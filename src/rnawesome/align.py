@@ -175,4 +175,4 @@ proc.stdout.close()
 proc.stderr.close()
 
 # Done
-print >>sys.stderr, "DONE with align.py"
+print >>sys.stderr, "DONE with align.py; processed %d lines" % nlines

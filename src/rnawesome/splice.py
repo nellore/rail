@@ -37,11 +37,12 @@ def handleRead(rdid, ivals):
         aligned, compose a spliced alignment record. '''
     for k in ivals.iterkeys():
         for iv in iter(ivals[k]):
+            st, en = iv.start, iv.end
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets
-            pt = partition.partition(k, iv.start, binsz)
-            print "%s\t%s\t%d\t%d\t%s" % (pt, k, iv.start, iv.end, sample.parseLab(rdid))
+            for pt in iter(partition.partition(k, st, en, binsz)):
+                print "%s\t%s\t%d\t%d\t%s" % (pt, k, st, en, sample.parseLab(rdid))
 
 last_rdid = "\t"
 nlines = 0
