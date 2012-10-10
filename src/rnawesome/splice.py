@@ -46,7 +46,7 @@ for ln in sys.stdin:
         handleRead(rdid, ivals)
         ivals = dict()
         last_rdid = rdid
-    if rdid not in ivals:
+    if refid not in ivals:
         ivals[refid] = interval.FlatIntervals()
     ivals[refid].add(interval.Interval(refoff, refoff+len(seq)))
     nlines += 1

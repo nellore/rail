@@ -62,16 +62,19 @@ class Interval(object):
 
     def hull(self, other):
         "@return: Interval containing both self and other."
-        if self > other:
-            other, self = self, other
-        return Interval(self.start, other.end)
-    
+        return Interval(min(self.start, other.start), max(self.end, other.end))
 
     def overlap(self, other):
         "@return: True iff self intersects other."
         if self > other:
             other, self = self, other
         return self.end > other.start
+
+    def overlap_or_adjacent(self, other):
+        "@return: True iff self intersects other."
+        if self > other:
+            other, self = self, other
+        return self.end >= other.start
          
 
     def __contains__(self, item):
@@ -123,17 +126,69 @@ class FlatIntervals(object):
     
     def __init__(self):
         self._ivals = []
+
+    def __len__(self):
+        return len(self._ivals)
     
     def add(self, ival):
         todel = []
         for i in xrange(0, len(self._ivals)):
             oival = self._ivals[i]
-            if ival.overlap(oival):
+            if ival.overlap_or_adjacent(oival):
                 ival = ival.hull(oival)
                 todel.append(i)
         for i in todel[::-1]:
             self._ivals.pop(i)
         self._ivals.append(ival)
     
+    def coverage(self):
+        tot = 0
+        for i in self._ivals:
+            tot += (i.end - i.start)
+        return tot
+    
     def __iter__(self):
         return iter(self._ivals)
+
+if __name__ == '__main__':
+    import unittest
+
+    class TestFlatIntervals(unittest.TestCase):
+
+        def test1(self):
+            iv = FlatIntervals()
+            iv.add(Interval(10, 100))
+            self.assertEquals(1, len(iv))
+            self.assertEquals(90, iv.coverage())
+            iv.add(Interval(200, 300))
+            self.assertEquals(2, len(iv))
+            self.assertEquals(190, iv.coverage())
+
+        def test2(self):
+            iv = FlatIntervals()
+            iv.add(Interval(10, 100))
+            self.assertEquals(1, len(iv))
+            self.assertEquals(90, iv.coverage())
+            iv.add(Interval(-10, 10))
+            self.assertEquals(1, len(iv))
+            self.assertEquals(110, iv.coverage())
+
+        def test3(self):
+            iv = FlatIntervals()
+            iv.add(Interval(10, 100))
+            self.assertEquals(1, len(iv))
+            self.assertEquals(90, iv.coverage())
+            iv.add(Interval(50, 60))
+            self.assertEquals(1, len(iv))
+            self.assertEquals(90, iv.coverage())
+
+        def test4(self):
+            iv = FlatIntervals()
+            iv.add(Interval(10, 100))
+            self.assertEquals(1, len(iv))
+            self.assertEquals(90, iv.coverage())
+            iv.add(Interval(50, 110))
+            self.assertEquals(1, len(iv))
+            self.assertEquals(100, iv.coverage())
+
+    unittest.main()
