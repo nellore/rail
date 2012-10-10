@@ -9,7 +9,7 @@ them down into a single pair with a larger counter.
 
 import sys
 
-nlines = 0        # # lines seen so far
+ninp, nout = 0, 0 # # lines input/output so far
 last_pt = "\t"    # last partition id
 last_refid = "\t" # last ref id
 last_st = -1      # last start pos
@@ -17,8 +17,10 @@ last_en = -1      # last end pos
 cnts = dict()     # per-label counts for a given rdid
 
 def flushCnts(pt, refid, st, en):
+    global nout
     for k, v in cnts.iteritems():
         print "%s\t%d\t%d\t%s\t%d\t%s" % (pt, st, en, refid, v, k)
+        nout += 1
 
 for ln in sys.stdin:
     ln = ln.rstrip()
@@ -37,10 +39,10 @@ for ln in sys.stdin:
             flushCnts(last_pt, last_refid, last_st, last_en)
         cnts = {lab:1}
     last_pt, last_refid, last_st, last_en = pt, refid, st, en
-    nlines += 1
+    ninp += 1
 
 if last_st >= 0:
     flushCnts(last_pt, last_refid, last_st, last_en)
 
 # Done
-print >>sys.stderr, "DONE with merge.py; processed %d lines" % nlines
+print >>sys.stderr, "DONE with merge.py; in/out = %d/%d" % (ninp, nout)

@@ -54,7 +54,7 @@ for ln in sys.stdin:
     toks = ln.split('\t')
     rdid, fw, refid, refoff, seq, qual = toks[0], toks[1], toks[2], int(toks[3]), toks[4], toks[5]
     if rdid != last_rdid:
-        handleRead(rdid, ivals)
+        handleRead(last_rdid, ivals)
         ivals = dict()
         last_rdid = rdid
     if refid not in ivals:
@@ -62,8 +62,8 @@ for ln in sys.stdin:
     ivals[refid].add(interval.Interval(refoff, refoff+len(seq)))
     nlines += 1
 
-if rdid is not None:
-    handleRead(rdid, ivals)
+if last_rdid != "\t":
+    handleRead(last_rdid, ivals)
 
 # Done
 print >>sys.stderr, "DONE with splice.py; processed %d lines" % nlines
