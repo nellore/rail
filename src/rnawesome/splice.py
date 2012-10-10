@@ -42,7 +42,7 @@ def handleRead(rdid, ivals):
             # Add a partition id that combines the ref id and some function of
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
-                print "%s\t%s\t%d\t%d\t%s" % (pt, k, st, en, sample.parseLab(rdid))
+                print "%s\t%d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdid))
 
 last_rdid = "\t"
 nlines = 0
