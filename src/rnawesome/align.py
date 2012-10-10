@@ -19,9 +19,11 @@ import threading
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "bowtie"))
 site.addsitedir(os.path.join(base_path, "read"))
+site.addsitedir(os.path.join(base_path, "sample"))
 
 import bowtie
 import readlet
+import sample
 
 nlines = 0
 pe = False
@@ -117,13 +119,17 @@ for ln in sys.stdin:
     if len(toks) == 3:
         # Unpaired read
         nm, seq, qual = toks
+        sample.hasLab(nm, mustHave=True)
     elif len(toks) == 5 or len(toks) == 6:
         # Paired-end read
         if len(toks) == 5:
+            # 6-token version
             nm1, seq1, qual1, seq2, qual2 = toks
             nm2 = nm1
         else:
+            # 5-token version
             nm1, seq1, qual1, nm2, seq2, qual2 = toks
+        sample.hasLab(nm1, mustHave=True)
         if discardMate is not None:
             if discardMate == 1:
                 nm, seq, qual = nm2, seq2, qual2

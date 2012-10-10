@@ -17,25 +17,35 @@ import site
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "interval"))
+site.addsitedir(os.path.join(base_path, "sample"))
 
 import interval
+import partition
+import sample
 
 parser = argparse.ArgumentParser(description=\
     'Take readlets aligned using Bowtie and combine into spliced alignments.')
 
+partition.addArgs(parser)
+
 args = parser.parse_args()
+
+binsz = partition.binSize(args)
 
 def handleRead(rdid, ivals):
     ''' Given all the intervals where readlets from a given read
         aligned, compose a spliced alignment record. '''
     for k in ivals.iterkeys():
         for iv in iter(ivals[k]):
-            # No reason to print rdid
-            print "%s\t%d\t%d" % (k, iv.start, iv.end)
+            # Keep stringing rdid along because it contains the label string
+            # Add a partition id that combines the ref id and some function of
+            # the offsets
+            pt = partition.partition(k, iv.start, binsz)
+            print "%s\t%s\t%d\t%d\t%s" % (pt, k, iv.start, iv.end, sample.parseLab(rdid))
 
 last_rdid = "\t"
 nlines = 0
-
+rdid = None
 ivals = dict()
 
 for ln in sys.stdin:
@@ -51,7 +61,8 @@ for ln in sys.stdin:
     ivals[refid].add(interval.Interval(refoff, refoff+len(seq)))
     nlines += 1
 
-handleRead(rdid, ivals)
+if rdid is not None:
+    handleRead(rdid, ivals)
 
 # Done
 print >>sys.stderr, "DONE with splice.py; processed %d lines" % nlines
