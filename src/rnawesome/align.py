@@ -20,10 +20,12 @@ base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "bowtie"))
 site.addsitedir(os.path.join(base_path, "read"))
 site.addsitedir(os.path.join(base_path, "sample"))
+site.addsitedir(os.path.join(base_path, "manifest"))
 
 import bowtie
 import readlet
 import sample
+import manifest
 
 nlines = 0
 pe = False
@@ -51,6 +53,7 @@ parser.add_argument(\
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
+manifest.addArgs(parser)
 
 args = parser.parse_args()
 

@@ -18,15 +18,18 @@ import site
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "interval"))
 site.addsitedir(os.path.join(base_path, "sample"))
+site.addsitedir(os.path.join(base_path, "manifest"))
 
 import interval
 import partition
 import sample
+import manifest
 
 parser = argparse.ArgumentParser(description=\
     'Take readlets aligned using Bowtie and combine into spliced alignments.')
 
 partition.addArgs(parser)
+manifest.addArgs(parser)
 
 args = parser.parse_args()
 

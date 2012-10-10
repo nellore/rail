@@ -8,6 +8,19 @@ them down into a single pair with a larger counter.
 """
 
 import sys
+import os
+import site
+import argparse
+
+base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+site.addsitedir(os.path.join(base_path, "manifest"))
+
+import manifest
+
+parser = argparse.ArgumentParser(description=\
+    'Merge reads that cover the same interval within a given partition.')
+manifest.addArgs(parser)
+args = parser.parse_args()
 
 ninp, nout = 0, 0 # # lines input/output so far
 last_pt = "\t"    # last partition id
