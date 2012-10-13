@@ -49,15 +49,18 @@ class CircularCountBuffer(object):
         return self._list[self._cur]
 
     def inc(self, off=None):
+        self.add(1, off)
+
+    def add(self, amt, off=None):
         if off is None: off = self._off
-        assert off >= self._off
+        assert off >= self._off, "Expected given offset (%d) >= circular buffer offset (%d)" % (off, self._off)
         diff = off - self._off
         assert diff < len(self._list)
         i = self._cur + diff
         if i >= len(self._list):
             assert off > 0
             i -= len(self._list)
-        self._list[i] += 1
+        self._list[i] += amt
     
     def off(self): return self._off
 
