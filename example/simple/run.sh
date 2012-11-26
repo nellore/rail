@@ -1,5 +1,7 @@
 SCR_DIR=../../src/rnawesome
 
+INTERMEDIATE_DIR=$TMPDIR
+
 # Step 1: Readletize input reads and use Bowtie to align the readlets 
 ALIGN_AGGR="cat"
 ALIGN="python $SCR_DIR/align.py"
@@ -23,6 +25,10 @@ WALK="python $SCR_DIR/walk.py"
 NORMALIZE_AGGR="sort -k1,1"
 NORMALIZE="python $SCR_DIR/normalize.py"
 
+# Step 6: Normalize post
+NORMALIZE_POST_AGGR="cat"
+NORMALIZE_POST="python $SCR_DIR/normalize_post.py"
+
 cat *.tab \
 	| $ALIGN_AGGR | $ALIGN \
 		--bowtieArgs '-v 2 -m 1' \
@@ -43,4 +49,12 @@ cat *.tab \
 		--genomeLen=1000 \
 		--columnize \
 	| $NORMALIZE_AGGR | $NORMALIZE \
-		--percentile 0.75
+		--percentile 0.75 \
+	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
+		--manifest simple.manifest \
+		--out $INTERMEDIATE_DIR/norm.tsv
+
+echo DONE
+
+echo "Normalization file:"
+cat ${INTERMEDIATE_DIR}norm.tsv
