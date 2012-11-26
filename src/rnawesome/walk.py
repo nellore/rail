@@ -10,7 +10,6 @@ How do we know the extents of the partition?
 TODO:
 - Need to have all the labels known
 - Optionally do run length encoding
-- Optionally omit all-0 lines
 '''
 
 import os
@@ -52,7 +51,6 @@ ls = sorted(labs)
 def handleInterval(last_st, st):
     # Wind all the buffers forward to just before this read's starting
     # position
-    print >>sys.stderr, "  handling [%d, %d)" % (last_st, st)
     while last_st > -1 and st > last_st:
         if last_st >= part_st and last_st < part_en:
             elts = []
