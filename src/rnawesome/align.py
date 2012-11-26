@@ -27,7 +27,8 @@ import readlet
 import sample
 import manifest
 
-nlines = 0
+ninp = 0               # # lines input so far
+nout = 0               # # lines output so far
 pe = False
 discardMate = None
 lengths = dict()       # read lengths after truncation
@@ -88,6 +89,7 @@ bowtieErrDone = threading.Event()
 
 def bowtieOut(st):
     ''' Process standard out (stdout) output from Bowtie '''
+    global nout
     for line in st:
         line = line.rstrip()
         toks, fron = None, None
@@ -98,8 +100,10 @@ def bowtieOut(st):
             fron = [str(nm)]
         if fron is not None:
             assert toks is not None
+            nout += 1
             print '\t'.join(fron) + '\t' + '\t'.join(toks)
         else:
+            nout += 1
             print line
     bowtieOutDone.set()
 
@@ -114,7 +118,7 @@ proc = bowtie.proc(args, outHandler=bowtieOut, errHandler=bowtieErr)
 for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split('\t')
-    nlines += 1
+    ninp += 1
     pair = False
     nm, seq, qual = None, None, None
     nm1, seq1, qual1 = None, None, None
@@ -178,4 +182,4 @@ proc.stdout.close()
 proc.stderr.close()
 
 # Done
-print >>sys.stderr, "DONE with align.py; processed %d lines" % nlines
+print >>sys.stderr, "DONE with align.py; in/out = %d/%d" % (ninp, nout)
