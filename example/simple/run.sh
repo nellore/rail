@@ -2,32 +2,41 @@ SCR_DIR=../../src/rnawesome
 
 INTERMEDIATE_DIR=$TMPDIR
 
-# Step 1: Readletize input reads and use Bowtie to align the readlets 
+# Step 1a: Readletize input reads and use Bowtie to align the readlets 
 ALIGN_AGGR="cat"
 ALIGN="python $SCR_DIR/align.py"
 
-# Step 2: 
-# (actually, should be merged with Step 1 in a Hadoop pipeline)
+# Step 1b: Bring together all the readlet alignment intervals for a given read and 
 SPLICE_AGGR="cat"
 SPLICE="python $SCR_DIR/splice.py"
 
-# Step 3: Take all the intervals in a given genome window for all
-#         samples and make a coverage table for the interval
+# Steps 1a and 1b happen together in the same map step in practice
+
+# Step 2: Collapse identical intervals from same sample
 MERGE_AGGR1="sort -n -k2,2"
 MERGE_AGGR2="sort -s -k1,1"
 MERGE="python $SCR_DIR/merge.py"
 
-# Step 4: Walk over genome windows and...
+# Step 3: Walk over genome windows and emit per-sample, per-position
+#         coverage tuples
 WALK_AGGR="sort -k1,1"
 WALK="python $SCR_DIR/walk.py"
 
-# Step 5: Normalize
+# Step 4: For all samples, take all coverage tuples for the sample and
+#         from them calculate a normalization factor
 NORMALIZE_AGGR="sort -k1,1"
 NORMALIZE="python $SCR_DIR/normalize.py"
 
-# Step 6: Normalize post
+# Step 5: Collect all the norm factors together and write to file
 NORMALIZE_POST_AGGR="cat"
 NORMALIZE_POST="python $SCR_DIR/normalize_post.py"
+
+# Step 6: Walk over genome windows again (taking output from Step 2)
+#         but this time, calculate per-position coverage vectors and
+#         fit a linear model to each
+WALK_FIT="python $SCR_DIR/walk_fit.py"
+
+WALK_IN_TMP=$TMPDIR/merge_out.tsv
 
 cat *.tab \
 	| $ALIGN_AGGR | $ALIGN \
@@ -42,8 +51,7 @@ cat *.tab \
 		--genomeLen=1000 \
 		--manifest simple.manifest \
 	| $MERGE_AGGR1 | $MERGE_AGGR2 | $MERGE \
-		--manifest simple.manifest \
-	| $WALK_AGGR | $WALK \
+	| $WALK_AGGR | tee $WALK_IN_TMP | $WALK \
 		--manifest simple.manifest \
 		--ntasks=10 \
 		--genomeLen=1000 \
@@ -53,6 +61,14 @@ cat *.tab \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
 		--manifest simple.manifest \
 		--out $INTERMEDIATE_DIR/norm.tsv
+
+echo "Starting walk_fit"
+cat $WALK_IN_TMP \
+	| $WALK_FIT \
+		--ntasks=10 \
+		--genomeLen=1000 \
+		--normals $INTERMEDIATE_DIR/norm.tsv
+		
 
 echo DONE
 
