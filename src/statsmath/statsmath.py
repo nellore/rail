@@ -9,8 +9,14 @@ import scipy
 from scipy import special
 import sys
 
+def is_finite(x):
+    return x != float('inf') and x != float('-inf')
+
+def is_infinite(x):
+    return not is_finite(x)
+
 def digamma(x):
-    return scipy.special.digamma()
+    return scipy.special.digamma(x)
 
 def trigamma(x):
     return scipy.special.polygamma(1, x)
