@@ -36,6 +36,11 @@ NORMALIZE_POST="python $SCR_DIR/normalize_post.py"
 #         fit a linear model to each
 WALK_FIT="python $SCR_DIR/walk_fit.py"
 
+# Step 7: Given all the t-statistics, moderate them and emit moderated
+#         t-stats
+EBAYES_AGGR="cat"
+EBAYES="python $SCR_DIR/ebayes.py"
+
 WALK_IN_TMP=$TMPDIR/merge_out.tsv
 
 cat *.tab \
@@ -68,8 +73,8 @@ cat $WALK_IN_TMP \
 		--ntasks=10 \
 		--genomeLen=1000 \
 		--seed=777 \
-		--normals $INTERMEDIATE_DIR/norm.tsv
-		
+		--normals $INTERMEDIATE_DIR/norm.tsv \
+	| $EBAYES_AGGR | $EBAYES
 
 echo DONE
 
