@@ -67,6 +67,7 @@ cat $WALK_IN_TMP \
 	| $WALK_FIT \
 		--ntasks=10 \
 		--genomeLen=1000 \
+		--seed=777 \
 		--normals $INTERMEDIATE_DIR/norm.tsv
 		
 

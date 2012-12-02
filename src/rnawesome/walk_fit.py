@@ -13,6 +13,7 @@ import site
 import argparse
 import math
 import rpy2
+import random
 from rpy2.robjects.packages import importr
 import rpy2.robjects as robjects
 
@@ -33,6 +34,12 @@ parser.add_argument(\
 parser.add_argument(\
     '--fudge-factor', dest='fudge', metavar='PATH', type=int,
     default=32, help='Add this to counts before taking log2')
+parser.add_argument(\
+    '--permutations', metavar='INT', type=int,
+    default=3, help='Number of permutation tests to perform')
+parser.add_argument(\
+    '--seed', metavar='INT', type=int,
+    default=41092, help='Seed for pseudo-random number generator')
 
 partition.addArgs(parser)
 
@@ -69,6 +76,8 @@ omitAllZero = True         # whether to omit rows that are all 0s
 
 labs, normals = normals(args)
 ls = sorted(labs)
+
+random.seed(args.seed)
 normalsl = [ float(normals[l]) for l in ls ]
 
 def labelMapping(ls):
@@ -85,19 +94,35 @@ def labelMapping(ls):
 lab2grp, grp2lab = labelMapping(ls)
 gs = [ lab2grp[x] for x in ls ]
 
-# We commit the following variables to the R environment, since we'll
-# use them over and over:
+def randomizedGs():
+    gsx = gs[:]
+    random.shuffle(gsx)
+    return gsx
 
-# gs is group vector (regressor #1)
-# normals is normalization vector vector (regressor #2)
-
-robjects.globalenv["groups"] = robjects.IntVector(gs)
-robjects.globalenv["normals"] = robjects.FloatVector(normalsl)
+gs_permuted = [ randomizedGs() for x in xrange(0, args.permutations) ]
 
 # Import stats R package
 
 stats = importr('stats')
 base = importr('base')
+
+def lmFit(y, groups):
+
+    ''' Use R's lmfit function to fit a linear model.  Return a tuple
+        containing all the fit information relevant to RNAwesome. '''
+
+    robjects.globalenv["normals"] = robjects.FloatVector(normalsl)
+    robjects.globalenv["counts"] = robjects.FloatVector(y)
+    robjects.globalenv["groups"] = robjects.IntVector(groups)
+    lmres = stats.lm("counts ~ groups + normals")
+    lmsumm = base.summary(lmres)
+    assert len(lmres.rx2('coefficients')) == 3
+    coeff_x = lmres.rx2('coefficients')[1]
+    stderr_x = lmsumm.rx2('coefficients').rx(2, 2)[0]
+    sigma = lmsumm.rx2('sigma')[0]
+    df_residual = lmres.rx2('df.residual')[0]
+    Amean = sum(y) / len(y)
+    return (Amean, df_residual, coeff_x, stderr_x/sigma, sigma)
 
 def handleInterval(last_st, st):
     # Wind all the buffers forward to just before this read's starting
@@ -120,25 +145,20 @@ def handleInterval(last_st, st):
                     assert l in normals
                     mycov = cov[l]
                 y.append(math.log(mycov + args.fudge, 2))
+            # TODO: other filters here?
             if tot > 0:
                 assert len(gs) == len(y)
                 assert len(normals) == len(y)
-                # y is count (response variable)
-                robjects.globalenv["counts"] = robjects.FloatVector(y)
-                lmres = stats.lm("counts ~ groups + normals")
-                lmsumm = base.summary(lmres)
-                assert len(lmres.rx2('coefficients')) == 3
-                _, coeff_x, _ = lmres.rx2('coefficients')
-                #print(lmsumm.rx2('coefficients'))
-                stderr_x = lmsumm.rx2('coefficients').rx(2, 2)[0]
-                #print(stderr_x)
-                sigma = lmsumm.rx2('sigma')[0]
-                #print(sigma)
-                df_residual = lmres.rx2('df.residual')[0]
-                Amean = float(tot) / len(y) 
-                pos = last_st
+                mn, df, coef, stdev, sig = lmFit(y, gs) 
+                fits = [(coef, stdev, sig)]
+                fitstrs = [ "%f,%f,%f" % fits[0] ]
+                # Do the permutations
+                for gsp in gs_permuted:
+                    _, _, coef, stdev, sig = lmFit(y, gsp) 
+                    fits.append((coef, stdev, sig))
+                    fitstrs.append("%f,%f,%f" % fits[-1])
+                print (("%d\t%f\t%d\t" % (last_st, mn, df)) + '\t'.join(fitstrs))
                 nout += 1
-                print "%d\t%f\t%f\t%f\t%d\t%f" % (pos, coeff_x, stderr_x / sigma, sigma, df_residual, Amean)
         last_st += 1
 
 def finishPartition(last_st, part_st, part_en):
