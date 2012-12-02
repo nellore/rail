@@ -32,8 +32,8 @@ parser.add_argument(\
     '--normals', metavar='PATH', type=str, required=True,
     help='File to read normalization factors from')
 parser.add_argument(\
-    '--fudge-factor', dest='fudge', metavar='PATH', type=int,
-    default=32, help='Add this to counts before taking log2')
+    '--fudge-factor', dest='fudge', metavar='PATH', type=float,
+    default=32.0, help='Add this to counts before taking log2')
 parser.add_argument(\
     '--permutations', metavar='INT', type=int,
     default=3, help='Number of permutation tests to perform')
