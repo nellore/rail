@@ -10,7 +10,7 @@ Python modules:
 - site
 - sys
 - threading
-- itertools
+- ghmm
 
 R packages:
 - base
