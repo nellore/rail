@@ -5,7 +5,9 @@ Given all the unmoderated t-statistics and others results from the
 linear fits, calculate the moderated t-statistics.  In general, we need
 to do this both for the test statistics, and for zero or more sets of
 null statistics, each corresponding to a permutation of the group
-labels.
+labels.  When we output the moderated t-statistics, we include a
+partition id since, later in the pipeline, we will want to partition
+them into genome windows.
 '''
 
 import argparse
@@ -18,12 +20,14 @@ import numpy as np
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "statsmath"))
+site.addsitedir(os.path.join(base_path, "interval"))
 
 import rpy2
 from rpy2.robjects.packages import importr
 import rpy2.robjects as robjects
 
 from statsmath import digamma, trigamma, trigammaInverse, is_infinite
+import partition
 
 parser = argparse.ArgumentParser(description=\
     'Take all or some of the unmoderated T-statistics and moderate them .')
@@ -31,6 +35,12 @@ parser = argparse.ArgumentParser(description=\
 parser.add_argument(\
     '--sample', metavar='FRACTION', type=float,
     default=1.1, help='Randomly sample this fraction of input t-stats')
+parser.add_argument(\
+    '--hmm-overlap', dest='hmmolap', metavar='INT', type=int, default=1000,
+    help='Number of observations into previous bin to begin')
+
+partition.addArgs(parser)
+args = parser.parse_args()
 
 ninp, nout = 0, 0
 
@@ -93,17 +103,17 @@ for ln in sys.stdin:
     ninp += 1
     # Token is pos(tab)row-mean(tab)degrees-of-freedom(tab)...
     # Where ... is a variable-length list of coef,stddev,sigma triples joined by tabs
-    assert len(toks) >= 4
-    pos, mn, mydf = int(toks[0]), float(toks[1]), int(toks[2])
+    assert len(toks) >= 5
+    refid, pos, mn, mydf = toks[0], int(toks[1]), float(toks[2]), int(toks[3])
     if df is None:
         df = mydf
     assert df == mydf
-    for i in xrange(3, len(toks)):
+    for i in xrange(5, len(toks)):
         toks2 = toks[i].split(',')
         assert len(toks2) == 3
         coef, stdddev, sigma = float(toks2[0]), float(toks2[1]), float(toks2[2])
         if first: tts.append([(coef, stdddev, sigma)])
-        else: tts[i-3].append((coef, stdddev, sigma))
+        else: tts[i-5].append((coef, stdddev, sigma))
     poss.append(pos)
     first = False
 
@@ -116,8 +126,10 @@ for i in xrange(0, len(tts_mod[0])):
     for ttup in tts_mod:
         ttmod, logfchange = ttup[i]
         ttstr_list.append("%f,%f" % (ttmod, logfchange))
-    print(str(poss[i]) + "\t" + "\t".join(ttstr_list))
-    nout += 1
+    # Place the position within a partition
+    for pt in partition.partition(refid, poss[i], poss[i] + args.hmmolap, partition.binSize(args)):
+        print(pt + "\t" + refid + "\t" + str(poss[i]) + "\t" + "\t".join(ttstr_list))
+        nout += 1
 
 # Done
 print >>sys.stderr, "DONE with ebayes.py; in/out = %d/%d" % (ninp, nout)

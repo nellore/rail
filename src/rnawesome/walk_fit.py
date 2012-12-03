@@ -67,6 +67,7 @@ def normals(args):
 
 ninp = 0                   # # lines input so far
 nout = 0                   # # lines output so far
+last_refid = "\t"          # last reference id 
 last_pt = "\t"             # id of previous partition
 last_st = -1               # start offset of previous fragment
 part_st, part_en = -1, -1  # start/end offsets of current partition
@@ -124,7 +125,7 @@ def lmFit(y, groups):
     Amean = sum(y) / len(y)
     return (Amean, df_residual, coeff_x, stderr_x/sigma, sigma)
 
-def handleInterval(last_st, st):
+def handleInterval(refid, last_st, st):
     # Wind all the buffers forward to just before this read's starting
     # position
     global nout
@@ -157,15 +158,15 @@ def handleInterval(last_st, st):
                     _, _, coef, stdev, sig = lmFit(y, gsp) 
                     fits.append((coef, stdev, sig))
                     fitstrs.append("%f,%f,%f" % fits[-1])
-                print (("%d\t%f\t%d\t" % (last_st, mn, df)) + '\t'.join(fitstrs))
+                print (("%s\t%d\t%f\t%d\t" % (refid, last_st, mn, df)) + '\t'.join(fitstrs))
                 nout += 1
         last_st += 1
 
-def finishPartition(last_st, part_st, part_en, verbose=False):
+def finishPartition(refid, last_st, part_st, part_en, verbose=False):
     global ends, cov
     if verbose:
         print >>sys.stderr, "Finished partition [%d, %d), last read start %d" % (part_st, part_en, last_st)
-    handleInterval(last_st, part_en)
+    handleInterval(refid, last_st, part_en)
     ends = dict()
     cov = dict()
 
@@ -181,7 +182,8 @@ for ln in sys.stdin:
         # We moved on to a new partition
         last_part_st, last_part_en = part_st, part_en
         if last_part_st >= 0:
-            finishPartition(last_st, last_part_st, last_part_en)
+            assert last_refid != "\t"
+            finishPartition(last_refid, last_st, last_part_st, last_part_en)
         refid2, part_st, part_en = partition.parse(pt, binsz)
         if verbose:
             print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
@@ -201,15 +203,16 @@ for ln in sys.stdin:
     # Wind all the buffers forward to just before this read's starting
     # position
     if last_st > -1 and st > last_st:
-        handleInterval(last_st, st)
+        handleInterval(refid, last_st, st)
     elif last_st == -1 and st > part_st:
-        handleInterval(part_st, st)
+        handleInterval(refid, part_st, st)
     cov[lab] += weight
-    last_pt, last_st = pt, st
+    last_refid, last_pt, last_st = refid, pt, st
     ninp += 1
 
 if part_st > -1:
-    finishPartition(last_st, part_st, part_en)
+    assert last_refid != "\t"
+    finishPartition(last_refid, last_st, part_st, part_en)
 
 # Done
 print >>sys.stderr, "DONE with walk_fit.py; in/out = %d/%d" % (ninp, nout)

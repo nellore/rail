@@ -78,6 +78,8 @@ cat $WALK_IN_TMP \
 		--seed=777 \
 		--normals $INTERMEDIATE_DIR/norm.tsv \
 	| $EBAYES_AGGR | $EBAYES \
+		--ntasks=10 \
+		--genomeLen=1000 \
 	| $HMM_PARAMS_AGGR | $HMM_PARAMS \
 		--null > ${INTERMEDIATE_DIR}hmm_params.tsv
 

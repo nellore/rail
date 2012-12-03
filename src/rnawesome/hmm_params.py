@@ -84,12 +84,12 @@ first = True
 for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split('\t')
-    assert len(toks) >= 2
-    pos = int(toks[0])
+    assert len(toks) >= 4
+    pt, refid, pos = toks[0], toks[1], int(toks[2])
     if first:
         names.append("test")
-    for i in xrange(1, len(toks)):
-        if i > 1 and not args.null:
+    for i in xrange(3, len(toks)):
+        if i > 3 and not args.null:
             break # skip null t-statistics
         toks2 = toks[i].split(',')
         assert len(toks2) == 2
@@ -98,7 +98,7 @@ for ln in sys.stdin:
             ttmods.append([ttmod])
             names.append("null%d" % i)
         else:
-            ttmods[i-1].append(ttmod)
+            ttmods[i-3].append(ttmod)
     first = False
     poss.append(pos)
     ninp += 1
