@@ -96,12 +96,15 @@ def handleInterval(last_st, st):
                     nout += 1
         last_st += 1
 
-def finishPartition(last_st, part_st, part_en):
+def finishPartition(last_st, part_st, part_en, verbose=False):
     global ends, cov
-    print >>sys.stderr, "Finished partition [%d, %d), last read start %d" % (part_st, part_en, last_st)
+    if verbose:
+        print >>sys.stderr, "Finished partition [%d, %d), last read start %d" % (part_st, part_en, last_st)
     handleInterval(last_st, part_en)
     ends = dict()
     cov = dict()
+
+verbose = False
 
 for ln in sys.stdin:
     ln = ln.rstrip()
@@ -115,7 +118,8 @@ for ln in sys.stdin:
         if last_part_st >= 0:
             finishPartition(last_st, last_part_st, last_part_en)
         refid2, part_st, part_en = partition.parse(pt, binsz)
-        print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
+        if verbose:
+            print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
         assert refid == refid2
         assert part_en > part_st
         last_st = -1 
