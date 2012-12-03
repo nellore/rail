@@ -41,6 +41,11 @@ WALK_FIT="python $SCR_DIR/walk_fit.py"
 EBAYES_AGGR="cat"
 EBAYES="python $SCR_DIR/ebayes.py"
 
+# Step 8: Given all the moderated t-statistics, calculate the HMM
+#         parameters to use in the next step
+HMM_PARAMS_AGGR="cat"
+HMM_PARAMS="python $SCR_DIR/hmm_params.py"
+
 WALK_IN_TMP=$TMPDIR/merge_out.tsv
 
 cat *.tab \
@@ -67,14 +72,14 @@ cat *.tab \
 		--manifest simple.manifest \
 		--out $INTERMEDIATE_DIR/norm.tsv
 
-echo "Starting walk_fit"
 cat $WALK_IN_TMP \
 	| $WALK_FIT \
 		--ntasks=10 \
 		--genomeLen=1000 \
 		--seed=777 \
 		--normals $INTERMEDIATE_DIR/norm.tsv \
-	| $EBAYES_AGGR | $EBAYES
+	| $EBAYES_AGGR | $EBAYES \
+	| $HMM_PARAMS_AGGR | $HMM_PARAMS
 
 echo DONE
 
