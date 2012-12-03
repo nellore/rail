@@ -16,13 +16,15 @@ def binSize(args):
     return int(math.ceil(1.0 * args.genomeLen / args.ntasks))
 
 def partition(refid, st, en, binSize):
-    ''' Assign to one or more partitions based on partition bin size
-        and start and end positions '''
+    ''' Assign the interval refid:[st, en) to one or more partitions
+        based on partition bin size and the interval's start and end
+        positions. '''
     binid_st = int(st / binSize)
     binid_en = int((en-1) / binSize)
     return [ ";".join([refid, str(i)]) for i in xrange(binid_st, binid_en+1) ]
 
 def parse(st, binSz):
+    ''' Parse a partition id. '''
     toks = st.split(";")
     if len(toks) != 2:
         raise RuntimeError("Expected two tokens separated by underscore, got %d: '%s'" % (len(toks), st))
