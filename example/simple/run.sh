@@ -46,7 +46,17 @@ EBAYES="python $SCR_DIR/ebayes.py"
 HMM_PARAMS_AGGR="cat"
 HMM_PARAMS="python $SCR_DIR/hmm_params.py"
 
-WALK_IN_TMP=$TMPDIR/merge_out.tsv
+# Step 9: Given sorted bins of moderated t-statistics, and HMM
+#         parameters, run the HMM
+HMM_AGGR="sort -k1,1"
+HMM="python $SCR_DIR/hmm.py"
+
+# Temporary files so we can form a DAG
+WALK_IN_TMP=${TMPDIR}walk_in.tsv
+HMM_IN_TMP=${TMPDIR}hmm_in.tsv
+
+echo "Temporary file for walk_fit.py input is '$WALK_IN_TMP'"
+echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 
 cat *.tab \
 	| $ALIGN_AGGR | $ALIGN \
@@ -80,8 +90,14 @@ cat $WALK_IN_TMP \
 	| $EBAYES_AGGR | $EBAYES \
 		--ntasks=10 \
 		--genomeLen=1000 \
-	| $HMM_PARAMS_AGGR | $HMM_PARAMS \
-		--null > ${INTERMEDIATE_DIR}hmm_params.tsv
+		--hmm-overlap=1000 \
+	| tee $HMM_IN_TMP | $HMM_PARAMS_AGGR | $HMM_PARAMS \
+		--null > ${INTERMEDIATE_DIR}hmm_params.tsv 
+
+cat $HMM_IN_TMP \
+	| $HMM_AGGR | $HMM \
+		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
+		--hmm-overlap=1000
 
 echo DONE
 
