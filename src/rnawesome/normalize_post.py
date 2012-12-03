@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(description=\
     'Take results from normalization phase and write them to a file.')
 
 parser.add_argument(\
-    '--out', metavar='PATH', type=str, required=True,
+    '--out', metavar='PATH', type=str, required=False, default=None,
     help='File to write output to')
 
 manifest.addArgs(parser)
@@ -40,11 +40,16 @@ for ln in sys.stdin:
     facts[toks[0]] = int(toks[1])
     ninp += 1
 
-ofh = open(args.out, 'w')
+ofh = sys.stdout
+if args.out is not None:
+    ofh = open(args.out, 'w')
+
 for l in ls:
     if l in facts: ofh.write("%s\t%d\n" % (l, facts[l]))
     else: ofh.write("%s\tNA\n" % l)
-ofh.close()
+
+if args.out is not None:
+    ofh.close()    
 
 # Done
 print >>sys.stderr, "DONE with normalize_post.py; in = %d" % ninp

@@ -69,8 +69,7 @@ cat *.tab \
 	| $NORMALIZE_AGGR | $NORMALIZE \
 		--percentile 0.75 \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
-		--manifest simple.manifest \
-		--out $INTERMEDIATE_DIR/norm.tsv
+		--manifest simple.manifest > ${INTERMEDIATE_DIR}norm.tsv
 
 cat $WALK_IN_TMP \
 	| $WALK_FIT \
@@ -79,9 +78,13 @@ cat $WALK_IN_TMP \
 		--seed=777 \
 		--normals $INTERMEDIATE_DIR/norm.tsv \
 	| $EBAYES_AGGR | $EBAYES \
-	| $HMM_PARAMS_AGGR | $HMM_PARAMS
+	| $HMM_PARAMS_AGGR | $HMM_PARAMS \
+		--null > ${INTERMEDIATE_DIR}hmm_params.tsv
 
 echo DONE
 
 echo "Normalization file:"
 cat ${INTERMEDIATE_DIR}norm.tsv
+
+echo "HMM parameter file:"
+cat ${INTERMEDIATE_DIR}hmm_params.tsv
