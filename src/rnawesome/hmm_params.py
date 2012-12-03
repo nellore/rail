@@ -34,10 +34,15 @@ args = parser.parse_args()
 #
 
 R_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "R")
+R_paramHelpers = os.path.join(R_dir, 'paramHelpers.R')
 R_getParams = os.path.join(R_dir, 'getParams.R')
 R_locfdrFit = os.path.join(R_dir, 'locfdrFit.R')
 assert os.path.exists(R_getParams)
 assert os.path.exists(R_locfdrFit)
+
+R_paramHelpers_fh = open(R_paramHelpers, 'r')
+R_paramHelpers_str = R_paramHelpers_fh.read()
+R_paramHelpers_fh.close()
 
 R_getParams_fh = open(R_getParams, 'r')
 R_getParams_str = R_getParams_fh.read()
@@ -47,9 +52,11 @@ R_locfdrFit_fh = open(R_locfdrFit, 'r')
 R_locfdrFit_str = R_locfdrFit_fh.read()
 R_locfdrFit_fh.close()
 
-# Load the getParams fucntion
+# Load the paramHelpers helper functions
+robjects.r(R_paramHelpers_str)
+# Load the getParams function
 robjects.r(R_getParams_str)
-# Load the loadfdrFit fucntion
+# Load the loadfdrFit function
 robjects.r(R_locfdrFit_str)
 
 r_getParams = robjects.r['getParams']
@@ -60,8 +67,9 @@ def getParams(ttmods):
     
     ''' Given moderated t statistics, calculate HMM parameters for use
         in the next step. '''
-    #res = r_getParams(robjects.FloatVector(ttmods))
-    return (0, 1, 2, 3)
+    res = r_getParams(robjects.FloatVector(ttmods))
+    stateprobs = res.rx2('stateprobs')
+    return tuple(stateprobs)
 
 ttmods = []
 poss = []
