@@ -92,8 +92,8 @@ def eBayes(tt, df):
 # per test/null permutation.  Inner list is per position.  Elements of
 # each 3-tuple are (1) coefficient, (2) standard deviation, (3) sigma.
 tts = []
-# poss is a list of positions
-poss = []
+# parallel lists of referene ids and positions
+refids, poss = [], []
 
 first = True
 df = None
@@ -115,6 +115,7 @@ for ln in sys.stdin:
         if first: tts.append([(coef, stdddev, sigma)])
         else: tts[i-5].append((coef, stdddev, sigma))
     poss.append(pos)
+    refids.append(refid)
     first = False
 
 tts_mod = [ eBayes(ttsx, df) for ttsx in tts ]
@@ -127,8 +128,8 @@ for i in xrange(0, len(tts_mod[0])):
         ttmod, logfchange = ttup[i]
         ttstr_list.append("%f,%f" % (ttmod, logfchange))
     # Place the position within a partition
-    for pt in partition.partition(refid, poss[i], poss[i] + args.hmmolap, partition.binSize(args)):
-        print(pt + "\t" + refid + "\t" + str(poss[i]) + "\t" + "\t".join(ttstr_list))
+    for pt in partition.partition(refids[i], poss[i], poss[i] + args.hmmolap, partition.binSize(args)):
+        print(pt + "\t" + refids[i] + "\t" + str(poss[i]) + "\t" + "\t".join(ttstr_list))
         nout += 1
 
 # Done
