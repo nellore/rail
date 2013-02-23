@@ -1,5 +1,6 @@
 '''
 ebayes.py
+(after walk_fit.py, before hmm_params.py)
 
 Given all the unmoderated t-statistics and others results from the
 linear fits, calculate the moderated t-statistics.  In general, we need
@@ -8,6 +9,26 @@ null statistics, each corresponding to a permutation of the group
 labels.  When we output the moderated t-statistics, we include a
 partition id since, later in the pipeline, we will want to partition
 them into genome windows.
+
+Tab-delimited input tuple columns:
+ 1. Reference ID
+ 2. Reference offset (0-based)
+ 3. Mean A
+ 4. Degrees of freedom
+ 5+. Comma-delimited triples of (1) coefficient, (2) standard deviation, (3)
+     sigma.  One for the data, and then N more triples for each of the N
+     permutations of the data tried.
+
+Binning/sorting prior to this step:
+ (none)
+
+Tab-delimited output tuple columns:
+ 1. Partition ID
+ 2. Reference ID
+ 3. Reference offset (0-based)
+ 4+. Comma-delimited pairs of (1) moderated t-staistic, (2) log fold-change.
+     One pair for the data, then N more pairs for each of N permutations.
+
 '''
 
 import argparse

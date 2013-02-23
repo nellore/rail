@@ -1,8 +1,24 @@
 '''
 normalize_post.py
+(after normalize.py, before walk_fit.py)
 
 Takes results from the normalize phase as a single bin and writes out a
-new manifest file annotated with normalization factors. 
+new manifest file annotated with normalization factors.
+ 
+Tab-delimited input tuple columns (just 1 tuple per sample label):
+ 1. Sample label
+ 2. Summary statistic
+
+Binning/sorting prior to this step:
+ (none)
+
+Tab-delimited output tuple columns:
+ (no Hadoop output - just file)
+
+Other output:
+ --out file gets a table, with a row for each sample and columns:
+ 1. Sample name
+ 2. Normalization factor
 '''
 
 import os

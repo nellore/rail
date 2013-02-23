@@ -2,10 +2,30 @@
 
 """
 splice.py
+(after align.py, before merge.py)
 
-Wraps Bowtie.  Has features for (1) optionally extracting readlets,
-(2) optionally truncating reads or omitting mates, (3) hashing the read
-name or partitioning the genome position.
+Given alignments from align.py, merge all intervals covered by a readlet into a
+minimal set of intervals covered by at least one readlet.  For output tuples,
+we generate a partition id based on the partition size given by --ntasks and
+--genomeLen.
+
+Tab-delimited input tuple columns:
+1. Read name
+2. Orientation +/-
+3. Reference ID
+4. 0-based reference offset
+5. Nucleotide sequence
+6. Quality sequence
+
+Binning/sorting prior to this step:
+1. Binned by read name
+
+Tab-delimited output tuple columns:
+1. Partition ID for partition overlapped by interval
+2. Interval start
+3. Interval end (exclusive)
+4. Reference ID
+5. Sample label
 """
 
 import os

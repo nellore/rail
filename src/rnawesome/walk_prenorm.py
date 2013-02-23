@@ -1,9 +1,29 @@
 '''
-walk.py
+walk_prenorm.py
+(after merge.py, before normalize.py)
 
-Walk along a partition of the genome and compile all the spiced
-alignments into a series of coverage vectors.  In a way, we're
-realizing the positions x samples coverage matrix one row at a time.
+Walk along a partition of the genome.  Given all the merged spliced-alignment
+intervals, collapse them down into a series of per-position coverage vectors.
+Then print those vectors on a per-group basis.  When printing output, we don't
+have to distinguish between positions or reference IDs because all that matters
+to normalization is the group label and the count.
+
+Tab-delimited input tuple columns:
+ 1. Partition ID for partition overlapped by interval
+ 2. Interval start
+ 3. Interval end (exclusive)
+ 4. Reference ID
+ 5. Interval count
+ 6. Sample label
+
+Binning/sorting prior to this step:
+ 1. Binned by partition
+ 2. Bins sorted by Interval start
+
+Tab-delimited output tuple columns:
+ 1. Sample label
+ 2. Count (at some position)
+
 '''
 
 import os
@@ -24,10 +44,6 @@ parser = argparse.ArgumentParser(description=\
     'Take spliced alignments binned and sorted into partitions and '
     'construct coverage vectors for each sample.')
 
-parser.add_argument(\
-    '--columnize', action='store_const', const=True,
-    help='Emit per-sample, per-position counts, instead of per-sample vectors')
-
 partition.addArgs(parser)
 manifest.addArgs(parser)
 
@@ -44,12 +60,6 @@ ends = dict()              # maps sample names to circular buffers
 cov = dict()               # current coverage in each sample
 omitAllZero = True         # whether to omit rows that are all 0s
 
-# if true, each line is a per-sample per-position count. otherwise,
-# each is per-position count vector for all samples.  Note that if
-# this is true, a downstream aggregator will have to re-aggregate by
-# genome window in rebuild the per-position count vector. 
-columnize = args.columnize
-
 # Get the set of all labels by parsing the manifest file, given on the
 # filesystem or in the Hadoop file cache
 labs = manifest.labels(args)
@@ -63,36 +73,17 @@ def handleInterval(last_st, st):
         if last_st >= part_st and last_st < part_en:
             # For all labels
             tot = 0
-            if columnize:
-                for l in ls:
-                    if l in ends:
-                        ends[l].advanceTo(last_st)
-                        # Take into account reads ending at this position
-                        nen = ends[l].get(last_st)
-                        assert nen <= cov[l], "%d reads ended at %d but coverage was only %d" % (nen, last_st, cov[l])
-                        cov[l] -= ends[l].get(last_st)
-                        tot += cov[l]
-                    if l in cov and cov[l] > 0:
-                        # Print the position then all the coverage numbers
-                        print "%s\t%d\t%d" % (l, last_st, cov[l])
-                        nout += 1
-            else:
-                elts = []
-                for l in ls:
-                    if l in ends:
-                        ends[l].advanceTo(last_st)
-                        # Take into account reads ending at this position
-                        nen = ends[l].get(last_st)
-                        assert nen <= cov[l], "%d reads ended at %d but coverage was only %d" % (nen, last_st, cov[l])
-                        cov[l] -= ends[l].get(last_st)
-                        tot += cov[l]
-                        elts.append(str(cov[l]))
-                    else:
-                        elts.append("0")
-                # 'elts' now contains a list of stringized coverage numbers
-                if not omitAllZero or tot > 0:
+            for l in ls:
+                if l in ends:
+                    ends[l].advanceTo(last_st)
+                    # Take into account reads ending at this position
+                    nen = ends[l].get(last_st)
+                    assert nen <= cov[l], "%d reads ended at %d but coverage was only %d" % (nen, last_st, cov[l])
+                    cov[l] -= ends[l].get(last_st)
+                    tot += cov[l]
+                if l in cov and cov[l] > 0:
                     # Print the position then all the coverage numbers
-                    print ("%d\t" % last_st) + "\t".join(elts)
+                    print "%s\t%d" % (l, cov[l])
                     nout += 1
         last_st += 1
 
@@ -147,4 +138,4 @@ if part_st > -1:
     finishPartition(last_st, part_st, part_en)
 
 # Done
-print >>sys.stderr, "DONE with walk.py; in/out = %d/%d" % (ninp, nout)
+print >>sys.stderr, "DONE with walk_prenorm.py; in/out = %d/%d" % (ninp, nout)

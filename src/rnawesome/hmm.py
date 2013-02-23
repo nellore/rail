@@ -1,7 +1,29 @@
 '''
 hmm.py
+(after hmm_params.py)
 
-Given the moderated t-statistics, run the HMM.
+Given the moderated t-statistics and HMM parameters, run HMM on the original
+data, as well as on all the permuted datasets.
+
+(not yet implemented)
+
+Tab-delimited input tuple columns:
+ 1. Partition ID
+ 2. Reference ID
+ 3. Reference offset (0-based)
+ 4+. Comma-delimited pairs of (1) moderated t-staistic, (2) log fold-change.
+     One pair for the data, then N more pairs for each of N permutations.
+
+Binning/sorting prior to this step:
+ 1. Binned by partition ID
+ 2. Sorted by reference offset
+
+Tab-delimited output tuple columns:
+ 1. Reference ID
+ 2. Reference offset (0-based)
+ 3+. HMM state.  One column for the original data, then N more columns for each
+     of the N permutations.
+
 '''
 
 import sys

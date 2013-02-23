@@ -1,10 +1,32 @@
 '''
 walk_fit.py
+(after normalize_post.py, before ebayes.py)
 
-Essentially re-do what we already did in the walk phase, but this time
-we build per-position vectors (i.e. we don't "columnize").  We now have
-the benefit of the normalization factors.  So we have all we need to
-obtain the per-position unmoderated t-statistics.
+Again, walk over the readlet intervals in a partition.  This time we emit
+per-position *vectors* instead of per-position, per-sample elements.  Also, we
+now know normalization factors.  So we have all we need to obtain the
+per-position unmoderated t-statistics.
+
+Tab-delimited input tuple columns:
+ 1. Partition ID for partition overlapped by interval
+ 2. Interval start
+ 3. Interval end (exclusive)
+ 4. Reference ID
+ 5. Interval count
+ 6. Sample label
+
+Binning/sorting prior to this step:
+ 1. Binned by partition
+ 2. Bins sorted by Interval start
+
+Tab-delimited output tuple columns:
+ 1. Reference ID
+ 2. Reference offset (0-based)
+ 3. Mean A
+ 4. Degrees of freedom
+ 5+. Comma-delimited triples of (1) coefficient, (2) standard deviation, (3)
+     sigma.  One for the data, and then N more triples for each of the N
+     permutations of the data tried.
 '''
 
 import os

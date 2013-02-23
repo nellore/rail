@@ -1,5 +1,7 @@
 '''
 sample.py
+
+Helper functions for checking for and parsing sample names. 
 '''
 
 import re

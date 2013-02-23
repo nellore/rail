@@ -19,8 +19,9 @@ MERGE="python $SCR_DIR/merge.py"
 
 # Step 3: Walk over genome windows and emit per-sample, per-position
 #         coverage tuples
-WALK_AGGR="sort -k1,1"
-WALK="python $SCR_DIR/walk.py"
+WALK_PRENORM_AGGR1="sort -n -k2,2"
+WALK_PRENORM_AGGR2="sort -s -k1,1"
+WALK_PRENORM="python $SCR_DIR/walk_prenorm.py"
 
 # Step 4: For all samples, take all coverage tuples for the sample and
 #         from them calculate a normalization factor
@@ -71,11 +72,10 @@ cat *.tab \
 		--genomeLen=1000 \
 		--manifest simple.manifest \
 	| $MERGE_AGGR1 | $MERGE_AGGR2 | $MERGE \
-	| $WALK_AGGR | tee $WALK_IN_TMP | $WALK \
+	| $WALK_PRENORM_AGGR1 | $WALK_PRENORM_AGGR2 | tee $WALK_IN_TMP | $WALK \
 		--manifest simple.manifest \
 		--ntasks=10 \
 		--genomeLen=1000 \
-		--columnize \
 	| $NORMALIZE_AGGR | $NORMALIZE \
 		--percentile 0.75 \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \

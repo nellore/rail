@@ -2,12 +2,45 @@
 
 """
 align.py
+(first step after preprocessing, before splice.py)
 
-Alignment script, usually to be used in Hadoop apps.
+Alignment script for MapReduce pipelines.  Wraps Bowtie.  Has features for (1)
+optionally extracting readlets (substrings) of configurable length, at a
+configurable interval along the read, (2) optionally truncating reads or
+omitting mates.  Each read or readlet is then written to the standard-in
+filehandle of an open Bowtie process.  Output from the Bowtie process is parsed
+and passed to the standard-out filehandle.  Alignments are in Bowtie format
+(not SAM).
 
-Wraps Bowtie.  Has features for (1) optionally extracting readlets,
-(2) optionally truncating reads or omitting mates, (3) hashing the read
-name or partitioning the genome position.
+Tab-delimited input tuple columns; can be in any of 3 formats:
+ Format 1 (unpaired):
+  1. Name
+  2. Nucleotide sequence
+  3. Quality sequence
+ Format 2 (paired, 5-column):
+  1. Name
+  2. Nucleotide sequence for mate 1
+  3. Quality sequence for mate 1
+  4. Nucleotide sequence for mate 2
+  5. Quality sequence for mate 2
+ Format 3 (paired, 6-column):
+  1. Name for mate 1
+  2. Nucleotide sequence for mate 1
+  3. Quality sequence for mate 1
+  4. Name for mate 2
+  5. Nucleotide sequence for mate 2
+  6. Quality sequence for mate 2
+
+Binning/sorting prior to this step:
+ (none)
+
+Tab-delimited output tuple columns (Bowtie's default output format):
+ 1. Read name
+ 2. Orientation +/-
+ 3. Reference ID
+ 4. 0-based reference offset
+ 5. Nucleotide sequence
+ 6. Quality sequence
 """
 
 import sys
@@ -45,12 +78,6 @@ xformReads = qualAdd is not None or truncateAmt is not None or truncateTo is not
 
 parser = argparse.ArgumentParser(description=\
     'Align reads using Bowtie, usually as the map step in a Hadoop program.')
-parser.add_argument(\
-    '--binReadName', metavar='NUMBINS', type=int, default=0,
-    help='Emit hashed version of read name as first column')
-parser.add_argument(\
-    '--binPos', metavar='NUMBINS', type=int, default=0,
-    help='Emit hashed version of read name as first column')
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
@@ -59,7 +86,8 @@ manifest.addArgs(parser)
 args = parser.parse_args()
 
 def xformRead(seq, qual):
-    # Possibly truncate
+    # Possibly truncate and/or modify quality values
+    # TODO: not implemented yet!
     newseq, newqual = "", ""
     if truncateAmt is not None:
         pass
@@ -70,7 +98,8 @@ def xformRead(seq, qual):
     return newseq, newqual
 
 def bowtieCmd(bowtieExe, bowtieIdx, bowtieArgs):
-    # Check that Bowtie exists and is executable
+    # Check that Bowtie exists and is executable, and that Bowtie index files
+    #mare in place
     if not os.path.isfile(bowtieExe):
         print >>sys.stderr, "Bowtie executable '%s' does not exist" % bowtieExe
         sys.exit(1)
@@ -91,25 +120,14 @@ def bowtieOut(st):
     ''' Process standard out (stdout) output from Bowtie '''
     global nout
     for line in st:
-        line = line.rstrip()
-        toks, fron = None, None
-        if args.binReadName > 0:
-            if toks is None:
-                toks = line.split('\t')
-            nm = abs(hash(toks[0]) % args.binReadName)
-            fron = [str(nm)]
-        if fron is not None:
-            assert toks is not None
-            nout += 1
-            print '\t'.join(fron) + '\t' + '\t'.join(toks)
-        else:
-            nout += 1
-            print line
+        sys.stdout.write(line)
+        nout += 1
     bowtieOutDone.set()
 
 def bowtieErr(st):
     ''' Process standard error (stderr) output from Bowtie '''
     for line in st:
+        # Print it right back out on sys.stderr
         print >> sys.stderr, line.rstrip()
     bowtieErrDone.set()
 
@@ -126,7 +144,7 @@ for ln in sys.stdin:
     if len(toks) == 3:
         # Unpaired read
         nm, seq, qual = toks
-        sample.hasLab(nm, mustHave=True)
+        sample.hasLab(nm, mustHave=True) # check that label is present in name
     elif len(toks) == 5 or len(toks) == 6:
         # Paired-end read
         if len(toks) == 5:
@@ -136,14 +154,15 @@ for ln in sys.stdin:
         else:
             # 5-token version
             nm1, seq1, qual1, nm2, seq2, qual2 = toks
-        sample.hasLab(nm1, mustHave=True)
+        sample.hasLab(nm1, mustHave=True) # check that label is present in name
         if discardMate is not None:
+            # We have been asked to discard one mate or the other
             if discardMate == 1:
-                nm, seq, qual = nm2, seq2, qual2
+                nm, seq, qual = nm2, seq2, qual2 # discard mate 1
             else:
-                nm, seq, qual = nm1, seq1, qual1
+                nm, seq, qual = nm1, seq1, qual1 # discard mate 2
         else:
-            pair = True
+            pair = True # paired-end read
     else:
         raise RuntimeError("Wrong number of tokens for line: " + ln)
     
@@ -153,7 +172,16 @@ for ln in sys.stdin:
             # Truncate and transform quality values
             seq1, qual1 = xformRead(seq1, qual1)
             seq2, qual2 = xformRead(seq2, qual2)
-        proc.stdin.write("%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2))
+        if args.readletLen > 0:
+            # Readletize
+            for rlet in iter(readlet.readletize(args, nm1, seq1, qual1)):
+                nm_rlet, seq_rlet, qual_rlet = rlet
+                proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+            for rlet in iter(readlet.readletize(args, nm2, seq2, qual2)):
+                nm_rlet, seq_rlet, qual_rlet = rlet
+                proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+        else:
+            proc.stdin.write("%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2))
     else:
         # Unpaired
         if xformReads:

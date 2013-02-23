@@ -2,9 +2,29 @@
 
 """
 merge.py
+(after splice.py, before walk_prenorm.py)
 
-If there are a lot of label, interval pairs that are identical, merge
-them down into a single pair with a larger counter.
+If there are a lot of intervals that are identical given a particular label &
+partition, merge them down into a single interval with counter >1.
+
+Tab-delimited input tuple columns:
+ 1. Partition ID for partition overlapped by interval
+ 2. Interval start
+ 3. Interval end (exclusive)
+ 4. Reference ID
+ 5. Sample label
+
+Binning/sorting prior to this step:
+ 1. Binned by partition
+ 2. Bins sorted by Interval start
+
+Tab-delimited output tuple columns (only column 5 is new):
+ 1. Partition ID for partition overlapped by interval
+ 2. Interval start
+ 3. Interval end (exclusive)
+ 4. Reference ID
+ 5. Interval count
+ 6. Sample label
 """
 
 import sys
@@ -24,6 +44,7 @@ cnts = dict()     # per-label counts for a given rdid
 def flushCnts(pt, refid, st, en):
     global nout
     for k, v in cnts.iteritems():
+        # k is group label, v is # times the interval occurred
         print "%s\t%d\t%d\t%s\t%d\t%s" % (pt, st, en, refid, v, k)
         nout += 1
 

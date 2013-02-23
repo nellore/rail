@@ -1,8 +1,23 @@
 '''
 hmm_params.py
+(after ebayes.py, before hmm.py)
 
-Given moderated t-statistics, fit HMM parameters.  This might be run
-just on the test statistics, or (rarely) on test and null statistics.
+Given moderated t-statistics, fit HMM parameters.  This might be run just on
+the test statistics, or (rarely) on test and null statistics.
+
+Tab-delimited input tuple columns:
+ 1. Partition ID
+ 2. Reference ID
+ 3. Reference offset (0-based)
+ 4+. Comma-delimited pairs of (1) moderated t-staistic, (2) log fold-change.
+     One pair for the data, then N more pairs for each of N permutations.
+
+Binning/sorting prior to this step:
+ (none)
+
+Tab-delimited output tuple columns:
+ 1. Either "test" for data, or "nullX" where X=integer for permutations
+ 2. Comma-delimited HMM parameters
 '''
 
 import os

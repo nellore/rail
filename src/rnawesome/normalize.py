@@ -1,20 +1,31 @@
 '''
 normalize.py
+(after walk_prenorm.py, before normalize_post.py)
 
-Takes input from walk.py --columnize (each record is a sample name,
-position, coverage tuple), and calculates some relevant per-sample
-summary, such as median, mean, total, or upper quartile.  Summaries are
-then written to an augmented manifest file on HDFS or other shared
-filesystem and that file is passed to downstream stages via file
-cacheing. 
+Given position counts for a given sample, calculates some relevant per-sample
+summary statistic, such as median, mean, total, or upper quartile.  Summary
+statistics are passed along to normalize_post.py, which prints them all to a
+file.
+
+Tab-delimited input tuple columns:
+ 1. Sample label
+ 2. Count (at some position)
+
+Binning/sorting prior to this step:
+ 1. Binned by sample label
+
+Tab-delimited output tuple columns:
+ 1. Sample label
+ 2. Normalization factor
+
 '''
 
 import sys
 import argparse
 
 parser = argparse.ArgumentParser(description=\
-    'Takes per-sample bins of coverage rows (in any order) and '
-    'calculates some relevant summary over all the coverage counts.')
+    'Takes per-position counts for given samples and calculates a summary '
+    'statistic such as median or 75% percentile.')
 
 parser.add_argument(\
     '--percentile', metavar='FRACTION', type=float, required=False, default=0.75,
@@ -44,8 +55,8 @@ def percentile(cov):
 for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split('\t')
-    assert len(toks) == 3
-    samp, pos, cv = toks[0], int(toks[1]), int(toks[2])
+    assert len(toks) == 2
+    samp, cv = toks[0], int(toks[1])
     if samp != last_samp and last_samp != "\t":
         print "%s\t%s" % (last_samp, percentile(cov))
         nout += 1
