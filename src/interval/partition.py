@@ -27,7 +27,7 @@ def parse(st, binSz):
     ''' Parse a partition id. '''
     toks = st.split(";")
     if len(toks) != 2:
-        raise RuntimeError("Expected two tokens separated by underscore, got %d: '%s'" % (len(toks), st))
+        raise RuntimeError("Expected two tokens separated by ;, got %d: '%s'" % (len(toks), st))
     refid, i = toks[0], int(toks[1])
     b = i * binSz
     return refid, b, b + binSz
