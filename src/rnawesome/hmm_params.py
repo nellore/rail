@@ -3,7 +3,20 @@ hmm_params.py
 (after ebayes.py, before hmm.py)
 
 Given moderated t-statistics, fit HMM parameters.  This might be run just on
-the test statistics, or (rarely) on test and null statistics.
+the test statistics, or (rarely) on both test and null statistics.  DERfinder's
+behavior is to fit just on the test statistics.
+
+The HMM has 3 hidden states, as discussed in section 3.2 of the DERfinder
+paper.  D(l) = 0 is meant for nucleotides where there is basically no
+expression in any sample.  D(l) = 1 is meant for nucleotides where there is
+expression, but no differential expression.  D(l) = 2 is meant for nucleotides
+where there is differential expression.  The HMM emissions are the moderated
+t-statistics.  The t-statistics are modeled as being drawn from one of three
+gaussians depending on the hidden state.  So that transition matrix is 3 x 3
+and the emission distributes are 3 gaussians.
+
+In this stage, we use the R code in source files R/paramHelpers.R,
+R/getParams.R, and R/locfdrFit.R.
 
 Tab-delimited input tuple columns:
  1. Partition ID
@@ -23,6 +36,8 @@ Tab-delimited output tuple columns:
 import os
 import sys
 import argparse
+
+# rpy2 is the glue between Python and R
 import rpy2
 from rpy2.robjects.packages import importr
 import rpy2.robjects as robjects
@@ -37,7 +52,6 @@ parser = argparse.ArgumentParser(description=\
 parser.add_argument(\
     '--null', action='store_const', const=True,
     help='Get HMM parameters for null as well as test statistics')
-
 parser.add_argument(\
     '--out', metavar='PATH', type=str, required=False, default=None,
     help='File to write output to')
@@ -79,12 +93,16 @@ r_getParams = robjects.r['getParams']
 ninp, nout = 0, 0
 
 def getParams(ttmods):
-    
     ''' Given moderated t statistics, calculate HMM parameters for use
         in the next step. '''
     res = r_getParams(robjects.FloatVector(ttmods))
+    # These are the initial probabilities for the 4 hidden states
     stateprobs = res.rx2('stateprobs')
-    return tuple(stateprobs)
+    # These are the means and standard deviations for the 4 emission
+    # probability distributions
+    mns = res.rx2('params').rx2('mean')
+    sds = res.rx2('params').rx2('sd')
+    return tuple(stateprobs + mns + sds)
 
 ttmods = []
 poss = []
@@ -99,21 +117,21 @@ first = True
 for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split('\t')
-    assert len(toks) >= 4
-    pt, refid, pos = toks[0], toks[1], int(toks[2])
+    assert len(toks) >= 3
+    pt, pos = toks[0], int(toks[1])
     if first:
-        names.append("test")
-    for i in xrange(3, len(toks)):
-        if i > 3 and not args.null:
+        names.append("test") # test data
+    for i in xrange(2, len(toks)):
+        if i > 2 and not args.null:
             break # skip null t-statistics
         toks2 = toks[i].split(',')
         assert len(toks2) == 2
         ttmod, logfchange = float(toks2[0]), float(toks2[1])
         if first:
             ttmods.append([ttmod])
-            names.append("null%d" % i)
+            names.append("null%d" % (i-2)) # permutation data
         else:
-            ttmods[i-3].append(ttmod)
+            ttmods[i-2].append(ttmod)
     first = False
     poss.append(pos)
     ninp += 1

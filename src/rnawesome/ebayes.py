@@ -24,9 +24,8 @@ Binning/sorting prior to this step:
 
 Tab-delimited output tuple columns:
  1. Partition ID
- 2. Reference ID
- 3. Reference offset (0-based)
- 4+. Comma-delimited pairs of (1) moderated t-staistic, (2) log fold-change.
+ 2. Reference offset (0-based)
+ 3+. Comma-delimited pairs of (1) moderated t-staistic, (2) log fold-change.
      One pair for the data, then N more pairs for each of N permutations.
 
 '''
@@ -43,11 +42,14 @@ base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "statsmath"))
 site.addsitedir(os.path.join(base_path, "interval"))
 
+# rpy2 is the glue that allows us to run R code fro mPython
 import rpy2
 from rpy2.robjects.packages import importr
 import rpy2.robjects as robjects
 
+# Some key functions ported from R
 from statsmath import digamma, trigamma, trigammaInverse, is_infinite
+
 import partition
 
 parser = argparse.ArgumentParser(description=\
@@ -107,8 +109,6 @@ def eBayes(tt, df):
     # logfchange = fit$coefficients
     # return(list(tt=tt,logfchange=logfchange))
 
-# We need some special math functions to do the moderation, including digamma, trigamma and 
-
 # tts is a list of { lists of 3-tuples }.  One outermost list element
 # per test/null permutation.  Inner list is per position.  Elements of
 # each 3-tuple are (1) coefficient, (2) standard deviation, (3) sigma.
@@ -150,7 +150,7 @@ for i in xrange(0, len(tts_mod[0])):
         ttstr_list.append("%f,%f" % (ttmod, logfchange))
     # Place the position within a partition
     for pt in partition.partition(refids[i], poss[i], poss[i] + args.hmmolap, partition.binSize(args)):
-        print(pt + "\t" + refids[i] + "\t" + str(poss[i]) + "\t" + "\t".join(ttstr_list))
+        print(pt + "\t" + str(poss[i]) + "\t" + "\t".join(ttstr_list))
         nout += 1
 
 # Done
