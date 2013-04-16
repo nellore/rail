@@ -1,6 +1,7 @@
 SCR_DIR=../../src/rnawesome
 
-INTERMEDIATE_DIR=$TMPDIR
+mkdir -p intermediate
+INTERMEDIATE_DIR=intermediate/
 
 # Step 1a: Readletize input reads and use Bowtie to align the readlets 
 ALIGN_AGGR="cat"
@@ -56,6 +57,11 @@ HMM="python $SCR_DIR/hmm.py"
 WALK_IN_TMP=${TMPDIR}walk_in.tsv
 HMM_IN_TMP=${TMPDIR}hmm_in.tsv
 
+# Parameters
+GENOME_LEN=1000
+NTASKS=10
+HMM_OVERLAP=30
+
 echo "Temporary file for walk_fit.py input is '$WALK_IN_TMP'"
 echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 
@@ -68,14 +74,14 @@ cat *.tab \
 		--readletIval 2 \
 		--manifest simple.manifest \
 	| $SPLICE_AGGR | $SPLICE \
-		--ntasks=10 \
-		--genomeLen=1000 \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
 		--manifest simple.manifest \
 	| $MERGE_AGGR1 | $MERGE_AGGR2 | $MERGE \
-	| $WALK_PRENORM_AGGR1 | $WALK_PRENORM_AGGR2 | tee $WALK_IN_TMP | $WALK \
+	| $WALK_PRENORM_AGGR1 | $WALK_PRENORM_AGGR2 | tee $WALK_IN_TMP | $WALK_PRENORM \
 		--manifest simple.manifest \
-		--ntasks=10 \
-		--genomeLen=1000 \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
 	| $NORMALIZE_AGGR | $NORMALIZE \
 		--percentile 0.75 \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
@@ -83,21 +89,24 @@ cat *.tab \
 
 cat $WALK_IN_TMP \
 	| $WALK_FIT \
-		--ntasks=10 \
-		--genomeLen=1000 \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
 		--seed=777 \
-		--normals $INTERMEDIATE_DIR/norm.tsv \
+		--normals ${INTERMEDIATE_DIR}norm.tsv \
 	| $EBAYES_AGGR | $EBAYES \
-		--ntasks=10 \
-		--genomeLen=1000 \
-		--hmm-overlap=1000 \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
+		--hmm-overlap=$HMM_OVERLAP \
 	| tee $HMM_IN_TMP | $HMM_PARAMS_AGGR | $HMM_PARAMS \
-		--null > ${INTERMEDIATE_DIR}hmm_params.tsv 
+		--null \
+		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
 
 cat $HMM_IN_TMP \
 	| $HMM_AGGR | $HMM \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
 		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
-		--hmm-overlap=1000
+		--hmm-overlap=$HMM_OVERLAP
 
 echo DONE
 
