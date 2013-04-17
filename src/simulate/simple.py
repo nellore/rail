@@ -71,7 +71,7 @@ def simulate(ref, readlen, targetNucs, stateFn):
     passi = 1
     while nucs < targetNucs:
         print >> sys.stderr, "  Pass %d..." % passi
-        for i in xrange(0, len(coverage)):
+        for i in xrange(0, len(coverage)-(readlen-1)):
             r1, r2 = random.random(), random.random()
             if r1 < coverage[i][0]:
                 seqs1.append(ref[i:i+readlen])
@@ -135,7 +135,7 @@ def writeReads(seqs1rep, seqs2rep, fnPre, manifestFn):
                     for i in xrange(0, len(sr[rep])):
                         seq = sr[rep][i]
                         qual = "I" * len(seq)
-                        nm = "r_group%d_rep%d_n%d" % (group, rep, i)
+                        nm = "r_n%d;LB:simple-%d-%d" % (i, group, rep)
                         fh.write("%s\t%s\t%s\n" % (nm, seq, qual))
 
 def parseFasta(fns):
@@ -168,10 +168,15 @@ if __name__ == "__main__":
         '--num-replicates', metavar='int', action='store', type=int, default=8,
         help='Number of replicates per group')
     parser.add_argument(\
+        '--seed', metavar='int', action='store', type=int, default=874,
+        help='Pseudo-random seed')
+    parser.add_argument(\
         '--num-nucs', metavar='int', action='store', type=float, default=1e7,
         help='Number of total nucleotides of reads to generate')
 
     args = parser.parse_args()
+    
+    random.seed(args.seed)
     
     seqs1, seqs2 = simulate(parseFasta(args.fasta), args.read_len, args.num_nucs, args.output_prefix + ".states")
     print >> sys.stderr, "  reads in group 1: %d" % len(seqs1)
