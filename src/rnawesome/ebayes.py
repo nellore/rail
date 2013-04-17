@@ -37,6 +37,8 @@ import os
 import site
 import math
 import numpy as np
+import time
+timeSt = time.clock()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "statsmath"))
@@ -154,4 +156,5 @@ for i in xrange(0, len(tts_mod[0])):
         nout += 1
 
 # Done
-print >>sys.stderr, "DONE with ebayes.py; in/out = %d/%d" % (ninp, nout)
+timeEn = time.clock()
+print >>sys.stderr, "DONE with ebayes.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)

@@ -32,6 +32,8 @@ import ghmm
 import argparse
 import numpy
 import string
+import time
+timeSt = time.clock()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "interval"))
@@ -177,4 +179,5 @@ if lastPartid is not None:
         writeResults(processPartition(tts[i], offs[i], hmms[i], st, en), refid, sys.stdout)
 
 # Done
-print >>sys.stderr, "DONE with hmm.py; in/out = %d/%d" % (ninp, nout)
+timeEn = time.clock()
+print >>sys.stderr, "DONE with hmm.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)

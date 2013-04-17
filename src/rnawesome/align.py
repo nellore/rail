@@ -48,6 +48,8 @@ import os
 import site
 import argparse
 import threading
+import time
+timeSt = time.clock()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "bowtie"))
@@ -210,4 +212,5 @@ proc.stdout.close()
 proc.stderr.close()
 
 # Done
-print >>sys.stderr, "DONE with align.py; in/out = %d/%d" % (ninp, nout)
+timeEn = time.clock()
+print >>sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)

@@ -36,6 +36,8 @@ Tab-delimited output tuple columns:
 import os
 import sys
 import argparse
+import time
+timeSt = time.clock()
 
 # rpy2 is the glue between Python and R
 import rpy2
@@ -158,4 +160,5 @@ if args.out is not None:
     ofh.close()
 
 # Done
-print >>sys.stderr, "DONE with hmm_params.py; in/out = %d/%d" % (ninp, nout)
+timeEn = time.clock()
+print >>sys.stderr, "DONE with hmm_params.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)

@@ -29,6 +29,8 @@ Tab-delimited output tuple columns (only column 5 is new):
 
 import sys
 import argparse
+import time
+timeSt = time.clock()
 
 parser = argparse.ArgumentParser(description=\
     'Merge reads that cover the same interval within a given partition.')
@@ -71,4 +73,5 @@ if last_st >= 0:
     flushCnts(last_pt, last_refid, last_st, last_en)
 
 # Done
-print >>sys.stderr, "DONE with merge.py; in/out = %d/%d" % (ninp, nout)
+timeEn = time.clock()
+print >>sys.stderr, "DONE with merge.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)

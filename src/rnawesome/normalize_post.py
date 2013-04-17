@@ -25,6 +25,8 @@ import os
 import sys
 import site
 import argparse
+import time
+timeSt = time.clock()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "manifest"))
@@ -68,4 +70,5 @@ if args.out is not None:
     ofh.close()    
 
 # Done
-print >>sys.stderr, "DONE with normalize_post.py; in = %d" % ninp
+timeEn = time.clock()
+print >>sys.stderr, "DONE with normalize_post.py; in = %d; time=%0.3f secs" % (ninp, timeEn-timeSt)

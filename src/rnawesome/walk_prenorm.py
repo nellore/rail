@@ -30,6 +30,8 @@ import os
 import sys
 import site
 import argparse
+import time
+timeSt = time.clock()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "interval"))
@@ -138,4 +140,5 @@ if part_st > -1:
     finishPartition(last_st, part_st, part_en)
 
 # Done
-print >>sys.stderr, "DONE with walk_prenorm.py; in/out = %d/%d" % (ninp, nout)
+timeEn = time.clock()
+print >>sys.stderr, "DONE with walk_prenorm.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)

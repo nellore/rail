@@ -22,6 +22,8 @@ Tab-delimited output tuple columns:
 
 import sys
 import argparse
+import time
+timeSt = time.clock()
 
 parser = argparse.ArgumentParser(description=\
     'Takes per-position counts for given samples and calculates a summary '
@@ -73,4 +75,5 @@ if last_samp != "\t":
     nout += 1
 
 # Done
-print >>sys.stderr, "DONE with normalize.py; in/out = %d/%d" % (ninp, nout)
+timeEn = time.clock()
+print >>sys.stderr, "DONE with normalize.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
