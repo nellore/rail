@@ -57,6 +57,10 @@ args = parser.parse_args()
 ninp, nout = 0, 0
 
 class HMM:
+    """ Encapsulates a simple HMM for finding regions of differential
+        expression.  Emissions are moderated t-statistics.  States
+        indicate differential expression. """
+    
     def __init__(self, probs, transProb=(0.999, 1e-12)):
         """ Given: initial probabilities, a 2-value summary of the transition
             probabilities, and the parameters for the gaussians modeling the
@@ -64,31 +68,33 @@ class HMM:
             will use to set up the HMM. """
         
         assert len(probs) == 12
-        initial = probs[0:4]
-        means = probs[4:8]
-        sds = probs[8:12]
+        initial, means, sds = probs[:4], probs[4:8], probs[8:]
         stayprob, EtoDE = transProb
         EtoZero = 1.0 - stayprob - 2.0 * EtoDE
         stayrem = (1.0 - stayprob) / 3.0
+        
+        # Transition probabilities
         A = [[ stayprob,  stayrem,  stayrem,  stayrem],
              [ EtoZero,  stayprob,    EtoDE,    EtoDE],
              [ EtoZero,     EtoDE, stayprob,    EtoDE],
              [ EtoZero,     EtoDE,    EtoDE, stayprob]]
         
-        # Emission parameters
+        # Emission probabilities
         E = map(list, zip(means, sds))
-        print >> sys.stderr, E
-        
         F = ghmm.Float()  # emission domain of this model
+        
         self.hmm = ghmm.HMMFromMatrices(\
             F,
             ghmm.GaussianDistribution(F),
             A,
             E,
             initial)
+        
         self.A, self.E, self.I = A, E, initial
     
     def viterbi(self, x):
+        """ Return most likely sequence of states through the HMM given
+            sequence of moderated t-statistics (x) """
         return self.hmm.viterbi(ghmm.EmissionSequence(ghmm.Float(), x))
     
     def __str__(self):
@@ -114,15 +120,22 @@ def parseParams(fn):
 # Parse all the HMM parameters and build HMMs using ghmm
 hmms = parseParams(args.params)
 
-def writeResults(res, refid, ofh):
-    for st, off in res:
-        ofh.write("%s\t%d\t%s\n" % (refid, off, st))
+def writeResults(res, refid, dataset, ofh):
+    """ Given HMM path through a partition, output intervals """
+    global nout
+    sti, offi = res[0]
+    for st, off in res[1:]:
+        if st != sti:
+            ofh.write("%s\t%d\t%d\t%s\t%d\n" % (refid, offi, off - offi, sti, dataset))
+            sti, offi = st, off
+    off = res[-1][1] + 1
+    ofh.write("%s\t%d\t%d\t%s\t%d\n" % (refid, offi, off - offi, sti, dataset))
+    nout += 1
 
 def processPartition(tts, offs, hmm, st, en):
     """ Run Viterbi on a sequence of moderated t-statistics """
     denseTts = []
     cur = 0
-    #print >> sys.stderr, (st, en, offs)
     for i in xrange(st - args.hmmolap, en):
         if cur >= len(offs) or i < offs[cur]:
             denseTts.append(0.0)
@@ -133,7 +146,7 @@ def processPartition(tts, offs, hmm, st, en):
     assert cur == len(tts)
     results = []
     path, _ = hmm.viterbi(denseTts)
-    assert len(path) == en-st + args.hmmolap, "%s" % str(path)
+    assert len(path) == en-st + args.hmmolap
     cur = args.hmmolap
     for i in xrange(st, en):
         results.append((path[cur], i))
@@ -155,7 +168,7 @@ for ln in sys.stdin:
     finishedPartition = lastPartid is not None and partid != lastPartid
     if finishedPartition:
         for i in xrange(0, len(tts)):
-            writeResults(processPartition(tts[i], offs[i], hmms[i], st, en), refid, sys.stdout)
+            writeResults(processPartition(tts[i], offs[i], hmms[i], st, en), refid, i, sys.stdout)
         tts, offs = [], []
     if startedPartition:
         refid, st, en = partition.parse(partid, partition.binSize(args))
@@ -166,8 +179,7 @@ for ln in sys.stdin:
         tt, logf = float(tt), float(logf)
         ii = i - 2
         if first:
-            tts.append([])
-            offs.append([])
+            tts.append([]); offs.append([])
             assert len(tts) == i-1
         tts[i-2].append(tt)
         offs[i-2].append(refoff)
@@ -176,7 +188,7 @@ for ln in sys.stdin:
 
 if lastPartid is not None:
     for i in xrange(0, len(tts)):
-        writeResults(processPartition(tts[i], offs[i], hmms[i], st, en), refid, sys.stdout)
+        writeResults(processPartition(tts[i], offs[i], hmms[i], st, en), refid, i, sys.stdout)
 
 # Done
 timeEn = time.clock()
