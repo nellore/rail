@@ -131,12 +131,12 @@ for ln in sys.stdin:
     if df is None:
         df = mydf
     assert df == mydf
-    for i in xrange(5, len(toks)):
+    for i in xrange(4, len(toks)):
         toks2 = toks[i].split(',')
         assert len(toks2) == 3
         coef, stdddev, sigma = float(toks2[0]), float(toks2[1]), float(toks2[2])
         if first: tts.append([(coef, stdddev, sigma)])
-        else: tts[i-5].append((coef, stdddev, sigma))
+        else: tts[i-4].append((coef, stdddev, sigma))
     poss.append(pos)
     refids.append(refid)
     first = False
