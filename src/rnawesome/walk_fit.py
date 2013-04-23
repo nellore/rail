@@ -34,6 +34,7 @@ import sys
 import site
 import argparse
 import math
+import string
 import rpy2
 import random
 from rpy2.robjects.packages import importr
@@ -61,6 +62,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--permutations', metavar='INT', type=int,
     default=3, help='Number of permutation tests to perform')
+parser.add_argument(\
+    '--permutations-out', metavar='PATH', type=str, required=False,
+    help='File to write permutations to')
 parser.add_argument(\
     '--seed', metavar='INT', type=int,
     default=41092, help='Seed for pseudo-random number generator')
@@ -106,19 +110,28 @@ def go():
     
     random.seed(args.seed)
     normalsl = [ float(normals[l]) for l in ls ]
-
-    def labelMapping(ls):
-        idx = 0
-        lab2grp = dict()
-        grp2lab = dict()
-        for l in ls:
-            if l not in lab2grp:
-                lab2grp[l] = idx
-                grp2lab[idx] = l
-                idx += 1
-        return lab2grp, grp2lab
     
-    lab2grp, _ = labelMapping(ls)
+    def groupName(lab):
+        toks = string.split(lab, '-')
+        assert len(toks) >= 2
+        return toks[1]
+    
+    def labelMapping(ls):
+        idx, gidx = 0, 0
+        lab2grp, grp2lab, lab2idx, idx2lab = {}, {}, {}, {}
+        for l in ls:
+            if l not in lab2idx:
+                lab2idx[l] = idx
+                idx2lab[idx] = l
+                idx += 1
+                gr = groupName(l)
+                if gr not in lab2grp:
+                    lab2grp[gr] = gidx
+                    grp2lab[gidx] = gr
+                    gidx += 1
+        return lab2grp, grp2lab, lab2idx, idx2lab
+    
+    lab2grp, grp2lab, lab2idx, _ = labelMapping(ls)
     
     # Import stats R package
     
@@ -127,13 +140,23 @@ def go():
     
     verbose = False
     
-    def randomizedGs():
-        gsx = gs[:]
-        random.shuffle(gsx)
-        return gsx
+    idxs = [ lab2idx[x] for x in ls ]
+    gs = map(lab2grp.get, [groupName(x) for x in ls])
     
-    gs = [ lab2grp[x] for x in ls ]
-    gs_permuted = [ randomizedGs() for x in xrange(0, args.permutations) ]
+    idxs_permutations = []
+    gs_permutations = []
+    
+    for _ in xrange(0, args.permutations):
+        both = zip(idxs, gs)
+        random.shuffle(both)
+        idxs_permutations.append(map(lambda x: x[0], both))
+        gs_permutations.append(map(lambda x: x[1], both))
+    
+    if args.permutations_out is not None:
+        with open(args.permutations_out, 'w') as fh:
+            fh.write(','.join(map(grp2lab.get, gs)) + '\n')
+            for g in gs_permutations:
+                fh.write(','.join(map(grp2lab.get, g)) + '\n')
     
     def handleInterval(refid, last_st, st):
         # Wind all the buffers forward to just before this read's starting
@@ -164,7 +187,7 @@ def go():
                     fits = [(coef, stdev, sig)]
                     fitstrs = [ "%f,%f,%f" % fits[0] ]
                     # Do the permutations
-                    for gsp in gs_permuted:
+                    for gsp in gs_permutations:
                         _, _, coef, stdev, sig = lmFit(y, gsp) 
                         fits.append((coef, stdev, sig))
                         fitstrs.append("%f,%f,%f" % fits[-1])
