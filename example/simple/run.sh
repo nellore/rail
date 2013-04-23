@@ -50,7 +50,8 @@ HMM_PARAMS="python $SCR_DIR/hmm_params.py"
 
 # Step 9: Given sorted bins of moderated t-statistics, and HMM
 #         parameters, run the HMM
-HMM_AGGR="sort -k1,1"
+HMM_AGGR1="sort -n -k2,2"
+HMM_AGGR2="sort -s -k1,1"
 HMM="python $SCR_DIR/hmm.py"
 
 # Temporary files so we can form a DAG
@@ -102,7 +103,7 @@ cat $WALK_IN_TMP \
 		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
 
 cat $HMM_IN_TMP \
-	| $HMM_AGGR | $HMM \
+	| $HMM_AGGR1 | $HMM_AGGR2 | $HMM \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
 		--params ${INTERMEDIATE_DIR}hmm_params.tsv \

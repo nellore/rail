@@ -52,12 +52,13 @@ HMM_PARAMS="python $SCR_DIR/hmm_params.py"
 
 # Step 9: Given sorted bins of moderated t-statistics, and HMM
 #         parameters, run the HMM
-HMM_AGGR="sort -k1,1"
+HMM_AGGR1="sort -n -k2,2"
+HMM_AGGR2="sort -s -k1,1"
 HMM="python $SCR_DIR/hmm.py"
 
 # Temporary files so we can form a DAG
 WALK_IN_TMP=${TMPDIR}walk_in.tsv
-HMM_IN_TMP=${TMPDIR}hmm_in.tsv
+HMM_IN_TMP=${INTERMEDIATE_DIR}hmm_in.tsv
 
 # Parameters
 GENOME_LEN=1000
@@ -89,6 +90,8 @@ cat *.tab5 \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
 		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
 
+cp $WALK_IN_TMP ${INTERMEDIATE_DIR}walk_in_input.tsv
+
 cat $WALK_IN_TMP \
 	| $WALK_FIT \
 		--ntasks=$NTASKS \
@@ -104,7 +107,7 @@ cat $WALK_IN_TMP \
 		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
 
 cat $HMM_IN_TMP \
-	| $HMM_AGGR | $HMM \
+	| $HMM_AGGR1 | $HMM_AGGR2 | $HMM \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
 		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
