@@ -35,6 +35,7 @@ import site
 import argparse
 import math
 import string
+import numpy
 import rpy2
 import random
 from rpy2.robjects.packages import importr
@@ -75,6 +76,113 @@ parser.add_argument(\
 partition.addArgs(parser)
 args = parser.parse_args()
 binsz = partition.binSize(args)
+
+stats = importr('stats')
+base = importr('base')
+
+class LMFitter(object):
+    """ Helper class for repeatedly fitting linear models to count
+        vectors.  There is one LMFitter per permutation.  Thus, one
+        LMFitter is associated with a (possibly permuted) group vector
+        and a (possibly permuted) normalization factor vector.  We use
+        a LRUCache to retrieve previously-calculated model parameters,
+        since we expect certain count vectors (e.g. ones with low total
+        count) to be common and this saves time. """
+    
+    def __init__(self, gs, ns, cacheSz = 1000):
+        """ Initialize with permuted group and normalization-factor
+            vectors """
+        assert len(gs) == len(ns)
+        self.gs, self.ns = gs, ns
+        
+        # Design matrix
+        self.D = D = numpy.array([gs, ns, numpy.ones(len(gs))]).T
+        # Element of (XTX)-1 useful for std err calculation later
+        XTX = numpy.dot(D.T, D)
+        XTXi = numpy.linalg.inv(XTX)
+        self.XTXi00 = XTXi[0, 0]
+        # Degrees of freedom
+        self.df = len(gs) - 3
+        
+        self.useCache = True
+        
+        # Very simple initial cache: remember last query and answer
+        self.prevY, self.prevAns = None, None
+        
+        # Cache is a doubly-linked list
+        # Link layout:     [PREV, NEXT, KEY, RESULT]
+        self.root = root = [None, None, None, None]
+        self.nmiss, self.nhit = 0, 0
+        self.cache = cache = {}
+        last = root
+        for _ in xrange(cacheSz):
+            key = object()
+            cache[key] = last[1] = last = [last, root, key, None]
+        root[0] = last
+    
+    def __fit(self, y):
+        assert len(y) == len(self.gs)
+        if True:
+            Amean = numpy.mean(y)
+            fit = numpy.linalg.lstsq(self.D, y)
+            coefs = fit[0]
+            residuals = [ y[i] - (coefs[0] * self.gs[i] + coefs[1] * self.ns[i] + coefs[2]) for i in xrange(len(y)) ]
+            rss = sum([r * r for r in residuals])
+            sigma = math.sqrt(rss / self.df)
+            groupStderr = math.sqrt(self.XTXi00 * (rss / self.df))
+            r1 = (Amean, self.df, coefs[0], groupStderr/sigma, sigma)
+        else:
+            robjects.globalenv["counts"] = robjects.FloatVector(y)
+            robjects.globalenv["normals"] = robjects.FloatVector(self.ns)
+            robjects.globalenv["groups"] = robjects.IntVector(self.gs)
+            lmres = stats.lm("counts ~ groups + normals")
+            lmsumm = base.summary(lmres)
+            assert len(lmres.rx2('coefficients')) == 3
+            coeff_x = lmres.rx2('coefficients')[1]
+            stderr_x = lmsumm.rx2('coefficients').rx(2, 2)[0]
+            sigma = lmsumm.rx2('sigma')[0]
+            df_residual = lmres.rx2('df.residual')[0]
+            Amean = sum(y) / len(y)
+            r2 = (Amean, df_residual, coeff_x, stderr_x/sigma, sigma)
+            print >> sys.stderr, "--\n%s\n%s" % (str(r1), str(r2))
+        return r1
+    
+    def fit(self, y):
+        """ Fit linear model given count vector y """
+        if False and y == self.prevY:
+            return self.prevAns # Cache hit!
+        self.prevY = y
+        tupy = tuple(y)
+        cache = self.cache
+        root = self.root
+        if self.useCache:
+            link = cache.get(tupy)
+            if link is not None:
+                # Cache hit!
+                link_prev, link_next, _, ans = link
+                link_prev[1] = link_next
+                link_next[0] = link_prev
+                last = root[0]
+                last[1] = root[0] = link
+                link[0] = last
+                link[1] = root
+                self.nhit += 1
+                self.prevAns = ans
+                return ans
+        # Cache miss
+        ans = self.__fit(y)
+        if self.useCache:
+            root[2] = tupy
+            root[3] = ans
+            oldroot = root
+            root = self.root = root[1]
+            root[2], oldkey = None, root[2]
+            root[3], _ = None, root[3]
+            del cache[oldkey]
+            cache[tupy] = oldroot
+            self.nmiss += 1
+        self.prevAns = ans
+        return ans
 
 def go():
 
@@ -135,22 +243,25 @@ def go():
     
     # Import stats R package
     
-    stats = importr('stats')
-    base = importr('base')
-    
     verbose = False
     
     idxs = [ lab2idx[x] for x in ls ]
     gs = map(lab2grp.get, [groupName(x) for x in ls])
     
-    idxs_permutations = []
-    gs_permutations = []
+    idxs_permutations = []  # permutations of sample indexes
+    gs_permutations = []    # permutations of groups indexes
+    norm_permutations = []  # permutations of sample norm factors
     
     for _ in xrange(0, args.permutations):
-        both = zip(idxs, gs)
-        random.shuffle(both)
-        idxs_permutations.append(map(lambda x: x[0], both))
-        gs_permutations.append(map(lambda x: x[1], both))
+        shuf = zip(idxs, gs, normalsl)
+        random.shuffle(shuf)
+        idxs_permutations.append(map(lambda x: x[0], shuf))
+        gs_permutations.append(map(lambda x: x[1], shuf))
+        norm_permutations.append(map(lambda x: x[2], shuf))
+    
+    testFitter = LMFitter(gs, normalsl)
+    permFitters = [ LMFitter(gs, ns) for gs, ns in \
+                    zip(gs_permutations, norm_permutations) ]
     
     if args.permutations_out is not None:
         with open(args.permutations_out, 'w') as fh:
@@ -179,40 +290,21 @@ def go():
                         assert l in normals
                         mycov = cov[l]
                     y.append(math.log(mycov + args.fudge, 2))
-                # TODO: other filters here?
                 if tot > 0:
                     assert len(gs) == len(y)
                     assert len(normals) == len(y)
-                    mn, df, coef, stdev, sig = lmFit(y, gs) 
+                    mn, df, coef, stdev, sig = testFitter.fit(y) 
                     fits = [(coef, stdev, sig)]
                     fitstrs = [ "%f,%f,%f" % fits[0] ]
                     # Do the permutations
-                    for gsp in gs_permutations:
-                        _, _, coef, stdev, sig = lmFit(y, gsp) 
+                    for fitter in permFitters:
+                        _, _, coef, stdev, sig = fitter.fit(y) 
                         fits.append((coef, stdev, sig))
                         fitstrs.append("%f,%f,%f" % fits[-1])
                     print (("%s\t%d\t%f\t%d\t" % (refid, last_st, mn, df)) + '\t'.join(fitstrs))
                     nout += 1
             last_st += 1
         return nout
-    
-    def lmFit(y, groups):
-    
-        ''' Use R's lmfit function to fit a linear model.  Return a tuple
-            containing all the fit information relevant to RNAwesome. '''
-    
-        robjects.globalenv["normals"] = robjects.FloatVector(normalsl)
-        robjects.globalenv["counts"] = robjects.FloatVector(y)
-        robjects.globalenv["groups"] = robjects.IntVector(groups)
-        lmres = stats.lm("counts ~ groups + normals")
-        lmsumm = base.summary(lmres)
-        assert len(lmres.rx2('coefficients')) == 3
-        coeff_x = lmres.rx2('coefficients')[1]
-        stderr_x = lmsumm.rx2('coefficients').rx(2, 2)[0]
-        sigma = lmsumm.rx2('sigma')[0]
-        df_residual = lmres.rx2('df.residual')[0]
-        Amean = sum(y) / len(y)
-        return (Amean, df_residual, coeff_x, stderr_x/sigma, sigma)
     
     def finishPartition(refid, last_st, part_st, part_en, verbose=False):
         if verbose:
