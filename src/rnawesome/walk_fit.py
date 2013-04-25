@@ -36,10 +36,7 @@ import argparse
 import math
 import string
 import numpy
-import rpy2
 import random
-from rpy2.robjects.packages import importr
-import rpy2.robjects as robjects
 import time
 timeSt = time.clock()
 
@@ -76,9 +73,6 @@ parser.add_argument(\
 partition.addArgs(parser)
 args = parser.parse_args()
 binsz = partition.binSize(args)
-
-stats = importr('stats')
-base = importr('base')
 
 class LMFitter(object):
     """ Helper class for repeatedly fitting linear models to count
@@ -121,35 +115,20 @@ class LMFitter(object):
         root[0] = last
     
     def __fit(self, y):
+        """ Fit linear model for given count vector y """
         assert len(y) == len(self.gs)
-        if True:
-            Amean = numpy.mean(y)
-            fit = numpy.linalg.lstsq(self.D, y)
-            coefs = fit[0]
-            residuals = [ y[i] - (coefs[0] * self.gs[i] + coefs[1] * self.ns[i] + coefs[2]) for i in xrange(len(y)) ]
-            rss = sum([r * r for r in residuals])
-            sigma = math.sqrt(rss / self.df)
-            groupStderr = math.sqrt(self.XTXi00 * (rss / self.df))
-            r1 = (Amean, self.df, coefs[0], groupStderr/sigma, sigma)
-        else:
-            robjects.globalenv["counts"] = robjects.FloatVector(y)
-            robjects.globalenv["normals"] = robjects.FloatVector(self.ns)
-            robjects.globalenv["groups"] = robjects.IntVector(self.gs)
-            lmres = stats.lm("counts ~ groups + normals")
-            lmsumm = base.summary(lmres)
-            assert len(lmres.rx2('coefficients')) == 3
-            coeff_x = lmres.rx2('coefficients')[1]
-            stderr_x = lmsumm.rx2('coefficients').rx(2, 2)[0]
-            sigma = lmsumm.rx2('sigma')[0]
-            df_residual = lmres.rx2('df.residual')[0]
-            Amean = sum(y) / len(y)
-            r2 = (Amean, df_residual, coeff_x, stderr_x/sigma, sigma)
-            print >> sys.stderr, "--\n%s\n%s" % (str(r1), str(r2))
-        return r1
+        Amean = numpy.mean(y)
+        fit = numpy.linalg.lstsq(self.D, y)
+        coefs = fit[0]
+        residuals = [ y[i] - (coefs[0] * self.gs[i] + coefs[1] * self.ns[i] + coefs[2]) for i in xrange(len(y)) ]
+        rss = sum([r * r for r in residuals])
+        sigma = math.sqrt(rss / self.df)
+        groupStderr = math.sqrt(self.XTXi00 * (rss / self.df))
+        return (Amean, self.df, coefs[0], groupStderr/sigma, sigma)
     
     def fit(self, y):
         """ Fit linear model given count vector y """
-        if False and y == self.prevY:
+        if y == self.prevY:
             return self.prevAns # Cache hit!
         self.prevY = y
         tupy = tuple(y)
