@@ -31,7 +31,6 @@ Tab-delimited output tuple columns:
 '''
 
 import argparse
-import random
 import sys
 import os
 import site
@@ -43,11 +42,6 @@ timeSt = time.clock()
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "statsmath"))
 site.addsitedir(os.path.join(base_path, "interval"))
-
-# rpy2 is the glue that allows us to run R code fro mPython
-import rpy2
-from rpy2.robjects.packages import importr
-import rpy2.robjects as robjects
 
 # Some key functions ported from R
 from statsmath import digamma, trigamma, trigammaInverse, is_infinite
@@ -92,24 +86,6 @@ def eBayes(tt, df):
     ttmod = coef / (np.sqrt(sgtilde) * stddev)
     logfchange = coef
     return zip(ttmod, logfchange)
-    
-    # sg2 <- fit$sigma^2
-    # sg2med <- median(sg2)
-    # sg2 <- pmax(sg2,1e-05*sg2med) # numpy.maximum
-    # zg <- log(sg2) # math.log
-    # eg <- zg - digamma(fit$df.residual/2)+log(fit$df.residual/2)
-    # if(!trend){
-    #    G <- length(fit$sigma)
-    #    ebar <- mean(eg)
-    #    d0 <- 2*trigammaInverse(mean( (eg-ebar)^2*(G/(G-1)) - trigamma(fit$df.residual/2) ))
-    #    s02 <- exp(ebar+digamma(d0/2)-log(d0/2))
-    # }
-    # if(!is.finite(d0)){
-    #    sgtilde <- s02
-    # }else{sgtilde <- (d0*s02+fit$df.residual*sg2)/(d0+fit$df.residual)}
-    # tt <- fit$coefficients/(sqrt(sgtilde)*fit$stdev.unscaled)
-    # logfchange = fit$coefficients
-    # return(list(tt=tt,logfchange=logfchange))
 
 # tts is a list of { lists of 3-tuples }.  One outermost list element
 # per test/null permutation.  Inner list is per position.  Elements of
