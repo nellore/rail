@@ -42,12 +42,16 @@ last_refid = "\t" # last ref id
 last_st = -1      # last start pos
 last_en = -1      # last end pos
 cnts = dict()     # per-label counts for a given rdid
+ndigits = 12      #maxinum number of digits of start position number 
 
 def flushCnts(pt, refid, st, en):
     global nout
     for k, v in cnts.iteritems():
         # k is group label, v is # times the interval occurred
-        print "%s\t%d\t%d\t%s\t%d\t%s" % (pt, st, en, refid, v, k)
+        start = str(st)
+        assert len(start)<=ndigits
+        start = (ndigits-len(start))*"0"+start
+        print "%s\t%s\t%d\t%s\t%d\t%s" % (pt, start, en, refid, v, k)
         nout += 1
 
 for ln in sys.stdin:

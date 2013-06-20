@@ -28,11 +28,13 @@ Tab-delimited output tuple columns:
 import os
 import site
 import sys
-import ghmm
+#import ghmm
 import argparse
 import numpy
 import string
 import time
+import scipy.stats
+import math
 timeSt = time.clock()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -81,22 +83,78 @@ class HMM:
         
         # Emission probabilities
         E = map(list, zip(means, sds))
-        F = ghmm.Float()  # emission domain of this model
-        
-        self.hmm = ghmm.HMMFromMatrices(\
-            F,
-            ghmm.GaussianDistribution(F),
-            A,
-            E,
-            initial)
-        
+        #F = ghmm.Float()  # emission domain of this model
+        # debugFile = open("debug.txt","w")
+        # debugFile.write("Initialized emission and transition probabilities\n")
+        # self.hmm = ghmm.HMMFromMatrices(
+        #     F,
+        #     ghmm.GaussianDistribution(F),
+        #     A,
+        #     E,
+        #     initial)
+
         self.A, self.E, self.I = A, E, initial
-    
+
+    def Elog(self,i,x): #Emission probability of t-statistic
+        prob = scipy.stats.norm(self.E[i][0],self.E[i][1]).pdf(x)
+        if(prob==0):
+            return float("-inf")
+        return math.log(prob,2)
+
+    def Ilog(self,i): #Initial probability of t-statistic
+        if(self.I[i]==0):
+            return float("-inf")
+        return math.log(self.I[i],2)
+
+    def Alog(self,i,j):
+        if(self.A[i][j]==0):
+            return float("-inf")
+        return math.log(self.A[i][j],2)
+
     def viterbi(self, x):
         """ Return most likely sequence of states through the HMM given
             sequence of moderated t-statistics (x) """
-        return self.hmm.viterbi(ghmm.EmissionSequence(ghmm.Float(), x))
+        # debugFile = open("debug.txt","a")
+        # debugFile.write("Started Viterbi algorithm\n")
+        # debugFile.write(str(self.hmm)+'\n')
+
+        #return self.hmm.viterbi(ghmm.EmissionSequence(ghmm.Float(), x))
     
+        """ Given sequence of emissions, return the most probable path
+        along with its log probability.  Do all calculations in log
+        space to avoid underflow. """
+        #x = map(self.smap.get, x) # turn emission characters into ids
+        nrow, ncol = len(self.E), len(x)  #nrows = states, ncols = observations
+        mat   = numpy.zeros(shape=(nrow, ncol), dtype=float) # prob
+        matTb = numpy.zeros(shape=(nrow, ncol), dtype=int)   # traceback
+        #print >> sys.stderr, (self.Alog, self.Elog, self.Ilog)
+        # Fill in first column
+        for i in xrange(0, nrow):
+            mat[i, 0] = self.Elog(i, x[0]) + self.Ilog(i)
+        # Fill in rest of log prob and Tb tables
+        for j in xrange(1, ncol):
+            for i in xrange(0, nrow):
+                ep = self.Elog(i, x[j])
+                mx, mxi = mat[0, j-1] + self.Alog(0, i) + ep, 0
+                for i2 in xrange(1, nrow):
+                    pr = mat[i2, j-1] + self.Alog(i2, i) + ep
+                    if pr > mx:
+                        mx, mxi = pr, i2
+                mat[i, j], matTb[i, j] = mx, mxi
+        # Find final state with maximal log probability
+        omx, omxi = mat[0, ncol-1], 0
+        for i in xrange(1, nrow):
+            if mat[i, ncol-1] > omx:
+                omx, omxi = mat[i, ncol-1], i
+        # Traceback
+        i, p = omxi, [omxi]
+        for j in xrange(ncol-1, 0, -1):
+            i = matTb[i, j]
+            p.append(i)
+        #p = map(lambda x: self.Q[x], p[::-1])
+        #print "Path",p
+        return p, omx # Return path and log probability
+
     def __str__(self):
         return 'A:\n%s\nE:\n%s\nI:\n%s' % (self.A, self.E, self.I)
     
@@ -106,6 +164,8 @@ class HMM:
 def parseParams(fn):
     """ Parse HMM parameters """
     hmms = []
+    # debugFile = open("debug.txt","a")
+    # debugFile.write("Reading HMM parameters\n")
     with open(fn, 'r') as fh:
         for ln in fh:
             ln = ln.rstrip()

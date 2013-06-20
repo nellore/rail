@@ -56,11 +56,13 @@ args = parser.parse_args()
 binsz = partition.binSize(args)
 
 nout = 0
+ndigits = 12 #maxinum number of digits of start position number 
 
 def handleRead(rdid, ivals):
     ''' Given all the intervals where readlets from a given read
         aligned, compose a spliced alignment record. '''
     global nout
+    global ndigits
     for k in ivals.iterkeys():
         for iv in iter(ivals[k]):
             st, en = iv.start, iv.end
@@ -68,7 +70,11 @@ def handleRead(rdid, ivals):
             # Add a partition id that combines the ref id and some function of
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
-                print "%s\t%d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdid))
+                start = str(st)
+                assert len(start)<=ndigits
+                start = (ndigits-len(start))*"0"+start
+                print "%s\t%s\t%d\t%s\t%s" % (pt, start, en, k, sample.parseLab(rdid))
+                #print "%s\t%d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdid))
                 nout += 1
 
 last_rdid = "\t"
