@@ -92,6 +92,9 @@ robjects.r(R_locfdrFit_str)
 
 r_getParams = robjects.r['getParams']
 
+robjects.r('''options(warn=-1)
+''')
+
 ninp, nout = 0, 0
 
 def getParams(ttmods):

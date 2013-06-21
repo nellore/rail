@@ -12,7 +12,7 @@ locfdrFit <-
 function (zz, bre = 120, df = 7, pct = 0, pct0 = 1/4, nulltype = 1, 
     type = 0, plot = 1, mult, mlests, main = " ", sw = 0, verbose=T) 
 {
-	require(locfdr)
+	suppressPackageStartupMessages(require(locfdr))
 	locmle = locfdr:::locmle
 	loccov2 = locfdr:::loccov2
 	loccov = locfdr:::loccov 
