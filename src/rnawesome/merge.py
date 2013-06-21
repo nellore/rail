@@ -50,8 +50,7 @@ def flushCnts(pt, refid, st, en):
         # k is group label, v is # times the interval occurred
         start = str(st)
         assert len(start)<=ndigits
-        start = (ndigits-len(start))*"0"+start
-        print "%s\t%s\t%d\t%s\t%d\t%s" % (pt, start, en, refid, v, k)
+        print "%s\t%012d\t%d\t%s\t%d\t%s" % (pt, st, en, refid, v, k)
         nout += 1
 
 for ln in sys.stdin:
