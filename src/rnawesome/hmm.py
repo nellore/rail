@@ -52,6 +52,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--hmm-overlap', dest='hmmolap', metavar='INT', type=int, default=1000,
     help='Number of observations into previous bin to begin')
+parser.add_argument(\
+    '--profile', action='store_const', const=True,
+    help='Profile the code')
 
 partition.addArgs(parser)
 args = parser.parse_args()
@@ -83,6 +86,7 @@ class HMM:
         
         # Emission probabilities
         E = map(list, zip(means, sds))
+        self.Edists = [ scipy.stats.norm(E[i][0], E[i][1]) for i in xrange(0, 4) ]
         #F = ghmm.Float()  # emission domain of this model
         # debugFile = open("debug.txt","w")
         # debugFile.write("Initialized emission and transition probabilities\n")
@@ -96,7 +100,7 @@ class HMM:
         self.A, self.E, self.I = A, E, initial
 
     def Elog(self,i,x): #Emission probability of t-statistic
-        prob = scipy.stats.norm(self.E[i][0],self.E[i][1]).pdf(x)
+        prob = self.Edists[i].pdf(x)
         if(prob==0):
             return float("-inf")
         return math.log(prob,2)
@@ -177,9 +181,6 @@ def parseParams(fn):
             hmms.append(HMM(map(float, params)))
     return hmms
 
-# Parse all the HMM parameters and build HMMs using ghmm
-hmms = parseParams(args.params)
-
 def writeResults(res, refid, dataset, ofh):
     """ Given HMM path through a partition, output intervals """
     global nout
@@ -213,42 +214,53 @@ def processPartition(tts, offs, hmm, st, en):
         cur += 1
     return results
 
-tts, offs = [], []
-refid, st, en = None, None, None
-lastPartid = None
-for ln in sys.stdin:
-    ln = ln.rstrip()
-    #print >>sys.stderr, ln
-    toks = ln.split('\t')
-    assert len(toks) >= 3
-    partid, refoff = toks[0], toks[1]
-    refoff = int(refoff)
-    first = False
-    startedPartition = lastPartid is None or partid != lastPartid
-    finishedPartition = lastPartid is not None and partid != lastPartid
-    if finishedPartition:
+def go():
+    global ninp, nout
+    
+    # Parse all the HMM parameters and build HMMs using ghmm
+    hmms = parseParams(args.params)
+    
+    tts, offs = [], []
+    refid, st, en = None, None, None
+    lastPartid = None
+    for ln in sys.stdin:
+        ln = ln.rstrip()
+        #print >>sys.stderr, ln
+        toks = ln.split('\t')
+        assert len(toks) >= 3
+        partid, refoff = toks[0], toks[1]
+        refoff = int(refoff)
+        first = False
+        startedPartition = lastPartid is None or partid != lastPartid
+        finishedPartition = lastPartid is not None and partid != lastPartid
+        if finishedPartition:
+            for i in xrange(0, len(tts)):
+                writeResults(processPartition(tts[i], offs[i], hmms[i], st, en), refid, i, sys.stdout)
+            tts, offs = [], []
+        if startedPartition:
+            refid, st, en = partition.parse(partid, partition.binSize(args))
+            first = True
+        for i in xrange(2, len(toks)):
+            assert toks[i].count(',') == 1
+            tt, logf = string.split(toks[i], ',')
+            tt, logf = float(tt), float(logf)
+            if first:
+                tts.append([]); offs.append([])
+                assert len(tts) == i-1
+            tts[i-2].append(tt)
+            offs[i-2].append(refoff)
+        lastPartid = partid
+        ninp += 1
+    
+    if lastPartid is not None:
         for i in xrange(0, len(tts)):
             writeResults(processPartition(tts[i], offs[i], hmms[i], st, en), refid, i, sys.stdout)
-        tts, offs = [], []
-    if startedPartition:
-        refid, st, en = partition.parse(partid, partition.binSize(args))
-        first = True
-    for i in xrange(2, len(toks)):
-        assert toks[i].count(',') == 1
-        tt, logf = string.split(toks[i], ',')
-        tt, logf = float(tt), float(logf)
-        ii = i - 2
-        if first:
-            tts.append([]); offs.append([])
-            assert len(tts) == i-1
-        tts[i-2].append(tt)
-        offs[i-2].append(refoff)
-    lastPartid = partid
-    ninp += 1
 
-if lastPartid is not None:
-    for i in xrange(0, len(tts)):
-        writeResults(processPartition(tts[i], offs[i], hmms[i], st, en), refid, i, sys.stdout)
+if args.profile:
+    import cProfile
+    cProfile.run('go()')
+else:
+    go()
 
 # Done
 timeEn = time.clock()
