@@ -33,7 +33,7 @@ import argparse
 import numpy
 import string
 import time
-import scipy.stats
+#import scipy.stats
 import math
 timeSt = time.clock()
 
@@ -86,8 +86,9 @@ class HMM:
         
         # Emission probabilities
         E = map(list, zip(means, sds))
-        self.Edists = [ scipy.stats.norm(E[i][0], E[i][1]) for i in xrange(0, 4) ]
-        #F = ghmm.Float()  # emission domain of this model
+        #self.Edists = [ scipy.stats.norm(E[i][0], E[i][1]) for i in xrange(0, 4) ]
+        
+	#F = ghmm.Float()  # emission domain of this model
         # debugFile = open("debug.txt","w")
         # debugFile.write("Initialized emission and transition probabilities\n")
         # self.hmm = ghmm.HMMFromMatrices(
@@ -100,8 +101,11 @@ class HMM:
         self.A, self.E, self.I = A, E, initial
 
     def Elog(self,i,x): #Emission probability of t-statistic
-        prob = self.Edists[i].pdf(x)
-        if(prob==0):
+        #prob = self.Edists[i].pdf(x)
+        m = self.E[i][0]
+        s = self.E[i][1]
+        prob = (1.0/(math.sqrt(2*math.pi*s*s)))*math.exp(-(x-m)*(x-m)/(2*s*s))
+	if(prob==0):
             return float("-inf")
         return math.log(prob,2)
 
