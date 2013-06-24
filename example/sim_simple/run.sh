@@ -84,13 +84,13 @@ WALK_IN_TMP=${TMPDIR}walk_in.tsv
 HMM_IN_TMP=${TMPDIR}hmm_in.tsv
 
 # Parameters
-GENOME_LEN=50000
+GENOME_LEN=48502
 NTASKS=20
 HMM_OVERLAP=100
 PERMUTATIONS=5
 
-echo "Temporary file for walk_fit.py input is '$WALK_IN_TMP'"
-echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
+echo "Temporary file for walk_fit.py input is '$WALK_IN_TMP'" 1>&2
+echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 
 cat *.tab5 \
 	| $ALIGN_AGGR | $ALIGN \
@@ -105,7 +105,7 @@ cat *.tab5 \
 		--genomeLen=$GENOME_LEN \
 		--manifest $MANIFEST_FN \
 	| $MERGE_AGGR1 | $MERGE_AGGR2 | $MERGE \
-	| $WALK_PRENORM_AGGR1 | $WALK_PRENORM_AGGR2 | tee $WALK_IN_TMP | $WALK_PRENORM \
+	| tee $WALK_IN_TMP | $WALK_PRENORM \
 		--manifest $MANIFEST_FN \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
@@ -132,6 +132,8 @@ cat $WALK_IN_TMP \
 		--null \
 		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
 
+hadoop dfs -put ${INTERMEDIATE_DIR}hmm_params.tsv /somewhere/whatever.txt
+
 cat $HMM_IN_TMP \
 	| $HMM_AGGR1 | $HMM_AGGR2 | tee ${INTERMEDIATE_DIR}hmm_in.tsv | $HMM \
 		--ntasks=$NTASKS \
@@ -139,10 +141,10 @@ cat $HMM_IN_TMP \
 		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
 		--hmm-overlap=$HMM_OVERLAP
 
-echo DONE
+echo DONE 1>&2
 
-echo "Normalization file:"
-cat ${INTERMEDIATE_DIR}norm.tsv
+echo "Normalization file:" 1>&2
+cat ${INTERMEDIATE_DIR}norm.tsv 1>&2
 
-echo "HMM parameter file:"
-cat ${INTERMEDIATE_DIR}hmm_params.tsv
+echo "HMM parameter file:" 1>&2
+cat ${INTERMEDIATE_DIR}hmm_params.tsv 1>&2
