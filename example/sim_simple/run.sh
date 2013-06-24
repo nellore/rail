@@ -132,8 +132,6 @@ cat $WALK_IN_TMP \
 		--null \
 		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
 
-hadoop dfs -put ${INTERMEDIATE_DIR}hmm_params.tsv /somewhere/whatever.txt
-
 cat $HMM_IN_TMP \
 	| $HMM_AGGR1 | $HMM_AGGR2 | tee ${INTERMEDIATE_DIR}hmm_in.tsv | $HMM \
 		--ntasks=$NTASKS \
