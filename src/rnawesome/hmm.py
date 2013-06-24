@@ -20,8 +20,9 @@ Binning/sorting prior to this step:
 Tab-delimited output tuple columns:
  1. Reference ID
  2. Reference offset (0-based)
- 3+. HMM state.  One column for the original data, then N more columns for each
-     of the N permutations.
+ 3. Length of run of positions with this state
+ 4. HMM state
+ 5. Dataset id (0 for test, >0 for permutations)
 
 '''
 
@@ -88,7 +89,7 @@ class HMM:
         E = map(list, zip(means, sds))
         #self.Edists = [ scipy.stats.norm(E[i][0], E[i][1]) for i in xrange(0, 4) ]
         
-	#F = ghmm.Float()  # emission domain of this model
+        #F = ghmm.Float()  # emission domain of this model
         # debugFile = open("debug.txt","w")
         # debugFile.write("Initialized emission and transition probabilities\n")
         # self.hmm = ghmm.HMMFromMatrices(
@@ -105,7 +106,7 @@ class HMM:
         m = self.E[i][0]
         s = self.E[i][1]
         prob = (1.0/(math.sqrt(2*math.pi*s*s)))*math.exp(-(x-m)*(x-m)/(2*s*s))
-	if(prob==0):
+        if(prob==0):
             return float("-inf")
         return math.log(prob,2)
 
