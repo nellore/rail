@@ -175,6 +175,9 @@ def go():
     cov = dict()               # current coverage in each sample
     
     def normals(args):
+        """ Reads in --normals file, places all the sample labels in 'labels'
+            list and places all normalization factors in 'normals' list.
+            Returns them. """
         if not os.path.isfile(args.normals):
             raise RuntimeError("No such --normals file '%s'" % args.normals)
         normals = dict()
@@ -220,8 +223,6 @@ def go():
     
     lab2grp, grp2lab, lab2idx, _ = labelMapping(ls)
     
-    # Import stats R package
-    
     verbose = False
     
     idxs = [ lab2idx[x] for x in ls ]
@@ -256,7 +257,7 @@ def go():
             if last_st >= part_st and last_st < part_en:
                 # For all labels
                 tot = 0
-                y = []
+                y, rawy = [], []
                 for l in ls:
                     mycov = 0.0
                     if l in ends:
@@ -268,7 +269,11 @@ def go():
                         tot += cov[l]
                         assert l in normals
                         mycov = cov[l]
+                    rawy.append(mycov)
                     y.append(math.log(mycov + args.fudge, 2))
+                # rawy contains coverage vector at offset 'last_st'.
+                # y contains the log2-transformed coverage vector.
+                # Parallel list of sample names is in 'ls'.
                 if tot > 0:
                     assert len(gs) == len(y)
                     assert len(normals) == len(y)
