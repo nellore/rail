@@ -41,7 +41,6 @@ timeSt = time.clock()
 
 # rpy2 is the glue between Python and R
 import rpy2
-from rpy2.robjects.packages import importr
 import rpy2.robjects as robjects
 
 #
@@ -64,7 +63,7 @@ args = parser.parse_args()
 # Set up R functions
 #
 
-R_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "R")
+R_dir = os.path.dirname(os.path.abspath(__file__))
 R_paramHelpers = os.path.join(R_dir, 'paramHelpers.R')
 R_getParams = os.path.join(R_dir, 'getParams.R')
 R_locfdrFit = os.path.join(R_dir, 'locfdrFit.R')
