@@ -1,5 +1,5 @@
 # Parameters
-GENOME_LEN=1000
+GENOME_LEN=48502
 NTASKS=10
 HMM_OVERLAP=30
 
@@ -8,13 +8,13 @@ HADOOP_FILES=/user/hduser/sim_simple
 STREAMING=$HADOOP_HOME/contrib/streaming/hadoop-streaming*.jar
 
 #Note: Must copy over the entire tornado directory
-TORNADO=/home/hduser/workspace/tornado
+TORNADO=/damsl/projects/myrna2/software/tornado
 EXAMPLE=$TORNADO/example
 SCR_DIR=$TORNADO/src
 RNAWESOME=$SCR_DIR/rnawesome
 
 #Bowtie locations
-BOWTIE=/home/hduser/software/bowtie-0.12.8/bowtie
+BOWTIE=$TORNADO/tools/bowtie-0.12.8/bowtie
 INDEXS=$EXAMPLE/fasta
 BOWTIE_IDX=$INDEXS/lambda_virus
 
@@ -23,8 +23,8 @@ SIM_SIMPLE=$EXAMPLE/sim_simple
 MANIFEST_FN=$SIM_SIMPLE/eg1.manifest
 
 INTERMEDIATE_DIR=$SIM_SIMPLE/intermediate
-rm -r intermediate
-mkdir -p intermediate
+#rm -r intermediate
+#mkdir -p intermediate
 
 # Step 1a: Readletize input reads and use Bowtie to align the readlets 
 ALIGN_AGGR="cat"
@@ -112,40 +112,40 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 # echo $FILES
 
 #copy files over to hdfs
-#hadoop dfs -copyFromLocal *.tab5 $HADOOP_FILES
-#hadoop dfs -mkdir $HADOOP_FILES/output
+# hadoop dfs -copyFromLocal *.tab5 $HADOOP_FILES
+# hadoop dfs -mkdir $HADOOP_FILES/output
 
-#Step 1 ALIGN
+# #Step 1 ALIGN
 # hadoop dfs -rmr $ALIGN_OUT
 # hadoop jar $STREAMING \
-# -D mapred.reduce.tasks=0 \
-# -file "$SCR_DIR/rnawesome/align.py" \
-# -file "$SCR_DIR/bowtie/bowtie.py" \
-# -file "$SCR_DIR/read/readlet.py" \
-# -file "$SCR_DIR/read/truncate.py" \
-# -file "$SCR_DIR/interval/interval.py" \
-# -file "$SCR_DIR/interval/partition.py" \
-# -file "$SCR_DIR/manifest/manifest.py" \
-# -file "$SCR_DIR/sample/sample.py" \
-# -file "$INDEXS/lambda_virus.rev.1.ebwt" \
-# -file "$INDEXS/lambda_virus.rev.2.ebwt" \
-# -file "$INDEXS/lambda_virus.1.ebwt" \
-# -file "$INDEXS/lambda_virus.2.ebwt" \
-# -file "$INDEXS/lambda_virus.3.ebwt" \
-# -file "$INDEXS/lambda_virus.4.ebwt" \
-# -file "$INDEXS/lambda_virus.fa" \
-# -file "$BOWTIE" \
-# -mapper "$ALIGN_ARGS" \
-# -input $HADOOP_FILES/*.tab5 -output $ALIGN_OUT
+#     -D mapred.reduce.tasks=0 \
+#     -file "$SCR_DIR/rnawesome/align.py" \
+#     -file "$SCR_DIR/bowtie/bowtie.py" \
+#     -file "$SCR_DIR/read/readlet.py" \
+#     -file "$SCR_DIR/read/truncate.py" \
+#     -file "$SCR_DIR/interval/interval.py" \
+#     -file "$SCR_DIR/interval/partition.py" \
+#     -file "$SCR_DIR/manifest/manifest.py" \
+#     -file "$SCR_DIR/sample/sample.py" \
+#     -file "$INDEXS/lambda_virus.rev.1.ebwt" \
+#     -file "$INDEXS/lambda_virus.rev.2.ebwt" \
+#     -file "$INDEXS/lambda_virus.1.ebwt" \
+#     -file "$INDEXS/lambda_virus.2.ebwt" \
+#     -file "$INDEXS/lambda_virus.3.ebwt" \
+#     -file "$INDEXS/lambda_virus.4.ebwt" \
+#     -file "$INDEXS/lambda_virus.fa" \
+#     -file "$BOWTIE" \
+#     -mapper "$ALIGN_ARGS" \
+#     -input $HADOOP_FILES/*.tab5 -output $ALIGN_OUT
 
-#Check $? after completion.  If not 0, then print an error message and quit
-# if [$? -ne 0]
-# then
-#     echo "Alignment step failed, now exiting"
-#     exit 0
-# fi
+# #Check $? after completion.  If not 0, then print an error message and quit
+# # if [$? -ne 0]
+# # then
+# #     echo "Alignment step failed, now exiting"
+# #     exit 0
+# # fi
 
-#Step 2 SPLICE and MERGE
+# #Step 2 SPLICE and MERGE
 # hadoop dfs -rmr $SPLICE_OUT
 # hadoop jar $STREAMING \
 #     -file "$SCR_DIR/rnawesome/splice.py" \
@@ -161,8 +161,8 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 #     -reducer "$MERGE" \
 #     -input $ALIGN_OUT/*part* -output $SPLICE_OUT
 
-##Question: Would it be more appropriate if walk_prenorm.py was a mapper or a reducer?
-#Step 3 and 4  and NORMALIZE
+# ##Question: Would it be more appropriate if walk_prenorm.py was a mapper or a reducer?
+# #Step 3 and 4  and NORMALIZE
 # hadoop dfs -rmr $NORMALIZE_OUT
 # hadoop jar $STREAMING \
 #     -file "$SCR_DIR/rnawesome/normalize.py" \
@@ -174,7 +174,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 #     -reducer "$NORMALIZE" \
 #     -input $SPLICE_OUT/*part* -output $NORMALIZE_OUT
 
-#Sort MERGE output
+# #Sort MERGE output
 # hadoop dfs -rmr $MERGE_OUT
 # hadoop jar $STREAMING \
 #     -D mapred.text.key.partitioner.options=-k1,1 \
@@ -184,7 +184,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 #     -reducer org.apache.hadoop.mapred.lib.IdentityReducer \
 #     -input $SPLICE_OUT/*part* -output $MERGE_OUT
 
-#Step 3 and 4  and NORMALIZE
+# #Step 3 and 4  and NORMALIZE
 # hadoop dfs -rmr $NORMALIZE_OUT
 # hadoop jar $STREAMING \
 #     -D mapred.text.key.partitioner.options=-k1,1 \
@@ -199,50 +199,79 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 #     -mapper cat \
 #     -input $MERGE_OUT/*part* -output $NORMALIZE_OUT
 
-#Step 5 NORMALIZE_POST
+# #Step 5 NORMALIZE_POST
 # hadoop dfs -rmr $NORMALIZE_POST_OUT
 # hadoop jar $STREAMING \
-#     -D mapred.reduce.tasks=1 \
 #     -file "$SCR_DIR/rnawesome/normalize_post.py" \
 #     -file "$SCR_DIR/manifest/manifest.py" \
 #     -mapper cat \
 #     -reducer "$NORMALIZE_POST_ARGS" \
 #     -input $NORMALIZE_OUT/*part* -output $NORMALIZE_POST_OUT
 
-#Copy files to local machine
+# #Copy files to local machine
 # hadoop dfs -copyToLocal $NORMALIZE_POST_OUT/part* ${INTERMEDIATE_DIR}/norm.tsv
 # hadoop dfs -copyToLocal $MERGE_OUT/part* ${INTERMEDIATE_DIR}/walk_in_input.tsv
 
-#Step 6 and 7 WALK_FIT and EBAYES
+# #Step 6 WALK_FIT  #once working bad solution
 # hadoop dfs -rmr $WALK_FIT_OUT
 # hadoop jar $STREAMING \
-#     -D mapred.reduce.tasks=1 \
+#     -D mapred.reduce.tasks=0 \
+#     -D mapred.map.tasks=1 \
 #     -file "$SCR_DIR/rnawesome/walk_fit.py" \
 #     -file "$SCR_DIR/rnawesome/ebayes.py" \
 #     -file "$SCR_DIR/interval/partition.py" \
 #     -file "$SCR_DIR/struct/circular.py" \
 #     -file "${INTERMEDIATE_DIR}/norm.tsv" \
 #     -mapper "$WALK_FIT_ARGS" \
-#     -reducer "$EBAYES_ARGS" \
 #     -input $MERGE_OUT/*part* -output $WALK_FIT_OUT
 
-#Check $? after completion.  If not 0, then print an error message and quit
-# if [$? -ne 0]
-# then
-#     echo "Splice step failed, now exiting"
-#     exit 0
-# fi
 
-#Step 8 HMM_PARAMS
-# hadoop dfs -rmr $HMM_PARAMS_OUT
-# hadoop jar $STREAMING \
-#     -D mapred.reduce.tasks=1 \
-#     -file "$SCR_DIR/rnawesome/hmm_params.py" \
-#     -mapper cat \
-#     -reducer "$HMM_PARAMS_ARGS" \
-#     -input $WALK_FIT_OUT/*part* -output $HMM_PARAMS_OUT
+#Step 6 WALK_FIT  #once working bad solution
+hadoop dfs -rmr $WALK_FIT_OUT
+hadoop jar $STREAMING \
+    -D mapred.text.key.partitioner.options=-k1,1 \
+    -D stream.num.map.output.key.fields=2 \
+    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+    -file "$SCR_DIR/rnawesome/walk_fit.py" \
+    -file "$SCR_DIR/rnawesome/ebayes.py" \
+    -file "$SCR_DIR/interval/partition.py" \
+    -file "$SCR_DIR/struct/circular.py" \
+    -file "${INTERMEDIATE_DIR}/norm.tsv" \
+    -mapper cat \
+    -reducer "$WALK_FIT_ARGS" \
+    -input $MERGE_OUT/*part* -output $WALK_FIT_OUT
 
-#Copy HMM params to local machine
+#Step 7 EBAYES
+hadoop dfs -rmr $EBAYES_OUT
+hadoop jar $STREAMING \
+    -D mapred.text.key.partitioner.options=-k1,1 \
+    -D stream.num.map.output.key.fields=2 \
+    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+    -file "$SCR_DIR/rnawesome/ebayes.py" \
+    -file "$SCR_DIR/interval/partition.py" \
+    -file "$SCR_DIR/struct/circular.py" \
+    -mapper cat \
+    -reducer "$EBAYES_ARGS" \
+    -input $WALK_FIT_OUT/*part* -output $EBAYES_OUT
+
+
+
+# # #Check $? after completion.  If not 0, then print an error message and quit
+# # # if [$? -ne 0]
+# # # then
+# # #     echo "Splice step failed, now exiting"
+# # #     exit 0
+# # # fi
+
+# # #Step 8 HMM_PARAMS
+hadoop dfs -rmr $HMM_PARAMS_OUT
+hadoop jar $STREAMING \
+    -file "$SCR_DIR/rnawesome/hmm_params.py" \
+    -mapper cat \
+    -reducer "$HMM_PARAMS_ARGS" \
+    -input $EBAYES_OUT/*part* -output $HMM_PARAMS_OUT
+
+# #Copy HMM params to local machine
 hadoop dfs -copyToLocal $HMM_PARAMS_OUT/part* ${INTERMEDIATE_DIR}/hmm_params.tsv
 
 #Step 9 HMM
@@ -252,11 +281,11 @@ hadoop jar $STREAMING \
     -D stream.num.map.output.key.fields=2 \
     -file "$SCR_DIR/rnawesome/hmm.py" \
     -file "$SCR_DIR/interval/partition.py" \
+    -file "$INTERMEDIATE_DIR/hmm_params.tsv" \
     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
     -mapper cat \
     -reducer "$HMM_ARGS" \
-    -input $WALK_FIT_OUT/*part* -output $HMM_OUT
-
+    -input $EBAYES_OUT/*part* -output $HMM_OUT
 
 
 # cat *.tab5 \
