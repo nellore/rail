@@ -132,13 +132,13 @@ cat $WALK_IN_TMP \
 		--null \
 		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
 
-#cat ${INTERMEDIATE_DIR}hmm_in.tsv \
-#	| $HMM_AGGR1 | $HMM_AGGR2 | $HMM \
-#		--ntasks=$NTASKS \
-#		--genomeLen=$GENOME_LEN \
-#		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
-#		--hmm-overlap=$HMM_OVERLAP \
-#	| tee ${INTERMEDIATE_DIR}hmm_out.tsv
+cat ${INTERMEDIATE_DIR}hmm_in.tsv \
+	| $HMM_AGGR1 | $HMM_AGGR2 | $HMM \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
+		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
+		--hmm-overlap=$HMM_OVERLAP \
+	| tee ${INTERMEDIATE_DIR}hmm_out.tsv
 
 echo DONE 1>&2
 

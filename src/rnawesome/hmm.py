@@ -87,18 +87,7 @@ class HMM:
         
         # Emission probabilities
         E = map(list, zip(means, sds))
-        #self.Edists = [ scipy.stats.norm(E[i][0], E[i][1]) for i in xrange(0, 4) ]
         
-        #F = ghmm.Float()  # emission domain of this model
-        # debugFile = open("debug.txt","w")
-        # debugFile.write("Initialized emission and transition probabilities\n")
-        # self.hmm = ghmm.HMMFromMatrices(
-        #     F,
-        #     ghmm.GaussianDistribution(F),
-        #     A,
-        #     E,
-        #     initial)
-
         self.A, self.E, self.I = A, E, initial
 
     def Elog(self,i,x): #Emission probability of t-statistic
@@ -197,7 +186,7 @@ def writeResults(res, refid, dataset, ofh):
             assert off <= args.genomeLen
             ofh.write("%s\t%d\t%d\t%s\t%d\n" % (refid, offi, off - offi, sti, dataset))
             sti, offi = st, off
-    assert off <= args.genomeLen, "off=%d, args.genomeLen=%d" % (off, args.genomeLen)
+    assert off <= args.genomeLen
     off = res[-1][1] + 1
     ofh.write("%s\t%d\t%d\t%s\t%d\n" % (refid, offi, off - offi, sti, dataset))
     nout += 1
@@ -241,7 +230,7 @@ def go():
         assert len(toks) >= 3
         partid, refoff = toks[0], toks[1]
         refoff = int(refoff)
-        assert refoff < args.genomeLen, "refoff=%d, args.genomeLen=%d" % (refoff, args.genomeLen)
+        assert refoff < args.genomeLen
         first = False
         startedPartition = lastPartid is None or partid != lastPartid
         finishedPartition = lastPartid is not None and partid != lastPartid
