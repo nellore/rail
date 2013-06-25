@@ -128,16 +128,17 @@ cat $WALK_IN_TMP \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
 		--hmm-overlap=$HMM_OVERLAP \
-	| tee $HMM_IN_TMP | tee ${INTERMEDIATE_DIR}hmm_params_in.tsv | $HMM_PARAMS_AGGR | $HMM_PARAMS \
+	| tee ${INTERMEDIATE_DIR}hmm_in.tsv | $HMM_PARAMS_AGGR | $HMM_PARAMS \
 		--null \
 		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
 
-cat $HMM_IN_TMP \
-	| $HMM_AGGR1 | $HMM_AGGR2 | tee ${INTERMEDIATE_DIR}hmm_in.tsv | $HMM \
-		--ntasks=$NTASKS \
-		--genomeLen=$GENOME_LEN \
-		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
-		--hmm-overlap=$HMM_OVERLAP
+#cat ${INTERMEDIATE_DIR}hmm_in.tsv \
+#	| $HMM_AGGR1 | $HMM_AGGR2 | $HMM \
+#		--ntasks=$NTASKS \
+#		--genomeLen=$GENOME_LEN \
+#		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
+#		--hmm-overlap=$HMM_OVERLAP \
+#	| tee ${INTERMEDIATE_DIR}hmm_out.tsv
 
 echo DONE 1>&2
 

@@ -189,11 +189,15 @@ def parseParams(fn):
 def writeResults(res, refid, dataset, ofh):
     """ Given HMM path through a partition, output intervals """
     global nout
+    if len(res) == 0:
+        return
     sti, offi = res[0]
     for st, off in res[1:]:
         if st != sti:
+            assert off <= args.genomeLen
             ofh.write("%s\t%d\t%d\t%s\t%d\n" % (refid, offi, off - offi, sti, dataset))
             sti, offi = st, off
+    assert off <= args.genomeLen, "off=%d, args.genomeLen=%d" % (off, args.genomeLen)
     off = res[-1][1] + 1
     ofh.write("%s\t%d\t%d\t%s\t%d\n" % (refid, offi, off - offi, sti, dataset))
     nout += 1
@@ -213,6 +217,8 @@ def processPartition(tts, offs, hmm, st, en):
     results = []
     path, _ = hmm.viterbi(denseTts)
     assert len(path) == en-st + args.hmmolap
+    if en > args.genomeLen:
+        en = args.genomeLen
     cur = args.hmmolap
     for i in xrange(st, en):
         results.append((path[cur], i))
@@ -235,6 +241,7 @@ def go():
         assert len(toks) >= 3
         partid, refoff = toks[0], toks[1]
         refoff = int(refoff)
+        assert refoff < args.genomeLen, "refoff=%d, args.genomeLen=%d" % (refoff, args.genomeLen)
         first = False
         startedPartition = lastPartid is None or partid != lastPartid
         finishedPartition = lastPartid is not None and partid != lastPartid
