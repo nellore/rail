@@ -1,0 +1,14 @@
+Design TODOs:
+- ebayes.py, hmm_params.py are scalability bottlenecks
+- walk_fit.py is slow because of repeated linear model fit
+
+Implementation TODOs:
+- Output per-sample bed track in walk_prenorm.py
+  + Convert to bigBed and push to permanent filesystem (perhaps S3, HDFS)
+- In merge.py detect when reads are spanning introns and emit some junction information
+  + Lots-of-info option: For each read, a list of introns spanned
+  + Tiny-info option: For each intron, a count of how many reads span it
+  + Intermediate option: Intron cooccurrences in a per-gene matrix
+
+Validation TODOs:
+- Reasonable results from a simulation?
