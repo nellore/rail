@@ -202,6 +202,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 #Step 5 NORMALIZE_POST
 # hadoop dfs -rmr $NORMALIZE_POST_OUT
 # hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=1 \
 #     -file "$SCR_DIR/rnawesome/normalize_post.py" \
 #     -file "$SCR_DIR/manifest/manifest.py" \
 #     -mapper cat \
@@ -215,6 +216,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 #Step 6 and 7 WALK_FIT and EBAYES
 # hadoop dfs -rmr $WALK_FIT_OUT
 # hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=1 \
 #     -file "$SCR_DIR/rnawesome/walk_fit.py" \
 #     -file "$SCR_DIR/rnawesome/ebayes.py" \
 #     -file "$SCR_DIR/interval/partition.py" \
@@ -234,6 +236,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 #Step 8 HMM_PARAMS
 # hadoop dfs -rmr $HMM_PARAMS_OUT
 # hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=1 \
 #     -file "$SCR_DIR/rnawesome/hmm_params.py" \
 #     -mapper cat \
 #     -reducer "$HMM_PARAMS_ARGS" \
