@@ -42,7 +42,7 @@ WALK_PRENORM="python $SCR_DIR/walk_prenorm.py"
 # -D mapred.text.key.partitioner.options=-k1,1
 NORMALIZE_AGGR="sort -k1,1"
 NORMALIZE="python $SCR_DIR/normalize.py"
-
+SAMPLE_OUT=intermediate
 # Step 5: Collect all the norm factors together and write to file
 # In Hadoop no partitioning or sorting (mapper only)
 NORMALIZE_POST_AGGR="cat"
@@ -95,7 +95,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 cat *.tab5 \
 	| $ALIGN_AGGR | $ALIGN \
 		--bowtieArgs '-v 2 -m 1 -p 6' \
-		--bowtieExe $HOME/software/bowtie-0.12.8/bowtie \
+		--bowtieExe /damsl/projects/myrna2/software/tornado/tools/bowtie-0.12.8/bowtie \
 		--bowtieIdx=../fasta/lambda_virus \
 		--readletLen 20 \
 		--readletIval 2 \
@@ -111,6 +111,7 @@ cat *.tab5 \
 		--genomeLen=$GENOME_LEN \
 	| $NORMALIZE_AGGR | $NORMALIZE \
 		--percentile 0.75 \
+                --out_dir $SAMPLE_OUT \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
 		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
 
@@ -138,7 +139,7 @@ cat ${INTERMEDIATE_DIR}hmm_in.tsv \
 		--genomeLen=$GENOME_LEN \
 		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
 		--hmm-overlap=$HMM_OVERLAP \
-	| tee ${INTERMEDIATE_DIR}hmm_out.tsv
+	| tee ${INTERMEDIATE_DIR}hmm_out.tsv > hmm.out
 
 echo DONE 1>&2
 

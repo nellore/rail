@@ -77,13 +77,16 @@ def percentile(cov):
 
 #proc = subprocess.Popen(['/damsl/software/hadoop/hadoop-1.1.2/bin/hadoop', 'fs', '-put', '-', fname ], stdin=subprocess.PIPE)
 
-# if args.hadoop_exe!="":
-#     fname = "%s/temp_file"%(args.out_dir)  #temp file used to make a global file handle
-#     print >>sys.stderr,fname
-#     proc = subprocess.Popen()
-#     proc.stdin.close()
-#     proc.wait()
-
+if args.hadoop_exe!="":
+    fname = "%s/temp_file"%(args.out_dir)  #temp file used to make a global file handle
+    print >>sys.stderr,fname
+    proc = subprocess.Popen([args.hadoop_exe, 'fs', '-put', '-', fname ], stdin=subprocess.PIPE)
+    proc.stdin.close()
+    proc.wait()
+else:
+    fname = "%s/temp_file"%(args.out_dir)  #temp file used to make a global file handle
+    print >>sys.stderr,fname
+    samp_out = open(fname,'w')
 #proc = open("temp.txt",'w')   
 #proc.close()
 
@@ -99,6 +102,7 @@ for ln in sys.stdin:
         totcov, totnonz = 0, 0
     
     ##TODO: incorporate bigBED conversion here
+    #This is for hadoop mode
     if args.hadoop_exe!="" and (last_samp =="\t" or last_samp != samp):  #initialize file handles
         proc.stdin.close()
         proc.wait()
@@ -106,14 +110,9 @@ for ln in sys.stdin:
         frag_st = pos
         frag_dep = cv
         out_fname = "%s/%s"%(args.out_dir,samp)
-        print >>sys.stderr,out_fname
-        print >>sys.stderr,"last_samp",last_samp,"samp",samp
         #samp_out = open(out_fname,'w')
         proc = subprocess.Popen([args.hadoop_exe, 'fs', '-put', '-', out_fname], stdin=subprocess.PIPE)
-        #proc = open("temp.txt", "w")
-        
-        
-        
+        #proc = open("temp.txt", "w")        
     elif args.hadoop_exe!="" and  frag_dep!=cv: #record a new entry
         line = "%s\t%d\t%d\t%d\n"%(chr_name,frag_st,pos,frag_dep)
         #samp_out.write(line)
@@ -121,8 +120,23 @@ for ln in sys.stdin:
         #proc.write(line)
         frag_st = pos
         frag_dep = cv
+    
+    #This is for local mode
+    if args.hadoop_exe=="" and (last_samp =="\t" or last_samp != samp):  #initialize file handles
+        last_chr = chr_name
+        frag_st = pos
+        frag_dep = cv
+        out_fname = "%s/%s"%(args.out_dir,samp)
+        samp_out = open(out_fname,'w')
+    elif args.hadoop_exe=="" and  frag_dep!=cv: #record a new entry
+        line = "%s\t%d\t%d\t%d\n"%(chr_name,frag_st,pos,frag_dep)
+        samp_out.write(line)
+        frag_st = pos
+        frag_dep = cv
+    
+    
+    
         
-
     last_samp = samp
     ninp += 1
     cov[cv] = cov.get(cv, 0) + 1
