@@ -116,6 +116,7 @@ for ln in sys.stdin:
         last_part_st, last_part_en = part_st, part_en
         if last_part_st >= 0:
             finishPartition(pt, last_st, last_part_st, last_part_en)
+            cov, ends = {}, {}
         refid2, part_st, part_en = partition.parse(pt, binsz)
         if verbose:
             print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
