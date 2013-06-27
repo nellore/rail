@@ -75,12 +75,14 @@ def percentile(cov):
             return str(k)
     raise RuntimeError("Should not reach this point")
 
-fname = "%s/temp_file"%(args.out_dir)  #temp file used to make a global file handle
-print >>sys.stderr,fname
 #proc = subprocess.Popen(['/damsl/software/hadoop/hadoop-1.1.2/bin/hadoop', 'fs', '-put', '-', fname ], stdin=subprocess.PIPE)
-proc = subprocess.Popen([args.hadoop_exe, 'fs', '-put', '-', fname ], stdin=subprocess.PIPE)
-proc.stdin.close()
-proc.wait()
+
+# if args.hadoop_exe!="":
+#     fname = "%s/temp_file"%(args.out_dir)  #temp file used to make a global file handle
+#     print >>sys.stderr,fname
+#     proc = subprocess.Popen()
+#     proc.stdin.close()
+#     proc.wait()
 
 #proc = open("temp.txt",'w')   
 #proc.close()
@@ -97,7 +99,7 @@ for ln in sys.stdin:
         totcov, totnonz = 0, 0
     
     ##TODO: incorporate bigBED conversion here
-    if last_samp =="\t" or last_samp != samp:  #initialize file handles
+    if args.hadoop_exe!="" and (last_samp =="\t" or last_samp != samp):  #initialize file handles
         proc.stdin.close()
         proc.wait()
         last_chr = chr_name
@@ -112,7 +114,7 @@ for ln in sys.stdin:
         
         
         
-    elif frag_dep!=cv: #record a new entry
+    elif args.hadoop_exe!="" and  frag_dep!=cv: #record a new entry
         line = "%s\t%d\t%d\t%d\n"%(chr_name,frag_st,pos,frag_dep)
         #samp_out.write(line)
         proc.stdin.write(line)
