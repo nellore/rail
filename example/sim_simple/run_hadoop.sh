@@ -51,7 +51,7 @@ MERGE_OUT=/user/hduser/sim_simple/merge_output
 WALK_PRENORM_AGGR1="sort -n -k2,2"
 WALK_PRENORM_AGGR2="sort -s -k1,1"
 WALK_PRENORM="python $RNAWESOME/walk_prenorm.py"
-WALK_OUT=/user/hduser/sim_simple/walk_output
+WALK_PRENORM_OUT=/user/hduser/sim_simple/walk_prenorm_output
 WALK_ARGS=''$WALK_PRENORM' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --manifest '$MANIFEST_FN''
 
 # Step 4: For all samples, take all coverage tuples for the sample and
@@ -112,31 +112,31 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 # echo $FILES
 
 #copy files over to hdfs
+# hadoop dfs -mkdir $HADOOP_FILES
 # hadoop dfs -copyFromLocal *.tab5 $HADOOP_FILES
-# hadoop dfs -mkdir $HADOOP_FILES/output
 
-# #Step 1 ALIGN
-# hadoop dfs -rmr $ALIGN_OUT
-# hadoop jar $STREAMING \
-#     -D mapred.reduce.tasks=0 \
-#     -file "$SCR_DIR/rnawesome/align.py" \
-#     -file "$SCR_DIR/bowtie/bowtie.py" \
-#     -file "$SCR_DIR/read/readlet.py" \
-#     -file "$SCR_DIR/read/truncate.py" \
-#     -file "$SCR_DIR/interval/interval.py" \
-#     -file "$SCR_DIR/interval/partition.py" \
-#     -file "$SCR_DIR/manifest/manifest.py" \
-#     -file "$SCR_DIR/sample/sample.py" \
-#     -file "$INDEXS/lambda_virus.rev.1.ebwt" \
-#     -file "$INDEXS/lambda_virus.rev.2.ebwt" \
-#     -file "$INDEXS/lambda_virus.1.ebwt" \
-#     -file "$INDEXS/lambda_virus.2.ebwt" \
-#     -file "$INDEXS/lambda_virus.3.ebwt" \
-#     -file "$INDEXS/lambda_virus.4.ebwt" \
-#     -file "$INDEXS/lambda_virus.fa" \
-#     -file "$BOWTIE" \
-#     -mapper "$ALIGN_ARGS" \
-#     -input $HADOOP_FILES/*.tab5 -output $ALIGN_OUT
+#Step 1 ALIGN
+hadoop dfs -rmr $ALIGN_OUT
+hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=0 \
+    -file "$SCR_DIR/rnawesome/align.py" \
+    -file "$SCR_DIR/bowtie/bowtie.py" \
+    -file "$SCR_DIR/read/readlet.py" \
+    -file "$SCR_DIR/read/truncate.py" \
+    -file "$SCR_DIR/interval/interval.py" \
+    -file "$SCR_DIR/interval/partition.py" \
+    -file "$SCR_DIR/manifest/manifest.py" \
+    -file "$SCR_DIR/sample/sample.py" \
+    -file "$INDEXS/lambda_virus.rev.1.ebwt" \
+    -file "$INDEXS/lambda_virus.rev.2.ebwt" \
+    -file "$INDEXS/lambda_virus.1.ebwt" \
+    -file "$INDEXS/lambda_virus.2.ebwt" \
+    -file "$INDEXS/lambda_virus.3.ebwt" \
+    -file "$INDEXS/lambda_virus.4.ebwt" \
+    -file "$INDEXS/lambda_virus.fa" \
+    -file "$BOWTIE" \
+    -mapper "$ALIGN_ARGS" \
+    -input $HADOOP_FILES/*.tab5 -output $ALIGN_OUT
 
 # #Check $? after completion.  If not 0, then print an error message and quit
 # # if [$? -ne 0]
@@ -145,44 +145,32 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 # #     exit 0
 # # fi
 
-# #Step 2 SPLICE and MERGE
-# hadoop dfs -rmr $SPLICE_OUT
-# hadoop jar $STREAMING \
-#     -file "$SCR_DIR/rnawesome/splice.py" \
-#     -file "$SCR_DIR/interval/interval.py" \
-#     -file "$SCR_DIR/interval/partition.py" \
-#     -file "$SCR_DIR/manifest/manifest.py" \
-#     -file "$SCR_DIR/sample/sample.py" \
-#     -file "$SCR_DIR/rnawesome/merge.py" \
-#     -jobconf num.key.fields.for.partition=1 \
-#     -jobconf stream.num.map.output.key.fields=2 \
-#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-#     -mapper "$SPLICE_ARGS" \
-#     -reducer "$MERGE" \
-#     -input $ALIGN_OUT/*part* -output $SPLICE_OUT
+#Step 2 SPLICE and MERGE
+hadoop dfs -rmr $SPLICE_OUT
+hadoop jar $STREAMING \
+    -file "$SCR_DIR/rnawesome/splice.py" \
+    -file "$SCR_DIR/interval/interval.py" \
+    -file "$SCR_DIR/interval/partition.py" \
+    -file "$SCR_DIR/manifest/manifest.py" \
+    -file "$SCR_DIR/sample/sample.py" \
+    -file "$SCR_DIR/rnawesome/merge.py" \
+    -jobconf num.key.fields.for.partition=1 \
+    -jobconf stream.num.map.output.key.fields=2 \
+    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+    -mapper "$SPLICE_ARGS" \
+    -reducer "$MERGE" \
+    -input $ALIGN_OUT/*part* -output $SPLICE_OUT
 
-# ##Question: Would it be more appropriate if walk_prenorm.py was a mapper or a reducer?
-# #Step 3 and 4  and NORMALIZE
-# hadoop dfs -rmr $NORMALIZE_OUT
-# hadoop jar $STREAMING \
-#     -file "$SCR_DIR/rnawesome/normalize.py" \
-#     -file "$SCR_DIR/rnawesome/walk_prenorm.py" \
-#     -file "$SCR_DIR/interval/partition.py" \
-#     -file "$SCR_DIR/manifest/manifest.py" \
-#     -file "$SCR_DIR/struct/circular.py" \
-#     -mapper "$WALK_ARGS" \
-#     -reducer "$NORMALIZE" \
-#     -input $SPLICE_OUT/*part* -output $NORMALIZE_OUT
 
-# #Sort MERGE output
-# hadoop dfs -rmr $MERGE_OUT
-# hadoop jar $STREAMING \
-#     -D mapred.text.key.partitioner.options=-k1,1 \
-#     -D stream.num.map.output.key.fields=2 \
-#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-#     -mapper cat \
-#     -reducer org.apache.hadoop.mapred.lib.IdentityReducer \
-#     -input $SPLICE_OUT/*part* -output $MERGE_OUT
+#Sort MERGE output
+hadoop dfs -rmr $MERGE_OUT
+hadoop jar $STREAMING \
+    -D mapred.text.key.partitioner.options=-k1,1 \
+    -D stream.num.map.output.key.fields=2 \
+    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+    -mapper cat \
+    -reducer org.apache.hadoop.mapred.lib.IdentityReducer \
+    -input $SPLICE_OUT/*part* -output $MERGE_OUT
 
 # #Step 3 and 4  and NORMALIZE
 # hadoop dfs -rmr $NORMALIZE_OUT
@@ -199,34 +187,46 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'"
 #     -mapper cat \
 #     -input $MERGE_OUT/*part* -output $NORMALIZE_OUT
 
-# #Step 5 NORMALIZE_POST
-# hadoop dfs -rmr $NORMALIZE_POST_OUT
-# hadoop jar $STREAMING \
-#     -file "$SCR_DIR/rnawesome/normalize_post.py" \
-#     -file "$SCR_DIR/manifest/manifest.py" \
-#     -mapper cat \
-#     -reducer "$NORMALIZE_POST_ARGS" \
-#     -input $NORMALIZE_OUT/*part* -output $NORMALIZE_POST_OUT
-
-# #Copy files to local machine
-# hadoop dfs -copyToLocal $NORMALIZE_POST_OUT/part* ${INTERMEDIATE_DIR}/norm.tsv
-# hadoop dfs -copyToLocal $MERGE_OUT/part* ${INTERMEDIATE_DIR}/walk_in_input.tsv
-
-# #Step 6 WALK_FIT  #once working bad solution
-# hadoop dfs -rmr $WALK_FIT_OUT
-# hadoop jar $STREAMING \
-#     -D mapred.reduce.tasks=0 \
-#     -D mapred.map.tasks=1 \
-#     -file "$SCR_DIR/rnawesome/walk_fit.py" \
-#     -file "$SCR_DIR/rnawesome/ebayes.py" \
-#     -file "$SCR_DIR/interval/partition.py" \
-#     -file "$SCR_DIR/struct/circular.py" \
-#     -file "${INTERMEDIATE_DIR}/norm.tsv" \
-#     -mapper "$WALK_FIT_ARGS" \
-#     -input $MERGE_OUT/*part* -output $WALK_FIT_OUT
+#Step 3 WALK_PRENORM
+hadoop dfs -rmr $WALK_PRENORM_OUT
+hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=0 \
+    -file "$SCR_DIR/rnawesome/normalize.py" \
+    -file "$SCR_DIR/rnawesome/walk_prenorm.py" \
+    -file "$SCR_DIR/interval/partition.py" \
+    -file "$SCR_DIR/manifest/manifest.py" \
+    -file "$SCR_DIR/struct/circular.py" \
+    -mapper "$WALK_ARGS" \
+    -input $MERGE_OUT/*part* -output $WALK_PRENORM_OUT
 
 
-#Step 6 WALK_FIT  #once working bad solution
+#Step 4 NORMALIZE
+hadoop dfs -rmr $NORMALIZE_OUT
+hadoop jar $STREAMING \
+    -file "$SCR_DIR/rnawesome/normalize.py" \
+    -file "$SCR_DIR/interval/partition.py" \
+    -file "$SCR_DIR/manifest/manifest.py" \
+    -file "$SCR_DIR/struct/circular.py" \
+    -mapper cat \
+    -reducer "$NORMALIZE" \
+    -input $WALK_PRENORM_OUT/*part* -output $NORMALIZE_OUT
+
+
+#Step 5 NORMALIZE_POST
+hadoop dfs -rmr $NORMALIZE_POST_OUT
+hadoop jar $STREAMING \
+    -file "$SCR_DIR/rnawesome/normalize_post.py" \
+    -file "$SCR_DIR/manifest/manifest.py" \
+    -mapper cat \
+    -reducer "$NORMALIZE_POST_ARGS" \
+    -input $NORMALIZE_OUT/*part* -output $NORMALIZE_POST_OUT
+
+#Copy files to local machine
+hadoop dfs -copyToLocal $NORMALIZE_POST_OUT/part* ${INTERMEDIATE_DIR}/norm.tsv
+hadoop dfs -copyToLocal $MERGE_OUT/part* ${INTERMEDIATE_DIR}/walk_in_input.tsv
+
+
+#Step 6 WALK_FIT 
 hadoop dfs -rmr $WALK_FIT_OUT
 hadoop jar $STREAMING \
     -D mapred.text.key.partitioner.options=-k1,1 \
@@ -253,7 +253,6 @@ hadoop jar $STREAMING \
     -mapper cat \
     -reducer "$EBAYES_ARGS" \
     -input $WALK_FIT_OUT/*part* -output $EBAYES_OUT
-
 
 
 # # #Check $? after completion.  If not 0, then print an error message and quit

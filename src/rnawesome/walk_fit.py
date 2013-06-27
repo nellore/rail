@@ -250,6 +250,8 @@ def go():
                 fh.write(','.join(map(grp2lab.get, g)) + '\n')
     
     def handleInterval(refid, last_st, st):
+        out = open("coverage.txt",'w')
+        out.close()
         # Wind all the buffers forward to just before this read's starting
         # position
         nout = 0
@@ -274,6 +276,12 @@ def go():
                 # rawy contains coverage vector at offset 'last_st'.
                 # y contains the log2-transformed coverage vector.
                 # Parallel list of sample names is in 'ls'.
+                out = open("coverage.txt",'a')
+                for i in range(0,len(rawy)):
+                    line = "%d\t"%(rawy[i])
+                    out.write(line)
+                out.write("\n")
+
                 if tot > 0:
                     assert len(gs) == len(y)
                     assert len(normals) == len(y)

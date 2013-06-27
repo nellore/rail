@@ -63,26 +63,42 @@ def makeRef(ln, stayprob, stateFn):
 
     return path, coverage
 
+def increment(depths, start, end):
+    assert end>start and end-start==args.read_en
+    for i in range(start,end):
+        depths[i]+=1
+    return depths
+
 def simulate(ref, readlen, targetNucs, stateFn):
     _, coverage = makeRef(len(ref), 0.999, stateFn)
     nucs = 0
     seqs1, seqs2 = [], []
     print >> sys.stderr, "Generating..."
     passi = 1
+    depths = [0]*len(coverage)
     while nucs < targetNucs:
         print >> sys.stderr, "  Pass %d..." % passi
         for i in xrange(0, len(coverage)-(readlen-1)):
             r1, r2 = random.random(), random.random()
             if r1 < coverage[i][0]:
                 seqs1.append(ref[i:i+readlen])
+                depths = increment(depths,i,i+readlen)
                 nucs += readlen
             if r2 < coverage[i][1]:
                 seqs2.append(ref[i:i+readlen])
+                depths = increment(depths,i,i+readlen)
                 nucs += readlen
         passi += 1
     print >> sys.stderr, "Shuffling"
     random.shuffle(seqs1)
     random.shuffle(seqs2)
+    
+    cov_file = open("coverages.txt",'w')
+    for i in range(0,len(depths)):
+        line = "%d\t%d\n"%(i,depths[i])
+        cov_file.write(line)
+    cov_file.close()
+    
     return seqs1, seqs2
 
 class WeightedRandomGenerator(object):

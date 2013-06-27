@@ -8,6 +8,8 @@ Then print those vectors on a per-group basis.  When printing output, we don't
 have to distinguish between positions or reference IDs because all that matters
 to normalization is the group label and the count.
 
+Todo: Right now, the entire partition name is being used for the chromosome name
+
 Tab-delimited input tuple columns:
  1. Partition ID for partition overlapped by interval
  2. Interval start
@@ -22,7 +24,9 @@ Binning/sorting prior to this step:
 
 Tab-delimited output tuple columns:
  1. Sample label
- 2. Count (at some position)
+ 2. Chromosome name
+ 3. Genome Position
+ 4. Count (at some position)
 
 '''
 
@@ -65,12 +69,14 @@ omitAllZero = True         # whether to omit rows that are all 0s
 # Get the set of all labels by parsing the manifest file, given on the
 # filesystem or in the Hadoop file cache
 labs = manifest.labels(args)
-ls = sorted(labs)
+ls = sorted(labs)    
 
-def handleInterval(last_st, st):
+def handleInterval(part_id, last_st, st):
     # Wind all the buffers forward to just before this read's starting
     # position
     global nout
+    part_id = part_id.split(";")[0] #take off bin id
+
     while last_st > -1 and st > last_st:
         if last_st >= part_st and last_st < part_en:
             # For all labels
@@ -85,15 +91,15 @@ def handleInterval(last_st, st):
                     tot += cov[l]
                 if l in cov and cov[l] > 0:
                     # Print the position then all the coverage numbers
-                    print "%s\t%d" % (l, cov[l])
+                    print "%s\t%s\t%012d\t%d" % (l, part_id, last_st, cov[l])
                     nout += 1
         last_st += 1
 
-def finishPartition(last_st, part_st, part_en, verbose=False):
+def finishPartition(part_id, last_st, part_st, part_en, verbose=False):
     global ends, cov
     if verbose:
         print >>sys.stderr, "Finished partition [%d, %d), last read start %d" % (part_st, part_en, last_st)
-    handleInterval(last_st, part_en)
+    handleInterval(part_id, last_st, part_en)
     ends = dict()
     cov = dict()
 
@@ -103,13 +109,13 @@ for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split('\t')
     assert len(toks) == 6
-    pt, st, en, refid, weight, lab = toks
+    pt, st, en, refid, weight, lab = toks  
     st, en, weight = int(st), int(en), int(weight)
     if pt != last_pt:
         # We moved on to a new partition
         last_part_st, last_part_en = part_st, part_en
         if last_part_st >= 0:
-            finishPartition(last_st, last_part_st, last_part_en)
+            finishPartition(pt, last_st, last_part_st, last_part_en)
         refid2, part_st, part_en = partition.parse(pt, binsz)
         if verbose:
             print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
@@ -129,15 +135,15 @@ for ln in sys.stdin:
     # Wind all the buffers forward to just before this read's starting
     # position
     if last_st > -1 and st > last_st:
-        handleInterval(last_st, st)
+        handleInterval(pt, last_st, st)
     elif last_st == -1 and st > part_st:
-        handleInterval(part_st, st)
+        handleInterval(pt, part_st, st)
     cov[lab] += weight
     last_pt, last_st = pt, st
     ninp += 1
 
 if part_st > -1:
-    finishPartition(last_st, part_st, part_en)
+    finishPartition(pt, last_st, part_st, part_en)
 
 # Done
 timeEn = time.clock()

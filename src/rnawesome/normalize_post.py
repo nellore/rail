@@ -27,7 +27,7 @@ import site
 import argparse
 import time
 timeSt = time.clock()
-
+ 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "manifest"))
 
