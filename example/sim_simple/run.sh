@@ -89,13 +89,15 @@ NTASKS=20
 HMM_OVERLAP=100
 PERMUTATIONS=5
 
+BOWTIE_EXE=$BOWTIE_HOME/bowtie
+
 echo "Temporary file for walk_fit.py input is '$WALK_IN_TMP'" 1>&2
 echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 
 cat *.tab5 \
 	| $ALIGN_AGGR | $ALIGN \
 		--bowtieArgs '-v 2 -m 1 -p 6' \
-		--bowtieExe /damsl/projects/myrna2/software/tornado/tools/bowtie-0.12.8/bowtie \
+		--bowtieExe $BOWTIE_EXE \
 		--bowtieIdx=../fasta/lambda_virus \
 		--readletLen 20 \
 		--readletIval 2 \
