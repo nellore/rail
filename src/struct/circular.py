@@ -89,15 +89,13 @@ class CircularCoverageBuffer(object):
        coverage information over a sorted list of intervals.  Intervals are
        sorted by the starting position along the genome. """
     
-    def __init__(self, st, en, maxlen, sanity=False):
+    def __init__(self, st, en, maxlen):
         self._st = st
         self._en = en
         self._maxlen = maxlen
         self._ends = CircularCountBuffer(st, maxlen)
         self._lastst = st
         self._cov = 0
-        self._sanity = sanity
-        self._densebuf = {}   # only for sanity-checking
     
     def add(self, st, en, amt):
         """ Add an interval; return coverages for fully-resolved positions """

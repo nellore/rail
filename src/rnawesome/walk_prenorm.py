@@ -71,39 +71,25 @@ omitAllZero = True         # whether to omit rows that are all 0s
 labs = manifest.labels(args)
 ls = sorted(labs)    
 
-def handleInterval(part_id, last_st, st):
-    # Wind all the buffers forward to just before this read's starting
-    # position
-    global nout
-    part_id = part_id.split(";")[0] #take off bin id
+def finish(partId, sampleId, covtup):
+    st, cov = covtup
+    nout = 0
+    for i in xrange(0, len(cov)):
+        if cov[i] > 0:
+            print "%s\t%s\t%012d\t%d" % (sampleId, partId, st+i, cov[i])
+            nout += 1
+    return nout
 
-    while last_st > -1 and st > last_st:
-        if last_st >= part_st and last_st < part_en:
-            # For all labels
-            tot = 0
-            for l in ls:
-                if l in ends:
-                    ends[l].advanceTo(last_st)
-                    # Take into account reads ending at this position
-                    nen = ends[l].get(last_st)
-                    assert nen <= cov[l], "%d reads ended at %d but coverage was only %d" % (nen, last_st, cov[l])
-                    cov[l] -= ends[l].get(last_st)
-                    tot += cov[l]
-                if l in cov and cov[l] > 0:
-                    # Print the position then all the coverage numbers
-                    print "%s\t%s\t%012d\t%d" % (l, part_id, last_st, cov[l])
-                    nout += 1
-        last_st += 1
-
-def finishPartition(part_id, last_st, part_st, part_en, verbose=False):
-    global ends, cov
-    if verbose:
-        print >>sys.stderr, "Finished partition [%d, %d), last read start %d" % (part_st, part_en, last_st)
-    handleInterval(part_id, last_st, part_en)
-    ends = dict()
-    cov = dict()
+def finishAll(pt, cov):
+    nout = 0
+    for samp, covbuf in cov.iteritems():
+        covst, covl = covbuf.finalize()
+        if len(covl) > 0:
+            nout += finish(pt, samp, (covst, covl))
+    return nout
 
 verbose = False
+maxlen = 100
 
 for ln in sys.stdin:
     ln = ln.rstrip()
@@ -111,12 +97,12 @@ for ln in sys.stdin:
     assert len(toks) == 6
     pt, st, en, refid, weight, lab = toks  
     st, en, weight = int(st), int(en), int(weight)
+    maxlen = max(en - st, maxlen)
     if pt != last_pt:
         # We moved on to a new partition
         last_part_st, last_part_en = part_st, part_en
-        if last_part_st >= 0:
-            finishPartition(pt, last_st, last_part_st, last_part_en)
-            cov, ends = {}, {}
+        nout += finishAll(last_pt, cov)
+        cov = {}
         refid2, part_st, part_en = partition.parse(pt, binsz)
         if verbose:
             print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
@@ -125,26 +111,16 @@ for ln in sys.stdin:
         last_st = -1 
     assert part_st >= 0
     assert part_en > part_st
-    if lab not in ends:
-        # We only use the count buffer to record where reads *end* so
-        # we don't need to extend past either end of the partition
-        ends[lab] = circular.CircularCountBuffer(part_st, binsz)
-        assert len(ends[lab]) == binsz
-        cov[lab] = 0
-    if en >= part_st and en < part_en:
-        ends[lab].add(weight, en) # increment a counter at the position where the read ends
-    # Wind all the buffers forward to just before this read's starting
-    # position
-    if last_st > -1 and st > last_st:
-        handleInterval(pt, last_st, st)
-    elif last_st == -1 and st > part_st:
-        handleInterval(pt, part_st, st)
-    cov[lab] += weight
+    if lab not in cov:
+        cov[lab] = circular.CircularCoverageBuffer(part_st, part_en, maxlen)
+    covst, covl = cov[lab].add(st, en, weight)
+    if len(covl) > 0:
+        nout += finish(pt, lab, (covst, covl))
     last_pt, last_st = pt, st
     ninp += 1
 
 if part_st > -1:
-    finishPartition(pt, last_st, part_st, part_en)
+    nout += finishAll(last_pt, cov)
 
 # Done
 timeEn = time.clock()
