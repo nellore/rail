@@ -74,9 +74,10 @@ ls = sorted(labs)
 def finish(partId, sampleId, covtup):
     st, cov = covtup
     nout = 0
+    chrid = partId[:partId.rfind(';')]
     for i in xrange(0, len(cov)):
         if cov[i] > 0:
-            print "%s\t%s\t%012d\t%d" % (sampleId, partId, st+i, cov[i])
+            print "%s\t%s\t%012d\t%d" % (sampleId, chrid, st+i, cov[i])
             nout += 1
     return nout
 

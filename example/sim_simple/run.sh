@@ -40,7 +40,8 @@ WALK_PRENORM="python $SCR_DIR/walk_prenorm.py"
 # -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner
 # -D stream.num.map.output.key.fields=1
 # -D mapred.text.key.partitioner.options=-k1,1
-NORMALIZE_AGGR="sort -k1,1"
+NORMALIZE_AGGR1="sort -n -k2,2"
+NORMALIZE_AGGR2="sort -s -k1,1"
 NORMALIZE="python $SCR_DIR/normalize.py"
 SAMPLE_OUT=intermediate/samples
 mkdir -p  $SAMPLE_OUT
@@ -121,9 +122,9 @@ cat *.tab5 \
 		--manifest $MANIFEST_FN \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
-	| $NORMALIZE_AGGR | $NORMALIZE \
+	| $NORMALIZE_AGGR1 | $NORMALIZE_AGGR2 | $NORMALIZE \
 		--percentile 0.75 \
-                --out_dir $SAMPLE_OUT \
+		--out_dir $SAMPLE_OUT \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
 		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
 
