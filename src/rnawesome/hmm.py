@@ -18,11 +18,14 @@ Binning/sorting prior to this step:
  2. Sorted by reference offset
 
 Tab-delimited output tuple columns:
- 1. Reference ID
- 2. Reference offset (0-based)
- 3. Length of run of positions with this state
- 4. HMM state
- 5. Dataset id (0 for test, >0 for permutations)
+ 1. Dataset id (0 for test, >0 for permutations)
+ 2. Reference ID
+ 3. Reference offset (0-based)
+ 4. Length of run of positions with this state
+ 5. HMM state
+
+
+
 
 '''
 
@@ -184,11 +187,11 @@ def writeResults(res, refid, dataset, ofh):
     for st, off in res[1:]:
         if st != sti:
             assert off <= args.genomeLen
-            ofh.write("%s\t%d\t%d\t%s\t%d\n" % (refid, offi, off - offi, sti, dataset))
+            ofh.write("%d\t%s\t%012d\t%d\t%s\n" % (dataset, refid, offi, off - offi, sti))
             sti, offi = st, off
     assert off <= args.genomeLen
     off = res[-1][1] + 1
-    ofh.write("%s\t%d\t%d\t%s\t%d\n" % (refid, offi, off - offi, sti, dataset))
+    ofh.write("%d\t%s\t%012d\t%d\t%s\n" % (dataset, refid, offi, off - offi, sti))
     nout += 1
 
 def processPartition(tts, offs, hmm, st, en):

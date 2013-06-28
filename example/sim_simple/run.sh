@@ -42,7 +42,8 @@ WALK_PRENORM="python $SCR_DIR/walk_prenorm.py"
 # -D mapred.text.key.partitioner.options=-k1,1
 NORMALIZE_AGGR="sort -k1,1"
 NORMALIZE="python $SCR_DIR/normalize.py"
-SAMPLE_OUT=intermediate
+SAMPLE_OUT=intermediate/samples
+mkdir -p  $SAMPLE_OUT
 # Step 5: Collect all the norm factors together and write to file
 # In Hadoop no partitioning or sorting (mapper only)
 NORMALIZE_POST_AGGR="cat"
@@ -78,6 +79,15 @@ HMM_PARAMS="python $SCR_DIR/hmm_params.py"
 HMM_AGGR1="sort -n -k2,2"
 HMM_AGGR2="sort -s -k1,1"
 HMM="python $SCR_DIR/hmm.py"
+
+# Step 10: Given the permutation outputs from the HMM step, this 
+#          stores the coverage vectors for each permutation into separate files
+PATH_AGGR1="sort -n -k3,3"
+PATH_AGGR2="sort -s -k2,2"
+PATH_AGGR3="sort -n -k1,1"
+AGGR_PATH="python $SCR_DIR/aggr_path.py"
+PERM_OUT=intermediate/permutations
+mkdir -p $PERM_OUT
 
 # Temporary files so we can form a DAG
 WALK_IN_TMP=${TMPDIR}walk_in.tsv
@@ -140,6 +150,8 @@ cat ${INTERMEDIATE_DIR}hmm_in.tsv \
 		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
 		--hmm-overlap=$HMM_OVERLAP \
 	| tee ${INTERMEDIATE_DIR}hmm_out.tsv > hmm.out
+
+cat hmm.out | $PATH_AGGR1 | $PATH_AGGR2 | $PATH_AGGR3 | $AGGR_PATH --out_dir $PERM_OUT
 
 echo DONE 1>&2
 
