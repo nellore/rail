@@ -28,8 +28,7 @@ Tab-delimited output tuple columns:
 import sys
 import argparse
 import time
-import pipes
-import subprocess, shlex
+import subprocess
 timeSt = time.clock()
 
 parser = argparse.ArgumentParser(description=\
@@ -150,4 +149,4 @@ if last_samp != "\t":
 # Done
 timeEn = time.clock()
 print >>sys.stderr, "DONE with normalize.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
- 
+
