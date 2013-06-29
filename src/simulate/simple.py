@@ -64,7 +64,7 @@ def makeRef(ln, stayprob, stateFn):
     return path, coverage
 
 def increment(depths, start, end):
-    assert end>start and end-start==args.read_en
+    assert end>start and end-start==args.read_len
     for i in range(start,end):
         depths[i]+=1
     return depths
