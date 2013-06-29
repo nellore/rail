@@ -134,6 +134,67 @@ class CircularCoverageBuffer(object):
             self._cov -= enamt
         return (storig, ret)
     
+class CircularMultiCoverageBuffer(object):
+    
+    """ A buffer that minimizes the amount of memory we have to use to compile
+       coverage information for multiple samples over a sorted list of
+       intervals.  Intervals are sorted by the starting position along the
+       genome. """
+    
+    def __init__(self, nsamps, st, en, maxlen):
+        self._st = st
+        self._en = en
+        self._nsamps = nsamps
+        self._maxlen = maxlen
+        self._lastst = st
+        self._reset()
+    
+    def _reset(self):
+        self._cov = [0] * self._nsamps
+        self._ends = [ CircularCountBuffer(self._st, self._maxlen) for _ in xrange(0, self._nsamps) ]
+    
+    def add(self, sampid, st, en, amt):
+        """ Add an interval; return coverages for fully-resolved positions """
+        assert en > st
+        assert en > self._st
+        assert st <= self._en
+        ret = None
+        if en - st + 1 > self._maxlen:
+            self._maxlen = en - st + 1
+            for e in self._ends:
+                e.resize(self._maxlen)
+        storig = self._lastst
+        while st > self._lastst:
+            if ret is None:
+                ret = [ [] for _ in xrange(0, self._nsamps) ]
+            for i in xrange(0, self._nsamps):
+                ret[i].append(self._cov[i])
+                assert self._ends[i].off() == self._lastst
+                self._ends[i].advance()
+                enamt = self._ends[i].get()
+                assert enamt <= self._cov[i]
+                self._cov[i] -= enamt
+            self._lastst += 1
+        self._cov[sampid] += amt
+        self._ends[sampid].add(amt, en)
+        return (storig, ret)
+    
+    def finalize(self):
+        ret = None
+        storig = self._lastst
+        while self._en > self._lastst:
+            if ret is None:
+                ret = [ [] for _ in xrange(0, self._nsamps) ]
+            for i in xrange(0, self._nsamps):
+                ret[i].append(self._cov[i])
+                assert self._ends[i].off() == self._lastst
+                self._ends[i].advance()
+                enamt = self._ends[i].get()
+                assert enamt <= self._cov[i]
+                self._cov[i] -= enamt
+            self._lastst += 1
+        return (storig, ret)
+
 if __name__ == '__main__':
     import unittest
 
@@ -221,4 +282,30 @@ if __name__ == '__main__':
             self.assertEqual((20, [7, 2, 2, 2, 2, 0, 0, 0, 0, 0]), ret5)
             self.assertEqual((30, [10, 10, 10, 10, 10, 10, 10, 10, 10, 10]), ret6)
     
+    class TestCircularMultiCoverageBuffer(unittest.TestCase):
+        
+        def test1(self):
+            buf = CircularMultiCoverageBuffer(2, 0, 100, 10)
+            ret1 = buf.add(0, 0, 10, 1)
+            ret2 = buf.add(0, 0, 10, 2)
+            ret3 = buf.add(0, 4, 10, 2)
+            ret4 = buf.add(0, 8, 20, 3)
+            self.assertEqual((0, None), ret1)
+            self.assertEqual((0, None), ret2)
+            self.assertEqual((0, [[3, 3, 3, 3], [0, 0, 0, 0]]), ret3)
+            self.assertEqual((4, [[5, 5, 5, 5], [0, 0, 0, 0]]), ret4)
+        
+        def test2(self):
+            buf = CircularMultiCoverageBuffer(2, 0, 20, 10)
+            ret1 = buf.add(0, 0, 10, 1)
+            ret2 = buf.add(0, 0, 10, 2)
+            ret3 = buf.add(1, 4, 10, 2)
+            ret4 = buf.add(0, 8, 20, 3)
+            ret5 = buf.finalize()
+            self.assertEqual((0, None), ret1)
+            self.assertEqual((0, None), ret2)
+            self.assertEqual((0, [[3, 3, 3, 3], [0, 0, 0, 0]]), ret3)
+            self.assertEqual((4, [[3, 3, 3, 3], [2, 2, 2, 2]]), ret4)
+            self.assertEqual((8, [[6, 6, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3], [2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]), ret5)
+        
     unittest.main()
