@@ -1,5 +1,6 @@
 SCR_DIR=../../src/rnawesome
-
+TORNADO=../..
+TOOLS=$TORNADO/tools
 MANIFEST_FN=eg1.manifest
 
 mkdir -p intermediate
@@ -45,6 +46,9 @@ NORMALIZE_AGGR2="sort -s -k1,1"
 NORMALIZE="python $SCR_DIR/normalize.py"
 SAMPLE_OUT=intermediate/samples
 mkdir -p  $SAMPLE_OUT
+UCSC_TOOLS=$TOOLS/ucsc_tools
+BIGBED_EXE=$UCSC_TOOLS/bedToBigBed
+CHROM_SIZES=$PWD/chrom.sizes
 # Step 5: Collect all the norm factors together and write to file
 # In Hadoop no partitioning or sorting (mapper only)
 NORMALIZE_POST_AGGR="cat"
@@ -105,57 +109,62 @@ BOWTIE_EXE=$BOWTIE_HOME/bowtie
 echo "Temporary file for walk_fit.py input is '$WALK_IN_TMP'" 1>&2
 echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 
-cat *.tab5 \
-	| $ALIGN_AGGR | $ALIGN \
-		--bowtieArgs '-v 2 -m 1 -p 6' \
-		--bowtieExe $BOWTIE_EXE \
-		--bowtieIdx=../fasta/lambda_virus \
-		--readletLen 20 \
-		--readletIval 2 \
-		--manifest $MANIFEST_FN \
-	| $SPLICE_AGGR | $SPLICE \
-		--ntasks=$NTASKS \
-		--genomeLen=$GENOME_LEN \
-		--manifest $MANIFEST_FN \
-	| $MERGE_AGGR1 | $MERGE_AGGR2 | $MERGE \
-	| tee $WALK_IN_TMP | $WALK_PRENORM \
-		--manifest $MANIFEST_FN \
-		--ntasks=$NTASKS \
-		--genomeLen=$GENOME_LEN \
-	| $NORMALIZE_AGGR1 | $NORMALIZE_AGGR2 | $NORMALIZE \
-		--percentile 0.75 \
-		--out_dir $SAMPLE_OUT \
-	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
-		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
+# cat *.tab5 \
+# 	| $ALIGN_AGGR | $ALIGN \
+# 		--bowtieArgs '-v 2 -m 1 -p 6' \
+# 		--bowtieExe $BOWTIE_EXE \
+# 		--bowtieIdx=../fasta/lambda_virus \
+# 		--readletLen 20 \
+# 		--readletIval 2 \
+# 		--manifest $MANIFEST_FN \
+# 	| $SPLICE_AGGR | $SPLICE \
+# 		--ntasks=$NTASKS \
+# 		--genomeLen=$GENOME_LEN \
+# 		--manifest $MANIFEST_FN \
+# 	| $MERGE_AGGR1 | $MERGE_AGGR2 | $MERGE \
+# 	| tee $WALK_IN_TMP | $WALK_PRENORM \
+# 		--manifest $MANIFEST_FN \
+# 		--ntasks=$NTASKS \
+# 		--genomeLen=$GENOME_LEN \
+# 	| $NORMALIZE_AGGR1 | $NORMALIZE_AGGR2 | $NORMALIZE \
+# 		--percentile 0.75 \
+# 		--out_dir $SAMPLE_OUT \
+#                 --bigbed_exe $BIGBED_EXE \
+#                 --chrom_sizes $CHROM_SIZES \
+# 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
+# 		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
 
-cp $WALK_IN_TMP ${INTERMEDIATE_DIR}walk_in_input.tsv
+# cp $WALK_IN_TMP ${INTERMEDIATE_DIR}walk_in_input.tsv
 
-cat $WALK_IN_TMP \
-	| tee ${INTERMEDIATE_DIR}walk_fit_in.tsv | $WALK_FIT \
-		--ntasks=$NTASKS \
-		--genomeLen=$GENOME_LEN \
-		--seed=777 \
-		--permutations=$PERMUTATIONS \
-		--permutations-out=${INTERMEDIATE_DIR}permutations.tsv \
-		--normals=${INTERMEDIATE_DIR}norm.tsv \
-		--fudge-factor=32 \
-	| $EBAYES_AGGR | tee ${INTERMEDIATE_DIR}ebayes_in.tsv | $EBAYES \
-		--ntasks=$NTASKS \
-		--genomeLen=$GENOME_LEN \
-		--hmm-overlap=$HMM_OVERLAP \
-	| tee ${INTERMEDIATE_DIR}hmm_in.tsv | $HMM_PARAMS_AGGR | $HMM_PARAMS \
-		--null \
-		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
+# cat $WALK_IN_TMP \
+# 	| tee ${INTERMEDIATE_DIR}walk_fit_in.tsv | $WALK_FIT \
+# 		--ntasks=$NTASKS \
+# 		--genomeLen=$GENOME_LEN \
+# 		--seed=777 \
+# 		--permutations=$PERMUTATIONS \
+# 		--permutations-out=${INTERMEDIATE_DIR}permutations.tsv \
+# 		--normals=${INTERMEDIATE_DIR}norm.tsv \
+# 	| $EBAYES_AGGR | tee ${INTERMEDIATE_DIR}ebayes_in.tsv | $EBAYES \
+# 		--ntasks=$NTASKS \
+# 		--genomeLen=$GENOME_LEN \
+# 		--hmm-overlap=$HMM_OVERLAP \
+# 	| tee ${INTERMEDIATE_DIR}hmm_in.tsv | $HMM_PARAMS_AGGR | $HMM_PARAMS \
+# 		--null \
+# 		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
 
-cat ${INTERMEDIATE_DIR}hmm_in.tsv \
-	| $HMM_AGGR1 | $HMM_AGGR2 | $HMM \
-		--ntasks=$NTASKS \
-		--genomeLen=$GENOME_LEN \
-		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
-		--hmm-overlap=$HMM_OVERLAP \
-	| tee ${INTERMEDIATE_DIR}hmm_out.tsv > hmm.out
+# cat ${INTERMEDIATE_DIR}hmm_in.tsv \
+# 	| $HMM_AGGR1 | $HMM_AGGR2 | $HMM \
+# 		--ntasks=$NTASKS \
+# 		--genomeLen=$GENOME_LEN \
+# 		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
+# 		--hmm-overlap=$HMM_OVERLAP \
+# 	| tee ${INTERMEDIATE_DIR}hmm_out.tsv > hmm.out
 
-cat hmm.out | $PATH_AGGR1 | $PATH_AGGR2 | $PATH_AGGR3 | $AGGR_PATH --out_dir $PERM_OUT
+cat hmm.out | $PATH_AGGR1 | $PATH_AGGR2 | $PATH_AGGR3 | $AGGR_PATH \
+                --out_dir $PERM_OUT \
+                --bigbed_exe $BIGBED_EXE \
+                --chrom_sizes $CHROM_SIZES \
+
 
 echo DONE 1>&2
 
