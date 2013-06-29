@@ -155,6 +155,7 @@ class CircularMultiCoverageBuffer(object):
     
     def add(self, sampid, st, en, amt):
         """ Add an interval; return coverages for fully-resolved positions """
+        assert sampid < self._nsamps
         assert en > st
         assert en > self._st
         assert st <= self._en

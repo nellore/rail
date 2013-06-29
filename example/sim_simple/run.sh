@@ -138,6 +138,7 @@ cat $WALK_IN_TMP \
 		--permutations=$PERMUTATIONS \
 		--permutations-out=${INTERMEDIATE_DIR}permutations.tsv \
 		--normals=${INTERMEDIATE_DIR}norm.tsv \
+		--fudge-factor=32 \
 	| $EBAYES_AGGR | tee ${INTERMEDIATE_DIR}ebayes_in.tsv | $EBAYES \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \

@@ -55,8 +55,8 @@ parser.add_argument(\
     '--normals', metavar='PATH', type=str, required=True,
     help='File to read normalization factors from')
 parser.add_argument(\
-    '--fudge-factor', dest='fudge', metavar='PATH', type=float,
-    default=32.0, help='Add this to counts before taking log2')
+    '--fudge-factor', metavar='PATH', type=float,
+    default=32, help='Add this to counts before taking log2')
 parser.add_argument(\
     '--permutations', metavar='INT', type=int,
     default=3, help='Number of permutation tests to perform')
@@ -167,12 +167,8 @@ def go():
 
     ninp = 0                   # # lines input so far
     nout = 0                   # # lines output so far
-    last_refid = "\t"          # last reference id 
     last_pt = "\t"             # id of previous partition
-    last_st = -1               # start offset of previous fragment
     part_st, part_en = -1, -1  # start/end offsets of current partition
-    ends = dict()              # maps sample names to circular buffers
-    cov = dict()               # current coverage in each sample
     
     def normals(args):
         """ Reads in --normals file, places all the sample labels in 'labels'
@@ -228,6 +224,8 @@ def go():
     idxs = [ lab2idx[x] for x in ls ]
     gs = map(lab2grp.get, [groupName(x) for x in ls])
     
+    # Make the permutations
+    
     idxs_permutations = []  # permutations of sample indexes
     gs_permutations = []    # permutations of groups indexes
     norm_permutations = []  # permutations of sample norm factors
@@ -239,70 +237,51 @@ def go():
         gs_permutations.append(map(lambda x: x[1], shuf))
         norm_permutations.append(map(lambda x: x[2], shuf))
     
+    # Make the objects that we'll use to fit the linear models for the
+    # unpermuted (testFitter) and permuted (permFitters) coverage vectors
     testFitter = LMFitter(gs, normalsl)
     permFitters = [ LMFitter(gs, ns) for gs, ns in \
                     zip(gs_permutations, norm_permutations) ]
     
+    # Write out a file describing all the permutations
     if args.permutations_out is not None:
         with open(args.permutations_out, 'w') as fh:
             fh.write(','.join(map(grp2lab.get, gs)) + '\n')
             for g in gs_permutations:
                 fh.write(','.join(map(grp2lab.get, g)) + '\n')
     
-    def handleInterval(refid, last_st, st):
-        out = open("coverage.txt",'w')
-        out.close()
-        # Wind all the buffers forward to just before this read's starting
-        # position
+    def transformCount(c):
+        return math.log(c + args.fudge_factor, 2) # base-2 log
+    
+    def modelFit(refid, st, y, testFitter, permFitters):
+        xformy = map(transformCount, y)
+        # Fit the unpermuted vector
+        mn, df, coef, stdev, sig = testFitter.fit(xformy) 
+        fitstrs = [ "%f,%f,%f" % (coef, stdev, sig) ]
+        # Fit the npermuted vectors
+        for fitter in permFitters:
+            _, _, coef, stdev, sig = fitter.fit(xformy)
+            fitstrs.append("%f,%f,%f" % (coef, stdev, sig))
+        print (("%s\t%d\t%f\t%d\t" % (refid, st, mn, df)) + '\t'.join(fitstrs))
+        return 1
+    
+    def analyzeWindow(refid, st, cov, testFitter, permFitters):
+        tcov = zip(*cov) # transpose
         nout = 0
-        while last_st > -1 and st > last_st:
-            if last_st >= part_st and last_st < part_en:
-                # For all labels
-                tot = 0
-                y, rawy = [], []
-                for l in ls:
-                    mycov = 0.0
-                    if l in ends:
-                        ends[l].advanceTo(last_st)
-                        # Take into account reads ending at this position
-                        nen = ends[l].get(last_st)
-                        assert nen <= cov[l], "%d reads ended at %d but coverage was only %d" % (nen, last_st, cov[l])
-                        cov[l] -= ends[l].get(last_st)
-                        tot += cov[l]
-                        assert l in normals
-                        mycov = cov[l]
-                    rawy.append(mycov)
-                    y.append(math.log(mycov + args.fudge, 2))
-                # rawy contains coverage vector at offset 'last_st'.
-                # y contains the log2-transformed coverage vector.
-                # Parallel list of sample names is in 'ls'.
-                out = open("coverage.txt",'a')
-                for i in range(0,len(rawy)):
-                    line = "%d\t"%(rawy[i])
-                    out.write(line)
-                out.write("\n")
-
-                if tot > 0:
-                    assert len(gs) == len(y)
-                    assert len(normals) == len(y)
-                    mn, df, coef, stdev, sig = testFitter.fit(y) 
-                    fits = [(coef, stdev, sig)]
-                    fitstrs = [ "%f,%f,%f" % fits[0] ]
-                    # Do the permutations
-                    for fitter in permFitters:
-                        _, _, coef, stdev, sig = fitter.fit(y) 
-                        fits.append((coef, stdev, sig))
-                        fitstrs.append("%f,%f,%f" % fits[-1])
-                    print (("%s\t%d\t%f\t%d\t" % (refid, last_st, mn, df)) + '\t'.join(fitstrs))
-                    nout += 1
-            last_st += 1
+        for i in xrange(0, len(tcov)):
+            if sum(tcov[i]) > 0:
+                nout += modelFit(refid, st + i, tcov[i], testFitter, permFitters)
         return nout
     
-    def finishPartition(refid, last_st, part_st, part_en, verbose=False):
-        if verbose:
-            print >>sys.stderr, "Finished partition [%d, %d), last read start %d" % (part_st, part_en, last_st)
-        nout = handleInterval(refid, last_st, part_en)
-        return nout
+    def finalize(refid, mcov, testFitter, permFitters):
+        st, cov = mcov.finalize()
+        if cov is not None:
+            return analyzeWindow(refid, st, cov, testFitter, permFitters)
+        return 0
+    
+    maxlen = 100
+    nsamp = len(ls)
+    mcov = None
     
     for ln in sys.stdin:
         ln = ln.rstrip()
@@ -310,43 +289,28 @@ def go():
         assert len(toks) == 6
         pt, st, en, refid, weight, lab = toks
         st, en, weight = int(st), int(en), int(weight)
+        maxlen = max(en - st, maxlen)
         if pt != last_pt:
             # We moved on to a new partition
-            last_part_st, last_part_en = part_st, part_en
-            if last_part_st >= 0:
-                assert last_refid != "\t"
-                nout += finishPartition(last_refid, last_st, last_part_st, last_part_en)
-                cov, ends = {}, {}
+            if mcov is not None:
+                nout += finalize(refid, mcov, testFitter, permFitters)
             refid2, part_st, part_en = partition.parse(pt, binsz)
+            mcov = circular.CircularMultiCoverageBuffer(nsamp, part_st, part_en, maxlen)
             if verbose:
                 print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
             assert refid == refid2
             assert part_en > part_st
-            last_st = -1 
         assert part_st >= 0
         assert part_en > part_st
-        if lab not in ends:
-            # We only use the count buffer to record where reads *end* so
-            # we don't need to extend past either end of the partition
-            ends[lab] = circular.CircularCountBuffer(part_st, binsz)
-            assert len(ends[lab]) == binsz
-            cov[lab] = 0
-        if en >= part_st and en < part_en:
-            ends[lab].add(weight, en) # increment a counter at the position where the read ends
-        # Wind all the buffers forward to just before this read's starting
-        # position
-        if last_st > -1 and st > last_st:
-            nout += handleInterval(refid, last_st, st)
-        elif last_st == -1 and st > part_st:
-            nout += handleInterval(refid, part_st, st)
-        cov[lab] += weight
-        last_refid, last_pt, last_st = refid, pt, st
+        sampid = lab2idx[lab]
+        covst, covl = mcov.add(sampid, st, en, weight)
+        if covl is not None:
+            nout += analyzeWindow(refid, covst, covl, testFitter, permFitters)
+        last_pt = pt
         ninp += 1
     
     if part_st > -1:
-        assert last_refid != "\t"
-        nout += finishPartition(last_refid, last_st, part_st, part_en)
-        cov, ends = {}, {}
+        nout += finalize(refid, mcov, testFitter, permFitters)
     
     # Done
     timeEn = time.clock()
