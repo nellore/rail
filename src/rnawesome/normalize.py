@@ -47,20 +47,29 @@ parser.add_argument(\
     '--hadoop_exe', type=str, required=False, default="",
     help='The location of the hadoop executable.')
 
+parser.add_argument(\
+    '--bigbed_exe', type=str, required=False, default="",
+    help='The location of the bigbed executable.')
+
+parser.add_argument(\
+    '--chrom_sizes', type=str, required=False, default="",
+    help='The location of chrom_sizes file required for bigbed conversion.')
+
 args = parser.parse_args()
 
 ninp = 0                   # # lines input so far
 nout = 0                   # # lines output so far
-last_samp = "\t"           # id of previous partition
 cov = dict()               # coverage histogram
 totcov = 0                 # total coverage
 totnonz = 0                # total positions with non-0 coverage
 
+fname = "temp_file"        #temp file used to make a global file handle
+samp_out = open(fname,'w')
 last_chr = "\t"            # name of previous chromosome
 last_samp = "\t"           # last sample last
 frag_st  = -1              # start offset of current fragment
+last_pos = -1              # the last position 
 frag_dep = -1              # depth count of the current fragment
-#samp_out = open(fname,'w')    # file handle for samples
 
 def percentile(cov):
     ''' Given a histogram (dictionary mapping keys to integers), return
@@ -76,18 +85,10 @@ def percentile(cov):
 
 #proc = subprocess.Popen(['/damsl/software/hadoop/hadoop-1.1.2/bin/hadoop', 'fs', '-put', '-', fname ], stdin=subprocess.PIPE)
 
-if args.hadoop_exe!="":
-    fname = "%s/temp_file"%(args.out_dir)  #temp file used to make a global file handle
-    print >>sys.stderr,fname
-    proc = subprocess.Popen([args.hadoop_exe, 'fs', '-put', '-', fname ], stdin=subprocess.PIPE)
-    proc.stdin.close()
-    proc.wait()
-else:
-    fname = "%s/temp_file"%(args.out_dir)  #temp file used to make a global file handle
-    print >>sys.stderr,fname
-    samp_out = open(fname,'w')
-#proc = open("temp.txt",'w')   
-#proc.close()
+def moveToHDFS(fin,fout):
+    put_proc = subprocess.Popen([args.hadoop_exe, 'fs', '-put',fin, fout])
+    put_proc.wait()
+
 
 for ln in sys.stdin:
     ln = ln.rstrip()
@@ -99,43 +100,31 @@ for ln in sys.stdin:
         nout += 1
         cov = dict()
         totcov, totnonz = 0, 0
-    
-    ##TODO: incorporate bigBED conversion here
-    #This is for hadoop mode
-    if args.hadoop_exe!="" and (last_samp =="\t" or last_samp != samp):  #initialize file handles
-        proc.stdin.close()
-        proc.wait()
-        last_chr = chr_name
-        frag_st = pos
-        frag_dep = cv
-        out_fname = "%s/%s"%(args.out_dir,samp)
-        #samp_out = open(out_fname,'w')
-        proc = subprocess.Popen([args.hadoop_exe, 'fs', '-put', '-', out_fname], stdin=subprocess.PIPE)
-        #proc = open("temp.txt", "w")        
-    elif args.hadoop_exe!="" and  frag_dep!=cv: #record a new entry
-        line = "%s\t%d\t%d\t%d\n"%(chr_name,frag_st,pos,frag_dep)
-        #samp_out.write(line)
-        proc.stdin.write(line)
-        #proc.write(line)
-        frag_st = pos
-        frag_dep = cv
-    
-    #This is for local mode
-    if args.hadoop_exe=="" and (last_samp =="\t" or last_samp != samp):  #initialize file handles
-        last_chr = chr_name
-        frag_st = pos
-        frag_dep = cv
-        out_fname = "%s/%s"%(args.out_dir,samp)
-        samp_out = open(out_fname,'w')
-    elif args.hadoop_exe=="" and  frag_dep!=cv: #record a new entry
+        
+    if last_samp == "\t":
+        samp_out.close()
+        last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
+        samp_out = open(fname,'w')        
+    elif last_samp != samp:  #initialize file handles and convert to bigbed
+        samp_out.close()
+        bb_file = "%s.bb"%(last_samp)
+        out_fname = "%s/%s.bb"%(args.out_dir,last_samp)
+        bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, args.chrom_sizes, bb_file])
+        bigbed_proc.wait()
+        if args.hadoop_exe!="": #For hadoop mode - moves local file to HDFS
+            moveToHDFS(bb_file,out_fname)
+        last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
+        samp_out = open(fname,'w')
+    elif frag_dep!=cv and abs(last_pos-pos)==1: #record a new entry
         line = "%s\t%d\t%d\t%d\n"%(chr_name,frag_st,pos,frag_dep)
         samp_out.write(line)
-        frag_st = pos
-        frag_dep = cv
+        frag_st, frag_dep = pos, cv
+    elif abs(last_pos-pos)>1:
+        line = "%s\t%d\t%d\t%d\n"%(chr_name,frag_st,pos,0)
+        samp_out.write(line)
+        frag_st,frag_dep = pos, cv
     
-    
-    
-        
+    last_pos = pos
     last_samp = samp
     ninp += 1
     cov[cv] = cov.get(cv, 0) + 1
