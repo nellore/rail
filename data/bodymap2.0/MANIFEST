@@ -1,0 +1,162 @@
+# age	60 years
+# organism part	kidney
+# sex	female
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human total RNA, lot 0908002
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030893/ERR030893.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030885/ERR030885.sra
+
+# age	77 years
+# organism part	heart
+# sex	male
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human heart total RNA, lot 07040023
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030894/ERR030894.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030886/ERR030886.sra
+
+# age	37 years
+# organism part	liver
+# sex	male
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human liver total RNA, lot 040000124
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030895/ERR030895.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030887/ERR030887.sra
+
+# age	65 years
+# organism part	lung
+# sex	male
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human lung total RNA, lot 0904002
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030879/ERR030879.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030896/ERR030896.sra
+
+# age	86 years
+# organism part	lymph node
+# sex	female
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human lymph node total RNA, lot 026P010305032B
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030878/ERR030878.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030897/ERR030897.sra
+
+# age	73 years
+# organism part	prostate
+# sex	male
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human prostate total RNA, lot 0906002
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030877/ERR030877.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030898/ERR030898.sra
+
+# age	77 years
+# organism part	skeletal muscle
+# sex	male
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human skeletal muscle total RNA, lot 046P021205086A
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030876/ERR030876.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030899/ERR030899.sra
+
+# age	58 years
+# organism part	white blood cells
+# sex	male
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human White Blood Cells total RNA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030875/ERR030875.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030900/ERR030900.sra
+
+# age	47 years
+# organism part	ovary
+# sex	female
+# phenotype	african american
+# Organism	Homo sapiens
+# BioSourceProvider	Human ovary total RNA, lot 0812002
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030874/ERR030874.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030901/ERR030901.sra
+
+# age	19 years
+# organism part	testes
+# sex	male
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human testes total RNA, lot 05060392
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030873/ERR030873.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030902/ERR030902.sra
+
+# age	60 years
+# organism part	thyroid
+# sex	female
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human thyroid total RNA, lot 0908003
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030872/ERR030872.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030903/ERR030903.sra
+
+# age	73 years
+# organism part	adipose
+# sex	female
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human adipose total RNA, lot 05060581
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030888/ERR030888.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030880/ERR030880.sra
+
+# age	60 years
+# organism part	adrenal
+# sex	male
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human adrenal total RNA, lot 0812003
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030889/ERR030889.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030881/ERR030881.sra
+
+# age	77 years
+# organism part	brain
+# sex	female
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human brain total RNA, Ambion
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030890/ERR030890.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030882/ERR030882.sra
+
+# age	29 years
+# organism part	breast
+# sex	female
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human breast total RNA, lot 04060013
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030891/ERR030891.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030883/ERR030883.sra
+
+# age	68 years
+# organism part	colon
+# sex	female
+# phenotype	caucasian
+# Organism	Homo sapiens
+# BioSourceProvider	Human colon total RNA, lot 05060063
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030892/ERR030892.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030884/ERR030884.sra
+
+# organism part	16 Tissues mixture
+# Organism	Homo sapiens
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030856/ERR030856.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030857/ERR030857.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030858/ERR030858.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030864/ERR030864.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030865/ERR030865.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030859/ERR030859.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030860/ERR030860.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030861/ERR030861.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030866/ERR030866.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030867/ERR030867.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030862/ERR030862.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030863/ERR030863.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030868/ERR030868.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030869/ERR030869.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030870/ERR030870.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/ERR/ERR030/ERR030871/ERR030871.sra
