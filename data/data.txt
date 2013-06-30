@@ -1,0 +1,15 @@
+RNA-seq datasets:
+
+- Gtex - embargo (also suspicious)
+- European RNA-seq - suspicious embargo
+- Body map - http://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-513/samples/
+- HapMap, Pickrell Montgomery
+- Alexis' data - 
+- ENCODE - RNA-seq
+
+BodyMap
+ENCODE
+Pickrell, Montgomery - lab effort
+
+European RNA-seq
+Gtex
