@@ -1,0 +1,882 @@
+#
+# SRP005098  ENCODE Cold Spring Harbor Labs Long RNA-seq (hg18)
+#
+
+# SRX036891
+
+# GSM646522: Gingeras_GM12878_cell_total
+# Run	Spots	Bases	Size	Published	Access Type
+# SRR089332	79.7 M	12.1 G	12.4 Gbp	2010-12-30	public
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR089/SRR089332/SRR089332.sra	SRR089332.sra
+
+# GSM646522: Gingeras_GM12878_cell_total
+# Run	Spots	Bases	Size	Published	Access Type
+# SRR089333	74.4 M	11.3 G	11.6 Gbp	2010-12-30	public
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR089/SRR089333/SRR089333.sra	SRR089333.sra
+
+# SRX036892
+
+# GSM646523: Gingeras_K562_cell_total
+# Run	Spots	Bases	Size	Published	Access Type
+# SRR089334	77.5 M	11.8 G	12.1 Gbp	2010-12-30	public
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR089/SRR089334/SRR089334.sra	SRR089334.sra
+
+# GSM646523: Gingeras_K562_cell_total
+# Run	Spots	Bases	Size	Published	Access Type
+# SRR089335	56.9 M	8.6 G	8.9 Gbp	2010-12-30	public
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR089/SRR089335/SRR089335.sra	SRR089335.sra
+
+# SRX036893
+
+# GSM646524: Gingeras_K562_cytosol_longPolyA
+# Run	Spots	Bases	Size	Published	Access Type
+# SRR089336	74.7 M	2.7 G	3.0 Gbp	2010-12-30	public
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR089/SRR089336/SRR089336.sra	SRR089336.sra
+
+#
+# SRP003497  GSE23316: ENCODE Caltech RNA-seq
+#
+
+# SRX026694
+#cell line	H1-hESC
+#source_name	H1-hESC
+#biomaterial_provider	Cellular Dynamics
+#cell organism	Human
+#cell description	Human Embryonic Stem Cells
+#cell karyotype	normal
+#cell lineage	embryonic stem cells
+#cell sex	M
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	4
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065533/SRR065533.sra	SRR065533.sra
+
+# SRX026693
+#cell line	GM12878
+#source_name	GM12878
+#biomaterial_provider	Coriell
+#cell organism	Human
+#cell description	lymphoblastoid
+#cell karyotype	relatively normal
+#cell lineage	International HapMap Project - CEPH/Utah - European Caucasion; Epstein-Barr Virus
+#cell sex	F
+#localization	cell
+#readtype	2x75
+#insertlength	400
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065532/SRR065532.sra	SRR065532.sra
+
+# SRX026691
+#cell line	HeLa-S3
+#source_name	HeLa-S3
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	cervical carcinoma
+#cell karyotype	cancer
+#cell lineage	ectoderm
+#cell sex	F
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065529/SRR065529.sra	SRR065529.sra
+
+# SRX026687
+#cell line	HUVEC
+#source_name	HUVEC
+#biomaterial_provider	Lonza
+#cell organism	Human
+#cell description	Human Umbilical Vein Endothelial Cell
+#cell karyotype	normal
+#cell lineage	mesoderm
+#cell sex	U
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065524/SRR065524.sra	SRR065524.sra
+
+# SRX026685
+#cell line	H1-hESC
+#source_name	H1-hESC
+#biomaterial_provider	Cellular Dynamics
+#cell organism	Human
+#cell description	Human Embryonic Stem Cells
+#cell karyotype	normal
+#cell lineage	embryonic stem cells
+#cell sex	M
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	3
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065521/SRR065521.sra	SRR065521.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR066/SRR066679/SRR066679.sra	SRR066679.sra
+
+# SRX026684
+#cell line	HepG2
+#source_name	HepG2
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	liver carcinoma
+#cell karyotype	cancer
+#cell lineage	endoderm
+#cell sex	M
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065520/SRR065520.sra	SRR065520.sra
+
+# SRX026678
+#cell line	HUVEC
+#source_name	HUVEC
+#biomaterial_provider	Lonza
+#cell organism	Human
+#cell description	Human Umbilical Vein Endothelial Cell
+#cell karyotype	normal
+#cell lineage	mesoderm
+#cell sex	U
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065509/SRR065509.sra	SRR065509.sra
+
+# SRX026675
+#cell line	HeLa-S3
+#source_name	HeLa-S3
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	cervical carcinoma
+#cell karyotype	cancer
+#cell lineage	ectoderm
+#cell sex	F
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065505/SRR065505.sra	SRR065505.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065506/SRR065506.sra	SRR065506.sra
+
+# SRX026674
+#cell line	H1-hESC
+#source_name	H1-hESC
+#biomaterial_provider	Cellular Dynamics
+#cell organism	Human
+#cell description	Human Embryonic Stem Cells
+#cell karyotype	normal
+#cell lineage	embryonic stem cells
+#cell sex	M
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065504/SRR065504.sra	SRR065504.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR066/SRR066678/SRR066678.sra	SRR066678.sra
+
+# SRX026673
+#cell line	NHEK
+#source_name	NHEK
+#biomaterial_provider	Lonza
+#cell organism	Human
+#cell description	Normal Human Epidermal Keratinocytes
+#cell karyotype	normal
+#cell lineage	ectoderm
+#cell sex	F
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065503/SRR065503.sra	SRR065503.sra
+
+# SRX026670
+#cell line	HepG2
+#source_name	HepG2
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	liver carcinoma
+#cell karyotype	cancer
+#cell lineage	endoderm
+#cell sex	M
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065496/SRR065496.sra	SRR065496.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065497/SRR065497.sra	SRR065497.sra
+
+# SRX026669
+#cell line	H1-hESC
+#source_name	H1-hESC
+#biomaterial_provider	Cellular Dynamics
+#cell organism	Human
+#cell description	Human Embryonic Stem Cells
+#cell karyotype	normal
+#cell lineage	embryonic stem cells
+#cell sex	M
+#localization	cell
+#readtype	2x75
+#insertlength	200
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065495/SRR065495.sra	SRR065495.sra
+
+# SRX026667
+#cell line	H1-hESC
+#source_name	H1-hESC
+#biomaterial_provider	Cellular Dynamics
+#cell organism	Human
+#cell description	Human Embryonic Stem Cells
+#cell karyotype	normal
+#cell lineage	embryonic stem cells
+#cell sex	M
+#localization	cell
+#readtype	2x75
+#insertlength	400
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065491/SRR065491.sra	SRR065491.sra
+
+# SRX026692
+#cell line	HUVEC
+#source_name	HUVEC
+#biomaterial_provider	Lonza
+#cell organism	Human
+#cell description	Human Umbilical Vein Endothelial Cell
+#cell karyotype	normal
+#cell lineage	mesoderm
+#cell sex	U
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065530/SRR065530.sra	SRR065530.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065531/SRR065531.sra	SRR065531.sra
+
+# SRX026690
+#cell line	NHEK
+#source_name	NHEK
+#biomaterial_provider	Lonza
+#cell organism	Human
+#cell description	Normal Human Epidermal Keratinocytes
+#cell karyotype	normal
+#cell lineage	ectoderm
+#cell sex	F
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065527/SRR065527.sra	SRR065527.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065528/SRR065528.sra	SRR065528.sra
+
+# SRX026689
+#cell line	H1-hESC
+#source_name	H1-hESC
+#biomaterial_provider	Cellular Dynamics
+#cell organism	Human
+#cell description	Human Embryonic Stem Cells
+#cell karyotype	normal
+#cell lineage	embryonic stem cells
+#cell sex	M
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065526/SRR065526.sra	SRR065526.sra
+
+# SRX026688
+#cell line	K562
+#source_name	K562
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	leukemia
+#cell karyotype	cancer
+#cell lineage	"The continuous cell line K-562 was established by Lozzio and Lozzio from the pleural effusion of a 53-year-old female with chronic myelogenous leukemia in terminal blast crises." - ATCC
+#cell sex	F
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065525/SRR065525.sra	SRR065525.sra
+
+# SRX026686
+#cell line	HepG2
+#source_name	HepG2
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	liver carcinoma
+#cell karyotype	cancer
+#cell lineage	endoderm
+#cell sex	M
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065522/SRR065522.sra	SRR065522.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065523/SRR065523.sra	SRR065523.sra
+
+# SRX026683
+#cell line	HeLa-S3
+#source_name	HeLa-S3
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	cervical carcinoma
+#cell karyotype	cancer
+#cell lineage	ectoderm
+#cell sex	F
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065518/SRR065518.sra	SRR065518.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065519/SRR065519.sra	SRR065519.sra
+
+# SRX026682
+#cell line	HeLa-S3
+#source_name	HeLa-S3
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	cervical carcinoma
+#cell karyotype	cancer
+#cell lineage	ectoderm
+#cell sex	F
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065516/SRR065516.sra	SRR065516.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065517/SRR065517.sra	SRR065517.sra
+
+# SRX026681
+#cell line	GM12878
+#source_name	GM12878
+#biomaterial_provider	Coriell
+#cell organism	Human
+#cell description	lymphoblastoid
+#cell karyotype	relatively normal
+#cell lineage	International HapMap Project - CEPH/Utah - European Caucasion; Epstein-Barr Virus
+#cell sex	F
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065514/SRR065514.sra	SRR065514.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065515/SRR065515.sra	SRR065515.sra
+
+# SRX026680
+#cell line	HepG2
+#source_name	HepG2
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	liver carcinoma
+#cell karyotype	cancer
+#cell lineage	endoderm
+#cell sex	M
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065511/SRR065511.sra	SRR065511.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065512/SRR065512.sra	SRR065512.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065513/SRR065513.sra	SRR065513.sra
+
+# SRX026679
+#cell line	GM12878
+#source_name	GM12878
+#biomaterial_provider	Coriell
+#cell organism	Human
+#cell description	lymphoblastoid
+#cell karyotype	relatively normal
+#cell lineage	International HapMap Project - CEPH/Utah - European Caucasion; Epstein-Barr Virus
+#cell sex	F
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065510/SRR065510.sra	SRR065510.sra
+
+# SRX026677
+#cell line	HepG2
+#source_name	HepG2
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	liver carcinoma
+#cell karyotype	cancer
+#cell lineage	endoderm
+#cell sex	M
+#localization	cell
+#readtype	1x32
+#insertlength	ilNA
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065508/SRR065508.sra	SRR065508.sra
+
+# SRX026676
+#cell line	K562
+#source_name	K562
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	leukemia
+#cell karyotype	cancer
+#cell lineage	"The continuous cell line K-562 was established by Lozzio and Lozzio from the pleural effusion of a 53-year-old female with chronic myelogenous leukemia in terminal blast crises." - ATCC
+#cell sex	F
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	2
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065507/SRR065507.sra	SRR065507.sra
+
+# SRX026672
+#cell line	HUVEC
+#source_name	HUVEC
+#biomaterial_provider	Lonza
+#cell organism	Human
+#cell description	Human Umbilical Vein Endothelial Cell
+#cell karyotype	normal
+#cell lineage	mesoderm
+#cell sex	U
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065500/SRR065500.sra	SRR065500.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065501/SRR065501.sra	SRR065501.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065502/SRR065502.sra	SRR065502.sra
+
+# SRX026671
+#cell line	HepG2
+#source_name	HepG2
+#biomaterial_provider	ATCC
+#cell organism	Human
+#cell description	liver carcinoma
+#cell karyotype	cancer
+#cell lineage	endoderm
+#cell sex	M
+#localization	cell
+#readtype	1x32
+#insertlength	ilNA
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065498/SRR065498.sra	SRR065498.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065499/SRR065499.sra	SRR065499.sra
+
+# SRX026668
+#cell line	H1-hESC
+#source_name	H1-hESC
+#biomaterial_provider	Cellular Dynamics
+#cell organism	Human
+#cell description	Human Embryonic Stem Cells
+#cell karyotype	normal
+#cell lineage	embryonic stem cells
+#cell sex	M
+#localization	cell
+#readtype	1x75D
+#insertlength	ilNA
+#replicate	1
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065492/SRR065492.sra	SRR065492.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065493/SRR065493.sra	SRR065493.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR065/SRR065494/SRR065494.sra	SRR065494.sra
+
+#
+# SRP007461
+#
+
+# GSM840137: CSHL_RnaSeq_K562_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR387/SRR387661/SRR387661.sra	SRR387661.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR387/SRR387662/SRR387662.sra	SRR387662.sra
+
+# GSM765405: CshlLong_RnaSeq_K562_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315336/SRR315336.sra	SRR315336.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315337/SRR315337.sra	SRR315337.sra
+
+# GSM765404: CshlLong_RnaSeq_HeLa-S3_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315334/SRR315334.sra	SRR315334.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315335/SRR315335.sra	SRR315335.sra
+
+# GSM765403: CshlLong_RnaSeq_HeLa-S3_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315332/SRR315332.sra	SRR315332.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315333/SRR315333.sra	SRR315333.sra
+
+# GSM765402: CshlLong_RnaSeq_HeLa-S3_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315330/SRR315330.sra	SRR315330.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315331/SRR315331.sra	SRR315331.sra
+
+# GSM765401: CshlLong_RnaSeq_NHEK_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315327/SRR315327.sra	SRR315327.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315328/SRR315328.sra	SRR315328.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315329/SRR315329.sra	SRR315329.sra
+
+# GSM765400: CshlLong_RnaSeq_NHEK_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315325/SRR315325.sra	SRR315325.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315326/SRR315326.sra	SRR315326.sra
+
+# GSM765399: CshlLong_RnaSeq_NHEK_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315323/SRR315323.sra	SRR315323.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315324/SRR315324.sra	SRR315324.sra
+
+# GSM765398: CshlLong_RnaSeq_NHEK_cell_longNonPolyA	RNA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315320/SRR315320.sra	SRR315320.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315321/SRR315321.sra	SRR315321.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315322/SRR315322.sra	SRR315322.sra
+
+# GSM765397: CshlLong_RnaSeq_HMEC_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315319/SRR315319.sra	SRR315319.sra
+
+# GSM765396: CshlLong_RnaSeq_AG04450_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315317/SRR315317.sra	SRR315317.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315318/SRR315318.sra	SRR315318.sra
+
+# GSM765395: CshlLong_RnaSeq_SK-N-SH_RA_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315315/SRR315315.sra	SRR315315.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315316/SRR315316.sra	SRR315316.sra
+
+# GSM765394: CshlLong_RnaSeq_NHLF_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315313/SRR315313.sra	SRR315313.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315314/SRR315314.sra	SRR315314.sra
+
+# GSM765393: CshlLong_RnaSeq_K562_nucleolus_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315311/SRR315311.sra	SRR315311.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315312/SRR315312.sra	SRR315312.sra
+
+# GSM765392: CshlLong_RnaSeq_K562_chromatin_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315309/SRR315309.sra	SRR315309.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315310/SRR315310.sra	SRR315310.sra
+
+# GSM765391: CshlLong_RnaSeq_HSMM_cell_longNonPolyA	
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315307/SRR315307.sra	SRR315307.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315308/SRR315308.sra	SRR315308.sra
+
+# GSM765390: CshlLong_RnaSeq_K562_nucleoplasm_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315305/SRR315305.sra	SRR315305.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315306/SRR315306.sra	SRR315306.sra
+
+# GSM765389: CshlLong_RnaSeq_NHLF_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315303/SRR315303.sra	SRR315303.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315304/SRR315304.sra	SRR315304.sra
+
+# GSM765388: CshlLong_RnaSeq_MCF-7_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315301/SRR315301.sra	SRR315301.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315302/SRR315302.sra	SRR315302.sra
+
+# GSM765387: CshlLong_RnaSeq_K562_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315299/SRR315299.sra	SRR315299.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315300/SRR315300.sra	SRR315300.sra
+
+# GSM765386: CshlLong_RnaSeq_GM12878_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315297/SRR315297.sra	SRR315297.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR315/SRR315298/SRR315298.sra	SRR315298.sra
+
+# GSM840138: CSHL_RnaSeq_GM12878_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR768/SRR768411/SRR768411.sra	SRR768411.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR768/SRR768412/SRR768412.sra	SRR768412.sra
+
+# GSM840136: CSHL_RnaSeq_K562_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR768/SRR768413/SRR768413.sra	SRR768413.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR768/SRR768414/SRR768414.sra	SRR768414.sra
+
+# GSM984609: CSHL_RnaSeq_Monocytes-CD14+_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545695/SRR545695.sra	SRR545695.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545696/SRR545696.sra	SRR545696.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545697/SRR545697.sra	SRR545697.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545698/SRR545698.sra	SRR545698.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545699/SRR545699.sra	SRR545699.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545700/SRR545700.sra	SRR545700.sra
+
+# GSM984621: CSHL_RnaSeq_HMEpC_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545723/SRR545723.sra	SRR545723.sra
+
+# GSM984620: CSHL_RnaSeq_HWP_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545721/SRR545721.sra	SRR545721.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545722/SRR545722.sra	SRR545722.sra
+
+# GSM984619: CSHL_RnaSeq_HVMF_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545719/SRR545719.sra	SRR545719.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545720/SRR545720.sra	SRR545720.sra
+
+# GSM984618: CSHL_RnaSeq_HAoEC_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545717/SRR545717.sra	SRR545717.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545718/SRR545718.sra	SRR545718.sra
+
+# GSM984617: CSHL_RnaSeq_NHEM_M2_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545715/SRR545715.sra	SRR545715.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545716/SRR545716.sra	SRR545716.sra
+
+# GSM984616: CSHL_RnaSeq_NHEM.f_M2_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545713/SRR545713.sra	SRR545713.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545714/SRR545714.sra	SRR545714.sra
+
+# GSM984615: CSHL_RnaSeq_SkMC_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545711/SRR545711.sra	SRR545711.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545712/SRR545712.sra	SRR545712.sra
+
+# GSM984614: CSHL_RnaSeq_HAoAF_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545709/SRR545709.sra	SRR545709.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545710/SRR545710.sra	SRR545710.sra
+
+# GSM984613: CSHL_RnaSeq_HSaVEC_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545707/SRR545707.sra	SRR545707.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545708/SRR545708.sra	SRR545708.sra
+
+# GSM984612: CSHL_RnaSeq_NHDF_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545705/SRR545705.sra	SRR545705.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545706/SRR545706.sra	SRR545706.sra
+
+# GSM984611: CSHL_RnaSeq_HCH_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545703/SRR545703.sra	SRR545703.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545704/SRR545704.sra	SRR545704.sra
+
+# GSM984610: CSHL_RnaSeq_HOB_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545701/SRR545701.sra	SRR545701.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545702/SRR545702.sra	SRR545702.sra
+
+# GSM984608: CSHL_RnaSeq_hMSC-BM_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545693/SRR545693.sra	SRR545693.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545694/SRR545694.sra	SRR545694.sra
+
+# GSM984607: CSHL_RnaSeq_hMSC-UC_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545691/SRR545691.sra	SRR545691.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545692/SRR545692.sra	SRR545692.sra
+
+# GSM984606: CSHL_RnaSeq_hMNC-PB_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545689/SRR545689.sra	SRR545689.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545690/SRR545690.sra	SRR545690.sra
+
+# GSM984605: CSHL_RnaSeq_GM12878_nucleolus_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545687/SRR545687.sra	SRR545687.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545688/SRR545688.sra	SRR545688.sra
+
+# GSM984604: CSHL_RnaSeq_HPIEpC_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545685/SRR545685.sra	SRR545685.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR545/SRR545686/SRR545686.sra	SRR545686.sra
+
+# GSM981260: CSHL_RnaSeq_hMSC-AT_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534334/SRR534334.sra	SRR534334.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534335/SRR534335.sra	SRR534335.sra
+
+# GSM981259: CSHL_RnaSeq_Monocytes-CD14+_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534328/SRR534328.sra	SRR534328.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534329/SRR534329.sra	SRR534329.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534330/SRR534330.sra	SRR534330.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534331/SRR534331.sra	SRR534331.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534332/SRR534332.sra	SRR534332.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534333/SRR534333.sra	SRR534333.sra
+
+# GSM981258: CSHL_RnaSeq_HFDPC_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534326/SRR534326.sra	SRR534326.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534327/SRR534327.sra	SRR534327.sra
+
+# GSM981257: CSHL_RnaSeq_CD34+_Mobilized_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534325/SRR534325.sra	SRR534325.sra
+
+# GSM981256: CSHL_RnaSeq_CD20+_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534319/SRR534319.sra	SRR534319.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534320/SRR534320.sra	SRR534320.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534321/SRR534321.sra	SRR534321.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534322/SRR534322.sra	SRR534322.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534323/SRR534323.sra	SRR534323.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534324/SRR534324.sra	SRR534324.sra
+
+# GSM981255: CSHL_RnaSeq_HPC-PL_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534317/SRR534317.sra	SRR534317.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534318/SRR534318.sra	SRR534318.sra
+
+# GSM981254: CSHL_RnaSeq_CD20+_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534311/SRR534311.sra	SRR534311.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534312/SRR534312.sra	SRR534312.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534313/SRR534313.sra	SRR534313.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534314/SRR534314.sra	SRR534314.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534315/SRR534315.sra	SRR534315.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534316/SRR534316.sra	SRR534316.sra
+
+# GSM981253: CSHL_RnaSeq_SK-N-SH_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534309/SRR534309.sra	SRR534309.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534310/SRR534310.sra	SRR534310.sra
+
+# GSM981252: CSHL_RnaSeq_MCF-7_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534307/SRR534307.sra	SRR534307.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534308/SRR534308.sra	SRR534308.sra
+
+# GSM981251: CSHL_RnaSeq_SK-N-SH_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534305/SRR534305.sra	SRR534305.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534306/SRR534306.sra	SRR534306.sra
+
+# GSM981250: CSHL_RnaSeq_SK-N-SH_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534303/SRR534303.sra	SRR534303.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534304/SRR534304.sra	SRR534304.sra
+
+# GSM981249: CSHL_RnaSeq_IMR90_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534301/SRR534301.sra	SRR534301.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534302/SRR534302.sra	SRR534302.sra
+
+# GSM981248: CSHL_RnaSeq_IMR90_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534299/SRR534299.sra	SRR534299.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534300/SRR534300.sra	SRR534300.sra
+
+# GSM981247: CSHL_RnaSeq_A549_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534297/SRR534297.sra	SRR534297.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534298/SRR534298.sra	SRR534298.sra
+
+# GSM981246: CSHL_RnaSeq_A549_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534295/SRR534295.sra	SRR534295.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534296/SRR534296.sra	SRR534296.sra
+
+# GSM981245: CSHL_RnaSeq_MCF-7_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534293/SRR534293.sra	SRR534293.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534294/SRR534294.sra	SRR534294.sra
+
+# GSM981244: CSHL_RnaSeq_IMR90_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534291/SRR534291.sra	SRR534291.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534292/SRR534292.sra	SRR534292.sra
+
+# GSM981243: CSHL_RnaSeq_IMR90_cell_total
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534289/SRR534289.sra	SRR534289.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR534/SRR534290/SRR534290.sra	SRR534290.sra
+
+# GSM767857: CshlLong_RnaSeq_HUVEC_nucleus_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317068/SRR317068.sra	SRR317068.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317069/SRR317069.sra	SRR317069.sra
+
+# GSM767856: CshlLong_RnaSeq_HUVEC_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317066/SRR317066.sra	SRR317066.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317067/SRR317067.sra	SRR317067.sra
+
+# GSM767855: CshlLong_RnaSeq_BJ_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317064/SRR317064.sra	SRR317064.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317065/SRR317065.sra	SRR317065.sra
+
+# GSM767854: CshlLong_RnaSeq_A549_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317062/SRR317062.sra	SRR317062.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317063/SRR317063.sra	SRR317063.sra
+
+# GSM767853: CshlLong_RnaSeq_GM12878_nucleus_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317060/SRR317060.sra	SRR317060.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317061/SRR317061.sra	SRR317061.sra
+
+# GSM767852: CshlLong_RnaSeq_GM12878_cytosol_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317058/SRR317058.sra	SRR317058.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317059/SRR317059.sra	SRR317059.sra
+
+# GSM767851: CshlLong_RnaSeq_MCF-7_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317056/SRR317056.sra	SRR317056.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317057/SRR317057.sra	SRR317057.sra
+
+# GSM767850: CshlLong_RnaSeq_HepG2_nucleus_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317054/SRR317054.sra	SRR317054.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317055/SRR317055.sra	SRR317055.sra
+
+# GSM767849: CshlLong_RnaSeq_K562_cytosol_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317052/SRR317052.sra	SRR317052.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317053/SRR317053.sra	SRR317053.sra
+
+# GSM767848: CshlLong_RnaSeq_HeLa-S3_nucleus_longNonPolyA	
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317050/SRR317050.sra	SRR317050.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317051/SRR317051.sra	SRR317051.sra
+
+# GSM767847: CshlLong_RnaSeq_HeLa-S3_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317048/SRR317048.sra	SRR317048.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317049/SRR317049.sra	SRR317049.sra
+
+# GSM767846: CshlLong_RnaSeq_NHEK_nucleus_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317046/SRR317046.sra	SRR317046.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317047/SRR317047.sra	SRR317047.sra
+
+# GSM767845: CshlLong_RnaSeq_SK-N-SH_RA_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317044/SRR317044.sra	SRR317044.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317045/SRR317045.sra	SRR317045.sra
+
+# GSM767844: CshlLong_RnaSeq_K562_nucleus_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317042/SRR317042.sra	SRR317042.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317043/SRR317043.sra	SRR317043.sra
+
+# GSM767843: CshlLong_RnaSeq_NHEK_cytosol_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317041/SRR317041.sra	SRR317041.sra
+
+# GSM767842: CshlLong_RnaSeq_H1-hESC_cytosol_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317040/SRR317040.sra	SRR317040.sra
+
+# GSM767841: CshlLong_RnaSeq_H1-hESC_nucleus_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317039/SRR317039.sra	SRR317039.sra
+
+# GSM767840: CshlLong_RnaSeq_HepG2_cytosol_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317037/SRR317037.sra	SRR317037.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317038/SRR317038.sra	SRR317038.sra
+
+# GSM767839: CshlLong_RnaSeq_HUVEC_cytosol_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317036/SRR317036.sra	SRR317036.sra
+
+# GSM767838: CshlLong_RnaSeq_HeLa-S3_cytosol_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR317/SRR317035/SRR317035.sra	SRR317035.sra
+
+# GSM758578: CshlLong_RnaSeq_HSMM_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307932/SRR307932.sra	SRR307932.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307933/SRR307933.sra	SRR307933.sra
+
+# GSM758577: CshlLong_RnaSeq_K562_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307930/SRR307930.sra	SRR307930.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307931/SRR307931.sra	SRR307931.sra
+
+# GSM758576: CshlLong_RnaSeq_HepG2_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307928/SRR307928.sra	SRR307928.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307929/SRR307929.sra	SRR307929.sra
+
+# GSM758575: CshlLong_RnaSeq_HepG2_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307926/SRR307926.sra	SRR307926.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307927/SRR307927.sra	SRR307927.sra
+
+# GSM758574: CshlLong_RnaSeq_H1-hESC_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307925/SRR307925.sra	SRR307925.sra
+
+# GSM758573: CshlLong_RnaSeq_H1-hESC_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307923/SRR307923.sra	SRR307923.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307924/SRR307924.sra	SRR307924.sra
+
+# GSM758572: CshlLong_RnaSeq_GM12878_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307921/SRR307921.sra	SRR307921.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307922/SRR307922.sra	SRR307922.sra
+
+# GSM758571: CshlLong_RnaSeq_HMEC_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307920/SRR307920.sra	SRR307920.sra
+
+# GSM758570: CshlLong_RnaSeq_H1-hESC_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307919/SRR307919.sra	SRR307919.sra
+
+# GSM758569: CshlLong_RnaSeq_HUVEC_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307917/SRR307917.sra	SRR307917.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307918/SRR307918.sra	SRR307918.sra
+
+# GSM758568: CshlLong_RnaSeq_HepG2_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307915/SRR307915.sra	SRR307915.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307916/SRR307916.sra	SRR307916.sra
+
+# GSM758567: CshlLong_RnaSeq_HepG2_cell_longNonPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307913/SRR307913.sra	SRR307913.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307914/SRR307914.sra	SRR307914.sra
+
+# GSM758566: CshlLong_RnaSeq_H1-hESC_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307911/SRR307911.sra	SRR307911.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307912/SRR307912.sra	SRR307912.sra
+
+# GSM758565: CshlLong_RnaSeq_HUVEC_nucleus_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307909/SRR307909.sra	SRR307909.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307910/SRR307910.sra	SRR307910.sra
+
+# GSM758564: CshlLong_RnaSeq_A549_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307907/SRR307907.sra	SRR307907.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307908/SRR307908.sra	SRR307908.sra
+
+# GSM758563: CshlLong_RnaSeq_HUVEC_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307905/SRR307905.sra	SRR307905.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307906/SRR307906.sra	SRR307906.sra
+
+# GSM758562: CshlLong_RnaSeq_BJ_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307903/SRR307903.sra	SRR307903.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307904/SRR307904.sra	SRR307904.sra
+
+# GSM758561: CshlLong_RnaSeq_AG04450_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307901/SRR307901.sra	SRR307901.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307902/SRR307902.sra	SRR307902.sra
+
+# GSM758560: CshlLong_RnaSeq_GM12878_cytosol_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307899/SRR307899.sra	SRR307899.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307900/SRR307900.sra	SRR307900.sra
+
+# GSM758559: CshlLong_RnaSeq_GM12878_cell_longPolyA
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307897/SRR307897.sra	SRR307897.sra
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR307/SRR307898/SRR307898.sra	SRR307898.sra
