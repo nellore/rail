@@ -1,7 +1,8 @@
 # Parameters
 GENOME_LEN=48502
-NTASKS=10
-HMM_OVERLAP=30
+NTASKS=20
+HMM_OVERLAP=100
+PERMUTATIONS=5
 
 #Hadoop file locations
 HADOOP_FILES=/user/hduser/sim_simple
@@ -74,9 +75,10 @@ NORMALIZE_POST_OUT=/user/hduser/sim_simple/normalize_post_output
 #         but this time, calculate per-position coverage vectors and
 #         fit a linear model to each
 WALK_FIT="python $RNAWESOME/walk_fit.py"
-WALK_FIT_ARGS=''$WALK_FIT' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --seed=777 --normals '${INTERMEDIATE_DIR}/norm.tsv''
+WALK_FIT_ARGS=''$WALK_FIT' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --seed=777 --normals '${INTERMEDIATE_DIR}/norm.tsv' --permutations='$PERMUTATIONS' --permutations-out='${INTERMEDIATE_DIR}/norm.tsv''
 #WALK_FIT_ARGS=''$WALK_FIT' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --seed=777 --normals '$NORMALIZE_POST_OUT/part-00000''
 WALK_FIT_OUT=/user/hduser/sim_simple/walkfit_output 
+
 # Step 7: Given all the t-statistics, moderate them and emit moderated
 #         t-stats
 EBAYES_AGGR="cat"
@@ -121,7 +123,6 @@ hadoop dfs -mkdir $SAMPLE_OUT
 hadoop dfs -rmr $PERM_OUT
 hadoop dfs -mkdir $PERM_OUT
 
-
 # echo $ALIGN_ARGS
 # echo $TORNADO
 # #FILES=`find $TORNADO -name \*`
@@ -158,23 +159,21 @@ hadoop dfs -mkdir $PERM_OUT
 #     -input $HADOOP_FILES/*.tab5 -output $ALIGN_OUT
 
 
-# #Step 2 SPLICE and MERGE
+# #Step 2 SPLICE
 # hadoop dfs -rmr $SPLICE_OUT
 # hadoop jar $STREAMING \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=1 \
+#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
 #     -file "$SCR_DIR/rnawesome/splice.py" \
 #     -file "$SCR_DIR/interval/interval.py" \
 #     -file "$SCR_DIR/interval/partition.py" \
 #     -file "$SCR_DIR/manifest/manifest.py" \
 #     -file "$SCR_DIR/sample/sample.py" \
 #     -file "$SCR_DIR/rnawesome/merge.py" \
-#     -jobconf num.key.fields.for.partition=1 \
-#     -jobconf stream.num.map.output.key.fields=2 \
-#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-#     -mapper "$SPLICE_ARGS" \
-#     -reducer "$MERGE" \
+#     -mapper cat \
+#     -reducer "$SPLICE_ARGS" \
 #     -input $ALIGN_OUT/*part* -output $SPLICE_OUT
-
-
 
 # #Sort MERGE output
 # hadoop dfs -rmr $MERGE_OUT
@@ -183,7 +182,7 @@ hadoop dfs -mkdir $PERM_OUT
 #     -D stream.num.map.output.key.fields=2 \
 #     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
 #     -mapper cat \
-#     -reducer org.apache.hadoop.mapred.lib.IdentityReducer \
+#     -reducer "$MERGE" \
 #     -input $SPLICE_OUT/*part* -output $MERGE_OUT
 
 
@@ -191,7 +190,6 @@ hadoop dfs -mkdir $PERM_OUT
 # hadoop dfs -rmr $WALK_PRENORM_OUT
 # hadoop jar $STREAMING \
 #     -D mapred.reduce.tasks=0 \
-#     -file "$SCR_DIR/rnawesome/normalize.py" \
 #     -file "$SCR_DIR/rnawesome/walk_prenorm.py" \
 #     -file "$SCR_DIR/interval/partition.py" \
 #     -file "$SCR_DIR/manifest/manifest.py" \
@@ -227,7 +225,9 @@ hadoop dfs -mkdir $PERM_OUT
 #     -input $NORMALIZE_OUT/*part* -output $NORMALIZE_POST_OUT
 
 # #Copy files to local machine
+# rm ${INTERMEDIATE_DIR}/norm.tsv
 # hadoop dfs -copyToLocal $NORMALIZE_POST_OUT/part* ${INTERMEDIATE_DIR}/norm.tsv
+# rm ${INTERMEDIATE_DIR}/walk_in_input.tsv
 # hadoop dfs -copyToLocal $MERGE_OUT/part* ${INTERMEDIATE_DIR}/walk_in_input.tsv
 
 
@@ -259,14 +259,6 @@ hadoop dfs -mkdir $PERM_OUT
 #     -reducer "$EBAYES_ARGS" \
 #     -input $WALK_FIT_OUT/*part* -output $EBAYES_OUT
 
-
-# # # #Check $? after completion.  If not 0, then print an error message and quit
-# # # # if [$? -ne 0]
-# # # # then
-# # # #     echo "Splice step failed, now exiting"
-# # # #     exit 0
-# # # # fi
-
 # # # #Step 8 HMM_PARAMS
 # hadoop dfs -rmr $HMM_PARAMS_OUT
 # hadoop jar $STREAMING \
@@ -278,18 +270,18 @@ hadoop dfs -mkdir $PERM_OUT
 # # #Copy HMM params to local machine
 # hadoop dfs -copyToLocal $HMM_PARAMS_OUT/part* ${INTERMEDIATE_DIR}/hmm_params.tsv
 
-#Step 9 HMM
-hadoop dfs -rmr $HMM_OUT
-hadoop jar $STREAMING \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=2 \
-    -file "$SCR_DIR/rnawesome/hmm.py" \
-    -file "$SCR_DIR/interval/partition.py" \
-    -file "$INTERMEDIATE_DIR/hmm_params.tsv" \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -mapper cat \
-    -reducer "$HMM_ARGS" \
-    -input $EBAYES_OUT/*part* -output $HMM_OUT
+# #Step 9 HMM
+# hadoop dfs -rmr $HMM_OUT
+# hadoop jar $STREAMING \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=2 \
+#     -file "$SCR_DIR/rnawesome/hmm.py" \
+#     -file "$SCR_DIR/interval/partition.py" \
+#     -file "$INTERMEDIATE_DIR/hmm_params.tsv" \
+#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+#     -mapper cat \
+#     -reducer "$HMM_ARGS" \
+#     -input $EBAYES_OUT/*part* -output $HMM_OUT
 
 # #Step 10 AGGR_PATH
 hadoop dfs -rmr $NULL_OUT
@@ -305,3 +297,9 @@ hadoop jar $STREAMING \
     -input $HMM_OUT/*part* -output $NULL_OUT
 
 
+# # # #Check $? after completion.  If not 0, then print an error message and quit
+# # # # if [$? -ne 0]
+# # # # then
+# # # #     echo "Splice step failed, now exiting"
+# # # #     exit 0
+# # # # fi

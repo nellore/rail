@@ -11,7 +11,8 @@ ALIGN_AGGR="cat"
 ALIGN="python $SCR_DIR/align.py"
 
 # Step 1b: Bring together all the readlet alignment intervals for a given read and 
-SPLICE_AGGR="cat"
+SPLICE_AGGR1="sort -n -k2,2"
+SPLICE_AGGR2="sort -s -k1,1"
 SPLICE="python $SCR_DIR/splice.py"
 
 # Steps 1a and 1b happen together in the same map step in practice
@@ -109,56 +110,58 @@ BOWTIE_EXE=$BOWTIE_HOME/bowtie
 echo "Temporary file for walk_fit.py input is '$WALK_IN_TMP'" 1>&2
 echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 
-# cat *.tab5 \
-# 	| $ALIGN_AGGR | $ALIGN \
-# 		--bowtieArgs '-v 2 -m 1 -p 6' \
-# 		--bowtieExe $BOWTIE_EXE \
-# 		--bowtieIdx=../fasta/lambda_virus \
-# 		--readletLen 20 \
-# 		--readletIval 2 \
-# 		--manifest $MANIFEST_FN \
-# 	| $SPLICE_AGGR | $SPLICE \
-# 		--ntasks=$NTASKS \
-# 		--genomeLen=$GENOME_LEN \
-# 		--manifest $MANIFEST_FN \
-# 	| $MERGE_AGGR1 | $MERGE_AGGR2 | $MERGE \
-# 	| tee $WALK_IN_TMP | $WALK_PRENORM \
-# 		--manifest $MANIFEST_FN \
-# 		--ntasks=$NTASKS \
-# 		--genomeLen=$GENOME_LEN \
-# 	| $NORMALIZE_AGGR1 | $NORMALIZE_AGGR2 | $NORMALIZE \
-# 		--percentile 0.75 \
-# 		--out_dir $SAMPLE_OUT \
-#                 --bigbed_exe $BIGBED_EXE \
-#                 --chrom_sizes $CHROM_SIZES \
-# 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
-# 		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
+cat *.tab5 \
+	| $ALIGN_AGGR | $ALIGN \
+		--bowtieArgs '-v 2 -m 1 -p 6' \
+		--bowtieExe $BOWTIE_EXE \
+		--bowtieIdx=../fasta/lambda_virus \
+		--readletLen 20 \
+		--readletIval 2 \
+		--manifest $MANIFEST_FN \
+    	| tee ${INTERMEDIATE_DIR}align_out.tsv \
+        | $SPLICE_AGGR1 | $SPLICE_AGGR2 | $SPLICE \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
+		--manifest $MANIFEST_FN \
+    	| tee ${INTERMEDIATE_DIR}splice_out.tsv \
+        | $MERGE_AGGR1 | $MERGE_AGGR2 | $MERGE \
+	| tee $WALK_IN_TMP | $WALK_PRENORM \
+		--manifest $MANIFEST_FN \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
+	| $NORMALIZE_AGGR1 | $NORMALIZE_AGGR2 | $NORMALIZE \
+		--percentile 0.75 \
+		--out_dir $SAMPLE_OUT \
+                --bigbed_exe $BIGBED_EXE \
+                --chrom_sizes $CHROM_SIZES \
+	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
+		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
 
-# cp $WALK_IN_TMP ${INTERMEDIATE_DIR}walk_in_input.tsv
+cp $WALK_IN_TMP ${INTERMEDIATE_DIR}walk_in_input.tsv
 
-# cat $WALK_IN_TMP \
-# 	| tee ${INTERMEDIATE_DIR}walk_fit_in.tsv | $WALK_FIT \
-# 		--ntasks=$NTASKS \
-# 		--genomeLen=$GENOME_LEN \
-# 		--seed=777 \
-# 		--permutations=$PERMUTATIONS \
-# 		--permutations-out=${INTERMEDIATE_DIR}permutations.tsv \
-# 		--normals=${INTERMEDIATE_DIR}norm.tsv \
-# 	| $EBAYES_AGGR | tee ${INTERMEDIATE_DIR}ebayes_in.tsv | $EBAYES \
-# 		--ntasks=$NTASKS \
-# 		--genomeLen=$GENOME_LEN \
-# 		--hmm-overlap=$HMM_OVERLAP \
-# 	| tee ${INTERMEDIATE_DIR}hmm_in.tsv | $HMM_PARAMS_AGGR | $HMM_PARAMS \
-# 		--null \
-# 		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
+cat $WALK_IN_TMP \
+	| tee ${INTERMEDIATE_DIR}walk_fit_in.tsv | $WALK_FIT \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
+		--seed=777 \
+		--permutations=$PERMUTATIONS \
+		--permutations-out=${INTERMEDIATE_DIR}permutations.tsv \
+		--normals=${INTERMEDIATE_DIR}norm.tsv \
+	| $EBAYES_AGGR | tee ${INTERMEDIATE_DIR}ebayes_in.tsv | $EBAYES \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
+		--hmm-overlap=$HMM_OVERLAP \
+	| tee ${INTERMEDIATE_DIR}hmm_in.tsv | $HMM_PARAMS_AGGR | $HMM_PARAMS \
+		--null \
+		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
 
-# cat ${INTERMEDIATE_DIR}hmm_in.tsv \
-# 	| $HMM_AGGR1 | $HMM_AGGR2 | $HMM \
-# 		--ntasks=$NTASKS \
-# 		--genomeLen=$GENOME_LEN \
-# 		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
-# 		--hmm-overlap=$HMM_OVERLAP \
-# 	| tee ${INTERMEDIATE_DIR}hmm_out.tsv > hmm.out
+cat ${INTERMEDIATE_DIR}hmm_in.tsv \
+	| $HMM_AGGR1 | $HMM_AGGR2 | $HMM \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
+		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
+		--hmm-overlap=$HMM_OVERLAP \
+	| tee ${INTERMEDIATE_DIR}hmm_out.tsv > hmm.out
 
 cat hmm.out | $PATH_AGGR1 | $PATH_AGGR2 | $PATH_AGGR3 | $AGGR_PATH \
                 --out_dir $PERM_OUT \
@@ -173,3 +176,5 @@ cat ${INTERMEDIATE_DIR}norm.tsv 1>&2
 
 echo "HMM parameter file:" 1>&2
 cat ${INTERMEDIATE_DIR}hmm_params.tsv 1>&2
+
+#sh clean.sh #This is just for testing to get rid of intermediate sample and permutation files

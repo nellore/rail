@@ -27,6 +27,9 @@ Tab-delimited output tuple columns:
  5+. Comma-delimited triples of (1) coefficient, (2) standard deviation, (3)
      sigma.  One for the data, and then N more triples for each of the N
      permutations of the data tried.
+
+TODO: Investigate intermediate folder problem.  Need to find a way to regularly clean and replace the contents in the folder
+
 '''
 
 import os
@@ -182,6 +185,7 @@ def go():
         for line in fh:
             line = line.rstrip()
             toks = line.split('\t')
+            print>>sys.stderr, toks
             assert len(toks) == 2
             labels.append(toks[0])
             if toks[1] != "NA":
@@ -262,7 +266,7 @@ def go():
         for fitter in permFitters:
             _, _, coef, stdev, sig = fitter.fit(xformy)
             fitstrs.append("%f,%f,%f" % (coef, stdev, sig))
-        print (("%s\t%d\t%f\t%d\t" % (refid, st, mn, df)) + '\t'.join(fitstrs))
+        print (("%s\t%012d\t%f\t%d\t" % (refid, st, mn, df)) + '\t'.join(fitstrs))
         return 1
     
     def analyzeWindow(refid, st, cov, testFitter, permFitters):

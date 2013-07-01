@@ -69,14 +69,15 @@ for ln in sys.stdin:
     if last_perm=="\t": 
         samp_out.close()       
         fname = "perm%s.bed"%(data_id)
+        print>>sys.stderr,"ID:",data_id
         samp_out = open(fname,'w')
         line = "%s\t%d\t%d\t%d\n"%(ref_id,ref_off,ref_off+ref_len,hmm_st)
         samp_out.write(line)
         last_perm=data_id
     elif last_perm!=data_id:
         samp_out.close()
-        bb_file = "perm%s.bb"%(data_id)
-        out_fname =  "%s/perm%s.bb"%(args.out_dir,data_id)
+        bb_file = "perm%s.bb"%(last_perm)
+        out_fname =  "%s/perm%s.bb"%(args.out_dir,last_perm)
         bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, args.chrom_sizes, bb_file])
         bigbed_proc.wait()
         if args.hadoop_exe!="": #For hadoop mode - moves local file to HDFS
@@ -90,34 +91,16 @@ for ln in sys.stdin:
     elif last_perm==data_id:
         line = "%s\t%d\t%d\t%d\n"%(ref_id,ref_off,ref_off+ref_len,hmm_st)
         samp_out.write(line)
-        
 
-    # #This is for hadoop mode
-    # if args.hadoop_exe!="" and (last_perm==-1 or last_perm!=data_id): #initialize pipes
-    #     proc.stdin.close()
-    #     proc.wait()
-    #     out_fname = "%s/perm%s.bed"%(args.out_dir,data_id)
-    #     proc = subprocess.Popen([args.hadoop_exe, 'fs', 'put', '-',out_fname],stdin=subprocess.PIPE)
-    #     line = "%s\t%d\t%d\t%d"%(ref_id,ref_off,ref_off+ref_len,hmm_st)
-    #     proc.stdin.write(line)
-    #     last_perm=data_id
-    # elif args.hadoop_exe!="" and last_perm==data_id:
-    #     line = "%s\t%d\t%d\t%d"%(ref_id,ref_off,ref_off+ref_len,hmm_st)
-    #     proc.stdin.write(line)
-    #     last_perm=data_id
+#Can't forget about last file
+samp_out.close()
+bb_file = "perm%s.bb"%(last_perm)
+out_fname =  "%s/perm%s.bb"%(args.out_dir,last_perm)
+bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, args.chrom_sizes, bb_file])
+bigbed_proc.wait()
+if args.hadoop_exe!="": #For hadoop mode - moves local file to HDFS
+    moveToHDFS(bb_file,out_fname)
 
-    # #This is for local mode
-    # if args.hadoop_exe=="" and (last_perm==-1 or last_perm!=data_id): #initialize pipes
-    #     samp_out.close()
-    #     out_fname = "%s/perm%s.bed"%(args.out_dir,data_id)
-    #     line = "%s\t%d\t%d\t%d\n"%(ref_id,ref_off,ref_off+ref_len,hmm_st)
-    #     samp_out = open(out_fname,'w')
-    #     samp_out.write(line)
-    #     last_perm=data_id
-    # elif args.hadoop_exe=="" and last_perm==data_id:
-    #     line = "%s\t%d\t%d\t%d\n"%(ref_id,ref_off,ref_off+ref_len,hmm_st)
-    #     samp_out.write(line)
-    #     last_perm=data_id
 
 #Done
 timeEn = time.clock()
