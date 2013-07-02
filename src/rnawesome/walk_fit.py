@@ -28,7 +28,11 @@ Tab-delimited output tuple columns:
      sigma.  One for the data, and then N more triples for each of the N
      permutations of the data tried.
 
-TODO: Investigate intermediate folder problem.  Need to find a way to regularly clean and replace the contents in the folder
+TODO:
+ - Investigate intermediate folder problem.  Need to find a way to regularly
+   clean and replace the contents in the folder
+ - Do input tuples really need the refid (4th) field?  Can't we recover from
+   partition ID?
 
 '''
 
@@ -291,29 +295,31 @@ def go():
         ln = ln.rstrip()
         toks = ln.split('\t')
         assert len(toks) == 6
-        pt, st, en, refid, weight, lab = toks
+        pt, st, en, _, weight, lab = toks
         st, en, weight = int(st), int(en), int(weight)
         maxlen = max(en - st, maxlen)
         if pt != last_pt:
             # We moved on to a new partition
             if mcov is not None:
-                nout += finalize(refid, mcov, testFitter, permFitters)
-            refid2, part_st, part_en = partition.parse(pt, binsz)
+                last_refid, _, _ = partition.parse(last_pt, binsz)
+                nout += finalize(last_refid, mcov, testFitter, permFitters)
+            _, part_st, part_en = partition.parse(pt, binsz)
             mcov = circular.CircularMultiCoverageBuffer(nsamp, part_st, part_en, maxlen)
             if verbose:
                 print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
-            assert refid == refid2
             assert part_en > part_st
         assert part_st >= 0
         assert part_en > part_st
         sampid = lab2idx[lab]
         covst, covl = mcov.add(sampid, st, en, weight)
         if covl is not None:
+            refid, _, _ = partition.parse(pt, binsz)
             nout += analyzeWindow(refid, covst, covl, testFitter, permFitters)
         last_pt = pt
         ninp += 1
     
     if part_st > -1:
+        refid, _, _ = partition.parse(pt, binsz)
         nout += finalize(refid, mcov, testFitter, permFitters)
     
     # Done

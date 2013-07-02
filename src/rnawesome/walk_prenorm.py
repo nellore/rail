@@ -28,6 +28,10 @@ Tab-delimited output tuple columns:
  3. Genome Position
  4. Count (at some position)
 
+TODO:
+ - Do input tuples really need the refid (4th) field?  Can't we recover from
+   partition ID?
+
 '''
 
 import os
@@ -96,7 +100,7 @@ for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split('\t')
     assert len(toks) == 6
-    pt, st, en, refid, weight, lab = toks  
+    pt, st, en, _, weight, lab = toks  
     st, en, weight = int(st), int(en), int(weight)
     maxlen = max(en - st, maxlen)
     if pt != last_pt:
@@ -104,10 +108,9 @@ for ln in sys.stdin:
         last_part_st, last_part_en = part_st, part_en
         nout += finishAll(last_pt, cov)
         cov = {}
-        refid2, part_st, part_en = partition.parse(pt, binsz)
+        _, part_st, part_en = partition.parse(pt, binsz)
         if verbose:
             print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
-        assert refid == refid2
         assert part_en > part_st
         last_st = -1 
     assert part_st >= 0
