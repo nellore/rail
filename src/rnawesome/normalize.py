@@ -23,6 +23,10 @@ Tab-delimited output tuple columns:
  1. Sample label
  2. Normalization factor
 
+Todo: Push all bed and bigbed files to --out_dir on local mode
+
+Note to self:  all of the reads are from the first sequence
+
 '''
 
 import sys
@@ -115,6 +119,8 @@ for ln in sys.stdin:
             moveToHDFS(bb_file,out_fname)
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
         samp_out = open(fname,'w')
+    elif last_chr!=chr_name:
+        last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
     elif frag_dep!=cv and abs(last_pos-pos)==1: #record a new entry
         line = "%s\t%d\t%d\t%d\n"%(chr_name,frag_st,pos,frag_dep)
         samp_out.write(line)
