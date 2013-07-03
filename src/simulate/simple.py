@@ -9,7 +9,40 @@ import random
 import bisect
 import math
 
+#Average exon length ~ 200 bp
+#Average intron length ~5000 bp
+#Use a 2-state Markov chain to simulate exon/intron regions
+#Accepts reference genome length as input
+def makeSpliceJunctions(ln):
+    states = []
+    E2I = 1/200.0  #The probability of changing from an exon state to an intron state
+    E2E = 1-E2I    #The probability of staying in an exon state
+    I2E = 1/5000.0 #The probability of changing from an intron state to an exon state
+    I2I = 1-I2E    #The probability of staying in an intron state
+    
+    A = [[E2E,E2I],
+         [I2E,I2I]]
+    """ Transition from 'state' to next state in time series using
+    HMM transition matrix """
+    def transition_(state):
+        assert state==0 or state==1
+        rnd = random.random()
+        tot = 0.0
+        for i in xrange(0,2):
+            tot+=A[state][i]
+            if rnd < tot:
+                return i
+        return random.randint(0,1)
+    state = 1 #Starts on intron
+    exp_path = [] #Expression states
+    for i in xrange(0,ln):
+        newstate = transition_(state)
+        state = newstate
+        exp_path.append("EI"[state])
+    return exp_path
+
 def makeRef(ln, stayprob, stateFn):
+    exp_path = makeSpliceJunctions(ln)
     stayrem = (1.0 - stayprob) / 3.0
     EtoZero = (1.0 - stayprob) / 2.0
     EtoDE = (1.0 - stayprob) / 4.0
@@ -41,7 +74,7 @@ def makeRef(ln, stayprob, stateFn):
         for i in xrange(0, ln):
             newstate = transition(state)
             if newstate != state:
-                if newstate == 0:#No differiential expression
+                if newstate == 0 or exp_path[i]=='I':#No differiential expression
                     cov1, cov2 = 0.001, 0.001
                 elif newstate == 1:#Differientially expressed towards seq2
                     cov2 = random.random()
@@ -59,7 +92,6 @@ def makeRef(ln, stayprob, stateFn):
             fh.write("0dED"[state])
             if (i+1) % 70 == 0:
                 fh.write('\n')
-            #Scale coverages
             
             coverage.append((cov1, cov2))
     return path, coverage
@@ -69,6 +101,10 @@ def increment(depths, start, end):
     for i in range(start,end):
         depths[i]+=1
     return depths
+
+#Takes into account splice junctions 
+def getSequence(ref,i,readlen):
+    return ref[i:i+readln]
 
 def simulate(ref, readlen, targetNucs, stateFn):
     path, coverage = makeRef(len(ref), 0.999, stateFn)

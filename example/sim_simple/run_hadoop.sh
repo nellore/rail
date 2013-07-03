@@ -18,7 +18,7 @@ UCSC_TOOLS=$TORNADO/tools/ucsc_tools
 #Bowtie locations
 BOWTIE=$TORNADO/tools/bowtie-0.12.8/bowtie
 INDEXS=$EXAMPLE/fasta
-BOWTIE_IDX=$INDEXS/lambda_virus
+BOWTIE_IDX=$INDEXS/virus
 #UCSC tools location
 BIGBED_EXE=$UCSC_TOOLS/bedToBigBed
 CHROM_SIZES=$PWD/chrom.sizes
@@ -37,8 +37,10 @@ ALIGN_OUT=/user/hduser/sim_simple/align_output
 # Step 1b: Bring together all the readlet alignment intervals for a given read and 
 SPLICE_AGGR="cat"
 SPLICE="python $RNAWESOME/splice.py"
+SAMTOOLS=
 SPLICE_ARGS=''$SPLICE' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --manifest '$MANIFEST_FN''
 SPLICE_OUT=/user/hduser/sim_simple/splice_output
+INTERVAL_OUT=/user/hduser/sim_simple/interval_output #stores both introns and exons
 
 # Steps 1a and 1b happen together in the same map step in practice
 
@@ -123,15 +125,7 @@ hadoop dfs -mkdir $SAMPLE_OUT
 hadoop dfs -rmr $PERM_OUT
 hadoop dfs -mkdir $PERM_OUT
 
-# echo $ALIGN_ARGS
-# echo $TORNADO
-# #FILES=`find $TORNADO -name \*`
-# FILES=`ls`
-# echo $FILES
-# FILES=$(echo $FILES|sed '/s a -file')
-# echo $FILES
-
-#copy files over to hdfs
+# #copy files over to hdfs
 # hadoop dfs -mkdir $HADOOP_FILES
 # hadoop dfs -copyFromLocal *.tab5 $HADOOP_FILES
 
@@ -159,21 +153,28 @@ hadoop dfs -mkdir $PERM_OUT
 #     -input $HADOOP_FILES/*.tab5 -output $ALIGN_OUT
 
 
-# #Step 2 SPLICE
-# hadoop dfs -rmr $SPLICE_OUT
-# hadoop jar $STREAMING \
-#     -D mapred.text.key.partitioner.options=-k1,1 \
-#     -D stream.num.map.output.key.fields=1 \
-#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-#     -file "$SCR_DIR/rnawesome/splice.py" \
-#     -file "$SCR_DIR/interval/interval.py" \
-#     -file "$SCR_DIR/interval/partition.py" \
-#     -file "$SCR_DIR/manifest/manifest.py" \
-#     -file "$SCR_DIR/sample/sample.py" \
-#     -file "$SCR_DIR/rnawesome/merge.py" \
-#     -mapper cat \
-#     -reducer "$SPLICE_ARGS" \
-#     -input $ALIGN_OUT/*part* -output $SPLICE_OUT
+#Step 2 SPLICE
+hadoop dfs -rmr $SPLICE_OUT
+hadoop jar $STREAMING \
+    -D mapred.text.key.partitioner.options=-k1,1 \
+    -D stream.num.map.output.key.fields=1 \
+    -libjars test.jar \
+    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+    -file "$SCR_DIR/rnawesome/splice.py" \
+    -file "$SCR_DIR/interval/interval.py" \
+    -file "$SCR_DIR/interval/partition.py" \
+    -file "$SCR_DIR/manifest/manifest.py" \
+    -file "$SCR_DIR/sample/sample.py" \
+    -file "$SCR_DIR/rnawesome/merge.py" \
+    -mapper cat \
+    -outputformat org.myorg.TestMultiOutputFormat \
+    -reducer "$SPLICE_ARGS" \
+    -input $ALIGN_OUT/*part* -output $SPLICE_OUT
+
+
+##TODO
+#1) Don't forget to cut -f 2- instead of cat
+#2) Don't forget to look at $SPLICE_OUT/exon instead
 
 # #Sort MERGE output
 # hadoop dfs -rmr $MERGE_OUT
@@ -284,17 +285,17 @@ hadoop dfs -mkdir $PERM_OUT
 #     -input $EBAYES_OUT/*part* -output $HMM_OUT
 
 # #Step 10 AGGR_PATH
-hadoop dfs -rmr $NULL_OUT
-hadoop jar $STREAMING \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=3 \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -file "$SCR_DIR/rnawesome/aggr_path.py" \
-    -file "$CHROM_SIZES" \
-    -file "$BIGBED_EXE" \
-    -mapper cat \
-    -reducer "$AGGR_PATH_ARGS" \
-    -input $HMM_OUT/*part* -output $NULL_OUT
+# hadoop dfs -rmr $NULL_OUT
+# hadoop jar $STREAMING \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=3 \
+#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+#     -file "$SCR_DIR/rnawesome/aggr_path.py" \
+#     -file "$CHROM_SIZES" \
+#     -file "$BIGBED_EXE" \
+#     -mapper cat \
+#     -reducer "$AGGR_PATH_ARGS" \
+#     -input $HMM_OUT/*part* -output $NULL_OUT
 
 
 # # # #Check $? after completion.  If not 0, then print an error message and quit

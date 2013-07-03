@@ -9,6 +9,8 @@ minimal set of intervals covered by at least one readlet.  For output tuples,
 we generate a partition id based on the partition size given by --ntasks and
 --genomeLen.
 
+This also spits out introns between intervals
+
 Tab-delimited input tuple columns:
 1. Read name
 2. Orientation +/-
@@ -20,12 +22,22 @@ Tab-delimited input tuple columns:
 Binning/sorting prior to this step:
 1. Binned by read name
 
+Exons:
 Tab-delimited output tuple columns:
 1. Partition ID for partition overlapped by interval
 2. Interval start
 3. Interval end (exclusive)
 4. Reference ID
 5. Sample label
+
+Introns
+Tab-delimited output tuple columns:
+1. Partition ID for partition overlapped by interval
+2. Interval start
+3. Interval end (exclusive)
+4. Reference ID
+5. Sample label
+6. Intron sequence
 """
 
 import os
@@ -44,9 +56,11 @@ import interval
 import partition
 import sample
 import manifest
+import subprocess
 
 parser = argparse.ArgumentParser(description=\
     'Take readlets aligned using Bowtie and combine into spliced alignments.')
+
 
 partition.addArgs(parser)
 manifest.addArgs(parser)
@@ -58,24 +72,33 @@ binsz = partition.binSize(args)
 nout = 0
 ndigits = 12 #maxinum number of digits of start position number 
 
+
 def handleRead(rdid, ivals):
     ''' Given all the intervals where readlets from a given read
         aligned, compose a spliced alignment record. '''
     global nout
-    global ndigits
+    in_end  = -1
+    in_start = -1
     for k in ivals.iterkeys():
         for iv in iter(ivals[k]):
+            
             st, en = iv.start, iv.end
+            if in_end==-1 and in_start!=-1:
+                in_end = st
+            if in_start==-1:
+                in_start = en
+            if in_start>0 and in_end>0 and in_end>in_start:
+                for pt in iter(partition.partition(k,in_start,in_end,binsz)):
+                    print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdid))
+                    nout += 1
+                    
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
-                start = str(st)
-                assert len(start)<=ndigits
-                start = (ndigits-len(start))*"0"+start
-                print "%s\t%s\t%d\t%s\t%s" % (pt, start, en, k, sample.parseLab(rdid))
-                #print "%s\t%d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdid))
+                print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdid))
                 nout += 1
+
 
 last_rdid = "\t"
 ninp = 0
@@ -98,6 +121,8 @@ for ln in sys.stdin:
     # Add this interval to the flattened interval collection for current read
     if refid not in ivals:
         ivals[refid] = interval.FlatIntervals()
+        
+
     ivals[refid].add(interval.Interval(refoff, refoff+len(seq)))
     ninp += 1
 
