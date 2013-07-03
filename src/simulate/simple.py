@@ -7,47 +7,12 @@ A very simple RNA-seq simulator.
 import sys
 import random
 import bisect
-import math
-
-#Average exon length ~ 200 bp
-#Average intron length ~5000 bp
-#Use a 2-state Markov chain to simulate exon/intron regions
-#Accepts reference genome length as input
-def makeSpliceJunctions(ln):
-    states = []
-    E2I = 1/200.0  #The probability of changing from an exon state to an intron state
-    E2E = 1-E2I    #The probability of staying in an exon state
-    I2E = 1/5000.0 #The probability of changing from an intron state to an exon state
-    I2I = 1-I2E    #The probability of staying in an intron state
-    
-    A = [[E2E,E2I],
-         [I2E,I2I]]
-    """ Transition from 'state' to next state in time series using
-    HMM transition matrix """
-    def transition_(state):
-        assert state==0 or state==1
-        rnd = random.random()
-        tot = 0.0
-        for i in xrange(0,2):
-            tot+=A[state][i]
-            if rnd < tot:
-                return i
-        return random.randint(0,1)
-    state = 1 #Starts on intron
-    exp_path = [] #Expression states
-    for i in xrange(0,ln):
-        newstate = transition_(state)
-        state = newstate
-        exp_path.append("EI"[state])
-    return exp_path
 
 def makeRef(ln, stayprob, stateFn):
-    exp_path = makeSpliceJunctions(ln)
     stayrem = (1.0 - stayprob) / 3.0
     EtoZero = (1.0 - stayprob) / 2.0
     EtoDE = (1.0 - stayprob) / 4.0
-    a = 1.0/(1.0-math.exp(-1))  #Normalization constant used for exponential distribution
-
+    
     # Transition matrix
     A = [[ stayprob,  stayrem,  stayrem,  stayrem],
          [ EtoZero,  stayprob,    EtoDE,    EtoDE],
@@ -74,26 +39,28 @@ def makeRef(ln, stayprob, stateFn):
         for i in xrange(0, ln):
             newstate = transition(state)
             if newstate != state:
-                if newstate == 0 or exp_path[i]=='I':#No differiential expression
+                if newstate == 0:
                     cov1, cov2 = 0.001, 0.001
-                elif newstate == 1:#Differientially expressed towards seq2
-                    cov2 = random.random()
-                    s = random.expovariate(2)+2.0
-                    cov1 = cov2/s                    
-                elif newstate == 2:#Equal differential expression
+                elif newstate == 1:
+                    cov1 = random.random()
+                    cov2 = 1.1
+                    while cov2 >= cov1:
+                        cov2 = random.random()
+                elif newstate == 2:
                     cov1 = random.random()
                     cov2 = cov1
-                else:#Differientially expressed towards seq1
-                    cov1 = random.random()
-                    s = random.expovariate(2)+2.0
-                    cov2 = cov1/s                    
+                else:
+                    cov2 = random.random()
+                    cov1 = 1.1
+                    while cov1 >= cov2:
+                        cov1 = random.random()
             state = newstate
             path.append("0dED"[state])
             fh.write("0dED"[state])
             if (i+1) % 70 == 0:
                 fh.write('\n')
-            
             coverage.append((cov1, cov2))
+
     return path, coverage
 
 def increment(depths, start, end):
@@ -102,31 +69,23 @@ def increment(depths, start, end):
         depths[i]+=1
     return depths
 
-#Takes into account splice junctions 
-def getSequence(ref,i,readlen):
-    return ref[i:i+readln]
-
 def simulate(ref, readlen, targetNucs, stateFn):
-    path, coverage = makeRef(len(ref), 0.999, stateFn)
+    _, coverage = makeRef(len(ref), 0.999, stateFn)
     nucs = 0
     seqs1, seqs2 = [], []
     print >> sys.stderr, "Generating..."
     passi = 1
     depths = [0]*len(coverage)
-    depths1 = [0]*len(coverage)
-    depths2 = [0]*len(coverage)
     while nucs < targetNucs:
         print >> sys.stderr, "  Pass %d..." % passi
         for i in xrange(0, len(coverage)-(readlen-1)):
             r1, r2 = random.random(), random.random()
             if r1 < coverage[i][0]:
                 seqs1.append(ref[i:i+readlen])
-                depths1 = increment(depths1,i,i+readlen)
                 depths = increment(depths,i,i+readlen)
                 nucs += readlen
             if r2 < coverage[i][1]:
                 seqs2.append(ref[i:i+readlen])
-                depths2 = increment(depths2,i,i+readlen)
                 depths = increment(depths,i,i+readlen)
                 nucs += readlen
         passi += 1
@@ -134,15 +93,11 @@ def simulate(ref, readlen, targetNucs, stateFn):
     random.shuffle(seqs1)
     random.shuffle(seqs2)
     
-    diff_file = open("diff_coverages.txt",'w')
-    cov_file = open("total_coverages.txt",'w')
+    cov_file = open("coverages.txt",'w')
     for i in range(0,len(depths)):
-        line = "%d\t%d\t%d\t%s\n"%(i,depths1[i],depths2[i],path[i])
-        diff_file.write(line)
         line = "%d\t%d\n"%(i,depths[i])
         cov_file.write(line)
     cov_file.close()
-    diff_file.close()
     
     return seqs1, seqs2
 
@@ -199,33 +154,17 @@ def writeReads(seqs1rep, seqs2rep, fnPre, manifestFn):
                         nm = "r_n%d;LB:simple-%d-%d" % (i, group, rep)
                         fh.write("%s\t%s\t%s\n" % (nm, seq, qual))
 
-def getFastaSeq(fnh):  
+def parseFasta(fns):
     lns = []
-    ln = fnh.readline() #read header
-    if ln=='':
-        return "END_OF_FILE"
-    ln = fnh.readline()
-    last_pos = fnh.tell()
-    while ln!='' and ln[0]!='>':
-        lns.append(ln.rstrip())
-        last_pos = fnh.tell()
-        ln = fnh.readline()
-    fnh.seek(last_pos)
+    for fn in fns:
+        with open(fn, 'r') as fh:
+            for ln in fh:
+                if ln[0] == '>':
+                    continue
+                else:
+                    lns.append(ln.rstrip())
     return ''.join(lns)
-    
-def getSimSeqs(fnames, readlen, targetNucs, stateFn):
-    seqs1, seqs2 = [],[]
-    for fname in fnames:
-        fnh = open(fname,'r')
-        ref = getFastaSeq(fnh)
-        assert ref!="END_OF_FILE"
-        while ref!="END_OF_FILE":
-            seq1,seq2 = simulate(ref,readlen,targetNucs,stateFn)
-            ref = getFastaSeq(fnh)
-            seqs1+=seq1
-            seqs2+=seq2
-    return seqs1,seqs2
-    
+
 if __name__ == "__main__":
     import argparse
     
@@ -255,8 +194,7 @@ if __name__ == "__main__":
     
     random.seed(args.seed)
     
-    #seqs1, seqs2 = simulate(parseFasta(args.fasta), args.read_len, args.num_nucs, args.output_prefix + ".states")
-    seqs1, seqs2 = getSimSeqs(args.fasta, args.read_len, args.num_nucs, args.output_prefix + ".states")
+    seqs1, seqs2 = simulate(parseFasta(args.fasta), args.read_len, args.num_nucs, args.output_prefix + ".states")
     print >> sys.stderr, "  reads in group 1: %d" % len(seqs1)
     print >> sys.stderr, "  reads in group 2: %d" % len(seqs2)
     print >> sys.stderr, "Replicatizing..."
