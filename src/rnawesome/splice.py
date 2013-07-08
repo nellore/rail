@@ -37,7 +37,6 @@ Tab-delimited output tuple columns:
 3. Interval end (exclusive)
 4. Reference ID
 5. Sample label
-6. Intron sequence
 """
 
 import os
@@ -51,7 +50,9 @@ base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "interval"))
 site.addsitedir(os.path.join(base_path, "sample"))
 site.addsitedir(os.path.join(base_path, "manifest"))
+site.addsitedir(os.path.join(base_path, "read"))
 
+import readlet
 import interval
 import partition
 import sample
@@ -64,8 +65,10 @@ parser = argparse.ArgumentParser(description=\
 
 partition.addArgs(parser)
 manifest.addArgs(parser)
+readlet.addArgs(parser)
 
 args = parser.parse_args()
+
 
 binsz = partition.binSize(args)
 
@@ -80,18 +83,19 @@ def handleRead(rdid, ivals):
     in_end  = -1
     in_start = -1
     for k in ivals.iterkeys():
-        for iv in iter(ivals[k]):
+        for iv in sorted(iter(ivals[k])):
             
             st, en = iv.start, iv.end
             if in_end==-1 and in_start!=-1:
                 in_end = st
             if in_start==-1:
                 in_start = en
-            if in_start>0 and in_end>0 and in_end>in_start:
-                for pt in iter(partition.partition(k,in_start,in_end,binsz)):
-                    print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdid))
-                    nout += 1
-                    
+            if in_start>0 and in_end>0:
+                if (in_end-in_start)>args.readletLen:
+                    for pt in iter(partition.partition(k,in_start,in_end,binsz)):
+                        print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdid))
+                        nout += 1
+                in_start, in_end = en,-1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets
@@ -122,7 +126,6 @@ for ln in sys.stdin:
     if refid not in ivals:
         ivals[refid] = interval.FlatIntervals()
         
-
     ivals[refid].add(interval.Interval(refoff, refoff+len(seq)))
     ninp += 1
 
