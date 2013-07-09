@@ -48,6 +48,7 @@ import os
 import site
 import argparse
 import threading
+import string
 import time
 timeSt = time.clock()
 
@@ -55,12 +56,15 @@ base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "bowtie"))
 site.addsitedir(os.path.join(base_path, "read"))
 site.addsitedir(os.path.join(base_path, "sample"))
+site.addsitedir(os.path.join(base_path, "interval"))
 site.addsitedir(os.path.join(base_path, "manifest"))
 
 import bowtie
 import readlet
 import sample
 import manifest
+import interval
+import partition
 
 ninp = 0               # # lines input so far
 nout = 0               # # lines output so far
@@ -84,8 +88,14 @@ parser = argparse.ArgumentParser(description=\
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
 manifest.addArgs(parser)
+partition.addArgs(parser)
+
+parser.add_argument(\
+    '--v2', action='store_const', const=True, default=False, help='New readlet handling')
 
 args = parser.parse_args()
+
+binsz = partition.binSize(args)
 
 def xformRead(seq, qual):
     # Possibly truncate and/or modify quality values
@@ -99,27 +109,82 @@ def xformRead(seq, qual):
         pass
     return newseq, newqual
 
-def bowtieCmd(bowtieExe, bowtieIdx, bowtieArgs):
-    # Check that Bowtie exists and is executable, and that Bowtie index files
-    #mare in place
-    if not os.path.isfile(bowtieExe):
-        print >>sys.stderr, "Bowtie executable '%s' does not exist" % bowtieExe
-        sys.exit(1)
-    if not os.access(bowtieExe, os.X_OK):
-        print >>sys.stderr, "Bowtie executable '%s' exists but is not executable" % bowtieExe
-        sys.exit(1)
-    # Check that index is there
-    for i in [".1.ebwt", ".2.ebwt", ".3.ebwt", ".4.ebwt", ".rev.1.ebwt", ".rev.2.ebwt"]:
-        if not os.path.isfile(bowtieIdx + i):
-            print >>sys.stderr, "Could not find index file " + (bowtieIdx + i)
-            sys.exit(1)
-    bowtieCmd = "%s %s --12 --mm %s -" % (bowtieExe, bowtieArgs, bowtieIdx)
-
 bowtieOutDone = threading.Event()
 bowtieErrDone = threading.Event()
 
+def composeReadletAlignments(rdnm, rdals):
+    global nout
+    # Add this interval to the flattened interval collection for current read
+    ivals = {}
+    for rdal in rdals:
+        refid, fw, refoff, seqlen = rdal
+        refoff, seqlen = int(refoff), int(seqlen)
+        if refid not in ivals:
+            ivals[refid] = interval.FlatIntervals()
+        ivals[refid].add(interval.Interval(refoff, refoff+len(seq)))
+    # ivals now populated
+    in_end, in_start = -1, -1
+    for k in ivals.iterkeys():
+        for iv in sorted(iter(ivals[k])):
+            # TODO: check orientations of exons so we can filter suspicious "exons"
+            # TODO: record info about the intron interval
+            st, en = iv.start, iv.end
+            if in_end == -1 and in_start != -1:
+                in_end = st
+            if in_start == -1:
+                in_start = en
+            if in_start > 0 and in_end > 0:
+                # TODO: why restrict length here?
+                if (in_end - in_start) > args.readletLen:
+                    for pt in iter(partition.partition(k, in_start, in_end, binsz)):
+                        print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
+                        nout += 1
+                in_start, in_end = en,-1
+            # Keep stringing rdid along because it contains the label string
+            # Add a partition id that combines the ref id and some function of
+            # the offsets
+            for pt in iter(partition.partition(k, st, en, binsz)):
+                print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdnm))
+                nout += 1
+
+def bowtieOutReadlets(st):
+    ''' Process standard out (stdout) output from Bowtie.  Each line of output
+        is another readlet alignment.  We *could* try to perform operations
+        over all readlet alignments from the same read here.  Currently, we
+        follow this step with an aggregation that bins by read id, then
+        operate over bins in splice.py. '''
+    global nout
+    mem, cnt = {}, {}
+    for line in st:
+        if line[0] == '@':
+            continue
+        rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
+        flags, refoff1 = int(flags), int(refoff1)
+        seqlen = len(seq)
+        toks = string.split(rdid, ';')
+        rdnm = ';'.join(toks[:-2])
+        cnt[rdnm] = cnt.get(rdnm, 0) + 1
+        rdlet_n = int(toks[-1])
+        if flags != 4:
+            fw = (flags & 16) == 0
+            if rdnm not in mem: mem[rdnm] = [ ]
+            mem[rdnm].append((refid, fw, refoff1-1, seqlen))
+        if cnt[rdnm] == rdlet_n:
+            # Last readlet
+            composeReadletAlignments(rdnm, mem[rdnm])
+            del mem[rdnm]
+            del cnt[rdnm]
+        nout += 1
+    assert len(mem) == 0
+    assert len(cnt) == 0
+    bowtieOutDone.set()
+
 def bowtieOut(st):
-    ''' Process standard out (stdout) output from Bowtie '''
+    ''' Process standard out (stdout) output from Bowtie.  Each line of output
+        is another readlet alignment.  We *could* try to perform operations
+        over all readlet alignments from the same read here.  Currently, we
+        follow this step with an aggregation that bins by read id, then
+        operate over bins in splice.py. '''
     global nout
     for line in st:
         sys.stdout.write(line)
@@ -133,7 +198,10 @@ def bowtieErr(st):
         print >> sys.stderr, line.rstrip()
     bowtieErrDone.set()
 
-proc = bowtie.proc(args, outHandler=bowtieOut, errHandler=bowtieErr)
+if args.v2:
+    proc = bowtie.proc(args, sam=True, outHandler=bowtieOutReadlets, errHandler=bowtieErr)
+else:
+    proc = bowtie.proc(args, sam=False, outHandler=bowtieOut, errHandler=bowtieErr)
 
 for ln in sys.stdin:
     ln = ln.rstrip()
@@ -176,12 +244,20 @@ for ln in sys.stdin:
             seq2, qual2 = xformRead(seq2, qual2)
         if args.readletLen > 0:
             # Readletize
-            for rlet in iter(readlet.readletize(args, nm1, seq1, qual1)):
-                nm_rlet, seq_rlet, qual_rlet = rlet
-                proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
-            for rlet in iter(readlet.readletize(args, nm2, seq2, qual2)):
-                nm_rlet, seq_rlet, qual_rlet = rlet
-                proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+            rlets1 = readlet.readletize(args, nm1, seq1, qual1)
+            for i in xrange(0, len(rlets1)):
+                nm_rlet, seq_rlet, qual_rlet = rlets1[i]
+                if args.v2:
+                    proc.stdin.write("%s;%d;%d\t%s\t%s\n" % (nm_rlet, i, len(rlets1), seq_rlet, qual_rlet))
+                else:
+                    proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+            rlets2 = readlet.readletize(args, nm2, seq2, qual2)
+            for i in xrange(0, len(rlets2)):
+                nm_rlet, seq_rlet, qual_rlet = rlets2[i]
+                if args.v2:
+                    proc.stdin.write("%s;%d;%d\t%s\t%s\n" % (nm_rlet, i, len(rlets2), seq_rlet, qual_rlet))
+                else:
+                    proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
         else:
             proc.stdin.write("%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2))
     else:
@@ -191,9 +267,13 @@ for ln in sys.stdin:
             seq, qual = xformRead(seq, qual)
         if args.readletLen > 0:
             # Readletize
-            for rlet in iter(readlet.readletize(args, nm, seq, qual)):
-                nm_rlet, seq_rlet, qual_rlet = rlet
-                proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+            rlets = readlet.readletize(args, nm, seq, qual)
+            for i in xrange(0, len(rlets)):
+                nm_rlet, seq_rlet, qual_rlet = rlets[i]
+                if args.v2:
+                    proc.stdin.write("%s;%d;%d\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq_rlet, qual_rlet))
+                else:
+                    proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
         else:
             proc.stdin.write("%s\t%s\t%s\n" % (nm, seq, qual))
 
