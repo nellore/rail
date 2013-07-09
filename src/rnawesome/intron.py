@@ -13,6 +13,7 @@ Tab-delimited output tuple columns:
 2. 5' start
 3. 3' start
 4. Sample label
+5. Read frequency (number of times sample read overlapped junction)
 """
 import os
 import sys
@@ -149,17 +150,21 @@ def sliding_window(refID, ivals, site, fastaF):
     seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end)
     score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
     junc5, junc3 = findSite(score5,"5"),findSite(score3,"3") 
-    return junc5+in_start,junc3+(in_end-n+1)
+    return junc5+in_start,junc3+(in_end-n+1) #returned transformed coordinates of junction sites
 
-    
 def getJunctionSites(refID,bins,fastaF):
+    samples = dict()
     sites5, sites3 = [],[]
     for coords,introns in bins.iteritems():
-        print coords,introns
         site5,site3 = sliding_window(refID,introns,"GT-AG",fastaF)
-        sites5.append(site5)
-        sites3.append(site3)
-    return sites5,sites3
+        for intr in introns:
+            lab = intr[2]
+            if lab not in samples:
+                samples[lab] = 1
+            else:
+                samples[lab]+=1
+        for sam,counts in samples.iteritems():
+            print "%s\t%012d\t%d\t%s\t%d"%(refID,site5,site3,sam,counts)
 
 
 starts = []  #Contains starting positions of introns
@@ -182,7 +187,7 @@ for ln in sys.stdin:
         #Cluster all introns with similar start and end positions   
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
-        sites5,sites3 = getJunctionSites(last_ref,bins,fnh)
+        getJunctionSites(last_ref,bins,fnh)
 
         starts,ends,labs = [],[],[]
 
@@ -191,9 +196,8 @@ for ln in sys.stdin:
     labs.append(lab)
     last_pt,last_ref = pt,refid
 
-
 intron_ivals = zip(starts,ends,labs)
 #Cluster all introns with similar start and end positions   
 bins = cluster(intron_ivals)
 #Apply sliding windows to find splice junction locations
-sites5,sites3 = getJunctionSites(last_ref,bins,fnh)
+getJunctionSites(last_ref,bins,fnh)
