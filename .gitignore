@@ -3,3 +3,6 @@ example/sim_simple/intermediate
 example/sim_simple/eg1.manifest
 example/sim_simple/eg1.states
 *.pyc
+*~
+.project
+.pydevproject

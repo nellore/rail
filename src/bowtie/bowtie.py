@@ -26,7 +26,7 @@ def out(pi):
     for line in iter(pi.readline, ''):
         print line
 
-def cmd(args):
+def cmd(args, sam=False):
     # Check that Bowtie exists and is executable
     if not os.path.isfile(args.bowtieExe):
         print >>sys.stderr, "Bowtie executable '%s' does not exist" % args.bowtieExe
@@ -39,13 +39,16 @@ def cmd(args):
         if not os.path.isfile(args.bowtieIdx + i):
             print >>sys.stderr, "Could not find index file " + (args.bowtieIdx + i)
             sys.exit(1)
-    return "%s %s --mm %s --12 -" % (args.bowtieExe, ' '.join(args.bowtieArgs), args.bowtieIdx)
+    out_arg = ""
+    if sam:
+        out_arg = " -S "
+    return "%s %s --mm %s %s --12 -" % (args.bowtieExe, ' '.join(args.bowtieArgs), out_arg, args.bowtieIdx)
 
-def proc(args, outHandler=None, errHandler=None):
+def proc(args, sam=False, outHandler=None, errHandler=None):
     stdout_pipe = None if outHandler is None else subprocess.PIPE
     stderr_pipe = None if errHandler is None else subprocess.PIPE
     proc = subprocess.Popen(\
-        cmd(args),
+        cmd(args, sam=sam),
         shell=True, stdin=subprocess.PIPE, stdout=stdout_pipe, stderr=stderr_pipe)
     if outHandler is not None:
         t = threading.Thread(target=outHandler, args=(proc.stdout,))
