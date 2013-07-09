@@ -1,5 +1,5 @@
 import math
-
+import numpy as np
 """                                                                                                                     
 Tab-delimited input tuple columns:                                                
 1. Partition ID for partition overlapped by interval                              
@@ -76,21 +76,51 @@ def cluster(ivals):
 """
 Scores a set of windows based off of splice site 
 """
-def score(seq, site):
+def score(seq, site, hist):
     wsize = len(site) # window size
-    nwins = len(seq)-wsize
+    nwins = len(seq)-wsize+1
     wins = [0]*nwins
+
     for i in range(0,nwins):
         for j in range(0,len(site)):
-            s = 1 if site[j]==seq[i] else -1
-            wins[i]+=s
-    return wins
+            s = 1 if site[j]==seq[i+j] else -1
+            wins[i]+=s*hist[i+j]
+    return wins            
+
+"""
+Creates histogram
+
+Note to self: this can be cleaned up
+"""
+def count(coords,offset,endtype):
+    n = 2*args.readletIval+1
+    hist = [0]*n
+    for c in coords:
+        if abs(offset-c)>2*args.readletIval:
+            print>>sys.error,"Out of bounds coordinate"
+            continue
+        i = 0
+        if endtype=="5":
+            ind = c-offset+i
+            while ind<n and ind>=0:
+                hist[ind]+=1
+                i+=1
+                ind = c-offset+i
+        else:
+            ind = n-(offset-c)-i-1
+            while ind<n and ind>=0:
+                hist[ind]+=1
+                i+=1
+                ind = n-(offset-c)-i-1
+    return hist
 
 """
 Returns the site by finding the maximum in the scores
 To break ties it uses the direction.  
 If direction=="5", that means its a 5' end and it will return the score closest to the 5' end (aka. left)
 The vice versa happens with direction=="3"
+
+Note that this just returns offsets wrt to window frame
 """
 def findSite(scores,direction):
     count = -1 if direction=="5" else 1
@@ -104,23 +134,24 @@ def findSite(scores,direction):
 
 """
 Note: site is formatted as follows: XX-XX (e.g. GT-AG)
-Returns the 5' and 3' splice sites within a multiple interval
+Returns the 5' and 3' splice sites within multiple intervals
 """
-def sliding_window(refID, ivals, site,fastaF):
-    print ival
-    assert len(ival)==2
-    start,end = ival[0],ival[1]
+def sliding_window(refID, ivals, site, fastaF):
+    sts,ens,labs = zip(*ivals)
+    in_start, in_end = min(sts),max(ens)
     toks = site.split("-")
     assert len(toks)==2
-    site5p,site5p = toks[0],toks[1]
-    seq = fastaF.fetch_sequence(refID,start,end)
-    prime5 = seq[:2*args.readletIval]  #5' intron end
-    prime3 = seq[-2*args.readletIval:] #3' intron end
-    scores5,scores3 = score(prime5,site5p), score(prime3,site3p)
-    return findSite(scores5,"5"),findSite(scores5,"3")
+    site5p,site3p = toks[0],toks[1]
+    #Make two histograms of both ends of intron
+    h5,h3 = count(sts,in_start,"5"),count(ens,in_end,"3")
+    n = 2*args.readletIval
+    seq5 = fastaF.fetch_sequence(refID,in_start,in_start+n)
+    seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end)
+    score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
+    junc5, junc3 = findSite(score5,"5"),findSite(score3,"3") 
+    return junc5+in_start,junc3+(in_end-n+1)
 
-
-#Get counts of splice junctions per sample
+    
 def getJunctionSites(refID,bins,fastaF):
     sites5, sites3 = [],[]
     for coords,introns in bins.iteritems():
@@ -129,7 +160,6 @@ def getJunctionSites(refID,bins,fastaF):
         sites5.append(site5)
         sites3.append(site3)
     return sites5,sites3
-
 
 
 starts = []  #Contains starting positions of introns
@@ -153,8 +183,6 @@ for ln in sys.stdin:
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
         sites5,sites3 = getJunctionSites(last_ref,bins,fnh)
-        print "Site 5",sites5
-        print "Site 3",sites3
 
         starts,ends,labs = [],[],[]
 
@@ -162,6 +190,10 @@ for ln in sys.stdin:
     ends.append(en)
     labs.append(lab)
     last_pt,last_ref = pt,refid
-        
+
+
 intron_ivals = zip(starts,ends,labs)
+#Cluster all introns with similar start and end positions   
 bins = cluster(intron_ivals)
+#Apply sliding windows to find splice junction locations
+sites5,sites3 = getJunctionSites(last_ref,bins,fnh)
