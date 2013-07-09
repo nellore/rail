@@ -6,24 +6,19 @@ MANIFEST_FN=eg1.manifest
 mkdir -p intermediate
 INTERMEDIATE_DIR=intermediate/
 
-# Step 1a: Readletize input reads and use Bowtie to align the readlets 
+# Step 1: Readletize input reads and use Bowtie to align the readlets 
 ALIGN_AGGR="cat"
 ALIGN="python $SCR_DIR/align.py"
-
-# Step 1b: Bring together all the readlet alignment intervals for a given read and 
-SPLICE_AGGR1="sort -n -k2,2"
-SPLICE_AGGR2="sort -s -k1,1"
-SPLICE="python $SCR_DIR/splice.py"
-
-# Steps 1a and 1b happen together in the same map step in practice
 
 # Step 2: Collapse identical intervals from same sample
 # In Hadoop, we want to partition by first field then sort by second
 # -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner
 # -D stream.num.map.output.key.fields=2
 # -D mapred.text.key.partitioner.options=-k1,1
-MERGE_AGGR1="sort -n -k2,2"
-MERGE_AGGR2="sort -s -k1,1"
+MERGE_AGGR1="grep '^exon'"
+MERGE_AGGR2="cut -f 2-"
+MERGE_AGGR3="sort -n -k2,2"
+MERGE_AGGR4="sort -s -k1,1"
 MERGE="python $SCR_DIR/merge.py"
 
 # Step 3: Walk over genome windows and emit per-sample, per-position
@@ -112,19 +107,17 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 
 cat *.tab5 \
 	| $ALIGN_AGGR | $ALIGN \
+		--v2 \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
 		--bowtieArgs '-v 2 -m 1 -p 6' \
 		--bowtieExe $BOWTIE_EXE \
 		--bowtieIdx=../fasta/lambda_virus \
 		--readletLen 20 \
 		--readletIval 2 \
 		--manifest $MANIFEST_FN \
-    	| tee ${INTERMEDIATE_DIR}align_out.tsv \
-        | $SPLICE_AGGR1 | $SPLICE_AGGR2 | $SPLICE \
-		--ntasks=$NTASKS \
-		--genomeLen=$GENOME_LEN \
-		--manifest $MANIFEST_FN \
-    	| tee ${INTERMEDIATE_DIR}splice_out.tsv \
-        | $MERGE_AGGR1 | $MERGE_AGGR2 | $MERGE \
+		| tee ${INTERMEDIATE_DIR}align_out.tsv \
+	| grep '^exon' | $MERGE_AGGR2 | $MERGE_AGGR3 | $MERGE_AGGR4 | $MERGE \
 	| tee $WALK_IN_TMP | $WALK_PRENORM \
 		--manifest $MANIFEST_FN \
 		--ntasks=$NTASKS \

@@ -121,7 +121,7 @@ def composeReadletAlignments(rdnm, rdals):
         refoff, seqlen = int(refoff), int(seqlen)
         if refid not in ivals:
             ivals[refid] = interval.FlatIntervals()
-        ivals[refid].add(interval.Interval(refoff, refoff+len(seq)))
+        ivals[refid].add(interval.Interval(refoff, refoff + seqlen))
     # ivals now populated
     in_end, in_start = -1, -1
     for k in ivals.iterkeys():
