@@ -42,8 +42,13 @@ NORMALIZE_AGGR2="sort -s -k1,1"
 NORMALIZE="python $SCR_DIR/normalize.py"
 SAMPLE_OUT=intermediate/samples
 mkdir -p  $SAMPLE_OUT
-UCSC_TOOLS=$TOOLS/ucsc_tools
-BIGBED_EXE=$UCSC_TOOLS/bedToBigBed
+
+BIGBED_EXE=`which bedToBigBed`
+if [ $? -ne 0 ] ; then
+	echo "bedToBigBed must be in PATH"
+	exit 1
+fi
+
 CHROM_SIZES=$PWD/chrom.sizes
 # Step 5: Collect all the norm factors together and write to file
 # In Hadoop no partitioning or sorting (mapper only)
