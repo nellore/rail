@@ -171,7 +171,8 @@ def bowtieOutReadlets(st):
             mem[rdnm].append((refid, fw, refoff1-1, seqlen))
         if cnt[rdnm] == rdlet_n:
             # Last readlet
-            composeReadletAlignments(rdnm, mem[rdnm])
+            if rdnm in mem:
+                composeReadletAlignments(rdnm, mem[rdnm])
             del mem[rdnm]
             del cnt[rdnm]
         nout += 1
