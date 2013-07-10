@@ -8,22 +8,22 @@ import re
 from operator import itemgetter
 from collections import defaultdict
 
-parser = argparse.ArgumentParser(description='Parse a GTF file.')
+#parser = argparse.ArgumentParser(description='Parse a GTF file.')
+def addArgs(parser):
+    parser.add_argument(\
+        '--fasta', metavar='path', type=str, nargs='+',
+        help='FASTA file(s) containing reference genome sequences')
+    parser.add_argument(\
+        '--gtf', metavar='path', type=str, nargs='+', required=True,
+        help='GTF file(s) containing gene annotations')
+    parser.add_argument(\
+        '--introns-out', metavar='PATH', type=str, required=False,
+        help='File to write intron information to')
+    parser.add_argument(\
+        '--exons-out', metavar='PATH', type=str, required=False,
+        help='File to write exon information to')
 
-parser.add_argument(\
-    '--fasta', metavar='path', type=str, nargs='+',
-    help='FASTA file(s) containing reference genome sequences')
-parser.add_argument(\
-    '--gtf', metavar='path', type=str, nargs='+', required=True,
-    help='GTF file(s) containing gene annotations')
-parser.add_argument(\
-    '--introns-out', metavar='PATH', type=str, required=False,
-    help='File to write intron information to')
-parser.add_argument(\
-    '--exons-out', metavar='PATH', type=str, required=False,
-    help='File to write exon information to')
-
-args = parser.parse_args()
+    #args = parser.parse_args()
 
 gene_id_re = re.compile("gene_id \"([^\"]+)\"")
 xscript_id_re = re.compile("transcript_id \"([^\"]+)\"")
@@ -38,7 +38,8 @@ class Annot(object):
         self.score = score
         self.frame = frame
         self.attrs = attrs
-        
+    def __str__(self):
+        return "%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s"%(self.refid, self.st0, self.en0, self.orient, self.feature, self.score, self.frame,self.attrs)
 class Transcript(object):
     """ Right now I ignore all associations with TSSs and promoters """
     def __init__(self, exons, start=None, stop=None, tssId=None):
@@ -52,14 +53,25 @@ class Transcript(object):
     #Pass in a dictionary of fastaseqs
     def buildSeq(self,fastaseqs):
         self.exons.sort(key = lambda x: x.st0)
+        self.st0 = self.exons[0].st0
+        self.en0 = self.exons[-1].en0
+        self.seqid = self.exons[0].refid
         seqs = []
         for E in self.exons:
-            seqid = E[0]
-            start = E[3]
-            end = E[4]
-            seqs.append(fastaseqs[seqid][start:end])
+            seqid = E.refid
+            start = E.st0
+            end = E.en0
+            if seqid not in fastaseqs:
+                continue
+            seqs.append(fastaseqs[seqid][start:end].upper())
         self.seq = "".join(seqs)
-
+    def __str__(self):
+        lns = []
+        lns.append("%d\t%s\t%d\n"%(self.st0,self.seqid,self.en0))
+        for e in self.exons:
+            lns.append("%s\n"%(str(e))) 
+        lns.append("%s\n"%(str(self.seq)))
+        return "".join(lns)
 """
 Constructs a dictionary of fasta seqs
 """
@@ -69,20 +81,23 @@ def parseFASTA(fns):
     seqid = ""
     numseqs = 0
     for fn in fns:
-        if ln[0] == '>':
-            seqid = ln[0].split(' ')[0][1:]
-            if numseqs>0:
-                seqs[seqid] = ''.join(lns)
-            lns = []
-            numseqs+=1
-            continue
-        else:
-            lns.append(ln.rstrip())
+        with open(fn, 'r') as fh:
+            for ln in fh:
+                if ln[0] == '>':
+                    if seqid!="":
+                        seqs[seqid] = ''.join(lns)
+                    seqid = ln.split(" ")[0][1:].rstrip()
+                    lns = []
+                    numseqs+=1
+                    continue
+                else:
+                    lns.append(ln.rstrip())
     return seqs
 
 
 """
 Returns a list of exons
+Note:  This is a little RAM intensive.  May want to consider saving to hard disk later ...
 """
 def parseGTF(fns):
     exons = list()
@@ -101,7 +116,6 @@ def parseGTF(fns):
                 assert feature == "exon"
                 start1, end1 = int(start1), int(end1)
                 assert end1 >= start1
-                annot = Annot(refid, start1-1, end1)
                 ma = gene_id_re.search(attr)
                 if ma is None:
                     raise RuntimeError("No gene_id!:\n" + line)
@@ -112,19 +126,24 @@ def parseGTF(fns):
                 xscript_id = ma.group(1)
                 if gene_id != last_gene_id:
                     last_gene_id = gene_id
-                exons.append((gene_id,xscript_id,annot))
+                attrs = "%s\t%s"%(gene_id,xscript_id)
+                annot = Annot(refid, start1-1, end1,orient,feature,score,frame,attrs)
+                exons.append(annot)
     return exons
 
-"""                                                                                                                         Input: sorted exons and a dictionary of fasta seqs                                                                         
+"""                                                                                                                        
+Input: sorted exons and a dictionary of fasta seqs                                                                         
 Chain all exons into transcript via transcript id                                                                           
 """
 def assembleTranscripts(exons,fastaseqs):
     exonlist = defaultdict(list)
+    #Bin all exons by transcript id
     for E in exons:
-        tr_id = E[1]
-        exonlist[tr_id].append(E[0])
-    xscripts = dict()
+        gene_id,xscript_id = E.attrs.split("\t")
+        exonlist[xscript_id].append(E)
+    xscripts = list()
     for tr_id,exons in exonlist.iteritems():
-        xscripts[tr_id] = Transcript(exons)
-        xscripts[tr_id].buildSeq(fastaseqs)
+        x = Transcript(exons)
+        x.buildSeq(fastaseqs)
+        xscripts.append(x)
     return xscripts

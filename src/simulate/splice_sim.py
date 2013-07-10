@@ -63,10 +63,10 @@ def makeWeights(xscripts):
     weights = [1.0] * len(xscripts)
     for i in range(0,len(weights)):
         weights[i] = random.random()
-    return WeightedRandomGenerator(weights)
+    return WeightedRandomGenerator(weights),weights
 
 def simulate(xscripts,readlen,targetNucs,fastaseqs):
-    gen = makeWeights(xscripts)
+    gen,weights = makeWeights(xscripts)
     n = 0
     seqs = []
     while n<targetNucs:
@@ -80,26 +80,33 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs):
         read = x.seq[i:i+readlen]
         seqs.append(read)
         n+=readlen
-    return seqs
-
+    return seqs,weights
 
 #Just prints out one file
-def writeReads(seqs, fnPre):
+def writeReads(seqs, fnPre,manifestFn):
     """ Only unpaired for now """
     fn = "%s.seqs.tab6"%(fnPre)
+    with open(manifestFn,'w') as manFh:
+        manFh.write("%s\t0\tsplice-0-0\n"%(fn))
     with open(fn,'w') as fh:
         for i in xrange(0,len(seqs)):
             seq = seqs[i]
             if len(seq)==0:
                 continue
             qual = "I" * len(seq)
-            nm = "r_n%d;LB:splice" % (i)
+            nm = "r_n%d;LB:splice-0-0" % (i)
             fh.write("%s\t%s\t%s\n" % (nm, seq, qual))
 
-                 
+def writeWeights(weights,xscripts,fout):
+    with open(fout,'w') as fh:
+        for i in range(0,len(weights)):
+            fh.write("weight:%s\n%s\n"%(weights[i],str(xscripts[i])))
+    
+
 if __name__=="__main__":
     annots = gtf.parseGTF(args.gtf)
     fastadb = gtf.parseFASTA(args.fasta)
     xscripts = gtf.assembleTranscripts(annots,fastadb)
-    seqs = simulate(xscripts,args.read_len,args.num_nucs,args.fasta)
-    writeReads(seqs,args.output_prefix)
+    seqs,weights = simulate(xscripts,args.read_len,args.num_nucs,args.fasta)
+    writeReads(seqs,args.output_prefix,args.output_prefix+".manifest")
+    writeWeights(weights,xscripts,args.output_prefix+".weights")
