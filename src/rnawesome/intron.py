@@ -14,6 +14,10 @@ Tab-delimited output tuple columns:
 3. 3' start
 4. Sample label
 5. Read frequency (number of times sample read overlapped junction)
+
+Questions to consider
+1) Should the splice junction sites be scored according to a histogram?
+2) How much can be assume about intron coverage?  This will break if there aren't enough spanning intronsa
 """
 import os
 import sys
@@ -21,6 +25,7 @@ import argparse
 import site
 import time
 from collections import defaultdict
+from collections import Counter
 timeSt = time.clock()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,6 +47,9 @@ parser.add_argument(\
     help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required')
 readlet.addArgs(parser)
 args = parser.parse_args()
+
+ninp = 0                   # # lines input so far
+nout = 0                   # # lines output so far 
 
 """
 Conducts radial clustering
@@ -90,8 +98,6 @@ def score(seq, site, hist):
 
 """
 Creates histogram
-
-Note to self: this can be cleaned up
 """
 def count(coords,offset,endtype):
     n = 2*args.readletIval+1
@@ -101,18 +107,11 @@ def count(coords,offset,endtype):
             print>>sys.error,"Out of bounds coordinate"
             continue
         i = 0
-        if endtype=="5":
-            ind = c-offset+i
-            while ind<n and ind>=0:
-                hist[ind]+=1
-                i+=1
-                ind = c-offset+i
-        else:
-            ind = n-(offset-c)-i-1
-            while ind<n and ind>=0:
-                hist[ind]+=1
-                i+=1
-                ind = n-(offset-c)-i-1
+        ind = c-offset+i if endtype=="5" else n-(offset-c)-i-1
+        while ind<n and ind>=0:
+            hist[ind]+=1
+            i+=1
+            ind = c-offset+i if endtype=="5" else n-(offset-c)-i-1        
     return hist
 
 """
@@ -128,8 +127,9 @@ def findSite(scores,direction):
     i = len(scores)-1 if direction=="5" else 0
     m, ind = -1, -1
     while i>=0 and i<len(scores):
-        if m > scores[i]:
+        if m < scores[i]:
             ind = i
+            m = scores[i]
         i+=count        
     return ind
 
@@ -138,6 +138,7 @@ Note: site is formatted as follows: XX-XX (e.g. GT-AG)
 Returns the 5' and 3' splice sites within multiple intervals
 """
 def sliding_window(refID, ivals, site, fastaF):
+    n,r = 2*args.readletIval, args.readletIval
     sts,ens,labs = zip(*ivals)
     in_start, in_end = min(sts),max(ens)
     toks = site.split("-")
@@ -145,27 +146,25 @@ def sliding_window(refID, ivals, site, fastaF):
     site5p,site3p = toks[0],toks[1]
     #Make two histograms of both ends of intron
     h5,h3 = count(sts,in_start,"5"),count(ens,in_end,"3")
-    n = 2*args.readletIval
-    seq5 = fastaF.fetch_sequence(refID,in_start,in_start+n)
-    seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end)
+    """Remember that fasta index is base 1 indexing"""
+    seq5 = fastaF.fetch_sequence(refID,in_start+1,in_start+n+1)
+    seq3 = fastaF.fetch_sequence(refID,in_end-n+1,in_end+1)
     score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
     junc5, junc3 = findSite(score5,"5"),findSite(score3,"3") 
-    return junc5+in_start,junc3+(in_end-n+1) #returned transformed coordinates of junction sites
+    return junc5+in_start-1,junc3+(in_end-n) #returned transformed coordinates of junction sites
 
 def getJunctionSites(refID,bins,fastaF):
-    samples = dict()
+    global nout
+    samples = Counter()
     sites5, sites3 = [],[]
     for coords,introns in bins.iteritems():
         site5,site3 = sliding_window(refID,introns,"GT-AG",fastaF)
         for intr in introns:
             lab = intr[2]
-            if lab not in samples:
-                samples[lab] = 1
-            else:
-                samples[lab]+=1
-        for sam,counts in samples.iteritems():
+            samples[lab]+=1
+        for sam,counts in samples.items():
             print "%s\t%012d\t%d\t%s\t%d"%(refID,site5,site3,sam,counts)
-
+            nout+=1
 
 starts = []  #Contains starting positions of introns
 ends = []    #Contains ending positions of introns
@@ -188,16 +187,19 @@ for ln in sys.stdin:
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
         getJunctionSites(last_ref,bins,fnh)
-
         starts,ends,labs = [],[],[]
-
+        
     starts.append(st)
     ends.append(en)
     labs.append(lab)
     last_pt,last_ref = pt,refid
+    ninp+=1
 
+#Handle last partition
 intron_ivals = zip(starts,ends,labs)
-#Cluster all introns with similar start and end positions   
 bins = cluster(intron_ivals)
-#Apply sliding windows to find splice junction locations
 getJunctionSites(last_ref,bins,fnh)
+
+# Done                                                                                                                                                                 
+timeEn = time.clock()
+print >>sys.stderr, "DONE with intron.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
