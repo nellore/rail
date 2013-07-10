@@ -173,7 +173,7 @@ def bowtieOutReadlets(st):
             # Last readlet
             if rdnm in mem:
                 composeReadletAlignments(rdnm, mem[rdnm])
-            del mem[rdnm]
+                del mem[rdnm]
             del cnt[rdnm]
         nout += 1
     assert len(mem) == 0
