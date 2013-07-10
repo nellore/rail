@@ -76,11 +76,11 @@ for ln in sys.stdin:
         last_perm=data_id
     elif last_perm!=data_id:
         samp_out.close()
-        bb_file = "perm%s.bb"%(last_perm)
-        out_fname =  "%s/perm%s.bb"%(args.out_dir,last_perm)
+        bb_file = "perm%s.bb"%(last_perm)  if args.hadoop_exe!="" else "%s/perm%s.bb"%(args.out_dir,last_perm)
         bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, args.chrom_sizes, bb_file])
         bigbed_proc.wait()
         if args.hadoop_exe!="": #For hadoop mode - moves local file to HDFS
+            out_fname =  "%s/perm%s.bb"%(args.out_dir,last_perm)
             moveToHDFS(bb_file,out_fname)
         fname = "perm%s.bed"%(data_id)
         samp_out = open(fname,'w')

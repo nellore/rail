@@ -111,11 +111,11 @@ for ln in sys.stdin:
         samp_out = open(fname,'w')        
     elif last_samp != samp:  #initialize file handles and convert to bigbed
         samp_out.close()
-        bb_file = "%s.bb"%(last_samp)
-        out_fname = "%s/%s.bb"%(args.out_dir,last_samp)
+        bb_file = "%s.bb"%(last_samp) if args.hadoop_exe!="" else "%s/%s.bb"%(args.out_dir,last_samp)
         bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, args.chrom_sizes, bb_file])
         bigbed_proc.wait()
         if args.hadoop_exe!="": #For hadoop mode - moves local file to HDFS
+            out_fname = "%s/%s.bb"%(args.out_dir,last_samp)
             moveToHDFS(bb_file,out_fname)
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
         samp_out = open(fname,'w')

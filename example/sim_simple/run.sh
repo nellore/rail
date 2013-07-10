@@ -2,7 +2,8 @@ SCR_DIR=../../src/rnawesome
 TORNADO=../..
 TOOLS=$TORNADO/tools
 MANIFEST_FN=eg1.manifest
-
+BOWTIE_IDX=../fasta/lambda_virus
+FASTA_IDX=../fasta/lambda_virus.fa.fai
 mkdir -p intermediate
 INTERMEDIATE_DIR=intermediate/
 
@@ -50,6 +51,8 @@ if [ $? -ne 0 ] ; then
 fi
 
 CHROM_SIZES=$PWD/chrom.sizes
+cat $FASTA_IDX | cut -f -2 > $CHROM_SIZES
+
 # Step 5: Collect all the norm factors together and write to file
 # In Hadoop no partitioning or sorting (mapper only)
 NORMALIZE_POST_AGGR="cat"
@@ -117,7 +120,7 @@ cat *.tab5 \
 		--genomeLen=$GENOME_LEN \
 		--bowtieArgs '-v 2 -m 1 -p 6' \
 		--bowtieExe $BOWTIE_EXE \
-		--bowtieIdx=../fasta/lambda_virus \
+		--bowtieIdx=$BOWTIE_IDX \
 		--readletLen 20 \
 		--readletIval 2 \
 		--manifest $MANIFEST_FN \
@@ -175,4 +178,4 @@ cat ${INTERMEDIATE_DIR}norm.tsv 1>&2
 echo "HMM parameter file:" 1>&2
 cat ${INTERMEDIATE_DIR}hmm_params.tsv 1>&2
 
-#sh clean.sh #This is just for testing to get rid of intermediate sample and permutation files
+sh clean.sh #This is just for testing to get rid of intermediate sample and permutation files
