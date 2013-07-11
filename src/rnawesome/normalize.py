@@ -33,6 +33,7 @@ import sys
 import argparse
 import time
 import subprocess
+import os
 timeSt = time.clock()
 
 parser = argparse.ArgumentParser(description=\
@@ -118,6 +119,7 @@ for ln in sys.stdin:
             out_fname = "%s/%s.bb"%(args.out_dir,last_samp)
             moveToHDFS(bb_file,out_fname)
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
+        os.remove(fname)
         samp_out = open(fname,'w')
     elif last_chr!=chr_name:
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
