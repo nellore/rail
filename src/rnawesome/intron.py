@@ -97,9 +97,9 @@ def score(seq, site, hist):
     return wins            
 
 """
-Creates histogram
+Creates histogram that is later used for scoring
 """
-def count(coords,offset,endtype):
+def hist_count(coords,offset,endtype):
     n = 2*args.readletIval+1
     hist = [0]*n
     for c in coords:
@@ -112,6 +112,17 @@ def count(coords,offset,endtype):
             hist[ind]+=1
             i+=1
             ind = c-offset+i if endtype=="5" else n-(offset-c)-i-1        
+    return hist
+"""
+Assigns scores based off of how close it is to the end based off of a p=2 series
+Sites closer to the ends get higher scores
+"""
+def exp_score(endtype):
+    N = 2*args.readletIval+1
+    if endtype=="5":
+        hist = [.5**n for n in range(0,N)]
+    else: 
+        hist = [.5**(N-n+1) for n in range(0,N)]
     return hist
 
 """
@@ -145,13 +156,15 @@ def sliding_window(refID, ivals, site, fastaF):
     assert len(toks)==2
     site5p,site3p = toks[0],toks[1]
     #Make two histograms of both ends of intron
-    h5,h3 = count(sts,in_start,"5"),count(ens,in_end,"3")
+    #h5,h3 = hist_count(sts,in_start,"5"),hist_count(ens,in_end,"3")
+    #h5,h3 = [1]*(2*args.readletIval+1),[1]*(2*args.readletIval+1)
+    h5,h3 = exp_score("5"),exp_score("3")
     """Remember that fasta index is base 1 indexing"""
     seq5 = fastaF.fetch_sequence(refID,in_start+1,in_start+n+1)
     seq3 = fastaF.fetch_sequence(refID,in_end-n+1,in_end+1)
     score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
     junc5, junc3 = findSite(score5,"5"),findSite(score3,"3") 
-    return junc5+in_start-1,junc3+(in_end-n) #returned transformed coordinates of junction sites
+    return junc5+in_start,junc3+(in_end-n) #returned transformed coordinates of junction sites
 
 def getJunctionSites(refID,bins,fastaF):
     global nout
