@@ -44,88 +44,89 @@ timeSt = time.clock()
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "interval"))
 site.addsitedir(os.path.join(base_path, "struct"))
-site.addsitedir(os.path.join(base_path, "manifest"))
 
 import circular
 import partition
-import manifest
 
 parser = argparse.ArgumentParser(description=\
     'Take spliced alignments binned and sorted into partitions and '
     'construct coverage vectors for each sample.')
 
 partition.addArgs(parser)
-manifest.addArgs(parser)
+
+parser.add_argument(\
+    '--profile', action='store_const', const=True, help='Profile the code')
 
 args = parser.parse_args()
 
-binsz = partition.binSize(args)
-
-ninp = 0                   # # lines input so far
-nout = 0                   # # lines output so far
-last_pt = "\t"             # id of previous partition
-last_st = -1               # start offset of previous fragment
-part_st, part_en = -1, -1  # start/end offsets of current partition
-ends = dict()              # maps sample names to circular buffers
-cov = dict()               # current coverage in each sample
-omitAllZero = True         # whether to omit rows that are all 0s
-
-# Get the set of all labels by parsing the manifest file, given on the
-# filesystem or in the Hadoop file cache
-labs = manifest.labels(args)
-ls = sorted(labs)    
-
-def finish(partId, sampleId, covtup):
-    st, cov = covtup
-    nout = 0
-    chrid = partId[:partId.rfind(';')]
-    for i in xrange(0, len(cov)):
-        if cov[i] > 0:
-            print "%s\t%s\t%012d\t%d" % (sampleId, chrid, st+i, cov[i])
-            nout += 1
-    return nout
-
-def finishAll(pt, cov):
-    nout = 0
-    for samp, covbuf in cov.iteritems():
-        covst, covl = covbuf.finalize()
-        if len(covl) > 0:
-            nout += finish(pt, samp, (covst, covl))
-    return nout
-
-verbose = False
-maxlen = 100
-
-for ln in sys.stdin:
-    ln = ln.rstrip()
-    toks = ln.split('\t')
-    assert len(toks) == 6
-    pt, st, en, _, weight, lab = toks  
-    st, en, weight = int(st), int(en), int(weight)
-    maxlen = max(en - st, maxlen)
-    if pt != last_pt:
-        # We moved on to a new partition
-        last_part_st, last_part_en = part_st, part_en
-        nout += finishAll(last_pt, cov)
-        cov = {}
+def go():
+    
+    binsz = partition.binSize(args)
+    
+    ninp = 0                   # # lines input so far
+    nout = 0                   # # lines output so far
+    last_pt = "\t"             # id of previous partition
+    part_st, part_en = -1, -1  # start/end offsets of current partition
+    cov = dict()               # current coverage in each sample
+    
+    def finish(partId, sampleId, covtup):
+        st, cov = covtup
+        nout = 0
+        chrid = partId[:partId.rfind(';')]
+        for i in xrange(0, len(cov)):
+            if cov[i] > 0:
+                print "%s\t%s\t%012d\t%d" % (sampleId, chrid, st+i, cov[i])
+                nout += 1
+        return nout
+    
+    def finishAll(pt, cov):
+        nout = 0
+        for samp, covbuf in cov.iteritems():
+            covst, covl = covbuf.finalize()
+            if len(covl) > 0:
+                nout += finish(pt, samp, (covst, covl))
+        return nout
+    
+    verbose = False
+    maxlen = 100
+    
+    for ln in sys.stdin:
+        ln = ln.rstrip()
+        toks = ln.split('\t')
+        assert len(toks) == 6
+        pt, st, en, _, weight, lab = toks  
+        st, en, weight = int(st), int(en), int(weight)
         _, part_st, part_en = partition.parse(pt, binsz)
-        if verbose:
-            print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
+        assert en > st
+        assert en > part_st
+        assert st < part_en
+        maxlen = max(en - st, maxlen)
+        if pt != last_pt:
+            # We moved on to a new partition
+            nout += finishAll(last_pt, cov)
+            cov = {}
+            if verbose:
+                print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
+            assert part_en > part_st
+        assert part_st >= 0
         assert part_en > part_st
-        last_st = -1 
-    assert part_st >= 0
-    assert part_en > part_st
-    if lab not in cov:
-        cov[lab] = circular.CircularCoverageBuffer(part_st, part_en, maxlen)
-    covst, covl = cov[lab].add(st, en, weight)
-    if len(covl) > 0:
-        nout += finish(pt, lab, (covst, covl))
-    last_pt, last_st = pt, st
-    ninp += 1
+        if lab not in cov:
+            cov[lab] = circular.CircularCoverageBuffer(part_st, part_en, maxlen)
+        covst, covl = cov[lab].add(st, en, weight)
+        if len(covl) > 0:
+            nout += finish(pt, lab, (covst, covl))
+        last_pt = pt
+        ninp += 1
+    
+    if part_st > -1:
+        nout += finishAll(last_pt, cov)
+    
+    # Done
+    timeEn = time.clock()
+    print >>sys.stderr, "DONE with walk_prenorm.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
 
-if part_st > -1:
-    nout += finishAll(last_pt, cov)
-
-# Done
-timeEn = time.clock()
-print >>sys.stderr, "DONE with walk_prenorm.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
+if args.profile:
+    import cProfile
+    cProfile.run('go()')
+else:
+    go()

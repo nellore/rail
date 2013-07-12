@@ -4,6 +4,8 @@ circular.py
 Circular buffers.
 '''
 
+import sys
+
 class CircularCountBuffer(object):
     
     """ Buffer for holding integer counts temporarily as we move sequentially
@@ -37,7 +39,7 @@ class CircularCountBuffer(object):
     
     def advance(self):
         """ Advance to next offset """
-        self.advanceTo(self._off + 1)
+        return self.advanceTo(self._off + 1)
     
     def advanceTo(self, off):
         """ Advance to given offset """
@@ -48,6 +50,7 @@ class CircularCountBuffer(object):
             self._cur += 1
             if self._cur >= len(self._list):
                 self._cur = 0
+        return self._list[self._cur]
     
     def get(self, off=None):
         """ Get count at given offset """
@@ -58,6 +61,22 @@ class CircularCountBuffer(object):
         if i >= len(self._list):
             i -= len(self._list)
         return self._list[self._cur]
+    
+    def peekMany(self, n):
+        ret = [0] * n
+        assert self._cur < len(self._list)
+        left = min(len(self._list) - self._cur, n)
+        if left > 0:
+            ret[0:left] = self._list[self._cur:(self._cur+left)]
+            assert len(ret) == n
+        if left < n:
+            # Note, n might be longer than buffer
+            ncopy = min(n-left, self._cur)
+            assert ncopy < len(self._list)
+            ret[left:(left+ncopy)] = self._list[0:ncopy]
+            assert len(ret) == n, "left=%d, n=%d, len(ret)=%d" % (left, n, len(ret))
+        assert len(ret) == n
+        return ret
     
     def inc(self, off=None):
         """ Increment count at given offset """
@@ -102,37 +121,35 @@ class CircularCoverageBuffer(object):
         assert en > st
         assert en > self._st
         assert st <= self._en
-        ret = []
         if en - st + 1 > self._maxlen:
             self._maxlen = en - st + 1
             self._ends.resize(self._maxlen)
         storig = self._lastst
-        while st > self._lastst:
-            # Advance to the position
-            ret.append(self._cov)
-            assert self._ends.off() == self._lastst
+        ret = [0] * (st - self._lastst)
+        if st > self._lastst:
             self._ends.advance()
-            self._lastst += 1
-            enamt = self._ends.get()
-            assert enamt <= self._cov, "%d, %d" % (enamt, self._cov)
-            self._cov -= enamt
+            cov = self._ends.peekMany(st - self._lastst)
+            for i in xrange(0, st - self._lastst):
+                ret[i] = self._cov
+                self._cov -= cov[i]
+            self._lastst = st
+            self._ends.advanceTo(st)
         self._cov += amt
         self._ends.add(amt, en)
         return (storig, ret)
     
     def finalize(self):
-        ret = []
-        storig = self._lastst
-        while self._en > self._lastst:
-            # Advance to the position
-            ret.append(self._cov)
-            assert self._ends.off() == self._lastst
-            self._ends.advance()
-            self._lastst += 1
-            enamt = self._ends.get()
-            assert enamt <= self._cov, "%d, %d" % (enamt, self._cov)
-            self._cov -= enamt
-        return (storig, ret)
+        self._ends.advance()
+        ret = [0] * (self._en - self._lastst)
+        if self._cov > 0:
+            cov = self._ends.peekMany(self._en - self._lastst)
+            for cur in xrange(0, self._en - self._lastst):
+                # Advance to the position
+                ret[cur] = self._cov
+                self._cov -= cov[cur]
+                if self._cov == 0:
+                    break
+        return (self._lastst, ret)
     
 class CircularMultiCoverageBuffer(object):
     
@@ -282,6 +299,50 @@ if __name__ == '__main__':
             self.assertEqual((20, []), ret4)
             self.assertEqual((20, [7, 2, 2, 2, 2, 0, 0, 0, 0, 0]), ret5)
             self.assertEqual((30, [10, 10, 10, 10, 10, 10, 10, 10, 10, 10]), ret6)
+        
+        def test4(self):
+            buf = CircularCoverageBuffer(20, 10000, 100)
+            ret1 = buf.add(0, 21, 1)
+            ret2 = buf.add(1, 22, 2)
+            ret3 = buf.add(2, 23, 2) # 5 covering 20
+            ret4 = buf.finalize()
+            self.assertEqual((20, []), ret1)
+            self.assertEqual((20, []), ret2)
+            self.assertEqual((20, []), ret3)
+            self.assertEqual(20, ret4[0])
+            self.assertEqual([5, 4, 2], ret4[1][0:3])
+            self.assertEqual([0] * 9977, ret4[1][3:])
+        
+        def test5(self):
+            import random
+            ln = 1000
+            max_ival = 250
+            buf = CircularCoverageBuffer(0, ln, max_ival)
+            ivals = []
+            cov = {}
+            for _ in xrange(0, 100):
+                ival_len = random.randint(40, max_ival)
+                off = random.randint(0, ln - ival_len)
+                ivals.append((off, off + ival_len, 1))
+                for i in xrange(0, ival_len):
+                    cov[i+off] = cov.get(i+off, 0) + 1
+            ivals.sort()
+            cur = 0
+            for st, en, amt in ivals:
+                bufcov = buf.add(st, en, amt)
+                bst, bufcov = bufcov
+                self.assertEqual(bst, cur)
+                for i in xrange(0, len(bufcov)):
+                    covcov = cov.get(cur, 0)
+                    self.assertEqual(covcov, bufcov[i])
+                    cur += 1
+            bufcov = buf.finalize()
+            bst, bufcov = bufcov
+            covcov = cov.get(cur, 0)
+            for i in xrange(0, len(bufcov)):
+                covcov = cov.get(cur, 0)
+                self.assertEqual(covcov, bufcov[i])
+                cur += 1
     
     class TestCircularMultiCoverageBuffer(unittest.TestCase):
         

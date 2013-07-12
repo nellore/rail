@@ -127,14 +127,13 @@ cat *.tab5 \
 		| tee ${INTERMEDIATE_DIR}align_out.tsv \
 	| grep '^exon' | $MERGE_AGGR2 | $MERGE_AGGR3 | $MERGE_AGGR4 | $MERGE \
 	| tee $WALK_IN_TMP | $WALK_PRENORM \
-		--manifest $MANIFEST_FN \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
 	| $NORMALIZE_AGGR1 | $NORMALIZE_AGGR2 | $NORMALIZE \
 		--percentile 0.75 \
 		--out_dir $SAMPLE_OUT \
-                --bigbed_exe $BIGBED_EXE \
-                --chrom_sizes $CHROM_SIZES \
+		--bigbed_exe $BIGBED_EXE \
+		--chrom_sizes $CHROM_SIZES \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
 		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
 
@@ -165,10 +164,9 @@ cat ${INTERMEDIATE_DIR}hmm_in.tsv \
 	| tee ${INTERMEDIATE_DIR}hmm_out.tsv > hmm.out
 
 cat hmm.out | $PATH_AGGR1 | $PATH_AGGR2 | $PATH_AGGR3 | $AGGR_PATH \
-                --out_dir $PERM_OUT \
-                --bigbed_exe $BIGBED_EXE \
-                --chrom_sizes $CHROM_SIZES \
-
+	--out_dir $PERM_OUT \
+	--bigbed_exe $BIGBED_EXE \
+	--chrom_sizes $CHROM_SIZES
 
 echo DONE 1>&2
 

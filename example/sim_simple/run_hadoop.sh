@@ -56,7 +56,7 @@ WALK_PRENORM_AGGR1="sort -n -k2,2"
 WALK_PRENORM_AGGR2="sort -s -k1,1"
 WALK_PRENORM="python $RNAWESOME/walk_prenorm.py"
 WALK_PRENORM_OUT=/user/hduser/sim_simple/walk_prenorm_output
-WALK_ARGS=''$WALK_PRENORM' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --manifest '$MANIFEST_FN''
+WALK_ARGS=''$WALK_PRENORM' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN''
 
 # Step 4: For all samples, take all coverage tuples for the sample and
 #         from them calculate a normalization factor
