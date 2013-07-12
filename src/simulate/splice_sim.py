@@ -37,6 +37,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--num-nucs', metavar='int', action='store', type=float, default=1e7,
     help='Number of total nucleotides of reads to generate')
+parser.add_argument(\
+    '--num-xscripts', metavar='int', action='store', type=float, default=1e7,
+    help='Number of transcripts to simulate')
 
 gtf.addArgs(parser)
 args = parser.parse_args()
@@ -60,9 +63,19 @@ class WeightedRandomGenerator(object):
 
 #Make weighted random generator for transcriptome
 def makeWeights(xscripts):
+    if args.num_xscripts==0:
+        num_xscripts= len(xscripts)
+    else:
+        num_xscripts = args.num_xscripts
     weights = [1.0] * len(xscripts)
+
+    num = 0
     for i in range(0,len(weights)):
-        weights[i] = random.random()
+        if num<num_xscripts:
+            weights[i] = random.random()
+        else:
+            weights[i] = 0
+        num+=1
     return WeightedRandomGenerator(weights),weights
 
 def simulate(xscripts,readlen,targetNucs,fastaseqs):
@@ -96,7 +109,7 @@ def writeReads(seqs, fnPre,manifestFn):
             qual = "I" * len(seq)
             nm = "r_n%d;LB:splice-0-0" % (i)
             fh.write("%s\t%s\t%s\n" % (nm, seq, qual))
-
+        
 def writeWeights(weights,xscripts,fout):
     with open(fout,'w') as fh:
         for i in range(0,len(weights)):
@@ -110,3 +123,4 @@ if __name__=="__main__":
     seqs,weights = simulate(xscripts,args.read_len,args.num_nucs,args.fasta)
     writeReads(seqs,args.output_prefix,args.output_prefix+".manifest")
     writeWeights(weights,xscripts,args.output_prefix+".weights")
+    
