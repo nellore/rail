@@ -119,7 +119,7 @@ for ln in sys.stdin:
             out_fname = "%s/%s.bb"%(args.out_dir,last_samp)
             moveToHDFS(bb_file,out_fname)
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
-        #os.remove(fname)
+        os.remove(fname)
         samp_out = open(fname,'w')
     elif last_chr!=chr_name:
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp

@@ -68,6 +68,7 @@ import manifest
 import interval
 import partition
 import eddist
+import nw
 import fasta
 
 ninp = 0               # # lines input so far
@@ -119,44 +120,53 @@ def xformRead(seq, qual):
 bowtieOutDone = threading.Event()
 bowtieErrDone = threading.Event()
 
-
 def composeReadletAlignments(rdnm, rdals, rdseq):
     global nout
     # Add this interval to the flattened interval collection for current read
     ivals = {}
+    positions = dict()  #stores readlet number based keyed by position
     for rdal in rdals:
-        refid, fw, refoff, seqlen = rdal
-        refoff, seqlen = int(refoff), int(seqlen)
+        refid, fw, refoff, seqlen, rlet_nm = rdal
+        refoff, seqlen, rlet_nm = int(refoff), int(seqlen), int(rlet_nm)
+        """
+        TODO: Need to know if readlets aligned in forward or reverse complicate
+        What if readlets align to the Crick strand?
+        fw = True if from forward strand and false if from other strand
+        """
+        positions[str(refoff)] = rlet_nm*args.readletIval
+        positions[str(refoff+seqlen)] = rlet_nm*args.readletIval+seqlen
         if refid not in ivals:
             ivals[refid] = interval.FlatIntervals()
         ivals[refid].add(interval.Interval(refoff, refoff + seqlen))
     # ivals now populated
-    in_end, in_start = -1, -1
+    in_end, in_start = -1, -1 
     for k in ivals.iterkeys():
         for iv in sorted(iter(ivals[k])):
             # TODO: check orientations of exons so we can filter suspicious "exons"
             # TODO: record info about the intron interval
             st, en = iv.start, iv.end
+            
             if in_end == -1 and in_start != -1:
                 in_end = st
+                
             if in_start == -1:
                 in_start = en
             if in_start > 0 and in_end > 0:
-                if (in_end > in_start) and (in_end-in_start) < (args.readletLen-seqlen):
-                    rlet_nm = int(refid.split(";")[-1]) #The location of in_end in the read coordinate frame                
-                    #Look at the intron in question                                                                         
-                    region_en = rlet_nm*args.readletLen
-                    region_st = region_en-(in_end-in_start)
-                    rdsubseq = rdseq[region_st:region_en]  #Sequence from read                                            
-                    refseq = fnh.fetch_sequence(k,region_st+1,region_en+1)  #Sequence from genome                           
-                    score = eddist.edDistDp(refseq,rdsubseq)   #Get edit distance between the two sequences
-                    pt = partition.partition(k, in_start, in_end, binsz)
-                    if score <=5: #if edit distance is less than 5                                                          
-                        print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
-                    else:
-                        print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
-                    nout += 1
-                elif (in_end > in_start) and (in_end-in_start)>(args.readletLen-seqlen):
+                
+                if (in_end > in_start) and (in_end-in_start) < (args.readletLen): #drops all introns less than a read length
+                    """
+                    Take into consideration the fw variable.  Need to apply reverse compliment if not on forward strand
+                    """
+                    refseq = fnh.fetch_sequence(k,in_start+1,in_end+1)  #Sequence from genome                           
+                    region_st = positions[str(in_start)]
+                    region_end = positions[str(in_end)]
+                    rdsubseq = rdseq[region_st:region_end]
+                    score = nw.needlemanWunsch(refseq,rdsubseq,nw.exampleCost)
+                    for pt in iter(partition.partition(k, in_start, in_end, binsz)):
+                        if score <= 10: #if edit distance is less than 5
+                            print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
+                            nout += 1
+                elif (in_end > in_start) and (in_end-in_start)>(args.readletLen):
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
                         print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
                         nout += 1
@@ -184,13 +194,14 @@ def bowtieOutReadlets(st):
         seqlen = len(seq)
         toks = string.split(rdid, ';')
         rdnm = ';'.join(toks[:-3])
+        rlet_nm = toks[2]
         cnt[rdnm] = cnt.get(rdnm, 0) + 1
         rdseq = toks[3]
         rdlet_n = int(toks[-2])
         if flags != 4:
             fw = (flags & 16) == 0
             if rdnm not in mem: mem[rdnm] = [ ]
-            mem[rdnm].append((refid, fw, refoff1-1, seqlen))
+            mem[rdnm].append((refid, fw, refoff1-1, seqlen,rlet_nm))
         if cnt[rdnm] == rdlet_n:
             # Last readlet
             if rdnm in mem:
