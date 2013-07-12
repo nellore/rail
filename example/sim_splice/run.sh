@@ -121,32 +121,32 @@ HMM_IN_TMP=${TMPDIR}hmm_in.tsv
 echo "Temporary file for walk_fit.py input is '$WALK_IN_TMP'" 1>&2
 echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 
-# cat $INPUT \
-# 	| $ALIGN_AGGR | $ALIGN \
-# 		--v2 \
-# 		--ntasks=$NTASKS \
-# 		--genomeLen=$GENOME_LEN \
-# 		--bowtieArgs '-v 2 -m 1 -p 6' \
-# 		--bowtieExe $BOWTIE_EXE \
-# 		--bowtieIdx=$BOWTIE_IDX \
-# 		--readletLen $READLET_LEN \
-# 		--readletIval $READLET_IVAL \
-# 		--manifest $MANIFEST_FN \
-# 		| tee ${INTERMEDIATE_DIR}align_out.tsv \
-# 	| grep '^exon' | $MERGE_AGGR2 | $MERGE_AGGR3 | $MERGE_AGGR4 | $MERGE \
-# 	| tee $WALK_IN_TMP | $WALK_PRENORM \
-# 		--manifest $MANIFEST_FN \
-# 		--ntasks=$NTASKS \
-# 		--genomeLen=$GENOME_LEN \
-# 	| $NORMALIZE_AGGR1 | $NORMALIZE_AGGR2 | $NORMALIZE \
-# 		--percentile 0.75 \
-# 		--out_dir $SAMPLE_OUT \
-#                 --bigbed_exe $BIGBED_EXE \
-#                 --chrom_sizes $CHROM_SIZES \
-# 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
-# 		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
+cat $INPUT \
+	| $ALIGN_AGGR | $ALIGN \
+		--v2 \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
+		--bowtieArgs '-v 2 -m 1 -p 6' \
+		--bowtieExe $BOWTIE_EXE \
+		--bowtieIdx=$BOWTIE_IDX \
+		--readletLen $READLET_LEN \
+		--readletIval $READLET_IVAL \
+		--manifest $MANIFEST_FN \
+                --refseq=$GENOME \
+		| tee ${INTERMEDIATE_DIR}align_out.tsv \
+	| grep '^exon' | $MERGE_AGGR2 | $MERGE_AGGR3 | $MERGE_AGGR4 | $MERGE \
+	| tee $WALK_IN_TMP | $WALK_PRENORM \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
+	| $NORMALIZE_AGGR1 | $NORMALIZE_AGGR2 | $NORMALIZE \
+		--percentile 0.75 \
+		--out_dir $SAMPLE_OUT \
+                --bigbed_exe $BIGBED_EXE \
+                --chrom_sizes $CHROM_SIZES \
+	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
+		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
 
-# cp $WALK_IN_TMP ${INTERMEDIATE_DIR}walk_in_input.tsv
+cp $WALK_IN_TMP ${INTERMEDIATE_DIR}walk_in_input.tsv
 
 cat ${INTERMEDIATE_DIR}align_out.tsv \
     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 \

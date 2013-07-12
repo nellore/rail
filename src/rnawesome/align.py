@@ -58,6 +58,8 @@ site.addsitedir(os.path.join(base_path, "read"))
 site.addsitedir(os.path.join(base_path, "sample"))
 site.addsitedir(os.path.join(base_path, "interval"))
 site.addsitedir(os.path.join(base_path, "manifest"))
+site.addsitedir(os.path.join(base_path, "alignment"))
+site.addsitedir(os.path.join(base_path, "fasta"))
 
 import bowtie
 import readlet
@@ -65,6 +67,8 @@ import sample
 import manifest
 import interval
 import partition
+import eddist
+import fasta
 
 ninp = 0               # # lines input so far
 nout = 0               # # lines output so far
@@ -84,6 +88,9 @@ xformReads = qualAdd is not None or truncateAmt is not None or truncateTo is not
 
 parser = argparse.ArgumentParser(description=\
     'Align reads using Bowtie, usually as the map step in a Hadoop program.')
+parser.add_argument(\
+    '--refseq', type=str, required=False,
+    help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required to be built via samtools')
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
@@ -94,8 +101,8 @@ parser.add_argument(\
     '--v2', action='store_const', const=True, default=False, help='New readlet handling')
 
 args = parser.parse_args()
-
 binsz = partition.binSize(args)
+fnh = fasta.fasta(args.refseq)
 
 def xformRead(seq, qual):
     # Possibly truncate and/or modify quality values
@@ -112,7 +119,8 @@ def xformRead(seq, qual):
 bowtieOutDone = threading.Event()
 bowtieErrDone = threading.Event()
 
-def composeReadletAlignments(rdnm, rdals):
+
+def composeReadletAlignments(rdnm, rdals, rdseq):
     global nout
     # Add this interval to the flattened interval collection for current read
     ivals = {}
@@ -134,8 +142,21 @@ def composeReadletAlignments(rdnm, rdals):
             if in_start == -1:
                 in_start = en
             if in_start > 0 and in_end > 0:
-                # TODO: why restrict length here?
-                if (in_end - in_start) > args.readletLen:
+                if (in_end > in_start) and (in_end-in_start) < (args.readletLen-seqlen):
+                    rlet_nm = int(refid.split(";")[-1]) #The location of in_end in the read coordinate frame                
+                    #Look at the intron in question                                                                         
+                    region_en = rlet_nm*args.readletLen
+                    region_st = region_en-(in_end-in_start)
+                    rdsubseq = rdseq[region_st:region_en]  #Sequence from read                                            
+                    refseq = fnh.fetch_sequence(k,region_st+1,region_en+1)  #Sequence from genome                           
+                    score = eddist.edDistDp(refseq,rdsubseq)   #Get edit distance between the two sequences
+                    pt = partition.partition(k, in_start, in_end, binsz)
+                    if score <=5: #if edit distance is less than 5                                                          
+                        print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
+                    else:
+                        print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
+                    nout += 1
+                elif (in_end > in_start) and (in_end-in_start)>(args.readletLen-seqlen):
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
                         print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
                         nout += 1
@@ -162,9 +183,10 @@ def bowtieOutReadlets(st):
         flags, refoff1 = int(flags), int(refoff1)
         seqlen = len(seq)
         toks = string.split(rdid, ';')
-        rdnm = ';'.join(toks[:-2])
+        rdnm = ';'.join(toks[:-3])
         cnt[rdnm] = cnt.get(rdnm, 0) + 1
-        rdlet_n = int(toks[-1])
+        rdseq = toks[3]
+        rdlet_n = int(toks[-2])
         if flags != 4:
             fw = (flags & 16) == 0
             if rdnm not in mem: mem[rdnm] = [ ]
@@ -172,7 +194,7 @@ def bowtieOutReadlets(st):
         if cnt[rdnm] == rdlet_n:
             # Last readlet
             if rdnm in mem:
-                composeReadletAlignments(rdnm, mem[rdnm])
+                composeReadletAlignments(rdnm, mem[rdnm],rdseq)
                 del mem[rdnm]
             del cnt[rdnm]
         nout += 1
@@ -249,14 +271,14 @@ for ln in sys.stdin:
             for i in xrange(0, len(rlets1)):
                 nm_rlet, seq_rlet, qual_rlet = rlets1[i]
                 if args.v2:
-                    proc.stdin.write("%s;%d;%d\t%s\t%s\n" % (nm_rlet, i, len(rlets1), seq_rlet, qual_rlet))
+                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet))
                 else:
                     proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
             rlets2 = readlet.readletize(args, nm2, seq2, qual2)
             for i in xrange(0, len(rlets2)):
                 nm_rlet, seq_rlet, qual_rlet = rlets2[i]
                 if args.v2:
-                    proc.stdin.write("%s;%d;%d\t%s\t%s\n" % (nm_rlet, i, len(rlets2), seq_rlet, qual_rlet))
+                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet))
                 else:
                     proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
         else:
@@ -272,7 +294,7 @@ for ln in sys.stdin:
             for i in xrange(0, len(rlets)):
                 nm_rlet, seq_rlet, qual_rlet = rlets[i]
                 if args.v2:
-                    proc.stdin.write("%s;%d;%d\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq_rlet, qual_rlet))
+                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet))
                 else:
                     proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
         else:

@@ -48,14 +48,15 @@ class Transcript(object):
             assert exon.feature == "exon"
         self.start = start # start coden Annot
         self.stop = stop
-        self.tssId = tssId
-        
-    #Pass in a dictionary of fastaseqs
-    def buildSeq(self,fastaseqs):
+        self.tssId = tssId 
         self.exons.sort(key = lambda x: x.st0)
         self.st0 = self.exons[0].st0
         self.en0 = self.exons[-1].en0
         self.seqid = self.exons[0].refid
+        self.gene_id,self.xscript_id = self.exons[0].attrs.split('\t')
+       
+    #Pass in a dictionary of fastaseqs
+    def buildSeq(self,fastaseqs):
         seqs = []
         for E in self.exons:
             seqid = E.refid
