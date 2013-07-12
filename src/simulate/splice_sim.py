@@ -12,6 +12,7 @@ import random
 import math
 import re
 import bisect
+import pickle
 from operator import itemgetter
 from collections import defaultdict
 
@@ -29,7 +30,7 @@ parser.add_argument(\
     '--read-len', metavar='int', action='store', type=int, default=100,
     help='Read length to simulate')
 parser.add_argument(\
-    '--num-replicates', metavar='int', action='store', type=int, default=8,
+    '--num-replicates', metavar='int', action='store', type=int, default=2,
     help='Number of replicates per group')
 parser.add_argument(\
     '--seed', metavar='int', action='store', type=int, default=874,
@@ -38,7 +39,7 @@ parser.add_argument(\
     '--num-nucs', metavar='int', action='store', type=float, default=1e7,
     help='Number of total nucleotides of reads to generate')
 parser.add_argument(\
-    '--num-xscripts', metavar='int', action='store', type=float, default=1e7,
+    '--num-xscripts', metavar='int', action='store', type=float, default=2,
     help='Number of transcripts to simulate')
 
 gtf.addArgs(parser)
@@ -95,25 +96,47 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs):
         n+=readlen
     return seqs,weights
 
+def replicateize(seqs1, seqs2, nreps):
+    """ Take all the sequence reads for groups 1 and 2 and split them into into
+        a bunch of replicates with varying average coverage. """
+    weights1 = [1.0] * nreps
+    weights2 = [1.0] * nreps
+    for i in xrange(0, nreps):
+        weights1[i] += (random.random() - 0.5)
+        weights2[i] += (random.random() - 0.5)
+    # Each replicate has a weight, so now we assign sequences to replicates
+    seqs1rep = [ [] for _ in xrange(0, nreps) ]
+    seqs2rep = [ [] for _ in xrange(0, nreps) ]
+    gen1 = WeightedRandomGenerator(weights1)
+    gen2 = WeightedRandomGenerator(weights2)
+    for seq in seqs1:
+        i = gen1.next()
+        seqs1rep[i].append(seq)
+    for seq in seqs2:
+        i = gen2.next()
+        seqs2rep[i].append(seq)
+    return seqs1rep, seqs2rep
+
+
 #Just prints out one file
-def writeReads(seqs, fnPre,manifestFn):
+def writeReads(seqs1rep,seqs2rep,fnPre,manifestFn):
     """ Only unpaired for now """
+    seqsrep = [ seqs1rep, seqs2rep ]
     fn = "%s.seqs.tab6"%(fnPre)
-    with open(manifestFn,'w') as manFh:
-        manFh.write("%s\t0\tsplice-0-0\n"%(fn))
-    with open(fn,'w') as fh:
-        for i in xrange(0,len(seqs)):
-            seq = seqs[i]
-            if len(seq)==0:
-                continue
-            qual = "I" * len(seq)
-            nm = "r_n%d;LB:splice-0-0" % (i)
-            fh.write("%s\t%s\t%s\n" % (nm, seq, qual))
+    with open(manifestFn, 'w') as manFh:
+        for group in xrange(0, 2):
+            sr = seqsrep[group]
+            for rep in xrange(0, len(sr)):
+                fn = "%s.group%d.rep%d.tab6" % (fnPre, group, rep)
+                manFh.write("%s\t0\tsplice-%d-%d\n" % (fn, group, rep))
+                with open(fn, 'w') as fh:
+                    for i in xrange(0, len(sr[rep])):
+                        seq = sr[rep][i]
+                        qual = "I" * len(seq)
+                        nm = "r_n%d;LB:splice-%d-%d" % (i, group, rep)
+                        fh.write("%s\t%s\t%s\n" % (nm, seq, qual))
+
         
-def writeWeights(weights,xscripts,fout):
-    with open(fout,'w') as fh:
-        for i in range(0,len(weights)):
-            fh.write("weight:%s\n%s\n"%(weights[i],str(xscripts[i])))
     
 
 if __name__=="__main__":
@@ -121,6 +144,8 @@ if __name__=="__main__":
     fastadb = gtf.parseFASTA(args.fasta)
     xscripts = gtf.assembleTranscripts(annots,fastadb)
     seqs,weights = simulate(xscripts,args.read_len,args.num_nucs,args.fasta)
-    writeReads(seqs,args.output_prefix,args.output_prefix+".manifest")
-    writeWeights(weights,xscripts,args.output_prefix+".weights")
+    seqs1,seqs2 = replicateize(seqs,seqs,args.num_replicates)
+    writeReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
+    pickle.dump(weights,open(args.output_prefix+".weights",'wb'))
+    pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
     
