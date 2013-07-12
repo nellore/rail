@@ -1,0 +1,13 @@
+# Run SRR493371 (GSM925767: LFB_HOXA1KD_hiseq_repC; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493371/SRR493371.sra	SRR493371.sra
+# Run SRR493370 (GSM925766: LFB_HOXA1KD_hiseq_repB; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493370/SRR493370.sra	SRR493370.sra
+# Run SRR493369 (GSM925765: LFB_HOXA1KD_hiseq_repA; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493369/SRR493369.sra	SRR493369.sra
+
+# Run SRR493368 (GSM925764: LFB_scramble_hiseq_repC; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493368/SRR493368.sra	SRR493368.sra
+# Run SRR493367 (GSM925763: LFB_scramble_hiseq_repB; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493367/SRR493367.sra	SRR493367.sra
+# Run SRR493366 (GSM925762: LFB_scramble_hiseq_repA; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493366/SRR493366.sra	SRR493366.sra
