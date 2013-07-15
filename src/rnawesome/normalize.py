@@ -101,12 +101,13 @@ for ln in sys.stdin:
     assert len(toks) == 4
     samp, chr_name, pos, cv = toks[0],toks[1],int(toks[2]),int(toks[3])
     if samp != last_samp and last_samp != "\t":
-        print "%s\t%s" % (last_samp, percentile(cov)) #just for testing now
+        print "%s\t%s" % (last_samp, percentile(cov)) 
         nout += 1
         cov = dict()
         totcov, totnonz = 0, 0
         
     if last_samp == "\t":
+        os.remove(fname)
         samp_out.close()
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
         samp_out = open(fname,'w')        
@@ -118,8 +119,8 @@ for ln in sys.stdin:
         if args.hadoop_exe!="": #For hadoop mode - moves local file to HDFS
             out_fname = "%s/%s.bb"%(args.out_dir,last_samp)
             moveToHDFS(bb_file,out_fname)
-        last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
         os.remove(fname)
+        last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
         samp_out = open(fname,'w')
     elif last_chr!=chr_name:
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
@@ -138,7 +139,7 @@ for ln in sys.stdin:
     cov[cv] = cov.get(cv, 0) + 1
     totcov += cv
     totnonz += 1
-
+os.remove(fname)
 if last_samp != "\t":
     print "%s\t%s" % (last_samp, percentile(cov))
     nout += 1
