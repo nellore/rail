@@ -31,7 +31,7 @@ Tab-delimited input tuple columns; can be in any of 3 formats:
   5. Nucleotide sequence for mate 2
   6. Quality sequence for mate 2
 
-Binning/sorting prior to this step:
+-Binning/sorting prior to this step:
  (none)
 
 Tab-delimited output tuple columns (Bowtie's default output format):
@@ -41,6 +41,24 @@ Tab-delimited output tuple columns (Bowtie's default output format):
  4. 0-based reference offset
  5. Nucleotide sequence
  6. Quality sequence
+
+
+Exons:
+Tab-delimited output tuple columns:
+1. Partition ID for partition overlapped by interval
+2. Interval start
+3. Interval end (exclusive)
+4. Reference ID
+5. Sample label
+
+Introns
+Tab-delimited output tuple columns:
+1. Partition ID for partition overlapped by interval
+2. Interval start
+3. Interval end (exclusive)
+4. Reference ID
+5. Sample label
+
 """
 
 import sys
@@ -153,7 +171,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 in_start = en
             if in_start > 0 and in_end > 0:
                 
-                if (in_end > in_start) and (in_end-in_start) < (args.readletLen): #drops all introns less than a read length
+                if (in_end > in_start) and (in_end-in_start) < (args.readletLen): #drops all introns less than a readlet length
                     """
                     Take into consideration the fw variable.  Need to apply reverse compliment if not on forward strand
                     """
@@ -163,19 +181,22 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                     rdsubseq = rdseq[region_st:region_end]
                     score = nw.needlemanWunsch(refseq,rdsubseq,nw.exampleCost)
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
-                        if score <= 10: #if edit distance is less than 5
-                            print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
+                        if score <= 10:
+                            start,end = (args.genomeLen-in_end-1,args.genomeLen-in_start-1) if fw==False else (in_start,in_end) #reverse complement
+                            print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
                             nout += 1
                 elif (in_end > in_start) and (in_end-in_start)>(args.readletLen):
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
-                        print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
+                        start,end = (args.genomeLen-in_end-1,args.genomeLen-in_start-1) if fw==False else (in_start,in_end) #reverse complement
+                        print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
                         nout += 1
                 in_start, in_end = en,-1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
-                print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdnm))
+                start,end = (args.genomeLen-en-1,args.genomeLen-st-1) if fw==False else (st,en) #reverse complement
+                print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
                 nout += 1
 
 def bowtieOutReadlets(st):

@@ -50,6 +50,7 @@ class Transcript(object):
         self.stop = stop
         self.tssId = tssId 
         self.exons.sort(key = lambda x: x.st0)
+        self.orient=self.exons[0].orient
         self.st0 = self.exons[0].st0
         self.en0 = self.exons[-1].en0
         self.seqid = self.exons[0].refid

@@ -41,6 +41,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--num-xscripts', metavar='int', action='store', type=float, default=2,
     help='Number of transcripts to simulate')
+parser.add_argument(\
+    '--stranded', metavar='int', action='store', type=int, default=False,
+    help='Indicates if boths strands need to be simulated')
 
 gtf.addArgs(parser)
 args = parser.parse_args()
@@ -69,18 +72,39 @@ def makeWeights(xscripts):
     else:
         num_xscripts = args.num_xscripts
     weights = [1.0] * len(xscripts)
-
+    
     num = 0
     for i in range(0,len(weights)):
+        strand = xscripts[i].strand
         if num<num_xscripts:
             weights[i] = random.random()
+            num+=1
         else:
             weights[i] = 0
-        num+=1
+    return WeightedRandomGenerator(weights),weights
+"""
+Randomly gets two transcripts: one from each strand
+"""
+def makeStrandedWeights(xscripts):
+    num_xscripts = args.num_xscripts
+    weights = [1.0] * len(xscripts)
+    last_strand = "+"
+    num = 0
+    for i in range(0,len(weights)):
+        if num<num_xscripts and xscripts[i].orient!=last_strand:
+            weights[i] = random.random()
+            print xscripts[i].xscript_id
+            last_strand = xscripts[i].orient
+            num+=1
+        else:
+            weights[i] = 0
     return WeightedRandomGenerator(weights),weights
 
 def simulate(xscripts,readlen,targetNucs,fastaseqs):
-    gen,weights = makeWeights(xscripts)
+    if args.stranded:
+        gen,weights = makeStrandedWeights(xscripts)
+    else:
+        gen,weights = makeWeights(xscripts)
     n = 0
     seqs = []
     while n<targetNucs:
