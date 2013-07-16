@@ -75,7 +75,6 @@ def makeWeights(xscripts):
     
     num = 0
     for i in range(0,len(weights)):
-        strand = xscripts[i].strand
         if num<num_xscripts:
             weights[i] = random.random()
             num+=1
@@ -160,9 +159,7 @@ def writeReads(seqs1rep,seqs2rep,fnPre,manifestFn):
                         nm = "r_n%d;LB:splice-%d-%d" % (i, group, rep)
                         fh.write("%s\t%s\t%s\n" % (nm, seq, qual))
 
-        
     
-
 if __name__=="__main__":
     annots = gtf.parseGTF(args.gtf)
     fastadb = gtf.parseFASTA(args.fasta)
@@ -170,6 +167,6 @@ if __name__=="__main__":
     seqs,weights = simulate(xscripts,args.read_len,args.num_nucs,args.fasta)
     seqs1,seqs2 = replicateize(seqs,seqs,args.num_replicates)
     writeReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
-    pickle.dump(weights,open(args.output_prefix+".weights",'wb'))
-    pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
+    #pickle.dump(weights,open(args.output_prefix+".weights",'wb'))
+    #pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
     
