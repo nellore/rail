@@ -1,4 +1,9 @@
+"""
+sequence.py
 
+A container for storing a sequence and its start/end position
+It can conduct reverse complements
+"""
 
 
 class Sequence(object):

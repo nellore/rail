@@ -29,7 +29,7 @@ HADOOP_EXE=$HADOOP_HOME/bin/hadoop
 TORNADO=/damsl/projects/myrna2/software/tornado
 EXAMPLE=$TORNADO/example
 SCR_DIR=$TORNADO/src
-CHECK=$SCR_DIR/check
+UTIL=$SCR_DIR/util
 RNAWESOME=$SCR_DIR/rnawesome
 UCSC_TOOLS=$TORNADO/tools/ucsc_tools
 #UCSC tools location
@@ -87,7 +87,7 @@ INTRON="python $RNAWESOME/intron.py"
 INTRON_ARGS=''$INTRON' --refseq='$GENOME' --readletIval '$READLET_IVAL''
 
 # Step 5c: Formats all splice sites into bed files
-SITE2BED="python $CHECK/site2bed.py"
+SITE2BED="python $UTIL/site2bed.py"
 INTRON_OUT=$HADOOP_FILES/intron_output
 SITEBED_OUT=$HADOOP_FILES/sitebed_output
 

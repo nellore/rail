@@ -1,5 +1,7 @@
 """
 gtf.py
+
+Parses gtf files
 """
 
 import string
@@ -27,7 +29,9 @@ def addArgs(parser):
 
 gene_id_re = re.compile("gene_id \"([^\"]+)\"")
 xscript_id_re = re.compile("transcript_id \"([^\"]+)\"")
-
+"""
+Stores objects such as exons and introns
+"""
 class Annot(object):
     def __init__(self, refid, st0, en0, orient, feature, score, frame, attrs):
         self.refid = refid
@@ -40,6 +44,9 @@ class Annot(object):
         self.attrs = attrs
     def __str__(self):
         return "%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s"%(self.refid, self.st0, self.en0, self.orient, self.feature, self.score, self.frame,self.attrs)
+"""
+Stores a chain of annotation objects
+"""
 class Transcript(object):
     """ Right now I ignore all associations with TSSs and promoters """
     def __init__(self, exons, start=None, stop=None, tssId=None):
@@ -99,7 +106,6 @@ def parseFASTA(fns):
 
 """
 Returns a list of exons
-Note:  This is a little RAM intensive.  May want to consider saving to hard disk later ...
 """
 def parseGTF(fns):
     exons = list()

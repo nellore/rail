@@ -34,15 +34,6 @@ Tab-delimited input tuple columns; can be in any of 3 formats:
 -Binning/sorting prior to this step:
  (none)
 
-Tab-delimited output tuple columns (Bowtie's default output format):
- 1. Read name
- 2. Orientation +/-
- 3. Reference ID
- 4. 0-based reference offset
- 5. Nucleotide sequence
- 6. Quality sequence
-
-
 Exons:
 Tab-delimited output tuple columns:
 1. Partition ID for partition overlapped by interval
@@ -78,6 +69,7 @@ site.addsitedir(os.path.join(base_path, "interval"))
 site.addsitedir(os.path.join(base_path, "manifest"))
 site.addsitedir(os.path.join(base_path, "alignment"))
 site.addsitedir(os.path.join(base_path, "fasta"))
+
 
 import bowtie
 import readlet
@@ -151,11 +143,6 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
     for rdal in rdals:
         refid, fw, refoff, seqlen, rlet_nm = rdal
         refoff, seqlen, rlet_nm = int(refoff), int(seqlen), int(rlet_nm)
-        """
-        TODO: Need to know if readlets aligned in forward or reverse complicate
-        What if readlets align to the Crick strand?
-        fw = True if from forward strand and false if from other strand
-        """
         positions[str(refoff)] = rlet_nm*args.readletIval
         positions[str(refoff+seqlen)] = rlet_nm*args.readletIval+seqlen
         if refid not in ivals:
@@ -166,7 +153,6 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
     for k in ivals.iterkeys():
         for iv in sorted(iter(ivals[k])):
             # TODO: check orientations of exons so we can filter suspicious "exons"
-            # TODO: record info about the intron interval
             st, en = iv.start, iv.end
             
             if in_end == -1 and in_start != -1:
@@ -177,9 +163,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             if in_start > 0 and in_end > 0:
                 
                 if (in_end > in_start) and (in_end-in_start) < (args.readletLen): #drops all introns less than a readlet length
-                    """
-                    Take into consideration the fw variable.  Need to apply reverse compliment if not on forward strand
-                    """
+                    #Take into consideration the fw variable.  Need to apply reverse compliment if not on forward strand
                     refseq = fnh.fetch_sequence(k,in_start+1,in_end+1)  #Sequence from genome                           
                     region_st = positions[str(in_start)]
                     region_end = positions[str(in_end)]

@@ -7,9 +7,9 @@ Converts all of the fastq reads into a tab delimited format
 Input: FASTQ format
 Output format:
 
- Format 1 (unpaired):                                                             
-  1. Name                                                                         
-  2. Nucleotide sequence                                                          
+ Format 1 (unpaired):                                                           
+  1. Name                                                                       
+  2. Nucleotide sequence                                                        
   3. Quality sequence
 '''
 

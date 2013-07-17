@@ -1,8 +1,12 @@
+"""
+chrsizes.py 
 
+Utility functions for handling sequence lengths from fasta index file
+"""
 
 
 """
-Returns a dictionary with all of the chromosome sizes
+Returns a dictionary with all of the chromosome sizes given a fai file
 """
 def getSizes(fname):
     sizes = dict()
@@ -13,8 +17,11 @@ def getSizes(fname):
             seq,length  = toks[0],int(toks[1])
             sizes[seq] = length
     return sizes
-
-def totalLength(sizes):
+"""
+Calculates the total length of all of the sequences added together given a fai file
+"""
+def totalLength(fname):
+    sizes = getSizes(fname)
     total = 0
     for k,v in sizes.iteritems():
         total+=v

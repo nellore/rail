@@ -1,9 +1,5 @@
 # Parameters
 GENOME_LEN=3095693983
-#GENOME_LEN is calculated as follows
-# lines = open("genome.fa.fai",'r').readlines()
-# lens = [int(ln.rstrip().split("\t")[1]) for ln in lines]
-# sum(lens)
 
 NTASKS=20
 HMM_OVERLAP=100
@@ -33,45 +29,45 @@ HADOOP_EXE=$HADOOP_HOME/bin/hadoop
 
 #Note: Must copy over the entire tornado directory
 TORNADO=/damsl/projects/myrna2/software/tornado
-EXAMPLE=$TORNADO/example
-SCR_DIR=$TORNADO/src
-CHECK=$SCR_DIR/check
-RNAWESOME=$SCR_DIR/rnawesome
-UCSC_TOOLS=$TORNADO/tools/ucsc_tools
-#UCSC tools location
-BIGBED_EXE=`which bedToBigBed`
-SIM_SIMPLE=$EXAMPLE/sim_splice
-MANIFEST_FN=human.manifest
 
+
+BIGBED_EXE=`which bedToBigBed`
 if [ $? -ne 0 ] ; then
         echo "bedToBigBed must be in PATH"
 	exit 1
 fi
+MANIFEST_FN=human.manifest
+SIM_SIMPLE=$EXAMPLE/sim_splice
+INTERMEDIATE_DIR=$SIM_SIMPLE/intermediate
+
+###Everything above is machine generated
+
+EXAMPLE=$TORNADO/example
+SCR_DIR=$TORNADO/src
+UTIL=$SCR_DIR/util
+RNAWESOME=$SCR_DIR/rnawesome
+UCSC_TOOLS=$TORNADO/tools/ucsc_tools
+#UCSC tools location
+
 
 CHROM_SIZES=$PWD/chrom.sizes
 cat $FASTA_IDX | cut -f -2 > $CHROM_SIZES
 
-INTERMEDIATE_DIR=$SIM_SIMPLE/intermediate
 # Step 0: Format Fastq files into tab delimited format
 ALIGN_IN=$HADOOP_FILES/align_input
 FASTQ2TAB="python $SCR_DIR/fasta/fastq2tab.py"
 
 # Step 1: Readletize input reads and use Bowtie to align the readlets 
-ALIGN_AGGR="cat"
 ALIGN="python $RNAWESOME/align.py"
 ALIGN_ARGS=''$ALIGN' --bowtieArgs '\''-v 2 -m 1 -p 6'\'' --bowtieExe '$BOWTIE_EXE' --bowtieIdx='$BOWTIE_IDX' --readletLen '$READLET_LEN' --readletIval '$READLET_IVAL' --manifest '$MANIFEST_FN' --refseq='$GENOME' --v2 --ntasks='$NTASKS' --genomeLen='$GENOME_LEN''
 ALIGN_OUT=$HADOOP_FILES/align_output
 
 # Step 2: Collapse identical intervals from same sample
-MERGE_AGGR1="sort -n -k2,2"
-MERGE_AGGR2="sort -s -k1,1"
 MERGE="python $RNAWESOME/merge.py"
 MERGE_OUT=$HADOOP_FILES/merge_output
 
 # Step 3: Walk over genome windows and emit per-sample, per-position
 #         coverage tuples
-WALK_PRENORM_AGGR1="sort -n -k2,2"
-WALK_PRENORM_AGGR2="sort -s -k1,1"
 WALK_PRENORM="python $RNAWESOME/walk_prenorm.py"
 WALK_PRENORM_OUT=$HADOOP_FILES/walk_prenorm_output
 WALK_ARGS=''$WALK_PRENORM' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN''
@@ -96,7 +92,7 @@ INTRON="python $RNAWESOME/intron.py"
 INTRON_ARGS=''$INTRON' --refseq='$GENOME' --readletIval '$READLET_IVAL''
 
 # Step 5c: Formats all splice sites into bed files
-SITE2BED="python $CHECK/site2bed.py"
+SITE2BED="python $UTIL/site2bed.py"
 INTRON_OUT=$HADOOP_FILES/intron_output
 SITEBED_OUT=$HADOOP_FILES/sitebed_output
 

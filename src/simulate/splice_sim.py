@@ -1,5 +1,5 @@
 """
-annotate_sim.py
+sim_splice.py
 
 Simulates differiential gene expression using annotated genes
 """
@@ -82,7 +82,7 @@ def makeWeights(xscripts):
             weights[i] = 0
     return WeightedRandomGenerator(weights),weights
 """
-Randomly gets two transcripts: one from each strand
+Randomly picks transcripts such that half of the transcripts come from one strand and the other half come from the other strand
 """
 def makeStrandedWeights(xscripts):
     num_xscripts = args.num_xscripts
@@ -167,6 +167,7 @@ if __name__=="__main__":
     seqs,weights = simulate(xscripts,args.read_len,args.num_nucs,args.fasta)
     seqs1,seqs2 = replicateize(seqs,seqs,args.num_replicates)
     writeReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
+    #This stores the list in pickle files for serialization
     #pickle.dump(weights,open(args.output_prefix+".weights",'wb'))
     #pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
     

@@ -39,8 +39,8 @@ INTRON_AGGR2="cut -f 2-"
 INTRON_AGGR3="sort -n -k2,2"
 INTRON_AGGR4="sort -s -k1,1"
 INTRON="python $SCR_DIR/intron.py"
-CHECK=../../src/check
-SITE2BED="python $CHECK/site2bed.py"
+UTIL=../../src/util
+SITE2BED="python $UTIL/site2bed.py"
 # Step 3: Walk over genome windows and emit per-sample, per-position
 #         coverage tuples
 # In Hadoop, we want to partition by first field then sort by second

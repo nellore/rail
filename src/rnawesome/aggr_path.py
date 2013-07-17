@@ -87,7 +87,6 @@ for ln in sys.stdin:
     samp_out.write(line)
     last_perm=data_id
 
-#Can't forget about last file
 samp_out.close()
 out_fname =  "%s/perm%s.bb"%(args.out_dir,last_perm)
 bb_file = "perm%s.bb" % (last_perm) if args.hadoop_exe != "" else out_fname

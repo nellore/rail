@@ -38,10 +38,6 @@ import readlet
 parser = argparse.ArgumentParser(description=\
                                      'Reports splice junction information')
 
-# parser.add_argument(\
-#     '--readletIval', type=int, required=False,
-#     help='If readlets are desired, interval between readlet starts')
-
 parser.add_argument(\
     '--refseq', type=str, required=False,
     help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required')
@@ -52,7 +48,8 @@ ninp = 0                   # # lines input so far
 nout = 0                   # # lines output so far 
 
 """
-Conducts radial clustering
+Conducts radial clustering.  
+All introns that have start and end positions within 2 readletIvals within each other are binned together
 """
 def cluster(ivals):
     points = []
@@ -97,10 +94,9 @@ def score(seq, site, hist):
     return wins            
 
 """
-Scores based off of a histogram
+Scores based off of a histogram of boundary locations
 """
 def hist_score(coords,offset,endtype,N):
-    #n = 2*args.readletIval+1
     #offset is placed in the middle of the histogram
     hist = [1.0]*N #pseudo counts
     n = N/2
@@ -108,7 +104,6 @@ def hist_score(coords,offset,endtype,N):
         if abs(offset-c)>N:
             print>>sys.error,"Out of bounds coordinate"
             continue
-        #ind = (c-offset) if endtype=="5" else (N-(offset-c)-1)
         ind = (c-offset)+n if endtype=="5" else (N-(offset-c)-1)-n
         hist[ind]+=1
     total = sum(hist)
@@ -120,23 +115,27 @@ Assigns scores based off of how close it is to the end based off of a p=2 series
 Sites closer to the ends get higher scores
 """
 def exp_score(endtype,N):
-    #N = 2*args.readletIval+1
     if endtype=="5":
         hist = [.5**n for n in range(0,N)]
     else: 
         hist = [.5**(N-n+1) for n in range(0,N)]
     return hist
 
+"""
+Assigns scores based off of a harmonic series (aka. logarithmic score)
+"""
 def harmonic_score(endtype,N):
-    #N = 2*args.readletIval+1
     if endtype=="5":
         hist = [1.0/(n+1) for n in range(0,N)]
     else: 
         hist = [1.0/(N-n) for n in range(0,N)]
     return hist
-
+"""
+Assigns scores based off of a normal distribution with mean=center of window and std=window_size/2
+"""
 def normal(x,m,s):
     return (1.0/(math.sqrt(2*math.pi*s*s)))*math.exp(-(x-m)*(x-m)/(2*s*s))
+
 """
 Score using a normal distribution s.t. positions in the center will be weighted higher
 """
@@ -164,7 +163,9 @@ def findSite(scores,direction):
             m = scores[i]
         i+=count        
     return ind,scores[ind]
-
+"""
+Just a fancier way to print out lists
+"""
 def print_list(L):
     s = ""
     for i in L:
@@ -181,29 +182,17 @@ def sliding_window(refID, ivals, site, fastaF):
     toks = site.split("-")
     assert len(toks)==2
     site5p,site3p = toks[0],toks[1]
-    #h5,h3 = harmonic_score("5",2*n+1),harmonic_score("3",2*n+1)
-    #h5,h3 = hist_score(sts,in_start,"5",2*n+1),hist_score(ens,in_end,"3",2*n+1)
     h5,h3 = normal_score(2*n+1),normal_score(2*n+1)
     """Remember that fasta index is base 1 indexing"""
-    # seq5 = fastaF.fetch_sequence(refID,in_start,in_start+2*n)
-    # seq3 = fastaF.fetch_sequence(refID,in_end-2*n,in_end+n)
     seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n)
     seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n)
     score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
     j5,s5 = findSite(score5,"5")
     j3,s3 = findSite(score3,"3")
-    # print >> sys.stderr,"Site",site
-    # print >> sys.stderr,"Seq",seq5,"-",seq3
-    # print >> sys.stderr,"Histogram",print_list(h5),"-",print_list(h3)
-    # print >> sys.stderr,"Score",print_list(score5),"-",print_list(score3)
-    # print >> sys.stderr,"Sites pos",j5,"-",j3
-    # print >> sys.stderr,"Site scores",s5,"-",s3
-    # print >> sys.stderr, "Site seqs",seq5[j5:j5+2],"-",seq3[j3:j3+2]
     return j5+in_start-n-1,s5,j3+(in_end-n-1),s3  #returned transformed coordinates of junction sites
 
-
 """
-TODO: May want to modify this to recognize multiple sites
+Finds canonical sites (e.g GT-AG sites)
 """
 def getJunctionSites(refID,bins,fastaF):
     global nout
@@ -256,6 +245,6 @@ intron_ivals = zip(starts,ends,labs)
 bins = cluster(intron_ivals)
 getJunctionSites(last_ref,bins,fnh)
 
-# Done                                                                                                                                                                 
+# Done                                                                                                                      
 timeEn = time.clock()
 print >>sys.stderr, "DONE with intron.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
