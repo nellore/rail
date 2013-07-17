@@ -88,6 +88,7 @@ import partition
 import eddist
 import nw
 import fasta
+import chrsizes
 
 ninp = 0               # # lines input so far
 nout = 0               # # lines output so far
@@ -110,6 +111,9 @@ parser = argparse.ArgumentParser(description=\
 parser.add_argument(\
     '--refseq', type=str, required=False,
     help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required to be built via samtools')
+parser.add_argument(\
+    '--chrom_sizes', type=str, required=False,
+    help='Contains all of the lengths of the chromsomes')
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
@@ -142,6 +146,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
     global nout
     # Add this interval to the flattened interval collection for current read
     ivals = {}
+    sizes = chrsizes.getSizes(args.chrom_sizes)
     positions = dict()  #stores readlet number based keyed by position
     for rdal in rdals:
         refid, fw, refoff, seqlen, rlet_nm = rdal
@@ -182,12 +187,12 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                     score = nw.needlemanWunsch(refseq,rdsubseq,nw.exampleCost)
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
                         if score <= 10:
-                            start,end = (args.genomeLen-in_end-1,args.genomeLen-in_start-1) if fw==False else (in_start,in_end) #reverse complement
+                            start,end = (sizes[k]-in_end-1,sizes[k]-in_start-1) if fw==False else (in_start,in_end) 
                             print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
                             nout += 1
                 elif (in_end > in_start) and (in_end-in_start)>(args.readletLen):
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
-                        start,end = (args.genomeLen-in_end-1,args.genomeLen-in_start-1) if fw==False else (in_start,in_end) #reverse complement
+                        start,end = (sizes[k]-in_end-1,sizes[k]-in_start-1) if fw==False else (in_start,in_end) 
                         print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
                         nout += 1
                 in_start, in_end = en,-1
@@ -195,7 +200,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             # Add a partition id that combines the ref id and some function of
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
-                start,end = (args.genomeLen-en-1,args.genomeLen-st-1) if fw==False else (st,en) #reverse complement
+                start,end = (sizes[k]-en-1,sizes[k]-st-1) if fw==False else (st,en) 
                 print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
                 nout += 1
 
