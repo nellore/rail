@@ -28,13 +28,7 @@ parser.add_argument(\
     '--igenome',type=str,required=True,help='Path of Illumina iGenome package'
 )
 parser.add_argument(\
-    '--bowtie',type=str,required=True,help='Path of Bowtie executable'
-)
-parser.add_argument(\
     '--rnaseq',type=str,required=True,help='Path of input RNA sequence data'
-)
-parser.add_argument(\
-    '--ucsc',type=str,required=True,help='Path of UCSC tools'
 )
 parser.add_argument(\
     '--manifest',type=str,required=True,help='Path of manifest file'
@@ -52,14 +46,13 @@ def print_parameters(ntasks,hmm_overlap,permutations,readlet_len,readlet_ival):
     print "READLET_LEN=%d"%(readlet_len)
     print "READLET_IVAL=%d"%(readlet_ival)
     
-def print_paths(igenome,bowtie,rnaseq,ucsc,manifest,intermediate):
+def print_paths(igenome,rnaseq,manifest,intermediate):
     cwd = os.getcwd()
     bowtie_idx = "%s/Sequence/BowtieIndex/genome"%igenome
     fasta_idx = "%s/Sequence/WholeGenomeFasta/genome.fa.fai"%igenome
     genome_length = chrsizes.totalLength(fasta_idx)
     print "TORNADO=%s/.."%cwd
     print "IGENOME=%s"%igenome
-    print "BOWTIE=%s"%bowtie
     print "BOWTIE_IDX=%s"%bowtie_idx
     print "GENOME=%s/Sequence/WholeGenomeFasta/genome.fa"%igenome
     print "FASTA_IDX=%s"%fasta_idx
@@ -71,22 +64,15 @@ def print_paths(igenome,bowtie,rnaseq,ucsc,manifest,intermediate):
     print "INDEX5=%s.rev.1.ebwt"%(bowtie_idx)
     print "INDEX6=%s.rev.2.ebwt"%(bowtie_idx)
     print "GENOME_LEN=%d"%(genome_length)
-    print "UCSC_TOOLS=%s"%(ucsc)
-    print "BIGBED_EXE=%s/bedToBigBed"%(ucsc)
     print "MANIFEST=%s"%manifest
-    print "INTERMEDIATE=%s"%(intermediate)
+    print "INTERMEDIATE_DIR=%s"%(intermediate)
 
-def print_hadoop_paths(hadoop):
-    print "HADOOP_FILES=/user/run"
-    print "STREAMING=%s/contrib/streaming/hadooop-streaming*.jar"%(hadoop)
-    print "%s/bin/hadoop"
-
+    
 if __name__=="__main__":
     print_parameters(args.ntasks,
                      args.hmm_overlap,
                      args.permutations,
                      args.readlet_len,
                      args.readlet_ival)
-    print_paths(args.igenome,args.bowtie,args.rnaseq,args.ucsc,args.manifest,args.intermediate)
-    print_hadoop_paths(hadoop)
+    print_paths(args.igenome,args.rnaseq,args.manifest,args.intermediate)
     
