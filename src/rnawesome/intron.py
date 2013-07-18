@@ -196,10 +196,18 @@ def sliding_window(refID, ivals, site, fastaF):
 """
 Applies the Smith-Waterman algorithm to correct the initial splice site estimate
 """
-def sw_correct(site5,site3,introns):
+def sw_correct(refID,site5,site3,introns):
     starts,ends,labs,seqs = zip(*introns)
-    
-    
+    for rdseq in seqs:
+        n = len(s)/2
+        st = site5-n
+        en = site3+n
+        seq5 = fastaF.fetch_sequence(refID,st,site5)
+        seq3 = fastaF.fetch_sequence(refID,site3,en)
+        score5,cigar5 = sw.smithWatermanXcript(seq5,rdseq)
+        score3,cigar3 = sw.smithWatermanXcript(seq5,rdseq)
+        
+        
 """
 Finds canonical sites (e.g GT-AG sites)
 """
@@ -238,7 +246,7 @@ for ln in sys.stdin:
     if last_pt=='\t':
         last_pt, last_ref = pt, refid
     elif last_pt!=pt:
-        intron_ivals = zip(starts,ends,labs,seqs
+        intron_ivals = zip(starts,ends,labs,seqs)
         #Cluster all introns with similar start and end positions   
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
