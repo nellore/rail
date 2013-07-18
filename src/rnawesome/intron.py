@@ -1,14 +1,14 @@
 import math
 import numpy as np
-"""                                                                                                                     
-Tab-delimited input tuple columns:                                                
-1. Partition ID for partition overlapped by interval                              
-2. Interval start                                                                 
-3. Interval end (exclusive)                                                       
-4. Reference ID                                                                   
-5. Sample label                                                                   
+"""                               
+Tab-delimited input tuple columns:  
+1. Partition ID for partition overlapped by interval 
+2. Interval start  
+3. Interval end (exclusive) 
+4. Reference ID    
+5. Sample label     
 
-Tab-delimited output tuple columns:                                               
+Tab-delimited output tuple columns:           
 1. Reference ID
 2. 5' start
 3. 3' start
@@ -31,9 +31,11 @@ timeSt = time.clock()
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "fasta"))
 site.addsitedir(os.path.join(base_path, "read"))
+site.addsitedir(os.path.join(base_path, "alignment"))
 
 import fasta
 import readlet
+import sw
 
 parser = argparse.ArgumentParser(description=\
                                      'Reports splice junction information')
@@ -177,7 +179,7 @@ Returns the 5' and 3' splice sites within multiple intervals
 """
 def sliding_window(refID, ivals, site, fastaF):
     n,r = 2*args.readletIval, args.readletIval
-    sts,ens,labs = zip(*ivals)
+    sts,ens,labs,seqs = zip(*ivals)
     in_start, in_end = min(sts),max(ens)
     toks = site.split("-")
     assert len(toks)==2
@@ -192,6 +194,13 @@ def sliding_window(refID, ivals, site, fastaF):
     return j5+in_start-n-1,s5,j3+(in_end-n-1),s3  #returned transformed coordinates of junction sites
 
 """
+Applies the Smith-Waterman algorithm to correct the initial splice site estimate
+"""
+def sw_correct(site5,site3,introns):
+    starts,ends,labs,seqs = zip(*introns)
+    
+    
+"""
 Finds canonical sites (e.g GT-AG sites)
 """
 def getJunctionSites(refID,bins,fastaF):
@@ -203,6 +212,7 @@ def getJunctionSites(refID,bins,fastaF):
         site5r,score5r,site3r,score3r = sliding_window(refID,introns,"CT-AC",fastaF) #Reverse complement
         if score5r>score5 and score3r>score3:
             site5,site3 = site5r,site3r
+
         
         for intr in introns:
             lab = intr[2]
@@ -214,6 +224,7 @@ def getJunctionSites(refID,bins,fastaF):
 starts = []  #Contains starting positions of introns
 ends = []    #Contains ending positions of introns
 labs = []    #Sample labels of introns
+seqs = []
 last_pt = "\t"
 fnh = fasta.fasta(args.refseq)
 last_ref = "\t"
@@ -222,21 +233,23 @@ for ln in sys.stdin:
     # Parse next read
     ln = ln.rstrip()
     toks = ln.split('\t')
-    assert len(toks)==5
-    pt, st, en, refid, lab = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4]
+    assert len(toks)>=5
+    pt, st, en, refid, lab, seq = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5]
     if last_pt=='\t':
         last_pt, last_ref = pt, refid
     elif last_pt!=pt:
-        intron_ivals = zip(starts,ends,labs)
+        intron_ivals = zip(starts,ends,labs,seqs
         #Cluster all introns with similar start and end positions   
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
-        getJunctionSites(last_ref,bins,strands,fnh)
+        getJunctionSites(last_ref,bins,fnh)
+
         starts,ends,labs = [],[],[]
         
     starts.append(st)
     ends.append(en)
     labs.append(lab)
+    seqs.append(seq)
     last_pt,last_ref = pt,refid
     ninp+=1
 
