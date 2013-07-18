@@ -104,8 +104,8 @@ parser.add_argument(\
     '--refseq', type=str, required=False,
     help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required to be built via samtools')
 parser.add_argument(\
-    '--chrom_sizes', type=str, required=False,
-    help='Contains all of the lengths of the chromsomes')
+    '--faidx', type=str, required=False,
+    help='Fasta index file')
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
@@ -138,7 +138,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
     global nout
     # Add this interval to the flattened interval collection for current read
     ivals = {}
-    sizes = chrsizes.getSizes(args.chrom_sizes)
+    sizes = chrsizes.getSizes(args.faidx)
     positions = dict()  #stores readlet number based keyed by position
     for rdal in rdals:
         refid, fw, refoff, seqlen, rlet_nm = rdal
