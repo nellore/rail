@@ -163,7 +163,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             if in_start > 0 and in_end > 0:
                 
                 if (in_end > in_start) and (in_end-in_start) < (args.readletLen): #drops all introns less than a readlet length
-                    #Take into consideration the fw variable.  Need to apply reverse compliment if not on forward strand
+                  #Take into consideration the fw variable.  Need to apply reverse compliment if not on forward strand
                     refseq = fnh.fetch_sequence(k,in_start+1,in_end+1)  #Sequence from genome                           
                     region_st = positions[str(in_start)]
                     region_end = positions[str(in_end)]
@@ -177,7 +177,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 elif (in_end > in_start) and (in_end-in_start)>(args.readletLen):
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
                         start,end = (sizes[k]-in_end-1,sizes[k]-in_start-1) if fw==False else (in_start,in_end) 
-                        print "intron\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
+                        print "intron\t%s\t%012d\t%d\t%s\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm),rdseq)
                         nout += 1
                 in_start, in_end = en,-1
             # Keep stringing rdid along because it contains the label string
@@ -185,7 +185,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
                 start,end = (sizes[k]-en-1,sizes[k]-st-1) if fw==False else (st,en) 
-                print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
+                print "exon\t%s\t%012d\t%d\t%s\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm),rdseq)
                 nout += 1
 
 def bowtieOutReadlets(st):
