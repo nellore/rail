@@ -17,8 +17,7 @@ if [ $? -ne 0 ] ; then
 	exit 1
 fi
 
-HADOOP_FILES=/user/run
-STREAMING=$HADOOP_HOME/contrib/streaming/hadooop-streaming*.jar
+STREAMING=$HADOOP_HOME/contrib/streaming/hadoop-streaming*.jar
 
 EXAMPLE=$TORNADO/example
 SCR_DIR=$TORNADO/src
@@ -53,7 +52,6 @@ SAMPLE_OUT=$HADOOP_FILES/sample_output
 NORMALIZE="python $RNAWESOME/normalize.py"
 NORMALIZE_OUT=$HADOOP_FILES/normalize_output
 NORMALIZE_ARGS=''$NORMALIZE' --percentile 0.75 --out_dir='$SAMPLE_OUT' --bigbed_exe='$BIGBED_EXE' --chrom_sizes='$CHROM_SIZES' --hadoop_exe='$HADOOP_EXE''
-BIGBED_EXE="$UCSC_TOOLS/bedToBigBed"
 
 # Step 5a: Collect all the norm factors together and write to file
 NORMALIZE_POST="python $RNAWESOME/normalize_post.py"
@@ -120,9 +118,9 @@ hadoop dfs -mkdir $SAMPLE_OUT
 hadoop dfs -rmr $PERM_OUT
 hadoop dfs -mkdir $PERM_OUT
 
-#copy files over to hdfs
-hadoop dfs -mkdir $HADOOP_FILES
-hadoop dfs -copyFromLocal $RNASEQ $HADOOP_FILES
+#copy files over to hdfs Need to upload files yourself
+# hadoop dfs -mkdir $HADOOP_FILES
+# hadoop dfs -copyFromLocal $RNASEQ $HADOOP_FILES
 
 #Step 0 FASTQ Format
 hadoop dfs -rmr $ALIGN_IN
