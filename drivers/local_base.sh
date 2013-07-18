@@ -10,6 +10,8 @@ if [ $? -ne 0 ] ; then
 	exit 1
 fi
 
+
+SCR_DIR=$TORNADO/src/rnawesome
 mkdir -p intermediate
 INTERMEDIATE_DIR=intermediate/
 
@@ -92,7 +94,7 @@ HMM_IN_TMP=${TMPDIR}hmm_in.tsv
 echo "Temporary file for walk_fit.py input is '$WALK_IN_TMP'" 1>&2
 echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 
- cat $INPUT \
+ cat $RNASEQ \
  	| $ALIGN_AGGR | $ALIGN \
 		--v2 \
 		--ntasks=$NTASKS \
@@ -104,6 +106,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 		--readletIval $READLET_IVAL \
 		--manifest $MANIFEST_FN \
                 --refseq=$GENOME \
+                --faidx=$FASTA_IDX \
 		| tee ${INTERMEDIATE_DIR}align_out.tsv \
 	| grep '^exon' | $MERGE_AGGR2 | $MERGE_AGGR3 | $MERGE_AGGR4 | $MERGE \
 	| tee $WALK_IN_TMP | $WALK_PRENORM \

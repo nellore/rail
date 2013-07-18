@@ -64,7 +64,7 @@ def print_paths(igenome,rnaseq,manifest,intermediate):
     print "INDEX5=%s.rev.1.ebwt"%(bowtie_idx)
     print "INDEX6=%s.rev.2.ebwt"%(bowtie_idx)
     print "GENOME_LEN=%d"%(genome_length)
-    print "MANIFEST=%s"%manifest
+    print "MANIFEST_FN=%s"%manifest
     print "INTERMEDIATE_DIR=%s"%(intermediate)
 
     
