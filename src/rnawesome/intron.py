@@ -2,11 +2,12 @@ import math
 import numpy as np
 """                               
 Tab-delimited input tuple columns:  
-1. Partition ID for partition overlapped by interval 
+1. Partition ID for partition overlapped by interval (also includes strand information)
 2. Interval start  
 3. Interval end (exclusive) 
 4. Reference ID    
 5. Sample label     
+6. Sequence
 
 Tab-delimited output tuple columns:           
 1. Reference ID
@@ -24,6 +25,7 @@ import sys
 import argparse
 import site
 import time
+import re
 from collections import defaultdict
 from collections import Counter
 timeSt = time.clock()
@@ -193,34 +195,55 @@ def sliding_window(refID, ivals, site, fastaF):
     j3,s3 = findSite(score3,"3")
     return j5+in_start-n-1,s5,j3+(in_end-n-1),s3  #returned transformed coordinates of junction sites
 
+cigar_pattern = re.compile(r"(\d+)(\S)")
+
 """
 Applies the Smith-Waterman algorithm to correct the initial splice site estimate
 """
-def sw_correct(refID,site5,site3,introns):
-    starts,ends,labs,seqs = zip(*introns)
-    for rdseq in seqs:
-        n = len(s)/2
-        st = site5-n
-        en = site3+n
-        seq5 = fastaF.fetch_sequence(refID,st,site5)
-        seq3 = fastaF.fetch_sequence(refID,site3,en)
-        score5,cigar5 = sw.smithWatermanXcript(seq5,rdseq)
-        score3,cigar3 = sw.smithWatermanXcript(seq5,rdseq)
+def sw_correct(refID,site5,site3,introns,strand,fastaF):
+    #starts,ends,labs,seqs = zip(*introns)
+    rdseqs = list(seqs)
+    for intr in introns:
+        rdst,rden,lab,rdseq = intr
+        n = len(rdseq)/2
+        st,en = site5-n, site3+n
+        print >> sys.stderr, "start",rdst,st,"end",rden,en,strand
+        seq5 = fastaF.fetch_sequence(refID,st,site5).upper()
+        seq3 = fastaF.fetch_sequence(refID,site3,en).upper()
+        if strand=="-":
+            seq5_obj = sequence.Sequence(st,site5,seq5)
+            seq3_obj = sequence.Sequence(site3,en,seq3)
+            seq5 = seq5_obj.reverse_complement().seq
+            seq3 = seq3_obj.reverse_complement().seq
+
+        score5,cigar5 = sw.smithWatermanXcript(seq5,rdseq,sw.cost)
+        score3,cigar3 = sw.smithWatermanXcript(seq3,rdseq,sw.cost)
+        a5 = cigar_pattern.findall(cigar5)
+        a3 = cigar_pattern.findall(cigar3)
+        startAlign,endAlign = a5[-1],a3[0]
+        cnt5,char5,cnt3,char3 = int(startAlign[0]),startAlign[1],int(endAlign[0]),endAlign[1]
+
+        
+        site5 = (site5+cnt5) if char5 == "I" else (site5-cnt5) if char5=="D" else site5
+        site3 = (site3+cnt3) if char3 == "I" else (site3-cnt3) if char3=="D" else site3
+    return site5,site3
         
         
 """
 Finds canonical sites (e.g GT-AG sites)
 """
-def getJunctionSites(refID,bins,fastaF):
+def getJunctionSites(pt,refID,bins,fastaF):
     global nout
+    strand = pt[-1]
     samples = Counter()
     sites5, sites3 = [],[]
     for coords,introns in bins.iteritems():
-        site5,score5,site3,score3 = sliding_window(refID,introns,"GT-AG",fastaF)
-        site5r,score5r,site3r,score3r = sliding_window(refID,introns,"CT-AC",fastaF) #Reverse complement
-        if score5r>score5 and score3r>score3:
-            site5,site3 = site5r,site3r
-
+        if strand=="+":
+            site5,score5,site3,score3 = sliding_window(refID,introns,"GT-AG",fastaF)
+        else:
+            site5,score5,site3,score3 = sliding_window(refID,introns,"CT-AC",fastaF) #Reverse complement
+        strand = "+"
+        site5,site3 = sw_correct(refID,site5,site3,introns,strand,fastaF)
         
         for intr in introns:
             lab = intr[2]
@@ -250,10 +273,14 @@ for ln in sys.stdin:
         #Cluster all introns with similar start and end positions   
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
-        getJunctionSites(last_ref,bins,fnh)
+        getJunctionSites(last_pt,last_ref,bins,fnh)
 
-        starts,ends,labs = [],[],[]
-        
+        starts,ends,labs,seqs = [],[],[],[]
+    else:
+        #Skip duplicates
+        if starts[-1]==st and ends[-1]==en and labs[-1]==lab and seqs[-1]==seq:
+            continue
+
     starts.append(st)
     ends.append(en)
     labs.append(lab)
@@ -262,9 +289,9 @@ for ln in sys.stdin:
     ninp+=1
 
 #Handle last partition
-intron_ivals = zip(starts,ends,labs)
+intron_ivals = zip(starts,ends,labs,seqs)
 bins = cluster(intron_ivals)
-getJunctionSites(last_ref,bins,fnh)
+getJunctionSites(last_pt,last_ref,bins,fnh)
 
 # Done                                                                                                                      
 timeEn = time.clock()
