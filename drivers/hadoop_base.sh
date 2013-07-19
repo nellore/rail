@@ -122,18 +122,11 @@ hadoop dfs -mkdir $PERM_OUT
 # hadoop dfs -mkdir $HADOOP_FILES
 # hadoop dfs -copyFromLocal $RNASEQ $HADOOP_FILES
 
-#Step 0 FASTQ Format
-hadoop dfs -rmr $ALIGN_IN
-time hadoop jar $STREAMING \
-    -mapper cat \
-    -reducer "$FASTQ2TAB" \
-    -input $HADOOP_FILES/*fastq -output $ALIGN_IN
-
-##Check $? after completion.  If not 0, then print an error message and quit
-if [ $? -ne 0 ] ; then
-    echo "FASTQ2TAB step failed, now exiting"
-    exit 1
-fi
+for FASTQ in $RNASEQ/*.fastq
+do
+    rm "$ALIGN_IN/$FASTQ"
+    cat $FASTQ | $FASTQ2TAB | hadoop dfs -put - "$ALIGN_IN/$FASTQ"
+done
 
 #Step 1 ALIGN
 hadoop dfs -rmr $ALIGN_OUT
