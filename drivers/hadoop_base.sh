@@ -161,7 +161,7 @@ time hadoop jar $STREAMING \
     -outputformat org.myorg.MultipleOutputFormat \
     -mapper "$ALIGN_ARGS" \
     -reducer cat \
-    -input $HADOOP_FILES/$ALIGN_IN -output $ALIGN_OUT
+    -input $ALIGN_IN -output $ALIGN_OUT
 
 
 ##Check $? after completion.  If not 0, then print an error message and quit
