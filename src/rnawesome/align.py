@@ -44,12 +44,12 @@ Tab-delimited output tuple columns:
 
 Introns
 Tab-delimited output tuple columns:
-1. Partition ID for partition overlapped by interval
+1. Partition ID for partition overlapped by interval (includes strand information)
 2. Interval start
 3. Interval end (exclusive)
 4. Reference ID
 5. Sample label
-
+6. Read Sequence
 """
 
 import sys
@@ -176,8 +176,9 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                             nout += 1
                 elif (in_end > in_start) and (in_end-in_start)>(args.readletLen):
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
+                        fw_char = "+" if fw else "-"
                         start,end = (sizes[k]-in_end-1,sizes[k]-in_start-1) if fw==False else (in_start,in_end) 
-                        print "intron\t%s\t%012d\t%d\t%s\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm),rdseq)
+                        print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s" % (pt, fw_char, start, end, k, sample.parseLab(rdnm),rdseq)
                         nout += 1
                 in_start, in_end = en,-1
             # Keep stringing rdid along because it contains the label string
@@ -185,7 +186,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
                 start,end = (sizes[k]-en-1,sizes[k]-st-1) if fw==False else (st,en) 
-                print "exon\t%s\t%012d\t%d\t%s\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm),rdseq)
+                print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
                 nout += 1
 
 def bowtieOutReadlets(st):
@@ -206,7 +207,7 @@ def bowtieOutReadlets(st):
         rdnm = ';'.join(toks[:-3])
         rlet_nm = toks[2]
         cnt[rdnm] = cnt.get(rdnm, 0) + 1
-        rdseq = toks[3]
+        rdseq = toks[4]
         rdlet_n = int(toks[-2])
         if flags != 4:
             fw = (flags & 16) == 0

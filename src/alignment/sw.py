@@ -4,14 +4,15 @@ sw.py Functions for Smith-Waterman which calculates local alignment value betwee
 
 import sys
 import numpy
+import re
 
-
+numpy.set_printoptions(threshold=numpy.nan)
 
 def cost(xc,yc):
     if xc=='-' or yc=='-': #gap
-        return -2 
+        return -2
     if xc==yc: #match
-        return 2
+        return 1
     return -1  #mismatch
 
 def smithWaterman(x,y,s):
@@ -26,10 +27,42 @@ def smithWaterman(x,y,s):
                           0)
     return D[len(x), len(y)]
 
-def traceback(D, x, y, s):
+cigar_pattern = re.compile(r"(\d+)(\S)")
+def sumcigar(alignment):
+    caligns = cigar_pattern.findall(alignment)
+    total = 0
+    for c in caligns:
+        if c[1]=="I" or c[1]=="M":
+            total+=int(c[0])
+        elif c[0]=="D":
+            total-=int(c[0])
+    return total
+
+"""
+Returns a cigar like format of the alignment
+"""
+def cigar(alignment):
+    count = 1
+    letter = alignment[0]
+    s = ""
+    for i in range(1,len(alignment)):
+        if letter!=alignment[i]:
+            s+="%d%s"%(count,letter)
+            letter = alignment[i]
+            count = 1
+        else:
+            count+=1
+    s+="%d%s"%(count,letter)
+    letter = alignment[i]
+    count = 1
+    return s
+        
+
+def traceback(D, x, y,xi,yi,s):
     """ Trace back from bottom-right cell in edit-distance matrix D for
         strings x and y """
-    i, j = len(x), len(y)
+    #i, j = len(x), len(y)
+    i,j = xi,yi
     xscript = []
     while i > 0 or j > 0:
         diag, vert, horz = -sys.maxint, -sys.maxint, -sys.maxint
@@ -39,7 +72,8 @@ def traceback(D, x, y, s):
             vert = D[i-1, j] + s(x[i-1], '-')
         if j > 0:
             horz = D[i, j-1] + s('-', y[j-1])
-        if diag >= vert and diag >= horz:
+
+        if diag > vert and diag > horz:
             xscript.append('R' if x[i-1] != y[j-1] else 'M')
             i -= 1; j -= 1
         elif vert >= horz:
@@ -61,4 +95,10 @@ def smithWatermanXcript(x, y, s):
                           D[i-1, j  ] + s(x[i-1], '-'),    # vertical
                           D[i  , j-1] + s('-',    y[j-1]), # horizontal
                           0)
-    return D[len(x), len(y)], traceback(D, x, y, s)
+    
+    #Find ending point
+    maxI,indI = 0,len(x)
+    for i in range(0,len(x)+1):
+        maxI =  i if D[i,len(y)]>maxI else maxI
+
+    return D[maxI, len(y)], cigar(traceback(D, x, y,maxI,len(y), s))
