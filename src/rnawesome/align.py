@@ -80,7 +80,6 @@ import partition
 import eddist
 import nw
 import fasta
-import chrsizes
 
 ninp = 0               # # lines input so far
 nout = 0               # # lines output so far
@@ -139,10 +138,13 @@ bowtieOutDone = threading.Event()
 bowtieErrDone = threading.Event()
 
 def composeReadletAlignments(rdnm, rdals, rdseq):
+    
+    # TODO: We include strand info with introns, but not exons.  We might want
+    # to include for both for the case where the RNA-seq protocol is stranded.
+    
     global nout
     # Add this interval to the flattened interval collection for current read
     ivals = {}
-    sizes = chrsizes.getSizes(args.faidx)
     positions = dict()  #stores readlet number based keyed by position
     for rdal in rdals:
         refid, fw, refoff0, seqlen, rlet_nm = rdal
