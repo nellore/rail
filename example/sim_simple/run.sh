@@ -2,9 +2,10 @@ SCR_DIR=../../src/rnawesome
 TORNADO=../..
 TOOLS=$TORNADO/tools
 MANIFEST_FN=eg1.manifest
-BOWTIE_IDX=../fasta/lambda_virus
-FASTA=../fasta/lambda_virus.fa
-FASTA_IDX=../fasta/lambda_virus.fa.fai
+IGENOMES=../fasta/lambda_virus
+FASTA=$IGENOMES/Sequence/WholeGenomeFasta/genome.fa
+FASTA_IDX=$IGENOMES/Sequence/WholeGenomeFasta/genome.fa.fai
+BOWTIE_IDX=$IGENOMES/Sequence/BowtieIndex/genome
 mkdir -p intermediate
 INTERMEDIATE_DIR=intermediate/
 
@@ -178,5 +179,3 @@ cat ${INTERMEDIATE_DIR}norm.tsv 1>&2
 
 echo "HMM parameter file:" 1>&2
 cat ${INTERMEDIATE_DIR}hmm_params.tsv 1>&2
-
-sh clean.sh #This is just for testing to get rid of intermediate sample and permutation files
