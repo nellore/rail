@@ -3,6 +3,7 @@ TORNADO=../..
 TOOLS=$TORNADO/tools
 MANIFEST_FN=eg1.manifest
 BOWTIE_IDX=../fasta/lambda_virus
+FASTA=../fasta/lambda_virus.fa
 FASTA_IDX=../fasta/lambda_virus.fa.fai
 mkdir -p intermediate
 INTERMEDIATE_DIR=intermediate/
@@ -124,9 +125,11 @@ cat *.tab5 \
 		--readletLen 20 \
 		--readletIval 2 \
 		--manifest $MANIFEST_FN \
+		--refseq $FASTA \
+		--faidx $FASTA_IDX \
 		| tee ${INTERMEDIATE_DIR}align_out.tsv \
 	| grep '^exon' | $MERGE_AGGR2 | $MERGE_AGGR3 | $MERGE_AGGR4 | $MERGE \
-	| tee $WALK_IN_TMP | $WALK_PRENORM \
+	| tee $WALK_IN_TMP | $WALK_PRENORM_AGGR1 | $WALK_PRENORM_AGGR2 | $WALK_PRENORM \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
 	| $NORMALIZE_AGGR1 | $NORMALIZE_AGGR2 | $NORMALIZE \

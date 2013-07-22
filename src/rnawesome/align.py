@@ -80,7 +80,6 @@ import partition
 import eddist
 import nw
 import fasta
-import chrsizes
 
 ninp = 0               # # lines input so far
 nout = 0               # # lines output so far
@@ -101,11 +100,11 @@ xformReads = qualAdd is not None or truncateAmt is not None or truncateTo is not
 parser = argparse.ArgumentParser(description=\
     'Align reads using Bowtie, usually as the map step in a Hadoop program.')
 parser.add_argument(\
-    '--refseq', type=str, required=False,
-    help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required to be built via samtools')
+    '--refseq', type=str, required=True,
+    help='The fasta sequence of the reference genome. The fasta index of the '
+         'reference genome is also required to be built via samtools')
 parser.add_argument(\
-    '--faidx', type=str, required=False,
-    help='Fasta index file')
+    '--faidx', type=str, required=True, help='Fasta index file')
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
@@ -131,62 +130,74 @@ def xformRead(seq, qual):
         pass
     return newseq, newqual
 
+_revcomp_trans = string.maketrans("ACGT", "TGCA")
+def revcomp(s):
+    return s[::-1].translate(_revcomp_trans)
+
 bowtieOutDone = threading.Event()
 bowtieErrDone = threading.Event()
 
 def composeReadletAlignments(rdnm, rdals, rdseq):
+    
+    # TODO: We include strand info with introns, but not exons.  We might want
+    # to include for both for the case where the RNA-seq protocol is stranded.
+    
     global nout
     # Add this interval to the flattened interval collection for current read
     ivals = {}
-    sizes = chrsizes.getSizes(args.faidx)
     positions = dict()  #stores readlet number based keyed by position
     for rdal in rdals:
-        refid, fw, refoff, seqlen, rlet_nm = rdal
-        refoff, seqlen, rlet_nm = int(refoff), int(seqlen), int(rlet_nm)
-        positions[str(refoff)] = rlet_nm*args.readletIval
-        positions[str(refoff+seqlen)] = rlet_nm*args.readletIval+seqlen
-        if refid not in ivals:
-            ivals[refid] = interval.FlatIntervals()
-        ivals[refid].add(interval.Interval(refoff, refoff + seqlen))
-    # ivals now populated
-    in_end, in_start = -1, -1 
-    for k in ivals.iterkeys():
-        for iv in sorted(iter(ivals[k])):
-            # TODO: check orientations of exons so we can filter suspicious "exons"
+        refid, fw, refoff0, seqlen, rlet_nm = rdal
+        refoff0, seqlen, rlet_nm = int(refoff0), int(seqlen), int(rlet_nm)
+        # Remember begin, end offsets for readlet w/r/t 5' end of the read
+        positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval
+        positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval + seqlen
+        if (refid, fw) not in ivals:
+            ivals[(refid, fw)] = interval.FlatIntervals()
+        ivals[(refid, fw)].add(interval.Interval(refoff0, refoff0 + seqlen))
+    
+    for kfw in ivals.iterkeys(): # for each chromosome covered by >= 1 readlet
+        k, fw = kfw
+        in_end, in_start = -1, -1
+        for iv in sorted(iter(ivals[kfw])): # for each covered interval, left-to-right
             st, en = iv.start, iv.end
-            
-            if in_end == -1 and in_start != -1:
+            assert en > st
+            assert st >= 0 and en >= 0
+            if in_end == -1 and in_start >= 0:
                 in_end = st
                 
             if in_start == -1:
                 in_start = en
-            if in_start > 0 and in_end > 0:
+            if in_start >= 0 and in_end >= 0:
                 
                 if (in_end > in_start) and (in_end-in_start) < (args.readletLen): #drops all introns less than a readlet length
-                  #Take into consideration the fw variable.  Need to apply reverse compliment if not on forward strand
-                    refseq = fnh.fetch_sequence(k,in_start+1,in_end+1)  #Sequence from genome                           
-                    region_st = positions[str(in_start)]
-                    region_end = positions[str(in_end)]
+                    # Take into consideration the fw variable.  Need to apply
+                    # reverse complement if not on forward strand.
+                    refseq = fnh.fetch_sequence(k,in_start + 1, in_end + 1) # Sequence from genome                           
+                    region_st = positions[(k, fw, in_start)]
+                    region_end = positions[(k, fw, in_end)]
                     rdsubseq = rdseq[region_st:region_end]
-                    score = nw.needlemanWunsch(refseq,rdsubseq,nw.exampleCost)
+                    if not fw:
+                        rdsubseq = revcomp(rdsubseq)
+                    score = nw.needlemanWunsch(refseq, rdsubseq, nw.exampleCost)
+                    # TODO: redo this in terms of percent identity or some
+                    # other measure that adapts to length of the missing bit,
+                    # not just a raw score 
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
                         if score <= 10:
-                            start,end = (sizes[k]-in_end-1,sizes[k]-in_start-1) if fw==False else (in_start,in_end) 
-                            print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
+                            print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
                             nout += 1
                 elif (in_end > in_start) and (in_end-in_start)>(args.readletLen):
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
                         fw_char = "+" if fw else "-"
-                        start,end = (sizes[k]-in_end-1,sizes[k]-in_start-1) if fw==False else (in_start,in_end) 
-                        print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s" % (pt, fw_char, start, end, k, sample.parseLab(rdnm),rdseq)
+                        print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, k, sample.parseLab(rdnm),rdseq)
                         nout += 1
-                in_start, in_end = en,-1
+                in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
-                start,end = (sizes[k]-en-1,sizes[k]-st-1) if fw==False else (st,en) 
-                print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, start, end, k, sample.parseLab(rdnm))
+                print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
                 nout += 1
 
 def bowtieOutReadlets(st):

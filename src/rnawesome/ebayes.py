@@ -77,6 +77,8 @@ def eBayes(tt, df):
     G = len(sg)
     ebar = np.mean(eg)
     d0 = 2 * trigammaInverse( np.mean( ((eg - ebar) ** 2) * (G/(G-1.0)) - trigamma(dfd2) ) )
+    if math.isnan(d0):
+        raise RuntimeError("d0 is NaN")
     d0d2 = d0 / 2.0
     s02 = math.exp(ebar + digamma(d0d2) - math.log(d0d2))
     sgtilde = None
