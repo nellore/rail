@@ -179,25 +179,22 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                         rdsubseq = revcomp(rdsubseq)
                     score = nw.needlemanWunsch(refseq, rdsubseq, nw.exampleCost)
                     # TODO: redo this in terms of percent identity or some
-                    # other measure that adapts to length of intron, not just
-                    # a raw score 
+                    # other measure that adapts to length of the missing bit,
+                    # not just a raw score 
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
                         if score <= 10:
-                            #start,end = (sizes[k]-in_end-1,sizes[k]-in_start-1) if fw==False else (in_start,in_end) 
                             print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
                             nout += 1
                 elif (in_end > in_start) and (in_end-in_start)>(args.readletLen):
                     for pt in iter(partition.partition(k, in_start, in_end, binsz)):
                         fw_char = "+" if fw else "-"
-                        start,end = (sizes[k]-in_end-1,sizes[k]-in_start-1) if fw==False else (in_start,in_end) 
-                        print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s" % (pt, fw_char, start, end, k, sample.parseLab(rdnm),rdseq)
+                        print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, k, sample.parseLab(rdnm),rdseq)
                         nout += 1
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
-                #start,end = (sizes[k]-en-1,sizes[k]-st-1) if fw==False else (st,en) 
                 print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
                 nout += 1
 
