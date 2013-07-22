@@ -146,12 +146,12 @@ def writeReads(seqs1rep, seqs2rep, fnPre, manifestFn):
             sr = seqsrep[group]
             for rep in xrange(0, len(sr)):
                 fn = "%s.group%d.rep%d.tab5" % (fnPre, group, rep)
-                manFh.write("%s\t0\tsimple-%d-%d\n" % (fn, group, rep))
+                manFh.write("%s\t0\tgroup%d-%d-0\n" % (fn, group, rep))
                 with open(fn, 'w') as fh:
                     for i in xrange(0, len(sr[rep])):
                         seq = sr[rep][i]
                         qual = "I" * len(seq)
-                        nm = "r_n%d;LB:simple-%d-%d" % (i, group, rep)
+                        nm = "r_n%d;LB:group%d-%d-0" % (i, group, rep)
                         fh.write("%s\t%s\t%s\n" % (nm, seq, qual))
 
 def parseFasta(fns):
