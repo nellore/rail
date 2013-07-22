@@ -101,11 +101,11 @@ xformReads = qualAdd is not None or truncateAmt is not None or truncateTo is not
 parser = argparse.ArgumentParser(description=\
     'Align reads using Bowtie, usually as the map step in a Hadoop program.')
 parser.add_argument(\
-    '--refseq', type=str, required=False,
-    help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required to be built via samtools')
+    '--refseq', type=str, required=True,
+    help='The fasta sequence of the reference genome. The fasta index of the '
+         'reference genome is also required to be built via samtools')
 parser.add_argument(\
-    '--faidx', type=str, required=False,
-    help='Fasta index file')
+    '--faidx', type=str, required=True, help='Fasta index file')
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
