@@ -4,12 +4,12 @@ HMM_OVERLAP=30
 PERMUTATIONS=5
 READLET_LEN=30
 READLET_IVAL=5
-IGENOME="../example/fasta/lambda_virus"
-RNASEQ="../example/sim_simple/*.tab5"
-MANIFEST="../example/sim_simple/eg1.manifest"
-INTERMEDIATE_DIR="../example/sim_simple/intermediate/"
-HDFS_DIR="/user/hduser/sim_simple"
-MODE="local"      #Note: make sure that HADOOP_HOME are already set in .bashrc
+IGENOME="/damsl/projects/myrna2/langmead/igenomes/Homo_sapiens/UCSC/hg19"
+RNASEQ="/damsl/projects/myrna2/langmead/tornado/data/trapnell/"
+MANIFEST="/damsl/projects/myrna2/software/tornado/example/sim_human/human.manifest"
+INTERMEDIATE_DIR="/damsl/projects/myrna2/software/tornado/example/sim_human/intermediate"
+HDFS_DIR="/user/hduser/sim_human"
+MODE="hadoop"      #Note: make sure that HADOOP_HOME are already set in .bashrc
 
 #Don't modify anything below here!!!
 if [ "hadoop" = "$MODE" ]; then

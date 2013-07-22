@@ -116,6 +116,12 @@ parser.add_argument(\
 
 args = parser.parse_args()
 binsz = partition.binSize(args)
+
+if not os.path.exists(args.refseq):
+    raise RuntimeError("No such --refseq file: '%s'" % args.refseq)
+if not os.path.exists(args.faidx):
+    raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
+
 fnh = fasta.fasta(args.refseq)
 
 def xformRead(seq, qual):
