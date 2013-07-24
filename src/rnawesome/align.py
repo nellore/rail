@@ -42,14 +42,15 @@ Tab-delimited output tuple columns:
 4. Reference ID
 5. Sample label
 
-Introns
+Introns:
 Tab-delimited output tuple columns:
 1. Partition ID for partition overlapped by interval (includes strand information)
 2. Interval start
 3. Interval end (exclusive)
 4. Reference ID
 5. Sample label
-6. Read Sequence
+6. Readlet Sequence on 5' site
+6. Readlet Sequence on 3' site
 """
 
 import sys
@@ -179,7 +180,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 if (in_end > in_start) and (in_end-in_start) < (args.readletLen): #drops all introns less than a readlet length
                     # Take into consideration the fw variable.  Need to apply
                     # reverse complement if not on forward strand.
-                    refseq = fnh.fetch_sequence(k,in_start + 1, in_end + 1) # Sequence from genome                           
+                    refseq = fnh.fetch_sequence(k,in_start + 1, in_end + 1) # Sequence from genome         
                     region_st = positions[(k, fw, in_start)]
                     region_end = positions[(k, fw, in_end)]
                     rdsubseq = rdseq[region_st:region_end]
@@ -194,10 +195,20 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                             print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
                             nout += 1
                 elif (in_end > in_start) and (in_end-in_start)>(args.readletLen):
-                    for pt in iter(partition.partition(k, in_start, in_end, binsz)):
-                        fw_char = "+" if fw else "-"
-                        print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, k, sample.parseLab(rdnm),rdseq)
-                        nout += 1
+                    region_st = positions[(k, fw, in_start)]
+                    region_end = positions[(k, fw, in_end)]
+                    
+                    leftseq = rdseq[region_st-args.readletLen-1:region_st-1]
+                    rightseq = rdseq[region_end+1:region_end+args.readletLen+1]
+                    if len(leftseq)>0 and len(rightseq)>0: #Trash all junctions spanned by small readlets
+                        if not fw:
+                            leftseq = revcomp(leftseq)
+                            rightseq = revcomp(rightseq)
+
+                        for pt in iter(partition.partition(k, in_start, in_end, binsz)):
+                            fw_char = "+" if fw else "-"
+                            print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, k, sample.parseLab(rdnm),leftseq,rightseq)
+                            nout += 1
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of

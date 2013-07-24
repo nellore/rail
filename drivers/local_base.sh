@@ -35,7 +35,7 @@ INTRON_AGGR2="cut -f 2-"
 INTRON_AGGR3="sort -n -k2,2"
 INTRON_AGGR4="sort -s -k1,1"
 INTRON="python $SCR_DIR/intron.py"
-UTIL=../../src/util
+UTIL=../src/util
 SITE2BED="python $UTIL/site2bed.py"
 # Step 3: Walk over genome windows and emit per-sample, per-position
 #         coverage tuples
@@ -124,7 +124,7 @@ cp $WALK_IN_TMP ${INTERMEDIATE_DIR}walk_in_input.tsv
 
 cat ${INTERMEDIATE_DIR}align_out.tsv \
     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 \
-    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL | $SITE2BED > ${INTERMEDIATE_DIR}splice_sites.bed
+    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN | $SITE2BED > ${INTERMEDIATE_DIR}splice_sites.bed
 
 #TODO: ebayes.py is broken !!!
 # cat $WALK_IN_TMP \  

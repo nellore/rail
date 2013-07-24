@@ -7,7 +7,8 @@ Tab-delimited input tuple columns:
 3. Interval end (exclusive) 
 4. Reference ID    
 5. Sample label     
-6. Sequence
+6. Readlet Sequence on 5' site
+7. Readlet Sequence on 3' site
 
 Tab-delimited output tuple columns:           
 1. Reference ID
@@ -26,6 +27,7 @@ import argparse
 import site
 import time
 import re
+import string
 from collections import defaultdict
 from collections import Counter
 timeSt = time.clock()
@@ -38,6 +40,7 @@ site.addsitedir(os.path.join(base_path, "alignment"))
 import fasta
 import readlet
 import sw
+import nw
 
 parser = argparse.ArgumentParser(description=\
                                      'Reports splice junction information')
@@ -97,6 +100,25 @@ def score(seq, site, hist):
             wins[i]+=s*hist[i+j]
     return wins            
 
+#Mean of histogram.  Array MUST be normalize (e.g. between [0,1] )
+def average(p):
+    result = 0
+    for x in range(0,len(p)):
+        result+=x*p[x]
+    return result
+#Second moment of histogram. Array MUST be normalize (e.g. between [0,1] )
+def moment2(p):
+    result = 0
+    for x in range(0,len(p)):
+        result+=x*x*p[x]
+    return result
+
+#Standard deviation of histogram. Array MUST be normalize (e.g. between [0,1] )
+def stddev(p):
+    m = average(p)
+    m2 = moment2(p)
+    return math.sqrt(m2-(m*m))
+
 """
 Scores based off of a histogram of boundary locations
 """
@@ -143,9 +165,9 @@ def normal(x,m,s):
 """
 Score using a normal distribution s.t. positions in the center will be weighted higher
 """
-def normal_score(N):
-    m = N/2
-    s = m
+def normal_score(N,m,s):
+    #m = N/2
+    #s = m
     hist = [normal(i,m,s) for i in range(0,N)]
     return hist
     
@@ -170,7 +192,7 @@ def findSite(scores,direction):
 """
 Just a fancier way to print out lists
 """
-def print_list(L):
+def format_list(L):
     s = ""
     for i in L:
         s+="%.2f "%i
@@ -179,55 +201,105 @@ def print_list(L):
 Note: site is formatted as follows: XX-XX (e.g. GT-AG)
 Returns the 5' and 3' splice sites within multiple intervals
 """
-def sliding_window(refID, ivals, site, fastaF):
+def sliding_window(refID, sts,ens, site, fastaF):
     n,r = 2*args.readletIval, args.readletIval
-    sts,ens,labs,seqs = zip(*ivals)
+    #sts,ens,labs,seq5s,seq3s = zip(*ivals)
     in_start, in_end = min(sts),max(ens)
     toks = site.split("-")
     assert len(toks)==2
     site5p,site3p = toks[0],toks[1]
-    h5,h3 = normal_score(2*n+1),normal_score(2*n+1)
+    hist5, hist3 = hist_score(sts,in_start,"5",2*n+1), hist_score(sts,in_start,"3",2*n+1)
+    mean5,std5 = average(hist5),stddev(hist5)
+    mean3,std3 = average(hist3),stddev(hist3)
+    #Create a normal distributed scoring scheme based off of candidates
+    h5,h3 = normal_score(2*n+1,mean5,std5), normal_score(2*n+1,mean5,std5)
     """Remember that fasta index is base 1 indexing"""
     seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n)
     seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n)
     score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
+    # print >> sys.stderr,"Histogram 5",format_list(hist5)
+    # print >> sys.stderr,"Histogram 3",format_list(hist3)
+    # print >> sys.stderr,"Normal 5",format_list(h5)
+    # print >> sys.stderr,"Normal 3",format_list(h3)
+    # print >> sys.stderr,"Score 5",format_list(score5)
+    # print >> sys.stderr,"Score 3",format_list(score3)
     j5,s5 = findSite(score5,"5")
     j3,s3 = findSite(score3,"3")
     return j5+in_start-n-1,s5,j3+(in_end-n-1),s3  #returned transformed coordinates of junction sites
 
+
+
 cigar_pattern = re.compile(r"(\d+)(\S)")
 
+_revcomp_trans = string.maketrans("ACGT", "TGCA")
+def revcomp(s):
+    return s[::-1].translate(_revcomp_trans)
+
+"""
+Generates a distribution and finds the most likely occurrance
+"""
+def findMode(sites):
+    hist = Counter()
+    for s in sites:
+        hist[s]+=1
+    #print >>sys.stderr,hist
+    return (hist.most_common(1)[0])[0]
+
+"""
+Applies the Needleman-Wunsch algorithm to provide a list of candiates
+"""
+def nw_correct(refID,site5,site3,introns,strand,fastaF):
+    sites5,sites3 = [],[]
+    for intr in introns:
+        rdst,rden,lab,rdseq5,rdseq3 = intr
+        n = args.readletLen
+        st,en = site5-n,site3+n
+        refseq5 = fastaF.fetch_sequence(refID,st-1,site5-1).upper()
+        refseq3 = fastaF.fetch_sequence(refID,site3+3,en+3).upper()
+        score5,cigar5 = nw.needlemanWunschXcript(refseq5,rdseq5,nw.lcsCost)
+        score3,cigar3 = nw.needlemanWunschXcript(refseq3,rdseq3,nw.lcsCost)
+        a5 = cigar_pattern.findall(cigar5)
+        a3 = cigar_pattern.findall(cigar3)
+        startAlign,endAlign = a5[-1],a3[0]
+        cnt5,char5,cnt3,char3 = int(startAlign[0]),startAlign[1],int(endAlign[0]),endAlign[1]        
+        nsite5 = (site5+cnt5) if char5 == "D" else (site5-cnt5) if char5=="I" else site5
+        nsite3 = (site3+cnt3) if char3 == "I" else (site3-cnt3) if char3=="D " else site3
+        # print >> sys.stderr, "Seq 5 bounds",st-1,site5-1
+        # print >> sys.stderr, "Seq 3 bounds",site3+3,en+3
+        # print >> sys.stderr, "Seq 5",rdseq5,refseq5, cigar5,cnt5
+        # print >> sys.stderr, "Seq 3",rdseq3,refseq3, cigar3,cnt3
+        # print >> sys.stderr, "Old sites", site5,site3
+        # print >> sys.stderr, "New sites", nsite5,nsite3
+        sites5.append(nsite5) 
+        sites3.append(nsite3)
+
+    #nsite5,nsite3 = findMode(sites5)[0],findMode(sites3)[0]
+    return sites5,sites3
+        
 """
 Applies the Smith-Waterman algorithm to correct the initial splice site estimate
 """
 def sw_correct(refID,site5,site3,introns,strand,fastaF):
-    #starts,ends,labs,seqs = zip(*introns)
-    rdseqs = list(seqs)
     for intr in introns:
-        rdst,rden,lab,rdseq = intr
-        n = len(rdseq)/2
-        st,en = site5-n, site3+n
-        print >> sys.stderr, "start",rdst,st,"end",rden,en,strand
-        seq5 = fastaF.fetch_sequence(refID,st,site5).upper()
-        seq3 = fastaF.fetch_sequence(refID,site3,en).upper()
-        if strand=="-":
-            seq5_obj = sequence.Sequence(st,site5,seq5)
-            seq3_obj = sequence.Sequence(site3,en,seq3)
-            seq5 = seq5_obj.reverse_complement().seq
-            seq3 = seq3_obj.reverse_complement().seq
-
-        score5,cigar5 = sw.smithWatermanXcript(seq5,rdseq,sw.cost)
-        score3,cigar3 = sw.smithWatermanXcript(seq3,rdseq,sw.cost)
+        rdst,rden,lab,rdseq5,rdseq3 = intr
+        n = args.readletLen
+        st,en = site5-n,site3+n
+        refseq5 = fastaF.fetch_sequence(refID,st-1,site5-1).upper()
+        refseq3 = fastaF.fetch_sequence(refID,site3+3,en+3).upper()
+        score5,cigar5 = sw.smithWatermanXcript(refseq5,rdseq5,nw.exampleCost)
+        score3,cigar3 = sw.smithWatermanXcript(refseq3,rdseq3,nw.exampleCost)
         a5 = cigar_pattern.findall(cigar5)
         a3 = cigar_pattern.findall(cigar3)
         startAlign,endAlign = a5[-1],a3[0]
-        cnt5,char5,cnt3,char3 = int(startAlign[0]),startAlign[1],int(endAlign[0]),endAlign[1]
+        cnt5,char5,cnt3,char3 = int(startAlign[0]),startAlign[1],int(endAlign[0]),endAlign[1]        
+        nsite5 = (site5+cnt5) if char5 == "I" else (site5-cnt5) if char5=="D" else site5
+        nsite3 = (site3+cnt3) if char3 == "I" else (site3-cnt3) if char3=="D" else site3
+        print >> sys.stderr, "Seq 5",rdseq5,refseq5, cigar5,cnt5
+        print >> sys.stderr, "Seq 3",rdseq3,refseq3, cigar3,cnt3
+        print >> sys.stderr, "Old sites", site5,site3
+        print >> sys.stderr, "New sites", nsite5,nsite3
+    return nsite5,nsite3+1
 
-        
-        site5 = (site5+cnt5) if char5 == "I" else (site5-cnt5) if char5=="D" else site5
-        site3 = (site3+cnt3) if char3 == "I" else (site3-cnt3) if char3=="D" else site3
-    return site5,site3
-        
         
 """
 Finds canonical sites (e.g GT-AG sites)
@@ -238,12 +310,14 @@ def getJunctionSites(pt,refID,bins,fastaF):
     samples = Counter()
     sites5, sites3 = [],[]
     for coords,introns in bins.iteritems():
-        if strand=="+":
-            site5,score5,site3,score3 = sliding_window(refID,introns,"GT-AG",fastaF)
-        else:
-            site5,score5,site3,score3 = sliding_window(refID,introns,"CT-AC",fastaF) #Reverse complement
-        strand = "+"
-        site5,site3 = sw_correct(refID,site5,site3,introns,strand,fastaF)
+        splice_site = "GT-AG" if strand=="+" else "CT-AC"  #only consider canonical sites
+        sts,ens,labs,seq5s,seq3s = zip(*introns)
+        site5,_,site3,_ = sliding_window(refID,sts,ens,splice_site,fastaF)
+        print >> sys.stderr,"First guess","Site5",site5,"Site3",site3
+        sites5,sites3 = nw_correct(refID,site5,site3,introns,strand,fastaF)   
+        print >> sys.stderr,"Second guess","Site5",findMode(sites5),"Site3",findMode(sites3)
+        site5,_,site3,_ = sliding_window(refID,sites5,sites3,splice_site,fastaF) #Retrain using nw
+        print >> sys.stderr,"Third guess","Site5",site5,"Site3",site3
         
         for intr in introns:
             lab = intr[2]
@@ -255,7 +329,7 @@ def getJunctionSites(pt,refID,bins,fastaF):
 starts = []  #Contains starting positions of introns
 ends = []    #Contains ending positions of introns
 labs = []    #Sample labels of introns
-seqs = []
+seq5s,seq3s = [],[]
 last_pt = "\t"
 fnh = fasta.fasta(args.refseq)
 last_ref = "\t"
@@ -265,34 +339,31 @@ for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split('\t')
     assert len(toks)>=5
-    pt, st, en, refid, lab, seq = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5]
+    pt, st, en, refid, lab, seq5, seq3 = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6]
     if last_pt=='\t':
         last_pt, last_ref = pt, refid
     elif last_pt!=pt:
-        intron_ivals = zip(starts,ends,labs,seqs)
+        intron_ivals = zip(starts,ends,labs,seq5s,seq3s)
         #Cluster all introns with similar start and end positions   
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
         getJunctionSites(last_pt,last_ref,bins,fnh)
-
-        starts,ends,labs,seqs = [],[],[],[]
-    else:
-        #Skip duplicates
-        if starts[-1]==st and ends[-1]==en and labs[-1]==lab and seqs[-1]==seq:
-            continue
+        starts,ends,labs,seq5,seq3 = [],[],[],[]
+        
 
     starts.append(st)
     ends.append(en)
     labs.append(lab)
-    seqs.append(seq)
+    seq5s.append(seq5)
+    seq3s.append(seq3)
     last_pt,last_ref = pt,refid
     ninp+=1
 
 #Handle last partition
-intron_ivals = zip(starts,ends,labs,seqs)
+intron_ivals = zip(starts,ends,labs,seq5s,seq3s)
 bins = cluster(intron_ivals)
 getJunctionSites(last_pt,last_ref,bins,fnh)
 
-# Done                                                                                                                      
+# Done                                                             
 timeEn = time.clock()
 print >>sys.stderr, "DONE with intron.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
