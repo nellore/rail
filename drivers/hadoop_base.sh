@@ -33,7 +33,7 @@ FASTQ2TAB="$PYTHON $SCR_DIR/fasta/fastq2tab.py"
 
 # Step 1: Readletize input reads and use Bowtie to align the readlets 
 ALIGN="$PYTHON $RNAWESOME/align.py"
-ALIGN_ARGS=''$ALIGN' --bowtieArgs '\''-v 2 -m 1 -p 6'\'' --bowtieExe '$BOWTIE_EXE' --bowtieIdx='$BOWTIE_IDX' --readletLen '$READLET_LEN' --readletIval '$READLET_IVAL' --manifest '$MANIFEST_FN' --refseq='$GENOME' --v2 --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --faidx='$FASTA_IDX''
+ALIGN_ARGS=''$ALIGN' --bowtieArgs '\''-v 2 -m 1'\'' --bowtieExe '$BOWTIE_EXE' --bowtieIdx='$BOWTIE_IDX' --readletLen '$READLET_LEN' --readletIval '$READLET_IVAL' --manifest '$MANIFEST_FN' --refseq='$GENOME' --v2 --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --faidx='$FASTA_IDX''
 ALIGN_OUT=$HADOOP_FILES/align_output
 
 # Step 2: Collapse identical intervals from same sample
@@ -118,10 +118,6 @@ hadoop dfs -mkdir $SAMPLE_OUT
 hadoop dfs -rmr $PERM_OUT
 hadoop dfs -mkdir $PERM_OUT
 
-#copy files over to hdfs Need to upload files yourself
-# hadoop dfs -mkdir $HADOOP_FILES
-# hadoop dfs -copyFromLocal $RNASEQ $HADOOP_FILES
-
 hadoop dfs -rmr $ALIGN_IN
 hadoop dfs -mkdir $ALIGN_IN
 for FASTQ in $RNASEQ
@@ -188,6 +184,7 @@ fi
 # #Sort MERGE output
 hadoop dfs -rmr $MERGE_OUT
 time hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=2 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
@@ -206,7 +203,7 @@ fi
 #Step 3 WALK_PRENORM
 hadoop dfs -rmr $WALK_PRENORM_OUT
 time hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=0 \
+    -D mapred.reduce.tasks=32 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
@@ -214,7 +211,8 @@ time hadoop jar $STREAMING \
     -file "$SCR_DIR/interval/partition.py" \
     -file "$SCR_DIR/manifest/manifest.py" \
     -file "$SCR_DIR/struct/circular.py" \
-    -mapper "$WALK_ARGS" \
+    -mapper cat \
+    -reducer "$WALK_ARGS" \
     -input $MERGE_OUT/*part* -output $WALK_PRENORM_OUT
 
 if [ $? -ne 0 ] ; then
@@ -226,6 +224,7 @@ fi
 #Step 4 NORMALIZE
 hadoop dfs -rmr $NORMALIZE_OUT
 time hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=3 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
@@ -250,6 +249,7 @@ fi
 #Step 5 NORMALIZE_POST
 hadoop dfs -rmr $NORMALIZE_POST_OUT
 time hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
@@ -267,6 +267,7 @@ fi
 #Step 6 INTRON
 hadoop dfs -rmr $INTRON_OUT
 time hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=3 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
@@ -287,6 +288,7 @@ fi
 #Step 5c
 hadoop dfs -rmr $SITEBED_OUT
 time hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=3 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
@@ -316,6 +318,7 @@ hadoop dfs -copyToLocal $SITEBED_OUT/part* ${INTERMEDIATE_DIR}/splice_sites.bed
 #Step 6 WALK_FIT 
 hadoop dfs -rmr $WALK_FIT_OUT
 hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=2 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
@@ -334,6 +337,7 @@ hadoop jar $STREAMING \
 #Step 7 EBAYES
 hadoop dfs -rmr $EBAYES_OUT
 hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=2 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
@@ -350,6 +354,7 @@ hadoop jar $STREAMING \
 # # #Step 8 HMM_PARAMS
 hadoop dfs -rmr $HMM_PARAMS_OUT
 hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
@@ -364,6 +369,7 @@ hadoop dfs -copyToLocal $HMM_PARAMS_OUT/part* ${INTERMEDIATE_DIR}/hmm_params.tsv
 #Step 9 HMM
 hadoop dfs -rmr $HMM_OUT
 hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=2 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
@@ -380,6 +386,7 @@ hadoop jar $STREAMING \
 #Step 10 AGGR_PATH
 hadoop dfs -rmr $NULL_OUT
 hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=3 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
