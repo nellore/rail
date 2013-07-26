@@ -13,6 +13,7 @@ Contact: langmea@cs.jhu.edu
 import sys
 import numpy
 import re
+import scipy.weave
 
 def exampleCost(xc, yc):
     """ Cost function assigning 0 to match, 2 to transition, 4 to
@@ -96,6 +97,48 @@ def traceback(D, x, y, s):
             j -= 1
     return (''.join(xscript))[::-1]
 
+
+    
+
+"""
+An inlined C implementation of Needleman Wunsch.
+
+Note: s MUST be a functor, otherwise very bad things will happen
+"""
+def c_needlemanWunschXcript(px, py, s):
+    assert type(px) == type("")
+    assert type(py) == type("")
+    D = numpy.zeros((len(px)+1, len(py)+1), dtype=int)
+    code = """
+    py::tuple arg(2);
+    std::string x = std::string(px);
+    std::string y = std::string(py);
+    for(int j = 0 ; j<y.length();j++){
+       arg[0] = '-'; arg[1] = y[j-1];
+       D(0,j) = j * (int)s.call(arg);    }
+    for(int i = 0 ; i<x.length();i++){
+       arg[0] = x[i-1]; arg[1] = '-';
+       D(i,0) = i * (int)s.call(arg);    }
+    for(int i = 1; i<x.length()+1; i++){
+       for(int j = 1; j<y.length()+1; j++){
+           arg[0] = x[i-1]; arg[1] = y[j-1];
+           int cc = (int)s.call(arg);
+           arg[0] = x[i-1]; arg[1] = '-';
+           int c_ = (int)s.call(arg);
+           arg[0] = '-'; arg[1] = y[j-1];
+           int _c = (int)s.call(arg);
+           D(i,j) = std::min( D(i-1,j-1)+cc, 
+                              std::min( D(i-1,j) + c_,
+                                        D(i,j-1) + _c)); 
+       }
+    }
+    """
+    
+    scipy.weave.inline(code,['D','px','py','s'],
+                       type_converters=scipy.weave.converters.blitz,
+                       compiler='gcc')
+    return D[len(px), len(py)], cigar(traceback(D, px, py, s))
+    
 def needlemanWunschXcript(x, y, s):
     """ Calculate global alignment value of sequences x and y using
         dynamic programming.  Return global alignment value, optimal
@@ -109,6 +152,6 @@ def needlemanWunschXcript(x, y, s):
         for j in xrange(1, len(y)+1):
             D[i, j] = min(D[i-1, j-1] + s(x[i-1], y[j-1]), # diagonal
                           D[i-1, j  ] + s(x[i-1], '-'),    # vertical
-                          D[i  , j-1] + s('-',    y[j-1])) # horizontal
+                          D[i  , j-1] + s('-',    y[j-1])) # horizonta
     return D[len(x), len(y)], cigar(traceback(D, x, y, s))
 

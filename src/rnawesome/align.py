@@ -105,6 +105,9 @@ parser.add_argument(\
     help='The fasta sequence of the reference genome. The fasta index of the '
          'reference genome is also required to be built via samtools')
 parser.add_argument(\
+    '--splice_overlap', type=int, default=10,
+    help='The overlap length of spanning readlets when evaluating splice junctions')
+parser.add_argument(\
     '--faidx', type=str, required=True, help='Fasta index file')
 
 bowtie.addArgs(parser)
@@ -198,16 +201,20 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                     region_st = positions[(k, fw, in_start)]
                     region_end = positions[(k, fw, in_end)]
                     
-                    leftseq = rdseq[region_st-args.readletLen-1:region_st-1]
-                    rightseq = rdseq[region_end+1:region_end+args.readletLen+1]
-                    if len(leftseq)>0 and len(rightseq)>0: #Trash all junctions spanned by small readlets
+                    left_flank = rdseq[region_st-args.readletLen-1:region_st-1]
+                    left_overlap = rdseq[region_st-1:region_st+args.splice_overlap-1]
+                    right_overlap = rdseq[region_end-args.splice_overlap+1:region_end+1]
+                    right_flank = rdseq[region_end+1:region_end+args.readletLen+1]
+                    if len(left_flank) == len(right_flank): #Trash all junctions spanned by small readlets
                         if not fw:
-                            leftseq = revcomp(leftseq)
-                            rightseq = revcomp(rightseq)
+                            left_flank = revcomp(left_flank)
+                            left_overlap = revcomp(left_overlap)
+                            right_flank = revcomp(right_flank)
+                            right_overlap = revcomp(right_overlap)
 
                         for pt in iter(partition.partition(k, in_start, in_end, binsz)):
                             fw_char = "+" if fw else "-"
-                            print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, k, sample.parseLab(rdnm),leftseq,rightseq)
+                            print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, k, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
                             nout += 1
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
