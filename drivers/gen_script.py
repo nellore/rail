@@ -36,6 +36,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--intermediate',type=str,default="$PWD/intermediate",help='Path of the intermediate folder'
 )
+parser.add_argument(\
+    '--pythonpath',type=str,default="",help='PYTHONPATH env variable'
+)
 
 args = parser.parse_args()
 
