@@ -17,7 +17,8 @@ if [ $? -ne 0 ] ; then
 	exit 1
 fi
 
-PYTHON=/home/jmorton/software/Python-2.7.5/python
+PYTHON=`which python`
+
 STREAMING=$HADOOP_HOME/contrib/streaming/hadoop-streaming*.jar
 EXAMPLE=$TORNADO/example
 SCR_DIR=$TORNADO/src
@@ -118,29 +119,29 @@ hadoop dfs -mkdir $SAMPLE_OUT
 hadoop dfs -rmr $PERM_OUT
 hadoop dfs -mkdir $PERM_OUT
 
-hadoop dfs -rmr $ALIGN_IN
-hadoop dfs -mkdir $ALIGN_IN
-for FASTQ in $RNASEQ
-do
-  FILE=`basename $FASTQ`  
-  cat <<EOF > $FILE.sh 
-  cat $FASTQ | $FASTQ2TAB > $FILE.tab
-EOF
-  sh $FILE.sh &
-done
-wait
+# hadoop dfs -rmr $ALIGN_IN
+# hadoop dfs -mkdir $ALIGN_IN
+# for FASTQ in $RNASEQ
+# do
+#   FILE=`basename $FASTQ`  
+#   cat <<EOF > $FILE.sh 
+#   cat $FASTQ | $FASTQ2TAB > $FILE.tab
+# EOF
+#   sh $FILE.sh &
+# done
+# wait
 
-for FASTQsh in *fastq.sh
-do
-  rm $FASTQsh
-done
+# for FASTQsh in *fastq.sh
+# do
+#   rm $FASTQsh
+# done
 
-for FASTQ in *.tab
-do
-  FILE=`basename $FASTQ`  
-  cat $FILE | hadoop dfs -put - "$ALIGN_IN/$FILE"
-  rm $FILE
-done
+# for FASTQ in *.tab
+# do
+#   FILE=`basename $FASTQ`  
+#   cat $FILE | hadoop dfs -put - "$ALIGN_IN/$FILE"
+#   rm $FILE
+# done
 
 #Step 1 ALIGN
 hadoop dfs -rmr $ALIGN_OUT
@@ -148,6 +149,8 @@ time hadoop jar $STREAMING \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=1 \
     -libjars multiplefiles.jar \
+    -cmdenv USER=$USER \
+    -cmdenv LOGNAME=$LOGNAME \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
@@ -270,6 +273,8 @@ time hadoop jar $STREAMING \
     -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=3 \
+    -cmdenv USER=$USER \
+    -cmdenv LOGNAME=$LOGNAME \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
@@ -294,6 +299,7 @@ time hadoop jar $STREAMING \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+    -cmdenv PYTHONCOMPILED=$PYTHONCOMPILED \
     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
     -file "$SCR_DIR/check/site2bed.py" \
     -mapper cat \
