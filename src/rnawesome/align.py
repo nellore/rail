@@ -72,12 +72,6 @@ site.addsitedir(os.path.join(base_path, "manifest"))
 site.addsitedir(os.path.join(base_path, "alignment"))
 site.addsitedir(os.path.join(base_path, "fasta"))
 
-print >>sys.stderr, 'Base:', site.USER_BASE
-print >>sys.stderr, 'Site:', site.USER_SITE
-
-print >>sys.stderr, 'Path:'
-print >>sys.stderr, sys.path
-
 import bowtie
 import readlet
 import sample
