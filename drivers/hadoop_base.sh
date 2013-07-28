@@ -1,3 +1,4 @@
+
 BIGBED_EXE=`which bedToBigBed`
 if [ $? -ne 0 ] ; then
         echo "bedToBigBed must be in PATH"
@@ -33,7 +34,7 @@ FASTQ2TAB="$PYTHON $SCR_DIR/fasta/fastq2tab.py"
 
 # Step 1: Readletize input reads and use Bowtie to align the readlets 
 ALIGN="$PYTHON $RNAWESOME/align.py"
-ALIGN_ARGS=''$ALIGN' --bowtieArgs '\''-v 2 -m 1 --mm'\'' --bowtieExe '$BOWTIE_EXE' --bowtieIdx='$BOWTIE_IDX' --readletLen '$READLET_LEN' --readletIval '$READLET_IVAL' --manifest '$MANIFEST_FN' --refseq='$GENOME' --v2 --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --faidx='$FASTA_IDX''
+ALIGN_ARGS=''$ALIGN' --bowtieArgs '\''-v 2 -m 1'\'' --bowtieExe '$BOWTIE_EXE' --bowtieIdx='$BOWTIE_IDX' --readletLen '$READLET_LEN' --readletIval '$READLET_IVAL' --manifest '$MANIFEST_FN' --refseq='$GENOME' --v2 --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --faidx='$FASTA_IDX''
 ALIGN_OUT=$HADOOP_FILES/align_output
 
 # Step 2: Collapse identical intervals from same sample
@@ -147,9 +148,8 @@ hadoop dfs -rmr $ALIGN_OUT
 time hadoop jar $STREAMING \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=1 \
+    -D mapred.reduce.tasks=0 \
     -libjars multiplefiles.jar \
-    -cmdenv USER=$USER \
-    -cmdenv LOGNAME=$LOGNAME \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
@@ -172,8 +172,7 @@ time hadoop jar $STREAMING \
     -file "$BOWTIE_EXE" \
     -outputformat org.myorg.MultipleOutputFormat \
     -mapper "$ALIGN_ARGS" \
-    -reducer cat \
-    -input $ALIGN_IN -output $ALIGN_OUT
+    -input $ALIGN_IN/*.tab -output $ALIGN_OUT
 
 
 ##Check $? after completion.  If not 0, then print an error message and quit
@@ -272,8 +271,6 @@ time hadoop jar $STREAMING \
     -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=3 \
-    -cmdenv USER=$USER \
-    -cmdenv LOGNAME=$LOGNAME \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
