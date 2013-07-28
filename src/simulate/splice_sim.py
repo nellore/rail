@@ -3,7 +3,7 @@ sim_splice.py
 
 Simulates differiential gene expression using annotated genes
 """
-
+import string
 import os
 import site
 import argparse
@@ -18,8 +18,10 @@ from collections import defaultdict
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "annotation"))
+site.addsitedir(os.path.join(base_path, "fasta"))
 
 import gtf
+import chrsizes
 
 parser = argparse.ArgumentParser(description=\
                                      'Transcript simulator')
@@ -44,6 +46,25 @@ parser.add_argument(\
 parser.add_argument(\
     '--stranded', metavar='int', action='store', type=int, default=False,
     help='Indicates if boths strands need to be simulated')
+parser.add_argument(\
+    '--alternative-spliced', metavar='int', action='store', type=int, default=False,
+    help='Indicates if alternatively spliced transcripts should be simulated')
+parser.add_argument(\
+    '--readmm_rate', metavar='float', action='store', type=float, default=0.01,
+    help='The rate of mismatches')
+parser.add_argument(\
+    '--snp_rate', metavar='float', action='store', type=float, default=0.001,
+    help='The rate of snps')
+parser.add_argument(\
+    '--indel_rate', metavar='float', action='store', type=float, default=0.0002,
+    help='The rate of inserts or deletions')
+parser.add_argument(\
+    '--variants_file', metavar='PATH', action='store', type=str, default="variants.txt",
+    help='Stores a list of variants for each transcript')
+parser.add_argument(\
+    '--chrsizes', type=str, required=True,
+    help='The sizes of each chromosome')
+
 
 gtf.addArgs(parser)
 args = parser.parse_args()
@@ -66,7 +87,7 @@ class WeightedRandomGenerator(object):
         return self.next()
 
 #Make weighted random generator for transcriptome
-def makeWeights(xscripts):
+def makeWeights(xscripts,seq_sizes):
     if args.num_xscripts==0:
         num_xscripts= len(xscripts)
     else:
@@ -75,8 +96,10 @@ def makeWeights(xscripts):
     
     num = 0
     for i in range(0,len(weights)):
-        if num<num_xscripts:
+        if num<num_xscripts and xscripts[i].seqid in seq_sizes: #Can't have no existent chromosome
             weights[i] = random.random()
+            print xscripts[i].gene_id,xscripts[i].xscript_id
+            
             num+=1
         else:
             weights[i] = 0
@@ -84,40 +107,85 @@ def makeWeights(xscripts):
 """
 Randomly picks transcripts such that half of the transcripts come from one strand and the other half come from the other strand
 """
-def makeStrandedWeights(xscripts):
+def makeStrandedWeights(xscripts,seq_sizes):
     num_xscripts = args.num_xscripts
     weights = [1.0] * len(xscripts)
     last_strand = "+"
     num = 0
     for i in range(0,len(weights)):
-        if num<num_xscripts and xscripts[i].orient!=last_strand:
+        if num<num_xscripts and xscripts[i].orient!=last_strand and xscripts[i].seqid in seq_sizes:  #Can't have no existent chromosome
             weights[i] = random.random()
-            print xscripts[i].xscript_id
             last_strand = xscripts[i].orient
+            print xscripts[i].gene_id,xscripts[i].xscript_id
             num+=1
         else:
             weights[i] = 0
     return WeightedRandomGenerator(weights),weights
 
-def simulate(xscripts,readlen,targetNucs,fastaseqs):
+total_reads = 0
+total_mismatches = 0
+def sequencingError(read,mm_rate):
+    global total_reads
+    global total_mismatches
+
+    length = len(read)
+    lread = list(read)
+    for i in range(1,len(lread)-1):
+        r = random.random()
+        if r<mm_rate:
+            lread[i] = "ACGT"[random.randint(0,3)]
+    nread = "".join(lread)
+    if nread!=read:
+        total_mismatches+=1
+    total_reads+=1
+
+    return nread
+
+"""
+Incorporants variants into transcripts with nonzero weights
+"""
+def incorporateVariants(weights,xscripts,mm_rate,indel_rate,var_handle):
+    for i in range(0,len(weights)):
+        if weights[i]!=0:
+            oldseq = xscripts[i].seq
+            xscripts[i].incorporateVariants(mm_rate,indel_rate,var_handle)
+            if xscripts[i].seq!=oldseq:
+                print >> sys.stderr, "No variants!"
+    return xscripts
+
+_revcomp_trans = string.maketrans("ACGT", "TGCA")
+def revcomp(s):
+    return s[::-1].translate(_revcomp_trans)
+
+
+def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes):
     if args.stranded:
-        gen,weights = makeStrandedWeights(xscripts)
+        gen,weights = makeStrandedWeights(xscripts,seq_sizes)
     else:
-        gen,weights = makeWeights(xscripts)
+        gen,weights = makeWeights(xscripts,seq_sizes)
     n = 0
     seqs = []
+    incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
+    sim_xscripts = set()
     while n<targetNucs:
         #Pick a transcript at weighted random
         i = gen.next()
         x = xscripts[i]
+        if x not in sim_xscripts:
+            sim_xscripts.add(x)
+        #print x.gene_id,x.xscript_id,x.seqid
         start,end,seqid = 0,len(x.seq)-readlen,x.seqid
         if end<start or len(x.seq)<readlen:
             continue
         i = random.randint(start,end)
-        read = x.seq[i:i+readlen]
+        if x.orient=="+":
+            read = x.seq[i:i+readlen]
+        else:
+            read = revcomp(x.seq[i:i+readlen])
+        read = sequencingError(read,args.readmm_rate)
         seqs.append(read)
         n+=readlen
-    return seqs,weights
+    return seqs,weights,list(sim_xscripts)
 
 def replicateize(seqs1, seqs2, nreps):
     """ Take all the sequence reads for groups 1 and 2 and split them into into
@@ -159,15 +227,39 @@ def writeReads(seqs1rep,seqs2rep,fnPre,manifestFn):
                         nm = "r_n%d;LB:splice-%d-%d" % (i, group, rep)
                         fh.write("%s\t%s\t%s\n" % (nm, seq, qual))
 
+"""
+Get all transcripts that exhibit alternative splicing
+"""
+def test_alternativeSplicing(xscripts):
+    genes = defaultdict(list)
+    axscripts = []
+    for x in xscripts:
+        genes[x.gene_id].append(x)
     
+    for gene_ids,isoforms in genes.iteritems():
+        if len(isoforms)>1:
+            axscripts+=isoforms
+            return axscripts
+    #return axscripts
+
 if __name__=="__main__":
+    print >> sys.stderr,"Mismatch Rate",args.readmm_rate
+    print >> sys.stderr,"SNP Rate",args.snp_rate
+    print >> sys.stderr,"Indel Rate",args.indel_rate
+    seq_sizes = chrsizes.getSizes(args.chrsizes)
+    
+    var_handle = open(args.variants_file,'w')
     annots = gtf.parseGTF(args.gtf)
     fastadb = gtf.parseFASTA(args.fasta)
     xscripts = gtf.assembleTranscripts(annots,fastadb)
-    seqs,weights = simulate(xscripts,args.read_len,args.num_nucs,args.fasta)
+    if args.alternative_spliced:
+        xscripts = test_alternativeSplicing(xscripts)
+    seqs,weights,xscripts = simulate(xscripts,args.read_len,args.num_nucs,args.fasta,var_handle,seq_sizes)
     seqs1,seqs2 = replicateize(seqs,seqs,args.num_replicates)
     writeReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
     #This stores the list in pickle files for serialization
     #pickle.dump(weights,open(args.output_prefix+".weights",'wb'))
-    #pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
+    pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
+    print >> sys.stderr,"Total number of reads",total_reads
+    print >> sys.stderr,"Total number of mismatched reads",total_mismatches
     
