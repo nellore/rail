@@ -9,6 +9,7 @@ import argparse
 import re
 from operator import itemgetter
 from collections import defaultdict
+import random
 
 #parser = argparse.ArgumentParser(description='Parse a GTF file.')
 def addArgs(parser):
@@ -72,8 +73,52 @@ class Transcript(object):
             end = E.en0
             if seqid not in fastaseqs:
                 continue
+
             seqs.append(fastaseqs[seqid][start:end].upper())
         self.seq = "".join(seqs)
+
+    """
+    Assumption: All splice sites are 2bp long
+    returns a list of start positions of splice sites in the transcripts
+    """
+    def getSites(self):
+        sites = []
+        for i in range(1,len(self.exons)):
+            site5 = self.exons[i-1].en0
+            site3 = self.exons[i].st0
+            sites.append(site5)
+            sites.append(site5+1)
+            sites.append(site3-1)
+            sites.append(site3-2)
+        return sites
+
+    def incorporateVariants(self,mm_rate,indel_rate,var_handle):
+        lseq = list(self.seq)
+        for i in range(0,len(lseq)):
+            r = random.random()
+            if r<mm_rate:
+                c = "ACGT"[random.randint(0,3)]
+                while c==lseq[i]: #Can't be equal
+                    lseq[i] = c
+                    c = "ACGT"[random.randint(0,3)]
+                var_handle.write("%s\tsnp%d"%(self.gene_id,i))
+            else:
+                r = random.random()
+                if r<indel_rate:
+                    indel = "ID"[random.randint(0,1)]
+                    if indel=="I":
+                        ins = "ACGT"[random.randint(0,3)]
+                        seq1 = lseq[:i]
+                        seq2 = lseq[i:]
+                        lseq = seq1+[ins]+seq2
+                        var_handle.write("%s\tinsert%d"%(self.gene_id,i))
+                    else:
+                        seq1 = lseq[:i]
+                        seq2 = lseq[i+1:]
+                        lseq = seq1+seq2
+                        var_handle.write("%s\tdelete%d"%(self.gene_id,i))
+        self.seq = "".join(lseq)
+
     def __str__(self):
         lns = []
         lns.append("%d\t%s\t%d\n"%(self.st0,self.seqid,self.en0))

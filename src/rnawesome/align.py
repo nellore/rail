@@ -72,12 +72,6 @@ site.addsitedir(os.path.join(base_path, "manifest"))
 site.addsitedir(os.path.join(base_path, "alignment"))
 site.addsitedir(os.path.join(base_path, "fasta"))
 
-print >>sys.stderr, 'Base:', site.USER_BASE
-print >>sys.stderr, 'Site:', site.USER_SITE
-
-print >>sys.stderr, 'Path:'
-print >>sys.stderr, sys.path
-
 import bowtie
 import readlet
 import sample
@@ -171,7 +165,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
         if (refid, fw) not in ivals:
             ivals[(refid, fw)] = interval.FlatIntervals()
         ivals[(refid, fw)].add(interval.Interval(refoff0, refoff0 + seqlen))
-    
+        
     for kfw in ivals.iterkeys(): # for each chromosome covered by >= 1 readlet
         k, fw = kfw
         in_end, in_start = -1, -1
@@ -206,22 +200,39 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 elif (in_end > in_start) and (in_end-in_start)>(args.readletLen):
                     region_st = positions[(k, fw, in_start)]
                     region_end = positions[(k, fw, in_end)]
+                    fw_char = "+" if fw else "-"
                     
-                    left_flank = rdseq[region_st-args.readletLen-1:region_st-1]
-                    left_overlap = rdseq[region_st-1:region_st+args.splice_overlap-1]
-                    right_overlap = rdseq[region_end-args.splice_overlap+1:region_end+1]
-                    right_flank = rdseq[region_end+1:region_end+args.readletLen+1]
-                    if len(left_flank) == len(right_flank): #Trash all junctions spanned by small readlets
-                        if not fw:
-                            left_flank = revcomp(left_flank)
-                            left_overlap = revcomp(left_overlap)
-                            right_flank = revcomp(right_flank)
-                            right_overlap = revcomp(right_overlap)
+                    if fw:
+                        left_flank = rdseq[region_st-args.readletLen:region_st]
+                        left_overlap = rdseq[region_st:region_st+args.splice_overlap]
+                        right_overlap = rdseq[region_end-args.splice_overlap:region_end]
+                        right_flank = rdseq[region_end:region_end+args.readletLen] 
+                        # print >> sys.stderr,"Positions","Read",region_st,region_end,"Intron",in_start,in_end
+                        # print >> sys.stderr,"Strand\t",fw_char,"Left \t",region_st-args.readletLen,"\t",left_flank,region_st,"\t",left_overlap
+                        # print >> sys.stderr,"Strand\t",fw_char,"Right\t",region_end,"\t",right_flank,"\t",region_end-args.splice_overlap,"\t",right_overlap
+                    else:
+                        # rdseq = revcomp(rdseq)
+                        # tmp = region_st
+                        # region_st = region_end
+                        # region_end = tmp
 
-                        for pt in iter(partition.partition(k, in_start, in_end, binsz)):
-                            fw_char = "+" if fw else "-"
-                            print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, k, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
-                            nout += 1
+                        right_flank = rdseq[region_st-args.readletLen:region_st]
+                        right_overlap = rdseq[region_st-args.readletLen-args.splice_overlap:region_st-args.readletLen]
+                        left_overlap = rdseq[region_end+args.readletLen:region_end+args.readletLen+args.splice_overlap]
+                        left_flank = rdseq[region_end:region_end+args.readletLen] 
+                        
+                        # print >> sys.stderr,"Positions","Read",region_st,region_end,"Intron",in_start,in_end
+                        # print >> sys.stderr,"Strand\t",fw_char,"Left \t",region_end,"\t",left_flank,"\t",region_end+args.readletLen,"\t",left_overlap
+                        # print >> sys.stderr,"Strand\t",fw_char,"Right\t",region_st-args.readletLen,"\t",right_flank,region_st-args.readletLen-args.splice_overlap,"\t",right_overlap
+                        
+                        
+
+                    # and len(left_flank)==args.splice_overlap and len(right_flank)==args.splice_overlap
+                    #if len(left_flank) == len(right_flank): #Trash all junctions spanned by small readlets
+                            
+                    for pt in iter(partition.partition(k, in_start, in_end, binsz)):
+                        print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, k, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
+                        nout += 1
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of

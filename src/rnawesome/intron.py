@@ -19,9 +19,13 @@ Tab-delimited output tuple columns:
 4. Sample label
 5. Read frequency (number of times sample read overlapped junction)
 
-Questions to consider
-1) Should the splice junction sites be scored according to a histogram?
-2) How much can be assume about intron coverage?  This will break if there aren't enough spanning introns
+
+TODO:
+1) Fix the sliding window skewness problem
+2) Test against a mismatch rate of 0.01% for small dataset
+3) Test against genetic variation for small dataset
+4) Test against huge data set using the validation problem for verification
+5) Run against human data set
 """
 import os
 import sys
@@ -52,6 +56,11 @@ parser = argparse.ArgumentParser(description=\
 parser.add_argument(\
     '--refseq', type=str, required=False,
     help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required')
+parser.add_argument(\
+    '--radius', type=int, required=False,default=10,
+    help='The radius of the clustering algorithm and the radius of the sliding window algorithm.')
+
+
 readlet.addArgs(parser)
 
 args = parser.parse_args()
@@ -66,7 +75,7 @@ All introns that have start and end positions within 2 readletIvals within each 
 def cluster(ivals):
     points = []
     bins = defaultdict(list)
-    rIval = args.readletIval
+    rIval = args.radius
     p = ivals[0]
     points.append(p)
     key = "%s,%s"%(p[0],p[1])
@@ -131,7 +140,7 @@ Just a fancier way to print out lists
 def format_list(L):
     s = ""
     for i in L:
-        s+="%.2f "%i
+        s+="%.3f "%i
     return s
 
 """
@@ -139,14 +148,16 @@ Note: site is formatted as follows: XX-XX (e.g. GT-AG)
 Returns the 5' and 3' splice sites within multiple intervals
 """
 def sliding_window(refID, sts,ens, site, fastaF):
-    n,r = 2*args.readletIval, args.readletIval
+    n,r = 2*args.radius, args.radius
     in_start, in_end = min(sts),max(ens)
     toks = site.split("-")
     assert len(toks)==2
     site5p,site3p = toks[0],toks[1]
     hist5, hist3 = histogram.hist_score(sts,in_start,"5",2*n+1), histogram.hist_score(sts,in_start,"3",2*n+1)
-    mean5,std5 = histogram.average(hist5),2*histogram.stddev(hist5)
-    mean3,std3 = histogram.average(hist3),2*histogram.stddev(hist3)
+    #mean5,std5 = histogram.average(hist5),2*histogram.stddev(hist5)
+    #mean3,std3 = histogram.average(hist3),2*histogram.stddev(hist3)
+    mean5,std5 = hist5.index(max(hist5)),2*histogram.stddev(hist5)
+    mean3,std3 = hist3.index(max(hist3)),2*histogram.stddev(hist3)
     #Create a normal distributed scoring scheme based off of candidates
     h5,h3 = histogram.normal_score(2*n+1,mean5,std5), histogram.normal_score(2*n+1,mean5,std5)
     """Remember that fasta index is base 1 indexing"""
@@ -155,6 +166,14 @@ def sliding_window(refID, sts,ens, site, fastaF):
     score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
     j5,s5 = findSite(score5,"5")
     j3,s3 = findSite(score3,"3")
+    # print >> sys.stderr,"Seq 5",seq5
+    # print >> sys.stderr,"Seq 3",seq3
+    # print >> sys.stderr,"Histogram 5\t",format_list(hist5)
+    # print >> sys.stderr,"Histogram 3\t",format_list(hist3)
+    # print >> sys.stderr,"Score 5 \t",format_list(h5)
+    # print >> sys.stderr,"Score 3 \t",format_list(h3)
+    # print >> sys.stderr, "Mean 5\t",histogram.average(hist5),"Mode 5",hist5.index(max(hist5))
+    # print >> sys.stderr, "Mean 3\t",histogram.average(hist3),"Mode 3",hist5.index(max(hist3))
     return j5+in_start-n-1,s5,j3+(in_end-n-1),s3  #returned transformed coordinates of junction sites
 
 
@@ -172,6 +191,7 @@ def findMode(sites):
     for s in sites:
         hist[s]+=1
     return (hist.most_common(1)[0])[0]
+
 """
 This calculates the corrected position of the site given the cigar alignment
 Note that read_site must be in terms of read coordinates
@@ -194,8 +214,8 @@ def cigar_correct(read_site,cigar,site5,site3):
                 diff = i+cnt-read_site
                 left_site,right_site = left_site-diff,right_site+diff
             i+=cnt
-        
-    return left_site,right_site       
+    #left_site,right_site indicate starting positions of splice site
+    return left_site,right_site
  
 """
 Applies the Needleman-Wunsch algorithm to provide a list of candiates
