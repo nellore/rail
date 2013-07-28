@@ -148,9 +148,8 @@ hadoop dfs -rmr $ALIGN_OUT
 time hadoop jar $STREAMING \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=1 \
+    -D mapred.reduce.tasks=0 \
     -libjars multiplefiles.jar \
-    -cmdenv USER=$USER \
-    -cmdenv LOGNAME=$LOGNAME \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
@@ -173,8 +172,7 @@ time hadoop jar $STREAMING \
     -file "$BOWTIE_EXE" \
     -outputformat org.myorg.MultipleOutputFormat \
     -mapper "$ALIGN_ARGS" \
-    -reducer cat \
-    -input $ALIGN_IN -output $ALIGN_OUT
+    -input $ALIGN_IN/*.tab -output $ALIGN_OUT
 
 
 ##Check $? after completion.  If not 0, then print an error message and quit
@@ -273,8 +271,6 @@ time hadoop jar $STREAMING \
     -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=3 \
-    -cmdenv USER=$USER \
-    -cmdenv LOGNAME=$LOGNAME \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
