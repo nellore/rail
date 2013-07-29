@@ -18,6 +18,8 @@ gpositions = defaultdict(Counter)
 for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split("\t")
+    if len(toks)<5:
+        continue
     refid,st,en,lab,freq = toks[0],int(toks[1]),int(toks[2]),toks[3],int(toks[4])
     gpositions[refid][str(st)]+=freq
     gpositions[refid][str(st+1)]+=freq

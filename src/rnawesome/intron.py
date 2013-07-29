@@ -297,10 +297,15 @@ for ln in sys.stdin:
     last_pt,last_ref = pt,refid
     ninp+=1
 
-#Handle last partition
-intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
-bins = cluster(intron_ivals)
-getJunctionSites(last_pt,last_ref,bins,fnh)
+if last_pt!='\t':
+    #Handle last partition
+    intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
+    #Cluster all introns with similar start and end positions   
+    bins = cluster(intron_ivals)
+    #Apply sliding windows to find splice junction locations
+    getJunctionSites(last_pt,last_ref,bins,fnh)
+
+
 
 # Done                                                             
 timeEn = time.clock()

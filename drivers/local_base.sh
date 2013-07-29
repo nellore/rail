@@ -124,9 +124,8 @@ cp $WALK_IN_TMP ${INTERMEDIATE_DIR}walk_in_input.tsv
 
 cat ${INTERMEDIATE_DIR}align_out.tsv \
     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 \
-    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=10 | $SITE2BED > ${INTERMEDIATE_DIR}splice_sites.bed
-
-#TODO: ebayes.py is broken !!!
+    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS | $SITE2BED > ${INTERMEDIATE_DIR}splice_sites.bed
+ 
 # cat $WALK_IN_TMP \  
 # 	| tee ${INTERMEDIATE_DIR}walk_fit_in.tsv | $WALK_FIT \
 # 		--ntasks=$NTASKS \

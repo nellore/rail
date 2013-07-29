@@ -61,7 +61,7 @@ NORMALIZE_POST_OUT=$HADOOP_FILES/normalize_post_output
 
 # Step 5b: Analyze introns
 INTRON="$PYTHON $RNAWESOME/intron.py"
-INTRON_ARGS=''$INTRON' --refseq='$GENOME' --readletIval '$READLET_IVAL''
+INTRON_ARGS=''$INTRON' --refseq='$GENOME' --readletIval '$READLET_IVAL' --readletLen '$READLET_LEN' --radius='$RADIUS''
 
 # Step 5c: Formats all splice sites into bed files
 SITE2BED="$PYTHON $UTIL/site2bed.py"
@@ -205,6 +205,8 @@ fi
 hadoop dfs -rmr $WALK_PRENORM_OUT
 time hadoop jar $STREAMING \
     -D mapred.reduce.tasks=32 \
+    -D mapred.text.key.partitioner.options=-k1,1 \
+    -D stream.num.map.output.key.fields=3 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
@@ -297,10 +299,10 @@ time hadoop jar $STREAMING \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
     -cmdenv PYTHONCOMPILED=$PYTHONCOMPILED \
     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -file "$SCR_DIR/check/site2bed.py" \
+    -file "$SCR_DIR/util/site2bed.py" \
     -mapper cat \
     -reducer "$SITE2BED" \
-    -input $INTRON_OUT -output $SITEBED_OUT
+    -input $INTRON_OUT/*part* -output $SITEBED_OUT
 
 if [ $? -ne 0 ] ; then
     echo "SITEBED step failed, now exiting"
@@ -309,12 +311,16 @@ fi
 
 
 #Copy files to local machine
-rm ${INTERMEDIATE_DIR}/norm.tsv
-hadoop dfs -copyToLocal $NORMALIZE_POST_OUT/part* ${INTERMEDIATE_DIR}/norm.tsv
-rm ${INTERMEDIATE_DIR}/walk_in_input.tsv
-hadoop dfs -copyToLocal $MERGE_OUT/part* ${INTERMEDIATE_DIR}/walk_in_input.tsv
-rm ${INTERMEDIATE_DIR}/splice_sites.bed
-hadoop dfs -copyToLocal $SITEBED_OUT/part* ${INTERMEDIATE_DIR}/splice_sites.bed
+rm ${INTERMEDIATE_DIR}/normalize
+mkdir ${INTERMEDIATE_DIR}/normalize
+hadoop dfs -copyToLocal $NORMALIZE_POST_OUT/part* ${INTERMEDIATE_DIR}/normalize
+cat ${INTERMEDIATE_DIR}/normalize/* > ${INTERMEDIATE_DIR}/norm.tsv
+rm ${INTERMEDIATE_DIR}/walk_in_input
+mkdir ${INTERMEDIATE_DIR}/walk_in_input
+hadoop dfs -copyToLocal $MERGE_OUT/part* ${INTERMEDIATE_DIR}/walk_in_input
+rm ${INTERMEDIATE_DIR}/splice_sites
+mkdir ${INTERMEDIATE_DIR}/splice_sites
+hadoop dfs -copyToLocal $SITEBED_OUT/part* ${INTERMEDIATE_DIR}/splice_sites
 
 
 #Step 6 WALK_FIT 

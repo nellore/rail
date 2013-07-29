@@ -213,12 +213,12 @@ def replicateize(seqs1, seqs2, nreps):
 def writeReads(seqs1rep,seqs2rep,fnPre,manifestFn):
     """ Only unpaired for now """
     seqsrep = [ seqs1rep, seqs2rep ]
-    fn = "%s.seqs.tab6"%(fnPre)
+    fn = "%s.seqs.tab"%(fnPre)
     with open(manifestFn, 'w') as manFh:
         for group in xrange(0, 2):
             sr = seqsrep[group]
             for rep in xrange(0, len(sr)):
-                fn = "%s.group%d.rep%d.tab6" % (fnPre, group, rep)
+                fn = "%s.group%d.rep%d.tab" % (fnPre, group, rep)
                 manFh.write("%s\t0\tsplice-%d-%d\n" % (fn, group, rep))
                 with open(fn, 'w') as fh:
                     for i in xrange(0, len(sr[rep])):
