@@ -1,4 +1,5 @@
 import math
+import sys
 
 #Mean of histogram.  Array MUST be normalized (e.g. between [0,1] )
 def average(p):
@@ -27,7 +28,7 @@ def hist_score(coords,offset,endtype,N):
     n = N/2
     for c in coords:
         if abs(offset-c)>N:
-            print>>sys.error,"Out of bounds coordinate"
+            print >> sys.stderr,"Out of bounds coordinate"
             continue
         ind = (c-offset)+n if endtype=="5" else (N-(offset-c)-1)-n
         hist[ind]+=1
