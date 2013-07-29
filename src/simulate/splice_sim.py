@@ -182,6 +182,7 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes):
             read = x.seq[i:i+readlen]
         else:
             read = revcomp(x.seq[i:i+readlen])
+            
         read = sequencingError(read,args.readmm_rate)
         seqs.append(read)
         n+=readlen

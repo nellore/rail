@@ -60,6 +60,7 @@ import argparse
 import threading
 import string
 import time
+import numpy
 
 timeSt = time.clock()
 
@@ -147,6 +148,46 @@ def revcomp(s):
 bowtieOutDone = threading.Event()
 bowtieErrDone = threading.Event()
 
+
+
+"""
+Applies Needleman Wunsch to correct splice junction gaps
+"""
+def correctSplice(read,ref_left,ref_right,fw):
+    if not fw:
+        ref_left = revcomp(ref_left)
+        ref_right = revcomp(ref_right)
+    score1,leftDP  = nw.c_needlemanWunsch(ref_left, read, nw.matchCost)
+    score2,rightDP = nw.c_needlemanWunsch(ref_right,read, nw.matchCost)
+    total = leftDP+rightDP
+    # print >> sys.stderr,ref_left,ref_right,read
+    # print >> sys.stderr,"Left Matrix\n",leftDP
+    # print >> sys.stderr,"Right Matrix\n",rightDP
+    # print >> sys.stderr,"Total Matrix\n",total
+    index = numpy.argmax(total)
+    max_  = numpy.max(total)
+    n = len(read)+1
+    r = index%n
+    c = index/n
+    return r,c,total[r,c]
+
+def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
+    global nout
+    fw_char = "+" if fw else "-"
+    if fw:
+        left_flank = rdseq[region_st-args.readletLen:region_st]
+        left_overlap = rdseq[region_st:region_st+args.splice_overlap]
+        right_overlap = rdseq[region_end-args.splice_overlap:region_end]
+        right_flank = rdseq[region_end:region_end+args.readletLen] 
+    else:
+        right_flank = rdseq[region_st-args.readletLen:region_st]
+        right_overlap = rdseq[region_st-args.readletLen-args.splice_overlap:region_st-args.readletLen]
+        left_overlap = rdseq[region_end+args.readletLen:region_end+args.readletLen+args.splice_overlap]
+        left_flank = rdseq[region_end:region_end+args.readletLen] 
+    for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
+        print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
+        nout += 1
+
 def composeReadletAlignments(rdnm, rdals, rdseq):
     
     # TODO: We include strand info with introns, but not exons.  We might want
@@ -155,7 +196,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
     global nout
     # Add this interval to the flattened interval collection for current read
     ivals = {}
-    positions = dict()  #stores readlet number based keyed by position
+    positions = dict()  #stores readlet number based keyed by position, strand and reference id
     for rdal in rdals:
         refid, fw, refoff0, seqlen, rlet_nm = rdal
         refoff0, seqlen, rlet_nm = int(refoff0), int(seqlen), int(rlet_nm)
@@ -175,64 +216,46 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             assert st >= 0 and en >= 0
             if in_end == -1 and in_start >= 0:
                 in_end = st
-                
             if in_start == -1:
                 in_start = en
             if in_start >= 0 and in_end >= 0:
-                
-                if (in_end > in_start) and (in_end-in_start) < (args.readletLen): #drops all introns less than a readlet length
-                    # Take into consideration the fw variable.  Need to apply
-                    # reverse complement if not on forward strand.
-                    refseq = fnh.fetch_sequence(k,in_start + 1, in_end + 1) # Sequence from genome         
-                    region_st = positions[(k, fw, in_start)]
-                    region_end = positions[(k, fw, in_end)]
-                    rdsubseq = rdseq[region_st:region_end]
+                region_st = positions[(k, fw, in_start)]
+                region_end = positions[(k, fw, in_end)]
+                #flank_st,flank_end = region_st-args.readletLen,region_end+args.readletLen
+                unmapped_st,unmapped_end = region_st-args.readletLen,region_end+args.readletLen
+                #unmapped_st,unmapped_end = flank_st+args.readletIval,flank_end-args.readletIval
+                reflen = in_end-in_start
+                unmappedlen = unmapped_end-unmapped_st
+                #print >> sys.stderr,"reflen",reflen,"unmappedlen",unmappedlen,"unmapped start",unmapped_st,"unmapped end",unmapped_end
+                if unmappedlen<=0:
+                    printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                elif abs(reflen-unmappedlen)/float(unmappedlen) > 0.05: 
+                    refseq = fnh.fetch_sequence(k,in_start + 1, in_end + 1).upper() # Sequence from genome         
+                    rdsubseq = rdseq[unmapped_st:unmapped_end]
                     if not fw:
                         rdsubseq = revcomp(rdsubseq)
-                    score = nw.needlemanWunsch(refseq, rdsubseq, nw.exampleCost)
+                    score,_ = nw.c_needlemanWunsch(refseq, rdsubseq, nw.inverseMatchCost)
                     # TODO: redo this in terms of percent identity or some
                     # other measure that adapts to length of the missing bit,
                     # not just a raw score 
-                    for pt in iter(partition.partition(k, in_start, in_end, binsz)):
-                        if score <= 10:
+                    if score <= 10:
+                        for pt in iter(partition.partition(k, in_start, in_end, binsz)):
                             print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
                             nout += 1
-                elif (in_end > in_start) and (in_end-in_start)>(args.readletLen):
-                    region_st = positions[(k, fw, in_start)]
-                    region_end = positions[(k, fw, in_end)]
-                    fw_char = "+" if fw else "-"
-                    
-                    if fw:
-                        left_flank = rdseq[region_st-args.readletLen:region_st]
-                        left_overlap = rdseq[region_st:region_st+args.splice_overlap]
-                        right_overlap = rdseq[region_end-args.splice_overlap:region_end]
-                        right_flank = rdseq[region_end:region_end+args.readletLen] 
-                        # print >> sys.stderr,"Positions","Read",region_st,region_end,"Intron",in_start,in_end
-                        # print >> sys.stderr,"Strand\t",fw_char,"Left \t",region_st-args.readletLen,"\t",left_flank,region_st,"\t",left_overlap
-                        # print >> sys.stderr,"Strand\t",fw_char,"Right\t",region_end,"\t",right_flank,"\t",region_end-args.splice_overlap,"\t",right_overlap
                     else:
-                        # rdseq = revcomp(rdseq)
-                        # tmp = region_st
-                        # region_st = region_end
-                        # region_end = tmp
-
-                        right_flank = rdseq[region_st-args.readletLen:region_st]
-                        right_overlap = rdseq[region_st-args.readletLen-args.splice_overlap:region_st-args.readletLen]
-                        left_overlap = rdseq[region_end+args.readletLen:region_end+args.readletLen+args.splice_overlap]
-                        left_flank = rdseq[region_end:region_end+args.readletLen] 
-                        
-                        # print >> sys.stderr,"Positions","Read",region_st,region_end,"Intron",in_start,in_end
-                        # print >> sys.stderr,"Strand\t",fw_char,"Left \t",region_end,"\t",left_flank,"\t",region_end+args.readletLen,"\t",left_overlap
-                        # print >> sys.stderr,"Strand\t",fw_char,"Right\t",region_st-args.readletLen,"\t",right_flank,region_st-args.readletLen-args.splice_overlap,"\t",right_overlap
-                        
-                        
-
-                    # and len(left_flank)==args.splice_overlap and len(right_flank)==args.splice_overlap
-                    #if len(left_flank) == len(right_flank): #Trash all junctions spanned by small readlets
-                            
-                    for pt in iter(partition.partition(k, in_start, in_end, binsz)):
-                        print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, k, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
-                        nout += 1
+                        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                else:# reflen > unmappedlen:
+                    diff = unmapped_end-unmapped_st-1
+                    ref_left = fnh.fetch_sequence(k,in_start - args.readletLen + 1, in_start - args.readletLen + diff + 1).upper()
+                    ref_right = fnh.fetch_sequence(k,in_end + args.readletLen - diff, in_end + args.readletLen).upper()
+                    unmapped = rdseq[unmapped_st:unmapped_end]
+                    #print >> sys.stderr,"Forward Strand",fw
+                    #print >> sys.stderr,ref_left,len(ref_left),ref_right,len(ref_right),unmapped,len(unmapped)
+                    _, dj,tscore = correctSplice(unmapped,ref_left,ref_right,fw)
+                    #print >> sys.stderr,ref_left,ref_right,unmapped
+                    #print >> sys.stderr,"Before",region_st,region_end,"Dj",dj,"Tscore",tscore,"After",region_st+dj,region_end-dj
+                    region_st,region_end = region_st+dj,region_end-dj
+                    printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
