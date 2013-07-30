@@ -6,10 +6,10 @@ import math
 
 def addArgs(parser):
     parser.add_argument(\
-        '--ntasks', metavar='NUMTASKS', type=int, required=True,
+        '--ntasks', metavar='NUMTASKS', type=int, required=False,
         help='Number of reduce tasks')
     parser.add_argument(\
-        '--genomeLen', metavar='LEN', type=int, required=True,
+        '--genomeLen', metavar='LEN', type=int, required=False,
         help='Total length of the genome; required so that we can accurately calculate bin sizes')
 
 def binSize(args):

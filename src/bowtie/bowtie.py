@@ -14,12 +14,12 @@ import threading
 def addArgs(parser):
     parser.add_argument(\
         '--bowtieArgs', metavar='ARGS', type=str, nargs='+',
-         required=True, help='Arguments to pass to Bowtie')
+         required=False, help='Arguments to pass to Bowtie')
     parser.add_argument(\
-        '--bowtieExe', metavar='EXE', type=str, required=True,
+        '--bowtieExe', metavar='EXE', type=str, required=False,
         help='Path to executable for Bowtie')
     parser.add_argument(\
-        '--bowtieIdx', metavar='INDEX', type=str, required=True,
+        '--bowtieIdx', metavar='INDEX', type=str, required=False,
         help='Path to Bowtie index.  Specify its basename.')
 
 def out(pi):

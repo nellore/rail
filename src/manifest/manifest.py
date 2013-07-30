@@ -6,7 +6,7 @@ import os
 
 def addArgs(parser):
     parser.add_argument(\
-        '--manifest', metavar='FILE', type=str, required=True,
+        '--manifest', metavar='FILE', type=str, required=False,
          help='Manifest file')
 
 def labels(args):

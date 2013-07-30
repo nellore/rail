@@ -102,14 +102,14 @@ xformReads = qualAdd is not None or truncateAmt is not None or truncateTo is not
 parser = argparse.ArgumentParser(description=\
     'Align reads using Bowtie, usually as the map step in a Hadoop program.')
 parser.add_argument(\
-    '--refseq', type=str, required=True,
+    '--refseq', type=str, required=False,
     help='The fasta sequence of the reference genome. The fasta index of the '
          'reference genome is also required to be built via samtools')
 parser.add_argument(\
-    '--splice_overlap', type=int, default=10,
+    '--splice-overlap', type=int, default=10,
     help='The overlap length of spanning readlets when evaluating splice junctions')
 parser.add_argument(\
-    '--faidx', type=str, required=True, help='Fasta index file')
+    '--faidx', type=str, required=False, help='Fasta index file')
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
@@ -118,16 +118,13 @@ partition.addArgs(parser)
 
 parser.add_argument(\
     '--v2', action='store_const', const=True, default=False, help='New readlet handling')
+parser.add_argument(\
+    '--test', action='store_const', const=True, default=False, help='Run unit tests')
+parser.add_argument(\
+    '--profile', action='store_const', const=True, default=False, help='Profile the code')
 
 args = parser.parse_args()
-binsz = partition.binSize(args)
-
-if not os.path.exists(args.refseq):
-    raise RuntimeError("No such --refseq file: '%s'" % args.refseq)
-if not os.path.exists(args.faidx):
-    raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
-
-fnh = fasta.fasta(args.refseq)
+    
 
 def xformRead(seq, qual):
     # Possibly truncate and/or modify quality values
@@ -147,8 +144,6 @@ def revcomp(s):
 
 bowtieOutDone = threading.Event()
 bowtieErrDone = threading.Event()
-
-
 
 """
 Applies Needleman Wunsch to correct splice junction gaps
@@ -188,6 +183,43 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
         print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
         nout += 1
 
+"""
+Compares potential short intron with readlet
+"""
+def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh):
+    global nout
+    refseq = fnh.fetch_sequence(k,in_start + 1, in_end + 1).upper() # Sequence from genome         
+    rdsubseq = rdseq[unmapped_st:unmapped_end]
+    if not fw:
+        rdsubseq = revcomp(rdsubseq)
+    score,_ = nw.c_needlemanWunsch(refseq, rdsubseq, nw.inverseMatchCost)
+    # TODO: redo this in terms of percent identity or some
+    # other measure that adapts to length of the missing bit,
+    # not just a raw score 
+    if score <= 10:
+        for pt in iter(partition.partition(k, in_start, in_end, binsz)):
+            print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
+            nout += 1
+    else:
+        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+
+def handleLongIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh):
+    global nout
+    diff = unmapped_end-unmapped_st-1
+    ref_left = fnh.fetch_sequence(k,in_start - args.readletLen + 1, in_start - args.readletLen + diff + 1).upper()
+    ref_right = fnh.fetch_sequence(k,in_end + args.readletLen - diff, in_end + args.readletLen).upper()
+    unmapped = rdseq[unmapped_st:unmapped_end]
+    #print >> sys.stderr,"Forward Strand",fw
+    #print >> sys.stderr,ref_left,len(ref_left),ref_right,len(ref_right),unmapped,len(unmapped)
+    _, dj,tscore = correctSplice(unmapped,ref_left,ref_right,fw)
+    #print >> sys.stderr,ref_left,ref_right,unmapped
+    #print >> sys.stderr,"Before",region_st,region_end,"Dj",dj,"Tscore",tscore,"After",region_st+dj,region_end-dj
+    left_diff,right_diff = dj,len(unmapped)-dj
+    region_st,region_end = region_st+left_diff,region_end-right_diff
+    in_start,in_end = in_start+left_diff,in_start-right_diff
+    printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+    
+
 def composeReadletAlignments(rdnm, rdals, rdseq):
     
     # TODO: We include strand info with introns, but not exons.  We might want
@@ -219,43 +251,16 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             if in_start == -1:
                 in_start = en
             if in_start >= 0 and in_end >= 0:
-                region_st = positions[(k, fw, in_start)]
-                region_end = positions[(k, fw, in_end)]
-                #flank_st,flank_end = region_st-args.readletLen,region_end+args.readletLen
+                region_st,region_end = positions[(k, fw, in_start)],positions[(k, fw, in_end)]
                 unmapped_st,unmapped_end = region_st-args.readletLen,region_end+args.readletLen
-                #unmapped_st,unmapped_end = flank_st+args.readletIval,flank_end-args.readletIval
-                reflen = in_end-in_start
-                unmappedlen = unmapped_end-unmapped_st
+                reflen,unmappedlen = in_end-in_start,unmapped_end-unmapped_st
                 #print >> sys.stderr,"reflen",reflen,"unmappedlen",unmappedlen,"unmapped start",unmapped_st,"unmapped end",unmapped_end
                 if unmappedlen<=0:
                     printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
                 elif abs(reflen-unmappedlen)/float(unmappedlen) > 0.05: 
-                    refseq = fnh.fetch_sequence(k,in_start + 1, in_end + 1).upper() # Sequence from genome         
-                    rdsubseq = rdseq[unmapped_st:unmapped_end]
-                    if not fw:
-                        rdsubseq = revcomp(rdsubseq)
-                    score,_ = nw.c_needlemanWunsch(refseq, rdsubseq, nw.inverseMatchCost)
-                    # TODO: redo this in terms of percent identity or some
-                    # other measure that adapts to length of the missing bit,
-                    # not just a raw score 
-                    if score <= 10:
-                        for pt in iter(partition.partition(k, in_start, in_end, binsz)):
-                            print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
-                            nout += 1
-                    else:
-                        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 else:# reflen > unmappedlen:
-                    diff = unmapped_end-unmapped_st-1
-                    ref_left = fnh.fetch_sequence(k,in_start - args.readletLen + 1, in_start - args.readletLen + diff + 1).upper()
-                    ref_right = fnh.fetch_sequence(k,in_end + args.readletLen - diff, in_end + args.readletLen).upper()
-                    unmapped = rdseq[unmapped_st:unmapped_end]
-                    #print >> sys.stderr,"Forward Strand",fw
-                    #print >> sys.stderr,ref_left,len(ref_left),ref_right,len(ref_right),unmapped,len(unmapped)
-                    _, dj,tscore = correctSplice(unmapped,ref_left,ref_right,fw)
-                    #print >> sys.stderr,ref_left,ref_right,unmapped
-                    #print >> sys.stderr,"Before",region_st,region_end,"Dj",dj,"Tscore",tscore,"After",region_st+dj,region_end-dj
-                    region_st,region_end = region_st+dj,region_end-dj
-                    printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    handleLongIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
@@ -318,99 +323,163 @@ def bowtieErr(st):
         print >> sys.stderr, line.rstrip()
     bowtieErrDone.set()
 
-if args.v2:
-    proc = bowtie.proc(args, sam=True, outHandler=bowtieOutReadlets, errHandler=bowtieErr)
-else:
-    proc = bowtie.proc(args, sam=False, outHandler=bowtieOut, errHandler=bowtieErr)
 
-for ln in sys.stdin:
-    ln = ln.rstrip()
-    toks = ln.split('\t')
-    ninp += 1
-    pair = False
-    nm, seq, qual = None, None, None
-    nm1, seq1, qual1 = None, None, None
-    nm2, seq2, qual2 = None, None, None
-    if len(toks) == 3:
-        # Unpaired read
-        nm, seq, qual = toks
-        sample.hasLab(nm, mustHave=True) # check that label is present in name
-    elif len(toks) == 5 or len(toks) == 6:
-        # Paired-end read
-        if len(toks) == 5:
-            # 6-token version
-            nm1, seq1, qual1, seq2, qual2 = toks
-            nm2 = nm1
-        else:
-            # 5-token version
-            nm1, seq1, qual1, nm2, seq2, qual2 = toks
-        sample.hasLab(nm1, mustHave=True) # check that label is present in name
-        if discardMate is not None:
-            # We have been asked to discard one mate or the other
-            if discardMate == 1:
-                nm, seq, qual = nm2, seq2, qual2 # discard mate 1
+def go():
+    for ln in sys.stdin:
+        ln = ln.rstrip()
+        toks = ln.split('\t')
+        ninp += 1
+        pair = False
+        nm, seq, qual = None, None, None
+        nm1, seq1, qual1 = None, None, None
+        nm2, seq2, qual2 = None, None, None
+        if len(toks) == 3:
+            # Unpaired read
+            nm, seq, qual = toks
+            sample.hasLab(nm, mustHave=True) # check that label is present in name
+        elif len(toks) == 5 or len(toks) == 6:
+            # Paired-end read
+            if len(toks) == 5:
+                # 6-token version
+                nm1, seq1, qual1, seq2, qual2 = toks
+                nm2 = nm1
             else:
-                nm, seq, qual = nm1, seq1, qual1 # discard mate 2
+                # 5-token version
+                nm1, seq1, qual1, nm2, seq2, qual2 = toks
+            sample.hasLab(nm1, mustHave=True) # check that label is present in name
+            if discardMate is not None:
+                # We have been asked to discard one mate or the other
+                if discardMate == 1:
+                    nm, seq, qual = nm2, seq2, qual2 # discard mate 1
+                else:
+                    nm, seq, qual = nm1, seq1, qual1 # discard mate 2
+            else:
+                pair = True # paired-end read
         else:
-            pair = True # paired-end read
-    else:
-        raise RuntimeError("Wrong number of tokens for line: " + ln)
+            raise RuntimeError("Wrong number of tokens for line: " + ln)
+        if pair:
+            # Paired-end
+            if xformReads:
+                # Truncate and transform quality values
+                seq1, qual1 = xformRead(seq1, qual1)
+                seq2, qual2 = xformRead(seq2, qual2)
+            if args.readletLen > 0:
+                # Readletize
+                rlets1 = readlet.readletize(args, nm1, seq1, qual1)
+                for i in xrange(0, len(rlets1)):
+                    nm_rlet, seq_rlet, qual_rlet = rlets1[i]
+                    if args.v2:
+                        proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet))
+                    else:
+                        proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+                rlets2 = readlet.readletize(args, nm2, seq2, qual2)
+                for i in xrange(0, len(rlets2)):
+                    nm_rlet, seq_rlet, qual_rlet = rlets2[i]
+                    if args.v2:
+                        proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet))
+                    else:
+                        proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+            else:
+                proc.stdin.write("%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2))
+        else:
+            # Unpaired
+            if xformReads:
+                # Truncate and transform quality values
+                seq, qual = xformRead(seq, qual)
+            if args.readletLen > 0:
+                # Readletize
+                rlets = readlet.readletize(args, nm, seq, qual)
+                for i in xrange(0, len(rlets)):
+                    nm_rlet, seq_rlet, qual_rlet = rlets[i]
+                    if args.v2:
+                        proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet))
+                    else:
+                        proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+            else:
+                proc.stdin.write("%s\t%s\t%s\n" % (nm, seq, qual))
+
+    # Close and flush STDIN.
+    proc.stdin.close()
+
+    # Wait until the threads processing stdout and stderr are done.
+
+    # Close stdout and stderr
+    print >>sys.stderr, "Waiting for Bowtie stdout processing thread to finish"
+    bowtieOutDone.wait()
+    print >>sys.stderr, "Waiting for Bowtie stderr processing thread to finish"
+    bowtieErrDone.wait()
+
+    proc.stdout.close()
+    proc.stderr.close()
+
+    # Done
+    timeEn = time.clock()
+    print >>sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
+
+
+def createTestFasta(fname,refid,refseq):
+    fastaH = open(fname,'w')
+    fastaIdx = open(fname+".fai",'w')
+    fastaH.write(">%s\n%s\n"%(refid,refseq))
+    fastaIdx.write("%s\t%d\t%d\t%d\t%d\n"%(refid,len(refseq),len(refid)+2,len(refseq),len(refseq)+1))
+    fastaH.close()
+    fastaIdx.close()
+
+def test_fasta_create():
+    rdseq = "ACGTACGT"
+    refseq = "ACGTCCCCACGT"
+    fname,refid = "test.fa","test"
+    createTestFasta(fname,refid,refseq)
+    fnh = fasta.fasta(fname)
+    testseq = fnh.fetch_sequence(refid,1,len(refseq))
+    assert testseq==refseq
+    print >> sys.stderr,"Test Fasta Create Success!"
+    os.remove(fname)
+    os.remove(fname+".fai")
     
-    if pair:
-        # Paired-end
-        if xformReads:
-            # Truncate and transform quality values
-            seq1, qual1 = xformRead(seq1, qual1)
-            seq2, qual2 = xformRead(seq2, qual2)
-        if args.readletLen > 0:
-            # Readletize
-            rlets1 = readlet.readletize(args, nm1, seq1, qual1)
-            for i in xrange(0, len(rlets1)):
-                nm_rlet, seq_rlet, qual_rlet = rlets1[i]
-                if args.v2:
-                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet))
-                else:
-                    proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
-            rlets2 = readlet.readletize(args, nm2, seq2, qual2)
-            for i in xrange(0, len(rlets2)):
-                nm_rlet, seq_rlet, qual_rlet = rlets2[i]
-                if args.v2:
-                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet))
-                else:
-                    proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
-        else:
-            proc.stdin.write("%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2))
+
+def test_short_alignment1():
+    sys.stdout = open("test.out",'w')
+    rdnm,fw = "0;LB:test",True
+    rdseq,refseq,fname,refid = "ACGTACGT","ACGTCCCCCCCCCCCACGT","test.fa","test"
+    createTestFasta(fname,refid,refseq)
+    fnh = fasta.fasta(fname)
+    region_st,region_end=3,4
+    in_start,in_end=3,15
+    unmapped_st,unmapped_end = region_st-args.readletLen,region_end+args.readletLen
+    handleShortAlignment(refid,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
+    printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+    sys.stdout.close()
+    test_out = open("test.out",'r')
+    line = test_out.readline().rstrip()
+    testline = test_out.readline().rstrip()
+    assert testline==line
+    print >> sys.stderr,"Test Short Intron 1 Success!"
+    os.remove(fname)
+    os.remove(fname+".fai")
+    os.remove("test.out")
+
+def test():
+    test_fasta_create()
+    test_short_alignment1()
+    
+if args.test:
+    binsz = 10000
+    test()
+elif args.profile:
+    import cProfile
+    cProfile.run('go()')
+else:
+    binsz = partition.binSize(args)
+    if not os.path.exists(args.refseq):
+        raise RuntimeError("No such --refseq file: '%s'" % args.refseq)
+    if not os.path.exists(args.faidx):
+        raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
+
+    fnh = fasta.fasta(args.refseq)
+
+    if args.v2:
+        proc = bowtie.proc(args, sam=True, outHandler=bowtieOutReadlets, errHandler=bowtieErr)
     else:
-        # Unpaired
-        if xformReads:
-            # Truncate and transform quality values
-            seq, qual = xformRead(seq, qual)
-        if args.readletLen > 0:
-            # Readletize
-            rlets = readlet.readletize(args, nm, seq, qual)
-            for i in xrange(0, len(rlets)):
-                nm_rlet, seq_rlet, qual_rlet = rlets[i]
-                if args.v2:
-                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet))
-                else:
-                    proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
-        else:
-            proc.stdin.write("%s\t%s\t%s\n" % (nm, seq, qual))
-
-# Close and flush STDIN.
-proc.stdin.close()
-
-# Wait until the threads processing stdout and stderr are done.
-
-# Close stdout and stderr
-print >>sys.stderr, "Waiting for Bowtie stdout processing thread to finish"
-bowtieOutDone.wait()
-print >>sys.stderr, "Waiting for Bowtie stderr processing thread to finish"
-bowtieErrDone.wait()
-
-proc.stdout.close()
-proc.stderr.close()
-
-# Done
-timeEn = time.clock()
-print >>sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
+        proc = bowtie.proc(args, sam=False, outHandler=bowtieOut, errHandler=bowtieErr)
+    go()

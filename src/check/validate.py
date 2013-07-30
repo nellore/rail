@@ -108,7 +108,6 @@ def compare(bed_sites,annot_sites,radius):
                 missed_sites.discard(exact)
             elif abs(guess-exact)<=radius:
                 #print "Nearby","Guess",guess,"Exact",exact
-                nearby+=1
                 if exact not in close_sites:
                     close_sites.add(exact)
                     missed_sites.discard(exact)
@@ -118,6 +117,7 @@ def compare(bed_sites,annot_sites,radius):
                 #print "Incorrect","Guess",guess,"Exact",exact
                 incorrect+=1
     incorrect_sites = found_sites.intersection(close_sites)
+    nearby = len(close_sites.difference(found_sites))
     incorrect+=len(incorrect_sites)
     return total/2,correct/2,nearby/2,incorrect/2,len(missed_sites)/2 #since we looking at 2x sites
 
