@@ -34,7 +34,7 @@ def lcsCost(xc, yc):
 
 def matchCost(xc,yc):
     #print >> sys.stderr,xc,yc,chr(xc),chr(yc)
-    return 1 if xc==yc else -4
+    return 1 if xc==yc else -1
 
 def inverseMatchCost(xc,yc):
     return 0 if xc==yc else 1

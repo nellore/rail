@@ -195,6 +195,7 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
     else:  #right < left since on opposite strand
         left_st,left_end = region_end+args.readletLen-args.splice_overlap,region_end+args.readletLen
         right_st,right_end = region_st-args.readletLen, region_st-args.readletLen+args.splice_overlap
+
         right_overlap = rdseq[right_st-args.splice_overlap:right_st]
         right_flank = rdseq[right_st:right_end]
         left_flank = rdseq[left_st:left_end]
