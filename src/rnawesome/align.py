@@ -158,13 +158,16 @@ def correctSplice(read,ref_left,ref_right,fw):
         rightDP = numpy.flipud(rightDP)
     else:
         ref_right = revcomp(ref_right)
-        score1,leftDP  = nw.c_needlemanWunsch(ref_left, revread, nw.matchCost)
-        score2,rightDP = nw.c_needlemanWunsch(ref_right,read, nw.matchCost)
+        score1,leftDP  = nw.c_needlemanWunsch(ref_left, read, nw.matchCost)
+        score2,rightDP = nw.c_needlemanWunsch(ref_right,revread, nw.matchCost)
         rightDP = numpy.fliplr(rightDP)
         rightDP = numpy.flipud(rightDP)
     
     total = leftDP+rightDP
-    # print >> sys.stderr,ref_left,ref_right,read
+    # print >> sys.stderr,"ref_left\t",ref_left
+    # print >> sys.stderr,"ref_right\t",ref_right
+    # print >> sys.stderr,"read    \t",read,"\n"
+    
     # print >> sys.stderr,"Left Matrix\n",leftDP
     # print >> sys.stderr,"Right Matrix\n",rightDP
     # print >> sys.stderr,"Total Matrix\n",total
@@ -180,11 +183,32 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
     fw_char = "+" if fw else "-"
     if not fw:
         rdseq = revcomp(rdseq)
-    left_flank = rdseq[region_st-args.readletLen:region_st]
-    left_overlap = rdseq[region_st:region_st+args.splice_overlap]
-    right_overlap = rdseq[region_end-args.splice_overlap:region_end]
-    right_flank = rdseq[region_end:region_end+args.readletLen] 
 
+    if fw:
+        left_st,left_end = region_st-args.splice_overlap,region_st
+        right_st,right_end = region_end,region_end+args.splice_overlap
+        
+        left_flank = rdseq[left_st:left_end]
+        left_overlap = rdseq[left_end:left_end+args.splice_overlap]
+        right_overlap = rdseq[right_st-args.splice_overlap:right_st]
+        right_flank = rdseq[right_st:right_end] 
+    else:  #right < left since on opposite strand
+        left_st,left_end = region_end+args.readletLen-args.splice_overlap,region_end+args.readletLen
+        right_st,right_end = region_st-args.readletLen, region_st-args.readletLen+args.splice_overlap
+        right_overlap = rdseq[right_st-args.splice_overlap:right_st]
+        right_flank = rdseq[right_st:right_end]
+        left_flank = rdseq[left_st:left_end]
+        left_overlap = rdseq[left_end:left_end+args.splice_overlap]
+
+        # right_flank = rdseq[region_st-args.readletLen:region_st]
+        # right_overlap = rdseq[region_st-args.readletLen-args.splice_overlap:region_st-args.readletLen]
+        # left_overlap = rdseq[region_end+args.readletLen:region_end+args.readletLen+args.splice_overlap]
+        # left_flank = rdseq[region_end:region_end+args.readletLen] 
+
+    # print >> sys.stderr,"Strand",fw_char
+    # print >> sys.stderr,'left ',left_st,'\t',left_flank,'\t',left_en,'\t',left_overlap
+    # print >> sys.stderr,'right',right_st,'\t',right_flank,'\t',right_en,'\t',right_overlap,'\n'
+    
     for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
         print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
         nout += 1
@@ -192,19 +216,28 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
 
 def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh): 
     diff = unmapped_end-unmapped_st-1
-    ref_left = fnh.fetch_sequence(k,in_start - args.readletLen + 1, in_start - args.readletLen + diff + 1).upper()
-    ref_right = fnh.fetch_sequence(k,in_end + args.readletLen - diff, in_end + args.readletLen).upper()
+    left_st, left_en = in_start - args.readletLen + 1, in_start - args.readletLen + diff + 1
+    right_st, right_en = in_end + args.readletLen - diff, in_end + args.readletLen
+    ref_left = fnh.fetch_sequence(k,left_st, left_en).upper()
+    ref_right = fnh.fetch_sequence(k,right_st, right_en).upper()
     unmapped = rdseq[unmapped_st:unmapped_end]
+    # print >> sys.stderr,"ref_left\t",ref_left
+    # print >> sys.stderr,"ref_right\t",ref_right
+    # print >> sys.stderr,"read    \t",unmapped,"\n"
+    
     #print >> sys.stderr,"Forward Strand",fw
     #print >> sys.stderr,ref_left,len(ref_left),ref_right,len(ref_right),unmapped,len(unmapped)
-    _, dj,tscore = correctSplice(unmapped,ref_left,ref_right,fw)
+    _, dj,_ = correctSplice(unmapped,ref_left,ref_right,fw)
+    #print >> sys.stderr,"Before",region_st,region_end
+    left_diff,right_diff = dj-args.readletLen , len(unmapped)-dj-args.readletLen
+    #print >> sys.stderr,"Left Diff",left_diff,"Right Diff",right_diff
+    region_st,region_end = region_st+left_diff,region_end-right_diff
+    in_start,in_end = in_start+left_diff, in_end-right_diff
     #print >> sys.stderr,ref_left,ref_right,unmapped
-    left_diff,right_diff = dj,len(unmapped)-dj
-    #print >> sys.stderr,"Before","Read",region_st,region_end,"Ref",in_start,in_end,"Dj",dj
-    region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
-    in_start,in_end = in_start - args.readletLen + dj,in_end + args.readletLen - diff + dj-1
-    #print >> sys.stderr,"After",region_st,region_end,"Ref",in_start,in_end
-    #print >> sys.stderr,"Left diff",left_diff,"Right diff",right_diff
+    #left_diff,right_diff = (dj-region_st),(region_end-dj)
+    # print >> sys.stderr,"Left Diff",left_diff,"Right Diff",right_diff
+    #print >> sys.stderr,"After",region_st,region_end
+
     #region_st,region_end = region_st+left_diff,region_end-right_diff
     #in_start,in_end = in_start+left_diff,in_end-right_diff
     printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
@@ -226,8 +259,8 @@ def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region
         for pt in iter(partition.partition(k, in_start, in_end, binsz)):
             print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
             nout += 1
-    else:  #Should we run a filter on this?
-        handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
+    #else:  #Should we run a filter on this?
+    #handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
 
     
 
@@ -267,10 +300,12 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 reflen,unmappedlen = in_end-in_start,unmapped_end-unmapped_st
                 #print >> sys.stderr,"reflen",reflen,"unmappedlen",unmappedlen,"unmapped start",unmapped_st,"unmapped end",unmapped_end
                 if unmappedlen<=0:
+                    #print >> sys.stderr,"len<=0","Region start",region_st,"Region end",region_end
                     printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
                 elif abs(reflen-unmappedlen)/float(unmappedlen) > 0.05: 
                     handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 else:# reflen > unmappedlen:
+                    #print >> sys.stderr,"len>0","Region start",region_st,"Region end",region_end
                     handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
@@ -336,6 +371,7 @@ def bowtieErr(st):
 
 
 def go():
+    global ninp
     for ln in sys.stdin:
         ln = ln.rstrip()
         toks = ln.split('\t')
@@ -452,6 +488,7 @@ def test_fasta_create():
 def test_short_alignment1():
     sys.stdout = open("test.out",'w')
     rdnm,fw = "0;LB:test",True
+    #Mapped readlets: ACGT, ACGT
     rdseq,refseq,fname,refid = "GCACGTACGTCG","GCACGTCCCCCCCCCCCACGTCG","test.fa","test"
     createTestFasta(fname,refid,refseq)
     fnh = fasta.fasta(fname)
@@ -500,13 +537,14 @@ def test_short_alignment2():
 def test_short_alignment3():
     sys.stdout = open("test.out",'w')
     rdnm,fw = "0;LB:test",True
+    #mapped reads: CGTA, TACG
     rdseq,refseq,fname,refid = "GCACGTACGTCG","GCACGTCCCCCCCCCCCACGTCG","test.fa","test"
     createTestFasta(fname,refid,refseq)
     fnh = fasta.fasta(fname)
-    region_st,region_end=7,6
-    in_start,in_end=7,17
+    region_st,region_end=7,5
+    in_start,in_end=7,16
     unmapped_st,unmapped_end = region_st-args.readletLen,region_end+args.readletLen
-    printIntrons(refid,rdseq,region_st-1,region_end,in_start-1,in_end,rdnm,fw)
+    printIntrons(refid,rdseq,region_st-1,region_end+1,in_start-1,in_end+1,rdnm,fw)
     handleIntron(refid,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
     sys.stdout.close()
     test_out = open("test.out",'r')
@@ -521,13 +559,26 @@ def test_short_alignment3():
     os.remove("test.out")
 
 
-
+def test_correct_splice():
+    left = "TTACGAAGGTTTGTA"
+    right= "TAATTTAGATGGAGA"
+    read = "TTACGAAGATGGAGA"
+    # left = "AGTATCGAACCTGAAGCAAGTTACGAAGGTTTGTATAACAAAAATTATGTGAAAG"
+    # right= "TAATATTTTCTTTTGAAATTTAATTTAGATGGAGAAATGGAAGCAGAGTGGCTAG"
+    # read = "AGTATCGAACCTGAAGCAAGTTACGAAGATGGAGAAATGGAAGCAGAGTGGCTAG"
+    fw = True
+    r,c,score = correctSplice(read,left,right,fw)
+    #print >> sys.stderr,read
+    #print >> sys.stderr,left[:c],right[c:]
+    assert left[:c]+right[c:] == read
+    print >> sys.stderr,"Correct Splice Test Successful!!!"
 def test():
     test_fasta_create()
     test_short_alignment1() 
     test_short_alignment2()
     test_short_alignment3()
-    
+    test_correct_splice()
+
 if args.test:
     binsz = 10000
     test()
