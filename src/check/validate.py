@@ -50,6 +50,7 @@ def siteDistribution(sites,fh):
     seq_hist = Counter()
     for k,s in sites.iteritems():
         for i in range(0,len(sites[k]),2):
+            print >> sys.stderr,len(sites[k]),i,s[i],s[i+1]
             st,en = s[i],s[i+1]
             refseq = fh.fetch_sequence(k,st+1,en+1).upper()
             seq_hist[refseq]+=1
@@ -94,22 +95,31 @@ def compare(bed_sites,annot_sites,radius):
     nearby  = 0
     incorrect = 0
     missed_sites = union_sites(annot_sites)
-    total = len(missed_sites)/2
+    found_sites = set()
+    close_sites = set()
+    total = len(missed_sites)
     for k,v in bed_sites.iteritems():
         for guess in v:
             exact = search.find(annot_sites[k],guess)
             if guess==exact:
                 #print "Correct","Guess",guess,"Exact",exact
                 correct+=1
+                found_sites.add(exact)
                 missed_sites.discard(exact)
             elif abs(guess-exact)<=radius:
                 #print "Nearby","Guess",guess,"Exact",exact
-                nearby+=1
-                missed_sites.discard(exact)
+                if exact not in close_sites:
+                    close_sites.add(exact)
+                    missed_sites.discard(exact)
+                else:
+                    incorrect+=1
             else:
                 #print "Incorrect","Guess",guess,"Exact",exact
                 incorrect+=1
-    return total,correct/2,nearby/2,incorrect/2,len(missed_sites)/2 #since we looking at 2x sites
+    incorrect_sites = found_sites.intersection(close_sites)
+    nearby = len(close_sites.difference(found_sites))
+    incorrect+=len(incorrect_sites)
+    return total/2,correct/2,nearby/2,incorrect/2,len(missed_sites)/2 #since we looking at 2x sites
 
 if __name__=="__main__":
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
@@ -118,15 +128,15 @@ if __name__=="__main__":
     #print annot_sites
     total,correct,nearby,incorrect,missed = compare(bed_sites,annot_sites,args.radius)
     fastaH = fasta.fasta(args.refseq)
-    bed_site_stats = siteDistribution(bed_sites,fastaH)
-    annot_site_stats = siteDistribution(annot_sites,fastaH)
+    #bed_site_stats = siteDistribution(bed_sites,fastaH)
+    #annot_site_stats = siteDistribution(annot_sites,fastaH)
     
     print "Total annot sites   \t",total
     print "Correct             \t",correct
     print "Nearby              \t",nearby
-    print "Incorrect           \t",incorrect
-    print "Missed              \t",missed
-    print "Bed site stats      \t",bed_site_stats
-    print "Annotated site stats\t",annot_site_stats
+    print "False positives     \t",incorrect
+    print "False negatives     \t",missed
+    #print "Bed site stats      \t",bed_site_stats
+    #print "Annotated site stats\t",annot_site_stats
 
     
