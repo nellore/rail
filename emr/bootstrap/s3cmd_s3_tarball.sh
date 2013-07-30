@@ -5,9 +5,8 @@
 # Download a tarball from an S3 bucket and expand to given directory
 #
 # Arguments are:
-# 1. Bucket to copy from
-# 2. Subdir to copy from
-# 3. Local directory to expand archive in
+# 1. s3:// URL to copy from
+# 2. Local directory to expand archive in
 
 set -e
 
@@ -22,8 +21,8 @@ access_key = $AWS_ACCESS_ID
 secret_key = $AWS_ACCESS_KEY
 EOF
 
-fn=`basename $2`
-s3cmd get s3://${1}/${2} .
-mkdir -p ${3}
-tar -xzf $fn -C ${3}
+fn=`basename $1`
+s3cmd get ${1} .
+mkdir -p ${2}
+tar -xzf $fn -C ${2}
 rm -f $fn
