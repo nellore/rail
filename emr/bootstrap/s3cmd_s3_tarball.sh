@@ -5,9 +5,8 @@
 # Download a tarball from an S3 bucket and expand to given directory
 #
 # Arguments are:
-# 1. Bucket to copy from
-# 2. Subdir to copy from
-# 3. Local directory to expand archive in
+# 1. s3:// URL to copy from
+# 2. Local directory to expand archive in
 
 set -e
 
