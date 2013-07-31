@@ -34,19 +34,27 @@ import argparse
 import time
 import subprocess
 import os
+import site
+import string
 timeSt = time.clock()
 
 parser = argparse.ArgumentParser(description=\
     'Takes per-position counts for given samples and calculates a summary '
     'statistic such as median or 75% percentile.')
 
+base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+site.addsitedir(os.path.join(base_path, "util"))
+
+import url
+import path
+
 parser.add_argument(\
     '--percentile', metavar='FRACTION', type=float, required=False, default=0.75,
     help='For a given sample, the per-position percentile to extract as the normalization factor')
 
 parser.add_argument(\
-    '--out_dir', type=str, required=False, default="",
-    help='The directory where all of the coverage vectors for each sample will be stored')
+    '--out_dir', type=str, required=True, default="",
+    help='The URL where all of the coverage vectors for each sample will be stored')
 
 parser.add_argument(\
     '--hadoop_exe', type=str, required=False, default="",
@@ -59,6 +67,10 @@ parser.add_argument(\
 parser.add_argument(\
     '--chrom_sizes', type=str, required=False, default="",
     help='The location of chrom_sizes file required for bigbed conversion.')
+
+parser.add_argument(\
+    '--faidx', type=str, required=False, default="",
+    help='Path to a FASTA index that we can use instead of --chrom_sizes.')
 
 args = parser.parse_args()
 
@@ -88,12 +100,30 @@ def percentile(cov):
             return str(k)
     raise RuntimeError("Should not reach this point")
 
-#proc = subprocess.Popen(['/damsl/software/hadoop/hadoop-1.1.2/bin/hadoop', 'fs', '-put', '-', fname ], stdin=subprocess.PIPE)
-
 def moveToHDFS(fin,fout):
     put_proc = subprocess.Popen([args.hadoop_exe, 'fs', '-put',fin, fout])
     put_proc.wait()
 
+outUrl = url.Url(args.out_dir)
+if outUrl.isS3():
+    if not path.which("s3cmd"):
+        # TODO make it possible for user to specify credentials file for s3cmd?
+        raise RuntimeError("Could not find path to s3cmd")
+
+chromSizes = args.chrom_sizes
+delChromSizes = False
+if chromSizes is None:
+    if args.faidx is None:
+        raise RuntimeError("Must specify either --chrom_sizes or --faidx")
+    import tempfile
+    fh = tempfile.NamedTemporaryFile(mode='w', delete=False)
+    with open(args.faidx, 'r') as ifh:
+        for ln in ifh:
+            toks = string.split(ln.rstrip(), '\t')
+            print >>fh, " ".join([toks[0], toks[1]])
+    fh.close()
+    chromSizes = fh.name
+    delChromSizes = True
 
 for ln in sys.stdin:
     ln = ln.rstrip()
@@ -110,15 +140,20 @@ for ln in sys.stdin:
         os.remove(fname)
         samp_out.close()
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
-        samp_out = open(fname,'w')        
+        samp_out = open(fname,'w')
     elif last_samp != samp:  #initialize file handles and convert to bigbed
         samp_out.close()
-        bb_file = "%s.bb"%(last_samp) if args.hadoop_exe!="" else "%s/%s.bb"%(args.out_dir,last_samp)
-        bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, args.chrom_sizes, bb_file])
+        bb_file = "%s.bb" % (last_samp) if outUrl.isNotLocal() else "%s/%s.bb" % (args.out_dir,last_samp)
+        bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, chromSizes, bb_file])
         bigbed_proc.wait()
-        if args.hadoop_exe!="": #For hadoop mode - moves local file to HDFS
-            out_fname = "%s/%s.bb"%(args.out_dir,last_samp)
-            moveToHDFS(bb_file,out_fname)
+        if outUrl.isNotLocal():
+            if outUrl.isS3():
+                out_fname = "%s/%s.bb" % (outUrl.toNonNativeUrl(), last_samp)
+                os.system("s3cmd put %s %s" % (bb_file, out_fname))
+            else:
+                assert outUrl.isHdfs()
+                out_fname = "%s/%s.bb" % (args.out_dir, last_samp)
+                moveToHDFS(bb_file, out_fname)
         os.remove(fname)
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
         samp_out = open(fname,'w')
@@ -139,10 +174,26 @@ for ln in sys.stdin:
     cov[cv] = cov.get(cv, 0) + 1
     totcov += cv
     totnonz += 1
-os.remove(fname)
+
 if last_samp != "\t":
     print "%s\t%s" % (last_samp, percentile(cov))
     nout += 1
+    samp_out.close()
+    bb_file = "%s.bb" % (last_samp) if outUrl.isNotLocal() else "%s/%s.bb" % (args.out_dir,last_samp)
+    bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, chromSizes, bb_file])
+    bigbed_proc.wait()
+    if outUrl.isNotLocal():
+        if outUrl.isS3():
+            out_fname = "%s/%s.bb" % (outUrl.toNonNativeUrl(), last_samp)
+            os.system("s3cmd put %s %s" % (bb_file, out_fname))
+        else:
+            assert outUrl.isHdfs()
+            out_fname = "%s/%s.bb" % (args.out_dir, last_samp)
+            moveToHDFS(bb_file, out_fname)
+    os.remove(fname)
+
+if delChromSizes:
+    os.remove(chromSizes)
 
 # Done
 timeEn = time.clock()

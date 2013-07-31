@@ -28,6 +28,9 @@ class Url(object):
     def isS3(self):
         return self.type[:2] == "s3"
     
+    def isNotLocal(self):
+        return self.type != "local"
+    
     def toUrl(self):
         if self.type == "local":
             return self.rest
