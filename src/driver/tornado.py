@@ -161,9 +161,9 @@ parser.add_argument(\
 # Preprocessing params
 #
 parser.add_argument(\
-    '--preproc-output', metavar='PATH', type=str, help='Put output from preprocessing step here')
+    '--preprocess-output', metavar='PATH', type=str, help='Put output from preprocessing step here')
 parser.add_argument(\
-    '--preproc-compress', metavar='gzip|bzip2', type=str, help='Type of compression to use for preprocessing output.')
+    '--preprocess-compress', metavar='gzip|bzip2', type=str, help='Type of compression to use for preprocessing output.')
 
 tornado_config.addArgs(parser)
 
@@ -198,12 +198,13 @@ manifest = None
 if args.manifest is not None:
     manifest = url.Url(args.manifest.rstrip('/'))
 out = url.Url(args.output.rstrip('/'))
-intermediate = args.intermediate
-if intermediate is not None:
-    intermediate = url.Url(intermediate.rstrip('/'))
+if args.intermediate is not None:
+    intermediate = url.Url(args.intermediate.rstrip('/'))
 else:
-    intermedaite = url.Url("hdfs:///%s/intermediate" % appName)
-ref = url.Url(args.reference)
+    intermediate = url.Url("hdfs://%s/intermediate" % appName)
+ref = None
+if args.reference is not None:
+    ref = url.Url(args.reference.rstrip('/'))
 
 jobName = None
 swapAdd = 0
@@ -317,11 +318,11 @@ if mode == 'aws':
         raise RuntimeError("--output argument '%s' is not an S3 URL" % out)
     if ref is not None and not ref.isS3():
         raise RuntimeError("--reference argument '%s' is not an S3 URL" % ref)
-    if intermediate is not None and not intermediate.isS3():
-        raise RuntimeError("--intermediate argument '%s' is not an S3 URL" % intermediate)
+    if args.intermediate is not None and not intermediate.isS3():
+        raise RuntimeError("--intermediate argument '%s' is not an S3 URL" % args.intermediate)
 
 tconf = tornado_config.TornadoConfig(args)
-pconf = pipeline.PipelineConfig(hadoopVersionToks, waitFail, emrStreamJar, emrCluster.numCores(), emrLocalDir, args.preproc_compress, out)
+pconf = pipeline.PipelineConfig(hadoopVersionToks, waitFail, emrStreamJar, emrCluster.numCores(), emrLocalDir, args.preprocess_compress, out)
 
 pipelines = ["preprocess", "align", "coverage", "junction", "differential"]
 
@@ -405,17 +406,24 @@ stepClasses = {\
 inDirs, outDirs, steps = [], [], []
 for prv, cur, nxt in [ allSteps[i:i+3] for i in xrange(0, len(allSteps)-2) ]:
     assert cur in stepClasses
-    if prv is None: inDirs.append(inp)
-    else: inDirs.append(outDirs[-1])
-    if nxt is None: outDirs.append(out + "/final")
-    else:
-        if args.preproc_output and cur == "preprocess":
-            outDirs.append(args.preproc_output)
+    if prv is None:
+        if cur == "preprocess":
+            inDirs.append(manifest.toUrl())
         else:
-            outDirs.append("%s/%s_out" % (intermediate, cur))
-    steps.append(stepClasses[cur](inDirs[-1], outDirs[-1]))
+            inDirs.append(inp.toUrl())
+    else: inDirs.append(outDirs[-1])
+    if nxt is None: outDirs.append(out.toUrl() + "/final")
+    else:
+        if args.preprocess_output and cur == "preprocess":
+            outDirs.append(args.preprocess_output)
+        else:
+            outDirs.append("%s/%s_out" % (intermediate.toUrl(), cur))
+    steps.append(stepClasses[cur](inDirs[-1], outDirs[-1], tconf, pconf))
 
-jsonStr = "\n".join([ step.toEmrCmd(pconf) for step in steps ])
+print >> sys.stderr, "Input directories:\n" + '\n'.join(inDirs)
+print >> sys.stderr, "Output directories:\n" + '\n'.join(outDirs)
+
+jsonStr = "[\n" + "\n".join([ step.toEmrCmd(pconf) for step in steps ]) + "\n]\n"
 with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as jsonFh:
     jsonFn = jsonFh.name
     jsonFh.write(jsonStr)

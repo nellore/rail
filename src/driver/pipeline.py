@@ -5,6 +5,8 @@ Classes and routines for describing steps in the pipeline and how they can be
 implemented as MapReduce steps.
 """
 
+import hadoop
+
 class Aggregation(object):
     """ Encapsulates information about the aggregation before a reducer. """
     
@@ -18,18 +20,13 @@ class Aggregation(object):
     def toHadoopArgs(self, config):
         begArgs, endArgs = [], []
         v = config.hadoopVersion
-        confArg = "-D"
-        if v[0] == 0 and v[1] < 19:
-            confArg = "-jobconf"
+        confArg = hadoop.confArg(v)
         if self.ntasks is not None:
             begArgs.append('"%s", "mapred.reduce.tasks=%d",' % (confArg, self.ntasks))
         else:
             assert self.ntasksPerReducer is not None
             begArgs.append('"%s", "mapred.reduce.tasks=%d",' % (confArg, self.ntasksPerReducer * config.nReducers))
-            if v[0] == 0 and v[1] < 19:
-                begArgs.append('"%s", "num.key.fields.for.partition=%d",' % (confArg, self.nbin))
-            else:
-                begArgs.append('"%s", "mapred.text.key.partitioner.options=-k1,%d",' % (confArg, self.nbin))
+            begArgs.append('"%s", "%s",' % (confArg, hadoop.keyFields(v, self.nbin)))
             begArgs.append('"%s", "stream.num.map.output.key.fields=%d",' % (confArg, self.nsort))
             endArgs.append('"-partitioner", "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",')
         return begArgs, endArgs
@@ -38,7 +35,7 @@ class PipelineConfig(object):
     """ Information about the particular system we're going to run on, which
         changes some of the exact arguments we use """
     
-    def __init__(self, hadoopVersion, waitOnFail, emrStreamJar, nReducers, emrLocalDir, preprocCompress):
+    def __init__(self, hadoopVersion, waitOnFail, emrStreamJar, nReducers, emrLocalDir, preprocCompress, out):
         # Hadoop version used on EMR cluster
         self.hadoopVersion = hadoopVersion
         # Whether to keep the EMR cluster running if job fails
@@ -51,12 +48,14 @@ class PipelineConfig(object):
         self.emrLocalDir = emrLocalDir
         # Whether & how to compress output from preprocessor
         self.preprocCompress = preprocCompress
+        # Output URL
+        self.out = out
 
 class Step(object):
     """ Encapsulates a single step of the pipeline, i.e. a single
         MapReduce/Hadoop job """
     
-    def __init__(self, name, inp, output, inputFormat, aggr, mapper, reducer, out):
+    def __init__(self, name, inp, output, inputFormat, aggr, mapper, reducer):
         self.name = name
         self.input = inp
         self.output = output
@@ -64,7 +63,6 @@ class Step(object):
         self.aggr = aggr
         self.mapper = mapper
         self.reducer = reducer
-        self.out = out
     
     def toHadoopCmd(self):
         raise RuntimeError("toHadoopCmd not yet implemented")
@@ -78,26 +76,26 @@ class Step(object):
         lines.append('    "Jar": "%s",' % config.emrStreamJar)
         lines.append('    "Args": [')
         
-        begArgs, endArgs = self.reduceStyle.toHadoopArgs(config)
-        for a in begArgs:
-            lines.append('      ' + a)
+        begArgs, endArgs = [], []
+        if self.aggr is not None:
+            begArgs, endArgs = self.aggr.toHadoopArgs(config)
         
-        lines.append('      "-input", "%s",' % self.input)
-        lines.append('      "-output", "%s",' % self.output)
-        lines.append('      "-mapper", "%s",' % self.mapper)
+        endArgs.append('"-input", "%s",' % self.input)
+        endArgs.append('"-output", "%s",' % self.output)
+        endArgs.append('"-mapper", "%s",' % self.mapper)
         
         if self.reducer is not None:
-            lines.append('      "-reducer", "%s",' % self.reducer)
+            endArgs.append('"-reducer", "%s",' % self.reducer)
+        else:
+            begArgs.append('"%s", "mapred.reduce.tasks=0",' % hadoop.confArg(config.hadoopVersion))
         
         if self.inputFormat is not None:
-            lines.append('      "-inputformat", "%s",' % self.inputFormat)
+            endArgs.append('"-inputformat", "%s",' % self.inputFormat)
         
-        for a in endArgs:
-            lines.append('      ' + a)
+        for a in begArgs + endArgs: lines.append('      ' + a)
         
-        # Add cache files for this job
-        for fn in self.cacheFiles:
-            lines.append('      "-file", "%s",' % fn)
+        # Remove trailing comma
+        lines[-1] = lines[-1][:-1]
         
         # Add cache files for any tools used by this job
         

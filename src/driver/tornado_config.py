@@ -4,6 +4,14 @@ tornado_config.py
 Parse and organize parameters controlling the behavior of the Tornado pipeline.
 """
 
+import os
+import site
+
+base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+site.addsitedir(os.path.join(base_path, "util"))
+
+import path
+
 def addArgs(parser):
     parser.add_argument(\
         '--quality', metavar='STR', type=str, default="phred33", help='Quality string format.')
@@ -12,9 +20,11 @@ def addArgs(parser):
     parser.add_argument(\
         '--readlet-interval', metavar='INT', type=int, default="5", help='Distance between substrings to extract from read.')
     parser.add_argument(\
-        '--partition-length', metavar='INT', type=int, default="5", help='Size of genome partitions to use.')
+        '--partition-length', metavar='INT', type=int, default=10000, help='Size of genome partitions to use.')
     parser.add_argument(\
         '--cluster-radius', metavar='INT', type=int, default="2", help='For clustering candidate introns into junctions.')
+    parser.add_argument(\
+        '--bowtie-exe', metavar='STR', type=str, help='Bowtie executable to use.  Must exist at this path on all the cluster nodes.')
     parser.add_argument(\
         '--bowtie-args', metavar='STR', type=str, help='Arguments to pass to Bowtie.')
     parser.add_argument(\
@@ -43,6 +53,7 @@ class TornadoConfig(object):
         q = self.quality = args.quality
         if q != "phred64" and q != "phred33" and q != "solexa64":
             raise RuntimeError("Unknown argument for --quality: '%s'" % q)
+        self.bowtieExe = args.bowtie_exe
         l = self.readletLen = args.readlet_length
         if l < 4:
             raise RuntimeError("Argument for --readlet-length must be >= 4; was %d" % l)
