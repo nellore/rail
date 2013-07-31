@@ -72,10 +72,11 @@ class NormalizeStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(None, 4, 1, 1),
             "cat",     # mapper
-            "python %s/normalize.py" % d)
+            "python %s/normalize.py --percentile %f --out_dir '%s/coverage' --bigbed_exe %s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai" % (d, self.normPercentile, pconf.out.toUpperUrl(), d, d))
 
 class NormalizePostStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
+        d = pconf.emrLocalDir
         super(pipeline.Step, self).__init__(\
             "NormalizePost", # name
             inp,     # input URL
@@ -83,10 +84,11 @@ class NormalizePostStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(1, None, 0, 0),
             "cat",     # mapper
-            "python %s/normalize_post.py" % emrLocalDir)
+            "python %s/normalize_post.py --out '%s/normalize' --manifest '%s/MANIFEST'" % (d, pconf.out.toUpperUrl(), d))
 
 class WalkFitStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
+        d = pconf.emrLocalDir
         super(pipeline.Step, self).__init__(\
             "WalkFit", # name
             inp,     # input URL
@@ -94,11 +96,12 @@ class WalkFitStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2),
             "cat",     # mapper
-            "python %s/walk_fit.py" % emrLocalDir)
+            "python %s/walk_fit.py" % d)
 
 class EbayesStep(pipeline.Step):
     """ Just 1 reduce task """
     def __init__(self, inp, output, tconf, pconf):
+        d = pconf.emrLocalDir
         super(pipeline.Step, self).__init__(\
             "EmpiricalBayes", # name
             inp,     # input URL
@@ -106,10 +109,11 @@ class EbayesStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(1, None, 0, 0),
             "cat",     # mapper
-            "python %s/ebayes.py" % emrLocalDir)
+            "python %s/ebayes.py" % d)
 
 class HmmParamsStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
+        d = pconf.emrLocalDir
         super(pipeline.Step, self).__init__(\
             "HMMparams", # name
             inp,     # input URL
@@ -117,10 +121,11 @@ class HmmParamsStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(1, None, 0, 0),
             "cat",     # mapper
-            "python %s/hmm_params.py" % emrLocalDir)
+            "python %s/hmm_params.py" % d)
 
 class HmmStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
+        d = pconf.emrLocalDir
         super(pipeline.Step, self).__init__(\
             "HMM", # name
             inp,     # input URL
@@ -128,10 +133,11 @@ class HmmStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2),
             "cat",     # mapper
-            "python %s/hmm.py" % emrLocalDir)  # reducer
+            "python %s/hmm.py" % d)  # reducer
 
 class AggrPathStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
+        d = pconf.emrLocalDir
         super(pipeline.Step, self).__init__(\
             "HMMPaths", # name
             inp,     # input URL
@@ -139,4 +145,4 @@ class AggrPathStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(nperms * 2, None, 1, 2),
             "cat",     # mapper
-            "python %s/aggr_path.py" % emrLocalDir)
+            "python %s/aggr_path.py" % d)

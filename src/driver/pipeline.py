@@ -56,7 +56,7 @@ class Step(object):
     """ Encapsulates a single step of the pipeline, i.e. a single
         MapReduce/Hadoop job """
     
-    def __init__(self, name, inp, output, inputFormat, aggr, mapper, reducer):
+    def __init__(self, name, inp, output, inputFormat, aggr, mapper, reducer, out):
         self.name = name
         self.input = inp
         self.output = output
@@ -64,6 +64,7 @@ class Step(object):
         self.aggr = aggr
         self.mapper = mapper
         self.reducer = reducer
+        self.out = out
     
     def toHadoopCmd(self):
         raise RuntimeError("toHadoopCmd not yet implemented")

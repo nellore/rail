@@ -44,13 +44,18 @@ import argparse
 import string
 import sys
 import tempfile
+import site
 
 import aws
-import url
 import pipeline
 import tornado_pipeline
 import tools
 import tornado_config
+
+base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+site.addsitedir(os.path.join(base_path, "util"))
+
+import url
 
 parser = argparse.ArgumentParser(description='Generate and run a script for Tornado.')
 
@@ -70,11 +75,13 @@ parser.add_argument(\
 # Basic plumbing
 #
 parser.add_argument(\
-    '--input', metavar='PATH', type=str, required=True, help='URL for input directory')
+    '--manifest', metavar='PATH', type=str, required=False, help='URL for manifest file')
+parser.add_argument(\
+    '--input', metavar='PATH', type=str, required=False, help='URL for input directory')
 parser.add_argument(\
     '--output', metavar='PATH', type=str, required=True, help='URL for output directory')
 parser.add_argument(\
-    '--reference', metavar='PATH', type=str, required=True, help='URL for reference archive')
+    '--reference', metavar='PATH', type=str, required=False, help='URL for reference archive')
 parser.add_argument(\
     '--intermediate', metavar='PATH', type=str, help='URL for intermediate files')
 parser.add_argument(\
@@ -184,7 +191,12 @@ appName = "tornado" # app name
 mode = "aws"
 
 # For URLs, remove trailing slash(es) and parse
-inp = url.Url(args.input.rstrip('/'))
+inp = None
+if args.input is not None:
+    inp = url.Url(args.input.rstrip('/'))
+manifest = None
+if args.manifest is not None:
+    manifest = url.Url(args.manifest.rstrip('/'))
 out = url.Url(args.output.rstrip('/'))
 intermediate = args.intermediate
 if intermediate is not None:
@@ -299,17 +311,17 @@ if mode == 'aws':
         emrStreamJar = "/home/hadoop/contrib/streaming/hadoop-%s-streaming.jar" % hadoopVersion
     
     # Sanity-check URLs
-    if not inp.isS3():
+    if inp is not None and not inp.isS3():
         raise RuntimeError("--input argument '%s' is not an S3 URL" % inp)
     if not out.isS3():
         raise RuntimeError("--output argument '%s' is not an S3 URL" % out)
-    if not ref.isS3():
+    if ref is not None and not ref.isS3():
         raise RuntimeError("--reference argument '%s' is not an S3 URL" % ref)
     if intermediate is not None and not intermediate.isS3():
         raise RuntimeError("--intermediate argument '%s' is not an S3 URL" % intermediate)
 
 tconf = tornado_config.TornadoConfig(args)
-pconf = pipeline.PipelineConfig(hadoopVersionToks, waitFail, emrStreamJar, emrCluster.numCores(), emrLocalDir, args.preproc_compress)
+pconf = pipeline.PipelineConfig(hadoopVersionToks, waitFail, emrStreamJar, emrCluster.numCores(), emrLocalDir, args.preproc_compress, out)
 
 pipelines = ["preprocess", "align", "coverage", "junction", "differential"]
 
@@ -358,8 +370,21 @@ useIndex = 'align' in pipelines
 useGtf = 'align' in pipelines
 useFasta = 'align' in pipelines or 'junction' in pipelines
 useRef = useIndex or useGtf or useFasta
+useKenttools = 'coverage' in pipelines or 'differential' in pipelines
+useSamtools = False
 useSraToolkit = 'preprocess' in pipelines
 useR = 'differential' in pipelines
+useManifest = 'coverage' in pipelines
+useInput = 'preprocess' not in pipelines
+
+if useManifest and manifest is None:
+    raise RuntimeError("Must specify --manifest when job involves preprocessing")
+
+if useRef and ref is None:
+    raise RuntimeError("Must specify --reference when job involves alignment or junction pipelines")
+
+if useInput and inp is None:
+    raise RuntimeError("Must specify --input when job does not involve preprocessing")
 
 allSteps = [ None ] + [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ] + [ None ]
 
@@ -382,8 +407,12 @@ for prv, cur, nxt in [ allSteps[i:i+3] for i in xrange(0, len(allSteps)-2) ]:
     assert cur in stepClasses
     if prv is None: inDirs.append(inp)
     else: inDirs.append(outDirs[-1])
-    if nxt is None: outDirs.append(out)
-    else: outDirs.append("%s/%s_out" % (intermediate, cur))
+    if nxt is None: outDirs.append(out + "/final")
+    else:
+        if args.preproc_output and cur == "preprocess":
+            outDirs.append(args.preproc_output)
+        else:
+            outDirs.append("%s/%s_out" % (intermediate, cur))
     steps.append(stepClasses[cur](inDirs[-1], outDirs[-1]))
 
 jsonStr = "\n".join([ step.toEmrCmd(pconf) for step in steps ])
@@ -403,15 +432,21 @@ if mode == "emr":
         "--json", jsonFn ]     # file with JSON description of flow
     
     cmdl.append(emrCluster.emrArgs())
-    cmdl.append(aws.bootstrapFetch("Fetch Tornado source", "s3://tornado-emr/bin/tornado-%s.tar.gz" % ver, emrLocalDir))
+    cmdl.append(aws.bootstrapFetchTarball("Fetch Tornado source", "s3://tornado-emr/bin/tornado-%s.tar.gz" % ver, emrLocalDir))
     if useRef:
-        cmdl.append(aws.bootstrapFetch("Fetch Tornado ref archive", ref.toNonNativeUrl(), emrLocalDir))
+        cmdl.append(aws.bootstrapFetchTarball("Fetch Tornado ref archive", ref.toNonNativeUrl(), emrLocalDir))
+    if useManifest:
+        cmdl.append(aws.bootstrapFetchFile("Fetch manifest file", manifest.toNonNativeUrl(), emrLocalDir, "MANIFEST"))
     if useBowtie:
         cmdl.append(tools.bootstrapTool("bowtie"))
     if useSraToolkit:
         cmdl.append(tools.bootstrapTool("sra-toolkit"))
     if useR:
         cmdl.append(tools.bootstrapTool("R"))
+    if useKenttools:
+        cmdl.append(tools.bootstrapTool("kenttools", dest="/mnt/bin"))
+    if useSamtools:
+        cmdl.append(tools.bootstrapTool("samtools"))
     cmdl.extend(emrArgs)
     
     cmd = ' '.join(cmdl)

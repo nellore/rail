@@ -119,7 +119,18 @@ def bootstrapHadoop(ncores=None, swap=None, memoryIntensive=False):
     
     return ' '.join(ret)
 
-def bootstrapFetch(name, url, emrLocalDir):
+def bootstrapFetchFile(name, url, emrLocalDir, destname=None):
+    """ Create a bootstrap action that copies the file at a given path within
+        the given bucket into the given directory on the node. """
+    tmp = ""
+    if destname is not None:
+        tmp = ",%s" % destname
+    ret = ['--bootstrap-action s3://tornado-emr/bootstrap/s3cmd_s3.sh',
+           '--bootstrap-name "%s"' % name,
+           '--args "%s,%s%s"' % (url.toNonNativeUrl(), emrLocalDir, tmp)]
+    return ' '.join(ret)
+
+def bootstrapFetchTarball(name, url, emrLocalDir):
     """ Create a bootstrap action that copies the file at a given path within
         the given bucket into the given directory on the node. """
     ret = ['--bootstrap-action s3://tornado-emr/bootstrap/s3cmd_s3_tarball.sh',
