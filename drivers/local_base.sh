@@ -12,8 +12,8 @@ fi
 
 
 SCR_DIR=$TORNADO/src/rnawesome
-mkdir -p intermediate
-INTERMEDIATE_DIR=intermediate/
+#mkdir -p intermediate
+#INTERMEDIATE_DIR=intermediate/
 
 # Step 1: Readletize input reads and use Bowtie to align the readlets 
 ALIGN_AGGR="cat"
@@ -48,7 +48,7 @@ WALK_PRENORM="python $SCR_DIR/walk_prenorm.py"
 NORMALIZE_AGGR1="sort -n -k2,2"
 NORMALIZE_AGGR2="sort -s -k1,1"
 NORMALIZE="python $SCR_DIR/normalize.py"
-SAMPLE_OUT=intermediate/samples
+SAMPLE_OUT=$INTERMEDIATE_DIR/samples
 mkdir -p  $SAMPLE_OUT
 CHROM_SIZES=$PWD/chrom.sizes
 cat $FASTA_IDX | cut -f -2 > $CHROM_SIZES
@@ -84,7 +84,7 @@ PATH_AGGR1="sort -n -k3,3"
 PATH_AGGR2="sort -s -k2,2"
 PATH_AGGR3="sort -n -k1,1"
 AGGR_PATH="python $SCR_DIR/aggr_path.py"
-PERM_OUT=intermediate/permutations
+PERM_OUT=$INTERMEDIATE_DIR/permutations
 mkdir -p $PERM_OUT
 
 # Temporary files so we can form a DAG
@@ -107,7 +107,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 		--manifest $MANIFEST_FN \
                 --refseq=$GENOME \
                 --faidx=$FASTA_IDX \
-		| tee ${INTERMEDIATE_DIR}align_out.tsv \
+		| tee ${INTERMEDIATE_DIR}/align_out.tsv \
 	| grep '^exon' | $MERGE_AGGR2 | $MERGE_AGGR3 | $MERGE_AGGR4 | $MERGE \
 	| tee $WALK_IN_TMP | $WALK_PRENORM \
 		--ntasks=$NTASKS \
@@ -118,37 +118,37 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
                 --bigbed_exe $BIGBED_EXE \
                 --chrom_sizes $CHROM_SIZES \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
-		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}norm.tsv
+		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}/norm.tsv
 
-cp $WALK_IN_TMP ${INTERMEDIATE_DIR}walk_in_input.tsv
+cp $WALK_IN_TMP ${INTERMEDIATE_DIR}/walk_in_input.tsv
 
-cat ${INTERMEDIATE_DIR}align_out.tsv \
+cat ${INTERMEDIATE_DIR}/align_out.tsv \
     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 \
-    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS | $SITE2BED > ${INTERMEDIATE_DIR}splice_sites.bed
+    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS | $SITE2BED > ${INTERMEDIATE_DIR}/splice_sites.bed
  
 # cat $WALK_IN_TMP \  
-# 	| tee ${INTERMEDIATE_DIR}walk_fit_in.tsv | $WALK_FIT \
+# 	| tee ${INTERMEDIATE_DIR}/walk_fit_in.tsv | $WALK_FIT \
 # 		--ntasks=$NTASKS \
 # 		--genomeLen=$GENOME_LEN \
 # 		--seed=777 \
 # 		--permutations=$PERMUTATIONS \
-# 		--permutations-out=${INTERMEDIATE_DIR}permutations.tsv \
-# 		--normals=${INTERMEDIATE_DIR}norm.tsv \
-# 	| $EBAYES_AGGR | tee ${INTERMEDIATE_DIR}ebayes_in.tsv | $EBAYES \
+# 		--permutations-out=${INTERMEDIATE_DIR}/permutations.tsv \
+# 		--normals=${INTERMEDIATE_DIR}/norm.tsv \
+# 	| $EBAYES_AGGR | tee ${INTERMEDIATE_DIR}/ebayes_in.tsv | $EBAYES \
 # 		--ntasks=$NTASKS \
 # 		--genomeLen=$GENOME_LEN \
 # 		--hmm-overlap=$HMM_OVERLAP \
-# 	| tee ${INTERMEDIATE_DIR}hmm_in.tsv | $HMM_PARAMS_AGGR | $HMM_PARAMS \
+# 	| tee ${INTERMEDIATE_DIR}/hmm_in.tsv | $HMM_PARAMS_AGGR | $HMM_PARAMS \
 # 		--null \
-# 		--out ${INTERMEDIATE_DIR}hmm_params.tsv 
+# 		--out ${INTERMEDIATE_DIR}/hmm_params.tsv 
 
-# cat ${INTERMEDIATE_DIR}hmm_in.tsv \
+# cat ${INTERMEDIATE_DIR}/hmm_in.tsv \
 # 	| $HMM_AGGR1 | $HMM_AGGR2 | $HMM \
 # 		--ntasks=$NTASKS \
 # 		--genomeLen=$GENOME_LEN \
-# 		--params ${INTERMEDIATE_DIR}hmm_params.tsv \
+# 		--params ${INTERMEDIATE_DIR}/hmm_params.tsv \
 # 		--hmm-overlap=$HMM_OVERLAP \
-# 	| tee ${INTERMEDIATE_DIR}hmm_out.tsv > hmm.out
+# 	| tee ${INTERMEDIATE_DIR}/hmm_out.tsv > hmm.out
 
 # cat hmm.out | $PATH_AGGR1 | $PATH_AGGR2 | $PATH_AGGR3 | $AGGR_PATH \
 #                 --out_dir $PERM_OUT \
@@ -159,8 +159,8 @@ cat ${INTERMEDIATE_DIR}align_out.tsv \
 # echo DONE 1>&2
 
 # echo "Normalization file:" 1>&2
-# cat ${INTERMEDIATE_DIR}norm.tsv 1>&2
+# cat ${INTERMEDIATE_DIR}/norm.tsv 1>&2
 
 # echo "HMM parameter file:" 1>&2
-# cat ${INTERMEDIATE_DIR}hmm_params.tsv 1>&2
+# cat ${INTERMEDIATE_DIR}/hmm_params.tsv 1>&2
 

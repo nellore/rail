@@ -100,6 +100,8 @@ def compare(bed_sites,annot_sites,radius):
     total = len(missed_sites)
     for k,v in bed_sites.iteritems():
         for guess in v:
+            if len(annot_sites[k])==0:
+                continue
             exact = search.find(annot_sites[k],guess)
             if guess==exact:
                 #print "Correct","Guess",guess,"Exact",exact

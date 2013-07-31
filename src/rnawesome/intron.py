@@ -222,11 +222,11 @@ Applies the Needleman-Wunsch algorithm to provide a list of candiates
 """
 def nw_correct(refID,site5,site3,introns,strand,fastaF):
     sites5,sites3 = [],[]
-    n = args.readletLen
     for intr in introns:
         in_st,in_en,lab,rdseq5_flank,rdseq5_over,rdseq3_flank,rdseq3_over = intr
         rdseq5 = rdseq5_flank+rdseq5_over
         rdseq3 = rdseq3_flank+rdseq3_over        
+        n = len(rdseq5_flank)
         overlap = len(rdseq5_over)
         st,en = site5-n,site3+n
         refseq5_flank = fastaF.fetch_sequence(refID,st-1,site5-1).upper()
@@ -304,8 +304,6 @@ if last_pt!='\t':
     bins = cluster(intron_ivals)
     #Apply sliding windows to find splice junction locations
     getJunctionSites(last_pt,last_ref,bins,fnh)
-
-
 
 # Done                                                             
 timeEn = time.clock()
