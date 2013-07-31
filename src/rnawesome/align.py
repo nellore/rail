@@ -69,14 +69,12 @@ site.addsitedir(os.path.join(base_path, "bowtie"))
 site.addsitedir(os.path.join(base_path, "read"))
 site.addsitedir(os.path.join(base_path, "sample"))
 site.addsitedir(os.path.join(base_path, "interval"))
-site.addsitedir(os.path.join(base_path, "manifest"))
 site.addsitedir(os.path.join(base_path, "alignment"))
 site.addsitedir(os.path.join(base_path, "fasta"))
 
 import bowtie
 import readlet
 import sample
-import manifest
 import interval
 import partition
 import eddist
@@ -113,7 +111,6 @@ parser.add_argument(\
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
-manifest.addArgs(parser)
 partition.addArgs(parser)
 
 parser.add_argument(\
