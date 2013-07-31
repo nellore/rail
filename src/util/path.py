@@ -4,6 +4,10 @@ path.py
 Module for manipulating and probing paths and files on the local filesystem.
 """
 
+def is_exe(fpath):
+    import os
+    return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
 def which(program):
     import os
     def is_exe(fpath):
