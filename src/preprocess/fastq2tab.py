@@ -36,12 +36,13 @@ def preprocess(fh, outfh, lab, filename=None):
 
 if __name__ == '__main__':
     import argparse
-    import sys
     
     parser = argparse.ArgumentParser(description='Preprocess a FASTQ file into a file that can be used with Myrna & friends')
     
     parser.add_argument(\
         '--input', metavar='PATHS', type=str, nargs='+', required=True, help='Use this in FN: field in output read name')
+    parser.add_argument(\
+        '--output', metavar='PATHS', type=str, nargs='+', required=True, help='Write these preprocessed files')
     parser.add_argument(\
         '--filename', metavar='STR', type=str, help='Use this in FN: field in output read name')
     parser.add_argument(\
@@ -51,5 +52,7 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     assert len(args.input) == len(args.label)
-    for fn, lab in zip(args.input, args.label):
-        preprocess(fn, sys.stdout, lab)
+    assert len(args.input) == len(args.output)
+    for fn, outfn, lab in zip(args.input, args.output, args.label):
+        with open(outfn, 'w') as ofh:
+            preprocess(fn, ofh, lab)
