@@ -96,7 +96,6 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 
  cat $RNASEQ \
  	| $ALIGN_AGGR | $ALIGN \
-		--v2 \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
 		--bowtieArgs '-v 2 -m 1 -p 6' \
@@ -104,7 +103,6 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 		--bowtieIdx=$BOWTIE_IDX \
 		--readletLen $READLET_LEN \
 		--readletIval $READLET_IVAL \
-		--manifest $MANIFEST_FN \
                 --refseq=$GENOME \
                 --faidx=$FASTA_IDX \
 		| tee ${INTERMEDIATE_DIR}/align_out.tsv \
