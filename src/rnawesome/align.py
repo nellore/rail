@@ -114,8 +114,6 @@ readlet.addArgs(parser)
 partition.addArgs(parser)
 
 parser.add_argument(\
-    '--v2', action='store_const', const=True, default=False, help='New readlet handling')
-parser.add_argument(\
     '--test', action='store_const', const=True, default=False, help='Run unit tests')
 parser.add_argument(\
     '--profile', action='store_const', const=True, default=False, help='Profile the code')
@@ -424,17 +422,11 @@ def go():
                 rlets1 = readlet.readletize(args, nm1, seq1, qual1)
                 for i in xrange(0, len(rlets1)):
                     nm_rlet, seq_rlet, qual_rlet = rlets1[i]
-                    if args.v2:
-                        proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet))
-                    else:
-                        proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet))
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
-                    if args.v2:
-                        proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet))
-                    else:
-                        proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet))
             else:
                 proc.stdin.write("%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2))
         else:
@@ -447,10 +439,7 @@ def go():
                 rlets = readlet.readletize(args, nm, seq, qual)
                 for i in xrange(0, len(rlets)):
                     nm_rlet, seq_rlet, qual_rlet = rlets[i]
-                    if args.v2:
-                        proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet))
-                    else:
-                        proc.stdin.write("%s\t%s\t%s\n" % (nm_rlet, seq_rlet, qual_rlet))
+                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet))
             else:
                 proc.stdin.write("%s\t%s\t%s\n" % (nm, seq, qual))
 
@@ -603,8 +592,5 @@ else:
 
     fnh = fasta.fasta(args.refseq)
 
-    if args.v2:
-        proc = bowtie.proc(args, sam=True, outHandler=bowtieOutReadlets, errHandler=bowtieErr)
-    else:
-        proc = bowtie.proc(args, sam=False, outHandler=bowtieOut, errHandler=bowtieErr)
+    proc = bowtie.proc(args, sam=True, outHandler=bowtieOutReadlets, errHandler=bowtieErr)
     go()
