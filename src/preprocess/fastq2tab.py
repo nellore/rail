@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+
+"""
+fastq2tab.py
+
+Author: Ben Langmead
+Date: 7/31/2013
+Contact: langmea@cs.jhu.edu
+
+Convert FASTQ to tab-delimited format.
+
+TODO: Handle paired-end inputs.
+"""
+
+import os
+import gzip
+
+def preprocess(fh, outfh, lab, filename=None):
+    fh_is_file = True
+    if not isinstance(fh, file):
+        if filename is None:
+            filename = os.path.basename(fh)
+        fh_is_file = False
+        fh = gzip.GzipFile(fh, 'r') if fh.endswith('.gz') else open(fh, 'r')
+    assert filename is not None
+    while True:
+        name = fh.readline().rstrip()
+        if len(name) == 0: break
+        seq   = fh.readline().rstrip()
+        fh.readline()
+        qual  = fh.readline().rstrip()
+        outfh.write('\t'.join([';'.join(["FN:" + filename, "LB:" + lab, name]), seq, qual]))
+        outfh.write('\n')
+    if not fh_is_file:
+        fh.close()
+
+if __name__ == '__main__':
+    import argparse
+    import sys
+    
+    parser = argparse.ArgumentParser(description='Preprocess a FASTQ file into a file that can be used with Myrna & friends')
+    
+    parser.add_argument(\
+        '--input', metavar='PATHS', type=str, nargs='+', required=True, help='Use this in FN: field in output read name')
+    parser.add_argument(\
+        '--filename', metavar='STR', type=str, help='Use this in FN: field in output read name')
+    parser.add_argument(\
+        '--label', metavar='STRS', type=str, nargs='+', required=True, help='Use this in LB: field in output read name')
+    parser.add_argument(\
+        '--test', action='store_const', const=True, default=False, help='Do unit tests')
+    
+    args = parser.parse_args()
+    assert len(args.input) == len(args.label)
+    for fn, lab in zip(args.input, args.label):
+        preprocess(fn, sys.stdout, lab)
