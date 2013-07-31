@@ -1,4 +1,3 @@
-
 BIGBED_EXE=`which bedToBigBed`
 if [ $? -ne 0 ] ; then
         echo "bedToBigBed must be in PATH"
@@ -229,7 +228,7 @@ hadoop dfs -rmr $NORMALIZE_OUT
 time hadoop jar $STREAMING \
     -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=3 \
+    -D stream.num.map.output.key.fields=2 \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
