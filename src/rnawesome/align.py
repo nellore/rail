@@ -275,8 +275,15 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
         refid, fw, refoff0, seqlen, rlet_nm = rdal
         refoff0, seqlen, rlet_nm = int(refoff0), int(seqlen), int(rlet_nm)
         # Remember begin, end offsets for readlet w/r/t 5' end of the read
-        positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval
-        positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval + seqlen
+        #TODO: Consider stranded scenario.  These positions are always defined on 5' end
+        if fw:
+            positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval
+            positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval + seqlen
+        else:
+            positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval
+            positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval + seqlen
+         
+       
         if (refid, fw) not in ivals:
             ivals[(refid, fw)] = interval.FlatIntervals()
         ivals[(refid, fw)].add(interval.Interval(refoff0, refoff0 + seqlen))
@@ -297,10 +304,14 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 unmapped_st,unmapped_end = region_st-args.readletLen,region_end+args.readletLen
                 reflen,unmappedlen = in_end-in_start,unmapped_end-unmapped_st
                 #print >> sys.stderr,"reflen",reflen,"unmappedlen",unmappedlen,"unmapped start",unmapped_st,"unmapped end",unmapped_end
-                if unmappedlen<=0:
+                if unmappedlen<=0: #This should NEVER happen ???
                     #print >> sys.stderr,"len<=0","Region start",region_st,"Region end",region_end
                     printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
                 elif abs(reflen-unmappedlen)/float(unmappedlen) > 0.05: 
+                    #Question: should it be < 0.05 instead?
+                    #Question: should it be abs(reflen-abs(region_end-region)) /float(abs(region_end-region_st))
+                    #Note: just a readlet missing due to error or variant
+                    #
                     handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 else:# reflen > unmappedlen:
                     #print >> sys.stderr,"len>0","Region start",region_st,"Region end",region_end
