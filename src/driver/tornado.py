@@ -188,7 +188,7 @@ ver = "0.0.1" # app version
 appName = "tornado" # app name
 
 # TODO: also support local and Hadoop modes
-mode = "aws"
+mode = "emr"
 
 # For URLs, remove trailing slash(es) and parse
 inp = None
@@ -222,7 +222,7 @@ emrStreamJar = None
 # Parse AWS-related arguments.  Exceptions are raised when there are obvious
 # issues.
 #
-if mode == 'aws':
+if mode == 'emr':
     itMaster, itCore, itTask = None, None, None
     numMaster, numCore, numTask = 0, 0, 0
     
@@ -322,7 +322,7 @@ if mode == 'aws':
         raise RuntimeError("--intermediate argument '%s' is not an S3 URL" % args.intermediate)
 
 tconf = tornado_config.TornadoConfig(args)
-pconf = pipeline.PipelineConfig(hadoopVersionToks, waitFail, emrStreamJar, emrCluster.numCores(), emrLocalDir, args.preprocess_compress, out)
+pconf = pipeline.PipelineConfig(hadoopVersionToks, waitFail, emrStreamJar, emrCluster.numCoreProcessors(), emrLocalDir, args.preprocess_compress, out)
 
 pipelines = ["preprocess", "align", "coverage", "junction", "differential"]
 
@@ -420,31 +420,31 @@ for prv, cur, nxt in [ allSteps[i:i+3] for i in xrange(0, len(allSteps)-2) ]:
             outDirs.append("%s/%s_out" % (intermediate.toUrl(), cur))
     steps.append(stepClasses[cur](inDirs[-1], outDirs[-1], tconf, pconf))
 
-print >> sys.stderr, "Input directories:\n" + '\n'.join(inDirs)
-print >> sys.stderr, "Output directories:\n" + '\n'.join(outDirs)
-
-jsonStr = "[\n" + "\n".join([ step.toEmrCmd(pconf) for step in steps ]) + "\n]\n"
-with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as jsonFh:
-    jsonFn = jsonFh.name
-    jsonFh.write(jsonStr)
-
-if args.dry_run:
+if mode == 'emr':
+    jsonStr = "[\n" + "\n".join([ step.toEmrCmd(pconf) for step in steps ]) + "\n]\n"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as jsonFh:
+        jsonFn = jsonFh.name
+        jsonFh.write(jsonStr)
+    
     print >> sys.stderr, "Json output in: '%s'" % jsonFn
-
-if mode == "emr":
+    
+    if emrScript is None:
+        emrScript = "elastic-mapreduce"
     
     cmdl = [
         emrScript, "--create", # create job flow
-        "-c", cred,            # credentials
         "--name", jobName,     # name job flow
         "--json", jsonFn ]     # file with JSON description of flow
+
+    if cred is not None:
+        cmdl.extend(["-c", cred])
     
     cmdl.append(emrCluster.emrArgs())
-    cmdl.append(aws.bootstrapFetchTarball("Fetch Tornado source", "s3://tornado-emr/bin/tornado-%s.tar.gz" % ver, emrLocalDir))
+    cmdl.append(aws.bootstrapFetchTarball("Fetch Tornado source", url.Url("s3://tornado-emr/bin/tornado-%s.tar.gz" % ver), emrLocalDir))
     if useRef:
-        cmdl.append(aws.bootstrapFetchTarball("Fetch Tornado ref archive", ref.toNonNativeUrl(), emrLocalDir))
+        cmdl.append(aws.bootstrapFetchTarball("Fetch Tornado ref archive", ref, emrLocalDir))
     if useManifest:
-        cmdl.append(aws.bootstrapFetchFile("Fetch manifest file", manifest.toNonNativeUrl(), emrLocalDir, "MANIFEST"))
+        cmdl.append(aws.bootstrapFetchFile("Fetch manifest file", manifest, emrLocalDir, "MANIFEST"))
     if useBowtie:
         cmdl.append(tools.bootstrapTool("bowtie"))
     if useSraToolkit:
@@ -458,5 +458,8 @@ if mode == "emr":
     cmdl.extend(emrArgs)
     
     cmd = ' '.join(cmdl)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as shFh:
+        shFn = shFh.name
+        shFh.write(cmd)
     if args.dry_run:
-        print >> sys.stderr, cmd
+        print >> sys.stderr, "elastic-mapreduce command in: '%s'" % shFn

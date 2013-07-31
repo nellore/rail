@@ -7,25 +7,31 @@ import pipeline
 
 class PreprocessingStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
+        compressArg = ""
+        if pconf.preprocCompress is not None:
+            compressArg = "--compress=%s" % pconf.preprocCompress
         super(PreprocessingStep, self).__init__(\
             "Preprocess", # name
             inp,      # input URL
             output,   # output URL
             "org.apache.hadoop.mapred.lib.NLineInputFormat",
             None,
-            "python %s/preproc.py --compress=%s" % (pconf.emrLocalDir, pconf.preprocCompress),
+            "python %s/preproc.py %s" % (pconf.emrLocalDir, compressArg),
             None)
 
 class AlignStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
         d = pconf.emrLocalDir
+        bexe = ""
+        if tconf.bowtieExe is not None:
+            bexe = "--bowtieExe='%s'" % tconf.bowtieExe
         super(AlignStep, self).__init__(\
             "Align", # name
             inp,     # input URL
             output,  # output URL
             None,    # input format
             None,    # no aggregation
-            "python %s/align.py --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai --bowtieArgs='%s' --bowtieExe='%s' --bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d" % (d, d, d, tconf.bowtieArgs, tconf.bowtieExe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen),
+            "python %s/align.py --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai --bowtieArgs='%s' %s --bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d" % (d, d, d, tconf.bowtieArgs(), bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen),
             None)
 
 class IntronStep(pipeline.Step):
@@ -36,7 +42,7 @@ class IntronStep(pipeline.Step):
             inp,     # input URL
             output,  # output URL
             None,    # input format
-            pipeline.Aggregation(None, 8, 1, 2),
+            pipeline.Aggregation(None, 8, 1, 2), # 8 tasks per reducer
             "cat",     # mapper
             "python %s/intron.py --refseq=%s/fasta/genome.fa --radius=%d --readletLen=%d --readletIval=%d" % (d, d, tconf.clusterRadius, tconf.readletLen, tconf.readletIval))
 

@@ -49,6 +49,7 @@ def addArgs(parser):
         '--hmm-overlap', metavar='INT', type=int, default=100, help='Number of positions of overlap between adjacent emission strings.')
 
 class TornadoConfig(object):
+    
     def __init__(self, args):
         q = self.quality = args.quality
         if q != "phred64" and q != "phred33" and q != "solexa64":
@@ -66,7 +67,7 @@ class TornadoConfig(object):
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
-        self.bowtieArgs = args.bowtie_args or ""
+        self._bowtieArgs = args.bowtie_args or "-v 1 -m"
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)
@@ -89,3 +90,6 @@ class TornadoConfig(object):
         o = self.hmmOlap = args.hmm_overlap
         if o < 0:
             raise RuntimeError("Argument for --hmm-overlap must be >= 0; was %d" % o)
+    
+    def bowtieArgs(self):
+        return ' '.join([self._bowtieArgs, "--mm", "-t"])

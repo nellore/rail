@@ -73,8 +73,11 @@ class EmrCluster(object):
         if itTask is not None:
             self.itSwapTask = instSwap[itTask]
     
-    def numCores(self):
+    def numProcessorsPerCoreInstance(self):
         return instNcores[self.itCore]
+    
+    def numCoreProcessors(self):
+        return instNcores[self.itCore] * self.numCore
     
     def emrArgs(self):
         ret = []
