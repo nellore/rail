@@ -11,9 +11,17 @@ def addArgs(parser):
     parser.add_argument(\
         '--genomeLen', metavar='LEN', type=int, required=False,
         help='Total length of the genome; required so that we can accurately calculate bin sizes')
+    parser.add_argument(\
+        '--partition-length', metavar='LEN', type=int, required=False,
+        help='Length of a single genome partition')
 
 def binSize(args):
-    return int(math.ceil(1.0 * args.genomeLen / args.ntasks))
+    if args.partition_length is not None:
+        return args.partition_length
+    elif args.genomeLen is not None:
+        return int(math.ceil(1.0 * args.genomeLen / args.ntasks))
+    else:
+        return 10000
 
 def partition(refid, st, en, binSize):
     ''' Assign the interval refid:[st, en) to one or more partitions
