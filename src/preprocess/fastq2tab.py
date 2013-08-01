@@ -23,14 +23,16 @@ def preprocess(fh, outfh, lab, filename=None):
         fh_is_file = False
         fh = gzip.GzipFile(fh, 'r') if fh.endswith('.gz') else open(fh, 'r')
     assert filename is not None
+    n = 0
     while True:
         name = fh.readline().rstrip()
         if len(name) == 0: break
         seq   = fh.readline().rstrip()
         fh.readline()
         qual  = fh.readline().rstrip()
-        outfh.write('\t'.join([';'.join(["FN:" + filename, "LB:" + lab, name]), seq, qual]))
+        outfh.write('\t'.join([';'.join(["FN:" + filename.replace(';', '_'), "LB:" + lab.replace(';', '_'), str(n)]), seq, qual]))
         outfh.write('\n')
+        n += 1
     if not fh_is_file:
         fh.close()
 
