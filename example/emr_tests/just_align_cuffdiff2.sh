@@ -14,7 +14,7 @@ python $TORNADO_HOME/src/driver/tornado.py \
 	--reference s3://tornado-emr/refs/hg19_UCSC.tar.gz \
 	--just-align \
 	--instance-type c1.xlarge \
-	--instance-counts 1,3,0 \
+	--instance-counts 1,0,0 \
 	$*
 
 echo "s3cmd del --recursive s3://langmead/tornado_cuffdiff2"

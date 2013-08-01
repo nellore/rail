@@ -46,7 +46,7 @@ class EmrCluster(object):
     """ Encapsulates information about the nodes in the cluster """
     
     def __init__(self, itMaster, numMaster, itCore, numCore, itTask, numTask, bidPrice):
-        assert numMaster > 0 and numCore > 0
+        assert numMaster > 0
         assert itMaster is not None and itMaster in instBits
         assert itCore is not None and itCore in instBits
         assert numTask == 0 or bidPrice is not None
@@ -77,12 +77,13 @@ class EmrCluster(object):
         return instNcores[self.itCore]
     
     def numCoreProcessors(self):
-        return instNcores[self.itCore] * self.numCore
+        return instNcores[self.itCore] * max(1, self.numCore)
     
     def emrArgs(self):
         ret = []
         ret.append("--instance-group master --instance-type %s --instance-count %d" % (self.itMaster, self.numMaster))
-        ret.append("--instance-group core --instance-type %s --instance-count %d" % (self.itCore, self.numCore))
+        if self.numCore > 0:
+            ret.append("--instance-group core --instance-type %s --instance-count %d" % (self.itCore, self.numCore))
         if self.numTask > 0:
             ret.append("--instance-group task --instance-type %s --instance-count %d --bid-price %f" % (self.itTask, self.numTask, self.bidPrice))
         return " ".join(ret)

@@ -463,6 +463,7 @@ if mode == 'emr':
         cmdl.append(aws.bootstrapFetchTarball("Fetch Tornado ref archive", ref, emrLocalDir))
     if useManifest:
         cmdl.append(aws.bootstrapFetchFile("Fetch manifest file", manifest, emrLocalDir, "MANIFEST"))
+    cmdl.append(tools.bootstrapTool("python"))
     if useBowtie:
         cmdl.append(tools.bootstrapTool("bowtie"))
     if useSraToolkit:

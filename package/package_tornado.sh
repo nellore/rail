@@ -7,9 +7,6 @@
 
 VER=`cat VERSION`
 ARNAME=tornado-${VER}.tar.gz
-cd src
-tar -zcvf ${ARNAME} --exclude '*.pyc' --exclude '*.tar.gz' .
-mv ${ARNAME} ..
-cd ..
+tar -zcvf ${ARNAME} --exclude '*.pyc' --exclude '*.tar.gz' src
 
 echo "s3cmd put --acl-public ${ARNAME} s3://tornado-emr/bin/"

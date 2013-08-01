@@ -16,7 +16,7 @@ class PreprocessingStep(pipeline.Step):
             output,   # output URL
             "org.apache.hadoop.mapred.lib.NLineInputFormat",
             None,
-            "python %s/preproc.py %s" % (pconf.emrLocalDir, compressArg),
+            "python %s/src/rnawesome/preproc.py %s" % (pconf.emrLocalDir, compressArg),
             None)
 
 class AlignStep(pipeline.Step):
@@ -31,7 +31,7 @@ class AlignStep(pipeline.Step):
             output,  # output URL
             None,    # input format
             None,    # no aggregation
-            "python %s/align.py --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai --bowtieArgs='%s' %s --bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d" % (d, d, d, tconf.bowtieArgs(), bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen),
+            "python %s/src/rnawesome/align.py --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai --bowtieArgs='%s' %s --bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d" % (d, d, d, tconf.bowtieArgs(), bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen),
             None)
 
 class IntronStep(pipeline.Step):
@@ -44,7 +44,7 @@ class IntronStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2), # 8 tasks per reducer
             "cat",     # mapper
-            "python %s/intron.py --refseq=%s/fasta/genome.fa --radius=%d --readletLen=%d --readletIval=%d" % (d, d, tconf.clusterRadius, tconf.readletLen, tconf.readletIval))
+            "python %s/src/rnawesome/intron.py --refseq=%s/fasta/genome.fa --radius=%d --readletLen=%d --readletIval=%d" % (d, d, tconf.clusterRadius, tconf.readletLen, tconf.readletIval))
 
 class MergeStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
@@ -56,7 +56,7 @@ class MergeStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2),
             "cat",     # mapper
-            "python %s/merge.py" % d)
+            "python %s/src/rnawesome/merge.py" % d)
 
 class WalkPrenormStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
@@ -68,7 +68,7 @@ class WalkPrenormStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2),
             "cat",     # mapper
-            "python %s/walk_prenorm.py --partition-len=%d" % (d, tconf.partitionLen))
+            "python %s/src/rnawesome/walk_prenorm.py --partition-len=%d" % (d, tconf.partitionLen))
 
 class NormalizeStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
@@ -80,7 +80,7 @@ class NormalizeStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(None, 4, 1, 1),
             "cat",     # mapper
-            "python %s/normalize.py --percentile %f --out_dir='%s/coverage' --bigbed_exe=%s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai" % (d, tconf.normPercentile, pconf.out.toUpperUrl(), d, d))
+            "python %s/src/rnawesome/normalize.py --percentile %f --out_dir='%s/coverage' --bigbed_exe=%s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai" % (d, tconf.normPercentile, pconf.out.toUpperUrl(), d, d))
 
 class NormalizePostStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
@@ -92,7 +92,7 @@ class NormalizePostStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(1, None, 0, 0),
             "cat",     # mapper
-            "python %s/normalize_post.py --out='%s/normalize' --manifest='%s/MANIFEST'" % (d, pconf.out.toUpperUrl(), d))
+            "python %s/src/rnawesome/normalize_post.py --out='%s/normalize' --manifest='%s/MANIFEST'" % (d, pconf.out.toUpperUrl(), d))
 
 class WalkFitStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
@@ -104,7 +104,7 @@ class WalkFitStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2),
             "cat",     # mapper
-            "python %s/walk_fit.py" % d)
+            "python %s/src/rnawesome/walk_fit.py" % d)
 
 class EbayesStep(pipeline.Step):
     """ Just 1 reduce task """
@@ -117,7 +117,7 @@ class EbayesStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(1, None, 0, 0),
             "cat",     # mapper
-            "python %s/ebayes.py" % d)
+            "python %s/src/rnawesome/ebayes.py" % d)
 
 class HmmParamsStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
@@ -129,7 +129,7 @@ class HmmParamsStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(1, None, 0, 0),
             "cat",     # mapper
-            "python %s/hmm_params.py" % d)
+            "python %s/src/rnawesome/hmm_params.py" % d)
 
 class HmmStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
@@ -141,7 +141,7 @@ class HmmStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2),
             "cat",     # mapper
-            "python %s/hmm.py" % d)  # reducer
+            "python %s/src/rnawesome/hmm.py" % d)  # reducer
 
 class AggrPathStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
@@ -153,4 +153,4 @@ class AggrPathStep(pipeline.Step):
             None,    # input format
             pipeline.Aggregation(tconf.numPermutations * 2, None, 1, 2),
             "cat",     # mapper
-            "python %s/aggr_path.py" % d)
+            "python %s/src/rnawesome/aggr_path.py" % d)
