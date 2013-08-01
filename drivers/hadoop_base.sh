@@ -33,7 +33,7 @@ FASTQ2TAB="$PYTHON $SCR_DIR/fasta/fastq2tab.py"
 
 # Step 1: Readletize input reads and use Bowtie to align the readlets 
 ALIGN="$PYTHON $RNAWESOME/align.py"
-ALIGN_ARGS=''$ALIGN' --bowtieArgs '\''-v 2 -m 1'\'' --bowtieExe '$BOWTIE_EXE' --bowtieIdx='$BOWTIE_IDX' --readletLen '$READLET_LEN' --readletIval '$READLET_IVAL' --refseq='$GENOME' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --faidx='$FASTA_IDX''
+ALIGN_ARGS=''$ALIGN' --bowtieArgs '\''-v 2 -m 1 --mm'\'' --bowtieExe '$BOWTIE_EXE' --bowtieIdx='$BOWTIE_IDX' --readletLen '$READLET_LEN' --readletIval '$READLET_IVAL' --refseq='$GENOME' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --faidx='$FASTA_IDX''
 ALIGN_OUT=$HADOOP_FILES/align_output
 
 # Step 2: Collapse identical intervals from same sample
