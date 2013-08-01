@@ -6,4 +6,4 @@
 
 set -e
 
-sudo apt-get --yes install samtools
+sudo apt-get --yes install samtools || { echo 'apt-get failed' ; exit 1; }

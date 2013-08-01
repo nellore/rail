@@ -6,4 +6,4 @@
 
 set -e
 
-sudo apt-get --yes install bowtie
+sudo apt-get --yes install bowtie || { echo 'apt-get failed' ; exit 1; }

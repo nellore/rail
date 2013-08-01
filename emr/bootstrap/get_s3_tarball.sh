@@ -12,7 +12,7 @@
 
 set -e
 fn=`basename $2`
-wget -S -T 10 -t 5 http://${1}.s3.amazonaws.com/${2}
+wget -S -T 10 -t 5 http://${1}.s3.amazonaws.com/${2} || { echo 'wget failed' ; exit 1; }
 mkdir -p ${3}
-tar -xzf $fn -C ${3}
+tar -xzf $fn -C ${3} || { echo 'untar failed' ; exit 1; }
 rm -f $fn

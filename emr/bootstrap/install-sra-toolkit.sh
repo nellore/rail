@@ -6,4 +6,4 @@
 
 set -e
 
-sudo apt-get --yes install sra-toolkit
+sudo apt-get --yes install sra-toolkit || { echo 'apt-get failed' ; exit 1; }

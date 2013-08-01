@@ -7,3 +7,5 @@ example/sim_simple/eg1.states
 *~
 .project
 .pydevproject
+drivers/chrom.sizes
+drivers/run.sh

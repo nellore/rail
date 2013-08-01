@@ -6,4 +6,4 @@
 
 set -e
 
-sudo apt-get --yes install r-base
+sudo apt-get --yes install r-base || { echo 'apt-get failed' ; exit 1; }

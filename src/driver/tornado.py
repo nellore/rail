@@ -174,6 +174,8 @@ parser.add_argument(\
     '--verbose', action='store_const', const=True, help='Print lots of info to stderr.')
 parser.add_argument(\
     '--version', action='store_const', const=True, help='Just print version information and quit.')
+parser.add_argument(\
+    '--set-version', metavar='VER', type=str, help='Force Tornado to use a particular version.')
 
 args = parser.parse_args()
 if args.local:
@@ -181,10 +183,24 @@ if args.local:
 if args.hadoop:
     raise RuntimeError("--hadoop mode not yet implemented")
 
-def is_exe(fpath):
-    return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+def parseVersion():
+    tornado_path = os.path.dirname(base_path)
+    for basename in [ "VERSION", "TORNADO_VERSION" ]:
+        vpath = os.path.join(tornado_path, basename)
+        if os.path.exists(vpath):
+            with open(vpath, 'r') as fh:
+                return fh.readline().rstrip()
+    else:
+        raise RuntimeError("Could not find VERSION file (looked in '%s') and --set-version not specified" % tornado_path)
 
-ver = "0.0.1" # app version
+ver = args.set_version
+if ver is None:
+    ver = parseVersion()
+
+print >> sys.stderr, "Tornado v" + ver
+
+assert ver is not None
+
 appName = "tornado" # app name
 
 # TODO: also support local and Hadoop modes
@@ -198,6 +214,7 @@ manifest = None
 if args.manifest is not None:
     manifest = url.Url(args.manifest.rstrip('/'))
 out = url.Url(args.output.rstrip('/'))
+logUrl = url.Url(out.toUrl() + '/' + "logs")
 if args.intermediate is not None:
     intermediate = url.Url(args.intermediate.rstrip('/'))
 else:
@@ -434,7 +451,8 @@ if mode == 'emr':
     cmdl = [
         emrScript, "--create", # create job flow
         "--name", jobName,     # name job flow
-        "--json", jsonFn ]     # file with JSON description of flow
+        "--json", jsonFn,
+        "--log-uri", logUrl.toUrl() ]     # file with JSON description of flow
 
     if cred is not None:
         cmdl.extend(["-c", cred])
@@ -461,5 +479,6 @@ if mode == 'emr':
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as shFh:
         shFn = shFh.name
         shFh.write(cmd)
-    if args.dry_run:
-        print >> sys.stderr, "elastic-mapreduce command in: '%s'" % shFn
+    print >> sys.stderr, "elastic-mapreduce command in: '%s'" % shFn
+    if not args.dry_run:
+        os.system(cmd)
