@@ -44,7 +44,7 @@ def preprocess(fh, outfh, lab, inputFormat="fastq", filename=None):
             seq = fh.readline().rstrip()
             fh.readline() # skip name line 2
             qual  = fh.readline().rstrip()
-            handle(seq, qual, n)
+            handle(seq, qual)
             n += 1
     else:
         assert inputFormat == "fasta"
@@ -58,7 +58,7 @@ def preprocess(fh, outfh, lab, inputFormat="fastq", filename=None):
                 if ln[0] == '>':
                     break
                 seqlines.append(ln.rstrip())
-            handle(''.join(seqlines), None, n)
+            handle(''.join(seqlines))
             n += 1
     if not fh_is_file:
         fh.close()
