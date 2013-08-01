@@ -118,8 +118,18 @@ parser.add_argument(\
 parser.add_argument(\
     '--profile', action='store_const', const=True, default=False, help='Profile the code')
 
-args = parser.parse_args()
+# Collect the bowtie arguments first
+argv = sys.argv
+bowtieArgs = []
+in_args = False
+for i in xrange(1, len(sys.argv)):
+    if in_args:
+        bowtieArgs.append(sys.argv[i])
+    if sys.argv[i] == '--':
+        argv = sys.argv[:i]
+        in_args = True
 
+args = parser.parse_args(argv[1:])
 
 def xformRead(seq, qual):
     # Possibly truncate and/or modify quality values
@@ -595,5 +605,5 @@ else:
 
     fnh = fasta.fasta(args.refseq)
 
-    proc = bowtie.proc(args, sam=True, outHandler=bowtieOutReadlets, errHandler=bowtieErr)
+    proc = bowtie.proc(args, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, errHandler=bowtieErr)
     go()

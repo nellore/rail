@@ -67,7 +67,7 @@ class TornadoConfig(object):
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
-        self._bowtieArgs = args.bowtie_args or "-v 1 -m"
+        self._bowtieArgs = args.bowtie_args or "-v 1 -m 1"
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)

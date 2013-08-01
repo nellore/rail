@@ -98,13 +98,13 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
  	| $ALIGN_AGGR | $ALIGN \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
-		--bowtieArgs '-v 2 -m 1 -p 6' \
 		--bowtieExe $BOWTIE_EXE \
 		--bowtieIdx=$BOWTIE_IDX \
 		--readletLen $READLET_LEN \
 		--readletIval $READLET_IVAL \
-                --refseq=$GENOME \
-                --faidx=$FASTA_IDX \
+		--refseq=$GENOME \
+		--faidx=$FASTA_IDX \
+		-- -v 2 -m 1 -p 6 \
 		| tee ${INTERMEDIATE_DIR}/align_out.tsv \
 	| grep '^exon' | $MERGE_AGGR2 | $MERGE_AGGR3 | $MERGE_AGGR4 | $MERGE \
 	| tee $WALK_IN_TMP | $WALK_PRENORM \

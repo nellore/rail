@@ -10,6 +10,12 @@ import os
 import sys
 import subprocess
 import threading
+import site
+
+base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+site.addsitedir(os.path.join(base_path, "util"))
+
+import path
 
 def addArgs(parser):
     parser.add_argument(\
@@ -26,13 +32,11 @@ def out(pi):
     for line in iter(pi.readline, ''):
         print line
 
-def cmd(args, sam=False):
+def cmd(args, bowtieArgs=None, sam=False):
     # Check that Bowtie exists and is executable
-    if not os.path.isfile(args.bowtieExe):
-        print >>sys.stderr, "Bowtie executable '%s' does not exist" % args.bowtieExe
-        sys.exit(1)
-    if not os.access(args.bowtieExe, os.X_OK):
-        print >>sys.stderr, "Bowtie executable '%s' exists but is not executable" % args.bowtieExe
+    bowtieExe = args.bowtieExe or "bowtie"
+    if not path.is_exe(bowtieExe) and path.which(bowtieExe) is None:
+        print >>sys.stderr, "Bowtie executable '%s' cannot be run" % bowtieExe
         sys.exit(1)
     # Check that index is there
     for i in [".1.ebwt", ".2.ebwt", ".3.ebwt", ".4.ebwt", ".rev.1.ebwt", ".rev.2.ebwt"]:
@@ -42,13 +46,19 @@ def cmd(args, sam=False):
     out_arg = ""
     if sam:
         out_arg = " -S "
-    return "%s %s --mm %s %s --12 -" % (args.bowtieExe, ' '.join(args.bowtieArgs), out_arg, args.bowtieIdx)
+    argstr = ''
+    if bowtieArgs is not None:
+        argstr = ' '.join(bowtieArgs)
+    if args.bowtieArgs is not None:
+        argstr += ' '
+        argstr += ' '.join(args.bowtieArgs)
+    return "%s %s --mm %s %s --12 -" % (bowtieExe, argstr, out_arg, args.bowtieIdx)
 
-def proc(args, sam=False, outHandler=None, errHandler=None):
+def proc(args, bowtieArgs=None, sam=False, outHandler=None, errHandler=None):
     stdout_pipe = None if outHandler is None else subprocess.PIPE
     stderr_pipe = None if errHandler is None else subprocess.PIPE
     proc = subprocess.Popen(\
-        cmd(args, sam=sam),
+        cmd(args, bowtieArgs=bowtieArgs, sam=sam),
         shell=True, stdin=subprocess.PIPE, stdout=stdout_pipe, stderr=stderr_pipe)
     if outHandler is not None:
         t = threading.Thread(target=outHandler, args=(proc.stdout,))
