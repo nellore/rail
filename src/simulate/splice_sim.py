@@ -92,18 +92,17 @@ def makeWeights(xscripts,seq_sizes):
         num_xscripts= len(xscripts)
     else:
         num_xscripts = args.num_xscripts
-    weights = [1.0] * len(xscripts)
-    
+    weights = [1.0] * len(xscripts)    
     num = 0
     for i in range(0,len(weights)):
         if num<num_xscripts and xscripts[i].seqid in seq_sizes: #Can't have no existent chromosome
             weights[i] = random.random()
-            print xscripts[i].gene_id,xscripts[i].xscript_id
-            
+            print xscripts[i].gene_id,xscripts[i].xscript_id            
             num+=1
         else:
             weights[i] = 0
     return WeightedRandomGenerator(weights),weights
+
 """
 Randomly picks transcripts such that half of the transcripts come from one strand and the other half come from the other strand
 """
@@ -157,6 +156,17 @@ _revcomp_trans = string.maketrans("ACGT", "TGCA")
 def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
+def overlapping_sites(xscript,read_st,read_en):
+    sites = xscript.getSites()
+    overlaps = []
+    read_st,read_en = read_st+xscript.st0,read_en+xscript.st0
+    for i in range(0,len(sites)-4,2):
+        if sites[i]>read_st and sites[i+3]<read_en:
+            overlaps.append(sites[i])
+            overlaps.append(sites[i+1])
+            overlaps.append(sites[i+2])
+            overlaps.append(sites[i+3])
+    return overlaps
 
 def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes):
     if args.stranded:
@@ -167,6 +177,7 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes):
     seqs = []
     incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
     sim_xscripts = set()
+    sites = set()
     while n<targetNucs:
         #Pick a transcript at weighted random
         i = gen.next()
@@ -181,12 +192,13 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes):
         if x.orient=="+":
             read = x.seq[i:i+readlen]
         else:
-            read = revcomp(x.seq[i:i+readlen])
-            
+            read = revcomp(x.seq[i:i+readlen])            
+        overlaps = overlapping_sites(x,i,i+readlen)
+        sites = sites.union(overlaps)
         read = sequencingError(read,args.readmm_rate)
         seqs.append(read)
         n+=readlen
-    return seqs,weights,list(sim_xscripts)
+    return seqs,weights,list(sim_xscripts),sites
 
 def replicateize(seqs1, seqs2, nreps):
     """ Take all the sequence reads for groups 1 and 2 and split them into into
@@ -255,12 +267,14 @@ if __name__=="__main__":
     xscripts = gtf.assembleTranscripts(annots,fastadb)
     if args.alternative_spliced:
         xscripts = test_alternativeSplicing(xscripts)
-    seqs,weights,xscripts = simulate(xscripts,args.read_len,args.num_nucs,args.fasta,var_handle,seq_sizes)
+    seqs,weights,xscripts,sites = simulate(xscripts,args.read_len,args.num_nucs,args.fasta,var_handle,seq_sizes)
     seqs1,seqs2 = replicateize(seqs,seqs,args.num_replicates)
     writeReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
     #This stores the list in pickle files for serialization
     #pickle.dump(weights,open(args.output_prefix+".weights",'wb'))
     pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
+    pickle.dump(sites,open(args.output_prefix+".sites",'wb'))
+    
     print >> sys.stderr,"Total number of reads",total_reads
     print >> sys.stderr,"Total number of mismatched reads",total_mismatches
     

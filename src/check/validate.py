@@ -4,7 +4,7 @@ validate.py
 Reads in the bed file containing the estimated splice sites and the pickle file containing the transcripts and provides the following statistics
 1.  Number of exactly correct splice junctions
 2.  Number of splice junctions within 1 radius (specified by user)
-3.  Number of splice junctions completely off 
+3.  Number of splice junctions completely off
 4.  Plot of the distribution of error
 """
 import os
@@ -31,6 +31,9 @@ parser.add_argument(\
     '--xscripts-file', metavar='path', type=str, required=True,
     help='Path of the transcripts pickle file')
 parser.add_argument(\
+    '--sites-file', metavar='path', type=str, required=True,
+    help='Path of the splice sites pickle file')
+parser.add_argument(\
     '--bed-file', metavar='path', type=str, required=True,
     help='Path of the transcripts pickle file')
 parser.add_argument(\
@@ -39,7 +42,6 @@ parser.add_argument(\
 parser.add_argument(\
     '--refseq', type=str, required=True,
     help='The reference sequence')
-
 args = parser.parse_args()
 
 
@@ -81,7 +83,7 @@ def readBedSites(bedfile):
             sites[seq].append(st)
     for k,v in sites.iteritems():
         sites[k] = list(set(sites[k]))
-        sites[k].sort()        
+        sites[k].sort()
     return sites
 
 def union_sites(sites):
@@ -94,9 +96,11 @@ def compare(bed_sites,annot_sites,radius):
     correct = 0
     nearby  = 0
     incorrect = 0
+    total_sites = union_sites(annot_sites)
     missed_sites = union_sites(annot_sites)
     found_sites = set()
     close_sites = set()
+    false_sites = set()
     total = len(missed_sites)
     for k,v in bed_sites.iteritems():
         for guess in v:
@@ -114,26 +118,59 @@ def compare(bed_sites,annot_sites,radius):
                     close_sites.add(exact)
                     missed_sites.discard(exact)
                 else:
+                    false_sites.add(guess)
                     incorrect+=1
             else:
                 #print "Incorrect","Guess",guess,"Exact",exact
+                false_sites.add(guess)
                 incorrect+=1
     incorrect_sites = found_sites.intersection(close_sites)
     nearby = len(close_sites.difference(found_sites))
     incorrect+=len(incorrect_sites)
-    return total/2,correct/2,nearby/2,incorrect/2,len(missed_sites)/2 #since we looking at 2x sites
+    return found_sites,close_sites,false_sites,missed_sites,total_sites #since we looking at 2x sites
 
 if __name__=="__main__":
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
+    sites = pickle.load(open(args.sites_file,'rb'))
     bed_sites = readBedSites(args.bed_file)
     annot_sites = annotated_sites(xscripts)
+
     #print annot_sites
-    total,correct,nearby,incorrect,missed = compare(bed_sites,annot_sites,args.radius)
+    found_sites,close_sites,false_sites,missed_sites,total_sites = compare(bed_sites,annot_sites,args.radius)
     fastaH = fasta.fasta(args.refseq)
+
+    intersect_sites = list(missed_sites.intersection(sites))
+    missed_sites = list(missed_sites)
+    total_sites = list(total_sites)
+    sites = list(sites)
+    found_sites = list(found_sites)
+    false_sites = list(false_sites)
+
+    total_sites.sort()
+    sites.sort()
+    found_sites.sort()
+    missed_sites.sort()
+    false_sites.sort()
+    intersect_sites.sort()
+
+    print >>sys.stderr, "Annot Sites",total_sites
+    print >>sys.stderr, "Sim Sites",sites
+    print >>sys.stderr, "Found Sites",found_sites
+    print >>sys.stderr, "Missed Sites",missed_sites
+    print >>sys.stderr, "False Sites",false_sites
+    print >>sys.stderr, "Intersect",intersect_sites
+
+    missed = len(missed_sites)/2
     #bed_site_stats = siteDistribution(bed_sites,fastaH)
     #annot_site_stats = siteDistribution(annot_sites,fastaH)
-    
+    total = len(total_sites)/2
+    sim_total = len(sites)/2
+    correct = len(found_sites)/2
+    nearby = len(close_sites)/2
+    incorrect = len(false_sites)/2
+
     print "Total annot sites   \t",total
+    print "Num sim sites       \t",sim_total
     print "Correct             \t",correct
     print "Nearby              \t",nearby
     print "False positives     \t",incorrect
@@ -141,4 +178,4 @@ if __name__=="__main__":
     #print "Bed site stats      \t",bed_site_stats
     #print "Annotated site stats\t",annot_site_stats
 
-    
+
