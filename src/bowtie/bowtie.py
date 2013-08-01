@@ -57,14 +57,17 @@ def cmd(args, bowtieArgs=None, sam=False):
 def proc(args, bowtieArgs=None, sam=False, outHandler=None, errHandler=None):
     stdout_pipe = None if outHandler is None else subprocess.PIPE
     stderr_pipe = None if errHandler is None else subprocess.PIPE
+    mycmd = cmd(args, bowtieArgs=bowtieArgs, sam=sam)
+    print >> sys.stderr, "Starting command: '%s'" % mycmd
     proc = subprocess.Popen(\
-        cmd(args, bowtieArgs=bowtieArgs, sam=sam),
-        shell=True, stdin=subprocess.PIPE, stdout=stdout_pipe, stderr=stderr_pipe)
+        mycmd, shell=True, stdin=subprocess.PIPE, stdout=stdout_pipe, stderr=stderr_pipe)
     if outHandler is not None:
+        print >> sys.stderr, "  Starting stdout handler"
         t = threading.Thread(target=outHandler, args=(proc.stdout,))
         t.daemon = True # thread dies with the program
         t.start()
     if errHandler is not None:
+        print >> sys.stderr, "  Starting stderr handler"
         t = threading.Thread(target=errHandler, args=(proc.stderr,))
         t.daemon = True # thread dies with the program
         t.start()
