@@ -388,6 +388,7 @@ def bowtieErr(st):
 
 def go():
     global ninp
+    first = True
     for ln in sys.stdin:
         ln = ln.rstrip()
         toks = ln.split('\t')
@@ -431,13 +432,25 @@ def go():
                 rlets1 = readlet.readletize(args, nm1, seq1, qual1)
                 for i in xrange(0, len(rlets1)):
                     nm_rlet, seq_rlet, qual_rlet = rlets1[i]
-                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet))
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet)
+                    if first:
+                        sys.stderr.write("First readlet: '%s'" % rdletStr)
+                        first = False
+                    proc.stdin.write(rdletStr)
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
-                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet))
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet)
+                    if first:
+                        sys.stderr.write("First readlet: '%s'" % rdletStr)
+                        first = False
+                    proc.stdin.write(rdletStr)
             else:
-                proc.stdin.write("%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2))
+                rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
+                if first:
+                    sys.stderr.write("First read: '%s'" % rdStr)
+                    first = False
+                proc.stdin.write(rdStr)
         else:
             # Unpaired
             if xformReads:
@@ -448,9 +461,17 @@ def go():
                 rlets = readlet.readletize(args, nm, seq, qual)
                 for i in xrange(0, len(rlets)):
                     nm_rlet, seq_rlet, qual_rlet = rlets[i]
-                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet))
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet)
+                    if first:
+                        sys.stderr.write("First readlet: '%s'" % rdletStr)
+                        first = False
+                    proc.stdin.write(rdletStr)
             else:
-                proc.stdin.write("%s\t%s\t%s\n" % (nm, seq, qual))
+                rdStr = "%s\t%s\t%s\n" % (nm, seq, qual)
+                if first:
+                    sys.stderr.write("First read: '%s'" % rdStr)
+                    first = False
+                proc.stdin.write(rdStr)
 
     # Close and flush STDIN.
     proc.stdin.close()
