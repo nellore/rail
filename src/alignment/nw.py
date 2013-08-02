@@ -28,8 +28,6 @@ def exampleCost(xc, yc):
     return 2 # transversion
 
 def lcsCost(xc, yc):
-    if type(xc)==type(1) and type(yc)==type(1):
-        xc,yc = chr(xc),chr(yc)
     return -1 if xc == yc else 0
 
 def matchCost(xc,yc):
