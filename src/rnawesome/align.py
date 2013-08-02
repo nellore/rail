@@ -148,7 +148,6 @@ def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
 bowtieOutDone = threading.Event()
-bowtieErrDone = threading.Event()
 
 """
 Applies Needleman Wunsch to correct splice junction gaps
@@ -378,14 +377,6 @@ def bowtieOut(st):
         nout += 1
     bowtieOutDone.set()
 
-def bowtieErr(st):
-    ''' Process standard error (stderr) output from Bowtie '''
-    for line in st:
-        # Print it right back out on sys.stderr
-        print >> sys.stderr, line.rstrip()
-    bowtieErrDone.set()
-
-
 def go():
     global ninp
     first = True
@@ -481,11 +472,8 @@ def go():
     # Close stdout and stderr
     print >>sys.stderr, "Waiting for Bowtie stdout processing thread to finish"
     bowtieOutDone.wait()
-    print >>sys.stderr, "Waiting for Bowtie stderr processing thread to finish"
-    bowtieErrDone.wait()
 
     proc.stdout.close()
-    proc.stderr.close()
 
     # Done
     timeEn = time.clock()
@@ -626,5 +614,5 @@ else:
 
     fnh = fasta.fasta(args.refseq)
 
-    proc = bowtie.proc(args, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, errHandler=bowtieErr)
+    proc = bowtie.proc(args, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets)
     go()
