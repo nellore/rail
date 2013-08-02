@@ -1,18 +1,18 @@
 import math
 import numpy as np
-"""                               
-Tab-delimited input tuple columns:  
+"""
+Tab-delimited input tuple columns:
 1. Partition ID for partition overlapped by interval (also includes strand information)
-2. Interval start  
-3. Interval end (exclusive) 
-4. Reference ID    
-5. Sample label     
+2. Interval start
+3. Interval end (exclusive)
+4. Reference ID
+5. Sample label
 6. Readlet Sequence before 5' site
 7. Readlet Sequence after 5' site
 8. Readlet Sequence before 3' site
 9. Readlet Sequence after 3' site
 
-Tab-delimited output tuple columns:           
+Tab-delimited output tuple columns:
 1. Reference ID
 2. 5' start
 3. 3' start
@@ -35,7 +35,6 @@ import time
 import re
 import string
 from collections import defaultdict
-from collections import Counter
 timeSt = time.clock()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,12 +42,14 @@ site.addsitedir(os.path.join(base_path, "fasta"))
 site.addsitedir(os.path.join(base_path, "read"))
 site.addsitedir(os.path.join(base_path, "alignment"))
 site.addsitedir(os.path.join(base_path, "statsmath"))
+site.addsitedir(os.path.join(base_path, "util"))
 
 import fasta
 import readlet
 import sw
 import nw
-import histogram 
+import histogram
+import counter
 
 parser = argparse.ArgumentParser(description=\
                                      'Reports splice junction information')
@@ -66,10 +67,10 @@ readlet.addArgs(parser)
 args = parser.parse_args()
 
 ninp = 0                   # # lines input so far
-nout = 0                   # # lines output so far 
+nout = 0                   # # lines output so far
 
 """
-Conducts radial clustering.  
+Conducts radial clustering.
 All introns that have start and end positions within 2 readletIvals within each other are binned together
 """
 def cluster(ivals):
@@ -79,7 +80,7 @@ def cluster(ivals):
     p = ivals[0]
     points.append(p)
     key = "%s,%s"%(p[0],p[1])
-    bins[key].append(ivals[0])    
+    bins[key].append(ivals[0])
     notFound = True
     for i in range(1,len(ivals)):
         for j in range(0,len(points)): #Check all the neighborhood of all points
@@ -96,12 +97,12 @@ def cluster(ivals):
             points.append(p)
             key = "%s,%s"%(p[0],p[1])
             bins[key].append(ivals[i])
-        notFound = True 
+        notFound = True
     return bins
 
 
 """
-Scores a set of windows based off of splice site 
+Scores a set of windows based off of splice site
 """
 def score(seq, site, hist):
     wsize = len(site) # window size
@@ -112,12 +113,12 @@ def score(seq, site, hist):
         for j in range(0,len(site)):
             s = 1 if site[j]==seq[i+j] else -3
             wins[i]+=s*hist[i+j]
-    return wins            
+    return wins
 
-    
+
 """
 Returns the site by finding the maximum in the scores
-To break ties it uses the direction.  
+To break ties it uses the direction.
 If direction=="5", that means its a 5' end and it will return the score closest to the 5' end (aka. left)
 The vice versa happens with direction=="3"
 
@@ -131,7 +132,7 @@ def findSite(scores,direction):
         if m < scores[i]:
             ind = i
             m = scores[i]
-        i+=count        
+        i+=count
     return ind,scores[ind]
 
 """
@@ -187,7 +188,7 @@ def revcomp(s):
 Generates a distribution and finds the most likely occurrance
 """
 def findMode(sites):
-    hist = Counter()
+    hist = counter.Counter()
     for s in sites:
         hist[s]+=1
     return (hist.most_common(1)[0])[0]
@@ -196,7 +197,7 @@ def findMode(sites):
 This calculates the corrected position of the site given the cigar alignment
 Note that read_site must be in terms of read coordinates
 """
-def cigar_correct(read_site,cigar,site5,site3): 
+def cigar_correct(read_site,cigar,site5,site3):
     left_site,right_site = site5,site3
     align = cigar_pattern.findall(cigar)
     i,j = 0,0  #pointers in Needleman Wunsch trace back matrix.  i = ref, j = read
@@ -216,7 +217,7 @@ def cigar_correct(read_site,cigar,site5,site3):
             i+=cnt
     #left_site,right_site indicate starting positions of splice site
     return left_site,right_site
- 
+
 """
 Applies the Needleman-Wunsch algorithm to provide a list of candiates
 """
@@ -225,7 +226,7 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
     for intr in introns:
         in_st,in_en,lab,rdseq5_flank,rdseq5_over,rdseq3_flank,rdseq3_over = intr
         rdseq5 = rdseq5_flank+rdseq5_over
-        rdseq3 = rdseq3_flank+rdseq3_over        
+        rdseq3 = rdseq3_flank+rdseq3_over
         n = len(rdseq5_flank)
         overlap = len(rdseq5_over)
         st,en = site5-n,site3+n
@@ -237,23 +238,23 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
         refseq3 = refseq3_flank+refseq3_over
         _,cigar5 = nw.c_needlemanWunschXcript(refseq5,rdseq5,nw.lcsCost)
         nsite5_1,nsite3_1 = cigar_correct(len(rdseq5_flank),cigar5,site5,site3)
-        sites5.append(nsite5_1) 
+        sites5.append(nsite5_1)
         sites3.append(nsite3_1)
     return sites5,sites3
-        
+
 """
 Finds canonical sites (e.g GT-AG sites)
 """
 def getJunctionSites(pt,refID,bins,fastaF):
     global nout
     strand = pt[-1]
-    samples = Counter()
+    samples = counter.Counter()
     sites5, sites3 = [],[]
     for coords,introns in bins.iteritems():
         splice_site = "GT-AG" if strand=="+" else "CT-AC"  #only consider canonical sites
         sts,ens,labs,_,_,_,_ = zip(*introns)
         site5,_,site3,_ = sliding_window(refID,sts,ens,splice_site,fastaF)
-        sites5,sites3 = nw_correct(refID,site5,site3,introns,strand,fastaF)   
+        sites5,sites3 = nw_correct(refID,site5,site3,introns,strand,fastaF)
         site5,_,site3,_ = sliding_window(refID,sites5,sites3,splice_site,fastaF) #Retrain using nw
         for intr in introns:
             lab = intr[2]
@@ -280,13 +281,13 @@ for ln in sys.stdin:
         last_pt, last_ref = pt, refid
     elif last_pt!=pt:
         intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
-        #Cluster all introns with similar start and end positions   
+        #Cluster all introns with similar start and end positions
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
         getJunctionSites(last_pt,last_ref,bins,fnh)
         starts,ends,labs = [],[],[]
         seq5_flanks,seq3_flanks,seq5_overs,seq3_overs = [],[],[],[]
-        
+
     starts.append(st)
     ends.append(en)
     labs.append(lab)
@@ -300,11 +301,11 @@ for ln in sys.stdin:
 if last_pt!='\t':
     #Handle last partition
     intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
-    #Cluster all introns with similar start and end positions   
+    #Cluster all introns with similar start and end positions
     bins = cluster(intron_ivals)
     #Apply sliding windows to find splice junction locations
     getJunctionSites(last_pt,last_ref,bins,fnh)
 
-# Done                                                             
+# Done
 timeEn = time.clock()
 print >>sys.stderr, "DONE with intron.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
