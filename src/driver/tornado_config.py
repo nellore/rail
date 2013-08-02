@@ -92,4 +92,4 @@ class TornadoConfig(object):
             raise RuntimeError("Argument for --hmm-overlap must be >= 0; was %d" % o)
     
     def bowtieArgs(self):
-        return ' '.join([self._bowtieArgs, "--mm", "-t"])
+        return ' '.join([self._bowtieArgs, "-t", "--sam-nohead"])
