@@ -30,7 +30,7 @@ def preprocess(fh, outfh, lab, inputFormat="fastq", filename=None):
         fh = gzip.GzipFile(fh, 'r') if fh.endswith('.gz') else open(fh, 'r')
     assert filename is not None
     n = 0
-    pre = ';'.join([filename.replace(';', '_'), lab.replace(';', '_')])
+    pre = ';'.join(["FN:" + filename.replace(';', '_'), "LB:" + lab.replace(';', '_')])
     
     def handle(seq, qual=None):
         if qual is None: qual = 'I' * len(seq)
@@ -85,6 +85,8 @@ if __name__ == '__main__':
     parser.add_argument(\
         '--s3cfg', metavar='STR', type=str, required=False, help='s3cmd configuration file to use')
     parser.add_argument(\
+        '--acl-public', action='store_const', const=True, default=False, help='Make files uploaded to s3 public')
+    parser.add_argument(\
         '--test', action='store_const', const=True, default=False, help='Do unit tests')
     
     args = parser.parse_args()
@@ -103,6 +105,6 @@ if __name__ == '__main__':
         with myopen(outfn, 'w') as ofh: preprocess(fn, ofh, lab)
         if pushUrl is not None:
             if pushUrl.isS3():
-                os.system("s3cmd %s put %s %s" % ("-c %s" % args.s3cfg if args.s3cfg is not None else "", outfn, pushUrl.toNonNativeUrl()))
+                os.system("s3cmd %s %s put %s %s" % ("-c %s" % args.s3cfg if args.s3cfg is not None else "", "--acl-public" if args.acl_public else "", outfn, pushUrl.toNonNativeUrl()))
             else:
                 os.system("hadoop fs -put %s %s" % (outfn, pushUrl.toUrl()))
