@@ -77,7 +77,8 @@ import readlet
 import sample
 import interval
 import partition
-import needlemanWunsch
+import eddist
+import nw
 import fasta
 
 ninp = 0               # # lines input so far
@@ -147,6 +148,7 @@ def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
 bowtieOutDone = threading.Event()
+bowtieErrDone = threading.Event()
 
 """
 Applies Needleman Wunsch to correct splice junction gaps
@@ -155,20 +157,20 @@ def correctSplice(read,ref_left,ref_right,fw):
     revread = revcomp(read)
     if not fw:
         ref_right = revcomp(ref_right)
-        score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
-        score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
+        score1,leftDP  = nw.c_needlemanWunsch(ref_left, read, nw.matchCost)
+        score2,rightDP = nw.c_needlemanWunsch(ref_right,revread, nw.matchCost)
         rightDP = numpy.fliplr(rightDP)
         rightDP = numpy.flipud(rightDP)
     else:
         ref_right = revcomp(ref_right)
-        score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
-        score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
+        score1,leftDP  = nw.c_needlemanWunsch(ref_left, read, nw.matchCost)
+        score2,rightDP = nw.c_needlemanWunsch(ref_right,revread, nw.matchCost)
         rightDP = numpy.fliplr(rightDP)
         rightDP = numpy.flipud(rightDP)
 
     total = leftDP+rightDP
     # print >> sys.stderr,"ref_left\t",ref_left
-    # print >> sys.stderr,"ref_right\t",revcomp(ref_right)
+    # print >> sys.stderr,"ref_right\t",ref_right
     # print >> sys.stderr,"read    \t",read,"\n"
 
     # print >> sys.stderr,"Left Matrix\n",leftDP
@@ -196,6 +198,7 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
     right_overlap = rdseq[right_st-offset:right_st]
     right_flank = rdseq[right_st:right_end]
 
+
         # right_flank = rdseq[region_st-args.readletLen:region_st]
         # right_overlap = rdseq[region_st-args.readletLen-args.splice_overlap:region_st-args.readletLen]
         # left_overlap = rdseq[region_end+args.readletLen:region_end+args.readletLen+args.splice_overlap]
@@ -213,24 +216,11 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
 def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh):
     diff = unmapped_end-unmapped_st-1
     offset = args.splice_overlap  #offset of unmapped to region coordinate frames
-
-    left_st,left_en = in_start,in_start+diff
-    right_st,right_en = in_end-diff,in_end
-
-    #left_st,right_st = in_start-offset,in_end-offset
-    #left_en,right_en = left_st+diff,right_st+diff
-
+    left_st, left_en = in_start - offset + 1, in_start - offset + diff + 1
+    right_st, right_en = in_end + offset - diff, in_end + offset
     ref_left = fnh.fetch_sequence(k,left_st, left_en).upper()
     ref_right = fnh.fetch_sequence(k,right_st, right_en).upper()
-
-    # left_st, left_en = in_start - offset + 1, in_start + diff + 1
-    # right_st, right_en = in_end + offset - diff, in_end + offset
-
     unmapped = rdseq[unmapped_st:unmapped_end]
-
-    # if not fw:
-    #     unmapped = revcomp(unmapped)
-
     # print >> sys.stderr,"ref_left\t",ref_left
     # print >> sys.stderr,"ref_right\t",ref_right
     # print >> sys.stderr,"read    \t",unmapped,"\n"
@@ -239,17 +229,14 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
     #print >> sys.stderr,ref_left,len(ref_left),ref_right,len(ref_right),unmapped,len(unmapped)
     _, dj,_ = correctSplice(unmapped,ref_left,ref_right,fw)
     #print >> sys.stderr,"Before",region_st,region_end
-    left_diff,right_diff = dj, len(unmapped)-dj
+    left_diff,right_diff = dj-offset, len(unmapped)-dj-offset
     #print >> sys.stderr,"Left Diff",left_diff,"Right Diff",right_diff
-    #region_st,region_end = region_st+left_diff,region_end-right_diff
-    #in_start,in_end = in_start+left_diff, in_end-right_diff
-    region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
-    in_start,in_end = in_start+left_diff,in_end-right_diff
-
+    region_st,region_end = region_st+left_diff,region_end-right_diff
+    in_start,in_end = in_start+left_diff, in_end-right_diff
     #print >> sys.stderr,ref_left,ref_right,unmapped
     #left_diff,right_diff = (dj-region_st),(region_end-dj)
-    #print >> sys.stderr,"Left Diff",left_diff,"Right Diff",right_diff
-    #print >> sys.stderr,"After",region_st,region_end,"\n"
+    # print >> sys.stderr,"Left Diff",left_diff,"Right Diff",right_diff
+    #print >> sys.stderr,"After",region_st,region_end
 
     #region_st,region_end = region_st+left_diff,region_end-right_diff
     #in_start,in_end = in_start+left_diff,in_end-right_diff
@@ -264,17 +251,18 @@ def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region
     rdsubseq = rdseq[unmapped_st:unmapped_end]
     if not fw:
         rdsubseq = revcomp(rdsubseq)
-        #score,_ = nw.c_needlemanWunsch(refseq, rdsubseq, nw.inverseMatchCost)
-        score = needlemanWunsch.needlemanWunsch(refseq, rdsubseq, needlemanWunsch.matchCost())
+    score,_ = nw.c_needlemanWunsch(refseq, rdsubseq, nw.inverseMatchCost)
     # TODO: redo this in terms of percent identity or some
     # other measure that adapts to length of the missing bit,
     # not just a raw score
-    if score >= len(rdsubseq)*(9.0/10):
+    if score <= len(rdsubseq)/10:
         for pt in iter(partition.partition(k, in_start, in_end, binsz)):
             print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
             nout += 1
             #else:
             #handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
+
+
 
 def composeReadletAlignments(rdnm, rdals, rdseq):
 
@@ -282,7 +270,6 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
     # to include for both for the case where the RNA-seq protocol is stranded.
 
     global nout
-    L=len(rdseq)-1
     # Add this interval to the flattened interval collection for current read
     ivals = {}
     positions = dict()  #stores readlet number based keyed by position, strand and reference id
@@ -295,8 +282,8 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval
             positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval + seqlen
         else:
-            positions[(refid, fw, refoff0)] = L - (rlet_nm * args.readletIval + seqlen)
-            positions[(refid, fw, refoff0 + seqlen)] = L - rlet_nm * args.readletIval
+            positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval
+            positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval + seqlen
 
         if (refid, fw) not in ivals:
             ivals[(refid, fw)] = interval.FlatIntervals()
@@ -316,40 +303,34 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             if in_start >= 0 and in_end >= 0:
                 region_st,region_end = min(positions[(k, fw, in_start)],positions[(k, fw, in_end)]), max(positions[(k, fw, in_start)],positions[(k, fw, in_end)])
                 offset = args.splice_overlap
-                #unmapped_st,unmapped_end = region_st-offset,region_end+offset #Need to add on sequence to get more alignment info
-                unmapped_st,unmapped_end = region_st,region_end
+                unmapped_st,unmapped_end = region_st-offset,region_end+offset #Need to add on sequence to get more alignment info
                 reflen,rdlet_len = in_end-in_start,region_end-region_st
                 #print >> sys.stderr,"reflen",reflen,"unmappedlen",unmappedlen,"unmapped start",unmapped_st,"unmapped end",unmapped_end
-
                 assert in_start<in_end
                 # if in_start>in_end:
                 #     print >> sys.stderr,"This should never happen!!!","ref_len",reflen,"<0"
                 #     print >> sys.stderr,"In_start",in_start,"In_end",in_end
 
                 #Prints out results for unit test
-                # test_st,test_end = 705200,705400
-                # if in_start>test_st and in_end<test_end:
-                #     handle = open("introns.txt",'a')
-                #     test_refseq = fnh.fetch_sequence(k,test_st+1,test_end+1)
-                #     test_in_st, test_in_end = in_start-test_st,in_end-test_st #Test coordinate frame
-                #     print >>handle, test_in_st,test_in_end,region_st,region_end,unmapped_st,unmapped_end,rdseq,revcomp(rdseq),test_refseq,fw
+                test_st,test_end = 705200,705310
+                if in_start>test_st and in_end<test_end:
+                    handle = open("introns.txt",'w')
+                    test_refseq = fnh.fetch_sequence(k,test_st+1,test_end+1)
+                    test_in_st, test_in_end = in_start-test_st,in_end-test_st #Test coordinate frame
+                    print >>handle, test_in_st,test_in_end,region_st,region_end,unmapped_st,unmapped_end,rdseq,revcomp(rdseq),test_refseq,fw
 
-                #handle = open("introns.txt",'a')
-                #print >> handle,in_start,in_end
 
                 if rdlet_len==0:
-                    #HandleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
-                    printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 elif abs(reflen-rdlet_len)/float(rdlet_len) < 0.05:
                     #Note: just a readlet missing due to error or variant
                     handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 elif reflen > rdlet_len:
                     #print >> sys.stderr,"len>0","Region start",region_st,"Region end",region_end
-                    #handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
-                    printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 else:
-                    print >> sys.stderr,"This should never happen!!!","ref_len",reflen,"<","rdlet_len",rdlet_len
-                    print >> sys.stderr,"In_start",in_start,"In_end",in_end
+                     print >> sys.stderr,"This should never happen!!!","ref_len",reflen,"<","rdlet_len",rdlet_len
+                     print >> sys.stderr,"In_start",in_start,"In_end",in_end
 
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
@@ -406,9 +387,16 @@ def bowtieOut(st):
         nout += 1
     bowtieOutDone.set()
 
+def bowtieErr(st):
+    ''' Process standard error (stderr) output from Bowtie '''
+    for line in st:
+        # Print it right back out on sys.stderr
+        print >> sys.stderr, line.rstrip()
+    bowtieErrDone.set()
+
+
 def go():
     global ninp
-    first = True
     for ln in sys.stdin:
         ln = ln.rstrip()
         toks = ln.split('\t')
@@ -452,25 +440,13 @@ def go():
                 rlets1 = readlet.readletize(args, nm1, seq1, qual1)
                 for i in xrange(0, len(rlets1)):
                     nm_rlet, seq_rlet, qual_rlet = rlets1[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet)
-                    if first:
-                        sys.stderr.write("First readlet: '%s'" % rdletStr)
-                        first = False
-                    proc.stdin.write(rdletStr)
+                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet))
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet)
-                    if first:
-                        sys.stderr.write("First readlet: '%s'" % rdletStr)
-                        first = False
-                    proc.stdin.write(rdletStr)
+                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet))
             else:
-                rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
-                if first:
-                    sys.stderr.write("First read: '%s'" % rdStr)
-                    first = False
-                proc.stdin.write(rdStr)
+                proc.stdin.write("%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2))
         else:
             # Unpaired
             if xformReads:
@@ -481,17 +457,9 @@ def go():
                 rlets = readlet.readletize(args, nm, seq, qual)
                 for i in xrange(0, len(rlets)):
                     nm_rlet, seq_rlet, qual_rlet = rlets[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet)
-                    if first:
-                        sys.stderr.write("First readlet: '%s'" % rdletStr)
-                        first = False
-                    proc.stdin.write(rdletStr)
+                    proc.stdin.write("%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet))
             else:
-                rdStr = "%s\t%s\t%s\n" % (nm, seq, qual)
-                if first:
-                    sys.stderr.write("First read: '%s'" % rdStr)
-                    first = False
-                proc.stdin.write(rdStr)
+                proc.stdin.write("%s\t%s\t%s\n" % (nm, seq, qual))
 
     # Close and flush STDIN.
     proc.stdin.close()
@@ -501,8 +469,11 @@ def go():
     # Close stdout and stderr
     print >>sys.stderr, "Waiting for Bowtie stdout processing thread to finish"
     bowtieOutDone.wait()
+    print >>sys.stderr, "Waiting for Bowtie stderr processing thread to finish"
+    bowtieErrDone.wait()
 
     proc.stdout.close()
+    proc.stderr.close()
 
     # Done
     timeEn = time.clock()
@@ -607,46 +578,43 @@ def test_short_alignment3():
     os.remove(fname+".fai")
     os.remove("test.out")
 
+
 def test_short_alignment4():
     sys.stdout = open("test.out",'w')
     rdnm,fw = "0;LB:test",True
     #mapped reads:
     #fw                                                                  (          >    <          )
     """CTTCTATATG CTGTCTGCGG GACTCCCACA TATGTAGCAC CAGAGATATT GTTAGAAGTC GGATATGGGC TAAAGATTGA CGTTTGGGCC GCTGGAATCA"""
-    #rev                                                                 (          >    <          )
+    #rev                                                                 (          >    <          )                                             
     """TGATTCCAGC GGCCCAAACG TCAATCTTTA GCCCATATCC GACTTCTAAC AATATCTCTG GTGCTACATA TGTGGGAGTC CCGCAGACAGC ATATAGAAG"""
-    #Correct position        (        > <        )
-    """TGATTCCAGC GGCCCAAACG TCAATCTTTA GCCCATATCC GACTTCTAAC AATATCTCTG GTGCTACATA TGTGGGAGTC CCGCAGACAGC ATATAGAAG"""
-    #read
-    """           TGATTCCAGC GGCCCAAACG TCAATCTTTA                                                            GCCCAT ATCCGACTTC T"""
-    #ref                                           >                                                    <
+    #                                              >                                                    <
     """ATATACAAAA TGATTCCAGC GGCCCAAACG TCAATCTTTA AGAATATATA AGTATATTAA TTTTTAAGAA AGCTATTATT TACTATTACC TTTAGCCCAT ATCCGACTTC T"""
 
-    rdseq ="TGATTCCAGCGGCCCAAACGTCAATCTTTAGCCCATATCCGACTTCTAACAATATCTCTGGTGCTACATATGTGGGAGTCCCGCAGACAGCATATAGAAG"
+    rdseq = "CTTCTATATGCTGTCTGCGGGACTCCCACATATGTAGCACCAGAGATATTGTTAGAAGTCGGATATGGGCTAAAGATTGACGTTTGGGCCGCTGGAATCA"
     refseq ="ATATACAAAATGATTCCAGCGGCCCAAACGTCAATCTTTAAGAATATATAAGTATATTAATTTTTAAGAAAGCTATTATTTACTATTACCTTTAGCCCATATCCGACTTCT"
     in_start,in_end = 40,89
-    region_st,region_end = 24,29
-    unmapped_st,unmapped_end = 14,39
-    fname,refid = "test.fa","test"
+    region_st,region_end = 70,75
+    unmapped_st,unmapped_end = 60,85
+    rdseq,refseq,fname,refid = "GCACGTACGTCG","GCACGTCCCCCCCCCCCACGTCG","test.fa","test"
     createTestFasta(fname,refid,refseq)
     fnh = fasta.fasta(fname)
+    region_st,region_end=7,5
+    in_start,in_end=7,16
     offset = args.splice_overlap
     unmapped_st,unmapped_end = region_st-offset,region_end+offset
-    #printIntrons(refid,rdseq,region_st-1,region_end+1,in_start-1,in_end+1,rdnm,fw)
+    printIntrons(refid,rdseq,region_st-1,region_end+1,in_start-1,in_end+1,rdnm,fw)
     handleIntron(refid,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
-
-    # sys.stdout.close()
-    # test_out = open("test.out",'r')
-    # line = test_out.readline().rstrip()
-    # testline = test_out.readline().rstrip()
-    # print >> sys.stderr, rdseq
-    # print >> sys.stderr, line,'\n',testline
-    # assert testline==line
-    # print >> sys.stderr,"Test Short Intron 4 Success!"
-    # os.remove(fname)
-    # os.remove(fname+".fai")
-    # os.remove("test.out")
-
+    sys.stdout.close()
+    test_out = open("test.out",'r')
+    line = test_out.readline().rstrip()
+    testline = test_out.readline().rstrip()
+    print >> sys.stderr, rdseq
+    print >> sys.stderr, line,'\n',testline
+    assert testline==line
+    print >> sys.stderr,"Test Short Intron 3 Success!"
+    os.remove(fname)
+    os.remove(fname+".fai")
+    os.remove("test.out")
 
 
 def test_correct_splice():
@@ -663,12 +631,12 @@ def test_correct_splice():
     assert left[:c]+right[c:] == read
     print >> sys.stderr,"Correct Splice Test Successful!!!"
 def test():
-    # test_fasta_create()
-    # test_short_alignment1()
-    # test_short_alignment2()
-    # test_short_alignment3()
-    # test_correct_splice()
-    test_short_alignment4()
+    test_fasta_create()
+    test_short_alignment1()
+    test_short_alignment2()
+    test_short_alignment3()
+    test_correct_splice()
+
 if args.test:
     binsz = 10000
     test()
@@ -684,5 +652,5 @@ else:
 
     fnh = fasta.fasta(args.refseq)
 
-    proc = bowtie.proc(args, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets)
+    proc = bowtie.proc(args, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, errHandler=bowtieErr)
     go()

@@ -46,8 +46,7 @@ site.addsitedir(os.path.join(base_path, "util"))
 
 import fasta
 import readlet
-import sw
-import nw
+import needlemanWunsch
 import histogram
 import counter
 
@@ -236,7 +235,7 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
         refseq3_over = refseq5_flank[-overlap:]
         refseq5 = refseq5_flank+refseq5_over
         refseq3 = refseq3_flank+refseq3_over
-        _,cigar5 = nw.c_needlemanWunschXcript(refseq5,rdseq5,nw.lcsCost)
+        _,cigar5 = needlemanWunsch.needlemanWunschXcript(refseq5,rdseq5,needlemanWunsch.lcsCost())
         nsite5_1,nsite3_1 = cigar_correct(len(rdseq5_flank),cigar5,site5,site3)
         sites5.append(nsite5_1)
         sites3.append(nsite3_1)
