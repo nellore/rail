@@ -75,7 +75,7 @@ class FileMover(object):
             cmdl = ['wget', '-t', '4', '-T', '20', '-w', '25']
             cmdl.append(url.toUrl())
             cmd = ' '.join(cmdl)
-            os.system(cmd)
+            extl = os.system(cmd)
             os.chdir(oldp)
             if extl > 0:
                 raise RuntimeError("Non-zero exitlevel %d from wget command '%s'" % (extl, cmd))
@@ -84,7 +84,7 @@ class FileMover(object):
             cmdl.append(url.toUrl())
             cmdl.append(dest)
             cmd = ' '.join(cmdl)
-            os.system(cmd)
+            extl = os.system(cmd)
             if extl > 0:
                 raise RuntimeError("Non-zero exitlevel %d from hadoop fs -get command '%s'" % (extl, cmd))
 
