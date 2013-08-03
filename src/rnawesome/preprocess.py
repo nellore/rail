@@ -292,7 +292,7 @@ if __name__ == '__main__':
     assert len(inp1) == len(inp2)
     assert len(inp1) == len(out)
     push = url.Url(args.push) if args.push is not None else None
-    mover = FileMover(args.c3cfg, args.acl_public)
+    mover = FileMover(args.s3cfg, args.acl_public)
     for fn1, fn2, outfn, lab in zip(inp1, inp2, out, lab):
         if fn2 is None:
             print >> sys.stderr, "Processing unpaired URL '%s' ..." % fn1
