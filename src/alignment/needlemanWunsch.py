@@ -95,12 +95,12 @@ def traceback(D, sx, sy, s):
 def needlemanWunsch(x,y,s):
     L = len(x)
     D = numpy.zeros((L+1,L+1),numpy.int32)
-    nw.nw(D,x,y,s)
-    return D[L,L]
+    nw.nw(D,s,x,y)
+    return D[L,L],D
 
 #x,y are the alignment sequences, s is the substitution matrix
 def needlemanWunschXcript(x,y,s):
     L = len(x)
     D = numpy.zeros((L+1,L+1),numpy.int32)
-    nw.nw(D,x,y,s)
-    return D[L,L],D
+    nw.nw(D,s,x,y)
+    return D[L,L], cigar(traceback(D, x, y, s))
