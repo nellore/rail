@@ -77,8 +77,7 @@ import readlet
 import sample
 import interval
 import partition
-import eddist
-import nw
+import needlemanWunsch
 import fasta
 
 ninp = 0               # # lines input so far
@@ -156,21 +155,21 @@ def correctSplice(read,ref_left,ref_right,fw):
     revread = revcomp(read)
     if not fw:
         ref_right = revcomp(ref_right)
-        score1,leftDP  = nw.c_needlemanWunsch(ref_left, read, nw.matchCost)
-        score2,rightDP = nw.c_needlemanWunsch(ref_right,revread, nw.matchCost)
+        score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
+        score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
         rightDP = numpy.fliplr(rightDP)
         rightDP = numpy.flipud(rightDP)
     else:
         ref_right = revcomp(ref_right)
-        score1,leftDP  = nw.c_needlemanWunsch(ref_left, read, nw.matchCost)
-        score2,rightDP = nw.c_needlemanWunsch(ref_right,revread, nw.matchCost)
+        score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
+        score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
         rightDP = numpy.fliplr(rightDP)
         rightDP = numpy.flipud(rightDP)
 
     total = leftDP+rightDP
-    print >> sys.stderr,"ref_left\t",ref_left
-    print >> sys.stderr,"ref_right\t",revcomp(ref_right)
-    print >> sys.stderr,"read    \t",read,"\n"
+    # print >> sys.stderr,"ref_left\t",ref_left
+    # print >> sys.stderr,"ref_right\t",revcomp(ref_right)
+    # print >> sys.stderr,"read    \t",read,"\n"
 
     # print >> sys.stderr,"Left Matrix\n",leftDP
     # print >> sys.stderr,"Right Matrix\n",rightDP
@@ -232,9 +231,9 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
     # if not fw:
     #     unmapped = revcomp(unmapped)
 
-    print >> sys.stderr,"ref_left\t",ref_left
-    print >> sys.stderr,"ref_right\t",ref_right
-    print >> sys.stderr,"read    \t",unmapped,"\n"
+    # print >> sys.stderr,"ref_left\t",ref_left
+    # print >> sys.stderr,"ref_right\t",ref_right
+    # print >> sys.stderr,"read    \t",unmapped,"\n"
 
     #print >> sys.stderr,"Forward Strand",fw
     #print >> sys.stderr,ref_left,len(ref_left),ref_right,len(ref_right),unmapped,len(unmapped)
@@ -265,11 +264,12 @@ def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region
     rdsubseq = rdseq[unmapped_st:unmapped_end]
     if not fw:
         rdsubseq = revcomp(rdsubseq)
-    score,_ = nw.c_needlemanWunsch(refseq, rdsubseq, nw.inverseMatchCost)
+        #score,_ = nw.c_needlemanWunsch(refseq, rdsubseq, nw.inverseMatchCost)
+        score = needlemanWunsch.needlemanWunsch(refseq, rdsubseq, needlemanWunsch.matchCost())
     # TODO: redo this in terms of percent identity or some
     # other measure that adapts to length of the missing bit,
     # not just a raw score
-    if score <= len(rdsubseq)/10:
+    if score >= len(rdsubseq)*(9.0/10):
         for pt in iter(partition.partition(k, in_start, in_end, binsz)):
             print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
             nout += 1
@@ -345,8 +345,8 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                     handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 elif reflen > rdlet_len:
                     #print >> sys.stderr,"len>0","Region start",region_st,"Region end",region_end
-                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
-                    #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    #handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
+                    printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
                 else:
                     print >> sys.stderr,"This should never happen!!!","ref_len",reflen,"<","rdlet_len",rdlet_len
                     print >> sys.stderr,"In_start",in_start,"In_end",in_end
