@@ -93,7 +93,7 @@ class RecordHandler(object):
         (rotating) files, compressing the files, uploading file, and deleting
         trash. """
     
-    def __init__(self, outfn, pushDest=None, mover=None, maxnucs=120000000, gzip=False):
+    def __init__(self, outfn, pushDest=None, mover=None, maxnucs=120000000, gzip=False, keep=False):
         self.outfnPre, self.outfn = outfn, None
         self.gzip = gzip
         self.pushDest = pushDest
@@ -103,6 +103,7 @@ class RecordHandler(object):
         self.prefix = None
         self.ofh = None
         self.first = True
+        self.keep = keep
     
     def setPrefix(self, pre):
         self.prefix = pre
@@ -112,6 +113,8 @@ class RecordHandler(object):
         if self.pushDest is not None:
             print >> sys.stderr, "  Pushing '%s' to '%s' ..." % (self.outfn, self.pushDest.toUrl())
             self.mover.put(self.outfn, self.pushDest)
+            if not self.keep:
+                os.remove(self.outfn)
     
     def nextFile(self):
         self.finish()
@@ -318,6 +321,6 @@ if __name__ == '__main__':
                 if not args.keep: toDelete.append(fn2)
         # Come up with an output filename
         if outfn is None: outfn = hashize(fn1)
-        handler = RecordHandler(outfn, push, mover, args.nucs_per_file, args.gzip_output)
+        handler = RecordHandler(outfn, push, mover, args.nucs_per_file, args.gzip_output, args.keep)
         preprocess(handler, lab, fn1, fn2, inputFormat)
         for fn in toDelete: os.remove(fn)

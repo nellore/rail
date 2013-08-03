@@ -1,16 +1,23 @@
+import sys
 import numpy
 import nw
-
+import re
 
 #Some commonly used substitution matrices
 #IMPORTANT: All substitution matrices must be of type numpy.int32
+
 def lcsCost():
+    """ A substitution matrix where match=-1, everything else =0.  Only makes
+       sense for solving LCS problems, and only if DP algorithm is taking a
+       min at each cell. """
     M = numpy.zeros((6,6),numpy.int32)
     for i in range(0,6):
         M[i,i] = -1
     return M
 
 def matchCost():
+    """ Return a substitution matrix where match=+1, everything else=-1.  The
+        6 symbols are 0=A, 1=C, 2=G, 3=T, 4=N, 5=- (gap). """
     M = numpy.zeros((6,6),numpy.int32)
     M.fill(-1)
     for i in range(0,6):
@@ -18,6 +25,8 @@ def matchCost():
     return M
 
 def inverseMatchCost():
+    """ Return a substitution matrix where match=0, everything else=1.  Only
+        makes sense if the DP algorithm is taking a min at each cell. """
     M = numpy.zeros((6,6),numpy.int32)
     M.fill(1)
     for i in range(0,6):
@@ -54,11 +63,8 @@ def cigar(alignment):
     count = 1
     return s
 
-
 def char2index(string):
-    for i in range(0,len(string)):
-        indexs[i] = "ACGTN-".index(string[i])
-    return indexs
+    return [ "ACGTN-".index(c) for c in string ]
 
 def traceback(D, sx, sy, s):
     """ Trace back from bottom-right cell in edit-distance matrix D for

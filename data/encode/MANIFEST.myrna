@@ -1,0 +1,54 @@
+# Myrna-style manifest file for ENCODE project
+# I've listed files in the European Nucleotide Archive
+
+#
+# Gingeras lab at CSHL
+# All UNPAIRED
+#
+
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR089/SRR089332/SRR089332.fastq.gz	0	Gingeras_GM12878_cell_total-0-SRR089332
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR089/SRR089333/SRR089333.fastq.gz	0	Gingeras_GM12878_cell_total-0-SRR089333
+
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR089/SRR089334/SRR089334.fastq.gz	0	Gingeras_K562_cell_total-0-SRR089334
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR089/SRR089335/SRR089335.fastq.gz	0	Gingeras_K562_cell_total-0-SRR089335
+
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR089/SRR089336/SRR089336.fastq.gz	0	Gingeras_K562_cytosol_longPolyA-0-SRR089336
+
+#
+# Myers lab
+# All PAIRED
+#
+
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065532/SRR065532_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065532/SRR065532_2.fastq.gz	0	Myers_GM12878_cell_2x75_400-2-SRR065532
+
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065529/SRR065529_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065529/SRR065529_2.fastq.gz	0	Myers_HeLa-S3_cell_2x75_200-1-SRR065529
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065505/SRR065505_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065505/SRR065505_2.fastq.gz	0	Myers_HeLa-S3_cell_2x75_200-2-SRR065505
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065506/SRR065506_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065506/SRR065506_2.fastq.gz	0	Myers_HeLa-S3_cell_2x75_200-2-SRR065506
+
+# Next batch are unpaired
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065530/SRR065530_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065530/SRR065530_2.fastq.gz	0	Myers_HUVEC_cell_1x75D_ilNA-2-SRR065530
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065531/SRR065531_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065531/SRR065531_2.fastq.gz	0	Myers_HUVEC_cell_1x75D_ilNA-2-SRR065531
+
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065509/SRR065509_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065509/SRR065509_2.fastq.gz	0	Myers_HUVEC_cell_2x75_200-1-SRR065509
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065524/SRR065524_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065524/SRR065524_2.fastq.gz	0	Myers_HUVEC_cell_2x75_200-2-SRR065524
+
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065504/SRR065504_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065504/SRR065504_2.fastq.gz	0	Myers_H1-hESC_cell_2x75_200-1-SRR065504
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR066/SRR066678/SRR066678_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR066/SRR066678/SRR066678_2.fastq.gz	0	Myers_H1-hESC_cell_2x75_200-1-SRR066678
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065495/SRR065495_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065495/SRR065495_2.fastq.gz	0	Myers_H1-hESC_cell_2x75_200-2-SRR065495
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065521/SRR065521_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065521/SRR065521_2.fastq.gz	0	Myers_H1-hESC_cell_2x75_200-3-SRR065521
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR066/SRR066679/SRR066679_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR066/SRR066679/SRR066679_2.fastq.gz	0	Myers_H1-hESC_cell_2x75_200-3-SRR066679
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065533/SRR065533_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065533/SRR065533_2.fastq.gz	0	Myers_H1_hESC_cell_2x75_200-4-SRR065533
+
+# Difference between previous batch and following batch is fragment length
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065491/SRR065491_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065491/SRR065491_2.fastq.gz	0	Myers_H1-hESC_cell_2x75_400-1-SRR065491
+
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065520/SRR065520_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065520/SRR065520_2.fastq.gz	0	Myers_HepG2_cell_2x75_200-1-SRR065520
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065496/SRR065496_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065496/SRR065496_2.fastq.gz	0	Myers_HepG2_cell_2x75_200-2-SRR065496
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065497/SRR065497_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065497/SRR065497_2.fastq.gz	0	Myers_HepG2_cell_2x75_200-2-SRR065497
+
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065503/SRR065503_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065503/SRR065503_2.fastq.gz	0	Myers_NHEK_cell_2x75_200-1-SRR065503
+
+# Next batch are unpaired
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065527/SRR065527_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065527/SRR065527_2.fastq.gz	0	Myers_NHEK_cell_1x75D_ilNA-1-SRR065527
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065528/SRR065528_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065528/SRR065528_2.fastq.gz	0	Myers_NHEK_cell_1x75D_ilNA-1-SRR065528
+
