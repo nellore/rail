@@ -103,4 +103,4 @@ def needlemanWunschXcript(x,y,s):
     L = len(x)
     D = numpy.zeros((L+1,L+1),numpy.int32)
     nw.nw(D,s,x,y)
-    return D[L,L], cigar(traceback(D, px, py, s))
+    return D[L,L], cigar(traceback(D, x, y, s))
