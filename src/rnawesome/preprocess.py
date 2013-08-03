@@ -37,7 +37,7 @@ class FileMover(object):
             if self.s3cred is not None:
                 cmdl.append("-c")
                 cmdl.append(self.s3cred)
-            cmdl.append("put")
+            cmdl.append("sync")
             if self.s3public:
                 cmdl.append("--acl-public")
             cmdl.append(fn)
@@ -52,6 +52,8 @@ class FileMover(object):
         print >> sys.stderr, "  Push command: '%s'" % cmd
         extl = os.system(cmd)
         print >> sys.stderr, "    Exitlevel: %d" % extl
+        if extl > 0:
+            raise RuntimeError("Non-zero exitlevel %d from s3cmd sync (upload) command '%s'" % (extl, cmd))
     
     def get(self, url, dest="."):
         """ Get a file to local directory """
@@ -63,26 +65,35 @@ class FileMover(object):
             cmdl.append("get")
             cmdl.append(url.toNonNativeUrl())
             cmdl.append(dest)
-            os.system(' '.join(cmdl))
+            cmd = ' '.join(cmdl)
+            extl = os.system(cmd)
+            if extl > 0:
+                raise RuntimeError("Non-zero exitlevel %d from s3cmd get command '%s'" % (extl, cmd))
         elif url.isWgettable():
             oldp = os.getcwd()
             os.chdir(dest)
             cmdl = ['wget', '-t', '4', '-T', '20', '-w', '25']
             cmdl.append(url.toUrl())
-            os.system(' '.join(cmdl))
+            cmd = ' '.join(cmdl)
+            os.system(cmd)
             os.chdir(oldp)
+            if extl > 0:
+                raise RuntimeError("Non-zero exitlevel %d from wget command '%s'" % (extl, cmd))
         else:
             cmdl = ["hadoop", "fs", "-get"]
             cmdl.append(url.toUrl())
             cmdl.append(dest)
-            os.system(' '.join(cmdl))
+            cmd = ' '.join(cmdl)
+            os.system(cmd)
+            if extl > 0:
+                raise RuntimeError("Non-zero exitlevel %d from hadoop fs -get command '%s'" % (extl, cmd))
 
 class RecordHandler(object):
     """ Takes read records and handles the process of writing them to
         (rotating) files, compressing the files, uploading file, and deleting
         trash. """
     
-    def __init__(self, outfn, pushDest=None, mover=None, maxnucs=50000000, gzip=False):
+    def __init__(self, outfn, pushDest=None, mover=None, maxnucs=120000000, gzip=False):
         self.outfnPre, self.outfn = outfn, None
         self.gzip = gzip
         self.pushDest = pushDest
@@ -237,7 +248,7 @@ if __name__ == '__main__':
     parser.add_argument(\
         '--filename', metavar='STR', type=str, help='Use this in FN: field in output read name')
     parser.add_argument(\
-        '--nucs-per-file', metavar='INT', type=int, default=50000000, help='Allow a max of this many nucleotides per output file')
+        '--nucs-per-file', metavar='INT', type=int, default=120000000, help='Allow a max of this many nucleotides per output file')
     parser.add_argument(\
         '--label', metavar='STRS', type=str, nargs='+', required=False, help='Use this in LB: field in output read name')
     parser.add_argument(\
