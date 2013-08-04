@@ -198,7 +198,7 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
     diff = unmapped_end-unmapped_st-1
     left_st,right_end = in_start-offset+1,in_end+offset
     left_end,right_st = left_st+diff,right_end-diff
-    print >> sys.stderr,left_st,left_end
+    #print >> sys.stderr,left_st,left_end
     ref_left = fnh.fetch_sequence(k,left_st, left_end).upper()
     ref_right = fnh.fetch_sequence(k,right_st, right_end).upper()
     unmapped = rdseq[unmapped_st:unmapped_end]
@@ -206,7 +206,23 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
     left_diff,right_diff = dj, len(unmapped)-dj
     region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
     left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
-    in_start,in_end = in_start+left_in_diff,in_end-right_in_diff
+    tmp_start,tmp_end = in_start+left_in_diff,in_end-right_in_diff
+
+    # if (tmp_start>=632300 and tmp_start<=632400) or (tmp_end>=632300 and tmp_end<=632400):
+    #     print >> sys.stderr,"Forward strand",fw
+    #     print >> sys.stderr,"original",in_start,in_end
+    #     print >> sys.stderr,"adjusted",tmp_start,tmp_end
+    #     print >> sys.stderr,"left_diff",left_diff,"right_diff",right_diff
+    #     print >> sys.stderr,"left  \t",ref_left
+    #     print >> sys.stderr,"right \t",ref_right
+    #     print >> sys.stderr,"read  \t",unmapped
+
+    #     print >> sys.stderr,"left \t",ref_left[:left_diff],ref_left[left_diff:]
+    #     print >> sys.stderr,"right\t",ref_right[:right_diff],ref_right[right_diff:]
+    #     print >> sys.stderr,"read \t",unmapped
+
+
+    in_start,in_end = tmp_start,tmp_end
     printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
 
 """
@@ -272,14 +288,14 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 reflen,rdlet_len = in_end-in_start, abs(region_end-region_st)
                 assert in_start<in_end
                 if rdlet_len==0 or reflen<2*offset:
-                    printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset)
                 elif abs(reflen-rdlet_len)/float(rdlet_len) < 0.05:
                     #Note: just a readlet missing due to error or variant
                     handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 elif reflen > rdlet_len:
-                    printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
-                    #handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset)
-
+                    #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset)
                 else:
                     print >> sys.stderr,"This should never happen!!!","ref_len",reflen,"<","rdlet_len",rdlet_len
                     print >> sys.stderr,"In_start",in_start,"In_end",in_end

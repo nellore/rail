@@ -154,26 +154,27 @@ def sliding_window(refID, sts,ens, site, fastaF):
     assert len(toks)==2
     site5p,site3p = toks[0],toks[1]
     hist5, hist3 = histogram.hist_score(sts,in_start,"5",2*n+1), histogram.hist_score(sts,in_start,"3",2*n+1)
-    #mean5,std5 = histogram.average(hist5),2*histogram.stddev(hist5)
-    #mean3,std3 = histogram.average(hist3),2*histogram.stddev(hist3)
     mean5,std5 = hist5.index(max(hist5)),2*histogram.stddev(hist5)
     mean3,std3 = hist3.index(max(hist3)),2*histogram.stddev(hist3)
+    # mean5,std5 = hist5.index(max(hist5)),r
+    # mean3,std3 = hist3.index(max(hist3)),r
+    
     #Create a normal distributed scoring scheme based off of candidates
     h5,h3 = histogram.normal_score(2*n+1,mean5,std5), histogram.normal_score(2*n+1,mean5,std5)
     """Remember that fasta index is base 1 indexing"""
-    seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n)
-    seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n)
+    seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n).upper()
+    seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n).upper()
     score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
     j5,s5 = findSite(score5,"5")
     j3,s3 = findSite(score3,"3")
-    # print >> sys.stderr,"Seq 5",seq5
-    # print >> sys.stderr,"Seq 3",seq3
-    # print >> sys.stderr,"Histogram 5\t",format_list(hist5)
-    # print >> sys.stderr,"Histogram 3\t",format_list(hist3)
-    # print >> sys.stderr,"Score 5 \t",format_list(h5)
-    # print >> sys.stderr,"Score 3 \t",format_list(h3)
-    # print >> sys.stderr, "Mean 5\t",histogram.average(hist5),"Mode 5",hist5.index(max(hist5))
-    # print >> sys.stderr, "Mean 3\t",histogram.average(hist3),"Mode 3",hist5.index(max(hist3))
+    print >> sys.stderr,"Seq 5",seq5
+    print >> sys.stderr,"Seq 3",seq3
+    print >> sys.stderr,"Histogram 5\t",format_list(hist5)
+    print >> sys.stderr,"Histogram 3\t",format_list(hist3)
+    print >> sys.stderr,"Score 5 \t",format_list(h5)
+    print >> sys.stderr,"Score 3 \t",format_list(h3)
+    print >> sys.stderr, "Mean 5\t",histogram.average(hist5),"Mode 5",hist5.index(max(hist5))
+    print >> sys.stderr, "Mean 3\t",histogram.average(hist3),"Mode 3",hist5.index(max(hist3))
     return j5+in_start-n-1,s5,j3+(in_end-n-1),s3  #returned transformed coordinates of junction sites
 
 
