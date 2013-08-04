@@ -387,7 +387,7 @@ def go():
                     nm_rlet, seq_rlet, qual_rlet = rlets1[i]
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet)
                     if first:
-                        sys.stderr.write("First readlet: '%s'" % rdletStr)
+                        sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
                     proc.stdin.write(rdletStr)
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
@@ -395,13 +395,13 @@ def go():
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet)
                     if first:
-                        sys.stderr.write("First readlet: '%s'" % rdletStr)
+                        sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
                     proc.stdin.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
                 if first:
-                    sys.stderr.write("First read: '%s'" % rdStr)
+                    sys.stderr.write("First read: '%s'" % rdStr.rstrip())
                     first = False
                 proc.stdin.write(rdStr)
         else:
@@ -416,13 +416,13 @@ def go():
                     nm_rlet, seq_rlet, qual_rlet = rlets[i]
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet)
                     if first:
-                        sys.stderr.write("First readlet: '%s'" % rdletStr)
+                        sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
                     proc.stdin.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\n" % (nm, seq, qual)
                 if first:
-                    sys.stderr.write("First read: '%s'" % rdStr)
+                    sys.stderr.write("First read: '%s'" % rdStr.rstrip())
                     first = False
                 proc.stdin.write(rdStr)
 
