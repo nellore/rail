@@ -302,7 +302,7 @@ if mode == 'emr':
         raise RuntimeError("Could not parse --hadoop-version '%s'" % hadoopVersion)
     elif len(vers) >= 3 and vers[:3] == [1, 0, 3]:
         emrArgs.append("--hadoop-version=1.0.3")
-        emrArgs.append("--ami-version 2.3")
+        emrArgs.append("--ami-version 2.4")
     elif len(vers) >= 3 and vers[:3] == [0, 20, 205]:
         emrArgs.append("--hadoop-version=0.20.205")
         emrArgs.append("--ami-version 2.0")
@@ -458,7 +458,7 @@ if mode == 'emr':
         cmdl.extend(["-c", cred])
     
     cmdl.append(emrCluster.emrArgs())
-    cmdl.append(aws.bootstrapFetchTarball("Fetch Tornado source", url.Url("s3://tornado-emr/bin/tornado-%s.tar.gz" % ver), emrLocalDir))
+    tornadoUrl = url.Url("s3://tornado-emr/bin/tornado-%s.tar.gz" % ver)
     if useRef:
         cmdl.append(aws.bootstrapFetchTarball("Fetch Tornado ref archive", ref, emrLocalDir))
     if useManifest:
@@ -474,6 +474,8 @@ if mode == 'emr':
         cmdl.append(tools.bootstrapTool("kenttools", dest="/mnt/bin"))
     if useSamtools:
         cmdl.append(tools.bootstrapTool("samtools"))
+    # Run the Tornado makefile
+    cmdl.append(tools.bootstrapTool("tornado", src=tornadoUrl, dest="/mnt/bin"))
     cmdl.extend(emrArgs)
     
     cmd = ' '.join(cmdl)
