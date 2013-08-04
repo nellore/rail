@@ -56,6 +56,7 @@ base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "util"))
 
 import url
+import path
 
 parser = argparse.ArgumentParser(description='Generate and run a script for Tornado.')
 
@@ -284,12 +285,12 @@ if mode == 'emr':
     
     # Get AWS credentials
     cred = args.credentials
-    if cred is not None and not is_exe(cred):
+    if cred is not None and not path.is_exe(cred):
         raise RuntimeError("File specified with --credentials ('%s') doesn't exist or isn't executable" % args.credentials)
     
     # Get EMR script
     emrScript = args.emr_script
-    if emrScript is not None and not is_exe(emrScript):
+    if emrScript is not None and not path.is_exe(emrScript):
         raise RuntimeError("File specified with --emr-script ('%s') doesn't exist or isn't executable" % args.emrScript)
     
     # Sanity check Hadoop version
@@ -474,14 +475,16 @@ if mode == 'emr':
         cmdl.append(tools.bootstrapTool("kenttools", dest="/mnt/bin"))
     if useSamtools:
         cmdl.append(tools.bootstrapTool("samtools"))
-    # Run the Tornado makefile
-    cmdl.append(tools.bootstrapTool("tornado", src=tornadoUrl, dest="/mnt/bin"))
+    # Get Tornado scripts and run Makefile for swig code
+    cmdl.append(tools.bootstrapTool("tornado", src=tornadoUrl, dest="/mnt"))
     cmdl.extend(emrArgs)
     
     cmd = ' '.join(cmdl)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as shFh:
         shFn = shFh.name
-        shFh.write(cmd)
+        shFh.write(cmd + '\n')
     print >> sys.stderr, "elastic-mapreduce command in: '%s'" % shFn
     if not args.dry_run:
         os.system(cmd)
+    else:
+        print >> sys.stderr, "--dry-run mode: not running elastic-mapreduce script"
