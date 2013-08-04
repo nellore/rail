@@ -222,6 +222,7 @@ Applies the Needleman-Wunsch algorithm to provide a list of candiates
 """
 def nw_correct(refID,site5,site3,introns,strand,fastaF):
     sites5,sites3 = [],[]
+    M = needlemanWunsch.matchCost()
     for intr in introns:
         in_st,in_en,lab,rdseq5_flank,rdseq5_over,rdseq3_flank,rdseq3_over = intr
         rdseq5 = rdseq5_flank+rdseq5_over
@@ -235,10 +236,12 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
         refseq3_over = refseq5_flank[-overlap:]
         refseq5 = refseq5_flank+refseq5_over
         refseq3 = refseq3_flank+refseq3_over
-        _,cigar5 = needlemanWunsch.needlemanWunschXcript(refseq5,rdseq5,needlemanWunsch.lcsCost())
+        #print >> sys.stderr,refseq5,rdseq5,'\n',M
+        _,cigar5 = needlemanWunsch.needlemanWunschXcript(refseq5,rdseq5,M)
         nsite5_1,nsite3_1 = cigar_correct(len(rdseq5_flank),cigar5,site5,site3)
         sites5.append(nsite5_1)
         sites3.append(nsite3_1)
+    del M
     return sites5,sites3
 
 """
@@ -286,7 +289,9 @@ for ln in sys.stdin:
         getJunctionSites(last_pt,last_ref,bins,fnh)
         starts,ends,labs = [],[],[]
         seq5_flanks,seq3_flanks,seq5_overs,seq3_overs = [],[],[],[]
-
+        #print >> sys.stderr,"pt",pt,st,en
+        
+        
     starts.append(st)
     ends.append(en)
     labs.append(lab)

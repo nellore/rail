@@ -72,14 +72,15 @@ def traceback(D, sx, sy, s):
     x,y = char2index(sx),char2index(sy)
     i, j = len(x), len(y)
     xscript = []
+    gap = 5
     while i > 0 or j > 0:
         diag, vert, horz = sys.maxint, sys.maxint, sys.maxint
         if i > 0 and j > 0:
             diag = D[i-1, j-1] + s[x[i-1], y[j-1]]
         if i > 0:
-            vert = D[i-1, j] + s[x[i-1], '-']
+            vert = D[i-1, j] + s[x[i-1], gap]
         if j > 0:
-            horz = D[i, j-1] + s['-', y[j-1]]
+            horz = D[i, j-1] + s[gap, y[j-1]]
         if diag <= vert and diag <= horz:
             xscript.append('R' if x[i-1] != y[j-1] else 'M')
             i -= 1; j -= 1
@@ -103,4 +104,7 @@ def needlemanWunschXcript(x,y,s):
     L = len(x)
     D = numpy.zeros((L+1,L+1),numpy.int32)
     nw.nw(D,s,x,y)
-    return D[L,L], cigar(traceback(D, x, y, s))
+    astr = cigar(traceback(D, x, y, s))
+    score = D[L,L]
+    del D
+    return score,astr
