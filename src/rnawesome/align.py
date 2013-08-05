@@ -201,7 +201,7 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
         nout += 1
 
 
-def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset):
+def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid):
     diff = unmapped_end-unmapped_st-1
     left_st,right_end = in_start-offset+1,in_end+offset
     left_end,right_st = left_st+diff,right_end-diff
@@ -220,10 +220,20 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
         left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
         tmp_start,tmp_end = in_start+left_in_diff,in_end-right_in_diff
 
+        # if (tmp_start>21848900 and tmp_start<21849000) or (tmp_end>21848900 and tmp_end<21849000):
+        #     print >> sys.stderr,rdid
+        #     print >> sys.stderr,"Region",tmp_start,tmp_end
+        #     print >> sys.stderr,"Intron",in_start,in_end
+        #     print >> sys.stderr,"left     \t",ref_left,left_st,left_end
+        #     print >> sys.stderr,"right    \t",ref_right,right_st,right_end
+        #     print >> sys.stderr,"unmapped \t",unmapped
+        #     print >> sys.stderr,"read     \t",rdseq
+
         if score>0:
             in_start,in_end = tmp_start,tmp_end
 
         printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+
 
 """
 Compares potential short intron with readlet
@@ -247,7 +257,7 @@ def getIntervals(rdals,L):
     ivals = {}
     positions = dict()  #stores readlet number based keyed by position, strand and reference id
     for rdal in rdals:
-        refid, fw, refoff0, seqlen, rlet_nm = rdal
+        refid, fw, refoff0, seqlen, rlet_nm, rdid = rdal
         refoff0, seqlen, rlet_nm = int(refoff0), int(seqlen), int(rlet_nm)
         # Remember begin, end offsets for readlet w/r/t 5' end of the read
         if fw:
@@ -256,11 +266,13 @@ def getIntervals(rdals,L):
         else:
             positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval + seqlen
             positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval
-
-        if (refid, fw) not in ivals:
-            ivals[(refid, fw)] = interval.FlatIntervals()
-        ivals[(refid, fw)].add(interval.Interval(refoff0, refoff0 + seqlen))
+        if (refid, fw, rdid) not in ivals:
+            ivals[(refid, fw, rdid)] = interval.FlatIntervals()
+        ivals[(refid, fw, rdid)].add(interval.Interval(refoff0, refoff0 + seqlen))
     return ivals,positions
+
+test_id = set(["r_n1688","r_n2805","r_n4526","r_n4833","r_n2020","r_n3512","r_n4446","r_n279","r_n1828","r_n5035","r_n1848","r_n2403","r_n3163","r_n3944","r_n4211"])
+test_exons = open("test_exons.txt",'w')
 
 def composeReadletAlignments(rdnm, rdals, rdseq):
 
@@ -271,7 +283,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
     # Add this interval to the flattened interval collection for current read
     ivals,positions = getIntervals(rdals,L)
     for kfw in ivals.iterkeys(): # for each chromosome covered by >= 1 readlet
-        k, fw = kfw
+        k, fw, rdid = kfw
         in_end, in_start = -1, -1
         for iv in sorted(iter(ivals[kfw])): # for each covered interval, left-to-right
             st, en = iv.start, iv.end
@@ -292,15 +304,15 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 reflen,rdlet_len = in_end-in_start, abs(region_end-region_st)
 
                 assert in_start<in_end
-                if rdlet_len==0 or reflen<2*offset:
-                    #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
-                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset)
-                elif abs(reflen-rdlet_len)/float(rdlet_len) < 0.05:
+                if abs(reflen-rdlet_len)/float(rdlet_len+1) < 0.05:
                     #Note: just a readlet missing due to error or variant
                     handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
+                elif rdlet_len==0 or reflen<2*offset:
+                    #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid)
                 elif reflen > rdlet_len:
                     #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
-                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset)
+                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid)
                 else:
                     print >> sys.stderr,"This should never happen!!!","ref_len",reflen,"<","rdlet_len",rdlet_len
                     print >> sys.stderr,"In_start",in_start,"In_end",in_end
@@ -311,6 +323,8 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
                 print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdnm))
+                if rdid in test_id:
+                    print >> test_exons,"exon\t%s\t%012d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdnm))
                 nout += 1
 
 def bowtieOutReadlets(st):
@@ -331,12 +345,13 @@ def bowtieOutReadlets(st):
         rdnm = ';'.join(toks[:-3])
         rlet_nm = toks[2]
         cnt[rdnm] = cnt.get(rdnm, 0) + 1
+        rd_name = toks[0]
         rdseq = toks[4]
         rdlet_n = int(toks[-2])
         if flags != 4:
             fw = (flags & 16) == 0
             if rdnm not in mem: mem[rdnm] = [ ]
-            mem[rdnm].append((refid, fw, refoff1-1, seqlen,rlet_nm))
+            mem[rdnm].append((refid, fw, refoff1-1, seqlen,rlet_nm,rd_name))
         if cnt[rdnm] == rdlet_n:
             # Last readlet
             if rdnm in mem:
