@@ -9,14 +9,14 @@ class PreprocessingStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
         compressArg = ""
         if pconf.preprocCompress is not None:
-            compressArg = "--compress=%s" % pconf.preprocCompress
+            compressArg = "--gzip-output"
         super(PreprocessingStep, self).__init__(\
             "Preprocess", # name
             inp,      # input URL
-            output,   # output URL
+            "hdfs:///dummy",   # output URL
             "org.apache.hadoop.mapred.lib.NLineInputFormat",
             None,
-            "python %s/src/rnawesome/preproc.py %s" % (pconf.emrLocalDir, compressArg),
+            "python %s/src/rnawesome/preproc.py --nucs-per-file=120000000 %s --push=%s" % (pconf.emrLocalDir, compressArg, output.replace('s3://', 'S3://').replace('s3n://', 'S3://')),
             None)
 
 class AlignStep(pipeline.Step):

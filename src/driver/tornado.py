@@ -104,6 +104,8 @@ parser.add_argument(\
 parser.add_argument(\
     '--just-differential', action='store_const', const=True, help='Just run the differential pipeline.')
 parser.add_argument(\
+    '--start-with-preprocess', action='store_const', const=True, help='Start pipeline from preprocessing step.')
+parser.add_argument(\
     '--start-with-align', action='store_const', const=True, help='Resume from just before the align pipeline.')
 parser.add_argument(\
     '--start-with-coverage', action='store_const', const=True, help='Resume from just before the coverage pipeline.')
@@ -219,7 +221,7 @@ logUrl = url.Url(out.toUrl() + '/' + "logs")
 if args.intermediate is not None:
     intermediate = url.Url(args.intermediate.rstrip('/'))
 else:
-    intermediate = url.Url("hdfs://%s/intermediate" % appName)
+    intermediate = url.Url("hdfs:///%s/intermediate" % appName)
 ref = None
 if args.reference is not None:
     ref = url.Url(args.reference.rstrip('/'))
@@ -439,7 +441,7 @@ for prv, cur, nxt in [ allSteps[i:i+3] for i in xrange(0, len(allSteps)-2) ]:
     steps.append(stepClasses[cur](inDirs[-1], outDirs[-1], tconf, pconf))
 
 if mode == 'emr':
-    jsonStr = "[\n" + "\n".join([ step.toEmrCmd(pconf) for step in steps ]) + "\n]\n"
+    jsonStr = "[\n" + ",\n".join([ step.toEmrCmd(pconf) for step in steps ]) + "\n]\n"
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as jsonFh:
         jsonFn = jsonFh.name
         jsonFh.write(jsonStr)
