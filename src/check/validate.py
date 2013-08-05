@@ -145,6 +145,7 @@ if __name__=="__main__":
     sites = list(sites)
     found_sites = list(found_sites)
     false_sites = list(false_sites)
+    close_sites = list(close_sites)
 
     total_sites.sort()
     sites.sort()
@@ -152,13 +153,15 @@ if __name__=="__main__":
     missed_sites.sort()
     false_sites.sort()
     intersect_sites.sort()
-
-    print >>sys.stderr, "Annot Sites",total_sites
-    print >>sys.stderr, "Sim Sites",sites
-    print >>sys.stderr, "Found Sites",found_sites
+    close_sites.sort()
+    
+    print >>sys.stderr, "Annot Sites ",total_sites
+    print >>sys.stderr, "Sim Sites   ",sites
+    print >>sys.stderr, "Found Sites ",found_sites
+    print >>sys.stderr, "Close Sites ",close_sites
     print >>sys.stderr, "Missed Sites",missed_sites
-    print >>sys.stderr, "False Sites",false_sites
-    print >>sys.stderr, "Intersect",intersect_sites
+    print >>sys.stderr, "False Sites ",false_sites
+    print >>sys.stderr, "Intersect   ",intersect_sites
 
     missed = len(missed_sites)/2
     #bed_site_stats = siteDistribution(bed_sites,fastaH)

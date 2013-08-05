@@ -52,7 +52,8 @@ import counter
 
 parser = argparse.ArgumentParser(description=\
                                      'Reports splice junction information')
-
+parser.add_argument(\
+    '--test', action='store_const', const=True, default=False, help='Run unit tests')
 parser.add_argument(\
     '--refseq', type=str, required=False,
     help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required')
@@ -154,15 +155,15 @@ def sliding_window(refID, sts,ens, site, fastaF):
     assert len(toks)==2
     site5p,site3p = toks[0],toks[1]
     hist5, hist3 = histogram.hist_score(sts,in_start,"5",2*n+1), histogram.hist_score(sts,in_start,"3",2*n+1)
-    #mean5,std5 = histogram.average(hist5),2*histogram.stddev(hist5)
-    #mean3,std3 = histogram.average(hist3),2*histogram.stddev(hist3)
-    mean5,std5 = hist5.index(max(hist5)),2*histogram.stddev(hist5)
-    mean3,std3 = hist3.index(max(hist3)),2*histogram.stddev(hist3)
+    mean5,std5 = hist5.index(max(hist5)),histogram.stddev(hist5)
+    mean3,std3 = hist3.index(max(hist3)),histogram.stddev(hist3)
+    # mean5,std5 = hist5.index(max(hist5)),r
+    # mean3,std3 = hist3.index(max(hist3)),r
     #Create a normal distributed scoring scheme based off of candidates
     h5,h3 = histogram.normal_score(2*n+1,mean5,std5), histogram.normal_score(2*n+1,mean5,std5)
     """Remember that fasta index is base 1 indexing"""
-    seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n)
-    seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n)
+    seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n).upper()
+    seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n).upper()
     score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
     j5,s5 = findSite(score5,"5")
     j3,s3 = findSite(score3,"3")
@@ -222,7 +223,7 @@ Applies the Needleman-Wunsch algorithm to provide a list of candiates
 """
 def nw_correct(refID,site5,site3,introns,strand,fastaF):
     sites5,sites3 = [],[]
-    M = needlemanWunsch.matchCost()
+    M = needlemanWunsch.lcsCost()
     for intr in introns:
         in_st,in_en,lab,rdseq5_flank,rdseq5_over,rdseq3_flank,rdseq3_over = intr
         rdseq5 = rdseq5_flank+rdseq5_over
@@ -265,51 +266,85 @@ def getJunctionSites(pt,refID,bins,fastaF):
             print "%s\t%012d\t%d\t%s\t%d"%(refID,site5,site3,sam,counts)
             nout+=1
 
-starts = []  #Contains starting positions of introns
-ends = []    #Contains ending positions of introns
-labs = []    #Sample labels of introns
-seq5_flanks,seq3_flanks,seq5_overs,seq3_overs = [],[],[],[]
-last_pt = "\t"
-fnh = fasta.fasta(args.refseq)
-last_ref = "\t"
+def go():
 
-for ln in sys.stdin:
-    # Parse next read
-    ln = ln.rstrip()
-    toks = ln.split('\t')
-    assert len(toks)>=9
-    pt, st, en, refid, lab, seq5_flank, seq5_over, seq3_flank, seq3_over = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6], toks[7], toks[8]
-    if last_pt=='\t':
-        last_pt, last_ref = pt, refid
-    elif last_pt!=pt:
+    global ninp
+    starts = []  #Contains starting positions of introns
+    ends = []    #Contains ending positions of introns
+    labs = []    #Sample labels of introns
+    seq5_flanks,seq3_flanks,seq5_overs,seq3_overs = [],[],[],[]
+    last_pt = "\t"
+    fnh = fasta.fasta(args.refseq)
+    last_ref = "\t"
+
+    for ln in sys.stdin:
+        # Parse next read
+        ln = ln.rstrip()
+        toks = ln.split('\t')
+        assert len(toks)>=9
+        pt, st, en, refid, lab, seq5_flank, seq5_over, seq3_flank, seq3_over = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6], toks[7], toks[8]
+        if last_pt=='\t':
+            last_pt, last_ref = pt, refid
+        elif last_pt!=pt:
+            intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
+            #Cluster all introns with similar start and end positions
+            bins = cluster(intron_ivals)
+            #Apply sliding windows to find splice junction locations
+            getJunctionSites(last_pt,last_ref,bins,fnh)
+            starts,ends,labs = [],[],[]
+            seq5_flanks,seq3_flanks,seq5_overs,seq3_overs = [],[],[],[]
+            #print >> sys.stderr,"pt",pt,st,en
+
+        starts.append(st)
+        ends.append(en)
+        labs.append(lab)
+        seq5_flanks.append(seq5_flank)
+        seq3_flanks.append(seq3_flank)
+        seq5_overs.append(seq5_over)
+        seq3_overs.append(seq3_over)
+        last_pt,last_ref = pt,refid
+        ninp+=1
+
+    if last_pt!='\t':
+        #Handle last partition
         intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
         #Cluster all introns with similar start and end positions
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
         getJunctionSites(last_pt,last_ref,bins,fnh)
-        starts,ends,labs = [],[],[]
-        seq5_flanks,seq3_flanks,seq5_overs,seq3_overs = [],[],[],[]
-        #print >> sys.stderr,"pt",pt,st,en
-        
-        
-    starts.append(st)
-    ends.append(en)
-    labs.append(lab)
-    seq5_flanks.append(seq5_flank)
-    seq3_flanks.append(seq3_flank)
-    seq5_overs.append(seq5_over)
-    seq3_overs.append(seq3_over)
-    last_pt,last_ref = pt,refid
-    ninp+=1
 
-if last_pt!='\t':
-    #Handle last partition
-    intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
-    #Cluster all introns with similar start and end positions
-    bins = cluster(intron_ivals)
-    #Apply sliding windows to find splice junction locations
-    getJunctionSites(last_pt,last_ref,bins,fnh)
+    # Done
+    timeEn = time.clock()
+    print >>sys.stderr, "DONE with intron.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
 
-# Done
-timeEn = time.clock()
-print >>sys.stderr, "DONE with intron.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
+def createTestFasta(fname,refid,refseq):
+    fastaH = open(fname,'w')
+    fastaIdx = open(fname+".fai",'w')
+    fastaH.write(">%s\n%s\n"%(refid,refseq))
+    fastaIdx.write("%s\t%d\t%d\t%d\t%d\n"%(refid,len(refseq),len(refid)+2,len(refseq),len(refseq)+1))
+    fastaH.close()
+    fastaIdx.close()
+
+def test_sliding_window():
+    refseq = """GAGAATTTTGTTGTAACAGTGGTGGCGCCATGAATTGAGTGAATTTCGAAAGGAGAGTCCACCGGGCGGATACCCTTTAGCTCTTTCCGAGGTCGGATGAAATTTTTTTCGATTCCGCTTTGGAGACGGCAGCGGCTCCTGTCTTTTCTTTCGCATTCTGCAAAATGAAGTTAATTTTTTGCGGTTTCCTCACGGCGCCTGTGCGCTCAGAGGTGACTGGTCTTCTATTCTGGTACCCATTTGCATGGGTCGGCTGCAGCATTTTAGAAAATGAGGGATCGACCTCCATAGGCTCTGGTGTGCGTTGTTTTTGTAATTTTTGACATTTTGCGGATCGGCGTGAGCCCTGTGCTGCCTATAGAAATACGGATTTTTGGTATTATTAGTGTAGTAGGCTGCTC"""
+    fname,refid = "test.fa","test"
+    createTestFasta(fname,refid,refseq)
+    fnh = fasta.fasta("test.fa")
+    sts  = [241,241,242,242,242,242,243,243,244,244,244,244,245,245,245,245,245,245,245,245]
+    ends = [295,295,296,296,296,296,297,297,298,298,298,298,299,299,299,299,299,299,299,299]    
+    n = len(sts)
+    refIDs = ["test"]*n
+    leftseqs  = ["CAAGTTACGA"]*n
+    rightseqs = ["AGATGGAGAA"]*n
+    strands = ["+"]*n
+    sliding_window(refIDs,sts,ends,"GT-AG",fnh)
+    
+
+    
+def test():
+    test_sliding_window1()
+
+if args.test:
+    test()
+else:
+    go()
