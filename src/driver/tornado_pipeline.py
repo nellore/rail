@@ -31,7 +31,7 @@ class AlignStep(pipeline.Step):
             output,  # output URL
             None,    # input format
             None,    # no aggregation
-            "python %s/src/rnawesome/align.py --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s --bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
+            "python %s/src/rnawesome/align.py --serial --write-reads reads.tab5 --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s --bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
             None)
 
 class IntronStep(pipeline.Step):

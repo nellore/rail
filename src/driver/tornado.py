@@ -461,9 +461,9 @@ if mode == 'emr':
     cmdl.append(emrCluster.emrArgs())
     tornadoUrl = url.Url("s3://tornado-emr/bin/tornado-%s.tar.gz" % ver)
     if useRef:
-        cmdl.append(aws.bootstrapFetchTarball("Fetch Tornado ref archive", ref, emrLocalDir))
+        cmdl.append(aws.bootstrapFetchTarball("reference archive", ref, emrLocalDir))
     if useManifest:
-        cmdl.append(aws.bootstrapFetchFile("Fetch manifest file", manifest, emrLocalDir, "MANIFEST"))
+        cmdl.append(aws.bootstrapFetchFile("manifest file", manifest, emrLocalDir, "MANIFEST"))
     cmdl.append(tools.bootstrapTool("python"))
     if useBowtie:
         cmdl.append(tools.bootstrapTool("bowtie"))
