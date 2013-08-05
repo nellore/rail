@@ -25,7 +25,7 @@ cd .archive
 # might not always need all three
 for i in index gtf fasta ; do
 	tar -zcvf ${genome}_${db}.$i.tar.gz $i
-	mv ${genome}_${db}.$i.idx.tar.gz ..
+	mv ${genome}_${db}.$i.tar.gz ..
 done
 
 cd ..
