@@ -156,12 +156,12 @@ def sliding_window(refID, sts,ens, site, fastaF):
     assert len(toks)==2
     site5p,site3p = toks[0],toks[1]
     hist5, hist3 = histogram.hist_score(sts,in_start,"5",2*n+1), histogram.hist_score(sts,in_start,"3",2*n+1)
-    mean5,std5 = hist5.index(max(hist5)),histogram.stddev(hist5)
+    mean5,std5 = hist5.index(max(hist5))+2,histogram.stddev(hist5)
     mean3,std3 = hist3.index(max(hist3)),histogram.stddev(hist3)
     # mean5,std5 = hist5.index(max(hist5)),r
     # mean3,std3 = hist3.index(max(hist3)),r
     #Create a normal distributed scoring scheme based off of candidates
-    h5,h3 = histogram.normal_score(2*n+1,mean5,std5), histogram.normal_score(2*n+1,mean5,std5)
+    h5,h3 = histogram.normal_score(2*n+1,mean5,std5), histogram.normal_score(2*n+1,mean3,std3)
     """Remember that fasta index is base 1 indexing"""
     seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n).upper()
     seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n).upper()
