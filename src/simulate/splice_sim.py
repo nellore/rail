@@ -29,6 +29,9 @@ parser.add_argument(\
     '--output-prefix', metavar='path', type=str, required=False,
     help='Prefix for output read files')
 parser.add_argument(\
+    '--output-annotations', metavar='path', type=str, required=False,
+    help='Prefix for simulated transcripts')
+parser.add_argument(\
     '--read-len', metavar='int', action='store', type=int, default=100,
     help='Read length to simulate')
 parser.add_argument(\
@@ -87,17 +90,20 @@ class WeightedRandomGenerator(object):
         return self.next()
 
 #Make weighted random generator for transcriptome
-def makeWeights(xscripts,seq_sizes):
+def makeWeights(xscripts,seq_sizes,annots_handle):
     if args.num_xscripts==0:
         num_xscripts= len(xscripts)
     else:
         num_xscripts = args.num_xscripts
-    weights = [1.0] * len(xscripts)    
+    weights = [1.0] * len(xscripts)
     num = 0
     for i in range(0,len(weights)):
         if num<num_xscripts and xscripts[i].seqid in seq_sizes: #Can't have no existent chromosome
             weights[i] = random.random()
-            print xscripts[i].gene_id,xscripts[i].xscript_id            
+            if num==0:
+                annots_handle.write(xscripts[i].xscript_id)
+            else:
+                annots_handle.write("\n"+xscripts[i].xscript_id)
             num+=1
         else:
             weights[i] = 0
@@ -106,7 +112,7 @@ def makeWeights(xscripts,seq_sizes):
 """
 Randomly picks transcripts such that half of the transcripts come from one strand and the other half come from the other strand
 """
-def makeStrandedWeights(xscripts,seq_sizes):
+def makeStrandedWeights(xscripts,seq_sizes,annots_handle):
     num_xscripts = args.num_xscripts
     weights = [1.0] * len(xscripts)
     last_strand = "+"
@@ -115,7 +121,10 @@ def makeStrandedWeights(xscripts,seq_sizes):
         if num<num_xscripts and xscripts[i].orient!=last_strand and xscripts[i].seqid in seq_sizes:  #Can't have no existent chromosome
             weights[i] = random.random()
             last_strand = xscripts[i].orient
-            print xscripts[i].gene_id,xscripts[i].xscript_id
+            if num==0:
+                annots_handle.write(xscripts[i].xscript_id)
+            else:
+                annots_handle.write("\n"+xscripts[i].xscript_id)
             num+=1
         else:
             weights[i] = 0
@@ -168,11 +177,11 @@ def overlapping_sites(xscript,read_st,read_en):
             overlaps.append(sites[i+3])
     return overlaps
 
-def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes):
+def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_handle):
     if args.stranded:
-        gen,weights = makeStrandedWeights(xscripts,seq_sizes)
+        gen,weights = makeStrandedWeights(xscripts,seq_sizes,annots_handle)
     else:
-        gen,weights = makeWeights(xscripts,seq_sizes)
+        gen,weights = makeWeights(xscripts,seq_sizes,annots_handle)
     n = 0
     seqs = []
     incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
@@ -192,7 +201,7 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes):
         if x.orient=="+":
             read = x.seq[i:i+readlen]
         else:
-            read = revcomp(x.seq[i:i+readlen])            
+            read = revcomp(x.seq[i:i+readlen])
         overlaps = overlapping_sites(x,i,i+readlen)
         sites = sites.union(overlaps)
         read = sequencingError(read,args.readmm_rate)
@@ -248,7 +257,7 @@ def test_alternativeSplicing(xscripts):
     axscripts = []
     for x in xscripts:
         genes[x.gene_id].append(x)
-    
+
     for gene_ids,isoforms in genes.iteritems():
         if len(isoforms)>1:
             axscripts+=isoforms
@@ -260,21 +269,21 @@ if __name__=="__main__":
     print >> sys.stderr,"SNP Rate",args.snp_rate
     print >> sys.stderr,"Indel Rate",args.indel_rate
     seq_sizes = chrsizes.getSizes(args.chrsizes)
-    
+    annots_handle = open(args.output_annotations,'w')
     var_handle = open(args.variants_file,'w')
     annots = gtf.parseGTF(args.gtf)
     fastadb = gtf.parseFASTA(args.fasta)
     xscripts = gtf.assembleTranscripts(annots,fastadb)
     if args.alternative_spliced:
         xscripts = test_alternativeSplicing(xscripts)
-    seqs,weights,xscripts,sites = simulate(xscripts,args.read_len,args.num_nucs,args.fasta,var_handle,seq_sizes)
+    seqs,weights,xscripts,sites = simulate(xscripts,args.read_len,args.num_nucs,args.fasta,var_handle,seq_sizes,annots_handle)
     seqs1,seqs2 = replicateize(seqs,seqs,args.num_replicates)
     writeReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
     #This stores the list in pickle files for serialization
     #pickle.dump(weights,open(args.output_prefix+".weights",'wb'))
     pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
     pickle.dump(sites,open(args.output_prefix+".sites",'wb'))
-    
+
     print >> sys.stderr,"Total number of reads",total_reads
     print >> sys.stderr,"Total number of mismatched reads",total_mismatches
-    
+
