@@ -21,8 +21,13 @@ cp Sequence/WholeGenomeFasta/genome.fa* .archive/fasta
 
 cd .archive
 
-tar -zcvf ${genome}_${db}.tar.gz .
-mv ${genome}_${db}.tar.gz ..
+# Put index, gene annotations, and fasta+index in separate archives, since we
+# might not always need all three
+for i in index gtf fasta ; do
+	tar -zcvf ${genome}_${db}.$i.tar.gz $i
+	mv ${genome}_${db}.$i.idx.tar.gz ..
+done
+
 cd ..
 
 echo "DONE -- you can 'rm -rf .archive'"
