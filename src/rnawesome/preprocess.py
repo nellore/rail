@@ -47,13 +47,13 @@ class FileMover(object):
         else:
             cmdl = ["hadoop", "fs", "-put"]
             cmdl.append(fn)
-            cmdl.append(url.toUrl())
+            cmdl.append("/".join(url.toUrl(), os.path.basename(fn)))
         cmd = ' '.join(cmdl)
         print >> sys.stderr, "  Push command: '%s'" % cmd
         extl = os.system(cmd)
         print >> sys.stderr, "    Exitlevel: %d" % extl
         if extl > 0:
-            raise RuntimeError("Non-zero exitlevel %d from s3cmd sync (upload) command '%s'" % (extl, cmd))
+            raise RuntimeError("Non-zero exitlevel %d from push command '%s'" % (extl, cmd))
     
     def get(self, url, dest="."):
         """ Get a file to local directory """
@@ -229,6 +229,8 @@ def preprocess(handler, lab, fh1, fh2=None, inputFormat="fastq", filename=None, 
     
     if not is_file[0]: fh1.close()
     if fh2 is not None and not is_file[1]: fh2.close()
+    
+    handler.finish()
 
 def guessFasta(fn):
     for ext in [ '.fa', '.fasta', '.fna', '.fas' ]:
@@ -259,6 +261,8 @@ if __name__ == '__main__':
     parser.add_argument(\
         '--push', metavar='URL', type=str, required=False, help='Upload output files to this URL')
     parser.add_argument(\
+        '--ignore-first-token', action='store_const', const=True, default=False, help='Throw away first token of input; useful in Hadoop streaming context')
+    parser.add_argument(\
         '--s3cfg', metavar='STR', type=str, required=False, help='s3cmd configuration file to use')
     parser.add_argument(\
         '--acl-public', action='store_const', const=True, default=False, help='Make files uploaded to s3 public')
@@ -279,6 +283,13 @@ if __name__ == '__main__':
         inp1, inp2, out, lab = [], [], [], []
         for ln in sys.stdin:
             ln = ln.strip()
+            if args.ignore_first_token:
+                if '\t' in ln:
+                    # Useful because Hadoop streaming sometimes (always?)
+                    # seems to include a file offset as the first, leftmost
+                    # token
+                    ln = ln[ln.index('\t')+1:]
+                else: continue
             if len(ln) == 0: continue
             if ln[0] == '#': continue
             toks = string.split(ln, '\t')
@@ -290,37 +301,37 @@ if __name__ == '__main__':
             out.append(None)
     
     if inp2 is None: inp2 = [None] * len(inp1)
-    
     assert len(inp1) == len(lab)
     assert len(inp1) == len(inp2)
     assert len(inp1) == len(out)
-    push = url.Url(args.push) if args.push is not None else None
-    mover = FileMover(args.s3cfg, args.acl_public)
-    for fn1, fn2, outfn, lab in zip(inp1, inp2, out, lab):
-        if fn2 is None:
-            print >> sys.stderr, "Processing unpaired URL '%s' ..." % fn1
-        else:
-            print >> sys.stderr, "Processing paired URLs '%s', '%s' ..." % (fn1, fn2)
-        # Determine whether input is fasta
-        inputFormat = "fastq"
-        if args.fasta or guessFasta(fn1): inputFormat = "fasta"
-        # Does input file need to be pulled down?
-        toDelete = []
-        inpUrl1 = url.Url(fn1)
-        if inpUrl1.isNotLocal():
-            mover.get(inpUrl1)
-            fn1 = os.path.basename(fn1)
-            assert os.path.exists(fn1)
-            if not args.keep: toDelete.append(fn1)
-            if fn2 is not None:
-                inpUrl2 = url.Url(fn2)
-                assert inpUrl2.isNotLocal()
-                mover.get(inpUrl2)
-                fn2 = os.path.basename(fn2)
-                assert os.path.exists(fn2)
-                if not args.keep: toDelete.append(fn2)
-        # Come up with an output filename
-        if outfn is None: outfn = hashize(fn1)
-        handler = RecordHandler(outfn, push, mover, args.nucs_per_file, args.gzip_output, args.keep)
-        preprocess(handler, lab, fn1, fn2, inputFormat)
-        for fn in toDelete: os.remove(fn)
+    if len(inp1) > 0:
+        push = url.Url(args.push) if args.push is not None else None
+        mover = FileMover(args.s3cfg, args.acl_public)
+        for fn1, fn2, outfn, lab in zip(inp1, inp2, out, lab):
+            if fn2 is None:
+                print >> sys.stderr, "Processing unpaired URL '%s' ..." % fn1
+            else:
+                print >> sys.stderr, "Processing paired URLs '%s', '%s' ..." % (fn1, fn2)
+            # Determine whether input is fasta
+            inputFormat = "fastq"
+            if args.fasta or guessFasta(fn1): inputFormat = "fasta"
+            # Does input file need to be pulled down?
+            toDelete = []
+            inpUrl1 = url.Url(fn1)
+            if inpUrl1.isNotLocal():
+                mover.get(inpUrl1)
+                fn1 = os.path.basename(fn1)
+                assert os.path.exists(fn1)
+                if not args.keep: toDelete.append(fn1)
+                if fn2 is not None:
+                    inpUrl2 = url.Url(fn2)
+                    assert inpUrl2.isNotLocal()
+                    mover.get(inpUrl2)
+                    fn2 = os.path.basename(fn2)
+                    assert os.path.exists(fn2)
+                    if not args.keep: toDelete.append(fn2)
+            # Come up with an output filename
+            if outfn is None: outfn = hashize(fn1)
+            handler = RecordHandler(outfn, push, mover, args.nucs_per_file, args.gzip_output, args.keep)
+            preprocess(handler, lab, fn1, fn2, inputFormat)
+            for fn in toDelete: os.remove(fn)
