@@ -206,42 +206,24 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
     left_st,right_end = in_start-offset+1,in_end+offset
     left_end,right_st = left_st+diff,right_end-diff
     #print >> sys.stderr,left_st,left_end
-    ref_left = fnh.fetch_sequence(k,left_st, left_end).upper()
-    ref_right = fnh.fetch_sequence(k,right_st, right_end).upper()
-    unmapped = rdseq[unmapped_st:unmapped_end]
-    if not fw:
-        unmapped = revcomp(unmapped)
-    _, dj,score,leftDP,rightDP,total = correctSplice(unmapped,ref_left,ref_right,fw)
-    left_diff,right_diff = dj, len(unmapped)-dj
-    region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
-    left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
-    tmp_start,tmp_end = in_start+left_in_diff,in_end-right_in_diff
+    if left_end<=left_st or right_end<=right_st:
+        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+    else:
+        ref_left = fnh.fetch_sequence(k,left_st, left_end).upper()
+        ref_right = fnh.fetch_sequence(k,right_st, right_end).upper()
+        unmapped = rdseq[unmapped_st:unmapped_end]
+        if not fw:
+            unmapped = revcomp(unmapped)
+        _, dj,score,leftDP,rightDP,total = correctSplice(unmapped,ref_left,ref_right,fw)
+        left_diff,right_diff = dj, len(unmapped)-dj
+        region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
+        left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
+        tmp_start,tmp_end = in_start+left_in_diff,in_end-right_in_diff
 
-    # if not fw:
-    #     print >> sys.stderr,"Forward strand",fw
-    #     print >> sys.stderr,"left    \t",ref_left
-    #     print >> sys.stderr,"right   \t",ref_right
-    #     print >> sys.stderr,"unmapped\t",revcomp(unmapped)
-    #     print >> sys.stderr,"unmapped region",unmapped_st,unmapped_end
-    #     print >> sys.stderr,"read    \t",revcomp(rdseq)
+        if score>0:
+            in_start,in_end = tmp_start,tmp_end
 
-    # if (tmp_end>=705400 and tmp_end<=705500):
-    #     print >> sys.stderr,"Forward strand",fw
-    #     print >> sys.stderr,"original",in_start,in_end
-    #     print >> sys.stderr,"adjusted",tmp_start,tmp_end
-    #     print >> sys.stderr,"score",score
-    #     print >> sys.stderr,"left_diff",left_diff,"right_diff",right_diff
-    #     print >> sys.stderr,"left  \t",ref_left
-    #     print >> sys.stderr,"right \t",ref_right
-    #     print >> sys.stderr,"read  \t",revcomp(unmapped)
-    #     print >> sys.stderr,"leftDP\n",leftDP
-    #     print >> sys.stderr,"rightDP\n",rightDP
-    #     print >> sys.stderr,"total\n",total
-
-    if score>0:
-        in_start,in_end = tmp_start,tmp_end
-
-    printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
 
 """
 Compares potential short intron with readlet
@@ -468,7 +450,7 @@ def writeReads(fh):
                 fh.write(rdStr)
 
 def go():
-    
+
     import time
     timeSt = time.clock()
     if args.serial:
@@ -488,18 +470,18 @@ def go():
         proc = bowtie.proc(args, readFn=None, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, stdinPipe=True)
         writeReads(proc.stdin)
         proc.stdin.close()
-    
+
     print >>sys.stderr, "Waiting for Bowtie to finish"
     bowtieOutDone.wait()
     proc.stdout.close()
     print >>sys.stderr, "Bowtie finished"
-    
+
     # Remove any temporary reads files created
     if args.serial and args.write_reads is None and not args.keep_reads:
         print >>sys.stderr, "Cleaning up temporary files"
         import shutil
         shutil.rmtree(tmpdir)
-    
+
     timeEn = time.clock()
     print >>sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
 
@@ -678,5 +660,5 @@ else:
     if not os.path.exists(args.faidx):
         raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
     fnh = fasta.fasta(args.refseq)
-    
+
     go()
