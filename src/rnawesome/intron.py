@@ -343,7 +343,7 @@ def test_sliding_window():
 
 
 def test():
-    test_sliding_window1()
+    test_sliding_window()
 
 if args.test:
     test()
