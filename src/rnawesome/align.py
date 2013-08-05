@@ -59,10 +59,7 @@ import site
 import argparse
 import threading
 import string
-import time
 import numpy
-
-timeSt = time.clock()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "bowtie"))
@@ -112,6 +109,12 @@ bowtie.addArgs(parser)
 readlet.addArgs(parser)
 partition.addArgs(parser)
 
+parser.add_argument(\
+    '--serial', action='store_const', const=True, default=False, help="Run bowtie serially after rather than concurrently with the input-reading loop")
+parser.add_argument(\
+    '--keep-reads', action='store_const', const=True, default=False, help="Don't delete any temporary read file(s) created")
+parser.add_argument(\
+    '--write-reads', type=str, required=False, help='Write input reads to given tab-delimited file')
 parser.add_argument(\
     '--test', action='store_const', const=True, default=False, help='Run unit tests')
 parser.add_argument(\
@@ -339,7 +342,9 @@ def bowtieOut(st):
         nout += 1
     bowtieOutDone.set()
 
-def go():
+def writeReads(fh):
+    """ Parse input reads, optionally transform them and/or turn them into
+        readlets. """
     global ninp
     first = True
     for ln in sys.stdin:
@@ -389,7 +394,7 @@ def go():
                     if first:
                         sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
-                    proc.stdin.write(rdletStr)
+                    fh.write(rdletStr)
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
@@ -397,13 +402,13 @@ def go():
                     if first:
                         sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
-                    proc.stdin.write(rdletStr)
+                    fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
                 if first:
                     sys.stderr.write("First read: '%s'" % rdStr.rstrip())
                     first = False
-                proc.stdin.write(rdStr)
+                fh.write(rdStr)
         else:
             # Unpaired
             if xformReads:
@@ -418,29 +423,49 @@ def go():
                     if first:
                         sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
-                    proc.stdin.write(rdletStr)
+                    fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\n" % (nm, seq, qual)
                 if first:
                     sys.stderr.write("First read: '%s'" % rdStr.rstrip())
                     first = False
-                proc.stdin.write(rdStr)
+                fh.write(rdStr)
 
-    # Close and flush STDIN.
-    proc.stdin.close()
-
-    # Wait until the threads processing stdout and stderr are done.
-
-    # Close stdout and stderr
-    print >>sys.stderr, "Waiting for Bowtie stdout processing thread to finish"
+def go():
+    
+    import time
+    timeSt = time.clock()
+    if args.serial:
+        # Reads are written to a file, then Bowtie reads them from the file
+        import tempfile
+        if args.write_reads is None:
+            tmpdir = tempfile.mkdtemp()
+            readFn = os.path.join(tmpdir, 'reads.tab5')
+        else:
+            readFn = args.write_reads
+        with open(readFn, 'w') as fh:
+            writeReads(fh)
+        assert os.path.exists(readFn)
+        proc = bowtie.proc(args, readFn=readFn, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, stdinPipe=False)
+    else:
+        # Reads are written to Bowtie process's stdin directly
+        proc = bowtie.proc(args, readFn=None, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, stdinPipe=True)
+        writeReads(proc.stdin)
+        proc.stdin.close()
+    
+    print >>sys.stderr, "Waiting for Bowtie to finish"
     bowtieOutDone.wait()
-
     proc.stdout.close()
-
-    # Done
+    print >>sys.stderr, "Bowtie finished"
+    
+    # Remove any temporary reads files created
+    if args.serial and args.write_reads is None and not args.keep_reads:
+        print >>sys.stderr, "Cleaning up temporary files"
+        import shutil
+        shutil.rmtree(tmpdir)
+    
     timeEn = time.clock()
     print >>sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
-
 
 def createTestFasta(fname,refid,refseq):
     fastaH = open(fname,'w')
@@ -595,6 +620,7 @@ def test_correct_splice():
     #print >> sys.stderr,left[:c],right[c:]
     assert left[:c]+right[c:] == read
     print >> sys.stderr,"Correct Splice Test Successful!!!"
+
 def test():
     # test_fasta_create()
     # test_short_alignment1()
@@ -602,6 +628,7 @@ def test():
     # test_short_alignment3()
     # test_correct_splice()
     test_short_alignment4()
+
 if args.test:
     binsz = 10000
     test()
@@ -614,8 +641,6 @@ else:
         raise RuntimeError("No such --refseq file: '%s'" % args.refseq)
     if not os.path.exists(args.faidx):
         raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
-
     fnh = fasta.fasta(args.refseq)
-
-    proc = bowtie.proc(args, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets)
+    
     go()

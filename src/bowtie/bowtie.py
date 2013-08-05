@@ -32,7 +32,7 @@ def out(pi):
     for line in iter(pi.readline, ''):
         print line
 
-def cmd(args, bowtieArgs=None, sam=False):
+def cmd(args, readFn=None, bowtieArgs=None, sam=False):
     # Check that Bowtie exists and is executable
     bowtieExe = args.bowtieExe or "bowtie"
     if not path.is_exe(bowtieExe) and path.which(bowtieExe) is None:
@@ -52,15 +52,18 @@ def cmd(args, bowtieArgs=None, sam=False):
     if args.bowtieArgs is not None:
         argstr += ' '
         argstr += ' '.join(args.bowtieArgs)
-    return "%s %s --mm %s %s --12 -" % (bowtieExe, argstr, out_arg, args.bowtieIdx)
+    mycmd = "%s %s --mm %s %s --12 " % (bowtieExe, argstr, out_arg, args.bowtieIdx)
+    mycmd += ("-" if readFn is None else readFn)
+    return mycmd
 
-def proc(args, bowtieArgs=None, sam=False, outHandler=None, errHandler=None):
+def proc(args, readFn=None, bowtieArgs=None, sam=False, outHandler=None, errHandler=None, stdinPipe=True):
     stdout_pipe = None if outHandler is None else subprocess.PIPE
     stderr_pipe = None if errHandler is None else subprocess.PIPE
-    mycmd = cmd(args, bowtieArgs=bowtieArgs, sam=sam)
+    stdin_pipe = subprocess.PIPE if stdinPipe else None
+    mycmd = cmd(args, readFn=readFn, bowtieArgs=bowtieArgs, sam=sam)
     print >> sys.stderr, "Starting command: '%s'" % mycmd
     proc = subprocess.Popen(\
-        mycmd, shell=True, stdin=subprocess.PIPE, stdout=stdout_pipe, stderr=stderr_pipe)
+        mycmd, shell=True, stdin=stdin_pipe, stdout=stdout_pipe, stderr=stderr_pipe)
     if outHandler is not None:
         print >> sys.stderr, "  Starting stdout handler"
         t = threading.Thread(target=outHandler, args=(proc.stdout,))
