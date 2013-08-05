@@ -50,7 +50,7 @@ Tab-delimited output tuple columns:
 4. Reference ID
 5. Sample label
 6. Readlet Sequence on 5' site
-6. Readlet Sequence on 3' site
+7. Readlet Sequence on 3' site
 """
 
 import sys

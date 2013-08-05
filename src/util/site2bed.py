@@ -9,11 +9,13 @@ import argparse
 import site
 import time
 
-from collections import Counter
+
 from collections import defaultdict
 from operator import itemgetter
+import counter
 
-gpositions = defaultdict(Counter)
+
+gpositions = defaultdict(counter.Counter)
 
 for ln in sys.stdin:
     ln = ln.rstrip()

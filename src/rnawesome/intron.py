@@ -57,6 +57,7 @@ parser.add_argument(\
 parser.add_argument(\
     '--refseq', type=str, required=False,
     help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required')
+
 parser.add_argument(\
     '--radius', type=int, required=False,default=10,
     help='The radius of the clustering algorithm and the radius of the sliding window algorithm.')
@@ -331,16 +332,16 @@ def test_sliding_window():
     createTestFasta(fname,refid,refseq)
     fnh = fasta.fasta("test.fa")
     sts  = [241,241,242,242,242,242,243,243,244,244,244,244,245,245,245,245,245,245,245,245]
-    ends = [295,295,296,296,296,296,297,297,298,298,298,298,299,299,299,299,299,299,299,299]    
+    ends = [295,295,296,296,296,296,297,297,298,298,298,298,299,299,299,299,299,299,299,299]
     n = len(sts)
     refIDs = ["test"]*n
     leftseqs  = ["CAAGTTACGA"]*n
     rightseqs = ["AGATGGAGAA"]*n
     strands = ["+"]*n
     sliding_window(refIDs,sts,ends,"GT-AG",fnh)
-    
 
-    
+
+
 def test():
     test_sliding_window1()
 
