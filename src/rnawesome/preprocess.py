@@ -33,11 +33,11 @@ class FileMover(object):
         """ Upload a local file to a url """
         assert os.path.exists(fn)
         if url.isS3():
-            cmdl = ["s3cmd"]
+            cmdl = ['s3cmd']
             if self.s3cred is not None:
-                cmdl.append("-c")
+                cmdl.append('-c')
                 cmdl.append(self.s3cred)
-            cmdl.append("sync")
+            cmdl.append('sync')
             if self.s3public:
                 cmdl.append("--acl-public")
             cmdl.append(fn)
@@ -45,9 +45,9 @@ class FileMover(object):
         elif url.isWgettable():
             raise RuntimeError("I don't know how to upload to http/ftp URLs")
         else:
-            cmdl = ["hadoop", "fs", "-put"]
+            cmdl = ['hadoop', 'fs', '-put']
             cmdl.append(fn)
-            cmdl.append("/".join(url.toUrl(), os.path.basename(fn)))
+            cmdl.append('/'.join([url.toUrl(), os.path.basename(fn)]))
         cmd = ' '.join(cmdl)
         print >> sys.stderr, "  Push command: '%s'" % cmd
         extl = os.system(cmd)
