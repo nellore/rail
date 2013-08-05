@@ -166,7 +166,7 @@ parser.add_argument(\
 parser.add_argument(\
     '--preprocess-output', metavar='PATH', type=str, help='Put output from preprocessing step here')
 parser.add_argument(\
-    '--preprocess-compress', metavar='gzip|bzip2', type=str, help='Type of compression to use for preprocessing output.')
+    '--preprocess-compress', metavar='gzip|none|bzip2', type=str, default='gzip', help='Type of compression to use for preprocessing output.')
 
 tornado_config.addArgs(parser)
 
@@ -427,17 +427,15 @@ inDirs, outDirs, steps = [], [], []
 for prv, cur, nxt in [ allSteps[i:i+3] for i in xrange(0, len(allSteps)-2) ]:
     assert cur in stepClasses
     if prv is None:
-        if cur == "preprocess":
-            inDirs.append(manifest.toUrl())
-        else:
-            inDirs.append(inp.toUrl())
+        if cur == "preprocess": inDirs.append(manifest)
+        else: inDirs.append(inp)
     else: inDirs.append(outDirs[-1])
-    if nxt is None: outDirs.append(out.toUrl() + "/final")
+    if nxt is None: outDirs.append(url.Url(out.toUrl() + "/final"))
     else:
         if args.preprocess_output and cur == "preprocess":
-            outDirs.append(args.preprocess_output)
+            outDirs.append(url.Url(args.preprocess_output))
         else:
-            outDirs.append("%s/%s_out" % (intermediate.toUrl(), cur))
+            outDirs.append(url.Url(intermediate.toUrl() + "/" + cur))
     steps.append(stepClasses[cur](inDirs[-1], outDirs[-1], tconf, pconf))
 
 if mode == 'emr':

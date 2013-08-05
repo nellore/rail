@@ -45,6 +45,9 @@ class Url(object):
             return self.type + ':' + self.rest
     
     def toUpperUrl(self):
+        """ Useful for hiding protocol names from Elastic MapReduce so it
+            doesn't mistake a URL passed as a mapper argument as an input
+            URL. """
         if self.type == 'local':
             return self.rest
         else:

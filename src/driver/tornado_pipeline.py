@@ -8,15 +8,15 @@ import pipeline
 class PreprocessingStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
         compressArg = ""
-        if pconf.preprocCompress is not None:
+        if pconf.preprocCompress is not None and pconf.preprocCompress == "gzip":
             compressArg = "--gzip-output"
         super(PreprocessingStep, self).__init__(\
             "Preprocess", # name
-            inp,      # input URL
+            inp.toUrl(),      # input URL
             "hdfs:///dummy",   # output URL
             "org.apache.hadoop.mapred.lib.NLineInputFormat",
             None,
-            "python %s/src/rnawesome/preproc.py --nucs-per-file=120000000 %s --push=%s" % (pconf.emrLocalDir, compressArg, output.replace('s3://', 'S3://').replace('s3n://', 'S3://')),
+            "python %s/src/rnawesome/preprocess.py --nucs-per-file=120000000 %s --push=%s --ignore-first-token" % (pconf.emrLocalDir, compressArg, output.toUpperUrl()),
             None)
 
 class AlignStep(pipeline.Step):
@@ -27,8 +27,8 @@ class AlignStep(pipeline.Step):
             bexe = "--bowtieExe='%s'" % tconf.bowtieExe
         super(AlignStep, self).__init__(\
             "Align", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),    # input URL
+            output.toUrl(), # output URL
             None,    # input format
             None,    # no aggregation
             "python %s/src/rnawesome/align.py --serial --write-reads reads.tab5 --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s --bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
@@ -39,8 +39,8 @@ class IntronStep(pipeline.Step):
         d = pconf.emrLocalDir
         super(IntronStep, self).__init__(\
             "Intron", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),     # input URL
+            output.toUrl(),  # output URL
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2), # 8 tasks per reducer
             "cat",     # mapper
@@ -51,8 +51,8 @@ class MergeStep(pipeline.Step):
         d = pconf.emrLocalDir
         super(MergeStep, self).__init__(\
             "Merge", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),     # input URL
+            output.toUrl(),  # output URL
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2),
             "cat",     # mapper
@@ -63,8 +63,8 @@ class WalkPrenormStep(pipeline.Step):
         d = pconf.emrLocalDir
         super(WalkPrenormStep, self).__init__(\
             "WalkPreNormalize", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),     # input URL
+            output.toUrl(),  # output URL
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2),
             "cat",     # mapper
@@ -75,8 +75,8 @@ class NormalizeStep(pipeline.Step):
         d = pconf.emrLocalDir
         super(NormalizeStep, self).__init__(\
             "Normalize", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),     # input URL
+            output.toUrl(),  # output URL
             None,    # input format
             pipeline.Aggregation(None, 4, 1, 1),
             "cat",     # mapper
@@ -87,8 +87,8 @@ class NormalizePostStep(pipeline.Step):
         d = pconf.emrLocalDir
         super(NormalizePostStep, self).__init__(\
             "NormalizePost", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),     # input URL
+            output.toUrl(),  # output URL
             None,    # input format
             pipeline.Aggregation(1, None, 0, 0),
             "cat",     # mapper
@@ -99,8 +99,8 @@ class WalkFitStep(pipeline.Step):
         d = pconf.emrLocalDir
         super(WalkFitStep, self).__init__(\
             "WalkFit", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),     # input URL
+            output.toUrl(),  # output URL
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2),
             "cat",     # mapper
@@ -112,8 +112,8 @@ class EbayesStep(pipeline.Step):
         d = pconf.emrLocalDir
         super(EbayesStep, self).__init__(\
             "EmpiricalBayes", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),     # input URL
+            output.toUrl(),  # output URL
             None,    # input format
             pipeline.Aggregation(1, None, 0, 0),
             "cat",     # mapper
@@ -124,8 +124,8 @@ class HmmParamsStep(pipeline.Step):
         d = pconf.emrLocalDir
         super(HmmParamsStep, self).__init__(\
             "HMMparams", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),     # input URL
+            output.toUrl(),  # output URL
             None,    # input format
             pipeline.Aggregation(1, None, 0, 0),
             "cat",     # mapper
@@ -136,8 +136,8 @@ class HmmStep(pipeline.Step):
         d = pconf.emrLocalDir
         super(HmmStep, self).__init__(\
             "HMM", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),     # input URL
+            output.toUrl(),  # output URL
             None,    # input format
             pipeline.Aggregation(None, 8, 1, 2),
             "cat",     # mapper
@@ -148,8 +148,8 @@ class AggrPathStep(pipeline.Step):
         d = pconf.emrLocalDir
         super(AggrPathStep, self).__init__(\
             "HMMPaths", # name
-            inp,     # input URL
-            output,  # output URL
+            inp.toUrl(),     # input URL
+            output.toUrl(),  # output URL
             None,    # input format
             pipeline.Aggregation(tconf.numPermutations * 2, None, 1, 2),
             "cat",     # mapper
