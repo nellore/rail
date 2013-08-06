@@ -460,10 +460,7 @@ if mode == 'emr':
     
     cmdl.append(emrCluster.emrArgs())
     tornadoUrl = url.Url("s3://tornado-emr/bin/tornado-%s.tar.gz" % ver)
-    if useRef:
-        cmdl.append(aws.bootstrapFetchTarball("reference archive", ref, emrLocalDir))
-    if useManifest:
-        cmdl.append(aws.bootstrapFetchFile("manifest file", manifest, emrLocalDir, "MANIFEST"))
+    
     cmdl.append(tools.bootstrapTool("python"))
     if useBowtie:
         cmdl.append(tools.bootstrapTool("bowtie"))
@@ -477,6 +474,17 @@ if mode == 'emr':
         cmdl.append(tools.bootstrapTool("samtools"))
     # Get Tornado scripts and run Makefile for swig code
     cmdl.append(tools.bootstrapTool("tornado", src=tornadoUrl, dest="/mnt"))
+    if useIndex:
+        cmdl.append(aws.bootstrapFetchTarball("reference index archive", url.Url(ref.toUrl().replace('.tar.gz', '.index.tar.gz')), emrLocalDir))
+    if useGtf:
+        cmdl.append(aws.bootstrapFetchTarball("reference gtf archive", url.Url(ref.toUrl().replace('.tar.gz', '.gtf.tar.gz')), emrLocalDir))
+    if useIndex and useFasta:
+        # Create FASTA from bowtie index
+        cmdl.append(tools.bootstrapTool("ref-fasta"))
+    elif useFasta:
+        cmdl.append(aws.bootstrapFetchTarball("reference fasta archive", url.Url(ref.toUrl().replace('.tar.gz', '.fasta.tar.gz')), emrLocalDir))
+    if useManifest:
+        cmdl.append(aws.bootstrapFetchFile("manifest file", manifest, emrLocalDir, "MANIFEST"))
     cmdl.extend(emrArgs)
     
     cmd = ' '.join(cmdl)
