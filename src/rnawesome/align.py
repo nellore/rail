@@ -156,35 +156,39 @@ Applies Needleman Wunsch to correct splice junction gaps
 """
 def correctSplice(read,ref_left,ref_right,fw):
     revread = revcomp(read)
-    """Needleman-Wunsch is a directional algorithm.  Since we are interested in scoring the 3' end of the right ref sequence,
-    we reverse complement the right ref sequence before applying the NW algorithm"""
     if not fw:
         ref_right = revcomp(ref_right)
         score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
         score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
+        rightDP = numpy.fliplr(rightDP)
+        rightDP = numpy.flipud(rightDP)
     else:
         ref_right = revcomp(ref_right)
         score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
         score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
+        rightDP = numpy.fliplr(rightDP)
+        rightDP = numpy.flipud(rightDP)
 
-    #Once NW is applied, the right DP matrix must be transformed in the same coordinate frame as the left DP matrix
-    rightDP = numpy.fliplr(rightDP)
-    rightDP = numpy.flipud(rightDP)
+    total = leftDP+rightDP
 
-    total = leftDP+rightDP #Add together to find the best overall alignment
-    index,max_ = numpy.argmax(total),numpy.max(total)
+    # print >> sys.stderr,"left\n",leftDP
+    # print >> sys.stderr,"right\n",rightDP
+    # print >> sys.stderr,"total\n",total
+
+    index = numpy.argmax(total)
+    max_  = numpy.max(total)
     n = len(read)+1
-    r,c = index%n,index/n
+    r = index%n
+    c = index/n
     return r,c,total[r,c],leftDP,rightDP,total
 
-#Print all listed exons to stdout
 def printExons(refid,in_start,in_end,rdnm):
     global nout
     for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
         print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, refid, sample.parseLab(rdnm))
         nout += 1
 
-#Print all listed introns to stdout and the flanking sequences
+
 def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
     global nout
     offset = args.splice_overlap
@@ -192,50 +196,44 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
     if not fw:
         rdseq = revcomp(rdseq)
 
-    #Obtain coordinates for flanking coordinate frames
     left_st,left_end = region_st-offset,region_st
     right_st,right_end = region_end,region_end+offset
 
-    #TODO: Should we remove right_overlap and right_flank?  These vars may be redundant
     left_flank = rdseq[left_st:left_end]
     left_overlap = rdseq[left_end:left_end+offset]
     right_overlap = rdseq[right_st-offset:right_st]
     right_flank = rdseq[right_st:right_end]
 
-    """Since there is a possibility that one of the sequences may be out of boundaries (e.g. mapping error),
-    the following checks to see if all of the sequences are valid"""
     if ( len(left_flank) == len(right_flank) and
          len(left_overlap) == len(right_overlap) and
          len(left_flank) == len(left_overlap)):
         for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
             print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
             nout += 1
-    # else: #Prints out faulty alignments to stderr
-    #     for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
-    #         print >> sys.stderr, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
+    else: #Test case
+        for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
+            print >> sys.stderr, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
 
 def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid):
-    """ We think there's a splice junction somewhere in here.  We attempt to
-        refine our guess about where its endpoints are. """
-    diff = unmapped_end-unmapped_st-1  #Length of ambigous region
-    #Obtain coordinates of flanking sequences surrounding splice site
+    diff = unmapped_end-unmapped_st-1
     left_st,right_end = in_start-offset+1,in_end+offset
     left_end,right_st = left_st+diff,right_end-diff
-    #Print directly to stdout if flanking sequences overlap too much
+    #print >> sys.stderr,left_st,left_end
     if left_end<=left_st or right_end<=right_st:
         printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
     else:
         ref_left = fnh.fetch_sequence(k,left_st, left_end).upper()
         ref_right = fnh.fetch_sequence(k,right_st, right_end).upper()
-        unmapped = rdseq[unmapped_st:unmapped_end] if not fw else revcomp(rdseq[unmapped_st:unmapped_end])
-        #Obtain corrected coordinates
+        unmapped = rdseq[unmapped_st:unmapped_end]
+        if not fw:
+            unmapped = revcomp(unmapped)
         _, dj,score,leftDP,rightDP,total = correctSplice(unmapped,ref_left,ref_right,fw)
         left_diff,right_diff = dj, len(unmapped)-dj
         region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
         left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
         tmp_start,tmp_end = in_start+left_in_diff,in_end-right_in_diff
 
-        # # if (tmp_start>21848900 and tmp_start<21849000) or (tmp_end>21848900 and tmp_end<21849000):
+        # if (tmp_start>21848900 and tmp_start<21849000) or (tmp_end>21848900 and tmp_end<21849000):
         # print >> sys.stderr,rdid
         # print >> sys.stderr,"Region",tmp_start,tmp_end
         # print >> sys.stderr,"Intron",in_start,in_end
@@ -244,14 +242,14 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
         # print >> sys.stderr,"unmapped \t",unmapped
         # print >> sys.stderr,"read     \t",rdseq
 
-        if score>0: #If crappy alignment, disregard corrections
+        if score>0:
             in_start,in_end = tmp_start,tmp_end
 
         printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
 
 
 """
-Compares potential short intron with readlet to check if it should be an exon instead
+Compares potential short intron with readlet
 """
 def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh):
     refseq = fnh.fetch_sequence(k,in_start + 1, in_end + 1).upper() # Sequence from genome
@@ -259,42 +257,45 @@ def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region
     if not fw:
         rdsubseq = revcomp(rdsubseq)
     score = needlemanWunsch.needlemanWunsch(refseq, rdsubseq, needlemanWunsch.matchCost())
-    if score >= len(rdsubseq)*(9.0/10): #Check if greater than 90% identity
+    # TODO: redo this in terms of percent identity or some
+    # other measure that adapts to length of the missing bit,
+    # not just a raw score
+    if score >= len(rdsubseq)*(9.0/10):
         printExons(k,in_start,in_end,rdnm)
 
-"""
-Gets a dictionary of positions and intervals
-"""
-def getIntervals(rdals):
+        # for pt in iter(partition.partition(k, in_start, in_end, binsz)):
+        #     print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
+        #     nout += 1
+
+def getIntervals(rdals,L):
     ivals = {}
     positions = dict()  #stores readlet number based keyed by position, strand and reference id
     for rdal in rdals:
-        refid, fw, refoff0, seqlen, rlet_id, rdid = rdal
-        refoff0, seqlen, rlet_id = int(refoff0), int(seqlen), int(rlet_id)
+        refid, fw, refoff0, seqlen, rlet_nm, rdid = rdal
+        refoff0, seqlen, rlet_nm = int(refoff0), int(seqlen), int(rlet_nm)
         # Remember begin, end offsets for readlet w/r/t 5' end of the read
         if fw:
-            positions[(refid, fw, refoff0)] = rlet_id * args.readletIval
-            positions[(refid, fw, refoff0 + seqlen)] = rlet_id * args.readletIval + seqlen
+            positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval
+            positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval + seqlen
         else:
-            positions[(refid, fw, refoff0)] = rlet_id * args.readletIval + seqlen
-            positions[(refid, fw, refoff0 + seqlen)] = rlet_id * args.readletIval
+            positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval + seqlen
+            positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval
         if (refid, fw, rdid) not in ivals:
             ivals[(refid, fw, rdid)] = interval.FlatIntervals()
         ivals[(refid, fw, rdid)].add(interval.Interval(refoff0, refoff0 + seqlen))
     return ivals,positions
 
-#Used for developing unit tests
-#test_id = set(["r_n1688","r_n2805","r_n4526","r_n4833","r_n2020","r_n3512","r_n4446","r_n279","r_n1828","r_n5035","r_n1848","r_n2403","r_n3163","r_n3944","r_n4211"])
-#test_exons = open("test_exons.txt",'w')
+test_id = set(["r_n1688","r_n2805","r_n4526","r_n4833","r_n2020","r_n3512","r_n4446","r_n279","r_n1828","r_n5035","r_n1848","r_n2403","r_n3163","r_n3944","r_n4211"])
+test_exons = open("test_exons.txt",'w')
 
-"""Figures out intron and exon boundaries given readlet alignments"""
 def composeReadletAlignments(rdnm, rdals, rdseq):
 
     # TODO: We include strand info with introns, but not exons.  We might want
     # to include for both for the case where the RNA-seq protocol is stranded.
     global nout
+    L=len(rdseq)-1
     # Add this interval to the flattened interval collection for current read
-    ivals,positions = getIntervals(rdals)
+    ivals,positions = getIntervals(rdals,L)
     for kfw in ivals.iterkeys(): # for each chromosome covered by >= 1 readlet
         k, fw, rdid = kfw
         in_end, in_start = -1, -1
@@ -311,32 +312,19 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                     region_st,region_end = positions[(k, fw, in_start)],positions[(k, fw, in_end)]
                 else:
                     region_end,region_st = positions[(k, fw, in_start)],positions[(k, fw, in_end)]
-                # TODO: review use of splice_overlap
+
                 offset = args.splice_overlap
                 unmapped_st,unmapped_end = region_st-offset,region_end+offset
                 reflen,rdlet_len = in_end-in_start, abs(region_end-region_st)
+
                 assert in_start<in_end
                 if abs(reflen-rdlet_len)/float(rdlet_len+1) < 0.05:
                     #Note: just a readlet missing due to error or variant
-                    # The difference in length between the unmapped stretch of
-                    # the read and the in-between stretch of the reference is
-                    # small, suggesting some readlets in the middle failed to
-                    # align for reasons other than a splice junction
                     handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 elif rdlet_len>reflen:
-                    # The difference in length between the unmapped stretch of
-                    # the read and the in-between stretch of the reference is
-                    # not small, and the unmapped stretch of read is longer.
-                    # This suggests there's no splice junction so we just fill
-                    # the gap with another exonic chunk.
                     printExons(k,in_start,in_end,rdnm)
                 else:
                     #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
-                    # The difference in length between the unmapped stretch of
-                    # the read and the in-between stretch of the reference is
-                    # not small, and the in-between stretch of reference is
-                    # longer.  There might be a splice junction; we go look
-                    # for it here.
                     handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid)
                 # else:
                 #     print >> sys.stderr,"This should never happen!!!","ref_len",reflen,"<","rdlet_len",rdlet_len
@@ -353,34 +341,51 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 nout += 1
 
 def bowtieOutReadlets(st):
-    ''' Process readlet SAM output.  Each line is a readlet alignment. '''
-    global nout, bowtieOutDone
+    ''' Process standard out (stdout) output from Bowtie.  Each line of output
+        is another readlet alignment.  We *could* try to perform operations
+        over all readlet alignments from the same read here.  Currently, we
+        follow this step with an aggregation that bins by read id, then
+        operate over bins in splice.py. '''
+    global nout
     mem, cnt = {}, {}
     for line in st:
         if line[0] == '@':
-            continue # skip SAM headers
-        # Parse SAM record
+            continue
         rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
         flags, refoff1 = int(flags), int(refoff1)
+        seqlen = len(seq)
         toks = string.split(rdid, ';')
-        #print >> sys.stderr, rdid
-        # Parse read name, which has format <name>;readlet-id;num-readlets
         rdnm = ';'.join(toks[:-3])
+        rlet_nm = toks[2]
         cnt[rdnm] = cnt.get(rdnm, 0) + 1
-        rlet_id, rlet_tot, rdseq = int(toks[-3]), int(toks[-2]), toks[-1]
+        rd_name = toks[0]
+        rdseq = toks[4]
+        rdlet_n = int(toks[-2])
         if flags != 4:
             fw = (flags & 16) == 0
             if rdnm not in mem: mem[rdnm] = [ ]
-            mem[rdnm].append((refid, fw, refoff1-1, len(seq), rlet_id, rdnm))
-        if cnt[rdnm] == rlet_tot:
-            if rdnm in mem: # last readlet
-                # at least one readlet aligned
-                composeReadletAlignments(rdnm, mem[rdnm], rdseq)
+            mem[rdnm].append((refid, fw, refoff1-1, seqlen,rlet_nm,rd_name))
+        if cnt[rdnm] == rdlet_n:
+            # Last readlet
+            if rdnm in mem:
+                composeReadletAlignments(rdnm, mem[rdnm],rdseq)
                 del mem[rdnm]
             del cnt[rdnm]
         nout += 1
     assert len(mem) == 0
     assert len(cnt) == 0
+    bowtieOutDone.set()
+
+def bowtieOut(st):
+    ''' Process standard out (stdout) output from Bowtie.  Each line of output
+        is another readlet alignment.  We *could* try to perform operations
+        over all readlet alignments from the same read here.  Currently, we
+        follow this step with an aggregation that bins by read id, then
+        operate over bins in splice.py. '''
+    global nout
+    for line in st:
+        sys.stdout.write(line)
+        nout += 1
     bowtieOutDone.set()
 
 def writeReads(fh):
@@ -431,7 +436,7 @@ def writeReads(fh):
                 rlets1 = readlet.readletize(args, nm1, seq1, qual1)
                 for i in xrange(0, len(rlets1)):
                     nm_rlet, seq_rlet, qual_rlet = rlets1[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1), seq1, seq_rlet, qual_rlet)
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet)
                     if first:
                         sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
@@ -439,7 +444,7 @@ def writeReads(fh):
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2), seq2, seq_rlet, qual_rlet)
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet)
                     if first:
                         sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
@@ -609,7 +614,7 @@ def test_short_alignment3():
 
 #This test isn't working yet
 def test_short_alignment4():
-
+    
     sys.stdout = open("test.out",'w')
     rdnm,fw = "0;LB:test",True
     #mapped reads:

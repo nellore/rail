@@ -60,7 +60,8 @@ NORMALIZE_POST_OUT=$HADOOP_FILES/normalize_post_output
 
 # Step 5b: Analyze introns
 INTRON="$PYTHON $RNAWESOME/intron.py"
-INTRON_ARGS=''$INTRON' --refseq='$GENOME' --readletIval '$READLET_IVAL' --readletLen '$READLET_LEN' --radius='$RADIUS' --sites-file='$SITES_FILE''
+#INTRON_ARGS=''$INTRON' --refseq='$GENOME' --readletIval '$READLET_IVAL' --readletLen '$READLET_LEN' --radius='$RADIUS' --sites-file='$SITES_FILE''
+INTRON_ARGS=''$INTRON' --refseq='$GENOME' --readletIval '$READLET_IVAL' --readletLen '$READLET_LEN' --radius='$RADIUS''
 
 # Step 5c: Formats all splice sites into bed files
 SITE2BED="$PYTHON $UTIL/site2bed.py"

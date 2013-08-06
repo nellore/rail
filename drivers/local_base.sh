@@ -122,9 +122,13 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 
 cp $WALK_IN_TMP ${INTERMEDIATE_DIR}/walk_in_input.tsv
 
+# cat ${INTERMEDIATE_DIR}/align_out.tsv \
+#     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 \
+#     | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS --sites-file=$SITES_FILE | $SITE2BED > ${INTERMEDIATE_DIR}/splice_sites.bed
+
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 \
-    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS --sites-file=$SITES_FILE | $SITE2BED > ${INTERMEDIATE_DIR}/splice_sites.bed
+    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS | $SITE2BED > ${INTERMEDIATE_DIR}/splice_sites.bed
 
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $INTRONS2BED > ${INTERMEDIATE_DIR}/flanks.bed
