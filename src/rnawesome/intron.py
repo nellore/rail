@@ -19,13 +19,11 @@ Tab-delimited output tuple columns:
 4. Sample label
 5. Read frequency (number of times sample read overlapped junction)
 
+Tab-delimited sites-file
+1. Forward strand site      (e.g. GT-AG)
+2. Reverse strand site      (e.g. CT-AC)
+3. Probability of occurence (e.g. .9924)
 
-TODO:
-1) Fix the sliding window skewness problem
-2) Test against a mismatch rate of 0.01% for small dataset
-3) Test against genetic variation for small dataset
-4) Test against huge data set using the validation problem for verification
-5) Run against human data set
 """
 import os
 import sys
@@ -57,10 +55,12 @@ parser.add_argument(\
 parser.add_argument(\
     '--refseq', type=str, required=False,
     help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required')
-
 parser.add_argument(\
     '--radius', type=int, required=False,default=10,
     help='The radius of the clustering algorithm and the radius of the sliding window algorithm.')
+parser.add_argument(\
+    '--sites-file', type=str, required=True,
+    help='The contains a list of splice-sites and their corresponding probabilities')
 
 
 readlet.addArgs(parser)
@@ -246,6 +246,28 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
     del M
     return sites5,sites3
 
+#Scores an individual site
+def scoreSite(refID,introns,splice_site,strand,fastaF):
+    sts,ens,labs,_,_,_,_ = zip(*introns)
+    site5,_,site3,_ = sliding_window(refID,sts,ens,splice_site,fastaF)
+    sites5,sites3 = nw_correct(refID,site5,site3,introns,strand,fastaF)
+    site5,score5,site3,score3 = sliding_window(refID,sites5,sites3,splice_site,fastaF) #Retrain using nw
+    return site5,score5,site3,score3
+
+#Scores a set of potential splice sites and evaluates their conditional probabilities
+def evaluateSites(refID,introns,sites_file,fw,fastaF):
+    site_scores = dict()
+    with open(sites_file,'r') as sites_h:
+        for ln in sites_h:
+            ln = ln.rstrip()
+            toks = ln.split("\t")
+            fw_site,rev_site,p = toks[0], toks[1], float(toks[2])
+            splice_site = fw_site if fw=="+" else rev_site
+            site5,score5,site3,score3 = scoreSite(refID,introns,splice_site,fw,fastaF)
+            site_scores[(site5,site3)] = (score5+score3)*p
+    best_sites = max(site_scores.iterkeys(),key=lambda key:site_scores[key])
+    return best_sites
+
 """
 Finds canonical sites (e.g GT-AG sites)
 """
@@ -255,11 +277,12 @@ def getJunctionSites(pt,refID,bins,fastaF):
     samples = counter.Counter()
     sites5, sites3 = [],[]
     for coords,introns in bins.iteritems():
-        splice_site = "GT-AG" if strand=="+" else "CT-AC"  #only consider canonical sites
-        sts,ens,labs,_,_,_,_ = zip(*introns)
-        site5,_,site3,_ = sliding_window(refID,sts,ens,splice_site,fastaF)
-        sites5,sites3 = nw_correct(refID,site5,site3,introns,strand,fastaF)
-        site5,_,site3,_ = sliding_window(refID,sites5,sites3,splice_site,fastaF) #Retrain using nw
+        #can_site = "GT-AG" if strand=="+" else "CT-AC"  #only consider canonical sites
+
+        """Also consider non-canonical sites.  However, since over 99% of all sites are canonical,
+        we will score every possibility using conditional probabilities"""
+        site5,site3 = evaluateSites(refID,introns,args.sites_file,strand,fastaF)
+
         for intr in introns:
             lab = intr[2]
             samples[lab]+=1

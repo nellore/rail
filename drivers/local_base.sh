@@ -37,6 +37,8 @@ INTRON_AGGR4="sort -s -k1,1"
 INTRON="python $SCR_DIR/intron.py"
 UTIL=../src/util
 SITE2BED="python $UTIL/site2bed.py"
+EXONS2BED="python $UTIL/exons2bed.py"
+INTRONS2BED="python $UTIL/introns2bed.py"
 # Step 3: Walk over genome windows and emit per-sample, per-position
 #         coverage tuples
 WALK_PRENORM_AGGR1="sort -n -k2,2"
@@ -122,7 +124,14 @@ cp $WALK_IN_TMP ${INTERMEDIATE_DIR}/walk_in_input.tsv
 
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 \
-    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS | $SITE2BED > ${INTERMEDIATE_DIR}/splice_sites.bed
+    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS --sites-file=$SITES_FILE | $SITE2BED > ${INTERMEDIATE_DIR}/splice_sites.bed
+
+cat ${INTERMEDIATE_DIR}/align_out.tsv \
+    | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $INTRONS2BED > ${INTERMEDIATE_DIR}/flanks.bed
+
+cat ${INTERMEDIATE_DIR}/align_out.tsv \
+    | grep '^exon' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $EXONS2BED > ${INTERMEDIATE_DIR}/exons.bed
+
  
 # cat $WALK_IN_TMP \  
 # 	| tee ${INTERMEDIATE_DIR}/walk_fit_in.tsv | $WALK_FIT \
