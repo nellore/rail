@@ -233,7 +233,8 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
          len(left_overlap) == len(right_overlap) and
          len(left_flank) == len(left_overlap)):
         for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
-            print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
+            #print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
+            print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap)
             nout += 1
     # else: #Test case
     #     for pt in iter(partition.partition(refid, in_start, in_end, binsz)):

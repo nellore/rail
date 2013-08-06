@@ -226,7 +226,8 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
     sites5,sites3 = [],[]
     M = needlemanWunsch.lcsCost()
     for intr in introns:
-        in_st,in_en,lab,rdseq5_flank,rdseq5_over,rdseq3_flank,rdseq3_over = intr
+        in_st,in_en,lab,rdseq5_flank,rdseq3_flank = intr
+        rdseq5_over,rdseq3_over = rdseq3_flank,rdseq5_flank
         rdseq5 = rdseq5_flank+rdseq5_over
         rdseq3 = rdseq3_flank+rdseq3_over
         n = len(rdseq5_flank)
@@ -256,7 +257,7 @@ def getJunctionSites(pt,refID,bins,fastaF):
     sites5, sites3 = [],[]
     for coords,introns in bins.iteritems():
         splice_site = "GT-AG" if strand=="+" else "CT-AC"  #only consider canonical sites
-        sts,ens,labs,_,_,_,_ = zip(*introns)
+        sts,ens,labs,_,_ = zip(*introns)
         site5,_,site3,_ = sliding_window(refID,sts,ens,splice_site,fastaF)
         sites5,sites3 = nw_correct(refID,site5,site3,introns,strand,fastaF)
         site5,_,site3,_ = sliding_window(refID,sites5,sites3,splice_site,fastaF) #Retrain using nw
@@ -273,7 +274,7 @@ def go():
     starts = []  #Contains starting positions of introns
     ends = []    #Contains ending positions of introns
     labs = []    #Sample labels of introns
-    seq5_flanks,seq3_flanks,seq5_overs,seq3_overs = [],[],[],[]
+    seq5_flanks,seq3_flanks = [],[]
     last_pt = "\t"
     fnh = fasta.fasta(args.refseq)
     last_ref = "\t"
@@ -282,18 +283,18 @@ def go():
         # Parse next read
         ln = ln.rstrip()
         toks = ln.split('\t')
-        assert len(toks)>=9
-        pt, st, en, refid, lab, seq5_flank, seq5_over, seq3_flank, seq3_over = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6], toks[7], toks[8]
+        assert len(toks)>=7
+        pt, st, en, refid, lab, seq5_flank, seq3_flank = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6]
         if last_pt=='\t':
             last_pt, last_ref = pt, refid
         elif last_pt!=pt:
-            intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
+            intron_ivals = zip(starts,ends,labs,seq5_flanks,seq3_flanks)
             #Cluster all introns with similar start and end positions
             bins = cluster(intron_ivals)
             #Apply sliding windows to find splice junction locations
             getJunctionSites(last_pt,last_ref,bins,fnh)
             starts,ends,labs = [],[],[]
-            seq5_flanks,seq3_flanks,seq5_overs,seq3_overs = [],[],[],[]
+            seq5_flanks,seq3_flanks = [],[]
             #print >> sys.stderr,"pt",pt,st,en
 
         starts.append(st)
@@ -301,14 +302,13 @@ def go():
         labs.append(lab)
         seq5_flanks.append(seq5_flank)
         seq3_flanks.append(seq3_flank)
-        seq5_overs.append(seq5_over)
-        seq3_overs.append(seq3_over)
         last_pt,last_ref = pt,refid
         ninp+=1
 
     if last_pt!='\t':
         #Handle last partition
-        intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
+        #intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
+        intron_ivals = zip(starts,ends,labs,seq5_flanks,seq3_flanks)
         #Cluster all introns with similar start and end positions
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
