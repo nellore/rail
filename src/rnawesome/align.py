@@ -68,6 +68,7 @@ site.addsitedir(os.path.join(base_path, "sample"))
 site.addsitedir(os.path.join(base_path, "interval"))
 site.addsitedir(os.path.join(base_path, "alignment"))
 site.addsitedir(os.path.join(base_path, "fasta"))
+site.addsitedir(os.path.join(base_path, "statsmath"))
 
 import bowtie
 import readlet
@@ -76,6 +77,7 @@ import interval
 import partition
 import needlemanWunsch
 import fasta
+import window
 
 ninp = 0               # # lines input so far
 nout = 0               # # lines output so far
@@ -151,36 +153,53 @@ def revcomp(s):
 
 bowtieOutDone = threading.Event()
 
+
+def medianTieBreaker(dpmat,m_ind):
+    m_elem = numpy.max(dpmat[:,m_ind])
+    st = m_ind
+    r,c = dpmat.shape
+    while m_ind>=0 and m_ind<c and numpy.max(dpmat[:,m_ind])==m_elem:
+        m_ind+=1
+    end = m_ind
+    return (st+end)/2
+
+
+
 """
 Applies Needleman Wunsch to correct splice junction gaps
 """
 def correctSplice(read,ref_left,ref_right,fw):
     revread = revcomp(read)
     """Needleman-Wunsch is a directional algorithm.  Since we are interested in scoring the 3' end of the right ref sequence,    we reverse complement the right ref sequence before applying the NW algorithm"""
-    if not fw:
-        ref_right = revcomp(ref_right)
-        score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
-        score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
-    else:
-        ref_right = revcomp(ref_right)
-        score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
-        score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
+    ref_right = revcomp(ref_right)
+    score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
+    score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
 
     #Once NW is applied, the right DP matrix must be transformed in the same coordinate frame as the left DP matrix
     rightDP = numpy.fliplr(rightDP)
     rightDP = numpy.flipud(rightDP)
+
+    # #Apply sliding window to break ties
+    # site5p,site3p = ("GT","AG") if fw else ("CT","AC")
+    # hist = [1]*len(read)
+    # wins5,wins3 = window.score(ref_left,site5p,hist),window.score(ref_right,site3p,hist)
+    # win5Mat,win3Mat = numpy.matrix([0,0]+wins5),numpy.matrix([0,0]+wins3)
+    # leftDP,rightDP = leftDP+win5Mat,rightDP+win3Mat
 
     total = leftDP+rightDP
 
     # print >> sys.stderr,"left\n",leftDP
     # print >> sys.stderr,"right\n",rightDP
     # print >> sys.stderr,"total\n",total
-
     index = numpy.argmax(total)
     max_  = numpy.max(total)
+
     n = len(read)+1
     r = index%n
     c = index/n
+
+    c = medianTieBreaker(total,c)
+    r = numpy.argmax(total[:,c])
     return r,c,total[r,c],leftDP,rightDP,total
 
 #Print all listed exons to stdout
@@ -242,16 +261,16 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
         tmp_start,tmp_end = in_start+left_in_diff,in_end-right_in_diff
 
         # if (tmp_start>21848900 and tmp_start<21849000) or (tmp_end>21848900 and tmp_end<21849000):
-        print >> sys.stderr,rdid
-        print >> sys.stderr,"Region",tmp_start,tmp_end
-        print >> sys.stderr,"Intron",in_start,in_end
-        print >> sys.stderr,"left     \t",ref_left,left_st,left_end
-        print >> sys.stderr,"right    \t",ref_right,right_st,right_end
-        print >> sys.stderr,"unmapped \t",unmapped
-        print >> sys.stderr,"read     \t",rdseq
-        print >> sys.stderr,"leftDP   \n",leftDP
-        print >> sys.stderr,"rightDP  \n",rightDP
-        print >> sys.stderr,"total    \n",total
+        # print >> sys.stderr,rdid
+        # print >> sys.stderr,"Region",tmp_start,tmp_end
+        # print >> sys.stderr,"Intron",in_start,in_end
+        # print >> sys.stderr,"left     \t",ref_left,left_st,left_end
+        # print >> sys.stderr,"right    \t",ref_right,right_st,right_end
+        # print >> sys.stderr,"unmapped \t",unmapped
+        # print >> sys.stderr,"read     \t",rdseq
+        # print >> sys.stderr,"leftDP   \n",leftDP
+        # print >> sys.stderr,"rightDP  \n",rightDP
+        # print >> sys.stderr,"total    \n",total
         if score>0:#If crappy alignment, disregard corrections
             in_start,in_end = tmp_start,tmp_end
 
