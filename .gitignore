@@ -9,3 +9,4 @@ example/sim_simple/eg1.states
 .pydevproject
 drivers/chrom.sizes
 drivers/run.sh
+refs

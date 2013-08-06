@@ -215,6 +215,8 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
             print >> sys.stderr, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
 
 def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid):
+    """ We think there's a splice junction somewhere in here.  We attempt to
+        refine our guess about where its endpoints are. """
     diff = unmapped_end-unmapped_st-1
     left_st,right_end = in_start-offset+1,in_end+offset
     left_end,right_st = left_st+diff,right_end-diff
@@ -267,19 +269,19 @@ def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region
         #     print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
         #     nout += 1
 
-def getIntervals(rdals,L):
+def getIntervals(rdals):
     ivals = {}
     positions = dict()  #stores readlet number based keyed by position, strand and reference id
     for rdal in rdals:
-        refid, fw, refoff0, seqlen, rlet_nm, rdid = rdal
-        refoff0, seqlen, rlet_nm = int(refoff0), int(seqlen), int(rlet_nm)
+        refid, fw, refoff0, seqlen, rlet_id, rdid = rdal
+        refoff0, seqlen, rlet_id = int(refoff0), int(seqlen), int(rlet_id)
         # Remember begin, end offsets for readlet w/r/t 5' end of the read
         if fw:
-            positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval
-            positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval + seqlen
+            positions[(refid, fw, refoff0)] = rlet_id * args.readletIval
+            positions[(refid, fw, refoff0 + seqlen)] = rlet_id * args.readletIval + seqlen
         else:
-            positions[(refid, fw, refoff0)] = rlet_nm * args.readletIval + seqlen
-            positions[(refid, fw, refoff0 + seqlen)] = rlet_nm * args.readletIval
+            positions[(refid, fw, refoff0)] = rlet_id * args.readletIval + seqlen
+            positions[(refid, fw, refoff0 + seqlen)] = rlet_id * args.readletIval
         if (refid, fw, rdid) not in ivals:
             ivals[(refid, fw, rdid)] = interval.FlatIntervals()
         ivals[(refid, fw, rdid)].add(interval.Interval(refoff0, refoff0 + seqlen))
@@ -293,9 +295,8 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
     # TODO: We include strand info with introns, but not exons.  We might want
     # to include for both for the case where the RNA-seq protocol is stranded.
     global nout
-    L=len(rdseq)-1
     # Add this interval to the flattened interval collection for current read
-    ivals,positions = getIntervals(rdals,L)
+    ivals,positions = getIntervals(rdals)
     for kfw in ivals.iterkeys(): # for each chromosome covered by >= 1 readlet
         k, fw, rdid = kfw
         in_end, in_start = -1, -1
@@ -312,19 +313,32 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                     region_st,region_end = positions[(k, fw, in_start)],positions[(k, fw, in_end)]
                 else:
                     region_end,region_st = positions[(k, fw, in_start)],positions[(k, fw, in_end)]
-
+                # TODO: review use of splice_overlap
                 offset = args.splice_overlap
                 unmapped_st,unmapped_end = region_st-offset,region_end+offset
                 reflen,rdlet_len = in_end-in_start, abs(region_end-region_st)
-
                 assert in_start<in_end
                 if abs(reflen-rdlet_len)/float(rdlet_len+1) < 0.05:
                     #Note: just a readlet missing due to error or variant
+                    # The difference in length between the unmapped stretch of
+                    # the read and the in-between stretch of the reference is
+                    # small, suggesting some readlets in the middle failed to
+                    # align for reasons other than a splice junction
                     handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 elif rdlet_len>reflen:
+                    # The difference in length between the unmapped stretch of
+                    # the read and the in-between stretch of the reference is
+                    # not small, and the unmapped stretch of read is longer.
+                    # This suggests there's no splice junction so we just fill
+                    # the gap with another exonic chunk.
                     printExons(k,in_start,in_end,rdnm)
                 else:
                     #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    # The difference in length between the unmapped stretch of
+                    # the read and the in-between stretch of the reference is
+                    # not small, and the in-between stretch of reference is
+                    # longer.  There might be a splice junction; we go look
+                    # for it here.
                     handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid)
                 # else:
                 #     print >> sys.stderr,"This should never happen!!!","ref_len",reflen,"<","rdlet_len",rdlet_len
@@ -341,51 +355,34 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 nout += 1
 
 def bowtieOutReadlets(st):
-    ''' Process standard out (stdout) output from Bowtie.  Each line of output
-        is another readlet alignment.  We *could* try to perform operations
-        over all readlet alignments from the same read here.  Currently, we
-        follow this step with an aggregation that bins by read id, then
-        operate over bins in splice.py. '''
-    global nout
+    ''' Process readlet SAM output.  Each line is a readlet alignment. '''
+    global nout, bowtieOutDone
     mem, cnt = {}, {}
     for line in st:
         if line[0] == '@':
-            continue
+            continue # skip SAM headers
+        # Parse SAM record
         rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
         flags, refoff1 = int(flags), int(refoff1)
-        seqlen = len(seq)
         toks = string.split(rdid, ';')
+        #print >> sys.stderr, rdid
+        # Parse read name, which has format <name>;readlet-id;num-readlets
         rdnm = ';'.join(toks[:-3])
-        rlet_nm = toks[2]
         cnt[rdnm] = cnt.get(rdnm, 0) + 1
-        rd_name = toks[0]
-        rdseq = toks[4]
-        rdlet_n = int(toks[-2])
+        rlet_id, rlet_tot, rdseq = int(toks[-3]), int(toks[-2]), toks[-1]
         if flags != 4:
             fw = (flags & 16) == 0
             if rdnm not in mem: mem[rdnm] = [ ]
-            mem[rdnm].append((refid, fw, refoff1-1, seqlen,rlet_nm,rd_name))
-        if cnt[rdnm] == rdlet_n:
-            # Last readlet
-            if rdnm in mem:
-                composeReadletAlignments(rdnm, mem[rdnm],rdseq)
+            mem[rdnm].append((refid, fw, refoff1-1, len(seq), rlet_id, rdnm))
+        if cnt[rdnm] == rlet_tot:
+            if rdnm in mem: # last readlet
+                # at least one readlet aligned
+                composeReadletAlignments(rdnm, mem[rdnm], rdseq)
                 del mem[rdnm]
             del cnt[rdnm]
         nout += 1
     assert len(mem) == 0
     assert len(cnt) == 0
-    bowtieOutDone.set()
-
-def bowtieOut(st):
-    ''' Process standard out (stdout) output from Bowtie.  Each line of output
-        is another readlet alignment.  We *could* try to perform operations
-        over all readlet alignments from the same read here.  Currently, we
-        follow this step with an aggregation that bins by read id, then
-        operate over bins in splice.py. '''
-    global nout
-    for line in st:
-        sys.stdout.write(line)
-        nout += 1
     bowtieOutDone.set()
 
 def writeReads(fh):
@@ -436,7 +433,7 @@ def writeReads(fh):
                 rlets1 = readlet.readletize(args, nm1, seq1, qual1)
                 for i in xrange(0, len(rlets1)):
                     nm_rlet, seq_rlet, qual_rlet = rlets1[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet)
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1), seq1, seq_rlet, qual_rlet)
                     if first:
                         sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
@@ -444,7 +441,7 @@ def writeReads(fh):
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet)
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2), seq2, seq_rlet, qual_rlet)
                     if first:
                         sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False

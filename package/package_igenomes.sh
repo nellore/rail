@@ -15,14 +15,19 @@ db=`basename $tmp`
 
 mkdir -p .archive/index .archive/gtf .archive/fasta
 
-cp Sequence/BowtieIndex/*.ebwt .archive/index
-cp Annotation/Genes/genes.gtf .archive/gtf
-cp Sequence/WholeGenomeFasta/genome.fa* .archive/fasta
-
+cp Sequence/BowtieIndex/*.ebwt .archive/index/
+cp Annotation/Genes/genes.gtf .archive/gtf/
+cp Sequence/WholeGenomeFasta/genome.fa* .archive/fasta/
 cd .archive
 
-tar -zcvf ${genome}_${db}.tar.gz .
-mv ${genome}_${db}.tar.gz ..
+# Put index, gene annotations, and fasta+index in separate archives, since we
+# might not always need all three
+for i in index gtf fasta ; do
+	tar cvf ${genome}_${db}.$i.tar $i
+	gzip ${genome}_${db}.$i.tar
+	mv ${genome}_${db}.$i.tar.gz ..
+done
+
 cd ..
 
 echo "DONE -- you can 'rm -rf .archive'"
