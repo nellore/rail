@@ -478,7 +478,7 @@ if mode == 'emr':
         cmdl.append(aws.bootstrapFetchTarball("reference index archive", url.Url(ref.toUrl().replace('.tar.gz', '.index.tar.gz')), emrLocalDir))
     if useGtf:
         cmdl.append(aws.bootstrapFetchTarball("reference gtf archive", url.Url(ref.toUrl().replace('.tar.gz', '.gtf.tar.gz')), emrLocalDir))
-    if useIndex and useFasta:
+    if False and useIndex and useFasta:
         # Create FASTA from bowtie index
         cmdl.append(tools.bootstrapTool("ref-fasta"))
     elif useFasta:
