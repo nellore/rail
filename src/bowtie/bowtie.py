@@ -74,4 +74,4 @@ def proc(args, readFn=None, bowtieArgs=None, sam=False, outHandler=None, errHand
         t = threading.Thread(target=errHandler, args=(proc.stderr,))
         t.daemon = True # thread dies with the program
         t.start()
-    return proc
+    return proc, mycmd
