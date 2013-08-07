@@ -131,7 +131,8 @@ def compare(bed_sites,annot_sites,radius):
 
 if __name__=="__main__":
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
-    sites = pickle.load(open(args.sites_file,'rb'))
+    sites = set( map( int,open(args.sites_file,'r').readline().rstrip().split("\t")))
+    #sites = pickle.load(open(args.sites_file,'rb'))
     bed_sites = readBedSites(args.bed_file)
     annot_sites = annotated_sites(xscripts)
 
