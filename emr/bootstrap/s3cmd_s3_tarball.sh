@@ -21,6 +21,17 @@ access_key = $AWS_ACCESS_ID
 secret_key = $AWS_ACCESS_KEY
 EOF
 
-mkdir -p ${2}
-cd ${2}
-s3cmd get ${1} - | gzip -dc | tar xvf - || { echo 's3cmd/gzip/tar failed' ; exit 1; }
+mkdir -p $1
+cd $1
+shift
+
+for i in $* ; do
+	s3cmd get $i - | gzip -dc | tar xvf - &
+	PIDS="$PIDS $!"
+done
+
+wait $PIDS
+if [ $? -ne 0 ] ; then
+	echo 'one or more s3cmds failed'
+	exit 1
+fi
