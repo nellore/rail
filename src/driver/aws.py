@@ -79,6 +79,12 @@ class EmrCluster(object):
     def numCoreProcessors(self):
         return instNcores[self.itCore] * max(1, self.numCore)
     
+    def swap(self):
+        if self.numCore > 0:
+            return instSwap[self.itCore]
+        else:
+            return instSwap[self.itMaster]
+    
     def emrArgs(self):
         ret = []
         ret.append("--instance-group master --instance-type %s --instance-count %d" % (self.itMaster, self.numMaster))
@@ -139,5 +145,13 @@ def bootstrapFetchTarball(name, url, emrLocalDir):
         the given bucket into the given directory on the node. """
     ret = ['--bootstrap-action s3://tornado-emr/bootstrap/s3cmd_s3_tarball.sh',
            '--bootstrap-name "%s"' % name,
-           '--args "%s,%s"' % (url.toNonNativeUrl(), emrLocalDir)]
+           '--args "%s,%s"' % (emrLocalDir, url.toNonNativeUrl())]
+    return ' '.join(ret)
+
+def bootstrapFetchTarballs(name, urls, emrLocalDir):
+    """ Create a bootstrap action that copies the file at a given path within
+        the given bucket into the given directory on the node. """
+    ret = ['--bootstrap-action s3://tornado-emr/bootstrap/s3cmd_s3_tarball.sh',
+           '--bootstrap-name "%s"' % name,
+           '--args "%s,%s"' % (emrLocalDir, ','.join([ url.toNonNativeUrl() for url in urls ])) ]
     return ' '.join(ret)
