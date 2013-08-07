@@ -21,9 +21,6 @@ access_key = $AWS_ACCESS_ID
 secret_key = $AWS_ACCESS_KEY
 EOF
 
-fn=`basename $1`
-s3cmd get ${1} . || { echo 's3cmd failed' ; exit 1; }
-
 mkdir -p ${2}
-tar -xzf $fn -C ${2} || { echo 'untar failed' ; exit 1; }
-rm -f $fn
+cd ${2}
+s3cmd get ${1} - | gzip -dc | tar xvf - || { echo 's3cmd/gzip/tar failed' ; exit 1; }
