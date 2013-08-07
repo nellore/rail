@@ -43,6 +43,10 @@ class Annot(object):
         self.score = score
         self.frame = frame
         self.attrs = attrs
+
+    def __len__(self):
+        return self.en0-self.st0
+
     def __str__(self):
         return "%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s"%(self.refid, self.st0, self.en0, self.orient, self.feature, self.score, self.frame,self.attrs)
 """
@@ -90,6 +94,17 @@ class Transcript(object):
             sites.append(site5+1)
             sites.append(site3-1)
             sites.append(site3-2)
+        return sites
+    """
+    Get all splice sites in terms of transcript sequence
+    """
+    def getXcriptSites(self):
+        sites = []
+        total = 0
+        for i in range(1,len(self.exons)):
+            total+=len(self.exons[i-1])
+            sites.append(total)
+            sites.append(total+1)
         return sites
 
     def incorporateVariants(self,mm_rate,indel_rate,var_handle):
