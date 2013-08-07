@@ -120,6 +120,8 @@ parser.add_argument(\
 parser.add_argument(\
     '--test', action='store_const', const=True, default=False, help='Run unit tests')
 parser.add_argument(\
+    '--archive', metavar="PATH", type=str, help='Save input and command to a subdirectory (named using this process\'s PID) of PATH')
+parser.add_argument(\
     '--profile', action='store_const', const=True, default=False, help='Profile the code')
 
 # Collect the bowtie arguments first
@@ -418,7 +420,7 @@ def bowtieOut(st):
         nout += 1
     bowtieOutDone.set()
 
-def writeReads(fh):
+def writeReads(fhs):
     """ Parse input reads, optionally transform them and/or turn them into
         readlets. """
     global ninp
@@ -470,7 +472,7 @@ def writeReads(fh):
                     if first:
                         sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
-                    fh.write(rdletStr)
+                    for fh in fhs: fh.write(rdletStr)
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
@@ -478,13 +480,13 @@ def writeReads(fh):
                     if first:
                         sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
-                    fh.write(rdletStr)
+                    for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
                 if first:
                     sys.stderr.write("First read: '%s'" % rdStr.rstrip())
                     first = False
-                fh.write(rdStr)
+                for fh in fhs: fh.write(rdStr)
         else:
             # Unpaired
             if xformReads:
@@ -499,18 +501,27 @@ def writeReads(fh):
                     if first:
                         sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
                         first = False
-                    fh.write(rdletStr)
+                    for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\n" % (nm, seq, qual)
                 if first:
                     sys.stderr.write("First read: '%s'" % rdStr.rstrip())
                     first = False
-                fh.write(rdStr)
+                for fh in fhs: fh.write(rdStr)
 
 def go():
-
+    
     import time
     timeSt = time.clock()
+    
+    archiveFh, archiveDir = None, None
+    if args.archive is not None:
+        archiveDir = os.path.join(args.archive, str(os.getpid()))
+        print >> sys.stderr, "Putting --archive reads and command in '%s'" % archiveDir
+        if not os.path.exists(archiveDir):
+            os.makedirs(archiveDir)
+        archiveFh = open(os.path.join(archiveDir, "reads.tab5"), 'w')
+    
     if args.serial:
         # Reads are written to a file, then Bowtie reads them from the file
         import tempfile
@@ -520,26 +531,35 @@ def go():
         else:
             readFn = args.write_reads
         with open(readFn, 'w') as fh:
-            writeReads(fh)
+            fhs = [fh]
+            if args.archive is not None: fhs.append(archiveFh)
+            writeReads(fhs)
         assert os.path.exists(readFn)
-        proc = bowtie.proc(args, readFn=readFn, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, stdinPipe=False)
+        proc, mycmd = bowtie.proc(args, readFn=readFn, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, stdinPipe=False)
     else:
         # Reads are written to Bowtie process's stdin directly
-        proc = bowtie.proc(args, readFn=None, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, stdinPipe=True)
-        writeReads(proc.stdin)
+        proc, mycmd = bowtie.proc(args, readFn=None, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, stdinPipe=True)
+        fhs = [proc.stdin]
+        if args.archive is not None: fhs.append(archiveFh)
+        writeReads(fhs)
         proc.stdin.close()
-
+    
+    if args.archive is not None:
+        archiveFh.close()
+        with open(os.path.join(archiveDir, "cmd.sh"), 'w') as ofh:
+            ofh.write(mycmd + '\n')
+    
     print >>sys.stderr, "Waiting for Bowtie to finish"
     bowtieOutDone.wait()
     proc.stdout.close()
     print >>sys.stderr, "Bowtie finished"
-
+    
     # Remove any temporary reads files created
     if args.serial and args.write_reads is None and not args.keep_reads:
         print >>sys.stderr, "Cleaning up temporary files"
         import shutil
         shutil.rmtree(tmpdir)
-
+    
     timeEn = time.clock()
     print >>sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
 

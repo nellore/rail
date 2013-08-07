@@ -16,7 +16,7 @@ class PreprocessingStep(pipeline.Step):
             "hdfs:///dummy",   # output URL
             "org.apache.hadoop.mapred.lib.NLineInputFormat",
             None,
-            "python %s/src/rnawesome/preprocess.py --nucs-per-file=120000000 %s --push=%s --ignore-first-token" % (pconf.emrLocalDir, compressArg, output.toUpperUrl()),
+            "python %s/src/rnawesome/preprocess.py --nucs-per-file=50000000 %s --push=%s --ignore-first-token" % (pconf.emrLocalDir, compressArg, output.toUpperUrl()),
             None)
 
 class AlignStep(pipeline.Step):
@@ -31,7 +31,8 @@ class AlignStep(pipeline.Step):
             output.toUrl(), # output URL
             None,    # input format
             None,    # no aggregation
-            "python %s/src/rnawesome/align.py --serial --write-reads reads.tab5 --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s --bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
+            "python %s/src/rnawesome/align.py --archive=/mnt/archive --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s --bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
+            #"python %s/src/rnawesome/align.py --serial --write-reads reads.tab5 --archive=/mnt/archive --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s --bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
             None)
 
 class IntronStep(pipeline.Step):
