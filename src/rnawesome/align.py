@@ -102,7 +102,7 @@ parser.add_argument(\
     help='The fasta sequence of the reference genome. The fasta index of the '
          'reference genome is also required to be built via samtools')
 parser.add_argument(\
-    '--splice-overlap', type=int, default=10,
+    '--splice-overlap', type=int, default=5,
     help='The overlap length of spanning readlets when evaluating splice junctions')
 parser.add_argument(\
     '--faidx', type=str, required=False, help='Fasta index file')
