@@ -550,8 +550,10 @@ def go():
     
     if args.archive is not None:
         archiveFh.close()
-        with open(os.path.join(archiveDir, "cmd.sh"), 'w') as ofh:
+        with open(os.path.join(archiveDir, "bowtie_cmd.sh"), 'w') as ofh:
             ofh.write(mycmd + '\n')
+        with open(os.path.join(archiveDir, "align_py_cmd.sh"), 'w') as ofh:
+            ofh.write(' '.join(sys.argv) + '\n')
     
     print >>sys.stderr, "Waiting for Bowtie to finish"
     bowtieOutDone.wait()
