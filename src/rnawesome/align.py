@@ -372,7 +372,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 #     print >> test_exons,"exon\t%s\t%012d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdnm))
                 nout += 1
 
-def bowtieOutReadlets(st):
+def bowtieOutReadlets(st, reportMult=1.2):
     ''' Process standard out (stdout) output from Bowtie.  Each line of output
         is another readlet alignment.  We *could* try to perform operations
         over all readlet alignments from the same read here.  Currently, we
@@ -380,11 +380,16 @@ def bowtieOutReadlets(st):
         operate over bins in splice.py. '''
     global nout
     mem, cnt = {}, {}
+    report = 1
     for line in st:
         if line[0] == '@':
             continue
+        nout += 1
         rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
         flags, refoff1 = int(flags), int(refoff1)
+        if nout >= report:
+            report *= reportMult
+            print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nout, rdid, flags)
         seqlen = len(seq)
         toks = string.split(rdid, ';')
         rdnm = ';'.join(toks[:-3])
@@ -403,7 +408,6 @@ def bowtieOutReadlets(st):
                 composeReadletAlignments(rdnm, mem[rdnm],rdseq)
                 del mem[rdnm]
             del cnt[rdnm]
-        nout += 1
     assert len(mem) == 0
     assert len(cnt) == 0
     bowtieOutDone.set()
@@ -420,11 +424,11 @@ def bowtieOut(st):
         nout += 1
     bowtieOutDone.set()
 
-def writeReads(fhs):
+def writeReads(fhs, reportMult=1.2):
     """ Parse input reads, optionally transform them and/or turn them into
         readlets. """
     global ninp
-    first = True
+    report = 1.0
     for ln in sys.stdin:
         ln = ln.rstrip()
         toks = ln.split('\t')
@@ -469,23 +473,23 @@ def writeReads(fhs):
                 for i in xrange(0, len(rlets1)):
                     nm_rlet, seq_rlet, qual_rlet = rlets1[i]
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet)
-                    if first:
-                        sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
-                        first = False
+                    if ninp >= report and i == 0:
+                        report *= reportMult
+                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet)
-                    if first:
-                        sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
-                        first = False
+                    if ninp >= report and i == 0:
+                        report *= reportMult
+                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
-                if first:
-                    sys.stderr.write("First read: '%s'" % rdStr.rstrip())
-                    first = False
+                if ninp >= report:
+                    report *= reportMult
+                    print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
         else:
             # Unpaired
@@ -498,15 +502,15 @@ def writeReads(fhs):
                 for i in xrange(0, len(rlets)):
                     nm_rlet, seq_rlet, qual_rlet = rlets[i]
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet)
-                    if first:
-                        sys.stderr.write("First readlet: '%s'" % rdletStr.rstrip())
-                        first = False
+                    if ninp >= report and i == 0:
+                        report *= reportMult
+                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\n" % (nm, seq, qual)
-                if first:
-                    sys.stderr.write("First read: '%s'" % rdStr.rstrip())
-                    first = False
+                if ninp >= report:
+                    report *= reportMult
+                    print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
 
 def go():
