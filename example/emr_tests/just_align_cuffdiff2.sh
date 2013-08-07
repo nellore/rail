@@ -21,7 +21,7 @@ python $TORNADO_HOME/src/driver/tornado.py \
 	--start-with-preprocess \
 	--stop-after-align \
 	--instance-type c1.xlarge \
-	--instance-counts 1,0,0 \
+	--instance-counts 1,1,0 \
 	$*
 
 echo "s3cmd del --recursive s3://langmead/tornado_${PROJ}"
