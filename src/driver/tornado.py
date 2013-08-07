@@ -146,6 +146,10 @@ parser.add_argument(\
 parser.add_argument(\
     '--alive', action='store_const', const=True, help='Keep cluster alive after it finishes job.')
 parser.add_argument(\
+    '--no-memory-intensive', action='store_const', const=True, help='Do not set memory-intensive mode on the cluster.')
+parser.add_argument(\
+    '--no-add-swap', action='store_const', const=True, help='Do not add swap memory to the cluster.')
+parser.add_argument(\
     '--name', metavar='STR', type=str, help='Amazon Elastic MapReduce job name.')
 parser.add_argument(\
     '--no-emr-debug', action='store_const', const=True, help='Don\'t enable EMR debugging functions.')
@@ -322,6 +326,8 @@ if mode == 'emr':
     
     # ActionOnFailure
     waitFail = args.alive
+    if waitFail:
+        emrArgs.append("--alive")
     
     # Local dir, where ref genome and Tornado scripts are installed
     emrLocalDir = args.emr_local_dir or "/mnt"
@@ -388,7 +394,7 @@ pipelineSteps = {
 
 useBowtie = 'align' in pipelines
 useIndex = 'align' in pipelines
-useGtf = 'align' in pipelines
+useGtf = False and 'align' in pipelines
 useFasta = 'align' in pipelines or 'junction' in pipelines
 useRef = useIndex or useGtf or useFasta
 useKenttools = 'coverage' in pipelines or 'differential' in pipelines
@@ -474,17 +480,35 @@ if mode == 'emr':
         cmdl.append(tools.bootstrapTool("samtools"))
     # Get Tornado scripts and run Makefile for swig code
     cmdl.append(tools.bootstrapTool("tornado", src=tornadoUrl, dest="/mnt"))
+    tarballs = []
     if useIndex:
-        cmdl.append(aws.bootstrapFetchTarball("reference index archive", url.Url(ref.toUrl().replace('.tar.gz', '.index.tar.gz')), emrLocalDir))
+        tarballs.append(url.Url(ref.toUrl().replace('.tar.gz', '.index.tar.gz')))
     if useGtf:
-        cmdl.append(aws.bootstrapFetchTarball("reference gtf archive", url.Url(ref.toUrl().replace('.tar.gz', '.gtf.tar.gz')), emrLocalDir))
-    if False and useIndex and useFasta:
-        # Create FASTA from bowtie index
-        cmdl.append(tools.bootstrapTool("ref-fasta"))
-    elif useFasta:
-        cmdl.append(aws.bootstrapFetchTarball("reference fasta archive", url.Url(ref.toUrl().replace('.tar.gz', '.fasta.tar.gz')), emrLocalDir))
+        tarballs.append(url.Url(ref.toUrl().replace('.tar.gz', '.gtf.tar.gz')))
+    if useFasta:
+        tarballs.append(url.Url(ref.toUrl().replace('.tar.gz', '.fasta.tar.gz')))
+    if len(tarballs) > 0:
+        cmdl.append(aws.bootstrapFetchTarballs("reference archives", tarballs, emrLocalDir))
     if useManifest:
         cmdl.append(aws.bootstrapFetchFile("manifest file", manifest, emrLocalDir, "MANIFEST"))
+    if not args.no_memory_intensive:
+        # Memory-intensive mode
+        cmdl.append('--bootstrap-action')
+        cmdl.append('s3://elasticmapreduce/bootstrap-actions/configurations/latest/memory-intensive')
+        cmdl.append('--bootstrap-name')
+        cmdl.append('"set memory-intensive"')
+    if not args.no_add_swap:
+        cmdl.append('--bootstrap-action')
+        cmdl.append('s3://elasticmapreduce/bootstrap-actions/add-swap')
+        cmdl.append('--bootstrap-name')
+        cmdl.append('"add swap"')
+        cmdl.append('--args "%d"' % emrCluster.swap())
+    cmdl.append('--bootstrap-action')
+    cmdl.append('s3://elasticmapreduce/bootstrap-actions/configure-hadoop')
+    cmdl.append('--bootstrap-name')
+    cmdl.append('"configure hadoop"')
+    cmdl.append('--args "-s,mapred.job.reuse.jvm.num.tasks=1,-s,mapred.tasktracker.reduce.tasks.maximum=%d,-s,io.sort.mb=100"' % emrCluster.numCoreProcessors())
+    
     cmdl.extend(emrArgs)
     
     cmd = ' '.join(cmdl)
