@@ -211,23 +211,48 @@ def printExons(refid,in_start,in_end,rdnm):
         print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, refid, sample.parseLab(rdnm))
         nout += 1
 
+"""
+Returns a more human readable format of the string
+"""
+def readableFormat(s):
+    return " ".join([s[i:i+10] for i in range(0,len(s),10)])
+
 #Print all listed introns to stdout and the flanking sequences
 def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
     global nout
     offset = args.splice_overlap
     fw_char = "+" if fw else "-"
-    if not fw:
-        rdseq = revcomp(rdseq)
+    
+    # if not fw:
+    #     rdseq = revcomp(rdseq)
+
     #Obtain coordinates for flanking coordinate frames
     left_st,left_end = region_st-offset,region_st
     right_st,right_end = region_end,region_end+offset
 
     #TODO: Should we remove right_overlap and right_flank?  These vars may be redundant
-    left_flank = rdseq[left_st:left_end]
-    left_overlap = rdseq[left_end:left_end+offset]
-    right_overlap = rdseq[right_st-offset:right_st]
-    right_flank = rdseq[right_st:right_end]
+    flank1 = rdseq[left_st:left_end]
+    overlap1 = rdseq[left_end:left_end+offset]
+    overlap2 = rdseq[right_st-offset:right_st]
+    flank2 = rdseq[right_st:right_end]
+    if not fw:
+        left_overlap = revcomp(flank1)
+        left_flank = revcomp(overlap1)
+        right_overlap = revcomp(flank2)
+        right_flank = revcomp(overlap2)
+        rdseq = revcomp(rdseq)
+    else:
+        left_flank = flank1
+        left_overlap = overlap1
+        right_flank = flank2
+        right_overlap = overlap2
 
+    # if(refid == 'chr2L' and in_end>15900360 and in_end<15900380):
+    #     print >> sys.stderr,"Printing ..."
+    #     print >> sys.stderr,"Intron    ",in_start,in_end
+    #     print >> sys.stderr,"left seqs ",left_flank,left_overlap,left_st,left_end
+    #     print >> sys.stderr,"right seqs",right_overlap,right_flank,right_st,right_end
+    #     print >> sys.stderr,"read      ",readableFormat(rdseq)
 
     """Since there is a possibility that one of the sequences may be out of boundaries (e.g. mapping error),
     the following checks to see if all of the sequences are valid"""
@@ -254,28 +279,45 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
     else:
         ref_left = fnh.fetch_sequence(k,left_st, left_end).upper()
         ref_right = fnh.fetch_sequence(k,right_st, right_end).upper()
-        unmapped = rdseq[unmapped_st:unmapped_end]
         if not fw:
-            unmapped = revcomp(unmapped)
+            readseq = revcomp(rdseq)
+            #unmapped = readseq[unmapped_st:unmapped_end]
+            unmapped = revcomp(rdseq[unmapped_st:unmapped_end])
+        else:
+            readseq = rdseq
+            unmapped = rdseq[unmapped_st:unmapped_end]
+
         _, dj,score,leftDP,rightDP,total = correctSplice(unmapped,ref_left,ref_right,fw)
         left_diff,right_diff = dj, len(unmapped)-dj
-        region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
         left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
-        tmp_start,tmp_end = in_start+left_in_diff,in_end-right_in_diff
 
-        # if (tmp_start>21848900 and tmp_start<21849000) or (tmp_end>21848900 and tmp_end<21849000):
-        # print >> sys.stderr,rdid
-        # print >> sys.stderr,"Region",tmp_start,tmp_end
-        # print >> sys.stderr,"Intron",in_start,in_end
-        # print >> sys.stderr,"left     \t",ref_left,left_st,left_end
-        # print >> sys.stderr,"right    \t",ref_right,right_st,right_end
-        # print >> sys.stderr,"unmapped \t",unmapped
-        # print >> sys.stderr,"read     \t",rdseq
-        # print >> sys.stderr,"leftDP   \n",leftDP
-        # print >> sys.stderr,"rightDP  \n",rightDP
-        # print >> sys.stderr,"total    \n",total
         if score>0:#If crappy alignment, disregard corrections
-            in_start,in_end = tmp_start,tmp_end
+            tmp_in_st,tmp_in_end = in_start,in_end
+            tmp_reg_st,tmp_reg_end = region_st,region_end
+            region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
+            in_start,in_end = in_start+left_in_diff,in_end-right_in_diff
+
+        # if(k == 'chr2L' and in_end>15900360 and in_end<15900380):
+        #     print >> sys.stderr,"Correcting ..."
+        #     print >> sys.stderr,"Old Intron",tmp_in_st,tmp_in_end
+        #     print >> sys.stderr,"New Intron",in_start,in_end
+        #     print >> sys.stderr,"Old Read  ",tmp_reg_st,tmp_reg_end 
+        #     print >> sys.stderr,"New Read  ",region_st,region_end
+        #     print >> sys.stderr,"Left seq  ",ref_left
+        #     print >> sys.stderr,"Right seq ",ref_right
+        #     print >> sys.stderr,"Unmapped  ",unmapped,unmapped_st,unmapped_end
+        #     print >> sys.stderr,"Read      ",readableFormat(readseq)
+            
+       #     print >> sys.stderr,"left     \t",ref_left,ref_left[:left_diff],ref_left[left_diff:], left_st,left_end
+        #     print >> sys.stderr,"right    \t",ref_right,ref_right[:right_diff],ref_right[right_diff:],right_st,right_end
+        #     print >> sys.stderr,"unmapped \t",unmapped
+        #     print >> sys.stderr,"read     \t",rdseq
+            # print >> sys.stderr,"leftDP   \n",leftDP
+            # print >> sys.stderr,"rightDP  \n",rightDP
+            # print >> sys.stderr,"total    \n",total
+
+        # if score>0:#If crappy alignment, disregard corrections
+        #     in_start,in_end = tmp_start,tmp_end
 
         printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
 
@@ -389,7 +431,7 @@ def bowtieOutReadlets(st, reportMult=1.2):
         flags, refoff1 = int(flags), int(refoff1)
         if nout >= report:
             report *= reportMult
-            print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nout, rdid, flags)
+            #print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nout, rdid, flags)
         seqlen = len(seq)
         toks = string.split(rdid, ';')
         rdnm = ';'.join(toks[:-3])
@@ -475,7 +517,7 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        #print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
@@ -483,13 +525,13 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        #print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
                 if ninp >= report:
                     report *= reportMult
-                    print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
+                    #print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
         else:
             # Unpaired
@@ -504,13 +546,13 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        #print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\n" % (nm, seq, qual)
                 if ninp >= report:
                     report *= reportMult
-                    print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
+                    #print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
 
 def go():
@@ -521,7 +563,7 @@ def go():
     archiveFh, archiveDir = None, None
     if args.archive is not None:
         archiveDir = os.path.join(args.archive, str(os.getpid()))
-        print >> sys.stderr, "Putting --archive reads and command in '%s'" % archiveDir
+        #print >> sys.stderr, "Putting --archive reads and command in '%s'" % archiveDir
         if not os.path.exists(archiveDir):
             os.makedirs(archiveDir)
         archiveFh = open(os.path.join(archiveDir, "reads.tab5"), 'w')
