@@ -81,7 +81,7 @@ import window
 
 ninp = 0               # # lines input so far
 nout = 0               # # lines output so far
-pe = False
+pe = False             # What is this variable?
 discardMate = None
 lengths = dict()       # read lengths after truncation
 rawLengths = dict()    # read legnths prior to truncation
@@ -155,7 +155,16 @@ def revcomp(s):
 
 bowtieOutDone = threading.Event()
 
+"""
+Breaks ties in the Needleman-Wunsch algorithm by selecting the middle element in a set of maxes
 
+e.g.  The 3rd row will be chosen
+matrix = [ 1 2 3 4 5
+           6 8 6 4 1
+           1 2 8 4 5
+           6 7 6 8 1
+           1 2 3 4 5]
+"""
 def medianTieBreaker(dpmat,m_ind):
     m_elem = numpy.max(dpmat[:,m_ind])
     st = m_ind
@@ -164,8 +173,6 @@ def medianTieBreaker(dpmat,m_ind):
         m_ind+=1
     end = m_ind
     return (st+end)/2
-
-
 
 """
 Applies Needleman Wunsch to correct splice junction gaps
@@ -180,13 +187,6 @@ def correctSplice(read,ref_left,ref_right,fw):
     #Once NW is applied, the right DP matrix must be transformed in the same coordinate frame as the left DP matrix
     rightDP = numpy.fliplr(rightDP)
     rightDP = numpy.flipud(rightDP)
-
-    # #Apply sliding window to break ties
-    # site5p,site3p = ("GT","AG") if fw else ("CT","AC")
-    # hist = [1]*len(read)
-    # wins5,wins3 = window.score(ref_left,site5p,hist),window.score(ref_right,site3p,hist)
-    # win5Mat,win3Mat = numpy.matrix([0,0]+wins5),numpy.matrix([0,0]+wins3)
-    # leftDP,rightDP = leftDP+win5Mat,rightDP+win3Mat
 
     total = leftDP+rightDP
 
@@ -222,7 +222,7 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
     global nout
     offset = args.splice_overlap
     fw_char = "+" if fw else "-"
-    
+
     # if not fw:
     #     rdseq = revcomp(rdseq)
 
@@ -247,13 +247,6 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
         right_flank = flank2
         right_overlap = overlap2
 
-    # if(refid == 'chr2L' and in_end>15900360 and in_end<15900380):
-    #     print >> sys.stderr,"Printing ..."
-    #     print >> sys.stderr,"Intron    ",in_start,in_end
-    #     print >> sys.stderr,"left seqs ",left_flank,left_overlap,left_st,left_end
-    #     print >> sys.stderr,"right seqs",right_overlap,right_flank,right_st,right_end
-    #     print >> sys.stderr,"read      ",readableFormat(rdseq)
-
     """Since there is a possibility that one of the sequences may be out of boundaries (e.g. mapping error),
     the following checks to see if all of the sequences are valid"""
     if ( len(left_flank) == len(right_flank) and
@@ -262,6 +255,7 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
         for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
             #print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
             print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap)
+            
             nout += 1
     # else: #Test case
     #     for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
@@ -301,13 +295,13 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
         #     print >> sys.stderr,"Correcting ..."
         #     print >> sys.stderr,"Old Intron",tmp_in_st,tmp_in_end
         #     print >> sys.stderr,"New Intron",in_start,in_end
-        #     print >> sys.stderr,"Old Read  ",tmp_reg_st,tmp_reg_end 
+        #     print >> sys.stderr,"Old Read  ",tmp_reg_st,tmp_reg_end
         #     print >> sys.stderr,"New Read  ",region_st,region_end
         #     print >> sys.stderr,"Left seq  ",ref_left
         #     print >> sys.stderr,"Right seq ",ref_right
         #     print >> sys.stderr,"Unmapped  ",unmapped,unmapped_st,unmapped_end
         #     print >> sys.stderr,"Read      ",readableFormat(readseq)
-            
+
        #     print >> sys.stderr,"left     \t",ref_left,ref_left[:left_diff],ref_left[left_diff:], left_st,left_end
         #     print >> sys.stderr,"right    \t",ref_right,ref_right[:right_diff],ref_right[right_diff:],right_st,right_end
         #     print >> sys.stderr,"unmapped \t",unmapped
@@ -315,9 +309,6 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
             # print >> sys.stderr,"leftDP   \n",leftDP
             # print >> sys.stderr,"rightDP  \n",rightDP
             # print >> sys.stderr,"total    \n",total
-
-        # if score>0:#If crappy alignment, disregard corrections
-        #     in_start,in_end = tmp_start,tmp_end
 
         printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
 
@@ -556,10 +547,10 @@ def writeReads(fhs, reportMult=1.2):
                 for fh in fhs: fh.write(rdStr)
 
 def go():
-    
+
     import time
     timeSt = time.clock()
-    
+
     archiveFh, archiveDir = None, None
     if args.archive is not None:
         archiveDir = os.path.join(args.archive, str(os.getpid()))
@@ -567,7 +558,7 @@ def go():
         if not os.path.exists(archiveDir):
             os.makedirs(archiveDir)
         archiveFh = open(os.path.join(archiveDir, "reads.tab5"), 'w')
-    
+
     if args.serial:
         # Reads are written to a file, then Bowtie reads them from the file
         import tempfile
@@ -589,25 +580,25 @@ def go():
         if args.archive is not None: fhs.append(archiveFh)
         writeReads(fhs)
         proc.stdin.close()
-    
+
     if args.archive is not None:
         archiveFh.close()
         with open(os.path.join(archiveDir, "bowtie_cmd.sh"), 'w') as ofh:
             ofh.write(mycmd + '\n')
         with open(os.path.join(archiveDir, "align_py_cmd.sh"), 'w') as ofh:
             ofh.write(' '.join(sys.argv) + '\n')
-    
+
     print >>sys.stderr, "Waiting for Bowtie to finish"
     bowtieOutDone.wait()
     proc.stdout.close()
     print >>sys.stderr, "Bowtie finished"
-    
+
     # Remove any temporary reads files created
     if args.serial and args.write_reads is None and not args.keep_reads:
         print >>sys.stderr, "Cleaning up temporary files"
         import shutil
         shutil.rmtree(tmpdir)
-    
+
     timeEn = time.clock()
     print >>sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
 
@@ -709,16 +700,14 @@ def test_short_alignment3():
     os.remove(fname+".fai")
     os.remove("test.out")
 
-
-#This test isn't working yet
 def test_short_alignment4():
 
     sys.stdout = open("test.out",'w')
     rdnm,fw = "0;LB:test",True
     #mapped reads:
     #ref st,end = (0,33),(135,166)
-    """ACGAAGGACT GCTTGACATC GGCCACGATA AC                                                                      AACCT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
-    """ACGAAGGACT GCTTGACATC GGCCACGATA AC CTGAGTCG ATAGGACGAA ACAAGTATAT ATTCGAAAAT TAATTAATTC CGAAATTTCA ATTTCATCCG ACATGTATCT ACATATGCCA CACTTCTGGT TGGACAACCT TTTTTGCGCC A"""
+    """ACGAAGGACT GCTTGACATC GGCCACGATA AC                                                                                                                 AACCT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
+    """ACGAAGGACT GCTTGACATC GGCCACGATA ACCTGAGTCG ATAGGACGAA ACAAGTATAT ATTCGAAAAT TAATTAATTC CGAAATTTCA ATTTCATCCG ACATGTATCT ACATATGCCA CACTTCTGGT TGGACAACCT TTTTTGCGCC A"""
 
     rdseq  = "ACGAAGGACTGCTTGACATCGGCCACGATAACAACCTTTTTTGCGCCAATCTTAAGAGCCTTCT"
     refseq = "ACGAAGGACTGCTTGACATCGGCCACGATAACCTGAGTCGATAGGACGAAACAAGTATATATTCGAAAATTAATTAATTCCGAAATTTCAATTTCATCCGACATGTATCTACATATGCCACACTTCTGGTTGGACAACCTTTTTTGCGCCA"
@@ -726,16 +715,17 @@ def test_short_alignment4():
     fname,refid = "test.fa","test"
     createTestFasta(fname,refid,refseq)
     fnh = fasta.fasta(fname)
-    region_st,region_end=31,38
-    in_start,in_end=31,141
+    region_st,region_end=32,33
+    in_start,in_end=31,134
     offset = args.splice_overlap
     unmapped_st,unmapped_end = region_st-offset,region_end+offset
-    printIntrons(refid,rdseq,region_st-1,region_end+1,in_start-1,in_end+1,rdnm,fw)
+    printIntrons(refid,rdseq,region_st,region_end,31,133,rdnm,fw)
     handleIntron(refid,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,"testid")
+    sys.stdout.close()
     test_out = open("test.out",'r')
     line = test_out.readline().rstrip()
     testline = test_out.readline().rstrip()
-    print >> sys.stderr, rdseq
+    print >> sys.stderr, readableFormat(rdseq)
     print >> sys.stderr, line,'\n',testline
     assert testline==line
     print >> sys.stderr,"Test Short Intron 4 Success!"
@@ -769,6 +759,11 @@ if args.test:
     binsz = 10000
     test()
 elif args.profile:
+    binsz = partition.binSize(args)
+    if not os.path.exists(args.refseq):
+        raise RuntimeError("No such --refseq file: '%s'" % args.refseq)
+    if not os.path.exists(args.faidx):
+        raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
     import cProfile
     cProfile.run('go()')
 else:
