@@ -264,11 +264,11 @@ if mode == 'emr':
     elif args.instance_type is not None:
         itMaster = args.instance_type
         itCore = args.instance_type
-        itTask = None
+        itTask = args.instance_type
         if not aws.validateInstType(itMaster):
             raise RuntimeError("Invalid instance type in --instance-type: '%s'" % itMaster)
     else:
-        itMaster, itCore, itTask = "c1.xlarge", "c1.xlarge", None
+        itMaster, itCore, itTask = "c1.xlarge", "c1.xlarge", "c1.xlarge"
     
     # Parse # instance arguments
     if args.instance_counts:
@@ -491,12 +491,12 @@ if mode == 'emr':
         cmdl.append(aws.bootstrapFetchTarballs("reference archives", tarballs, emrLocalDir))
     if useManifest:
         cmdl.append(aws.bootstrapFetchFile("manifest file", manifest, emrLocalDir, "MANIFEST"))
-    if not args.no_memory_intensive:
-        # Memory-intensive mode
-        cmdl.append('--bootstrap-action')
-        cmdl.append('s3://elasticmapreduce/bootstrap-actions/configurations/latest/memory-intensive')
-        cmdl.append('--bootstrap-name')
-        cmdl.append('"set memory-intensive"')
+    #if not args.no_memory_intensive:
+    #    # Memory-intensive mode
+    #    cmdl.append('--bootstrap-action')
+    #    cmdl.append('s3://elasticmapreduce/bootstrap-actions/configurations/latest/memory-intensive')
+    #    cmdl.append('--bootstrap-name')
+    #    cmdl.append('"set memory-intensive"')
     if not args.no_add_swap:
         cmdl.append('--bootstrap-action')
         cmdl.append('s3://elasticmapreduce/bootstrap-actions/add-swap')

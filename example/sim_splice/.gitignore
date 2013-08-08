@@ -1,0 +1,6 @@
+fly.genes*
+*.tab
+*.manifest
+*.sites
+*.xscripts
+intermediate
