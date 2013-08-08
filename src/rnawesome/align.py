@@ -123,6 +123,9 @@ parser.add_argument(\
     '--archive', metavar="PATH", type=str, help='Save input and command to a subdirectory (named using this process\'s PID) of PATH')
 parser.add_argument(\
     '--profile', action='store_const', const=True, default=False, help='Profile the code')
+parser.add_argument(\
+    '--verbose', action='store_const', const=True, default=False, help='Prints out extra debugging statements')
+
 
 # Collect the bowtie arguments first
 argv = sys.argv
@@ -255,7 +258,7 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
         for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
             #print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
             print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap)
-            
+
             nout += 1
     # else: #Test case
     #     for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
@@ -426,7 +429,8 @@ def bowtieOutReadlets(st, reportMult=1.2):
             flags, refoff1 = int(flags), int(refoff1)
             if nout >= report:
                 report *= reportMult
-                print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nout, rdid, flags)
+                if args.verbose:
+                    print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nout, rdid, flags)
             seqlen = len(seq)
             toks = string.split(rdid, ';')
             rdnm = ';'.join(toks[:-3])
@@ -524,7 +528,8 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        if args.verbose:
+                            print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
@@ -532,13 +537,15 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        if args.verbose:
+                            print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
                 if ninp >= report:
                     report *= reportMult
-                    print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
+                    if args.verbose:
+                        print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
         else:
             # Unpaired
@@ -553,13 +560,15 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        if args.verbose:
+                            print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\n" % (nm, seq, qual)
                 if ninp >= report:
                     report *= reportMult
-                    print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
+                    if args.verbose:
+                        print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
 
 def go():
@@ -570,7 +579,8 @@ def go():
     archiveFh, archiveDir = None, None
     if args.archive is not None:
         archiveDir = os.path.join(args.archive, str(os.getpid()))
-        print >> sys.stderr, "Putting --archive reads and command in '%s'" % archiveDir
+        if args.verbose:
+            print >> sys.stderr, "Putting --archive reads and command in '%s'" % archiveDir
         if not os.path.exists(archiveDir):
             os.makedirs(archiveDir)
         archiveFh = open(os.path.join(archiveDir, "reads.tab5"), 'w')
@@ -603,11 +613,12 @@ def go():
             ofh.write(mycmd + '\n')
         with open(os.path.join(archiveDir, "align_py_cmd.sh"), 'w') as ofh:
             ofh.write(' '.join(sys.argv) + '\n')
-
-    print >>sys.stderr, "Waiting for Bowtie to finish"
+    if args.verbose:
+        print >>sys.stderr, "Waiting for Bowtie to finish"
     bowtieOutDone.wait()
     proc.stdout.close()
-    print >>sys.stderr, "Bowtie finished"
+    if args.verbose:
+        print >>sys.stderr, "Bowtie finished"
 
     # Remove any temporary reads files created
     if args.serial and args.write_reads is None and not args.keep_reads:
