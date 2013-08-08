@@ -10,7 +10,7 @@ def lcsCost():
     """ A substitution matrix where match=-1, everything else =0.  Only makes
        sense for solving LCS problems, and only if DP algorithm is taking a
        min at each cell. """
-    M = numpy.zeros((6,6),numpy.int32)
+    M = numpy.zeros((6,6), dtype=numpy.int32)
     for i in range(0,6):
         M[i,i] = -1
     return M
@@ -18,7 +18,7 @@ def lcsCost():
 def matchCost():
     """ Return a substitution matrix where match=+1, everything else=-1.  The
         6 symbols are 0=A, 1=C, 2=G, 3=T, 4=N, 5=- (gap). """
-    M = numpy.zeros((6,6),numpy.int32)
+    M = numpy.zeros((6,6), dtype=numpy.int32)
     M.fill(-1)
     for i in range(0,6):
         M[i,i] = 1
@@ -27,7 +27,7 @@ def matchCost():
 def inverseMatchCost():
     """ Return a substitution matrix where match=0, everything else=1.  Only
         makes sense if the DP algorithm is taking a min at each cell. """
-    M = numpy.zeros((6,6),numpy.int32)
+    M = numpy.zeros((6,6), dtype=numpy.int32)
     M.fill(1)
     for i in range(0,6):
         M[i,i] = 0
@@ -92,17 +92,41 @@ def traceback(D, sx, sy, s):
             j -= 1
     return (''.join(xscript))[::-1]
 
-#x,y are the alignment sequences, s is the substitution matrix
-def needlemanWunsch(x,y,s):
-    L = len(x)
-    D = numpy.zeros((L+1,L+1),numpy.int32)
+def needlemanWunschPython(x, y, s):
+    """ Calculate global alignment value of sequences x and y using
+        dynamic programming.  Return global alignment value. """
+    x, y = char2index(x), char2index(y)
+    D = numpy.zeros((len(x)+1, len(y)+1), dtype=numpy.int32)
+    for j in xrange(1, len(y)+1):
+        D[0, j] = j * s[5, y[j-1]]
+    for i in xrange(1, len(x)+1):
+        D[i, 0] = i * s[x[i-1], 5]
+    for i in xrange(1, len(x)+1):
+        for j in xrange(1, len(y)+1):
+            D[i, j] = max(D[i-1, j-1] + s[x[i-1], y[j-1]], # diagonal
+                          D[i-1, j  ] + s[x[i-1], 5     ], # vertical
+                          D[i  , j-1] + s[5,      y[j-1]]) # horizontal
+    return D[len(x), len(y)], D
+
+def needlemanWunsch(x, y, s, check=False):
+    """ Calculate global alignment value of sequences x and y using
+        dynamic programming.  Return global alignment value.  Uses swig
+        to call a C implementation. """
+    nrow, ncol = len(x)+1, len(y)+1
+    D = numpy.zeros((nrow, ncol), dtype=numpy.int32)
     nw.nw(D,s,x,y)
-    return D[L,L],D
+    if check:
+        sc, Dd = needlemanWunschPython(x, y, s)
+        for i in xrange(1, len(x)+1):
+            for j in xrange(1, len(y)+1):
+                assert D[i, j] == Dd[i, j]
+        assert sc == D[nrow-1, ncol-1]
+    return D[nrow-1, ncol-1], D
 
 #x,y are the alignment sequences, s is the substitution matrix
 def needlemanWunschXcript(x,y,s):
     L = len(x)
-    D = numpy.zeros((L+1,L+1),numpy.int32)
+    D = numpy.zeros((L+1,L+1), dtype=numpy.int32)
     nw.nw(D,s,x,y)
     astr = cigar(traceback(D, x, y, s))
     score = D[L,L]
