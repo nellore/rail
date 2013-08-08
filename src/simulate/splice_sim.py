@@ -132,6 +132,9 @@ def makeStrandedWeights(xscripts,seq_sizes,annots_handle):
 
 total_reads = 0
 total_mismatches = 0
+"""
+Incorporates sequencing error into reads
+"""
 def sequencingError(read,mm_rate):
     global total_reads
     global total_mismatches
@@ -168,17 +171,15 @@ def revcomp(s):
 def overlapping_sites(xscript,read_st,read_end):
     sites = xscript.getSites()         #in the genome coordinate frame
     xsites = xscript.getXcriptSites()  #in the transcript coordinate frame
-    sites.sort()
-    xsites.sort()
+    # sites.sort(key=lambda tup:tup[1])
+    # sites.sort(key=lambda tup:tup[0])
+    # xsites.sort(key=lambda tup:tup[1])
+    # xsites.sort(key=lambda tup:tup[0])
     overlaps = []
-    #read_st,read_en = read_st+xscript.st0,read_en+xscript.st0
-    for i in range(0,len(xsites),2):
-        if read_st<=xsites[i] and read_end>=xsites[i+1]:
+    for i in range(0,len(xsites)):
+        if read_st<=xsites[i][0] and read_end>=xsites[i][1]:
             overlaps.append(sites[2*i])
             overlaps.append(sites[2*i+1])
-            overlaps.append(sites[2*i+2])
-            overlaps.append(sites[2*i+3])
-
     return overlaps
 
 def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_handle):
@@ -286,17 +287,20 @@ if __name__=="__main__":
     #This stores the list in pickle files for serialization
     #pickle.dump(weights,open(args.output_prefix+".weights",'wb'))
     pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
-    site_handle = open(args.output_prefix+".sites",'w')
     #sites = list(sites)
     real_sites,sim_sites = xscripts[0].getSites(),list(sites)
     real_sites.sort()
     sim_sites.sort()
     real_sites = "\t".join(map(str,real_sites))
     sim_sites = "\t".join(map(str,sim_sites))
-    print >> sys.stderr,"Transcripts    ",real_sites
-    print >> sys.stderr,"Simulated sites",sim_sites
-    sites = map( str, sites)
-    site_handle.write("\t".join(sites))
+    #print >> sys.stderr,"Transcripts    ",real_sites
+    #print >> sys.stderr,"Simulated sites",sim_sites
+
+    pickle.dump(sites,open(args.output_prefix+".sites",'wb'))
+
+    #site_handle = open(args.output_prefix+".sites",'w')
+    #sites = map( str, sites)
+    #site_handle.write("\t".join(sites))
 
     print >> sys.stderr,"Total number of reads",total_reads
     print >> sys.stderr,"Total number of mismatched reads",total_mismatches

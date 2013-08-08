@@ -7,6 +7,7 @@ Reads in the bed file containing the estimated splice sites and the pickle file 
 3.  Number of splice junctions completely off
 4.  Plot of the distribution of error
 """
+import re
 import os
 import site
 import argparse
@@ -67,7 +68,8 @@ def annotated_sites(xscripts):
         sites[x.seqid]=sites[x.seqid]+x.getSites()
     for k,v in sites.iteritems():
         sites[k] = list(set(sites[k]))
-        sites[k].sort()
+        sites[k].sort(key=lambda tup:tup[1])
+        sites[k].sort(key=lambda tup:tup[0])
     return sites
 
 """
@@ -75,29 +77,37 @@ Bins all splice sites in bed file and bins them by reference sequence id
 """
 def readBedSites(bedfile):
     sites = defaultdict(list)
+    i = 0
     with open(bedfile,'r') as fh:
         for ln in fh:
-            line = ln.rstrip()
-            toks = line.split("\t")
-            seq,st = toks[0],int(toks[1])
-            sites[seq].append(st)
+            if i%2==1:
+                sites[seqid].append( (st,en,seqid,"") )
+            else:
+                line = ln.rstrip()
+                toks = line.split("\t")
+                seqid,st,en = toks[0],int(toks[1]),int(toks[2])
+            i+=1
     for k,v in sites.iteritems():
-        sites[k] = list(set(sites[k]))
-        sites[k].sort()
+        sites[k] = list( set(sites[k])) #Remove redundancies
+        sites[k].sort(key=lambda tup:tup[1])
+        sites[k].sort(key=lambda tup:tup[0])
     return sites
 
-def union_sites(sites):
+#Removes all duplicates
+def unique_sites(sites):
     total_sites = set()
     for k,v in sites.iteritems():
-        total_sites = total_sites.union(set(v))
+        total_sites = total_sites.union( set(v) )
     return set(total_sites)
-
+"""
+Compares the simulated sites and the output from the pipeline
+"""
 def compare(bed_sites,annot_sites,radius):
     correct = 0
     nearby  = 0
     incorrect = 0
-    total_sites = union_sites(annot_sites)
-    missed_sites = union_sites(annot_sites)
+    total_sites = unique_sites(annot_sites)
+    missed_sites = unique_sites(annot_sites)
     found_sites = set()
     close_sites = set()
     false_sites = set()
@@ -106,13 +116,13 @@ def compare(bed_sites,annot_sites,radius):
         for guess in v:
             if len(annot_sites[k])==0:
                 continue
-            exact = search.find(annot_sites[k],guess)
-            if guess==exact:
-                #print "Correct","Guess",guess,"Exact",exact
+            exact = search.find_tuple(annot_sites[k],guess)
+            #print "Correct","Guess",guess,"Exact",exact
+            if (guess[0],guess[1],guess[2]) == (exact[0],exact[1],exact[2]):
                 correct+=1
                 found_sites.add(exact)
                 missed_sites.discard(exact)
-            elif abs(guess-exact)<=radius:
+            elif abs(guess[0]-exact[0])<=radius:
                 #print "Nearby","Guess",guess,"Exact",exact
                 if exact not in close_sites:
                     close_sites.add(exact)
@@ -127,12 +137,15 @@ def compare(bed_sites,annot_sites,radius):
     incorrect_sites = found_sites.intersection(close_sites)
     nearby = len(close_sites.difference(found_sites))
     incorrect+=len(incorrect_sites)
-    return found_sites,close_sites,false_sites,missed_sites,total_sites #since we looking at 2x sites
+    return found_sites,close_sites,false_sites,missed_sites,total_sites
+
+#def readOverlappedSite(fname):
+#return set( map( int,open(fname,'r').readline().rstrip().split("\t")))
 
 if __name__=="__main__":
+    #sites = readOverlappedSites(args.site_file)
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
-    sites = set( map( int,open(args.sites_file,'r').readline().rstrip().split("\t")))
-    #sites = pickle.load(open(args.sites_file,'rb'))
+    sites = pickle.load(open(args.sites_file,'rb')) #probably going to break ... NEED TO TEST!!!
     bed_sites = readBedSites(args.bed_file)
     annot_sites = annotated_sites(xscripts)
 
@@ -141,37 +154,45 @@ if __name__=="__main__":
     fastaH = fasta.fasta(args.refseq)
 
     intersect_sites = list(missed_sites.intersection(sites))
-    missed_sites = list(missed_sites)
-    total_sites = list(total_sites)
-    sites = list(sites)
-    found_sites = list(found_sites)
-    false_sites = list(false_sites)
-    close_sites = list(close_sites)
+    missed_sites    = list(missed_sites)
+    total_sites     = list(total_sites)
+    sites           = list(sites)
+    found_sites     = list(found_sites)
+    false_sites     = list(false_sites)
+    close_sites     = list(close_sites)
 
-    total_sites.sort()
-    sites.sort()
-    found_sites.sort()
-    missed_sites.sort()
-    false_sites.sort()
-    intersect_sites.sort()
-    close_sites.sort()
-    
-    print >>sys.stderr, "Annot Sites ",total_sites
-    print >>sys.stderr, "Sim Sites   ",sites
-    print >>sys.stderr, "Found Sites ",found_sites
+    #Sort all of the lists with respect to start position and chromosome
+    total_sites.sort(key=lambda tup:tup[1])
+    total_sites.sort(key=lambda tup:tup[0])
+    sites.sort(key=lambda tup:tup[1])
+    sites.sort(key=lambda tup:tup[0])
+    found_sites.sort(key=lambda tup:tup[1])
+    found_sites.sort(key=lambda tup:tup[0])
+    missed_sites.sort(key=lambda tup:tup[1])
+    missed_sites.sort(key=lambda tup:tup[0])
+    false_sites.sort(key=lambda tup:tup[1])
+    false_sites.sort(key=lambda tup:tup[0])
+    intersect_sites.sort(key=lambda tup:tup[1])
+    intersect_sites.sort(key=lambda tup:tup[0])
+    close_sites.sort(key=lambda tup:tup[1])
+    close_sites.sort(key=lambda tup:tup[0])
+
+    # print >>sys.stderr, "Annot Sites ",total_sites
+    # print >>sys.stderr, "Sim Sites   ",sites
+    # print >>sys.stderr, "Found Sites ",found_sites
     print >>sys.stderr, "Close Sites ",close_sites
     print >>sys.stderr, "Missed Sites",missed_sites
     print >>sys.stderr, "False Sites ",false_sites
     print >>sys.stderr, "Intersect   ",intersect_sites
 
-    missed = len(missed_sites)/2
     #bed_site_stats = siteDistribution(bed_sites,fastaH)
     #annot_site_stats = siteDistribution(annot_sites,fastaH)
-    total = len(total_sites)/2
-    sim_total = len(sites)/2
-    correct = len(found_sites)/2
-    nearby = len(close_sites)/2
-    incorrect = len(false_sites)/2
+    missed = len(missed_sites)
+    total = len(total_sites)
+    sim_total = len(sites)
+    correct = len(found_sites)
+    nearby = len(close_sites)
+    incorrect = len(false_sites)
 
     print "Total annot sites   \t",total
     print "Num sim sites       \t",sim_total

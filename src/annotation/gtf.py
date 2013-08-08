@@ -60,14 +60,14 @@ class Transcript(object):
             assert exon.feature == "exon"
         self.start = start # start coden Annot
         self.stop = stop
-        self.tssId = tssId 
+        self.tssId = tssId
         self.exons.sort(key = lambda x: x.st0)
         self.orient=self.exons[0].orient
         self.st0 = self.exons[0].st0
         self.en0 = self.exons[-1].en0
         self.seqid = self.exons[0].refid
         self.gene_id,self.xscript_id = self.exons[0].attrs.split('\t')
-       
+
     #Pass in a dictionary of fastaseqs
     def buildSeq(self,fastaseqs):
         seqs = []
@@ -81,32 +81,32 @@ class Transcript(object):
             seqs.append(fastaseqs[seqid][start:end].upper())
         self.seq = "".join(seqs)
 
-    """
-    Assumption: All splice sites are 2bp long
-    returns a list of start positions of splice sites in the transcripts
-    """
+    """Assumption: All splice sites are 2bp long
+    returns a list of start positions of splice sites in the transcripts"""
     def getSites(self):
         sites = []
         for i in range(1,len(self.exons)):
             site5 = self.exons[i-1].en0
             site3 = self.exons[i].st0
-            sites.append(site5)
-            sites.append(site5+1)
-            sites.append(site3-1)
-            sites.append(site3-2)
+            sites.append( (site5, site5+1, self.seqid, self.xscript_id) )
+            sites.append( (site3-2, site3-1, self.seqid, self.xscript_id) )
         return sites
+
     """
     Get all splice sites in terms of transcript sequence
+    Note that this only returns the break point boundaries
+    e.g. AGGGT AGGT returns (5,6)
     """
     def getXcriptSites(self):
         sites = []
         total = 0
         for i in range(1,len(self.exons)):
             total+=len(self.exons[i-1])
-            sites.append(total)
-            sites.append(total+1)
+            sites.append( (total, total+1, self.seqid, self.xscript_id) )
         return sites
-
+    """
+    Incorporates variants into transcriptome such as SNPs and indels
+    """
     def incorporateVariants(self,mm_rate,indel_rate,var_handle):
         lseq = list(self.seq)
         for i in range(0,len(lseq)):
@@ -138,7 +138,7 @@ class Transcript(object):
         lns = []
         lns.append("%d\t%s\t%d\n"%(self.st0,self.seqid,self.en0))
         for e in self.exons:
-            lns.append("%s\n"%(str(e))) 
+            lns.append("%s\n"%(str(e)))
         lns.append("%s\n"%(str(self.seq)))
         return "".join(lns)
 """
@@ -199,9 +199,9 @@ def parseGTF(fns):
                 exons.append(annot)
     return exons
 
-"""                                                                                                                        
-Input: sorted exons and a dictionary of fasta seqs                                                                         
-Chain all exons into transcript via transcript id                                                                           
+"""
+Input: sorted exons and a dictionary of fasta seqs
+Chain all exons into transcript via transcript id
 """
 def assembleTranscripts(exons,fastaseqs):
     exonlist = defaultdict(list)
