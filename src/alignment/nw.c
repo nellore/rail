@@ -2,7 +2,7 @@
 
 #define GAP 5
 
-void char2index(const char* str, int* indexs, int len){
+void char2index(const char* str, int* indexs, int len) {
 	int i;
 	for(i = 0; i < len; i++) {
 		switch(str[i]) {
@@ -16,7 +16,7 @@ void char2index(const char* str, int* indexs, int len){
 	}
 }
 
-#define MAX3(x, y, z) MAX(x, MAX(y, z))
+#define MAX3(x, y, z) MAX((x), MAX((y), (z)))
 
 /**
  * Global alignment with a .  Note we're taking the MAX of the three contributions.
@@ -24,8 +24,8 @@ void char2index(const char* str, int* indexs, int len){
 void nw(int* D, int Dx, int Dy, int* mat, int mx, int my, char *xstr, int xL, char *ystr, int yL){
 	int* x = (int*)malloc(sizeof(int)*(xL));
 	int* y = (int*)malloc(sizeof(int)*(yL));
-	char2index(xstr,x,xL); // convert string x to integer array
-	char2index(ystr,y,yL); // convert string y to integer array
+	char2index(xstr, x, xL); // convert string x to integer array
+	char2index(ystr, y, yL); // convert string y to integer array
 	D[0] = 0;
 	int i,j;
 	for(j = 1; j < Dy; j++) {
@@ -45,24 +45,3 @@ void nw(int* D, int Dx, int Dy, int* mat, int mx, int my, char *xstr, int xL, ch
 	free(x);
 	free(y);
 }
-
-/* int main(){ */
-/*   int test1 = matchCost('-','-'); */
-/*   assert (test1 == 1); */
-/*   printf("Test1 succeeded\n"); */
-/*   int test2 = matchCost('-','A'); */
-/*   assert (test2 == -1); */
-/*   printf("Test2 succeeded\n"); */
-/*   /\* int* test3 = needlemanWunsch("ACGT","ACGT", matchCost); *\/ */
-/*   /\* //printf("Test3 value %d\n",test3[15]); *\/ */
-/*   /\* int i,j; *\/ */
-/*   /\* for(i = 0 ; i < 5; i++){ *\/ */
-/*   /\*   for(j = 0 ; j < 5; j++){ *\/ */
-/*   /\*     printf("%d\t",test3[j+5*i]); *\/ */
-/*   /\*   } *\/ */
-/*   /\*   printf("\n"); *\/ */
-/*   /\* } *\/ */
-/*   /\* assert (test3[24] == 4); *\/ */
-/*   /\* printf("Test3 succeeded\n"); *\/ */
-/*   return 0; */
-/* } */

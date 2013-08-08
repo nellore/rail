@@ -414,33 +414,49 @@ def bowtieOutReadlets(st, reportMult=1.2):
     global nout
     mem, cnt = {}, {}
     report = 1
-    for line in st:
-        if line[0] == '@':
-            continue
-        nout += 1
-        rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
-        flags, refoff1 = int(flags), int(refoff1)
-        if nout >= report:
-            report *= reportMult
-            #print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nout, rdid, flags)
-        seqlen = len(seq)
-        toks = string.split(rdid, ';')
-        rdnm = ';'.join(toks[:-3])
-        rlet_nm = toks[2]
-        cnt[rdnm] = cnt.get(rdnm, 0) + 1
-        rd_name = toks[0]
-        rdseq = toks[4]
-        rdlet_n = int(toks[-2])
-        if flags != 4:
-            fw = (flags & 16) == 0
-            if rdnm not in mem: mem[rdnm] = [ ]
-            mem[rdnm].append((refid, fw, refoff1-1, seqlen,rlet_nm,rd_name))
-        if cnt[rdnm] == rdlet_n:
-            # Last readlet
-            if rdnm in mem:
-                composeReadletAlignments(rdnm, mem[rdnm],rdseq)
-                del mem[rdnm]
-            del cnt[rdnm]
+    try:
+        while True:
+            line = st.readline()
+            if len(line) == 0:
+                break # no more output
+            if line[0] == '@':
+                continue # skip header
+            nout += 1
+            rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
+            flags, refoff1 = int(flags), int(refoff1)
+            if nout >= report:
+                report *= reportMult
+                print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nout, rdid, flags)
+            seqlen = len(seq)
+            toks = string.split(rdid, ';')
+            rdnm = ';'.join(toks[:-3])
+            rlet_nm = toks[2]
+            cnt[rdnm] = cnt.get(rdnm, 0) + 1
+            rd_name = toks[0]
+            rdseq = toks[4]
+            rdlet_n = int(toks[-2])
+            if flags != 4:
+                fw = (flags & 16) == 0
+                if rdnm not in mem: mem[rdnm] = [ ]
+                mem[rdnm].append((refid, fw, refoff1-1, seqlen,rlet_nm,rd_name))
+            if cnt[rdnm] == rdlet_n:
+                # Last readlet
+                if rdnm in mem:
+                    composeReadletAlignments(rdnm, mem[rdnm],rdseq)
+                    del mem[rdnm]
+                del cnt[rdnm]
+    except IOError as e:
+        print >> sys.stderr, "I/O error while reading output from Bowtie ({0}): {1}".format(e.errno, e.strerror)
+        sys.exit(20)
+    except ValueError as e:
+        print >> sys.stderr, "Value error while reading output from Bowtie: " + str(e)
+        sys.exit(30)
+    except TypeError as e:
+        print >> sys.stderr, "Type error while reading output from Bowtie: " + str(e)
+        sys.exit(35)
+    except:
+        print >> sys.stderr, "Unexpected error while reading output from Bowtie:%s" % (sys.exc_info()[0])
+        raise
     assert len(mem) == 0
     assert len(cnt) == 0
     bowtieOutDone.set()
@@ -508,7 +524,7 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1),seq1, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        #print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
                 rlets2 = readlet.readletize(args, nm2, seq2, qual2)
                 for i in xrange(0, len(rlets2)):
@@ -516,13 +532,13 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2),seq2, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        #print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
                 if ninp >= report:
                     report *= reportMult
-                    #print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
+                    print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
         else:
             # Unpaired
@@ -537,13 +553,13 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        #print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\n" % (nm, seq, qual)
                 if ninp >= report:
                     report *= reportMult
-                    #print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
+                    print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
 
 def go():
@@ -554,7 +570,7 @@ def go():
     archiveFh, archiveDir = None, None
     if args.archive is not None:
         archiveDir = os.path.join(args.archive, str(os.getpid()))
-        #print >> sys.stderr, "Putting --archive reads and command in '%s'" % archiveDir
+        print >> sys.stderr, "Putting --archive reads and command in '%s'" % archiveDir
         if not os.path.exists(archiveDir):
             os.makedirs(archiveDir)
         archiveFh = open(os.path.join(archiveDir, "reads.tab5"), 'w')
