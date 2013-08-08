@@ -18,10 +18,11 @@ python $TORNADO_HOME/src/driver/tornado.py \
 	--manifest s3://langmead/tornado_${PROJ}/manifest/cuffdiff2_small.manifest \
 	--output s3://langmead/tornado_${PROJ}/output \
 	--reference s3://tornado-emr/refs/hg19_UCSC.tar.gz \
-	--start-with-preprocess \
-	--stop-after-align \
 	--instance-type c1.xlarge \
-	--instance-counts 1,1,0 \
+	--instance-counts 1,1,2 \
+	--bid-price 0.08 \
+	--stop-after-coverage \
+	--no-junction \
 	$*
 
 echo "s3cmd del --recursive s3://langmead/tornado_${PROJ}"
