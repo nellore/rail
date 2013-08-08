@@ -381,33 +381,49 @@ def bowtieOutReadlets(st, reportMult=1.2):
     global nout
     mem, cnt = {}, {}
     report = 1
-    for line in st:
-        if line[0] == '@':
-            continue
-        nout += 1
-        rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
-        flags, refoff1 = int(flags), int(refoff1)
-        if nout >= report:
-            report *= reportMult
-            print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nout, rdid, flags)
-        seqlen = len(seq)
-        toks = string.split(rdid, ';')
-        rdnm = ';'.join(toks[:-3])
-        rlet_nm = toks[2]
-        cnt[rdnm] = cnt.get(rdnm, 0) + 1
-        rd_name = toks[0]
-        rdseq = toks[4]
-        rdlet_n = int(toks[-2])
-        if flags != 4:
-            fw = (flags & 16) == 0
-            if rdnm not in mem: mem[rdnm] = [ ]
-            mem[rdnm].append((refid, fw, refoff1-1, seqlen,rlet_nm,rd_name))
-        if cnt[rdnm] == rdlet_n:
-            # Last readlet
-            if rdnm in mem:
-                composeReadletAlignments(rdnm, mem[rdnm],rdseq)
-                del mem[rdnm]
-            del cnt[rdnm]
+    try:
+        while True:
+            line = st.readline()
+            if len(line) == 0:
+                break # no more output
+            if line[0] == '@':
+                continue # skip header
+            nout += 1
+            rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
+            flags, refoff1 = int(flags), int(refoff1)
+            if nout >= report:
+                report *= reportMult
+                print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nout, rdid, flags)
+            seqlen = len(seq)
+            toks = string.split(rdid, ';')
+            rdnm = ';'.join(toks[:-3])
+            rlet_nm = toks[2]
+            cnt[rdnm] = cnt.get(rdnm, 0) + 1
+            rd_name = toks[0]
+            rdseq = toks[4]
+            rdlet_n = int(toks[-2])
+            if flags != 4:
+                fw = (flags & 16) == 0
+                if rdnm not in mem: mem[rdnm] = [ ]
+                mem[rdnm].append((refid, fw, refoff1-1, seqlen,rlet_nm,rd_name))
+            if cnt[rdnm] == rdlet_n:
+                # Last readlet
+                if rdnm in mem:
+                    composeReadletAlignments(rdnm, mem[rdnm],rdseq)
+                    del mem[rdnm]
+                del cnt[rdnm]
+    except IOError as e:
+        print >> sys.stderr, "I/O error while reading output from Bowtie ({0}): {1}".format(e.errno, e.strerror)
+        sys.exit(20)
+    except ValueError as e:
+        print >> sys.stderr, "Value error while reading output from Bowtie: " + str(e)
+        sys.exit(30)
+    except TypeError as e:
+        print >> sys.stderr, "Type error while reading output from Bowtie: " + str(e)
+        sys.exit(35)
+    except:
+        print >> sys.stderr, "Unexpected error while reading output from Bowtie:%s" % (sys.exc_info()[0])
+        raise
     assert len(mem) == 0
     assert len(cnt) == 0
     bowtieOutDone.set()
@@ -723,18 +739,22 @@ def test():
     test_short_alignment4()
     test_correct_splice()
 
-if args.test:
-    binsz = 10000
-    test()
-elif args.profile:
-    import cProfile
-    cProfile.run('go()')
-else:
-    binsz = partition.binSize(args)
-    if not os.path.exists(args.refseq):
-        raise RuntimeError("No such --refseq file: '%s'" % args.refseq)
-    if not os.path.exists(args.faidx):
-        raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
-    fnh = fasta.fasta(args.refseq)
-
-    go()
+try:
+    if args.test:
+        binsz = 10000
+        test()
+    elif args.profile:
+        import cProfile
+        cProfile.run('go()')
+    else:
+        binsz = partition.binSize(args)
+        if not os.path.exists(args.refseq):
+            raise RuntimeError("No such --refseq file: '%s'" % args.refseq)
+        if not os.path.exists(args.faidx):
+            raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
+        fnh = fasta.fasta(args.refseq)
+    
+        go()
+except:
+    print >> sys.stderr, "Unexpected error in align.py:", sys.exc_info()[0]
+    sys.exit(10)
