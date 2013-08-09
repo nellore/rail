@@ -155,7 +155,8 @@ def sliding_window(refID, sts,ens, site, fastaF):
     toks = site.split("-")
     assert len(toks)==2
     site5p,site3p = toks[0],toks[1]
-    hist5, hist3 = histogram.hist_score(sts,in_start,"5",2*n+1), histogram.hist_score(sts,in_start,"3",2*n+1)
+    hist5 = histogram.hist_score(sts,in_start,"5",2*n+1),
+    hist3 = histogram.hist_score(ens,in_end,"3",2*n+1)
     mean5,std5 = hist5.index(max(hist5))+2,histogram.stddev(hist5)
     mean3,std3 = hist3.index(max(hist3)),histogram.stddev(hist3)
     # mean5,std5 = hist5.index(max(hist5)),r
