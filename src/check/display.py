@@ -32,7 +32,7 @@ import window
 #Formats the sequence into a more readable format
 #def formatSeq():
 
-def printLeftSeq(seqid,flank_seq,exon,site,win_radius,display_st,display_end,fnh):
+def printLeftSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
     """
     display_window                 (----------------------)
     flank                              |------|
@@ -41,20 +41,21 @@ def printLeftSeq(seqid,flank_seq,exon,site,win_radius,display_st,display_end,fnh
     ref_start |----------- ... ------------------------------------------->
     """
     #convert to display window coordinate frame for exon information
+    flank_seq,flank_end = flank  #Note
     win_length = 2*win_radius
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
     display_exon_st   = display_st - exon.st0
-    display_exon_end  = exon.en0 - exon.st0
+    display_exon_end  = exon.en0 - exon.st0 -1
     exon_seq = exon.seq[display_exon_st:display_exon_end]
     #print >> sys.stderr,"Whole exon",exon.seq
     eLen,fLen = len(exon_seq), len(flank_seq)
     #Stay in reference coordinates for intron
     remaining = win_length - eLen
-    display_intron_st = site[0]
+    display_intron_st = display_st+eLen+1
     display_intron_end= display_intron_st + remaining
     intron_seq = fnh.fetch_sequence(seqid,display_intron_st+1,display_intron_end+1)
 
-    flank_st = eLen - fLen #starting position of flanking sequence
+    flank_st = (flank_end-fLen) - display_st - 1  #starting position of flanking sequence
     site_st = site[0] - display_st - 1
 
     print "Region: ",display_st,'-',display_end
@@ -62,9 +63,9 @@ def printLeftSeq(seqid,flank_seq,exon,site,win_radius,display_st,display_end,fnh
     print "Flanks  "," "*flank_st + flank_seq
     print "Exon    ",exon_seq
     print "Intron  "," "*eLen + intron_seq
-    print "Site    "," "*site_st+"**"
+    print "Site    "," "*site_st+"**\n"
 
-def printRightSeq(seqid,flank_seq,exon,site,win_radius,display_st,display_end,fnh):
+def printRightSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
     """
     display_window                 (----------------------)
     flank                                     |------|
@@ -72,9 +73,10 @@ def printRightSeq(seqid,flank_seq,exon,site,win_radius,display_st,display_end,fn
     intron        <---------------------------|
     ref_start     <--------------------------------------------------...---|
     """
+    flank_seq,flank_st = flank  #Note
 
     win_length = 2*win_radius
-    display_st,display_end = site[0] - win_radius, site[0] + win_radius
+    #display_st,display_end = site[0] - win_radius, site[0] + win_radius
     display_intron_st  = display_st
     display_intron_end = exon.st0
     intron_seq = fnh.fetch_sequence(seqid,display_intron_st+1,display_intron_end+1)
@@ -83,7 +85,8 @@ def printRightSeq(seqid,flank_seq,exon,site,win_radius,display_st,display_end,fn
     display_exon_st  = 0
     display_exon_end = remaining
     exon_seq = exon.seq[display_exon_st:display_exon_end]
-    flank_st = site[1] - display_st + 1
+    #Before, flank_st actually pointed to the end of the splice_site
+    flank_st = (flank_st) -  display_st
     site_st  = site[0] - display_st
 
     print "Region: ",display_st,'-',display_end
@@ -108,13 +111,14 @@ def printSeqs(flanks,xscript,site,fnh):
 
     #flank_seq = flanks[0]
 
-    for flank_seq in flanks:
+    for flank in flanks:
+        #flank_seq,flank_st = flank  #Note
         if exon_li!=-1:
             exon = xscript.exons[exon_li]
-            printLeftSeq(xscript.seqid,flank_seq,exon,site,win_radius,display_st,display_end,fnh)
+            printLeftSeq(xscript.seqid,flank,exon,site,win_radius,display_st,display_end,fnh)
         if exon_ri!=-1:
             exon = xscript.exons[exon_ri]
-            printRightSeq(xscript.seqid,flank_seq,exon,site,win_radius,display_st,display_end,fnh)
+            printRightSeq(xscript.seqid,flank,exon,site,win_radius,display_st,display_end,fnh)
 
 
 pattern = re.compile("(\S+):(\d+)-(\d+)") #parses chromosome name and positions
@@ -129,7 +133,7 @@ For each false positive, display
 
 def falsePositives(fp,flanks,xscript,annot_sites,fnh):
     _,_,seqid,_ = fp
-    close = search.find(annot_sites[seqid],fp)
+    close = search.find_tuple(annot_sites[seqid],fp)
     #xscript_id = close[3]
     #x = xscript[xscript_id]
     key = (close[0],close[1],close[2])
@@ -138,6 +142,7 @@ def falsePositives(fp,flanks,xscript,annot_sites,fnh):
 
 #TODO: Add false negative printing
 def incorrect(fps,fns,flanks,xscripts,annot_sites,region,fnh):
+    print fps
     if region!="":
         seqid,st,end = pattern.findall(region)[0]
         for s in fps:
@@ -184,7 +189,7 @@ class TestDisplayFunctions(unittest.TestCase):
 
     def testPrint1(self):
         site = (440,441,'chr2R',"NM_001042999")
-        flanks = ["CCAATTTCAC","CCAATTTCAC"]
+        flanks = [("CCAATTTCAC",440),("CCAATTTCAC",440)]
         # print >> sys.stderr,'fasta file',self.fasta
         # print >> sys.stderr,'gtf file  ',self.gtf
         annots = gtf.parseGTF([self.gtf])
@@ -202,7 +207,7 @@ class TestDisplayFunctions(unittest.TestCase):
     def testPrint2(self):
         site = (501,502,'chr2R',"NM_001042999")
 
-        flanks = ["TAGAAGATTC","TAGAAGATTC"]
+        flanks = [("TAGAAGATTC",503),("TAGAAGATTC",503)]
         annots = gtf.parseGTF([self.gtf])
         fastadb = gtf.parseFASTA([self.fasta])
         xscripts = gtf.assembleTranscripts(annots,fastadb)

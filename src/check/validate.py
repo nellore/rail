@@ -111,6 +111,7 @@ def unique_sites(sites):
     for k,v in sites.iteritems():
         total_sites = total_sites.union( set(v) )
     return set(total_sites)
+
 """
 Compares the simulated sites and the output from the pipeline
 """
@@ -129,17 +130,18 @@ def compare(bed_sites,annot_sites,radius):
             if len(annot_sites[k])==0:
                 continue
             exact = search.find_tuple(annot_sites[k],guess)
+            print >> sys.stderr,"Exact",exact,"Guess",guess
             if (guess[0],guess[1],guess[2]) == (exact[0],exact[1],exact[2]):
                 correct+=1
                 found_sites.add(exact)
                 missed_sites.discard(exact)
             elif abs(guess[0]-exact[0])<=radius:
-                if exact not in close_sites:
-                    close_sites.add(exact)
-                    missed_sites.discard(exact)
-                else:
-                    false_sites.add(guess)
-                    incorrect+=1
+                #if exact not in close_sites:
+                close_sites.add(guess)
+                missed_sites.discard(exact)
+                #else:
+                #    false_sites.add(guess)
+                #incorrect+=1
             else:
                 false_sites.add(guess)
                 incorrect+=1
@@ -161,7 +163,7 @@ def compare(bed_sites,annot_sites,radius):
 #     for i in range(0,len(flank_seq)):
 
 """
-Takes all flanking sequences, finds the closest annotated site and bins them
+Takes all flanking sequences, finds the closest annotated site and bins them w/r/t that site
 """
 def binFlanks(annot_sites,flanks_file):
     flanks = defaultdict(list)
@@ -178,8 +180,8 @@ def binFlanks(annot_sites,flanks_file):
             #Create key and bin flanking sequences
             key5 = (site5[0],site5[1],site5[2])
             key3 = (site3[0],site3[1],site3[2])
-            flanks[key5].append(flank_left)
-            flanks[key3].append(flank_right)
+            flanks[key5].append( (flank_left,st)  )
+            flanks[key3].append( (flank_right,end+1) )
     return flanks
 
 
@@ -234,7 +236,7 @@ if __name__=="__main__":
     close_sites.sort(key=lambda tup:tup[1])
     close_sites.sort(key=lambda tup:tup[0])
 
-
+    #print >>sys.stderr, "Annotated   ",annot_sites
     print >>sys.stderr, "Close Sites ",close_sites
     print >>sys.stderr, "Missed Sites",missed_sites
     print >>sys.stderr, "False Sites ",false_sites
@@ -247,7 +249,7 @@ if __name__=="__main__":
     nearby = len(close_sites)
     incorrect = len(false_sites)
 
-    print "Total annot sites   \t",total
+    print "Total annot sites   \t",total_sites
     print "Num sim sites       \t",sim_total
     print "Correct             \t",correct
     print "Nearby              \t",nearby
