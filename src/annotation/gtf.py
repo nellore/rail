@@ -80,8 +80,8 @@ class Transcript(object):
             end = E.en0
             if seqid not in fastaseqs:
                 continue
-            self.exons[i].setSeq( fastaseqs[seqid][start+1:end+1].upper() ) #1-based offset NEED TO TEST THIS!!!
-            seqs.append( fastaseqs[seqid][start+1:end+1].upper() )
+            self.exons[i].setSeq( fastaseqs[seqid][start:end].upper() ) #1-based offset NEED TO TEST THIS!!!
+            seqs.append( fastaseqs[seqid][start:end].upper() )
         self.seq = "".join(seqs)
 
     """Assumption: All splice sites are 2bp long
@@ -172,7 +172,7 @@ def parseFASTA(fns):
                     continue
                 else:
                     lns.append(ln.rstrip())
-        seqs[seqid] = ''.join(lns) 
+        seqs[seqid] = ''.join(lns)
     return seqs
 
 
@@ -227,3 +227,49 @@ def assembleTranscripts(exons,fastaseqs):
         x.buildSeq(fastaseqs)
         xscripts.append(x)
     return xscripts
+
+
+def createTestFasta(fname,refid,refseq):
+    fastaH = open(fname,'w')
+    fastaIdx = open(fname+".fai",'w')
+    fastaH.write(">%s\n%s\n"%(refid,refseq))
+    fastaIdx.write("%s\t%d\t%d\t%d\t%d\n"%(refid,len(refseq),len(refid)+2,len(refseq),len(refseq)+1))
+    fastaH.close()
+    fastaIdx.close()
+
+def createTestGTF(fname,annots):
+    gtfH = open(fname,'w')
+    gtfH.write(annots)
+    gtfH.close()
+
+def readableFormat(s):
+    return "\t".join([s[i:i+10] + " " + str(i+10) for i in range(0,len(s),10)])
+
+import unittest
+class TestDisplayFunctions(unittest.TestCase):
+    def setUp(self):
+        refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAACGTCTGGATCCGCCTGAAGCATATTGGCAATAAGATCGCGCA"""
+        annots="""chr2R\tunknown\texon\t11\t20\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t51\t60\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\n"""
+        self.fasta = "test.fa"
+        self.faidx = "test.fa.fai"
+        self.gtf   = "test.gtf"
+        createTestFasta(self.fasta,"chr2R",refseq)
+        createTestGTF(self.gtf,annots)
+
+    def test1(self):
+        annots = parseGTF([self.gtf])
+        fastadb = parseFASTA([self.fasta])
+        xscripts = assembleTranscripts(annots,fastadb)
+        print readableFormat(fastadb["chr2R"])
+        exon1,exon2 = "CAAGGATGTC","CTGAAGCATA"
+        #print xscripts[0]
+        xscript = xscripts[0]
+        self.assertEqual( xscript.exons[0].seq,exon1 )
+        self.assertEqual( xscript.exons[1].seq,exon2 )
+
+if __name__=="__main__":
+    unittest.main()
+
+
+
+
