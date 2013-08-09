@@ -163,8 +163,8 @@ def compare(bed_sites,annot_sites,radius):
 """
 Takes all flanking sequences, finds the closest annotated site and bins them
 """
-def binFlanks(sites,flanks_file):
-    flanks_dict = deflault_dict(list)
+def binFlanks(annot_sites,flanks_file):
+    flanks = defaultdict(list)
     with open(flanks_file,'r') as fnh:
         for ln in fnh:
             ln = ln.rstrip()
@@ -173,8 +173,8 @@ def binFlanks(sites,flanks_file):
             st,end,seqid,flank_left,flank_right = int(toks[2]), int(toks[3]), toks[4], toks[6], toks[7]
             #Search for nearby sites
             guess5,guess3 = (st,st+1,seqid,""), (end-1,end,seqid,"")
-            site5 = search.find_tuple(sites,guess5)
-            site3 = search.find_tuple(sites,guess3)
+            site5 = search.find_tuple(annot_sites[seqid],guess5)
+            site3 = search.find_tuple(annot_sites[seqid],guess3)
             #Create key and bin flanking sequences
             key5 = (site5[0],site5[1],site5[2])
             key3 = (site3[0],site3[1],site3[2])
@@ -187,23 +187,22 @@ def binFlanks(sites,flanks_file):
 Prints out false positives and false negatives specified by a region
 as well as flanking sequences
 """
-def display(fps,fns,flanks_dict,xscripts,annot_sites,region):
-    #First convert xscripts into dictionary
-    xscriptDict = {x.seqid: x for x in xscripts}  #Only available for >=python2.7
-
-    # xscriptDict = dict()
-    # for x in xscripts:
-    #     xscriptDict[x.seqid] = x
-
-
-    return
+def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,region,fnh):
+    #print >> sys.stderr, annot_sites
+    flanksDict = binFlanks(annot_sites,flanks_file)
+    #Convert xscripts into dictionary
+    #xscriptDict = {x.seqid: x for x in xscripts}  #Only available for >=python2.7
+    xscriptDict = dict()
+    for x in xscripts:
+        xscriptDict[x.seqid] = x
+    display.incorrect(fps,fns,flanksDict,xscriptDict,annot_sites,region,fnh)
 
 
 
 if __name__=="__main__":
     #sites = readOverlappedSites(args.site_file)
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
-    sites = pickle.load(open(args.sites_file,'rb'))
+    sim_sites = pickle.load(open(args.sites_file,'rb')) #simulated sites
     bed_sites = readBedSites(args.bed_file)
     annot_sites = annotated_sites(xscripts)
 
@@ -211,10 +210,10 @@ if __name__=="__main__":
     found_sites,close_sites,false_sites,missed_sites,total_sites = compare(bed_sites,annot_sites,args.radius)
     fastaH = fasta.fasta(args.refseq)
 
-    intersect_sites = list(missed_sites.intersection(sites))
+    intersect_sites = list(missed_sites.intersection(sim_sites))
     missed_sites    = list(missed_sites)
     total_sites     = list(total_sites)
-    sites           = list(sites)
+    sim_sites       = list(sim_sites)
     found_sites     = list(found_sites)
     false_sites     = list(false_sites)
     close_sites     = list(close_sites)
@@ -222,8 +221,8 @@ if __name__=="__main__":
     #Sort all of the lists with respect to start position and chromosome
     total_sites.sort(key=lambda tup:tup[1])
     total_sites.sort(key=lambda tup:tup[0])
-    sites.sort(key=lambda tup:tup[1])
-    sites.sort(key=lambda tup:tup[0])
+    sim_sites.sort(key=lambda tup:tup[1])
+    sim_sites.sort(key=lambda tup:tup[0])
     found_sites.sort(key=lambda tup:tup[1])
     found_sites.sort(key=lambda tup:tup[0])
     missed_sites.sort(key=lambda tup:tup[1])
@@ -235,6 +234,7 @@ if __name__=="__main__":
     close_sites.sort(key=lambda tup:tup[1])
     close_sites.sort(key=lambda tup:tup[0])
 
+
     print >>sys.stderr, "Close Sites ",close_sites
     print >>sys.stderr, "Missed Sites",missed_sites
     print >>sys.stderr, "False Sites ",false_sites
@@ -242,7 +242,7 @@ if __name__=="__main__":
 
     missed = len(missed_sites)
     total = len(total_sites)
-    sim_total = len(sites)
+    sim_total = len(sim_sites)
     correct = len(found_sites)
     nearby = len(close_sites)
     incorrect = len(false_sites)
@@ -255,5 +255,5 @@ if __name__=="__main__":
     print "False negatives     \t",missed
     #print "Bed site stats      \t",bed_site_stats
     #print "Annotated site stats\t",annot_site_stats
-
-
+    false_sites = false_sites+close_sites
+    displayIncorrect(false_sites,missed_sites,args.flank_seqs,xscripts,annot_sites,args.region,fastaH)

@@ -103,19 +103,22 @@ def printSeqs(flanks,xscript,site,fnh):
     #Get indexes of displayed exons.  Note that one of them should be -1
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
     exon_li, exon_ri = xscript.getExon(display_st), xscript.getExon(display_end)
-    flank_seq = flanks[0]
     #print >> sys.stderr,"xscript seq",xscript.seq
     #print >> sys.stderr,"exon 1",xscript.exons[0].seq
 
-    if exon_li!=-1:
-        exon = xscript.exons[exon_li]
-        printLeftSeq(xscript.seqid,flank_seq,exon,site,win_radius,display_st,display_end,fnh)
-    if exon_ri!=-1:
-        exon = xscript.exons[exon_ri]
-        printRightSeq(xscript.seqid,flank_seq,exon,site,win_radius,display_st,display_end,fnh)
+    #flank_seq = flanks[0]
+
+    for flank_seq in flanks:
+        if exon_li!=-1:
+            exon = xscript.exons[exon_li]
+            printLeftSeq(xscript.seqid,flank_seq,exon,site,win_radius,display_st,display_end,fnh)
+        if exon_ri!=-1:
+            exon = xscript.exons[exon_ri]
+            printRightSeq(xscript.seqid,flank_seq,exon,site,win_radius,display_st,display_end,fnh)
 
 
 pattern = re.compile("(\S+):(\d+)-(\d+)") #parses chromosome name and positions
+
 """
 Given a dictionary of flanking sequences and a dictionary of xscripts
 For each false positive, display
@@ -123,16 +126,29 @@ For each false positive, display
 2) Annotations
 3) Sites
 """
-def displayFalsePositives(fps,flanks,xscripts,annot_sites,region):
-    seqid,st,end = pattern.findall(region)[0]
-    for s in fps:
-        pos1,pos2,cur_seq,_ = s
-        if curseq==seqid and pos1>=st and pos2<=end:
-            close = search.find(annot_sites,s)
-            xscript_id = close[3]
-            x = xscript[xscript_id]
-            flank_seqs = flanks[close]
-            printSeqs(flank_seqs,x,s)
+
+def falsePositives(fp,flanks,xscript,annot_sites,fnh):
+    _,_,seqid,_ = fp
+    close = search.find(annot_sites[seqid],fp)
+    #xscript_id = close[3]
+    #x = xscript[xscript_id]
+    key = (close[0],close[1],close[2])
+    flank_seqs = flanks[key]
+    printSeqs(flank_seqs,xscript,fp,fnh)
+
+#TODO: Add false negative printing
+def incorrect(fps,fns,flanks,xscripts,annot_sites,region,fnh):
+    if region!="":
+        seqid,st,end = pattern.findall(region)[0]
+        for s in fps:
+            spos1,spos2,sseqid,_ = s
+            if sseqid==seqid and spos1>=st and spos2<=end:
+                falsePositives(s,flanks,xscripts,annot_sites)
+    else:
+        for s in fps:
+            _,_,sseqid,_ = s
+            falsePositives(s,flanks,xscripts[sseqid],annot_sites,fnh)
+
 
 _revcomp_trans = string.maketrans("ACGT", "TGCA")
 def revcomp(s):
