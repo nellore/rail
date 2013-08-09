@@ -21,10 +21,13 @@ base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "annotation"))
 site.addsitedir(os.path.join(base_path, "struct"))
 site.addsitedir(os.path.join(base_path, "fasta"))
+site.addsitedir(os.path.join(base_path, "statsmath"))
 
 import gtf
 import search
 import fasta
+import window
+import display
 
 parser = argparse.ArgumentParser(description=\
                                      'Splice junction validator')
@@ -33,16 +36,25 @@ parser.add_argument(\
     help='Path of the transcripts pickle file')
 parser.add_argument(\
     '--sites-file', metavar='path', type=str, required=True,
-    help='Path of the splice sites pickle file')
+    help='Path of the annotated splice sites pickle file')
 parser.add_argument(\
     '--bed-file', metavar='path', type=str, required=True,
-    help='Path of the transcripts pickle file')
+    help='Path of the estimated splice sites bed file')
 parser.add_argument(\
     '--radius', type=int, required=False,default=10,
     help='The radius of tolerance for identifying splice site neighborhoods')
 parser.add_argument(\
     '--refseq', type=str, required=True,
     help='The reference sequence')
+parser.add_argument(\
+                    '--false-positives',action='store_const', const=True, default=False, help='Indicates if false positives are printed')
+parser.add_argument(\
+                    '--false-negatives',action='store_const', const=True, default=False, help='Indicates if false positives are printed')
+parser.add_argument(\
+                    '--flank-seqs', type=str,required=True,help='The flanking sequences surrounding the intron')
+parser.add_argument(\
+                    '--region',type=str,required=False,default="",help='The coordinates of the sites to be displayed (e.g. chrX:1-100)')
+
 args = parser.parse_args()
 
 
@@ -117,13 +129,11 @@ def compare(bed_sites,annot_sites,radius):
             if len(annot_sites[k])==0:
                 continue
             exact = search.find_tuple(annot_sites[k],guess)
-            #print "Correct","Guess",guess,"Exact",exact
             if (guess[0],guess[1],guess[2]) == (exact[0],exact[1],exact[2]):
                 correct+=1
                 found_sites.add(exact)
                 missed_sites.discard(exact)
             elif abs(guess[0]-exact[0])<=radius:
-                #print "Nearby","Guess",guess,"Exact",exact
                 if exact not in close_sites:
                     close_sites.add(exact)
                     missed_sites.discard(exact)
@@ -131,7 +141,6 @@ def compare(bed_sites,annot_sites,radius):
                     false_sites.add(guess)
                     incorrect+=1
             else:
-                #print "Incorrect","Guess",guess,"Exact",exact
                 false_sites.add(guess)
                 incorrect+=1
     incorrect_sites = found_sites.intersection(close_sites)
@@ -139,13 +148,62 @@ def compare(bed_sites,annot_sites,radius):
     incorrect+=len(incorrect_sites)
     return found_sites,close_sites,false_sites,missed_sites,total_sites
 
+
+
 #def readOverlappedSite(fname):
 #return set( map( int,open(fname,'r').readline().rstrip().split("\t")))
+
+# """
+# hist_obj is keyed by site and contains a base distribution of A,G,C,T,N,...
+# """
+# def flankingHist(site,flank_seq,hist_obj):
+#     key = (site[0],site[1],site[2]) #Don't want xscript_id for key
+#     for i in range(0,len(flank_seq)):
+
+"""
+Takes all flanking sequences, finds the closest annotated site and bins them
+"""
+def binFlanks(sites,flanks_file):
+    flanks_dict = deflault_dict(list)
+    with open(flanks_file,'r') as fnh:
+        for ln in fnh:
+            ln = ln.rstrip()
+            toks = ln.split("\t")
+            assert len(toks)==8
+            st,end,seqid,flank_left,flank_right = int(toks[2]), int(toks[3]), toks[4], toks[6], toks[7]
+            #Search for nearby sites
+            guess5,guess3 = (st,st+1,seqid,""), (end-1,end,seqid,"")
+            site5 = search.find_tuple(sites,guess5)
+            site3 = search.find_tuple(sites,guess3)
+            #Create key and bin flanking sequences
+            key5 = (site5[0],site5[1],site5[2])
+            key3 = (site3[0],site3[1],site3[2])
+            flanks[key5].append(flank_left)
+            flanks[key3].append(flank_right)
+    return flanks
+
+
+"""
+Prints out false positives and false negatives specified by a region
+as well as flanking sequences
+"""
+def display(fps,fns,flanks_dict,xscripts,annot_sites,region):
+    #First convert xscripts into dictionary
+    xscriptDict = {x.seqid: x for x in xscripts}  #Only available for >=python2.7
+
+    # xscriptDict = dict()
+    # for x in xscripts:
+    #     xscriptDict[x.seqid] = x
+
+
+    return
+
+
 
 if __name__=="__main__":
     #sites = readOverlappedSites(args.site_file)
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
-    sites = pickle.load(open(args.sites_file,'rb')) #probably going to break ... NEED TO TEST!!!
+    sites = pickle.load(open(args.sites_file,'rb'))
     bed_sites = readBedSites(args.bed_file)
     annot_sites = annotated_sites(xscripts)
 
@@ -177,16 +235,11 @@ if __name__=="__main__":
     close_sites.sort(key=lambda tup:tup[1])
     close_sites.sort(key=lambda tup:tup[0])
 
-    # print >>sys.stderr, "Annot Sites ",total_sites
-    # print >>sys.stderr, "Sim Sites   ",sites
-    # print >>sys.stderr, "Found Sites ",found_sites
     print >>sys.stderr, "Close Sites ",close_sites
     print >>sys.stderr, "Missed Sites",missed_sites
     print >>sys.stderr, "False Sites ",false_sites
     print >>sys.stderr, "Intersect   ",intersect_sites
 
-    #bed_site_stats = siteDistribution(bed_sites,fastaH)
-    #annot_site_stats = siteDistribution(annot_sites,fastaH)
     missed = len(missed_sites)
     total = len(total_sites)
     sim_total = len(sites)

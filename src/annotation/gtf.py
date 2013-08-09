@@ -43,7 +43,9 @@ class Annot(object):
         self.score = score
         self.frame = frame
         self.attrs = attrs
-
+        self.seq = ""
+    def setSeq(self,seq):
+        self.seq = seq
     def __len__(self):
         return self.en0-self.st0
 
@@ -71,14 +73,15 @@ class Transcript(object):
     #Pass in a dictionary of fastaseqs
     def buildSeq(self,fastaseqs):
         seqs = []
-        for E in self.exons:
+        for i in range(0,len(self.exons)):
+            E = self.exons[i]
             seqid = E.refid
             start = E.st0
             end = E.en0
             if seqid not in fastaseqs:
                 continue
-
-            seqs.append(fastaseqs[seqid][start:end].upper())
+            self.exons[i].setSeq( fastaseqs[seqid][start+1:end+1].upper() ) #1-based offset NEED TO TEST THIS!!!
+            seqs.append( fastaseqs[seqid][start+1:end+1].upper() )
         self.seq = "".join(seqs)
 
     """Assumption: All splice sites are 2bp long
@@ -91,7 +94,14 @@ class Transcript(object):
             sites.append( (site5, site5+1, self.seqid, self.xscript_id) )
             sites.append( (site3-2, site3-1, self.seqid, self.xscript_id) )
         return sites
-
+    """
+    Given a base position, find the exon that it overlaps, return -1 if nonexistant
+    """
+    def getExon(self,bpos):
+        for i in range(0,len(self.exons)):
+            if bpos>=self.exons[i].st0 and bpos<=self.exons[i].en0:
+                return i
+        return -1
     """
     Get all splice sites in terms of transcript sequence
     Note that this only returns the break point boundaries
@@ -155,12 +165,14 @@ def parseFASTA(fns):
                 if ln[0] == '>':
                     if seqid!="":
                         seqs[seqid] = ''.join(lns)
+
                     seqid = ln.split(" ")[0][1:].rstrip()
                     lns = []
                     numseqs+=1
                     continue
                 else:
                     lns.append(ln.rstrip())
+        seqs[seqid] = ''.join(lns) 
     return seqs
 
 

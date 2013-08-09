@@ -68,10 +68,8 @@ parser.add_argument(\
     '--chrsizes', type=str, required=True,
     help='The sizes of each chromosome')
 
-
 gtf.addArgs(parser)
 args = parser.parse_args()
-
 
 class WeightedRandomGenerator(object):
 
@@ -234,7 +232,6 @@ def replicateize(seqs1, seqs2, nreps):
         i = gen2.next()
         seqs2rep[i].append(seq)
     return seqs1rep, seqs2rep
-
 
 #Just prints out one file
 def writeReads(seqs1rep,seqs2rep,fnPre,manifestFn):
