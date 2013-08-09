@@ -237,10 +237,11 @@ if __name__=="__main__":
     close_sites.sort(key=lambda tup:tup[0])
 
     #print >>sys.stderr, "Annotated   ",annot_sites
-    print >>sys.stderr, "Close Sites ",close_sites
-    print >>sys.stderr, "Missed Sites",missed_sites
-    print >>sys.stderr, "False Sites ",false_sites
-    print >>sys.stderr, "Intersect   ",intersect_sites
+    print >>sys.stderr, "Total annot sites",total_sites
+    print >>sys.stderr, "Close Sites      ",close_sites
+    print >>sys.stderr, "Missed Sites     ",missed_sites
+    print >>sys.stderr, "False Sites      ",false_sites
+    print >>sys.stderr, "Intersect        ",intersect_sites
 
     missed = len(missed_sites)
     total = len(total_sites)
@@ -249,13 +250,13 @@ if __name__=="__main__":
     nearby = len(close_sites)
     incorrect = len(false_sites)
 
-    print "Total annot sites   \t",total_sites
+    #print "Bed site stats      \t",bed_site_stats
+    #print "Annotated site stats\t",annot_site_stats
+    false_sites = false_sites+close_sites
+    displayIncorrect(false_sites,missed_sites,args.flank_seqs,xscripts,annot_sites,args.region,fastaH)
+
     print "Num sim sites       \t",sim_total
     print "Correct             \t",correct
     print "Nearby              \t",nearby
     print "False positives     \t",incorrect
     print "False negatives     \t",missed
-    #print "Bed site stats      \t",bed_site_stats
-    #print "Annotated site stats\t",annot_site_stats
-    false_sites = false_sites+close_sites
-    displayIncorrect(false_sites,missed_sites,args.flank_seqs,xscripts,annot_sites,args.region,fastaH)

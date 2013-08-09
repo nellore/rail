@@ -30,7 +30,14 @@ import fasta
 import window
 
 #Formats the sequence into a more readable format
-#def formatSeq():
+def format_seq(S):
+    return "".join(list(S))
+#Formats lists into a more readable format
+def format_list(L):
+    return " ".join(["%.1f" % i for i in L])
+    #Also discretizes the floats into ints
+    #return "".join(["%d" % int((i+5)*10) for i in L])
+
 
 def printLeftSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
     """
@@ -49,21 +56,28 @@ def printLeftSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
     exon_seq = exon.seq[display_exon_st:display_exon_end]
     #print >> sys.stderr,"Whole exon",exon.seq
     eLen,fLen = len(exon_seq), len(flank_seq)
+
     #Stay in reference coordinates for intron
     remaining = win_length - eLen
     display_intron_st = display_st+eLen+1
     display_intron_end= display_intron_st + remaining
     intron_seq = fnh.fetch_sequence(seqid,display_intron_st+1,display_intron_end+1)
+    site_seq = intron_seq[0:2]
+    swin_radius = win_radius/4
+    #Get sliding window scores
+    #_, norm_score, win_score, _ = window.slide_left(seqid, [flank_end], site_seq, fnh, swin_radius)
 
     flank_st = (flank_end-fLen) - display_st - 1  #starting position of flanking sequence
     site_st = site[0] - display_st - 1
 
-    print "Region: ",display_st,'-',display_end
-    print "Site    ",site
-    print "Flanks  "," "*flank_st + flank_seq
-    print "Exon    ",exon_seq
-    print "Intron  "," "*eLen + intron_seq
-    print "Site    "," "*site_st+"**\n"
+    print "Region   ","%s:%d-%d"%(site[2],display_st,display_end)
+    print "Site pos ","%s:%d-%d"%(site[2],site[0],site[1])
+    print "Flanks   ",format_seq(" "*flank_st + flank_seq)
+    print "Exon     ",format_seq(exon_seq)
+    print "Intron   ",format_seq(" "*eLen + intron_seq)
+    print "Site     ",format_seq(" "*site_st+"**\n")
+    #print "Normals  ",format_seq(" "*(site_st-swin_radius)+format_list(norm_score))
+    #print "Slides   ",format_seq(" "*(site_st-swin_radius)+format_list(win_score))
 
 def printRightSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
     """
@@ -91,27 +105,28 @@ def printRightSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
 
     print "Region: ",display_st,'-',display_end
     print "Site    ",site
-    print "Flanks  "," "*flank_st + flank_seq
-    print "Exon    "," "*iLen +exon_seq
-    print "Intron  ",intron_seq
-    print "Site    "," "*site_st+"**"
+    print "Flanks  ",format_seq(" "*flank_st + flank_seq)
+    print "Exon    ",format_seq(" "*iLen +exon_seq)
+    print "Intron  ",format_seq(intron_seq)
+    print "Site    ",format_seq(" "*site_st+"**")
 
 """
 Prints the flanking sequences, the annotated region and the site
 """
 def printSeqs(flanks,xscript,site,fnh):
     #Display everything around the splice site by a 50 bp radius
-    win_radius = 50
+    win_radius = 30
     pos1,pos2 = site[0],site[1]  #positions of the estimated splice site
     #Get indexes of displayed exons.  Note that one of them should be -1
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
     exon_li, exon_ri = xscript.getExon(display_st), xscript.getExon(display_end)
     #print >> sys.stderr,"xscript seq",xscript.seq
     #print >> sys.stderr,"exon 1",xscript.exons[0].seq
-
+    
     #flank_seq = flanks[0]
 
     for flank in flanks:
+        
         #flank_seq,flank_st = flank  #Note
         if exon_li!=-1:
             exon = xscript.exons[exon_li]
@@ -137,12 +152,13 @@ def falsePositives(fp,flanks,xscript,annot_sites,fnh):
     #xscript_id = close[3]
     #x = xscript[xscript_id]
     key = (close[0],close[1],close[2])
+    print key
     flank_seqs = flanks[key]
     printSeqs(flank_seqs,xscript,fp,fnh)
 
 #TODO: Add false negative printing
 def incorrect(fps,fns,flanks,xscripts,annot_sites,region,fnh):
-    print fps
+    #print fps
     if region!="":
         seqid,st,end = pattern.findall(region)[0]
         for s in fps:
@@ -214,6 +230,8 @@ class TestDisplayFunctions(unittest.TestCase):
         fnh = fasta.fasta(self.fasta)
         printSeqs(flanks,xscripts[0],site,fnh)
 
+
+    ###Note:  Need to test for the case where exon.st0 > display window.  aka, exon is way too short
 
     def tearDown(self):
         os.remove(self.fasta)

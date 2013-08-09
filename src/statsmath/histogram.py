@@ -43,7 +43,7 @@ Sites closer to the ends get higher scores
 def exp_score(endtype,N):
     if endtype=="5":
         hist = [.5**n for n in range(0,N)]
-    else: 
+    else:
         hist = [.5**(N-n+1) for n in range(0,N)]
     return hist
 
@@ -53,7 +53,7 @@ Assigns scores based off of a harmonic series (aka. logarithmic score)
 def harmonic_score(endtype,N):
     if endtype=="5":
         hist = [1.0/(n+1) for n in range(0,N)]
-    else: 
+    else:
         hist = [1.0/(N-n) for n in range(0,N)]
     return hist
 """
