@@ -47,14 +47,12 @@ parser.add_argument(\
     '--refseq', type=str, required=True,
     help='The reference sequence')
 parser.add_argument(\
-                    '--false-positives',action='store_const', const=True, default=False, help='Indicates if false positives are printed')
-parser.add_argument(\
-                    '--false-negatives',action='store_const', const=True, default=False, help='Indicates if false positives are printed')
+                    '--region',type=str,required=False,default="",help='The coordinates of the sites to be displayed (e.g. chrX:1-100)')
 parser.add_argument(\
                     '--flank-seqs', type=str,required=True,help='The flanking sequences surrounding the intron')
-parser.add_argument(\
-                    '--region',type=str,required=False,default="",help='The coordinates of the sites to be displayed (e.g. chrX:1-100)')
 
+display.addArgs(parser)
+                    
 args = parser.parse_args()
 
 
@@ -109,6 +107,7 @@ def readBedSites(bedfile):
 def unique_sites(sites):
     total_sites = set()
     for k,v in sites.iteritems():
+        v = [(x[0],x[1],x[2],'') for x in v]
         total_sites = total_sites.union( set(v) )
     return set(total_sites)
 
@@ -121,6 +120,7 @@ def compare(bed_sites,annot_sites,radius):
     incorrect = 0
     total_sites = unique_sites(annot_sites)
     missed_sites = unique_sites(annot_sites)
+
     found_sites = set()
     close_sites = set()
     false_sites = set()
@@ -130,23 +130,22 @@ def compare(bed_sites,annot_sites,radius):
             if len(annot_sites[k])==0:
                 continue
             exact = search.find_tuple(annot_sites[k],guess)
+            # if guess[0]==25617506 and guess[1] == 25617507 and guess[2] == 'chr3R':
+            #     print "Guess",guess,"Exact",exact
+            #     print "Guess==Exact",((guess[0],guess[1],guess[2]) == (exact[0],exact[1],exact[2]))
             if (guess[0],guess[1],guess[2]) == (exact[0],exact[1],exact[2]):
-                correct+=1
                 found_sites.add(exact)
-                missed_sites.discard(exact)
+                missed_sites.discard(guess)
+
             elif abs(guess[0]-exact[0])<=radius:
                 #if exact not in close_sites:
                 close_sites.add(guess)
-                missed_sites.discard(exact)
+                key = (exact[0],exact[1],exact[2],'')
+                missed_sites.discard(key)
                 #else:
                 #    false_sites.add(guess)
-                #incorrect+=1
             else:
                 false_sites.add(guess)
-                incorrect+=1
-    incorrect_sites = found_sites.intersection(close_sites)
-    nearby = len(close_sites.difference(found_sites))
-    incorrect+=len(incorrect_sites)
     return found_sites,close_sites,false_sites,missed_sites,total_sites
 
 
@@ -198,7 +197,7 @@ def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,region,fnh):
     xscriptDict = dict()
     for x in xscripts:
         xscriptDict[x.xscript_id] = x
-    display.incorrect(fps,fns,flanksDict,xscriptDict,annot_sites,region,fnh)
+    display.incorrect(args,fps,fns,flanksDict,xscriptDict,annot_sites,region,fnh)
 
 if __name__=="__main__":
     #sites = readOverlappedSites(args.site_file)
@@ -235,12 +234,6 @@ if __name__=="__main__":
     close_sites.sort(key=lambda tup:tup[1])
     close_sites.sort(key=lambda tup:tup[0])
 
-    #print >>sys.stderr, "Annotated   ",annot_sites
-    # print >>sys.stderr, "Total annot sites",total_sites
-    # print >>sys.stderr, "Close Sites      ",close_sites
-    # print >>sys.stderr, "Missed Sites     ",missed_sites
-    # print >>sys.stderr, "False Sites      ",false_sites
-    # print >>sys.stderr, "Intersect        ",intersect_sites
 
     missed = len(missed_sites)
     total = len(total_sites)
@@ -252,7 +245,16 @@ if __name__=="__main__":
     #print "Bed site stats      \t",bed_site_stats
     #print "Annotated site stats\t",annot_site_stats
     false_sites = false_sites+close_sites
+
     displayIncorrect(false_sites,missed_sites,args.flank_seqs,xscripts,annot_sites,args.region,fastaH)
+
+    #print >>sys.stderr, "Annotated   ",annot_sites
+    #print >>sys.stderr, "Total annot sites",total_sites
+    # print >>sys.stderr, "Close Sites      ",close_sites
+    # print >>sys.stderr, "Missed Sites     ",missed_sites
+    # print >>sys.stderr, "False Sites      ",false_sites
+    # print >>sys.stderr, "Intersect        ",intersect_sites
+    #print "Bed sites on chr3R",bed_sites['chr3R']
 
     print "Num sim sites       \t",sim_total
     print "Correct             \t",correct
