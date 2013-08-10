@@ -135,6 +135,38 @@ def printRightSeq(seqid,flank,exon,site,annot_site,win_radius,display_st,display
     flank_st = (flank_st) -  display_st
     print "Flanks  ",format_seq(" "*flank_st + flank_seq),"\n"
 
+def printShortExon(display_st,display_end,xscript,site,fnh):
+    """
+    display_window                 (----------------------)
+    exon                                 |---------|
+    intron        <----------------------|         |-----------------...--->
+    ref_start     <--------------------------------------------------...--->
+    """
+    short_exon=""
+    #First find the exon
+    for exon in xscript.exons:
+        if display_st<exon.st0 and display_end>exon.en0:
+                short_exon = exon
+    assert short_exon!=""
+    seqid = xscript.seqid
+    left_in_start, left_in_end = display_st, short_exon.st0 - 1    #Left intron
+    right_in_start, right_in_end = short_exon.en0, display_end     #Right intron
+    display_exon_st = short_exon.st0-display_st
+    display_exon_end = short_exon.en0-display_st
+    left_in_seq = fnh.fetch_sequence(seqid,left_in_start+1,left_in_end+1)
+    right_in_seq = fnh.fetch_sequence(seqid,right_in_start+1,right_in_end+1)
+    exon_seq = exon.seq[display_exon_st:display_exon_end]
+    i1Len,eLen,i2Len = len(left_in_seq), len(exon_seq), len(right_in_seq)
+    display_i1_st, display_i2_st = 0, right_in_start-display_st
+    eLen = len(exon_seq)
+    site_st  = site[0] - display_st
+    print "Region   ","%s:%d-%d"%(site[2],display_st,display_end)
+    print "Site pos ","%s:%d-%d"%(site[2],site[0],site[1])
+    print "Annotated","%s:%d-%d"%(site[2],site[0],site[1])
+    print "Exon    ",format_seq(" "*display_exon_st +exon_seq)
+    print "Intron  ",format_seq(left_in_seq+" "*eLen+right_in_seq)
+    print "Site    ",format_seq(" "*site_st+"**")
+    return
 
 
 """
@@ -157,7 +189,7 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,fnh):
     xscript = xscriptDict[xscript_id]
 
     #Display everything around the splice site by a 50 bp radius
-    win_radius = 30
+    win_radius = 50
     pos1,pos2 = site[0],site[1]  #positions of the estimated splice site
     #Get indexes of displayed exons.  Note that one of them should be -1
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
@@ -172,6 +204,7 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,fnh):
             exon = xscript.exons[exon_ri]
             printRightSeq(xscript.seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh)
 
+
 """
 Prints the flanking sequences, the annotated region and the site
 """
@@ -185,13 +218,17 @@ def falseNegativeDisplay(flankDict,xscriptDict,site,fnh):
         flanks = flankDict[key]
     xscript = xscriptDict[xscriptID]
 
-
     #Display everything around the splice site by a 50 bp radius
-    win_radius = 30
+    win_radius = 50
     pos1,pos2 = site[0],site[1]  #positions of the estimated splice site
-    #Get indexes of displayed exons.  Note that one of them should be -1
+    #Get indexes of displayed exons.  Note that one of them should be -1 unless one of the exons are really short
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
     exon_li, exon_ri = xscript.getExon(display_st), xscript.getExon(display_end)
+    if exon_li==-1 and exon_ri==-1:  #most likely a really short exon
+        printShortExon(display_st,display_end,xscript,site,fnh)
+        return
+
+    print "Exon indexs",exon_li,exon_ri
     if len(flanks)==0:
         if exon_li!=-1:
             exon = xscript.exons[exon_li]
@@ -225,6 +262,7 @@ def incorrect(fps,fns,flankDict,xscriptDict,annotDict,region,fnh):
         for fp in fps:
             falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,fnh)
         for fn in fns:
+            print "False negative",fn
             falseNegativeDisplay(flankDict,xscriptDict,fn,fnh)
 
 
@@ -319,6 +357,16 @@ class TestDisplayFunctions(unittest.TestCase):
         xscriptDict = {x.xscript_id: x for x in xscripts}
         falseNegativeDisplay(flankDict,xscriptDict,site,fnh)
         print
+    def testShortExon(self):
+        site = (500,501,'chr2R',"NM_001042999")
+        #exon bounds (503,648)
+        display_st,display_end = 495,650
+        annots = gtf.parseGTF([self.gtf])
+        fastadb = gtf.parseFASTA([self.fasta])
+        xscripts = gtf.assembleTranscripts(annots,fastadb)
+        fnh = fasta.fasta(self.fasta)
+        xscript = xscripts[0]
+        printShortExon(display_st,display_end,xscript,site,fnh)
 
     ###Note:  Need to test for the case where exon.st0 > display window.  aka, exon is way too short
 
