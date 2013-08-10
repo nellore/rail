@@ -200,8 +200,6 @@ def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,region,fnh):
         xscriptDict[x.xscript_id] = x
     display.incorrect(fps,fns,flanksDict,xscriptDict,annot_sites,region,fnh)
 
-
-
 if __name__=="__main__":
     #sites = readOverlappedSites(args.site_file)
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
@@ -254,7 +252,6 @@ if __name__=="__main__":
     #print "Bed site stats      \t",bed_site_stats
     #print "Annotated site stats\t",annot_site_stats
     false_sites = false_sites+close_sites
-    print "False sites",false_sites
     displayIncorrect(false_sites,missed_sites,args.flank_seqs,xscripts,annot_sites,args.region,fastaH)
 
     print "Num sim sites       \t",sim_total

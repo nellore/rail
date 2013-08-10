@@ -194,7 +194,6 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,fnh):
     #Get indexes of displayed exons.  Note that one of them should be -1
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
     exon_li, exon_ri = xscript.getExon(display_st), xscript.getExon(display_end)
-    print "flanks",flanks
     for flank in flanks:
         #flank_seq,flank_st = flank  #Note
         if exon_li!=-1:
@@ -228,7 +227,6 @@ def falseNegativeDisplay(flankDict,xscriptDict,site,fnh):
         printShortExon(display_st,display_end,xscript,site,fnh)
         return
 
-    print "Exon indexs",exon_li,exon_ri
     if len(flanks)==0:
         if exon_li!=-1:
             exon = xscript.exons[exon_li]
@@ -254,15 +252,18 @@ def incorrect(fps,fns,flankDict,xscriptDict,annotDict,region,fnh):
         seqid,st,end = pattern.findall(region)[0]
         for fp in fps:
             if sseqid==seqid and spos1>=st and spos2<=end:
+                print "False positive"
                 falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,fnh)
         for fn in fns:
             if sseqid==seqid and spos1>=st and spos2<=end:
+                print "False negative"
                 falseNegativeDisplay(flankDict,xscriptDict,fn,fnh)
     else:
         for fp in fps:
+            print "False positive"
             falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,fnh)
         for fn in fns:
-            print "False negative",fn
+            print "False negative"
             falseNegativeDisplay(flankDict,xscriptDict,fn,fnh)
 
 
