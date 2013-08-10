@@ -255,7 +255,10 @@ class TestDisplayFunctions(unittest.TestCase):
         self.gtf   = "test.gtf"
         createTestFasta(self.fasta,"chr2R",refseq)
         createTestGTF(self.gtf,annots)
-
+    def tearDown(self):
+        os.remove(self.fasta)
+        os.remove(self.faidx)
+        os.remove(self.gtf)
     def test1(self):
         annots = parseGTF([self.gtf])
         fastadb = parseFASTA([self.fasta])
