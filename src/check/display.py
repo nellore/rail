@@ -39,7 +39,7 @@ def format_list(L):
     #return "".join(["%d" % int((i+5)*10) for i in L])
 
 
-def printLeftSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
+def printLeftSeq(seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh):
     """
     display_window                 (----------------------)
     flank                              |------|
@@ -51,8 +51,8 @@ def printLeftSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
     flank_seq,flank_end = flank  #Note
     win_length = 2*win_radius
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
-    display_exon_st   = display_st - exon.st0
-    display_exon_end  = exon.en0 - exon.st0 -1
+    display_exon_st   = display_st - exon.st0+1
+    display_exon_end  = exon.en0 - exon.st0 
     exon_seq = exon.seq[display_exon_st:display_exon_end]
     #print >> sys.stderr,"Whole exon",exon.seq
     eLen,fLen = len(exon_seq), len(flank_seq)
@@ -72,6 +72,7 @@ def printLeftSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
 
     print "Region   ","%s:%d-%d"%(site[2],display_st,display_end)
     print "Site pos ","%s:%d-%d"%(site[2],site[0],site[1])
+    print "Annotated","%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1])
     print "Flanks   ",format_seq(" "*flank_st + flank_seq)
     print "Exon     ",format_seq(exon_seq)
     print "Intron   ",format_seq(" "*eLen + intron_seq)
@@ -79,7 +80,7 @@ def printLeftSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
     #print "Normals  ",format_seq(" "*(site_st-swin_radius)+format_list(norm_score))
     #print "Slides   ",format_seq(" "*(site_st-swin_radius)+format_list(win_score))
 
-def printRightSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
+def printRightSeq(seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh):
     """
     display_window                 (----------------------)
     flank                                     |------|
@@ -99,12 +100,14 @@ def printRightSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
     display_exon_st  = 0
     display_exon_end = remaining
     exon_seq = exon.seq[display_exon_st:display_exon_end]
-    #Before, flank_st actually pointed to the end of the splice_site
-    flank_st = (flank_st) -  display_st
-    site_st  = site[0] - display_st
+    
+    #Place flank_st and site_st in display coordinate frame
+    flank_st = (flank_st) -  display_st - 1
+    site_st  = site[0] - display_st - 1
 
-    print "Region: ",display_st,'-',display_end
-    print "Site    ",site
+    print "Region   ","%s:%d-%d"%(site[2],display_st,display_end)
+    print "Site pos ","%s:%d-%d"%(site[2],site[0],site[1])
+    print "Annotated","%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1])
     print "Flanks  ",format_seq(" "*flank_st + flank_seq)
     print "Exon    ",format_seq(" "*iLen +exon_seq)
     print "Intron  ",format_seq(intron_seq)
@@ -113,27 +116,30 @@ def printRightSeq(seqid,flank,exon,site,win_radius,display_st,display_end,fnh):
 """
 Prints the flanking sequences, the annotated region and the site
 """
-def printSeqs(flanks,xscript,site,fnh):
+def printSeqs(flanks,xscript,site,annot_site,fnh):
     #Display everything around the splice site by a 50 bp radius
     win_radius = 30
     pos1,pos2 = site[0],site[1]  #positions of the estimated splice site
     #Get indexes of displayed exons.  Note that one of them should be -1
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
     exon_li, exon_ri = xscript.getExon(display_st), xscript.getExon(display_end)
+    #print "Display range",display_st,display_end
+    #print "Transcript",xscript
+
     #print >> sys.stderr,"xscript seq",xscript.seq
     #print >> sys.stderr,"exon 1",xscript.exons[0].seq
-    
-    #flank_seq = flanks[0]
 
+    #print "Exon indexes",exon_li,exon_ri
+
+    #flank_seq = flanks[0]
     for flank in flanks:
-        
         #flank_seq,flank_st = flank  #Note
         if exon_li!=-1:
             exon = xscript.exons[exon_li]
-            printLeftSeq(xscript.seqid,flank,exon,site,win_radius,display_st,display_end,fnh)
+            printLeftSeq(xscript.seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh)
         if exon_ri!=-1:
             exon = xscript.exons[exon_ri]
-            printRightSeq(xscript.seqid,flank,exon,site,win_radius,display_st,display_end,fnh)
+            printRightSeq(xscript.seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh)
 
 
 pattern = re.compile("(\S+):(\d+)-(\d+)") #parses chromosome name and positions
@@ -145,16 +151,19 @@ For each false positive, display
 2) Annotations
 3) Sites
 """
-
-def falsePositives(fp,flanks,xscript,annot_sites,fnh):
+def falsePositives(fp,flanks,xscripts,annot_sites,fnh):
     _,_,seqid,_ = fp
     close = search.find_tuple(annot_sites[seqid],fp)
     #xscript_id = close[3]
     #x = xscript[xscript_id]
     key = (close[0],close[1],close[2])
-    print key
     flank_seqs = flanks[key]
-    printSeqs(flank_seqs,xscript,fp,fnh)
+    xscript_id = close[3]
+    xscript = xscripts[xscript_id]
+    print xscript
+    print "Exact",close,"False site",fp,'\n'
+    print "Flanks",flank_seqs,'\n'
+    printSeqs(flank_seqs,xscript,fp,close,fnh)
 
 #TODO: Add false negative printing
 def incorrect(fps,fns,flanks,xscripts,annot_sites,region,fnh):
@@ -162,13 +171,11 @@ def incorrect(fps,fns,flanks,xscripts,annot_sites,region,fnh):
     if region!="":
         seqid,st,end = pattern.findall(region)[0]
         for s in fps:
-            spos1,spos2,sseqid,_ = s
             if sseqid==seqid and spos1>=st and spos2<=end:
                 falsePositives(s,flanks,xscripts,annot_sites)
     else:
         for s in fps:
-            _,_,sseqid,_ = s
-            falsePositives(s,flanks,xscripts[sseqid],annot_sites,fnh)
+            falsePositives(s,flanks,xscripts,annot_sites,fnh)
 
 
 _revcomp_trans = string.maketrans("ACGT", "TGCA")
@@ -217,18 +224,18 @@ class TestDisplayFunctions(unittest.TestCase):
         # print >> sys.stderr,"Annotations   \n",annots[0],'\n',annots[1]
         # print >> sys.stderr,"Transcripts",str(xscripts)
 
-        printSeqs(flanks,xscripts[0],site,fnh)
+        printSeqs(flanks,xscripts[0],site,site,fnh)
 
 
     def testPrint2(self):
-        site = (501,502,'chr2R',"NM_001042999")
+        site = (502,503,'chr2R',"NM_001042999")
 
         flanks = [("TAGAAGATTC",503),("TAGAAGATTC",503)]
         annots = gtf.parseGTF([self.gtf])
         fastadb = gtf.parseFASTA([self.fasta])
         xscripts = gtf.assembleTranscripts(annots,fastadb)
         fnh = fasta.fasta(self.fasta)
-        printSeqs(flanks,xscripts[0],site,fnh)
+        printSeqs(flanks,xscripts[0],site,site,fnh)
 
 
     ###Note:  Need to test for the case where exon.st0 > display window.  aka, exon is way too short

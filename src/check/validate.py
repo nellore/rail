@@ -130,7 +130,6 @@ def compare(bed_sites,annot_sites,radius):
             if len(annot_sites[k])==0:
                 continue
             exact = search.find_tuple(annot_sites[k],guess)
-            print >> sys.stderr,"Exact",exact,"Guess",guess
             if (guess[0],guess[1],guess[2]) == (exact[0],exact[1],exact[2]):
                 correct+=1
                 found_sites.add(exact)
@@ -180,6 +179,8 @@ def binFlanks(annot_sites,flanks_file):
             #Create key and bin flanking sequences
             key5 = (site5[0],site5[1],site5[2])
             key3 = (site3[0],site3[1],site3[2])
+            #print "Left Site: Exact",key5,"Guess",st
+            #print "Right Site: Exact",key3,"Guess",end+1
             flanks[key5].append( (flank_left,st)  )
             flanks[key3].append( (flank_right,end+1) )
     return flanks
@@ -196,7 +197,7 @@ def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,region,fnh):
     #xscriptDict = {x.seqid: x for x in xscripts}  #Only available for >=python2.7
     xscriptDict = dict()
     for x in xscripts:
-        xscriptDict[x.seqid] = x
+        xscriptDict[x.xscript_id] = x
     display.incorrect(fps,fns,flanksDict,xscriptDict,annot_sites,region,fnh)
 
 
@@ -237,11 +238,11 @@ if __name__=="__main__":
     close_sites.sort(key=lambda tup:tup[0])
 
     #print >>sys.stderr, "Annotated   ",annot_sites
-    print >>sys.stderr, "Total annot sites",total_sites
-    print >>sys.stderr, "Close Sites      ",close_sites
-    print >>sys.stderr, "Missed Sites     ",missed_sites
-    print >>sys.stderr, "False Sites      ",false_sites
-    print >>sys.stderr, "Intersect        ",intersect_sites
+    # print >>sys.stderr, "Total annot sites",total_sites
+    # print >>sys.stderr, "Close Sites      ",close_sites
+    # print >>sys.stderr, "Missed Sites     ",missed_sites
+    # print >>sys.stderr, "False Sites      ",false_sites
+    # print >>sys.stderr, "Intersect        ",intersect_sites
 
     missed = len(missed_sites)
     total = len(total_sites)
@@ -253,6 +254,7 @@ if __name__=="__main__":
     #print "Bed site stats      \t",bed_site_stats
     #print "Annotated site stats\t",annot_site_stats
     false_sites = false_sites+close_sites
+    print "False sites",false_sites
     displayIncorrect(false_sites,missed_sites,args.flank_seqs,xscripts,annot_sites,args.region,fastaH)
 
     print "Num sim sites       \t",sim_total

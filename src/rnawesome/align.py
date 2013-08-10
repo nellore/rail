@@ -221,7 +221,7 @@ def readableFormat(s):
     return " ".join([s[i:i+10] for i in range(0,len(s),10)])
 
 #Print all listed introns to stdout and the flanking sequences
-def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
+def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,outhandle):
     global nout
     offset = args.splice_overlap
     fw_char = "+" if fw else "-"
@@ -257,7 +257,7 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw):
          len(left_flank) == len(left_overlap)):
         for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
             #print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
-            print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap)
+            print >> outhandle,"intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap)
 
             nout += 1
     # else: #Test case
@@ -272,7 +272,7 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
     #print >> sys.stderr,left_st,left_end
     #Print directly to stdout if flanking sequences overlap too much
     if left_end<=left_st or right_end<=right_st:
-        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,sys.stdout)
     else:
         ref_left = fnh.fetch_sequence(k,left_st, left_end).upper()
         ref_right = fnh.fetch_sequence(k,right_st, right_end).upper()
@@ -288,11 +288,27 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
         left_diff,right_diff = dj, len(unmapped)-dj
         left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
 
-        if score>0:#If crappy alignment, disregard corrections
+        #if k == "chrX" and (in_start>17993223 and in_start<17993283) or (in_end>17993223 and in_end<17993283):
+            # print >> sys.stderr,"left diff",left_diff
+            # print >> sys.stderr,"left in diff",left_in_diff
+            # print >> sys.stderr,"Intron",in_start,in_end
+            # print >> sys.stderr,"Read",region_st,region_end
+            # printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,sys.stderr)  #Before
+
+        if score>0:   #If crappy alignment, disregard corrections
             tmp_in_st,tmp_in_end = in_start,in_end
             tmp_reg_st,tmp_reg_end = region_st,region_end
-            region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
+
+            #region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
+            region_st,region_end = region_st-left_in_diff,region_end+right_in_diff
             in_start,in_end = in_start+left_in_diff,in_end-right_in_diff
+
+            #if k == "chrX" and (in_start>17993223 and in_start<17993283) or (in_end>17993223 and in_end<17993283):
+            # print >> sys.stderr,"left diff",left_diff
+            # print >> sys.stderr,"left in diff",left_in_diff
+            # print >> sys.stderr,"Intron",in_start,in_end
+            # print >> sys.stderr,"Read",region_st,region_end
+            # printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,sys.stderr) #After
 
         # if(k == 'chr2L' and in_end>15900360 and in_end<15900380):
         #     print >> sys.stderr,"Correcting ..."
@@ -313,7 +329,7 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
             # print >> sys.stderr,"rightDP  \n",rightDP
             # print >> sys.stderr,"total    \n",total
 
-        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,sys.stdout)
 
 
 """
@@ -662,7 +678,7 @@ def test_short_alignment1():
     #unmapped_st,unmapped_end = region_st-args.readletLen,region_end+args.readletLen
     offset = args.splice_overlap
     unmapped_st,unmapped_end = region_st-offset,region_end+offset
-    printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+    printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,sys.stdout)
     handleIntron(refid,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,"testid")
     sys.stdout.close()
     test_out = open("test.out",'r')
@@ -687,7 +703,7 @@ def test_short_alignment2():
     in_start,in_end=6,17
     offset = args.splice_overlap
     unmapped_st,unmapped_end = region_st-offset,region_end+offset
-    printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+    printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,sys.stdout)
     handleIntron(refid,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,"testid")
     sys.stdout.close()
     test_out = open("test.out",'r')
@@ -713,7 +729,7 @@ def test_short_alignment3():
     in_start,in_end=7,16
     offset = args.splice_overlap
     unmapped_st,unmapped_end = region_st-offset,region_end+offset
-    printIntrons(refid,rdseq,region_st-1,region_end+1,in_start-1,in_end+1,rdnm,fw)
+    printIntrons(refid,rdseq,region_st-1,region_end+1,in_start-1,in_end+1,rdnm,fw,sys.stdout)
     handleIntron(refid,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,"testid")
     sys.stdout.close()
     test_out = open("test.out",'r')
@@ -746,7 +762,7 @@ def test_short_alignment4():
     in_start,in_end=31,134
     offset = args.splice_overlap
     unmapped_st,unmapped_end = region_st-offset,region_end+offset
-    printIntrons(refid,rdseq,region_st,region_end,31,133,rdnm,fw)
+    printIntrons(refid,rdseq,region_st,region_end,31,133,rdnm,fw,sys.stdout)
     handleIntron(refid,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,"testid")
     sys.stdout.close()
     test_out = open("test.out",'r')
