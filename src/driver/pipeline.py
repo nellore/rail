@@ -3,6 +3,14 @@ pipeline.py
 
 Classes and routines for describing steps in the pipeline and how they can be
 implemented as MapReduce steps.
+
+A few pieces of vocabulary:
+- The overall DAG is a "flow"
+- Each straight-line piece of the DAG is a "pipeline"
+- Each Map-Aggregate-Reduce is a "step"
+
+This module helps to compose flows and to construct the appropriate
+shell/Hadoop/EMR scripts for running the flow. 
 """
 
 import hadoop
@@ -55,14 +63,16 @@ class Step(object):
     """ Encapsulates a single step of the pipeline, i.e. a single
         MapReduce/Hadoop job """
     
-    def __init__(self, name, inp, output, inputFormat, aggr, mapper, reducer):
+    def __init__(self, inp, output, name="(no name)", inputFormat=None, outputFormat=None, aggr=None, mapper="cat", reducer=None, libjars=[]):
         self.name = name
         self.input = inp
         self.output = output
         self.inputFormat = inputFormat
+        self.outputFormat = outputFormat
         self.aggr = aggr
         self.mapper = mapper
         self.reducer = reducer
+        self.libjars = libjars
     
     def toHadoopCmd(self):
         raise RuntimeError("toHadoopCmd not yet implemented")
@@ -80,6 +90,9 @@ class Step(object):
         if self.aggr is not None:
             begArgs, endArgs = self.aggr.toHadoopArgs(config)
         
+        for libjar in self.libjars:
+            begArgs.append('"-libjars", "%s",' % libjar)
+        
         endArgs.append('"-input", "%s",' % self.input)
         endArgs.append('"-output", "%s",' % self.output)
         endArgs.append('"-mapper", "%s",' % self.mapper)
@@ -91,6 +104,8 @@ class Step(object):
         
         if self.inputFormat is not None:
             endArgs.append('"-inputformat", "%s",' % self.inputFormat)
+        if self.outputFormat is not None:
+            endArgs.append('"-outputformat", "%s",' % self.outputFormat)
         
         for a in begArgs + endArgs: lines.append('      ' + a)
         

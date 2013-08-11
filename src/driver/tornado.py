@@ -429,19 +429,36 @@ stepClasses = {\
     'hmm'            : tornado_pipeline.HmmStep,
     'aggr_path'      : tornado_pipeline.AggrPathStep }
 
+# The following works for straight-line pipelines, but we have a tree, where
+# the 'align' step feeds both the 'merge' and the 'intron' steps
 inDirs, outDirs, steps = [], [], []
+alignOut = None # part of my hacky way of handling the branch after align
 for prv, cur, nxt in [ allSteps[i:i+3] for i in xrange(0, len(allSteps)-2) ]:
     assert cur in stepClasses
     if prv is None:
-        if cur == "preprocess": inDirs.append(manifest)
+        # Hacky handling of the branch after align
+        if cur == 'merge': inDirs.append(url.Url(inp.toUrl() + "/exon"))
+        elif cur == 'intron': inDirs.append(url.Url(inp.toUrl() + "/intron"))
+        elif cur == "preprocess": inDirs.append(manifest)
         else: inDirs.append(inp)
-    else: inDirs.append(outDirs[-1])
+    else:
+        # Hacky handling of the branch after align
+        if cur == 'merge':
+            assert alignOut is not None
+            inDirs.append(url.Url(alignOut.toUrl() + "/exon"))
+        elif cur == 'intron':
+            assert alignOut is not None
+            inDirs.append(url.Url(alignOut.toUrl() + "/intron"))
+        else:
+            inDirs.append(outDirs[-1])
     if nxt is None: outDirs.append(url.Url(out.toUrl() + "/final"))
     else:
         if args.preprocess_output and cur == "preprocess":
-            outDirs.append(url.Url(args.preprocess_output))
+            outDirs.append(url.Url(args.preprocess_output + "/"))
         else:
-            outDirs.append(url.Url(intermediate.toUrl() + "/" + cur))
+            outDirs.append(url.Url(intermediate.toUrl() + "/" + cur + "/"))
+    if cur == "align":
+        alignOut = outDirs[-1] # part of my hacky way of handling the branch after align
     steps.append(stepClasses[cur](inDirs[-1], outDirs[-1], tconf, pconf))
 
 if mode == 'emr':

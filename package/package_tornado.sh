@@ -8,6 +8,11 @@
 VER=`cat VERSION`
 ARNAME=tornado-${VER}.tar.gz
 cd src && make clean && cd ..
-tar -zcvf ${ARNAME} --exclude '*.pyc' --exclude '*.tar.gz' src
+
+# Make lib directory for the multiplefiles.jar file
+mkdir -p lib
+cp drivers/*.jar lib
+
+tar -zcvf ${ARNAME} --exclude '*.pyc' --exclude '*.tar.gz' src lib
 
 echo "s3cmd put --acl-public ${ARNAME} s3://tornado-emr/bin/"
