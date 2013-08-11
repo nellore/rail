@@ -53,6 +53,9 @@ parser.add_argument(\
     '--alternative-spliced', metavar='int', action='store', type=int, default=False,
     help='Indicates if alternatively spliced transcripts should be simulated')
 parser.add_argument(\
+    '--paired-end', metavar='int', action='store', type=int, default=False,
+    help='Indicates if the reads are paired end')
+parser.add_argument(\
     '--readmm_rate', metavar='float', action='store', type=float, default=0.01,
     help='The rate of mismatches')
 parser.add_argument(\
@@ -67,6 +70,7 @@ parser.add_argument(\
 parser.add_argument(\
     '--chrsizes', type=str, required=True,
     help='The sizes of each chromosome')
+
 
 gtf.addArgs(parser)
 args = parser.parse_args()
@@ -136,7 +140,6 @@ Incorporates sequencing error into reads
 def sequencingError(read,mm_rate):
     global total_reads
     global total_mismatches
-
     length = len(read)
     lread = list(read)
     for i in range(1,len(lread)-1):
@@ -147,7 +150,6 @@ def sequencingError(read,mm_rate):
     if nread!=read:
         total_mismatches+=1
     total_reads+=1
-
     return nread
 
 """
@@ -180,6 +182,52 @@ def overlapping_sites(xscript,read_st,read_end):
             overlaps.append(sites[2*i+1])
     return overlaps
 
+def simulateSingle(xscript,sites,readlen):
+    start,end,seqid = 0,len(xscript.seq)-readlen,xscript.seqid
+    if end<start or len(xscript.seq)<readlen:
+        print >> sys.stderr,"end<start",(end<start)
+        print >> sys.stderr,"len(x.seq)<readlen",(len(xscript.seq)<readlen)
+        return None,None
+        #continue
+    i = random.randint(start,end)
+    if xscript.orient=="+":
+        read = xscript.seq[i:i+readlen]
+    else:
+        read = revcomp(xscript.seq[i:i+readlen])
+    overlaps = overlapping_sites(xscript,i,i+readlen)
+    sites = sites.union(overlaps)
+    read = sequencingError(read,args.readmm_rate)
+    return read,sites
+
+def simulatePairedEnd(xscript,sites,readlen):
+    start,end,seqid = 0,len(xscript.seq)-readlen,xscript.seqid
+    if end<start or len(xscript.seq)<readlen:
+        #print >> sys.stderr, xscript.seq
+        #print >> sys.stderr,"end<start",(end<start)
+        #print >> sys.stderr,"len(x.seq)<readlen",(len(xscript.seq)<readlen)
+        return None,None
+        #continue
+    i = random.randint(start,end)
+    j = random.randint(start,end)
+    while j < i-readlen or j>i+readlen: #get other mate
+        j = random.randint(start,end)
+
+    if xscript.orient=="+":
+        mate1 = xscript.seq[i:i+readlen]
+        mate2 = xscript.seq[j:j+readlen]
+    else:
+        mate1 = revcomp(xscript.seq[i:i+readlen])
+        mate2 = revcomp(xscript.seq[j:j+readlen])
+
+    overlaps1 = overlapping_sites(xscript,i,i+readlen)
+    overlaps2 = overlapping_sites(xscript,j,j+readlen)
+    sites = sites.union(overlaps1)
+    sites = sites.union(overlaps2)
+    mate1 = sequencingError(mate1,args.readmm_rate)
+    mate2 = sequencingError(mate2,args.readmm_rate)
+
+    return (mate1,mate2),sites
+
 def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_handle):
     if args.stranded:
         gen,weights = makeStrandedWeights(xscripts,seq_sizes,annots_handle)
@@ -197,19 +245,23 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
         if x not in sim_xscripts:
             sim_xscripts.add(x)
         #print x.gene_id,x.xscript_id,x.seqid
-        start,end,seqid = 0,len(x.seq)-readlen,x.seqid
-        if end<start or len(x.seq)<readlen:
-            continue
-        i = random.randint(start,end)
-        if x.orient=="+":
-            read = x.seq[i:i+readlen]
+        if args.paired_end:
+            tmp_reads,tmp_sites = simulatePairedEnd(x,sites,readlen)
+            if tmp_reads==None and tmp_sites==None:
+                continue
+            else:
+                reads,sites = tmp_reads,tmp_sites
+            n+=readlen+readlen
+            seqs.append(reads) #Appends a pair of reads
         else:
-            read = revcomp(x.seq[i:i+readlen])
-        overlaps = overlapping_sites(x,i,i+readlen)
-        sites = sites.union(overlaps)
-        read = sequencingError(read,args.readmm_rate)
-        seqs.append(read)
-        n+=readlen
+            tmp_read,tmp_sites = simulateSingle(x,sites,readlen)
+            if tmp_reads==None and tmp_sites==None:
+                continue
+            else:
+                reads,sites = tmp_reads,tmp_sites
+            n+=readlen
+            seqs.append(read) #Appends just one read
+
     return seqs,weights,list(sim_xscripts),sites
 
 def replicateize(seqs1, seqs2, nreps):
@@ -233,8 +285,7 @@ def replicateize(seqs1, seqs2, nreps):
         seqs2rep[i].append(seq)
     return seqs1rep, seqs2rep
 
-#Just prints out one file
-def writeReads(seqs1rep,seqs2rep,fnPre,manifestFn):
+def writeSingleReads(seqs1rep,seqs2rep,fnPre,manifestFn):
     """ Only unpaired for now """
     seqsrep = [ seqs1rep, seqs2rep ]
     fn = "%s.seqs.tab"%(fnPre)
@@ -250,6 +301,26 @@ def writeReads(seqs1rep,seqs2rep,fnPre,manifestFn):
                         qual = "I" * len(seq)
                         nm = "r_n%d;LB:splice-%d-%d" % (i, group, rep)
                         fh.write("%s\t%s\t%s\n" % (nm, seq, qual))
+"""
+Uses the 5 tok format in align.py
+"""
+def writePairedEndReads(seqs1rep,seqs2rep,fnPre,manifestFn):
+    """ Only unpaired for now """
+    seqsrep = [ seqs1rep, seqs2rep ]
+    fn = "%s.seqs.tab"%(fnPre)
+    with open(manifestFn, 'w') as manFh:
+        for group in xrange(0, 2):
+            sr = seqsrep[group]
+            for rep in xrange(0, len(sr)):
+                fn = "%s.group%d.rep%d.tab" % (fnPre, group, rep)
+                manFh.write("%s\t0\tsplice-%d-%d\n" % (fn, group, rep))
+                with open(fn, 'w') as fh:
+                    for i in xrange(0, len(sr[rep])):
+                        pair = sr[rep][i]
+                        mate1,mate2 = pair
+                        qual = "I" * len(mate1)
+                        nm = "r_n%d;LB:splice-%d-%d" % (i, group, rep)
+                        fh.write("%s\t%s\t%s\t%s\t%s\n" % (nm, mate1, qual, mate2, qual))
 
 """
 Get all transcripts that exhibit alternative splicing
@@ -259,7 +330,6 @@ def test_alternativeSplicing(xscripts):
     axscripts = []
     for x in xscripts:
         genes[x.gene_id].append(x)
-
     for gene_ids,isoforms in genes.iteritems():
         if len(isoforms)>1:
             axscripts+=isoforms
@@ -280,7 +350,10 @@ if __name__=="__main__":
         xscripts = test_alternativeSplicing(xscripts)
     seqs,weights,xscripts,sites = simulate(xscripts,args.read_len,args.num_nucs,args.fasta,var_handle,seq_sizes,annots_handle)
     seqs1,seqs2 = replicateize(seqs,seqs,args.num_replicates)
-    writeReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
+    if args.paired_end:
+        writePairedEndReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
+    else:
+        writeSingleReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
     #This stores the list in pickle files for serialization
     #pickle.dump(weights,open(args.output_prefix+".weights",'wb'))
     pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
