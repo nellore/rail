@@ -69,7 +69,7 @@ class NormalizeStep(pipeline.Step):
             output.toUrl(),  # output URL
             name="Normalize", # name
             aggr=pipeline.Aggregation(None, 4, 1, 1),
-            reducer="python %s/src/rnawesome/normalize.py --percentile %f --out_dir='%s/coverage' --bigbed_exe=%s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai" % (d, tconf.normPercentile, pconf.out.toUpperUrl(), d, d))
+            reducer="python %s/src/rnawesome/normalize.py --percentile %f --out_dir=%s/coverage --bigbed_exe=%s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai" % (d, tconf.normPercentile, pconf.out.toUpperUrl(), d, d))
 
 class NormalizePostStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):
@@ -79,7 +79,7 @@ class NormalizePostStep(pipeline.Step):
             output.toUrl(),  # output URL
             name="NormalizePost", # name
             aggr=pipeline.Aggregation(1, None, 0, 0),
-            reducer="python %s/src/rnawesome/normalize_post.py --out='%s/normalize' --manifest='%s/MANIFEST'" % (d, pconf.out.toUpperUrl(), d))
+            reducer="python %s/src/rnawesome/normalize_post.py --out=%s/normalize --manifest=%s/MANIFEST" % (d, pconf.out.toUpperUrl(), d))
 
 class WalkFitStep(pipeline.Step):
     def __init__(self, inp, output, tconf, pconf):

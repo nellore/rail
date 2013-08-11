@@ -15,6 +15,14 @@ shell/Hadoop/EMR scripts for running the flow.
 
 import hadoop
 
+class FlowDirectories(object):
+    """ Holds the key directories relevant to the flow """
+    def __init__(self, inp, out, inter, mani):
+        self.input = inp
+        self.output = out
+        self.intermediate = inter
+        self.manifest = mani
+
 class Aggregation(object):
     """ Encapsulates information about the aggregation before a reducer. """
     
