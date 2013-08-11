@@ -17,4 +17,5 @@ fi
 # wget the needed files
 for i in bedToBigBed bigBedToBed wigToBigWig bigWigToWig ; do
 	wget -S -T 10 -t 5 http://hgdownload.cse.ucsc.edu/admin/exe/linux.x86_64/$i || { echo 'wget failed' ; exit 1; }
+	chmod a+x $i
 done
