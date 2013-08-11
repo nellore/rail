@@ -19,7 +19,7 @@ python $TORNADO_HOME/src/driver/tornado.py \
 	--output s3://langmead/tornado_${PROJ}/output \
 	--reference s3://tornado-emr/refs/hg19_UCSC.tar.gz \
 	--instance-type c1.xlarge \
-	--instance-counts 1,1,2 \
+	--instance-counts 1,1,6 \
 	--bid-price 0.08 \
 	--stop-after-coverage \
 	--no-junction \

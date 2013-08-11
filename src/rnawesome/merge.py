@@ -56,7 +56,7 @@ def flushCnts(pt, refid, st, en):
 for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split('\t')
-    assert len(toks) == 5
+    assert len(toks) == 5, "Bad input:\n" + ln
     pt, st, en, refid, lab = toks
     st, en = int(st), int(en)
     assert pt != last_pt or st >= last_st

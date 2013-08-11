@@ -170,7 +170,7 @@ time hadoop jar $STREAMING \
     -file "$INDEX6"\
     -file "$GENOME"\
     -file "$BOWTIE_EXE" \
-    -outputformat org.myorg.MultipleOutputFormat \
+    -outputformat edu.jhu.cs.MultipleOutputFormat \
     -mapper "$ALIGN_ARGS" \
     -input $ALIGN_IN/*.tab -output $ALIGN_OUT
 
@@ -192,7 +192,7 @@ time hadoop jar $STREAMING \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -mapper 'cut -f 2-' \
+    -mapper 'cat' \
     -reducer "$MERGE" \
     -input $ALIGN_OUT/exon/part* -output $MERGE_OUT
 
@@ -278,7 +278,7 @@ time hadoop jar $STREAMING \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
     -file "$SCR_DIR/rnawesome/intron.py" \
-    -mapper 'cut -f 2-' \
+    -mapper 'cat' \
     -reducer "$INTRON_ARGS" \
     -input $ALIGN_OUT/intron/*part* -output $INTRON_OUT
 
