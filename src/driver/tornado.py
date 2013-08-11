@@ -524,7 +524,8 @@ if mode == 'emr':
     cmdl.append('s3://elasticmapreduce/bootstrap-actions/configure-hadoop')
     cmdl.append('--bootstrap-name')
     cmdl.append('"configure hadoop"')
-    cmdl.append('--args "-s,mapred.job.reuse.jvm.num.tasks=1,-s,mapred.tasktracker.reduce.tasks.maximum=%d,-s,io.sort.mb=100"' % emrCluster.numCoreProcessors())
+    numCore = emrCluster.numCoreProcessors()
+    cmdl.append('--args "-s,mapred.job.reuse.jvm.num.tasks=1,-s,mapred.tasktracker.reduce.tasks.maximum=%d,-s,mapred.tasktracker.map.tasks.maximum=%d"' % (numCore, numCore))
     
     cmdl.extend(emrArgs)
     
