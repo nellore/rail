@@ -51,6 +51,7 @@ Tab-delimited output tuple columns:
 5. Sample label
 6. Readlet Sequence on 5' site
 7. Readlet Sequence on 3' site
+8. Read name
 """
 
 import sys
@@ -181,11 +182,10 @@ def medianTieBreaker(dpmat,m_ind):
 """
 Uses the sliding window algorithm to help place the flanking sequences close to the junction sites
 """
-def windowTransform(read,site):
-    cost = -1
-    hist = [2]*( len(read) - 1 )
-    scores = window.score(read, site, hist,cost)
-    return numpy.matrix(scores+[0])
+def windowTransform(read,site,cost):
+    hist = [1]*( len(read) )
+    scores = window.score(read, site, hist, cost)
+    return scores
 
 """
 Applies Needleman Wunsch to correct splice junction gaps
@@ -202,9 +202,15 @@ def correctSplice(read,ref_left,ref_right,fw):
     rightDP = numpy.flipud(rightDP)
 
     #Apply window transform to find proper sites for flanking sequences
+    """           Need to offset windows
+    ref  --------------GT.........AG-----------
+    ^<          >>^                         """
     # left_site,right_site = ("GT","AG") if fw else ("CT","AC")
-    # win_left = windowTransform(read,left_site)
-    # win_right = windowTransform(read,right_site)
+    # cost = -1
+    # win_left = numpy.matrix([0]+windowTransform(ref_left,left_site,cost)+[0])
+    # win_right = numpy.matrix([0]+[0]+windowTransform(ref_right,right_site,cost))
+    # #win_left = windowTransform(read,left_site)
+    # #win_right = windowTransform(read,right_site)
     # leftDP = leftDP+win_left
     # rightDP = rightDP+win_right
 
@@ -217,8 +223,7 @@ def correctSplice(read,ref_left,ref_right,fw):
     max_  = numpy.max(total)
 
     n = len(read)+1
-    r = index%n
-    c = index/n
+    r,c = index%n, index/n
 
     c = medianTieBreaker(total,c)
     r = numpy.argmax(total[:,c])
@@ -236,9 +241,11 @@ Returns a more human readable format of the string
 """
 def readableFormat(s):
     return " ".join([s[i:i+10] for i in range(0,len(s),10)])
+def formatList(s,l):
+    return (" "*l).join( list( str(s) ) )
 
 #Print all listed introns to stdout and the flanking sequences
-def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,outhandle):
+def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,outhandle):
     global nout
     offset = args.splice_overlap
     fw_char = "+" if fw else "-"
@@ -273,7 +280,7 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,outhan
     if ( len(left_flank) == len(right_flank) ):
         for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
             #print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
-            print >> outhandle,"intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap)
+            print >> outhandle,"intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,rdid)
 
             nout += 1
     # else: #Test case
@@ -288,7 +295,7 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
     #print >> sys.stderr,left_st,left_end
     #Print directly to stdout if flanking sequences overlap too much
     if left_end<=left_st or right_end<=right_st:
-        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,sys.stdout)
+        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,sys.stdout)
     else:
         ref_left = fnh.fetch_sequence(k,left_st, left_end).upper()
         ref_right = fnh.fetch_sequence(k,right_st, right_end).upper()
@@ -305,17 +312,17 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
         left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
 
 
-        if k=='chr3R' and in_end > 2469882 and in_end<2469982:
-            print >> sys.stderr,"Before"
-            print >> sys.stderr,"read ",unmapped
-            print >> sys.stderr,"left ",ref_left
-            print >> sys.stderr,"right",ref_right
-            print >> sys.stderr,"region",region_st,region_end
-            print >> sys.stderr,"whole read",rdseq
-            printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,sys.stderr)
-            print >> sys.stderr,"left DP\n",leftDP
-            print >> sys.stderr,"right DP\n",rightDP
-            print >> sys.stderr,"total DP\n",total
+        # if k=='chr3R' and in_end > 2469882 and in_end<2469982:
+        #     print >> sys.stderr,"Before"
+        #     print >> sys.stderr,"read ",unmapped
+        #     print >> sys.stderr,"left ",ref_left
+        #     print >> sys.stderr,"right",ref_right
+        #     print >> sys.stderr,"region",region_st,region_end
+        #     print >> sys.stderr,"whole read",rdseq
+        #     printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,sys.stderr)
+        #     print >> sys.stderr,"left DP\n",leftDP
+        #     print >> sys.stderr,"right DP\n",rightDP
+        #     print >> sys.stderr,"total DP\n",total
         if score>0:   #If crappy alignment, disregard corrections
             tmp_in_st,tmp_in_end = in_start,in_end
             tmp_reg_st,tmp_reg_end = region_st,region_end
@@ -323,16 +330,16 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
             #region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
             region_st,region_end = region_st-left_in_diff,region_end+right_in_diff
             in_start,in_end = in_start+left_in_diff,in_end-right_in_diff
-        if k=='chr3R' and in_end > 2469882 and in_end < 2469982:
-            print >> sys.stderr,"After"
-            print >> sys.stderr,"read ",unmapped
-            print >> sys.stderr,"left ",ref_left
-            print >> sys.stderr,"right",ref_right
-            print >> sys.stderr,"left diff",left_diff,"right diff",right_diff
-            print >> sys.stderr,"left intron diff",left_in_diff,"right intron diff",right_in_diff
-            printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,sys.stderr)
+        # if k=='chr3R' and in_end > 2469882 and in_end < 2469982:
+        #     print >> sys.stderr,"After"
+        #     print >> sys.stderr,"read ",unmapped
+        #     print >> sys.stderr,"left ",ref_left
+        #     print >> sys.stderr,"right",ref_right
+        #     print >> sys.stderr,"left diff",left_diff,"right diff",right_diff
+        #     print >> sys.stderr,"left intron diff",left_in_diff,"right intron diff",right_in_diff
+        #     printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,sys.stderr)
 
-        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,sys.stdout)
+        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,sys.stdout)
 
 
 """
@@ -411,7 +418,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 elif rdlet_len>reflen:
                     printExons(k,in_start,in_end,rdnm)
                 else:
-                    #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw)
+                    #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,rdid,fw)
                     handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid)
                 # else:
                 #     print >> sys.stderr,"This should never happen!!!","ref_len",reflen,"<","rdlet_len",rdlet_len
@@ -436,15 +443,19 @@ def bowtieOutReadlets(st, reportMult=1.2):
     global nout
     mem, cnt = {}, {}
     report = 1
+    line_nm = 0
     try:
         while True:
+            print >> sys.stderr,"line_number",line_nm
             line = st.readline()
             if len(line) == 0:
                 break # no more output
             if line[0] == '@':
                 continue # skip header
             nout += 1
+            print >> sys.stderr,"Bowtie line output",line.rstrip()
             rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
+            print >> sys.stderr,"flags",flags,"refoff1",refoff1
             flags, refoff1 = int(flags), int(refoff1)
             if nout >= report:
                 report *= reportMult
@@ -453,10 +464,12 @@ def bowtieOutReadlets(st, reportMult=1.2):
             seqlen = len(seq)
             toks = string.split(rdid, ';')
             rdnm = ';'.join(toks[:-3])
+            print >> sys.stderr,"rdnm",rdnm
             rlet_nm = toks[2]
             cnt[rdnm] = cnt.get(rdnm, 0) + 1
             rd_name = toks[0]
             rdseq = toks[4]
+            print >> sys.stderr,"rdlet_n",toks[-2]
             rdlet_n = int(toks[-2])
             if flags != 4:
                 fw = (flags & 16) == 0
@@ -468,6 +481,7 @@ def bowtieOutReadlets(st, reportMult=1.2):
                     composeReadletAlignments(rdnm, mem[rdnm],rdseq)
                     del mem[rdnm]
                 del cnt[rdnm]
+            line_nm+=1
     except IOError as e:
         print >> sys.stderr, "I/O error while reading output from Bowtie ({0}): {1}".format(e.errno, e.strerror)
         sys.exit(20)
@@ -476,6 +490,7 @@ def bowtieOutReadlets(st, reportMult=1.2):
         sys.exit(30)
     except TypeError as e:
         print >> sys.stderr, "Type error while reading output from Bowtie: " + str(e)
+        raise
         sys.exit(35)
     except:
         print >> sys.stderr, "Unexpected error while reading output from Bowtie:%s" % (sys.exc_info()[0])
@@ -516,11 +531,11 @@ def writeReads(fhs, reportMult=1.2):
         elif len(toks) == 5 or len(toks) == 6:
             # Paired-end read
             if len(toks) == 5:
-                # 6-token version
+                # 5-token version
                 nm1, seq1, qual1, seq2, qual2 = toks
                 nm2 = nm1
             else:
-                # 5-token version
+                # 6-token version
                 nm1, seq1, qual1, nm2, seq2, qual2 = toks
             sample.hasLab(nm1, mustHave=True) # check that label is present in name
             if discardMate is not None:
@@ -696,7 +711,6 @@ else:
             #A visual representation of the reference sequence and the read
             """ACGAAGGACT GCTTGACATC GGCCACGATA AC                                                                                                                 AACCT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
             """ACGAAGGACT GCTTGACATC GGCCACGATA ACCTGAGTCG ATAGGACGAA ACAAGTATAT ATTCGAAAAT TAATTAATTC CGAAATTTCA ATTTCATCCG ACATGTATCT ACATATGCCA CACTTCTGGT TGGACAACCT TTTTTGCGCC A"""
-
             self.rdseq  = "ACGAAGGACTGCTTGACATCGGCCACGATAACAACCTTTTTTGCGCCAATCTTAAGAGCCTTCT"
             self.refseq = "ACGAAGGACTGCTTGACATCGGCCACGATAACCTGAGTCGATAGGACGAAACAAGTATATATTCGAAAATTAATTAATTCCGAAATTTCAATTTCATCCGACATGTATCTACATATGCCACACTTCTGGTTGGACAACCTTTTTTGCGCCA"
 
@@ -717,8 +731,9 @@ else:
             region_st,region_end=32,33
             in_start,in_end=31,132
             offset = 5
+            rdid = "test"
             unmapped_st,unmapped_end = region_st-offset,region_end+offset
-            printIntrons(refid,self.rdseq,region_st,region_end,31,132,rdnm,fw,sys.stdout)
+            printIntrons(refid,self.rdseq,region_st,region_end,31,132,rdnm,fw,rdid,sys.stdout)
             handleIntron(refid,in_start,in_end,self.rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,"testid")
             sys.stdout.close()
             test_out = open("test.out",'r')
@@ -729,7 +744,7 @@ else:
             self.assertEquals(line,testline)
 
 
-        def test_correct_splice(self):
+        def test_correct_splice1(self):
             left = "TTACGAAGGTTTGTA"
             right= "TAATTTAGATGGAGA"
             read = "TTACGAAGATGGAGA"
@@ -743,6 +758,60 @@ else:
             assert left[:c]+right[c:] == read
             print >> sys.stderr,"Correct Splice Test Successful!!!"
 
+        def test_correct_splice2(self):
+
+            read = "ACGATAACCTTTTTT"
+            left = "ACGATAACCTGAGTC"
+            right= "TGGACAACCTTTTTT"
+
+        def test_windowTransform(self):
+            left = "ACGATAACCTGAGTCG"
+            right= "GGTTGGACAACCTTTT"
+            read     = "ACGATAACAACCTTTT"
+            ref_left,ref_right = left,right
+            revread = revcomp(read)
+            """Needleman-Wunsch is a directional algorithm.  Since we are interested in scoring the 3' end of the right ref sequence,    we reverse complement the right ref sequence before applying the NW algorithm"""
+            ref_right = revcomp(ref_right)
+            score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
+            score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
+
+            #Once NW is applied, the right DP matrix must be transformed in the same coordinate frame as the left DP matrix
+            rightDP = numpy.fliplr(rightDP)
+            rightDP = numpy.flipud(rightDP)
+
+            #Apply window transform to find proper sites for flanking sequences
+            left_site,right_site = ("CT","AC")
+            """
+            Need to offset windows
+            ref  --------------GT.........AG-----------
+                              ^<          >>^
+            """
+            cost = -2
+            win_left = numpy.matrix([0]+windowTransform(left,left_site,cost)+[0])
+            win_right = numpy.matrix([0]+[0]+windowTransform(right,right_site,cost))
+
+            print >> sys.stderr,"Before window transform"
+            print >> sys.stderr,"read ",read
+            print >> sys.stderr,"left ",left
+            print >> sys.stderr,"right",right
+            print >> sys.stderr,"leftDP\n",leftDP
+            print >> sys.stderr,"rightDP\n",rightDP
+
+            leftDP = leftDP+win_left
+            rightDP = rightDP+win_right
+            total = leftDP+rightDP
+            win_right[0,16] = -10
+            win_left[0,16] = -10
+            print >> sys.stderr,"After window transform"
+            print >> sys.stderr,"read\n   ",formatList(read,3)
+            print >> sys.stderr,"left\n   ",formatList(left,3)
+            print >> sys.stderr,win_left
+            print >> sys.stderr,"leftDP\n",leftDP
+            print >> sys.stderr,"right\n   ",formatList(right,3)
+            print >> sys.stderr,win_right
+            print >> sys.stderr,"rightDP\n",rightDP
+            print >> sys.stderr,"read\n   ",formatList(read,3)
+            print >> sys.stderr,"total\n",total
 
         def tearDown(self):
             os.remove(self.fasta)
