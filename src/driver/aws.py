@@ -79,6 +79,14 @@ class EmrCluster(object):
     def numCoreProcessors(self):
         return instNcores[self.itCore] * max(1, self.numCore)
     
+    def numTaskProcessors(self):
+        if self.numTask == 0:
+            return 0
+        return instNcores[self.itTask] * self.numTask
+    
+    def numCoreOrTaskProcessors(self):
+        return self.numCoreProcessors() + self.numTaskProcessors()
+    
     def swap(self):
         if self.numCore > 0:
             return instSwap[self.itCore]

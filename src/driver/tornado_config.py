@@ -20,7 +20,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--readlet-interval', metavar='INT', type=int, default="5", help='Distance between substrings to extract from read.')
     parser.add_argument(\
-        '--partition-length', metavar='INT', type=int, default=10000, help='Size of genome partitions to use.')
+        '--partition-length', metavar='INT', type=int, default=30000, help='Size of genome partitions to use.')
     parser.add_argument(\
         '--cluster-radius', metavar='INT', type=int, default="2", help='For clustering candidate introns into junctions.')
     parser.add_argument(\

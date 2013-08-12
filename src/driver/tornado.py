@@ -348,7 +348,7 @@ if mode == 'emr':
         raise RuntimeError("--intermediate argument '%s' is not an S3 URL" % args.intermediate)
 
 tconf = tornado_config.TornadoConfig(args)
-pconf = pipeline.PipelineConfig(hadoopVersionToks, waitFail, emrStreamJar, emrCluster.numCoreProcessors(), emrLocalDir, args.preprocess_compress, out)
+pconf = pipeline.PipelineConfig(hadoopVersionToks, waitFail, emrStreamJar, emrCluster.numCoreOrTaskProcessors(), emrLocalDir, args.preprocess_compress, out)
 
 pipelines = ["preprocess", "align", "coverage", "junction", "differential"]
 
