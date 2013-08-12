@@ -15,13 +15,24 @@ def lcsCost():
         M[i,i] = -1
     return M
 
+# def matchCost():
+#     """ Return a substitution matrix where match=+1, everything else=-1.  The
+#         6 symbols are 0=A, 1=C, 2=G, 3=T, 4=N, 5=- (gap). """
+#     M = numpy.zeros((6,6), dtype=numpy.int32)
+#     M.fill(-1)
+#     for i in range(0,6):
+#         M[i,i] = 1
+#     return M
+
 def matchCost():
-    """ Return a substitution matrix where match=+1, everything else=-1.  The
+    """ Return a substitution matrix where match=+1, gap=-2, everything else=-1.  The
         6 symbols are 0=A, 1=C, 2=G, 3=T, 4=N, 5=- (gap). """
-    M = numpy.zeros((6,6), dtype=numpy.int32)
-    M.fill(-1)
-    for i in range(0,6):
-        M[i,i] = 1
+    M = numpy.matrix([[ 1,-1,-1,-1,-1,-2],
+                      [-1, 1,-1,-1,-1,-2],
+                      [-1,-1, 1,-1,-1,-2],
+                      [-1,-1,-1, 1,-1,-2],
+                      [-1,-1,-1,-1, 1,-2],
+                      [-2,-2,-2,-2,-2,-2]],dtype=numpy.int32)
     return M
 
 def inverseMatchCost():
@@ -125,10 +136,10 @@ def needlemanWunsch(x, y, s, check=False):
 
 #x,y are the alignment sequences, s is the substitution matrix
 def needlemanWunschXcript(x,y,s):
-    L = len(x)
-    D = numpy.zeros((L+1,L+1), dtype=numpy.int32)
+    Lx,Ly = len(x),len(y)
+    D = numpy.zeros((Lx+1,Ly+1), dtype=numpy.int32)
     nw.nw(D,s,x,y)
     astr = cigar(traceback(D, x, y, s))
-    score = D[L,L]
+    score = D[Lx,Ly]
     del D
     return score,astr

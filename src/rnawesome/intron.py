@@ -157,7 +157,7 @@ def sliding_window(refID, sts,ens, site, fastaF):
     site5p,site3p = toks[0],toks[1]
     hist5 = histogram.hist_score(sts,in_start,"5",2*n+1)
     hist3 = histogram.hist_score(ens,in_end,"3",2*n+1)
-    mean5,std5 = hist5.index(max(hist5))+2, histogram.stddev(hist5)
+    mean5,std5 = hist5.index(max(hist5))+2,   histogram.stddev(hist5)
     mean3,std3 = hist3.index(max(hist3)),   histogram.stddev(hist3)
     # mean5,std5 = hist5.index(max(hist5)),r
     # mean3,std3 = hist3.index(max(hist3)),r
@@ -226,7 +226,7 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
     sites5,sites3 = [],[]
     M = needlemanWunsch.lcsCost()
     for intr in introns:
-        in_st,in_en,lab,rdseq5_flank,rdseq3_flank = intr
+        in_st,in_en,lab,rdseq5_flank,rdseq3_flank,_ = intr
         rdseq5_over,rdseq3_over = rdseq3_flank,rdseq5_flank
         rdseq5 = rdseq5_flank+rdseq5_over
         rdseq3 = rdseq3_flank+rdseq3_over
@@ -239,7 +239,7 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
         refseq3_over = refseq5_flank[-overlap:]
         refseq5 = refseq5_flank+refseq5_over
         refseq3 = refseq3_flank+refseq3_over
-        #print >> sys.stderr,refseq5,rdseq5,'\n',M
+        #print >> sys.stderr,refseq5,rdseq5,len(refseq5),len(rdseq5),'\n',M
         _,cigar5 = needlemanWunsch.needlemanWunschXcript(refseq5,rdseq5,M)
         nsite5_1,nsite3_1 = cigar_correct(len(rdseq5_flank),cigar5,site5,site3)
         sites5.append(nsite5_1)
@@ -254,19 +254,32 @@ def getJunctionSites(pt,refID,bins,fastaF):
     global nout
     strand = pt[-1]
     samples = counter.Counter()
+    coOccurences = defaultdict( list )
     sites5, sites3 = [],[]
     for coords,introns in bins.iteritems():
         splice_site = "GT-AG" if strand=="+" else "CT-AC"  #only consider canonical sites
-        sts,ens,labs,_,_ = zip(*introns)
+        sts,ens,labs,_,_,rdids = zip(*introns)
         site5,_,site3,_ = sliding_window(refID,sts,ens,splice_site,fastaF)
         sites5,sites3   = nw_correct(refID,site5,site3,introns,strand,fastaF)
         site5,_,site3,_ = sliding_window(refID,sites5,sites3,splice_site,fastaF) #Retrain using nw
         for intr in introns:
-            lab = intr[2]
+            _,_,lab,_,_,rdid = intr
+            coOccurences[rdid].append( (site5,site3) )
             samples[lab]+=1
+
+
+        #Output for bed sites
         for sam,counts in samples.items():
-            print "%s\t%012d\t%d\t%s\t%d"%(refID,site5,site3,sam,counts)
+            print "site\t%s\t%012d\t%d\t%s\t%d"%(refID,site5,site3,sam,counts)
             nout+=1
+
+        #Output for co-occurences
+        for rdid,sites in coOccurences.items():
+            if len(sites)>1:
+                for s in sites:
+                    left_site,right_site = s
+                    print "cooccurence\t%s\t%s\t%d\t%d"%(rdid,refID,left_site,right_site)
+                #nout+=1
 
 def go():
 
@@ -274,6 +287,7 @@ def go():
     starts = []  #Contains starting positions of introns
     ends = []    #Contains ending positions of introns
     labs = []    #Sample labels of introns
+    rdids = []   #The read ids
     seq5_flanks,seq3_flanks = [],[]
     last_pt = "\t"
     fnh = fasta.fasta(args.refseq)
@@ -283,12 +297,12 @@ def go():
         # Parse next read
         ln = ln.rstrip()
         toks = ln.split('\t')
-        assert len(toks)>=7
-        pt, st, en, refid, lab, seq5_flank, seq3_flank = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6]
+        assert len(toks)>=8
+        pt, st, en, refid, lab, seq5_flank, seq3_flank, rdid = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6], toks[7]
         if last_pt=='\t':
             last_pt, last_ref = pt, refid
         elif last_pt!=pt:
-            intron_ivals = zip(starts,ends,labs,seq5_flanks,seq3_flanks)
+            intron_ivals = zip(starts,ends,labs,seq5_flanks,seq3_flanks,rdids)
             #Cluster all introns with similar start and end positions
             bins = cluster(intron_ivals)
             #Apply sliding windows to find splice junction locations
@@ -302,13 +316,14 @@ def go():
         labs.append(lab)
         seq5_flanks.append(seq5_flank)
         seq3_flanks.append(seq3_flank)
+        rdids.append(rdid)
         last_pt,last_ref = pt,refid
         ninp+=1
 
     if last_pt!='\t':
         #Handle last partition
         #intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
-        intron_ivals = zip(starts,ends,labs,seq5_flanks,seq3_flanks)
+        intron_ivals = zip(starts,ends,labs,seq5_flanks,seq3_flanks,rdids)
         #Cluster all introns with similar start and end positions
         bins = cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
@@ -337,7 +352,7 @@ def test_nw_correct1():
     leftseqs  = ["GACCAACACG","AACACGTCCT","AACACGTCCT","GACCAACACG","CAACACGTCC","ACCAACACGT","CAACACGTCC","GACCAACACG","AACACGTCCT","CCAACACGTC","CAACACGTCC","CCAACACGTC","ACCAACACGT","CAACACGTCC","GACCAACACG","CCAACACGTC","CCAACACGTC","CAACACGTCC","ACCAACACGT","CAACACGTCC","ACCAACACGT","AACACGTCCT","CCAACACGTC","AACACGTCCT","CAACACGTCC","CAACACGTCC","GACCAACACG","GACCAACACG","AACACGTCCT","CCAACACGTC","ACCAACACGT","CCAACACGTC","CCAACACGTC","AACACGTCCT","AACACGTCCT","CCAACACGTC","CAACACGTCC","ACCAACACGT","ACCAACACGT","GACCAACACG","AACACGTCCT","GACCAACACG","GACCAACACG","ACCAACACGT","CCAACACGTC","AACACGTCCT","ACCAACACGT","CAACACGTCC","AACACGTCCT","AACACGTCCT","CAACACGTCC","GACCAACACG","CCAACACGTC","CCAACACGTC","ACCAACACGT","ACCAACACGT","GACCAACACG","AACACGTCCT","CAACACGTCC","GACCAACACG","GACCAACACG","AACACGTCCT","ACCAACACGT","CAACACGTCC","CCAACACGTC","GACCAACACG","CCAACACGTC","CAACACGTCC","ACCAACACGT","ACCAACACGT","AACACGTCCT","GACCAACACG","CAACACGTCC","CCAACACGTC","GACCAACACG","ACCAACACGT","CAACACGTCC","CAACACGTCC","ACCAACACGT","AACACGTCCT","CAACACGTCC","CAACACGTCC","ACCAACACGT","GACCAACACG","AACACGTCCT","CCAACACGTC","ACCAACACGT","ACCAACACGT","GACCAACACG","CAACACGTCC","AACACGTCCT","GACCAACACG","AACACGTCCT","AACACGTCCT","GACCAACACG","CAACACGTCC","CCAACACGTC","ACCAACACGT","CCAACACGTC","AACACGTCCT","CCAACACGTC","CAACACGTCC","AACACGTCCT","AACACGTCCT","CCAACACGTC","ACCAACACGT","GACCAACACG","GACCAACACG","ACCAACACGT","AACACGTCCT","CCAACACGTC","CCAACACGTC","AACACGTCCT","AACACGTCCT","CCAACACGTC","CCAACACGTC"]
 
     n = len(leftseqs)
-    sts,ends,labs = [205]*n, [371]*n, ["test_labs"]*n
+    sts,ends,labs,rdids = [205]*n, [371]*n, ["test_labs"]*n, map( str, range(0,n))
     fname,refid = "test.fa","test"
     createTestFasta(fname,refid,refseq)
     fnh = fasta.fasta("test.fa")
@@ -348,7 +363,7 @@ def test_nw_correct1():
     assert left_site==205
     assert right_site==369
     print >> sys.stderr,"Sliding window test passed !"
-    introns = zip(sts,ends,labs,leftseqs,rightseqs)
+    introns = zip(sts,ends,labs,leftseqs,rightseqs,rdids)
     sites5,sites3   = nw_correct(refID,left_site,right_site,introns,strand,fnh)
     left_site,_,right_site,_ = sliding_window(refID,sites5,sites3,splice_site,fnh)
 
@@ -370,7 +385,7 @@ def test_nw_correct2():
     refseq = "CGACGACACCGACGACGCCAAAGTTGCCACAGGAAACGGAAATCTGAGCGTGTGCACGTGTGTGTGTGCGCGCACATGGCGTTCATATTTATTTATTTCTTTTTCGGTACAGGAAACGCCCAGCAGGATTAAGAATGGAGTAGTCTTGTGACCATCGGGAACTTTTCGGGGGACAGCCATAAGTGTCAAGACTTAAAGCTG"
 
     n = len(leftseqs)
-    sts,ends,labs = [57]*n, [112]*n,["test_labs"]*n
+    sts,ends,labs,rdids = [57]*n, [112]*n,["test_labs"]*n, map( str, range(0,n))
 
     fname,refid = "test.fa","test"
     createTestFasta(fname,refid,refseq)
@@ -382,7 +397,7 @@ def test_nw_correct2():
     assert left_site==57
     assert right_site==110
     print >> sys.stderr,"Sliding window test passed !"
-    introns = zip(sts,ends,labs,leftseqs,rightseqs)
+    introns = zip(sts,ends,labs,leftseqs,rightseqs,rdids)
     sites5,sites3   = nw_correct(refID,left_site,right_site,introns,strand,fnh)
     left_site,_,right_site,_ = sliding_window(refID,sites5,sites3,splice_site,fnh)
 
@@ -398,9 +413,6 @@ def test_nw_correct2():
 
 
 
-def test_noncanonical1():
-
-    return
 
 def test():
     test_nw_correct1()

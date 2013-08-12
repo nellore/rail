@@ -274,11 +274,10 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,o
         #print >> sys.stderr, left_flank,left_overlap,right_flank,right_overlap
     """Since there is a possibility that one of the sequences may be out of boundaries (e.g. mapping error),
     the following checks to see if all of the sequences are valid"""
-    # if ( len(left_flank) == len(right_flank) and
-    #      len(left_overlap) == len(right_overlap) and
-    #      len(left_flank) == len(left_overlap)):
-    if ( len(left_flank) == len(right_flank) ):
-        for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
+    if ( len(left_flank) == len(right_flank) and
+         len(left_overlap) == len(right_overlap) and
+         len(left_flank) == len(left_overlap)):
+         for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
             #print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
             print >> outhandle,"intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,rdid)
 
@@ -446,16 +445,13 @@ def bowtieOutReadlets(st, reportMult=1.2):
     line_nm = 0
     try:
         while True:
-            print >> sys.stderr,"line_number",line_nm
             line = st.readline()
             if len(line) == 0:
                 break # no more output
             if line[0] == '@':
                 continue # skip header
             nout += 1
-            print >> sys.stderr,"Bowtie line output",line.rstrip()
             rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
-            print >> sys.stderr,"flags",flags,"refoff1",refoff1
             flags, refoff1 = int(flags), int(refoff1)
             if nout >= report:
                 report *= reportMult
@@ -464,12 +460,10 @@ def bowtieOutReadlets(st, reportMult=1.2):
             seqlen = len(seq)
             toks = string.split(rdid, ';')
             rdnm = ';'.join(toks[:-3])
-            print >> sys.stderr,"rdnm",rdnm
             rlet_nm = toks[2]
             cnt[rdnm] = cnt.get(rdnm, 0) + 1
             rd_name = toks[0]
             rdseq = toks[4]
-            print >> sys.stderr,"rdlet_n",toks[-2]
             rdlet_n = int(toks[-2])
             if flags != 4:
                 fw = (flags & 16) == 0
