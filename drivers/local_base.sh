@@ -39,6 +39,14 @@ UTIL=../src/util
 SITE2BED="python $UTIL/site2bed.py"
 EXONS2BED="python $UTIL/exons2bed.py"
 INTRONS2BED="python $UTIL/introns2bed.py"
+
+SITE_AGGR1="grep '^site'"
+SITE_AGGR2="cut -f 2-"
+
+CO_AGGR1="grep '^cooccurence'"
+CO_AGGR2="cut -f 2-"
+
+
 # Step 3: Walk over genome windows and emit per-sample, per-position
 #         coverage tuples
 WALK_PRENORM_AGGR1="sort -n -k2,2"
@@ -129,7 +137,10 @@ cp $WALK_IN_TMP ${INTERMEDIATE_DIR}/walk_in_input.tsv
 
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 \
-    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS | tee ${INTERMEDIATE_DIR}/intron_out.tsv | $SITE_AGGR1 | $SITE_AGG2 | $SITE2BED > ${INTERMEDIATE_DIR}/splice_sites.bed
+    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS > ${INTERMEDIATE_DIR}/intron_out.tsv 
+
+cat ${INTERMEDIATE_DIR}/intron_out.tsv \
+    | grep '^site' | $SITE_AGGR2 | $SITE2BED > ${INTERMEDIATE_DIR}/splice_sites.bed
 
 cat ${INTERMEDIATE_DIR}/intron_out.tsv \
     | grep '^cooccurence' | $CO_AGGR2 > ${INTERMEDIATE_DIR}/cooccurences.tab
