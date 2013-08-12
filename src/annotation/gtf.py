@@ -3,7 +3,7 @@ gtf.py
 
 Parses gtf files
 """
-
+import os
 import string
 import argparse
 import re

@@ -1,4 +1,5 @@
 import histogram
+import sys
 
 """
 Returns the site by finding the maximum in the scores
