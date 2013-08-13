@@ -1,5 +1,5 @@
 CHECK=../src/check
-SIM_SPLICE=/media/jamie/3cd05818-b444-4592-81e3-e1fa9121c2c9/Documents/summer2013/workspace/tornado/example/sim_splice
+SIM_SPLICE=../example/sim_splice
 XSCRIPTS=$SIM_SPLICE/fly.xscripts
 BEDSITES=$SIM_SPLICE/intermediate/splice_sites.bed
 SITES=$SIM_SPLICE/fly.sites

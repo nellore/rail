@@ -143,129 +143,132 @@ hadoop dfs -mkdir $PERM_OUT
 #   rm $FILE
 # done
 
-#Step 1 ALIGN
-hadoop dfs -rmr $ALIGN_OUT
-time hadoop jar $STREAMING \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=1 \
-    -D mapred.reduce.tasks=0 \
-    -libjars multiplefiles.jar \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -file "$SCR_DIR/rnawesome/align.py" \
-    -file "$SCR_DIR/bowtie/bowtie.py" \
-    -file "$SCR_DIR/read/readlet.py" \
-    -file "$SCR_DIR/read/truncate.py" \
-    -file "$SCR_DIR/interval/interval.py" \
-    -file "$SCR_DIR/interval/partition.py" \
-    -file "$SCR_DIR/manifest/manifest.py" \
-    -file "$SCR_DIR/sample/sample.py" \
-    -file "$INDEX1"\
-    -file "$INDEX2"\
-    -file "$INDEX3"\
-    -file "$INDEX4"\
-    -file "$INDEX5"\
-    -file "$INDEX6"\
-    -file "$GENOME"\
-    -file "$BOWTIE_EXE" \
-    -outputformat edu.jhu.cs.MultipleOutputFormat \
-    -mapper "$ALIGN_ARGS" \
-    -input $ALIGN_IN/*.tab -output $ALIGN_OUT
+# #Step 1 ALIGN
+# hadoop dfs -rmr $ALIGN_OUT
+# time hadoop jar $STREAMING \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=1 \
+#     -D mapred.reduce.tasks=0 \
+#     -libjars multiplefiles.jar \
+#     -cmdenv PYTHONPATH=$PYTHONPATH \
+#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+#     -file "$SCR_DIR/rnawesome/align.py" \
+#     -file "$SCR_DIR/bowtie/bowtie.py" \
+#     -file "$SCR_DIR/read/readlet.py" \
+#     -file "$SCR_DIR/read/truncate.py" \
+#     -file "$SCR_DIR/interval/interval.py" \
+#     -file "$SCR_DIR/interval/partition.py" \
+#     -file "$SCR_DIR/manifest/manifest.py" \
+#     -file "$SCR_DIR/sample/sample.py" \
+#     -file "$SCR_DIR/util/path.py" \
+#     -file "$GENOME" \
+#     -file "$FASTA_IDX" \
+#     -file "$INDEX1"\
+#     -file "$INDEX2"\
+#     -file "$INDEX3"\
+#     -file "$INDEX4"\
+#     -file "$INDEX5"\
+#     -file "$INDEX6"\
+#     -file "$GENOME"\
+#     -file "$BOWTIE_EXE" \
+#     -outputformat edu.jhu.cs.MultipleOutputFormat \
+#     -mapper "$ALIGN_ARGS" \
+#     -input $ALIGN_IN/*.tab -output $ALIGN_OUT
 
 
-##Check $? after completion.  If not 0, then print an error message and quit
-if [ $? -ne 0 ] ; then
-    echo "ALIGN step failed, now exiting"
-    exit 1
-fi
+# ##Check $? after completion.  If not 0, then print an error message and quit
+# if [ $? -ne 0 ] ; then
+#     echo "ALIGN step failed, now exiting"
+#     exit 1
+# fi
 
 
-# #Sort MERGE output
-hadoop dfs -rmr $MERGE_OUT
-time hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=2 \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -mapper 'cat' \
-    -reducer "$MERGE" \
-    -input $ALIGN_OUT/exon/part* -output $MERGE_OUT
+# # #Sort MERGE output
+# hadoop dfs -rmr $MERGE_OUT
+# time hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=32 \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=2 \
+#     -cmdenv PYTHONPATH=$PYTHONPATH \
+#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+#     -mapper 'cat' \
+#     -reducer "$MERGE" \
+#     -input $ALIGN_OUT/exon/part* -output $MERGE_OUT
 
-if [ $? -ne 0 ] ; then
-    echo "MERGE step failed, now exiting"
-    exit 1
-fi
+# if [ $? -ne 0 ] ; then
+#     echo "MERGE step failed, now exiting"
+#     exit 1
+# fi
 
-#Step 3 WALK_PRENORM
-hadoop dfs -rmr $WALK_PRENORM_OUT
-time hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=3 \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -file "$SCR_DIR/rnawesome/walk_prenorm.py" \
-    -file "$SCR_DIR/interval/partition.py" \
-    -file "$SCR_DIR/manifest/manifest.py" \
-    -file "$SCR_DIR/struct/circular.py" \
-    -mapper cat \
-    -reducer "$WALK_ARGS" \
-    -input $MERGE_OUT/*part* -output $WALK_PRENORM_OUT
+# #Step 3 WALK_PRENORM
+# hadoop dfs -rmr $WALK_PRENORM_OUT
+# time hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=32 \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=3 \
+#     -cmdenv PYTHONPATH=$PYTHONPATH \
+#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+#     -file "$SCR_DIR/rnawesome/walk_prenorm.py" \
+#     -file "$SCR_DIR/interval/partition.py" \
+#     -file "$SCR_DIR/manifest/manifest.py" \
+#     -file "$SCR_DIR/struct/circular.py" \
+#     -mapper cat \
+#     -reducer "$WALK_ARGS" \
+#     -input $MERGE_OUT/*part* -output $WALK_PRENORM_OUT
 
-if [ $? -ne 0 ] ; then
-    echo "WALK_PRENORM step failed, now exiting"
-    exit 1
-fi
+# if [ $? -ne 0 ] ; then
+#     echo "WALK_PRENORM step failed, now exiting"
+#     exit 1
+# fi
 
 
-#Step 4 NORMALIZE
-hadoop dfs -rmr $NORMALIZE_OUT
-time hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=2 \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -file "$SCR_DIR/rnawesome/normalize.py" \
-    -file "$SCR_DIR/interval/partition.py" \
-    -file "$SCR_DIR/manifest/manifest.py" \
-    -file "$SCR_DIR/struct/circular.py" \
-    -file "$CHROM_SIZES" \
-    -file "$BIGBED_EXE" \
-    -mapper cat \
-    -reducer "$NORMALIZE_ARGS" \
-    -input $WALK_PRENORM_OUT/*part* -output $NORMALIZE_OUT
+# #Step 4 NORMALIZE
+# hadoop dfs -rmr $NORMALIZE_OUT
+# time hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=32 \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=2 \
+#     -cmdenv PYTHONPATH=$PYTHONPATH \
+#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+#     -file "$SCR_DIR/rnawesome/normalize.py" \
+#     -file "$SCR_DIR/interval/partition.py" \
+#     -file "$SCR_DIR/manifest/manifest.py" \
+#     -file "$SCR_DIR/struct/circular.py" \
+#     -file "$CHROM_SIZES" \
+#     -file "$BIGBED_EXE" \
+#     -mapper cat \
+#     -reducer "$NORMALIZE_ARGS" \
+#     -input $WALK_PRENORM_OUT/*part* -output $NORMALIZE_OUT
 
-if [ $? -ne 0 ] ; then
-    echo "NORMALIZE step failed, now exiting"
-    exit 1
-fi
+# if [ $? -ne 0 ] ; then
+#     echo "NORMALIZE step failed, now exiting"
+#     exit 1
+# fi
 
-#Step 5 NORMALIZE_POST
-hadoop dfs -rmr $NORMALIZE_POST_OUT
-time hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -file "$SCR_DIR/rnawesome/normalize_post.py" \
-    -file "$SCR_DIR/manifest/manifest.py" \
-    -mapper cat \
-    -reducer "$NORMALIZE_POST_ARGS" \
-    -input $NORMALIZE_OUT/*part* -output $NORMALIZE_POST_OUT
+# #Step 5 NORMALIZE_POST
+# hadoop dfs -rmr $NORMALIZE_POST_OUT
+# time hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=32 \
+#     -cmdenv PYTHONPATH=$PYTHONPATH \
+#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+#     -file "$SCR_DIR/rnawesome/normalize_post.py" \
+#     -file "$SCR_DIR/manifest/manifest.py" \
+#     -mapper cat \
+#     -reducer "$NORMALIZE_POST_ARGS" \
+#     -input $NORMALIZE_OUT/*part* -output $NORMALIZE_POST_OUT
 
-if [ $? -ne 0 ] ; then
-    echo "NORMALIZE_POST step failed, now exiting"
-    exit 1
-fi
+# if [ $? -ne 0 ] ; then
+#     echo "NORMALIZE_POST step failed, now exiting"
+#     exit 1
+# fi
 
 #Step 6 INTRON
 hadoop dfs -rmr $INTRON_OUT
@@ -273,10 +276,12 @@ time hadoop jar $STREAMING \
     -D mapred.reduce.tasks=32 \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=3 \
+    -libjars multiplefiles.jar \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+    -outputformat edu.jhu.cs.MultipleOutputFormat \
     -file "$SCR_DIR/rnawesome/intron.py" \
     -mapper 'cat' \
     -reducer "$INTRON_ARGS" \
@@ -302,7 +307,7 @@ time hadoop jar $STREAMING \
     -file "$SCR_DIR/util/site2bed.py" \
     -mapper cat \
     -reducer "$SITE2BED" \
-    -input $INTRON_OUT/*part* -output $SITEBED_OUT
+    -input $INTRON_OUT/site/*part* -output $SITEBED_OUT
 
 if [ $? -ne 0 ] ; then
     echo "SITEBED step failed, now exiting"
