@@ -158,6 +158,7 @@ def sliding_window(refID, sts,ens, site, fastaF):
     hist5 = histogram.hist_score(sts,in_start,"5",2*n+1)
     hist3 = histogram.hist_score(ens,in_end,"3",2*n+1)
     mean5,std5 = hist5.index(max(hist5))+2,   histogram.stddev(hist5)
+    #mean5,std5 = hist5.index(max(hist5)),   histogram.stddev(hist5)
     mean3,std3 = hist3.index(max(hist3)),   histogram.stddev(hist3)
     # mean5,std5 = hist5.index(max(hist5)),r
     # mean3,std3 = hist3.index(max(hist3)),r
@@ -243,7 +244,7 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
         _,cigar5 = needlemanWunsch.needlemanWunschXcript(refseq5,rdseq5,M)
         nsite5_1,nsite3_1 = cigar_correct(len(rdseq5_flank),cigar5,site5,site3)
         sites5.append(nsite5_1)
-        sites3.append(nsite3_1) #Adjust for 3' end offset in nw alignment
+        sites3.append(nsite3_1+2) #Adjust for 3' end offset in nw alignment
     del M
     return sites5,sites3
 
@@ -262,6 +263,7 @@ def getJunctionSites(pt,refID,bins,fastaF):
         site5,_,site3,_ = sliding_window(refID,sts,ens,splice_site,fastaF)
         sites5,sites3   = nw_correct(refID,site5,site3,introns,strand,fastaF)
         site5,_,site3,_ = sliding_window(refID,sites5,sites3,splice_site,fastaF) #Retrain using nw
+
         for intr in introns:
             _,_,lab,_,_,rdid = intr
             coOccurences[rdid].append( (site5,site3) )

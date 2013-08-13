@@ -291,7 +291,6 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
     #Obtain coordinates of flanking sequences surrounding splice site
     left_st,right_end = in_start-offset+1,in_end+offset
     left_end,right_st = left_st+diff,right_end-diff
-    #print >> sys.stderr,left_st,left_end
     #Print directly to stdout if flanking sequences overlap too much
     if left_end<=left_st or right_end<=right_st:
         printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,sys.stdout)
@@ -310,12 +309,13 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
         left_diff,right_diff = dj, len(unmapped)-dj
         left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
 
-
         # if k=='chr3R' and in_end > 2469882 and in_end<2469982:
+        #     # if k=='chr2L' and in_end > 18388908 and in_end<18389008:
+        #     #if k=='chr3L' and in_end > 3178156 and in_end < 3178256:
         #     print >> sys.stderr,"Before"
-        #     print >> sys.stderr,"read ",unmapped
-        #     print >> sys.stderr,"left ",ref_left
-        #     print >> sys.stderr,"right",ref_right
+        #     print >> sys.stderr,"read ",unmapped,len(unmapped)
+        #     print >> sys.stderr,"left ",ref_left,len(ref_left)
+        #     print >> sys.stderr,"right",ref_right,len(ref_right)
         #     print >> sys.stderr,"region",region_st,region_end
         #     print >> sys.stderr,"whole read",rdseq
         #     printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,sys.stderr)
@@ -323,13 +323,13 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
         #     print >> sys.stderr,"right DP\n",rightDP
         #     print >> sys.stderr,"total DP\n",total
         if score>0:   #If crappy alignment, disregard corrections
-            tmp_in_st,tmp_in_end = in_start,in_end
-            tmp_reg_st,tmp_reg_end = region_st,region_end
-
-            #region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
-            region_st,region_end = region_st-left_in_diff,region_end+right_in_diff
+            region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
+            #region_st,region_end = region_st-left_in_diff,region_end+right_in_diff
             in_start,in_end = in_start+left_in_diff,in_end-right_in_diff
+            #in_start,in_end = in_start-left_in_diff,in_end+right_in_diff
         # if k=='chr3R' and in_end > 2469882 and in_end < 2469982:
+        #     # if k=='chr2L' and in_end > 18388908 and in_end<18389008:
+        #     # if k=='chr3L' and in_end > 3178156 and in_end < 3178256:
         #     print >> sys.stderr,"After"
         #     print >> sys.stderr,"read ",unmapped
         #     print >> sys.stderr,"left ",ref_left
