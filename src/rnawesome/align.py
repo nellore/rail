@@ -358,7 +358,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
                 elif rdlet_len>reflen:
                     printExons(k,in_start,in_end,rdnm)
                 else:
-                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rd
+                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid)
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of

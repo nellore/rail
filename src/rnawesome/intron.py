@@ -124,7 +124,7 @@ def sliding_window(refID, sts,ens, site, fastaF):
     site5p,site3p = toks[0],toks[1]
     hist5 = histogram.hist_score(sts,in_start,"5",2*n+1)
     hist3 = histogram.hist_score(ens,in_end,"3",2*n+1)
-    mean5,std5 = hist5.index(max(hist5))+2,   histogram.stddev(hist5) #offset correction for 5' end
+    mean5,std5 = hist5.index(max(hist5))+1,   histogram.stddev(hist5) #offset bias correction for 5' end
     mean3,std3 = hist3.index(max(hist3)),   histogram.stddev(hist3)
     #Create a normal distributed scoring scheme based off of candidates
     h5,h3 = histogram.normal_score(2*n+1,mean5,std5), histogram.normal_score(2*n+1,mean3,std3)
@@ -204,7 +204,7 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
         _,cigar5 = needlemanWunsch.needlemanWunschXcript(refseq5,rdseq5,M)
         nsite5_1,nsite3_1 = cigar_correct(len(rdseq5_flank),cigar5,site5,site3)
         sites5.append(nsite5_1)
-        sites3.append(nsite3_1+2) #Adjust for 3' end offset in nw alignment
+        sites3.append(nsite3_1+2) #Adjust for 3' end offset bias in nw alignment
     del M
     return sites5,sites3
 
