@@ -157,28 +157,20 @@ def sliding_window(refID, sts,ens, site, fastaF):
     site5p,site3p = toks[0],toks[1]
     hist5 = histogram.hist_score(sts,in_start,"5",2*n+1)
     hist3 = histogram.hist_score(ens,in_end,"3",2*n+1)
-    mean5,std5 = hist5.index(max(hist5))+2,   histogram.stddev(hist5)
-    #mean5,std5 = hist5.index(max(hist5)),   histogram.stddev(hist5)
+    mean5,std5 = hist5.index(max(hist5))+2,   histogram.stddev(hist5) #offset correction for 5' end
     mean3,std3 = hist3.index(max(hist3)),   histogram.stddev(hist3)
-    # mean5,std5 = hist5.index(max(hist5)),r
-    # mean3,std3 = hist3.index(max(hist3)),r
     #Create a normal distributed scoring scheme based off of candidates
     h5,h3 = histogram.normal_score(2*n+1,mean5,std5), histogram.normal_score(2*n+1,mean3,std3)
     """Remember that fasta index is base 1 indexing"""
     seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n).upper()
     seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n).upper()
     score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
-    j5,s5 = findSite(score5,"5")
-    j3,s3 = findSite(score3,"3")
-    # print >> sys.stderr,"Seq 5",seq5
-    # print >> sys.stderr,"Seq 3",seq3
-    # print >> sys.stderr,"Histogram 5\t",format_list(hist5)
-    # print >> sys.stderr,"Histogram 3\t",format_list(hist3)
-    # print >> sys.stderr,"Score 5 \t",format_list(h5)
-    # print >> sys.stderr,"Score 3 \t",format_list(h3)
-    # print >> sys.stderr, "Mean 5\t",histogram.average(hist5),"Mode 5",hist5.index(max(hist5)),"Std 5",std5
-    # print >> sys.stderr, "Mean 3\t",histogram.average(hist3),"Mode 3",hist5.index(max(hist3)),"Std 3",std3
-    return j5+in_start-n-1,s5,j3+(in_end-n-1),s3  #returned transformed coordinates of junction sites
+    #Find candidates in sliding window scores
+    maxwin_5,score_5 = findSite(score5,"5")
+    maxwin_3,score_3 = findSite(score3,"3")
+    #Convert candidates into reference genome coordinates
+    junc5, junc3 = maxwin_5+in_start-n-1, maxwin_3+(in_end-n-1)
+    return junc5,score_5,junc3,score_3  #returned transformed coordinates of junction sites
 
 
 cigar_pattern = re.compile(r"(\d+)(\S)")
@@ -221,7 +213,7 @@ def cigar_correct(read_site,cigar,site5,site3):
     return left_site,right_site
 
 """
-Applies the Needleman-Wunsch algorithm to provide a list of candiates
+Applies the Needleman-Wunsch algorithm to provide a list of candiadtes
 """
 def nw_correct(refID,site5,site3,introns,strand,fastaF):
     sites5,sites3 = [],[]
@@ -240,7 +232,6 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
         refseq3_over = refseq5_flank[-overlap:]
         refseq5 = refseq5_flank+refseq5_over
         refseq3 = refseq3_flank+refseq3_over
-        #print >> sys.stderr,refseq5,rdseq5,len(refseq5),len(rdseq5),'\n',M
         _,cigar5 = needlemanWunsch.needlemanWunschXcript(refseq5,rdseq5,M)
         nsite5_1,nsite3_1 = cigar_correct(len(rdseq5_flank),cigar5,site5,site3)
         sites5.append(nsite5_1)
@@ -269,7 +260,6 @@ def getJunctionSites(pt,refID,bins,fastaF):
             coOccurences[rdid].append( (site5,site3) )
             samples[lab]+=1
 
-
         #Output for bed sites
         for sam,counts in samples.items():
             print "site\t%s\t%012d\t%d\t%s\t%d"%(refID,site5,site3,sam,counts)
@@ -281,7 +271,6 @@ def getJunctionSites(pt,refID,bins,fastaF):
                 for s in sites:
                     left_site,right_site = s
                     print "cooccurence\t%s\t%s\t%d\t%d"%(rdid,refID,left_site,right_site)
-                #nout+=1
 
 def go():
 
@@ -311,7 +300,6 @@ def go():
             getJunctionSites(last_pt,last_ref,bins,fnh)
             starts,ends,labs = [],[],[]
             seq5_flanks,seq3_flanks = [],[]
-            #print >> sys.stderr,"pt",pt,st,en
 
         starts.append(st)
         ends.append(en)
@@ -324,7 +312,6 @@ def go():
 
     if last_pt!='\t':
         #Handle last partition
-        #intron_ivals = zip(starts,ends,labs,seq5_flanks,seq5_overs,seq3_flanks,seq3_overs)
         intron_ivals = zip(starts,ends,labs,seq5_flanks,seq3_flanks,rdids)
         #Cluster all introns with similar start and end positions
         bins = cluster(intron_ivals)
@@ -344,83 +331,98 @@ def createTestFasta(fname,refid,refseq):
     fastaIdx.close()
 
 
-def test_nw_correct1():
-    print >> sys.stderr,"NW test 1"
-
-    refseq="""TCGATGTCGATGGGTCCAAGCTGCTCAAATATCCCGCTGCCGGTGGATGCAACACCGGGTCCCCCTTGCAGCCAGATTACCAGCGGCCTCTCTATGAAATGAGATACATTGGCAGTGGTGTATAGAAGCCAGTAAAAGAGGTGAGCGCCCTTCCGAACTTCCACATAGTCCCATTCCTGTACTCCAGGTCCCAGACCAACACGTCCTGCAACGAAATAACTAAGACTTTTGGAGTATTTCTCTCAAACATCGAAACTTATAAATGACCCCATTTAGTAGATTTTAATTAACCTCAATATGGCAACCACAACTACGCCATTTTTTTCACTTTGGTAACCATACCACATTTATGTCTCAGAAAACGTACACACCTTGCACGCAGATCAGTGATAAAAAAAAAC"""
-
-    rightseqs = ["TCCTTGCACG","TGCACGCAGA","TGCACGCAGA","TCCTTGCACG","TTGCACGCAG","CCTTGCACGC","TTGCACGCAG","TCCTTGCACG","TGCACGCAGA","CTTGCACGCA","TTGCACGCAG","CTTGCACGCA","CCTTGCACGC","TTGCACGCAG","TCCTTGCACG","CTTGCACGCA","CTTGCACGCA","TTGCACGCAG","CCTTGCACGC","TTGCACGCAG","CCTTGCACGC","TGCACGCAGA","CTTGCACGCA","TGCACGCAGA","TTGCACGCAG","TTGCACGCAG","TCCTTGCACG","TCCTTGCACG","TGCACGCAGA","CTTGCACGCA","CCTTGCACGC","CTTGCACGCA","CTTGCACGCA","TGCACGCAGA","TGCACGCAGA","CTTGCACGCA","TTGCACGCAG","CCTTGCACGC","CCTTGCACGC","TCCTTGCACG","TGCACGCAGA","TCCTTGCACG","TCCTTGCACG","CCTTGCACGC","CTTGCACGCA","TGCACGCAGA","CCTTGCACGC","TTGCACGCAG","TGCACGCAGA","TGCACGCAGA","TTGCACGCAG","TCCTTGCACG","CTTGCACGCA","CTTGCACGCA","CCTTGCACGC","CCTTGCACGC","TCCTTGCACG","TGCACGCAGA","TTGCACGCAG","TCCTTGCACG","TCCTTGCACG","TGCACGCAGA","CCTTGCACGC","TTGCACGCAG","CTTGCACGCA","TCCTTGCACG","CTTGCACGCA","TTGCACGCAG","CCTTGCACGC","CCTTGCACGC","TGCACGCAGA","TCCTTGCACG","TTGCACGCAG","CTTGCACGCA","TCCTTGCACG","CCTTGCACGC","TTGCACGCAG","TTGCACGCAG","CCTTGCACGC","TGCACGCAGA","TTGCACGCAG","TTGCACGCAG","CCTTGCACGC","TCCTTGCACG","TGCACGCAGA","CTTGCACGCA","CCTTGCACGC","CCTTGCACGC","TCCTTGCACG","TTGCACGCAG","TGCACGCAGA","TCCTTGCACG","TGCACGCAGA","TGCACGCAGA","TCCTTGCACG","TTGCACGCAG","CTTGCACGCA","CCTTGCACGC","CTTGCACGCA","TGCACGCAGA","CTTGCACGCA","TTGCACGCAG","TGCACGCAGA","TGCACGCAGA","CTTGCACGCA","CCTTGCACGC","TCCTTGCACG","TCCTTGCACG","CCTTGCACGC","TGCACGCAGA","CTTGCACGCA","CTTGCACGCA","TGCACGCAGA","TGCACGCAGA","CTTGCACGCA","CTTGCACGCA"]
-
-    leftseqs  = ["GACCAACACG","AACACGTCCT","AACACGTCCT","GACCAACACG","CAACACGTCC","ACCAACACGT","CAACACGTCC","GACCAACACG","AACACGTCCT","CCAACACGTC","CAACACGTCC","CCAACACGTC","ACCAACACGT","CAACACGTCC","GACCAACACG","CCAACACGTC","CCAACACGTC","CAACACGTCC","ACCAACACGT","CAACACGTCC","ACCAACACGT","AACACGTCCT","CCAACACGTC","AACACGTCCT","CAACACGTCC","CAACACGTCC","GACCAACACG","GACCAACACG","AACACGTCCT","CCAACACGTC","ACCAACACGT","CCAACACGTC","CCAACACGTC","AACACGTCCT","AACACGTCCT","CCAACACGTC","CAACACGTCC","ACCAACACGT","ACCAACACGT","GACCAACACG","AACACGTCCT","GACCAACACG","GACCAACACG","ACCAACACGT","CCAACACGTC","AACACGTCCT","ACCAACACGT","CAACACGTCC","AACACGTCCT","AACACGTCCT","CAACACGTCC","GACCAACACG","CCAACACGTC","CCAACACGTC","ACCAACACGT","ACCAACACGT","GACCAACACG","AACACGTCCT","CAACACGTCC","GACCAACACG","GACCAACACG","AACACGTCCT","ACCAACACGT","CAACACGTCC","CCAACACGTC","GACCAACACG","CCAACACGTC","CAACACGTCC","ACCAACACGT","ACCAACACGT","AACACGTCCT","GACCAACACG","CAACACGTCC","CCAACACGTC","GACCAACACG","ACCAACACGT","CAACACGTCC","CAACACGTCC","ACCAACACGT","AACACGTCCT","CAACACGTCC","CAACACGTCC","ACCAACACGT","GACCAACACG","AACACGTCCT","CCAACACGTC","ACCAACACGT","ACCAACACGT","GACCAACACG","CAACACGTCC","AACACGTCCT","GACCAACACG","AACACGTCCT","AACACGTCCT","GACCAACACG","CAACACGTCC","CCAACACGTC","ACCAACACGT","CCAACACGTC","AACACGTCCT","CCAACACGTC","CAACACGTCC","AACACGTCCT","AACACGTCCT","CCAACACGTC","ACCAACACGT","GACCAACACG","GACCAACACG","ACCAACACGT","AACACGTCCT","CCAACACGTC","CCAACACGTC","AACACGTCCT","AACACGTCCT","CCAACACGTC","CCAACACGTC"]
-
-    n = len(leftseqs)
-    sts,ends,labs,rdids = [205]*n, [371]*n, ["test_labs"]*n, map( str, range(0,n))
-    fname,refid = "test.fa","test"
-    createTestFasta(fname,refid,refseq)
-    fnh = fasta.fasta("test.fa")
-    refID, splice_site, strand= "test","CT-AC","-"
-    left_site,_,right_site,_ = sliding_window(refID,sts,ends,splice_site,fnh)
-    print "left site",left_site,205
-    print "right site",right_site,369
-    assert left_site==205
-    assert right_site==369
-    print >> sys.stderr,"Sliding window test passed !"
-    introns = zip(sts,ends,labs,leftseqs,rightseqs,rdids)
-    sites5,sites3   = nw_correct(refID,left_site,right_site,introns,strand,fnh)
-    left_site,_,right_site,_ = sliding_window(refID,sites5,sites3,splice_site,fnh)
-
-    print "left site ",left_site,205
-    print "left histogram ",sites5
-    print "right site",right_site,369
-    print "right histogram",sites3
-
-    assert left_site==205
-    assert right_site==369
-    print >> sys.stderr,"Needleman Wunsch test passed ! \n"
-
-def test_nw_correct2():
-    print >> sys.stderr,"NW test 2"
-    leftseqs =["CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG"]
-
-    rightseqs=["AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG"]
-
-    refseq = "CGACGACACCGACGACGCCAAAGTTGCCACAGGAAACGGAAATCTGAGCGTGTGCACGTGTGTGTGTGCGCGCACATGGCGTTCATATTTATTTATTTCTTTTTCGGTACAGGAAACGCCCAGCAGGATTAAGAATGGAGTAGTCTTGTGACCATCGGGAACTTTTCGGGGGACAGCCATAAGTGTCAAGACTTAAAGCTG"
-
-    n = len(leftseqs)
-    sts,ends,labs,rdids = [57]*n, [112]*n,["test_labs"]*n, map( str, range(0,n))
-
-    fname,refid = "test.fa","test"
-    createTestFasta(fname,refid,refseq)
-    fnh = fasta.fasta("test.fa")
-    refID, splice_site,strand= "test","GT-AG",'+'
-    left_site,_,right_site,_ = sliding_window(refID,sts,ends,splice_site,fnh)
-    print "left site",left_site,57
-    print "right site",right_site,111
-    assert left_site==57
-    assert right_site==110
-    print >> sys.stderr,"Sliding window test passed !"
-    introns = zip(sts,ends,labs,leftseqs,rightseqs,rdids)
-    sites5,sites3   = nw_correct(refID,left_site,right_site,introns,strand,fnh)
-    left_site,_,right_site,_ = sliding_window(refID,sites5,sites3,splice_site,fnh)
-
-    print "left site ",left_site,57
-    print "left histogram ",sites5
-    print "right site",right_site,110
-    print "right histogram",sites3
-    print "left  seq",refseq[:left_site]
-    print "right seq",refseq[right_site:]
-    assert left_site==57
-    assert right_site==110
-    print >> sys.stderr,"Needleman Wunsch test passed ! \n"
-
-
-
-
-def test():
-    test_nw_correct1()
-    test_nw_correct2()
-
-if args.test:
-    test()
-else:
+if not args.test:
     go()
+else:
+    del sys.argv[1:]
+    import unittest
+
+
+    class TestIntronFunctions1(unittest.TestCase):
+        def setUp(self):
+            self.refseq="""TCGATGTCGATGGGTCCAAGCTGCTCAAATATCCCGCTGCCGGTGGATGCAACACCGGGTCCCCCTTGCAGCCAGATTACCAGCGGCCTCTCTATGAAATGAGATACATTGGCAGTGGTGTATAGAAGCCAGTAAAAGAGGTGAGCGCCCTTCCGAACTTCCACATAGTCCCATTCCTGTACTCCAGGTCCCAGACCAACACGTCCTGCAACGAAATAACTAAGACTTTTGGAGTATTTCTCTCAAACATCGAAACTTATAAATGACCCCATTTAGTAGATTTTAATTAACCTCAATATGGCAACCACAACTACGCCATTTTTTTCACTTTGGTAACCATACCACATTTATGTCTCAGAAAACGTACACACCTTGCACGCAGATCAGTGATAAAAAAAAAC"""
+
+            self.rightseqs = ["TCCTTGCACG","TGCACGCAGA","TGCACGCAGA","TCCTTGCACG","TTGCACGCAG","CCTTGCACGC","TTGCACGCAG","TCCTTGCACG","TGCACGCAGA","CTTGCACGCA","TTGCACGCAG","CTTGCACGCA","CCTTGCACGC","TTGCACGCAG","TCCTTGCACG","CTTGCACGCA","CTTGCACGCA","TTGCACGCAG","CCTTGCACGC","TTGCACGCAG","CCTTGCACGC","TGCACGCAGA","CTTGCACGCA","TGCACGCAGA","TTGCACGCAG","TTGCACGCAG","TCCTTGCACG","TCCTTGCACG","TGCACGCAGA","CTTGCACGCA","CCTTGCACGC","CTTGCACGCA","CTTGCACGCA","TGCACGCAGA","TGCACGCAGA","CTTGCACGCA","TTGCACGCAG","CCTTGCACGC","CCTTGCACGC","TCCTTGCACG","TGCACGCAGA","TCCTTGCACG","TCCTTGCACG","CCTTGCACGC","CTTGCACGCA","TGCACGCAGA","CCTTGCACGC","TTGCACGCAG","TGCACGCAGA","TGCACGCAGA","TTGCACGCAG","TCCTTGCACG","CTTGCACGCA","CTTGCACGCA","CCTTGCACGC","CCTTGCACGC","TCCTTGCACG","TGCACGCAGA","TTGCACGCAG","TCCTTGCACG","TCCTTGCACG","TGCACGCAGA","CCTTGCACGC","TTGCACGCAG","CTTGCACGCA","TCCTTGCACG","CTTGCACGCA","TTGCACGCAG","CCTTGCACGC","CCTTGCACGC","TGCACGCAGA","TCCTTGCACG","TTGCACGCAG","CTTGCACGCA","TCCTTGCACG","CCTTGCACGC","TTGCACGCAG","TTGCACGCAG","CCTTGCACGC","TGCACGCAGA","TTGCACGCAG","TTGCACGCAG","CCTTGCACGC","TCCTTGCACG","TGCACGCAGA","CTTGCACGCA","CCTTGCACGC","CCTTGCACGC","TCCTTGCACG","TTGCACGCAG","TGCACGCAGA","TCCTTGCACG","TGCACGCAGA","TGCACGCAGA","TCCTTGCACG","TTGCACGCAG","CTTGCACGCA","CCTTGCACGC","CTTGCACGCA","TGCACGCAGA","CTTGCACGCA","TTGCACGCAG","TGCACGCAGA","TGCACGCAGA","CTTGCACGCA","CCTTGCACGC","TCCTTGCACG","TCCTTGCACG","CCTTGCACGC","TGCACGCAGA","CTTGCACGCA","CTTGCACGCA","TGCACGCAGA","TGCACGCAGA","CTTGCACGCA","CTTGCACGCA"]
+
+            self.leftseqs  = ["GACCAACACG","AACACGTCCT","AACACGTCCT","GACCAACACG","CAACACGTCC","ACCAACACGT","CAACACGTCC","GACCAACACG","AACACGTCCT","CCAACACGTC","CAACACGTCC","CCAACACGTC","ACCAACACGT","CAACACGTCC","GACCAACACG","CCAACACGTC","CCAACACGTC","CAACACGTCC","ACCAACACGT","CAACACGTCC","ACCAACACGT","AACACGTCCT","CCAACACGTC","AACACGTCCT","CAACACGTCC","CAACACGTCC","GACCAACACG","GACCAACACG","AACACGTCCT","CCAACACGTC","ACCAACACGT","CCAACACGTC","CCAACACGTC","AACACGTCCT","AACACGTCCT","CCAACACGTC","CAACACGTCC","ACCAACACGT","ACCAACACGT","GACCAACACG","AACACGTCCT","GACCAACACG","GACCAACACG","ACCAACACGT","CCAACACGTC","AACACGTCCT","ACCAACACGT","CAACACGTCC","AACACGTCCT","AACACGTCCT","CAACACGTCC","GACCAACACG","CCAACACGTC","CCAACACGTC","ACCAACACGT","ACCAACACGT","GACCAACACG","AACACGTCCT","CAACACGTCC","GACCAACACG","GACCAACACG","AACACGTCCT","ACCAACACGT","CAACACGTCC","CCAACACGTC","GACCAACACG","CCAACACGTC","CAACACGTCC","ACCAACACGT","ACCAACACGT","AACACGTCCT","GACCAACACG","CAACACGTCC","CCAACACGTC","GACCAACACG","ACCAACACGT","CAACACGTCC","CAACACGTCC","ACCAACACGT","AACACGTCCT","CAACACGTCC","CAACACGTCC","ACCAACACGT","GACCAACACG","AACACGTCCT","CCAACACGTC","ACCAACACGT","ACCAACACGT","GACCAACACG","CAACACGTCC","AACACGTCCT","GACCAACACG","AACACGTCCT","AACACGTCCT","GACCAACACG","CAACACGTCC","CCAACACGTC","ACCAACACGT","CCAACACGTC","AACACGTCCT","CCAACACGTC","CAACACGTCC","AACACGTCCT","AACACGTCCT","CCAACACGTC","ACCAACACGT","GACCAACACG","GACCAACACG","ACCAACACGT","AACACGTCCT","CCAACACGTC","CCAACACGTC","AACACGTCCT","AACACGTCCT","CCAACACGTC","CCAACACGTC"]
+            self.fasta = "test.fa"
+            self.faidx = "test.fa.fai"
+            createTestFasta(self.fasta,"test",self.refseq)
+
+        def tearDown(self):
+            os.remove(self.fasta)
+            os.remove(self.faidx)
+
+        def test_nw_correct1(self):
+            print >> sys.stderr,"NW test 1"
+
+
+            n = len(self.leftseqs)
+            sts,ends,labs,rdids = [205]*n, [371]*n, ["test_labs"]*n, map( str, range(0,n))
+            fnh = fasta.fasta("test.fa")
+
+            refID, splice_site, strand= "test","CT-AC","-"
+            left_site,_,right_site,_ = sliding_window(refID,sts,ends,splice_site,fnh)
+            print "left site",left_site,205
+            print "right site",right_site,369
+            self.assertEquals( left_site, 205)
+            self.assertEquals( right_site, 369)
+            print >> sys.stderr,"Sliding window test passed !"
+            introns = zip(sts,ends,labs,self.leftseqs,self.rightseqs,rdids)
+            sites5,sites3   = nw_correct(refID,left_site,right_site,introns,strand,fnh)
+            left_site,_,right_site,_ = sliding_window(refID,sites5,sites3,splice_site,fnh)
+
+            print "left site ",left_site,205
+            print "left histogram ",sites5
+            print "right site",right_site,369
+            print "right histogram",sites3
+
+            self.assertEquals( left_site, 205)
+            self.assertEquals( right_site, 369)
+            print >> sys.stderr,"Needleman Wunsch test passed ! \n"
+            
+    class TestIntronFunctions2(unittest.TestCase):
+        def setUp(self):
+            self.leftseqs =["CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG"]
+
+            self.rightseqs=["AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG","AAACGCCCAG"]
+
+            self.refseq = "CGACGACACCGACGACGCCAAAGTTGCCACAGGAAACGGAAATCTGAGCGTGTGCACGTGTGTGTGTGCGCGCACATGGCGTTCATATTTATTTATTTCTTTTTCGGTACAGGAAACGCCCAGCAGGATTAAGAATGGAGTAGTCTTGTGACCATCGGGAACTTTTCGGGGGACAGCCATAAGTGTCAAGACTTAAAGCTG"
+            self.fasta = "test.fa"
+            self.faidx = "test.fa.fai"
+            createTestFasta(self.fasta,"test",self.refseq)
+        def tearDown(self):
+            os.remove(self.fasta)
+            os.remove(self.faidx)
+
+        def test_nw_correct2(self):
+            print >> sys.stderr,"NW test 2"
+
+            n = len(self.leftseqs)
+            sts,ends,labs,rdids = [57]*n, [112]*n,["test_labs"]*n, map( str, range(0,n))
+
+            fnh = fasta.fasta("test.fa")
+            refID, splice_site,strand= "test","GT-AG",'+'
+            left_site,_,right_site,_ = sliding_window(refID,sts,ends,splice_site,fnh)
+            print "left site",left_site,57
+            print "right site",right_site,111
+            self.assertEquals( left_site,57)
+            self.assertEquals( right_site,110)
+            print >> sys.stderr,"Sliding window test passed !"
+            introns = zip(sts,ends,labs,self.leftseqs,self.rightseqs,rdids)
+            sites5,sites3   = nw_correct(refID,left_site,right_site,introns,strand,fnh)
+            left_site,_,right_site,_ = sliding_window(refID,sites5,sites3,splice_site,fnh)
+
+            print "left site ",left_site,57
+            print "left histogram ",sites5
+            print "right site",right_site,110
+            print "right histogram",sites3
+            print "left  seq",self.refseq[:left_site]
+            print "right seq",self.refseq[right_site:]
+            self.assertEquals( left_site,57)
+            self.assertEquals( right_site,110)
+            print >> sys.stderr,"Needleman Wunsch test passed ! \n"
+
+
+    unittest.main()
+

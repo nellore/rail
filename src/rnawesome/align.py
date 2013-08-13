@@ -725,7 +725,7 @@ else:
             region_st,region_end=32,33
             in_start,in_end=31,132
             offset = 5
-            rdid = "test"
+            rdid = "testid"
             unmapped_st,unmapped_end = region_st-offset,region_end+offset
             printIntrons(refid,self.rdseq,region_st,region_end,31,132,rdnm,fw,rdid,sys.stdout)
             handleIntron(refid,in_start,in_end,self.rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,"testid")
