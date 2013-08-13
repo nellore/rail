@@ -201,24 +201,7 @@ def correctSplice(read,ref_left,ref_right,fw):
     rightDP = numpy.fliplr(rightDP)
     rightDP = numpy.flipud(rightDP)
 
-    #Apply window transform to find proper sites for flanking sequences
-    """           Need to offset windows
-    ref  --------------GT.........AG-----------
-    ^<          >>^                         """
-    # left_site,right_site = ("GT","AG") if fw else ("CT","AC")
-    # cost = -1
-    # win_left = numpy.matrix([0]+windowTransform(ref_left,left_site,cost)+[0])
-    # win_right = numpy.matrix([0]+[0]+windowTransform(ref_right,right_site,cost))
-    # #win_left = windowTransform(read,left_site)
-    # #win_right = windowTransform(read,right_site)
-    # leftDP = leftDP+win_left
-    # rightDP = rightDP+win_right
-
     total = leftDP+rightDP
-
-    # print >> sys.stderr,"left\n",leftDP
-    # print >> sys.stderr,"right\n",rightDP
-    # print >> sys.stderr,"total\n",total
     index = numpy.argmax(total)
     max_  = numpy.max(total)
 
@@ -249,9 +232,6 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,o
     global nout
     offset = args.splice_overlap
     fw_char = "+" if fw else "-"
-
-    # if not fw:
-    #     rdseq = revcomp(rdseq)
     #Obtain coordinates for flanking coordinate frames
     left_st,left_end = region_st-offset,region_st
     right_st,right_end = region_end,region_end+offset
@@ -271,20 +251,15 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,o
         left_overlap = overlap1
         right_flank = flank2
         right_overlap = overlap2
-        #print >> sys.stderr, left_flank,left_overlap,right_flank,right_overlap
     """Since there is a possibility that one of the sequences may be out of boundaries (e.g. mapping error),
     the following checks to see if all of the sequences are valid"""
     if ( len(left_flank) == len(right_flank) and
          len(left_overlap) == len(right_overlap) and
          len(left_flank) == len(left_overlap)):
          for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
-            #print "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
             print >> outhandle,"intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,rdid)
 
             nout += 1
-    # else: #Test case
-    #     for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
-    #         print >> sys.stderr, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,right_flank,right_overlap)
 
 def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid):
     diff = unmapped_end-unmapped_st-1
@@ -299,7 +274,6 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
         ref_right = fnh.fetch_sequence(k,right_st, right_end).upper()
         if not fw:
             readseq = revcomp(rdseq)
-            #unmapped = readseq[unmapped_st:unmapped_end]
             unmapped = revcomp(rdseq[unmapped_st:unmapped_end])
         else:
             readseq = rdseq
@@ -308,36 +282,9 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
         _, dj,score,leftDP,rightDP,total = correctSplice(unmapped,ref_left,ref_right,fw)
         left_diff,right_diff = dj, len(unmapped)-dj
         left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
-
-        # if k=='chr3R' and in_end > 2469882 and in_end<2469982:
-        #     # if k=='chr2L' and in_end > 18388908 and in_end<18389008:
-        #     #if k=='chr3L' and in_end > 3178156 and in_end < 3178256:
-        #     print >> sys.stderr,"Before"
-        #     print >> sys.stderr,"read ",unmapped,len(unmapped)
-        #     print >> sys.stderr,"left ",ref_left,len(ref_left)
-        #     print >> sys.stderr,"right",ref_right,len(ref_right)
-        #     print >> sys.stderr,"region",region_st,region_end
-        #     print >> sys.stderr,"whole read",rdseq
-        #     printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,sys.stderr)
-        #     print >> sys.stderr,"left DP\n",leftDP
-        #     print >> sys.stderr,"right DP\n",rightDP
-        #     print >> sys.stderr,"total DP\n",total
         if score>0:   #If crappy alignment, disregard corrections
             region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
-            #region_st,region_end = region_st-left_in_diff,region_end+right_in_diff
             in_start,in_end = in_start+left_in_diff,in_end-right_in_diff
-            #in_start,in_end = in_start-left_in_diff,in_end+right_in_diff
-        # if k=='chr3R' and in_end > 2469882 and in_end < 2469982:
-        #     # if k=='chr2L' and in_end > 18388908 and in_end<18389008:
-        #     # if k=='chr3L' and in_end > 3178156 and in_end < 3178256:
-        #     print >> sys.stderr,"After"
-        #     print >> sys.stderr,"read ",unmapped
-        #     print >> sys.stderr,"left ",ref_left
-        #     print >> sys.stderr,"right",ref_right
-        #     print >> sys.stderr,"left diff",left_diff,"right diff",right_diff
-        #     print >> sys.stderr,"left intron diff",left_in_diff,"right intron diff",right_in_diff
-        #     printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,sys.stderr)
-
         printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,sys.stdout)
 
 
@@ -355,10 +302,6 @@ def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region
     # not just a raw score
     if score >= len(rdsubseq)*(9.0/10):
         printExons(k,in_start,in_end,rdnm)
-
-        # for pt in iter(partition.partition(k, in_start, in_end, binsz)):
-        #     print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, k, sample.parseLab(rdnm))
-        #     nout += 1
 
 def getIntervals(rdals,L):
     ivals = {}
@@ -383,8 +326,6 @@ test_exons = open("test_exons.txt",'w')
 
 def composeReadletAlignments(rdnm, rdals, rdseq):
 
-    # TODO: We include strand info with introns, but not exons.  We might want
-    # to include for both for the case where the RNA-seq protocol is stranded.
     global nout
     L=len(rdseq)-1
     # Add this interval to the flattened interval collection for current read
@@ -412,25 +353,18 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
 
                 assert in_start<in_end
                 if abs(reflen-rdlet_len)/float(rdlet_len+1) < 0.05:
-                    #Note: just a readlet missing due to error or variant
+                    #Note: just a readlet missing due to sequencing error or variant
                     handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh)
                 elif rdlet_len>reflen:
                     printExons(k,in_start,in_end,rdnm)
                 else:
-                    #printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdnm,rdid,fw)
-                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid)
-                # else:
-                #     print >> sys.stderr,"This should never happen!!!","ref_len",reflen,"<","rdlet_len",rdlet_len
-                #     print >> sys.stderr,"In_start",in_start,"In_end",in_end
-
+                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rd
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
                 print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdnm))
-                # if rdid in test_id:
-                #     print >> test_exons,"exon\t%s\t%012d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdnm))
                 nout += 1
 
 def bowtieOutReadlets(st, reportMult=1.2):
@@ -657,6 +591,7 @@ def go():
     timeEn = time.clock()
     print >>sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
 
+#Only used for testing
 def createTestFasta(fname,refid,refseq):
     fastaH = open(fname,'w')
     fastaIdx = open(fname+".fai",'w')
@@ -664,18 +599,6 @@ def createTestFasta(fname,refid,refseq):
     fastaIdx.write("%s\t%d\t%d\t%d\t%d\n"%(refid,len(refseq),len(refid)+2,len(refseq),len(refseq)+1))
     fastaH.close()
     fastaIdx.close()
-
-def test_fasta_create():
-    rdseq = "ACGTACGT"
-    refseq = "ACGTCCCCACGT"
-    fname,refid = "test.fa","test"
-    createTestFasta(fname,refid,refseq)
-    fnh = fasta.fasta(fname)
-    testseq = fnh.fetch_sequence(refid,1,len(refseq))
-    assert testseq==refseq
-    print >> sys.stderr,"Test Fasta Create Success!"
-    os.remove(fname)
-    os.remove(fname+".fai")
 
 
 if not args.test and not args.profile:
@@ -700,7 +623,7 @@ else:
     binsz = 10000
     #test()
 
-    class TestAlignFunctions(unittest.TestCase):
+    class TestAlignFunctions1(unittest.TestCase):
         def setUp(self):
             #A visual representation of the reference sequence and the read
             """ACGAAGGACT GCTTGACATC GGCCACGATA AC                                                                                                                 AACCT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
@@ -712,6 +635,9 @@ else:
             self.faidx = "test.fa.fai"
             createTestFasta(self.fasta,"test",self.refseq)
 
+        def tearDown(self):
+            os.remove(self.fasta)
+            os.remove(self.faidx)
 
         def test_short_alignment1(self):
 
@@ -738,6 +664,8 @@ else:
             self.assertEquals(line,testline)
 
 
+
+
         def test_correct_splice1(self):
             left = "TTACGAAGGTTTGTA"
             right= "TAATTTAGATGGAGA"
@@ -757,6 +685,12 @@ else:
             read = "ACGATAACCTTTTTT"
             left = "ACGATAACCTGAGTC"
             right= "TGGACAACCTTTTTT"
+            fw = True
+            r,c,score,_,_,_ = correctSplice(read,left,right,fw)
+            #print >> sys.stderr,read
+            #print >> sys.stderr,left[:c],right[c:]
+            assert left[:c]+right[c:] == read
+            print >> sys.stderr,"Correct Splice Test Successful!!!"
 
         def test_windowTransform(self):
             left = "ACGATAACCTGAGTCG"
@@ -806,10 +740,6 @@ else:
             print >> sys.stderr,"rightDP\n",rightDP
             print >> sys.stderr,"read\n   ",formatList(read,3)
             print >> sys.stderr,"total\n",total
-
-        def tearDown(self):
-            os.remove(self.fasta)
-            os.remove(self.faidx)
 
 
     unittest.main()

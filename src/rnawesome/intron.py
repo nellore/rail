@@ -49,6 +49,7 @@ import readlet
 import needlemanWunsch
 import histogram
 import counter
+import window
 
 parser = argparse.ArgumentParser(description=\
                                      'Reports splice junction information')
@@ -103,40 +104,6 @@ def cluster(ivals):
 
 
 """
-Scores a set of windows based off of splice site
-"""
-def score(seq, site, hist):
-    wsize = len(site) # window size
-    nwins = len(seq)-wsize+1
-    wins = [0]*nwins
-
-    for i in range(0,nwins):
-        for j in range(0,len(site)):
-            s = 1 if site[j]==seq[i+j] else -3
-            wins[i]+=s*hist[i+j]
-    return wins
-
-
-"""
-Returns the site by finding the maximum in the scores
-To break ties it uses the direction.
-If direction=="5", that means its a 5' end and it will return the score closest to the 5' end (aka. left)
-The vice versa happens with direction=="3"
-
-Note that this just returns offsets wrt to window frame
-"""
-def findSite(scores,direction):
-    count = -1 if direction=="5" else 1
-    i = len(scores)-1 if direction=="5" else 0
-    m, ind = -1, -1
-    while i>=0 and i<len(scores):
-        if m < scores[i]:
-            ind = i
-            m = scores[i]
-        i+=count
-    return ind,scores[ind]
-
-"""
 Just a fancier way to print out lists
 """
 def format_list(L):
@@ -164,10 +131,12 @@ def sliding_window(refID, sts,ens, site, fastaF):
     """Remember that fasta index is base 1 indexing"""
     seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n).upper()
     seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n).upper()
-    score5,score3 = score(seq5,site5p,h5),score(seq3,site3p,h3)
+    cost = -3
+    score5 = window.score(seq5,site5p,h5,cost)
+    score3 = window.score(seq3,site3p,h3,cost)
     #Find candidates in sliding window scores
-    maxwin_5,score_5 = findSite(score5,"5")
-    maxwin_3,score_3 = findSite(score3,"3")
+    maxwin_5,score_5 = window.findSite(score5,"5")
+    maxwin_3,score_3 = window.findSite(score3,"3")
     #Convert candidates into reference genome coordinates
     junc5, junc3 = maxwin_5+in_start-n-1, maxwin_3+(in_end-n-1)
     return junc5,score_5,junc3,score_3  #returned transformed coordinates of junction sites
@@ -380,7 +349,7 @@ else:
             self.assertEquals( left_site, 205)
             self.assertEquals( right_site, 369)
             print >> sys.stderr,"Needleman Wunsch test passed ! \n"
-            
+
     class TestIntronFunctions2(unittest.TestCase):
         def setUp(self):
             self.leftseqs =["CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG","CGTGTGCACG"]
