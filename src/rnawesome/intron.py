@@ -253,10 +253,10 @@ Finds canonical sites (e.g GT-AG sites)
 def getJunctionSites(pt,refID,bins,fastaF):
     global nout
     strand = pt[-1]
-    samples = counter.Counter()
-    coOccurences = defaultdict( list )
     sites5, sites3 = [],[]
     for coords,introns in bins.iteritems():
+        samples = counter.Counter()
+        coOccurences = defaultdict( list )
         splice_site = "GT-AG" if strand=="+" else "CT-AC"  #only consider canonical sites
         sts,ens,labs,_,_,rdids = zip(*introns)
         site5,_,site3,_ = sliding_window(refID,sts,ens,splice_site,fastaF)

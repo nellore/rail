@@ -169,7 +169,7 @@ def binFlanks(annot_sites,flanks_file):
         for ln in fnh:
             ln = ln.rstrip()
             toks = ln.split("\t")
-            assert len(toks)==8
+            assert len(toks)>=8
             st,end,seqid,flank_left,flank_right = int(toks[2]), int(toks[3]), toks[4], toks[6], toks[7]
             #Search for nearby sites
             guess5,guess3 = (st,st+1,seqid,""), (end-1,end,seqid,"")
