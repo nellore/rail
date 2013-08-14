@@ -34,7 +34,7 @@ def addArgs(parser):
                         '--false-positives',action='store_const', const=True, default=False, help='Indicates if false positives are to be printed')
     parser.add_argument(\
                         '--false-negatives',action='store_const', const=True, default=False, help='Indicates if false positives are to be printed')
-    
+
 
 #Formats the sequence into a more readable format
 def format_seq(S):
@@ -48,7 +48,7 @@ def format_list(L):
 
 
 #No flanking site required
-def printLeftSite(seqid,exon,site,annot_site,win_radius,display_st,display_end,fnh):
+def LeftSite2str(seqid,exon,site,annot_site,win_radius,display_st,display_end,fnh):
     """
     display_window                 (----------------------)
     exon                       |--------------|
@@ -76,17 +76,27 @@ def printLeftSite(seqid,exon,site,annot_site,win_radius,display_st,display_end,f
 
     site_st = site[0] - display_st - 1
 
-    print "Region   ","%s:%d-%d"%(site[2],display_st,display_end)
-    print "Site pos ","%s:%d-%d"%(site[2],site[0],site[1])
-    print "Annotated","%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1])
-    print "Exon     ",format_seq(exon_seq)
-    print "Intron   ",format_seq(" "*eLen + intron_seq)
-    print "Site     ",format_seq(" "*site_st+"**")
+    # print "Region   ","%s:%d-%d"%(site[2],display_st,display_end)
+    # print "Site pos ","%s:%d-%d"%(site[2],site[0],site[1])
+    # print "Annotated","%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1])
+    # print "Exon     ",format_seq(exon_seq)
+    # print "Intron   ",format_seq(" "*eLen + intron_seq)
+    # print "Site     ",format_seq(" "*site_st+"**")
+
+    return "%s\n%s\n%s\n%s\n%s\n%s"%(
+        "Region   "+"%s:%d-%d"%(site[2],display_st,display_end),
+        "Site pos "+"%s:%d-%d"%(site[2],site[0],site[1]),
+        "Annotated"+"%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1]),
+        "Exon     "+format_seq(exon_seq),
+        "Intron   "+format_seq(" "*eLen + intron_seq),
+        "Site     "+format_seq(" "*site_st+"**")),site_seq
+
+
     #print "Normals  ",format_seq(" "*(site_st-swin_radius)+format_list(norm_score))
     #print "Slides   ",format_seq(" "*(site_st-swin_radius)+format_list(win_score))
 
 #No flanking sequence required
-def printRightSite(seqid,exon,site,annot_site,win_radius,display_st,display_end,fnh):
+def RightSite2str(seqid,exon,site,annot_site,win_radius,display_st,display_end,fnh):
     """
     display_window                 (----------------------)
     exon                                      |--------------|
@@ -104,17 +114,24 @@ def printRightSite(seqid,exon,site,annot_site,win_radius,display_st,display_end,
     display_exon_st  = 0
     display_exon_end = remaining
     exon_seq = exon.seq[display_exon_st:display_exon_end]
-
+    site_seq = intron_seq[-2:]
     site_st  = site[0] - display_st
-    print "Region   ","%s:%d-%d"%(site[2],display_st,display_end)
-    print "Site pos ","%s:%d-%d"%(site[2],site[0],site[1])
-    print "Annotated","%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1])
-    print "Exon    ",format_seq(" "*iLen +exon_seq)
-    print "Intron  ",format_seq(intron_seq)
-    print "Site    ",format_seq(" "*site_st+"**")
+    # print "Region   ","%s:%d-%d"%(site[2],display_st,display_end)
+    # print "Site pos ","%s:%d-%d"%(site[2],site[0],site[1])
+    # print "Annotated","%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1])
+    # print "Exon    ",format_seq(" "*iLen +exon_seq)
+    # print "Intron  ",format_seq(intron_seq)
+    # print "Site    ",format_seq(" "*site_st+"**")
+    return "%s\n%s\n%s\n%s\n%s\n%s"%(
+        "Region   "+"%s:%d-%d"%(site[2],display_st,display_end),
+        "Site pos "+"%s:%d-%d"%(site[2],site[0],site[1]),
+        "Annotated"+"%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1]),
+        "Exon     "+format_seq(" "*iLen +exon_seq),
+        "Intron   "+format_seq(intron_seq),
+        "Site     "+format_seq(" "*site_st+"**") ), site_seq
 
 
-def printLeftSeq(seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh):
+def LeftSeq2str(seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh):
     """
     display_window                 (----------------------)
     flank                              |------|
@@ -122,13 +139,15 @@ def printLeftSeq(seqid,flank,exon,site,annot_site,win_radius,display_st,display_
     intron                                    |--------------------------->
     ref_start |----------- ... ------------------------------------------->
     """
-    printLeftSite(seqid,exon,site,annot_site,win_radius,display_st,display_end,fnh)
+    site_str,site_seq = LeftSite2str(seqid,exon,site,annot_site,win_radius,display_st,display_end,fnh)
     flank_seq,flank_end = flank  #Note
     fLen = len(flank_seq)
     flank_st = (flank_end-fLen) - display_st - 1  #starting position of flanking sequence
-    print "Flanks   ",format_seq(" "*flank_st + flank_seq),"\n"
+    #print   "Flanks   ",format_seq(" "*flank_st + flank_seq),"\n"
+    return "%s\n%s"%(site_str,"Flanks   "+format_seq(" "*flank_st + flank_seq)), site_seq
 
-def printRightSeq(seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh):
+
+def RightSeq2str(seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh):
     """
     display_window                 (----------------------)
     flank                                     |------|
@@ -137,10 +156,11 @@ def printRightSeq(seqid,flank,exon,site,annot_site,win_radius,display_st,display
     ref_start     <--------------------------------------------------...---|
     """
     flank_seq,flank_st = flank  #Note
-    printRightSite(seqid,exon,site,annot_site,win_radius,display_st,display_end,fnh)
+    site_str,site_seq = RightSite2str(seqid,exon,site,annot_site,win_radius,display_st,display_end,fnh)
     #Place flank_st and site_st in display coordinate frame
     flank_st = (flank_st) -  display_st
-    print "Flanks  ",format_seq(" "*flank_st + flank_seq),"\n"
+    #print "Flanks  ",format_seq(" "*flank_st + flank_seq),"\n"
+    return "%s\n%s"%(site_str,"Flanks  "+format_seq(" "*flank_st + flank_seq)), site_seq
 
 def printShortExon(display_st,display_end,xscript,site,fnh):
     """
@@ -175,7 +195,6 @@ def printShortExon(display_st,display_end,xscript,site,fnh):
     print "Site    ",format_seq(" "*site_st+"**")
     return
 
-
 """
 Given a dictionary of flanking sequences and a dictionary of xscripts
 For each false positive, display
@@ -200,13 +219,22 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,fnh):
     exon_li, exon_ri = xscript.getExon(display_st), xscript.getExon(display_end)
     for flank in flanks:
         #flank_seq,flank_st = flank  #Note
-        print "False positive"
         if exon_li!=-1:
             exon = xscript.exons[exon_li]
-            printLeftSeq(xscript.seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh)
+            site_str,site_seq = LeftSeq2str(xscript.seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh)
+            if site_seq=="GT" or site_seq=="CT":
+                print "False positive ~ bad alignment"
+            else:
+                print "False positive ~ non-canonical site"
+            print site_str
         if exon_ri!=-1:
             exon = xscript.exons[exon_ri]
-            printRightSeq(xscript.seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh)
+            site_str,site_seq = RightSeq2str(xscript.seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh)
+            if site_seq=="AG" or site_seq=="AC":
+                print "False positive ~ bad alignment"
+            else:
+                print "False positive ~ non-canonical site"
+            print site_str
 
 
 """
@@ -241,20 +269,24 @@ def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,fnh):
         print "False negative ~ no flanking sequences"
         if exon_li!=-1:
             exon = xscript.exons[exon_li]
-            printLeftSite(xscript.seqid,exon,site,site,win_radius,display_st,display_end,fnh)
+            site_str,_ = LeftSite2str(xscript.seqid,exon,site,site,win_radius,display_st,display_end,fnh)
+            print site_str
         if exon_ri!=-1:
             exon = xscript.exons[exon_ri]
-            printRightSite(xscript.seqid,exon,site,site,win_radius,display_st,display_end,fnh)
+            site_str,_ = RightSite2str(xscript.seqid,exon,site,site,win_radius,display_st,display_end,fnh)
+            print site_str
     else:
         for flank in flanks:
             print "False negative ~ misclassified"
             #flank_seq,flank_st = flank  #Note
             if exon_li!=-1:
                 exon = xscript.exons[exon_li]
-                printLeftSeq(xscript.seqid,flank,exon,site,site,win_radius,display_st,display_end,fnh)
+                site_str,_ = LeftSeq2str(xscript.seqid,flank,exon,site,site,win_radius,display_st,display_end,fnh)
+                print site_str
             if exon_ri!=-1:
                 exon = xscript.exons[exon_ri]
-                printRightSeq(xscript.seqid,flank,exon,site,site,win_radius,display_st,display_end,fnh)
+                site_str,_ = RightSeq2str(xscript.seqid,flank,exon,site,site,win_radius,display_st,display_end,fnh)
+                print site_str
 
 pattern = re.compile("(\S+):(\d+)-(\d+)") #parses chromosome name and positions
 
