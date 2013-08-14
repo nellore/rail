@@ -39,7 +39,6 @@ import sys
 import site
 import argparse
 import time
-timeSt = time.clock()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "interval"))
@@ -56,10 +55,14 @@ partition.addArgs(parser)
 
 parser.add_argument(\
     '--profile', action='store_const', const=True, help='Profile the code')
+parser.add_argument(\
+    '--partition-stats', action='store_const', const=True, help='Output statistics about bin sizes, time taken per bin, number of bins per reducer')
 
 args = parser.parse_args()
 
 def go():
+    
+    timeSt = time.clock()
     
     binsz = partition.binSize(args)
     
@@ -68,6 +71,7 @@ def go():
     last_pt = "\t"             # id of previous partition
     part_st, part_en = -1, -1  # start/end offsets of current partition
     cov = dict()               # current coverage in each sample
+    prefix = "o\t" if args.partition_stats else "";
     
     def finish(partId, sampleId, covtup):
         st, cov = covtup
@@ -75,7 +79,7 @@ def go():
         chrid = partId[:partId.rfind(';')]
         for i in xrange(0, len(cov)):
             if cov[i] > 0:
-                print "%s\t%s\t%012d\t%d" % (sampleId, chrid, st+i, cov[i])
+                print "%s%s\t%s\t%012d\t%d" % (prefix, sampleId, chrid, st+i, cov[i])
                 nout += 1
         return nout
     
@@ -89,6 +93,9 @@ def go():
     
     verbose = False
     maxlen = 100
+    nInBin = 0
+    nbin = 0
+    timeBinSt = 0
     
     for ln in sys.stdin:
         ln = ln.rstrip()
@@ -108,6 +115,13 @@ def go():
             if verbose:
                 print >>sys.stderr, "Started partition [%d, %d); first read: [%d, %d)" % (part_st, part_en, st, en)
             assert part_en > part_st
+            if last_pt != '\t' and args.partition_stats:
+                timeBin = time.clock() - timeBinSt
+                print '\t'.join(['partstats', str(nInBin), str(timeBin)])
+                timeBinSt = time.clock()
+                nInBin = 0
+            nbin += 1
+        nInBin += 1
         assert part_st >= 0
         assert part_en > part_st
         if lab not in cov:
@@ -118,11 +132,18 @@ def go():
         last_pt = pt
         ninp += 1
     
+    if last_pt != '\t' and args.partition_stats:
+        timeBin = time.clock() - timeBinSt
+        print '\t'.join(['partstats', str(nInBin), str(timeBin)])
+    
     if part_st > -1:
         nout += finishAll(last_pt, cov)
     
-    # Done
     timeEn = time.clock()
+    
+    if args.partition_stats:
+        print '\t'.join(['reducerstats', str(nbin), str(ninp), str(nout), str(timeEn - timeSt)])
+    
     print >>sys.stderr, "DONE with walk_prenorm.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
 
 if args.profile:

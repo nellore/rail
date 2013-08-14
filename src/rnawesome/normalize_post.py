@@ -30,17 +30,22 @@ timeSt = time.clock()
  
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "manifest"))
+site.addsitedir(os.path.join(base_path, "util"))
 
 import manifest
+import url
+import filemover
 
 parser = argparse.ArgumentParser(description=\
     'Take results from normalization phase and write them to a file.')
 
 parser.add_argument(\
-    '--out', metavar='PATH', type=str, required=False, default=None,
-    help='File to write output to')
+    '--out', metavar='URL', type=str, required=False, default=None,
+    help='URL to write output to.  Goes to stdout by default.')
 
 manifest.addArgs(parser)
+filemover.addArgs(parser)
+
 args = parser.parse_args()
 
 # Get the set of all labels by parsing the manifest file, given on the
@@ -59,15 +64,25 @@ for ln in sys.stdin:
     ninp += 1
 
 ofh = sys.stdout
+outFn, outUrl = None
+
 if args.out is not None:
-    ofh = open(args.out, 'w')
+    # If --out is a local file, just write directly to that file.  Otherwise,
+    # write to a temporary file that we will later upload to destination.
+    outUrl = url.Url(args.out)
+    outFn = args.out if outUrl.isLocal() else "normalize_post.temp"
+    ofh = open(outFn, 'w')
 
 for l in ls:
     if l in facts: ofh.write("%s\t%d\n" % (l, facts[l]))
     else: ofh.write("%s\tNA\n" % l)
 
 if args.out is not None:
-    ofh.close()    
+    ofh.close()
+    if not outUrl.isLocal():
+        mover = filemover.FileMover(args=args)
+        mover.put(outFn, outUrl.plus("normalization_factors.tsv").toNonNativeUrl())
+        os.remove(outFn)
 
 # Done
 timeEn = time.clock()

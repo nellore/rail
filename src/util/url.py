@@ -29,11 +29,23 @@ class Url(object):
             self.type = "local"
             self.rest = s
     
+    def plus(self, s):
+        # Return a new URL consisting of the given subdirectory or file s
+        # appended onto this URL with a slash in between
+        st = self.toUrl()
+        if st[-1] == '/':
+            return Url(st + s)
+        else:
+            return Url('/'.join([st, s]))
+    
     def isS3(self):
         return self.type[:2] == 's3'
     
     def isWgettable(self):
         return self.type in ['ftp', 'http']
+    
+    def isLocal(self):
+        return self.type == 'local'
     
     def isNotLocal(self):
         return self.type != 'local'
