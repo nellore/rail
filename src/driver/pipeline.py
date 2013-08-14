@@ -15,14 +15,6 @@ shell/Hadoop/EMR scripts for running the flow.
 
 import hadoop
 
-class FlowDirectories(object):
-    """ Holds the key directories relevant to the flow """
-    def __init__(self, inp, out, inter, mani):
-        self.input = inp
-        self.output = out
-        self.intermediate = inter
-        self.manifest = mani
-
 class Aggregation(object):
     """ Encapsulates information about the aggregation before a reducer. """
     
@@ -71,9 +63,9 @@ class Step(object):
     """ Encapsulates a single step of the pipeline, i.e. a single
         MapReduce/Hadoop job """
     
-    def __init__(self, inp, output, name="(no name)", inputFormat=None, outputFormat=None, aggr=None, mapper="cat", reducer=None, libjars=[]):
+    def __init__(self, inps, output, name="(no name)", inputFormat=None, outputFormat=None, aggr=None, mapper="cat", reducer=None, libjars=[]):
         self.name = name
-        self.input = inp
+        self.inputs = inps
         self.output = output
         self.inputFormat = inputFormat
         self.outputFormat = outputFormat
@@ -101,8 +93,8 @@ class Step(object):
         for libjar in self.libjars:
             begArgs.append('"-libjars", "%s",' % libjar)
         
-        endArgs.append('"-input", "%s",' % self.input)
-        endArgs.append('"-output", "%s",' % self.output)
+        endArgs.append('"-input", "%s",' % ','.join(map(lambda x: x.toUrl(), self.inputs)))
+        endArgs.append('"-output", "%s",' % self.output.toUrl())
         endArgs.append('"-mapper", "%s",' % self.mapper)
         
         if self.reducer is not None:

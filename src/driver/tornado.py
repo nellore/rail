@@ -385,13 +385,6 @@ elif args.just_differential:
     pipelines = ["differential"]
 assert len(pipelines) > 0
 
-pipelineSteps = {
-    'preprocess'   : ['preprocess'],
-    'align'        : ['align'],
-    'junction'     : ['intron'],
-    'coverage'     : ['merge', 'walk_prenorm', 'normalize', 'normalize_post'],
-    'differential' : ['walk_fit', 'ebayes', 'hmm_params', 'hmm', 'aggr_path'] }
-
 useBowtie = 'align' in pipelines
 useIndex = 'align' in pipelines
 useGtf = False and 'align' in pipelines
@@ -413,53 +406,48 @@ if useRef and ref is None:
 if useInput and inp is None:
     raise RuntimeError("Must specify --input when job does not involve preprocessing")
 
-allSteps = [ None ] + [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ] + [ None ]
+pipelineSteps = {
+    'preprocess'   : ['preprocess'],
+    'align'        : ['align'],
+    'junction'     : ['intron'],
+    'coverage'     : ['merge', 'walk_prenorm', 'normalize', 'normalize_post'],
+    'differential' : ['walk_fit', 'ebayes', 'hmm_params', 'hmm', 'aggr_path'] }
 
-stepClasses = {\
-    'preprocess'     : tornado_pipeline.PreprocessingStep,
-    'align'          : tornado_pipeline.AlignStep,
-    'intron'         : tornado_pipeline.IntronStep,
-    'merge'          : tornado_pipeline.MergeStep,
-    'walk_prenorm'   : tornado_pipeline.WalkPrenormStep,
-    'normalize'      : tornado_pipeline.NormalizeStep,
-    'normalize_post' : tornado_pipeline.NormalizePostStep,
-    'walk_fit'       : tornado_pipeline.WalkFitStep,
-    'ebayes'         : tornado_pipeline.EbayesStep,
-    'hmm_params'     : tornado_pipeline.HmmParamsStep,
-    'hmm'            : tornado_pipeline.HmmStep,
-    'aggr_path'      : tornado_pipeline.AggrPathStep }
+allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
 
-# The following works for straight-line pipelines, but we have a tree, where
-# the 'align' step feeds both the 'merge' and the 'intron' steps
-inDirs, outDirs, steps = [], [], []
-alignOut = None # part of my hacky way of handling the branch after align
-for prv, cur, nxt in [ allSteps[i:i+3] for i in xrange(0, len(allSteps)-2) ]:
-    assert cur in stepClasses
-    if prv is None:
-        # Hacky handling of the branch after align
-        if cur == 'merge': inDirs.append(url.Url(inp.toUrl() + "/exon"))
-        elif cur == 'intron': inDirs.append(url.Url(inp.toUrl() + "/intron"))
-        elif cur == "preprocess": inDirs.append(manifest)
-        else: inDirs.append(inp)
-    else:
-        # Hacky handling of the branch after align
-        if cur == 'merge':
-            assert alignOut is not None
-            inDirs.append(url.Url(alignOut.toUrl() + "/exon"))
-        elif cur == 'intron':
-            assert alignOut is not None
-            inDirs.append(url.Url(alignOut.toUrl() + "/intron"))
-        else:
-            inDirs.append(outDirs[-1])
-    if nxt is None: outDirs.append(url.Url(out.toUrl() + "/final"))
-    else:
-        if args.preprocess_output and cur == "preprocess":
-            outDirs.append(url.Url(args.preprocess_output + "/"))
-        else:
-            outDirs.append(url.Url(intermediate.toUrl() + "/" + cur + "/"))
-    if cur == "align":
-        alignOut = outDirs[-1] # part of my hacky way of handling the branch after align
-    steps.append(stepClasses[cur](inDirs[-1], outDirs[-1], tconf, pconf))
+# Tornado is organized as a tree, but this struct also allows us to
+# organize it as a DAG
+stepInfo = {\
+    'preprocess'     : ([                              ], tornado_pipeline.PreprocessingStep),
+    'align'          : ([('preprocess',     ''        )], tornado_pipeline.AlignStep),
+    'intron'         : ([('align',          '/intron' )], tornado_pipeline.IntronStep),
+    'merge'          : ([('align',          '/exon'   )], tornado_pipeline.MergeStep),
+    'walk_prenorm'   : ([('merge',          '/o'      )], tornado_pipeline.WalkPrenormStep),
+    'normalize'      : ([('walk_prenorm',   '/o'      )], tornado_pipeline.NormalizeStep),
+    'normalize_post' : ([('normalize',      ''        )], tornado_pipeline.NormalizePostStep),
+    'walk_fit'       : ([('normalize_post', ''        )], tornado_pipeline.WalkFitStep),
+    'ebayes'         : ([('walk_fit',       ''        )], tornado_pipeline.EbayesStep),
+    'hmm_params'     : ([('ebayes',         ''        )], tornado_pipeline.HmmParamsStep),
+    'hmm'            : ([('hmm_params',     ''        )], tornado_pipeline.HmmStep),
+    'aggr_path'      : ([('hmm',            ''        )], tornado_pipeline.AggrPathStep) }
+
+# 'normalize_post' sends pushes normalization-factor .tsv to out/normalization_factors.tsv
+# 'normalize' sends per-sample coverage bigBed to out
+# 'intron' sends junction into to out
+
+def buildFlow(allSteps, stepInfo, inp, out, inter, manifest):
+    steps = []
+    for cur in allSteps:
+        prvs, cl = stepInfo[cur]
+        indirs = []
+        for prv, subdir in prvs:
+            base = inter if prv in allSteps else inp
+            indirs.append(base.plus(prv + subdir))
+        outdir = inter.plus(cur)
+        steps.append(cl(indirs, outdir, tconf, pconf))
+    return steps
+
+steps = buildFlow(allSteps, stepInfo, inp, out, intermediate, manifest)
 
 if mode == 'emr':
     jsonStr = "[\n" + ",\n".join([ step.toEmrCmd(pconf) for step in steps ]) + "\n]\n"
