@@ -17,7 +17,7 @@ def addArgs(parser):
         '--fasta', metavar='path', type=str, nargs='+',
         help='FASTA file(s) containing reference genome sequences')
     parser.add_argument(\
-        '--gtf', metavar='path', type=str, nargs='+', required=True,
+        '--gtf', metavar='path', type=str, nargs='+', required=False,
         help='GTF file(s) containing gene annotations')
     parser.add_argument(\
         '--introns-out', metavar='PATH', type=str, required=False,

@@ -19,9 +19,11 @@ from collections import defaultdict
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "annotation"))
 site.addsitedir(os.path.join(base_path, "fasta"))
+site.addsitedir(os.path.join(base_path, "util"))
 
 import gtf
 import chrsizes
+import counter
 
 parser = argparse.ArgumentParser(description=\
                                      'Transcript simulator')
@@ -68,9 +70,11 @@ parser.add_argument(\
     '--variants_file', metavar='PATH', action='store', type=str, default="variants.txt",
     help='Stores a list of variants for each transcript')
 parser.add_argument(\
-    '--chrsizes', type=str, required=True,
+    '--chrsizes', type=str, required=False,
     help='The sizes of each chromosome')
-
+parser.add_argument(\
+    '--test', action='store_const', const=True, default=False,
+    help='Run unit tests')
 
 gtf.addArgs(parser)
 args = parser.parse_args()
@@ -176,28 +180,35 @@ def overlapping_sites(xscript,read_st,read_end):
     # xsites.sort(key=lambda tup:tup[1])
     # xsites.sort(key=lambda tup:tup[0])
     overlaps = []
+    st,en = read_st+xscript.st0,read_end+xscript.st0
     for i in range(0,len(xsites)):
         if read_st<=xsites[i][0] and read_end>=xsites[i][1]:
             overlaps.append(sites[2*i])
             overlaps.append(sites[2*i+1])
-    return overlaps
+        diff = sites[2*i+1][1] - sites[2*i][0] + 1
+        if read_st>=xsites[i][0]:
+            st+=diff
+        if read_end>=xsites[i][0]:
+            en+=diff
+    return overlaps,st,en
+
 
 def simulateSingle(xscript,sites,readlen):
     start,end,seqid = 0,len(xscript.seq)-readlen,xscript.seqid
     if end<start or len(xscript.seq)<readlen:
-        print >> sys.stderr,"end<start",(end<start)
-        print >> sys.stderr,"len(x.seq)<readlen",(len(xscript.seq)<readlen)
-        return None,None
+        #print >> sys.stderr,"end<start",(end<start)
+        #print >> sys.stderr,"len(x.seq)<readlen",(len(xscript.seq)<readlen)
+        return None,None,None
         #continue
     i = random.randint(start,end)
     if xscript.orient=="+":
         read = xscript.seq[i:i+readlen]
     else:
         read = revcomp(xscript.seq[i:i+readlen])
-    overlaps = overlapping_sites(xscript,i,i+readlen)
+    overlaps,st,end = overlapping_sites(xscript,i,i+readlen)
     sites = sites.union(overlaps)
     read = sequencingError(read,args.readmm_rate)
-    return read,sites
+    return read,sites,(st,end)
 
 def simulatePairedEnd(xscript,sites,readlen):
     start,end,seqid = 0,len(xscript.seq)-readlen,xscript.seqid
@@ -205,7 +216,7 @@ def simulatePairedEnd(xscript,sites,readlen):
         #print >> sys.stderr, xscript.seq
         #print >> sys.stderr,"end<start",(end<start)
         #print >> sys.stderr,"len(x.seq)<readlen",(len(xscript.seq)<readlen)
-        return None,None
+        return None,None,None,None
         #continue
     i = random.randint(start,end)
     j = random.randint(start,end)
@@ -219,14 +230,14 @@ def simulatePairedEnd(xscript,sites,readlen):
         mate1 = revcomp(xscript.seq[i:i+readlen])
         mate2 = revcomp(xscript.seq[j:j+readlen])
 
-    overlaps1 = overlapping_sites(xscript,i,i+readlen)
-    overlaps2 = overlapping_sites(xscript,j,j+readlen)
+    overlaps1,st1,end1 = overlapping_sites(xscript,i,i+readlen)
+    overlaps2,st2,end2 = overlapping_sites(xscript,j,j+readlen)
     sites = sites.union(overlaps1)
     sites = sites.union(overlaps2)
     mate1 = sequencingError(mate1,args.readmm_rate)
     mate2 = sequencingError(mate2,args.readmm_rate)
 
-    return (mate1,mate2),sites
+    return (mate1,mate2),sites,(st1,end1),(st2,end2)
 
 def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_handle):
     if args.stranded:
@@ -235,6 +246,7 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
         gen,weights = makeWeights(xscripts,seq_sizes,annots_handle)
     n = 0
     seqs = []
+    cov_sts, cov_ends = counter.Counter(), counter.Counter()
     incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
     sim_xscripts = set()
     sites = set()
@@ -246,23 +258,29 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
             sim_xscripts.add(x)
         #print x.gene_id,x.xscript_id,x.seqid
         if args.paired_end:
-            tmp_reads,tmp_sites = simulatePairedEnd(x,sites,readlen)
+            tmp_reads,tmp_sites,bounds1,bounds2 = simulatePairedEnd(x,sites,readlen)
             if tmp_reads==None and tmp_sites==None:
                 continue
             else:
                 reads,sites = tmp_reads,tmp_sites
             n+=readlen+readlen
+            cov_sts[ bounds1[0] ]+=1
+            cov_sts[ bounds2[0] ]+=1
+            cov_ends[ bounds1[1] ]+=1
+            cov_ends[ bounds2[1] ]+=1
             seqs.append(reads) #Appends a pair of reads
         else:
-            tmp_read,tmp_sites = simulateSingle(x,sites,readlen)
+            tmp_reads,tmp_sites,bounds = simulateSingle(x,sites,readlen)
             if tmp_reads==None and tmp_sites==None:
                 continue
             else:
                 reads,sites = tmp_reads,tmp_sites
             n+=readlen
-            seqs.append(read) #Appends just one read
+            cov_sts[ bounds[0] ]+=1
+            cov_ends[ bounds[1] ]+=1
+            seqs.append(reads) #Appends just one read
 
-    return seqs,weights,list(sim_xscripts),sites
+    return seqs,weights,list(sim_xscripts),sites,cov_sts,cov_ends
 
 def replicateize(seqs1, seqs2, nreps):
     """ Take all the sequence reads for groups 1 and 2 and split them into into
@@ -336,7 +354,7 @@ def test_alternativeSplicing(xscripts):
             return axscripts
     #return axscripts
 
-if __name__=="__main__":
+def go():
     print >> sys.stderr,"Mismatch Rate",args.readmm_rate
     print >> sys.stderr,"SNP Rate",args.snp_rate
     print >> sys.stderr,"Indel Rate",args.indel_rate
@@ -348,31 +366,83 @@ if __name__=="__main__":
     xscripts = gtf.assembleTranscripts(annots,fastadb)
     if args.alternative_spliced:
         xscripts = test_alternativeSplicing(xscripts)
-    seqs,weights,xscripts,sites = simulate(xscripts,args.read_len,args.num_nucs,args.fasta,var_handle,seq_sizes,annots_handle)
+    seqs,weights,xscripts,sites,cov_sts,cov_ends = simulate(xscripts,args.read_len,args.num_nucs,args.fasta,var_handle,seq_sizes,annots_handle)
     seqs1,seqs2 = replicateize(seqs,seqs,args.num_replicates)
     if args.paired_end:
         writePairedEndReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
     else:
         writeSingleReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
     #This stores the list in pickle files for serialization
-    #pickle.dump(weights,open(args.output_prefix+".weights",'wb'))
     pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
-    #sites = list(sites)
+    ###BIG NOTE:  This pickles a tuple of counter objects
+    pickle.dump( (cov_sts,cov_ends) ,open(args.output_prefix+".cov",'wb'))
     real_sites,sim_sites = xscripts[0].getSites(),list(sites)
     real_sites.sort()
     sim_sites.sort()
     real_sites = "\t".join(map(str,real_sites))
     sim_sites = "\t".join(map(str,sim_sites))
-    #print >> sys.stderr,"Transcripts    ",real_sites
-    #print >> sys.stderr,"Simulated sites",sim_sites
-
+    
     pickle.dump(sites,open(args.output_prefix+".sites",'wb'))
-
-    #site_handle = open(args.output_prefix+".sites",'w')
-    #sites = map( str, sites)
-    #site_handle.write("\t".join(sites))
-
     print >> sys.stderr,"Total number of reads",total_reads
     print >> sys.stderr,"Total number of mismatched reads",total_mismatches
 
-    #print >> sys.stderr,"Sites",sites
+def createTestFasta(fname,refid,refseq):
+    fastaH = open(fname,'w')
+    fastaIdx = open(fname+".fai",'w')
+    fastaH.write(">%s\n%s\n"%(refid,refseq))
+    fastaIdx.write("%s\t%d\t%d\t%d\t%d\n"%(refid,len(refseq),len(refid)+2,len(refseq),len(refseq)+1))
+    fastaH.close()
+    fastaIdx.close()
+
+def createTestGTF(fname,annots):
+    gtfH = open(fname,'w')
+    gtfH.write(annots)
+    gtfH.close()
+
+def readableFormat(s):
+    return "\t".join([s[i:i+10] + " " + str(i+10) for i in range(0,len(s),10)])
+
+if __name__=="__main__":
+    if not args.test:
+        go()
+    else:
+        del sys.argv[1:]
+        import unittest
+        class TestSimulationFunctions(unittest.TestCase):
+            def setUp(self):
+                """       CAACTGTGAT (CAAGGATGTC) TTCGCTTGTG (AAACGAACGT) CTGGATCCGC (CTGAAGCATA) TTGGCAATAA GATCGCGCA"""
+                refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAACGTCTGGATCCGCCTGAAGCATATTGGCAATAAGATCGCGCA"""
+                annots="""chr2R\tunknown\texon\t11\t20\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t31\t40\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t51\t60\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\n"""
+                self.fasta = "test.fa"
+                self.faidx = "test.fa.fai"
+                self.gtf   = "test.gtf"
+                createTestFasta(self.fasta,"chr2R",refseq)
+                createTestGTF(self.gtf,annots)
+            def tearDown(self):
+                os.remove(self.fasta)
+                os.remove(self.faidx)
+                os.remove(self.gtf)
+            def test_overlap1(self):
+                annots = gtf.parseGTF([self.gtf])
+                fastadb = gtf.parseFASTA([self.fasta])
+                xscripts = gtf.assembleTranscripts(annots,fastadb)
+                print readableFormat(fastadb["chr2R"])
+                read_st,read_end = 5,15
+                _,st,end = overlapping_sites(xscripts[0],read_st,read_end)
+                print >> sys.stderr,"read",read_st,read_end
+                print >> sys.stderr,"ref",st,end
+                self.assertEquals(15,st)
+                self.assertEquals(35,end)
+            def test_overlap2(self):
+                annots = gtf.parseGTF([self.gtf])
+                fastadb = gtf.parseFASTA([self.fasta])
+                xscripts = gtf.assembleTranscripts(annots,fastadb)
+                print readableFormat(fastadb["chr2R"])
+                read_st,read_end = 5,25
+                _,st,end = overlapping_sites(xscripts[0],read_st,read_end)
+                print >> sys.stderr,"read",read_st,read_end
+                print >> sys.stderr,"ref",st,end
+                self.assertEquals(15,st)
+                self.assertEquals(55,end)
+
+        unittest.main()

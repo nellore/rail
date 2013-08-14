@@ -22,13 +22,14 @@ site.addsitedir(os.path.join(base_path, "annotation"))
 site.addsitedir(os.path.join(base_path, "struct"))
 site.addsitedir(os.path.join(base_path, "fasta"))
 site.addsitedir(os.path.join(base_path, "statsmath"))
+site.addsitedir(os.path.join(base_path, "util"))
 
 import gtf
 import search
 import fasta
 import window
 import display
-
+import counter
 parser = argparse.ArgumentParser(description=\
                                      'Splice junction validator')
 parser.add_argument(\
@@ -37,6 +38,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--sites-file', metavar='path', type=str, required=True,
     help='Path of the annotated splice sites pickle file')
+parser.add_argument(\
+    '--coverage-file', metavar='path', type=str, required=True,
+    help='Path of the coverage pickle file')
 parser.add_argument(\
     '--bed-file', metavar='path', type=str, required=True,
     help='Path of the estimated splice sites bed file')
@@ -189,7 +193,7 @@ def binFlanks(annot_sites,flanks_file):
 Prints out false positives and false negatives specified by a region
 as well as flanking sequences
 """
-def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,region,fnh):
+def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,region,cov_sts,cov_ends,fnh):
     #print >> sys.stderr, annot_sites
     flanksDict = binFlanks(annot_sites,flanks_file)
     #Convert xscripts into dictionary
@@ -197,15 +201,15 @@ def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,region,fnh):
     xscriptDict = dict()
     for x in xscripts:
         xscriptDict[x.xscript_id] = x
-    display.incorrect(args,fps,fns,flanksDict,xscriptDict,annot_sites,region,fnh)
+    display.incorrect(args,fps,fns,flanksDict,xscriptDict,annot_sites,region,cov_sts,cov_ends,fnh)
 
 if __name__=="__main__":
     #sites = readOverlappedSites(args.site_file)
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
     sim_sites = pickle.load(open(args.sites_file,'rb')) #simulated sites
+    cov_sts,cov_ends = pickle.load(open(args.coverage_file,'rb'))
     bed_sites = readBedSites(args.bed_file)
     annot_sites = annotated_sites(xscripts)
-
     #print annot_sites
     found_sites,close_sites,false_sites,missed_sites,total_sites = compare(bed_sites,annot_sites,args.radius)
     fastaH = fasta.fasta(args.refseq)
@@ -246,7 +250,7 @@ if __name__=="__main__":
     #print "Annotated site stats\t",annot_site_stats
     false_sites = false_sites+close_sites
 
-    displayIncorrect(false_sites,missed_sites,args.flank_seqs,xscripts,annot_sites,args.region,fastaH)
+    displayIncorrect(false_sites,missed_sites,args.flank_seqs,xscripts,annot_sites,args.region,cov_sts,cov_ends,fastaH)
 
     #print >>sys.stderr, "Annotated   ",annot_sites
     #print >>sys.stderr, "Total annot sites",total_sites

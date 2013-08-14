@@ -15,6 +15,7 @@ import bisect
 import string
 from collections import Counter
 from collections import defaultdict
+import numpy
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 import unittest
@@ -44,7 +45,6 @@ def format_list(L):
     return " ".join(["%.1f" % i for i in L])
     #Discretizes the floats into ints
     #return "".join(["%d" % int((i+5)*10) for i in L])
-
 
 
 #No flanking site required
@@ -84,12 +84,12 @@ def LeftSite2str(seqid,exon,site,annot_site,win_radius,display_st,display_end,fn
     # print "Site     ",format_seq(" "*site_st+"**")
 
     return "%s\n%s\n%s\n%s\n%s\n%s"%(
-        "Region   "+"%s:%d-%d"%(site[2],display_st,display_end),
-        "Site pos "+"%s:%d-%d"%(site[2],site[0],site[1]),
-        "Annotated"+"%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1]),
-        "Exon     "+format_seq(exon_seq),
-        "Intron   "+format_seq(" "*eLen + intron_seq),
-        "Site     "+format_seq(" "*site_st+"**")),site_seq
+        "Region    "+"%s:%d-%d"%(site[2],display_st,display_end),
+        "Site pos  "+"%s:%d-%d"%(site[2],site[0],site[1]),
+        "Annotated "+"%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1]),
+        "Exon      "+format_seq(exon_seq),
+        "Intron    "+format_seq(" "*eLen + intron_seq),
+        "Site      "+format_seq(" "*site_st+"**")),site_seq
 
 
     #print "Normals  ",format_seq(" "*(site_st-swin_radius)+format_list(norm_score))
@@ -123,9 +123,9 @@ def RightSite2str(seqid,exon,site,annot_site,win_radius,display_st,display_end,f
     # print "Intron  ",format_seq(intron_seq)
     # print "Site    ",format_seq(" "*site_st+"**")
     return "%s\n%s\n%s\n%s\n%s\n%s"%(
-        "Region   "+"%s:%d-%d"%(site[2],display_st,display_end),
-        "Site pos "+"%s:%d-%d"%(site[2],site[0],site[1]),
-        "Annotated"+"%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1]),
+        "Region    "+"%s:%d-%d"%(site[2],display_st,display_end),
+        "Site pos  "+"%s:%d-%d"%(site[2],site[0],site[1]),
+        "Annotated "+"%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1]),
         "Exon     "+format_seq(" "*iLen +exon_seq),
         "Intron   "+format_seq(intron_seq),
         "Site     "+format_seq(" "*site_st+"**") ), site_seq
@@ -195,6 +195,28 @@ def printShortExon(display_st,display_end,xscript,site,fnh):
     print "Site    ",format_seq(" "*site_st+"**")
     return
 
+def coverageTrack(stsCnt,endsCnt,region_st,region_end):
+    diff = region_end-region_st
+
+    sts = [0]*diff
+    ends = [0]*diff
+    for i in range(region_st,region_end):
+
+        if stsCnt[i]>9:
+            sts[i-region_st] = 9
+        else:
+            sts[i-region_st] = stsCnt[i]
+
+        if endsCnt[i]>9:
+            ends[i-region_end] = endsCnt[i]
+        else:
+            ends[i-region_end] = endsCnt[i]
+
+    print "Starts   "+format_seq(format_seq("".join( map( str,sts))))
+    print "Ends     "+format_seq(format_seq("".join( map( str,ends))))
+
+
+
 """
 Given a dictionary of flanking sequences and a dictionary of xscripts
 For each false positive, display
@@ -202,7 +224,7 @@ For each false positive, display
 2) Annotations
 3) Sites
 """
-def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,fnh):
+def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,fnh):
     _,_,seqid,_ = site
     close = search.find_tuple(annotDict[seqid],site)
     annot_site = close
@@ -227,6 +249,7 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,fnh):
             else:
                 print "False positive ~ non-canonical site"
             print site_str
+            coverageTrack(cov_sts,cov_ends,display_st,display_end)
         if exon_ri!=-1:
             exon = xscript.exons[exon_ri]
             site_str,site_seq = RightSeq2str(xscript.seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh)
@@ -235,12 +258,12 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,fnh):
             else:
                 print "False positive ~ non-canonical site"
             print site_str
-
+            coverageTrack(cov_sts,cov_ends,display_st,display_end)
 
 """
 Prints the flanking sequences, the annotated region and the site
 """
-def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,fnh):
+def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,fnh):
     _,_,seqid,_ = site
     close = search.find_tuple(annotDict[seqid],site)
     annot_site = close
@@ -263,6 +286,7 @@ def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,fnh):
     if exon_li==-1 and exon_ri==-1:  #most likely a really short exon
         print "False negative ~ short exon"
         printShortExon(display_st,display_end,xscript,site,fnh)
+        coverageTrack(cov_sts,cov_ends,display_st,display_end)
         return
 
     if len(flanks)==0:
@@ -271,10 +295,12 @@ def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,fnh):
             exon = xscript.exons[exon_li]
             site_str,_ = LeftSite2str(xscript.seqid,exon,site,site,win_radius,display_st,display_end,fnh)
             print site_str
+            coverageTrack(cov_sts,cov_ends,display_st,display_end)
         if exon_ri!=-1:
             exon = xscript.exons[exon_ri]
             site_str,_ = RightSite2str(xscript.seqid,exon,site,site,win_radius,display_st,display_end,fnh)
             print site_str
+            coverageTrack(cov_sts,cov_ends,display_st,display_end)
     else:
         for flank in flanks:
             print "False negative ~ misclassified"
@@ -283,32 +309,34 @@ def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,fnh):
                 exon = xscript.exons[exon_li]
                 site_str,_ = LeftSeq2str(xscript.seqid,flank,exon,site,site,win_radius,display_st,display_end,fnh)
                 print site_str
+                coverageTrack(cov_sts,cov_ends,display_st,display_end)
             if exon_ri!=-1:
                 exon = xscript.exons[exon_ri]
                 site_str,_ = RightSeq2str(xscript.seqid,flank,exon,site,site,win_radius,display_st,display_end,fnh)
                 print site_str
+                coverageTrack(cov_sts,cov_ends,display_st,display_end)
 
 pattern = re.compile("(\S+):(\d+)-(\d+)") #parses chromosome name and positions
 
-def incorrect(args,fps,fns,flankDict,xscriptDict,annotDict,region,fnh):
+def incorrect(args,fps,fns,flankDict,xscriptDict,annotDict,region,cov_sts,cov_ends,fnh):
 
     if region!="":
         seqid,st,end = pattern.findall(region)[0]
         if args.false_positives:
             for fp in fps:
                 if sseqid==seqid and spos1>=st and spos2<=end:
-                    falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,fnh)
+                    falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,cov_sts,cov_ends,fnh)
         if args.false_negatives:
             for fn in fns:
                 if sseqid==seqid and spos1>=st and spos2<=end:
-                    falseNegativeDisplay(flankDict,xscriptDict,fn,annotDict,fnh)
+                    falseNegativeDisplay(flankDict,xscriptDict,fn,annotDict,cov_sts,cov_ends,fnh)
     else:
         if args.false_positives:
             for fp in fps:
-                falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,fnh)
+                falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,cov_sts,cov_ends,fnh)
         if args.false_negatives:
             for fn in fns:
-                falseNegativeDisplay(flankDict,xscriptDict,fn,annotDict,fnh)
+                falseNegativeDisplay(flankDict,xscriptDict,fn,annotDict,cov_sts,cov_ends,fnh)
 
 
 _revcomp_trans = string.maketrans("ACGT", "TGCA")
@@ -350,6 +378,7 @@ class TestDisplayFunctions(unittest.TestCase):
         print "Test print 1"
         #site = (440,441,'chr2R',"NM_001042999")
         site = (439,440,'chr2R',"NM_001042999")
+        cov_sts,cov_ends = {420:1},{420:1}
         # print >> sys.stderr,'fasta file',self.fasta
         # print >> sys.stderr,'gtf file  ',self.gtf
         annots = gtf.parseGTF([self.gtf])
@@ -368,13 +397,13 @@ class TestDisplayFunctions(unittest.TestCase):
         flankDict = { key: flanks  }
         annotDict = {x.seqid: x.getSites() for x in xscripts}
         xscriptDict = {x.xscript_id: x for x in xscripts}
-        falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,fnh)
+        falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,fnh)
         print
-
 
     def testPrint2(self):
         print "Test print 2"
         site = (500,501,'chr2R',"NM_001042999")
+        cov_sts,cov_ends = {420:1},{420:1}
         flanks = [("TAGAAGATTC",502),("TAGAAGATTC",502)]
         annots = gtf.parseGTF([self.gtf])
         fastadb = gtf.parseFASTA([self.fasta])
@@ -401,7 +430,7 @@ class TestDisplayFunctions(unittest.TestCase):
         flankDict = {}
         annotDict = {x.seqid: x.getSites() for x in xscripts}
         xscriptDict = {x.xscript_id: x for x in xscripts}
-        falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,fnh)
+        falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,fnh)
         print
     def testShortExon(self):
         site = (500,501,'chr2R',"NM_001042999")
