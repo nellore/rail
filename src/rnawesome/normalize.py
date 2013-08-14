@@ -47,6 +47,7 @@ site.addsitedir(os.path.join(base_path, "util"))
 
 import url
 import path
+import filemover
 
 parser.add_argument(\
     '--percentile', metavar='FRACTION', type=float, required=False, default=0.75,
@@ -71,6 +72,8 @@ parser.add_argument(\
 parser.add_argument(\
     '--faidx', type=str, required=False, default="",
     help='Path to a FASTA index that we can use instead of --chrom_sizes.')
+
+filemover.addArgs(parser)
 
 args = parser.parse_args()
 
@@ -104,11 +107,8 @@ def moveToHDFS(fin,fout):
     put_proc = subprocess.Popen([args.hadoop_exe, 'fs', '-put',fin, fout])
     put_proc.wait()
 
+mover = filemover.FileMover(args=args)
 outUrl = url.Url(args.out_dir)
-if outUrl.isS3():
-    if not path.which("s3cmd"):
-        # TODO make it possible for user to specify credentials file for s3cmd?
-        raise RuntimeError("Could not find path to s3cmd")
 
 chromSizes = args.chrom_sizes
 delChromSizes = False
@@ -147,13 +147,7 @@ for ln in sys.stdin:
         bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, chromSizes, bb_file])
         bigbed_proc.wait()
         if outUrl.isNotLocal():
-            if outUrl.isS3():
-                out_fname = "%s/%s.bb" % (outUrl.toNonNativeUrl(), last_samp)
-                os.system("s3cmd put %s %s" % (bb_file, out_fname))
-            else:
-                assert outUrl.isHdfs()
-                out_fname = "%s/%s.bb" % (args.out_dir, last_samp)
-                moveToHDFS(bb_file, out_fname)
+            mover.put(bb_file, '/'.join([outUrl.toNonNativeUrl(), bb_file]))
         os.remove(fname)
         last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
         samp_out = open(fname,'w')
@@ -183,13 +177,7 @@ if last_samp != "\t":
     bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, chromSizes, bb_file])
     bigbed_proc.wait()
     if outUrl.isNotLocal():
-        if outUrl.isS3():
-            out_fname = "%s/%s.bb" % (outUrl.toNonNativeUrl(), last_samp)
-            os.system("s3cmd put %s %s" % (bb_file, out_fname))
-        else:
-            assert outUrl.isHdfs()
-            out_fname = "%s/%s.bb" % (args.out_dir, last_samp)
-            moveToHDFS(bb_file, out_fname)
+        mover.put(bb_file, '/'.join([outUrl.toNonNativeUrl(), bb_file]))
     os.remove(fname)
 
 if delChromSizes:
@@ -198,4 +186,3 @@ if delChromSizes:
 # Done
 timeEn = time.clock()
 print >>sys.stderr, "DONE with normalize.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
-
