@@ -64,7 +64,7 @@ for ln in sys.stdin:
     ninp += 1
 
 ofh = sys.stdout
-outFn, outUrl = None
+outFn, outUrl = None, None
 
 if args.out is not None:
     # If --out is a local file, just write directly to that file.  Otherwise,
