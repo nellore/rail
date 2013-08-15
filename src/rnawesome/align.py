@@ -107,6 +107,9 @@ parser.add_argument(\
     help='The overlap length of spanning readlets when evaluating splice junctions')
 parser.add_argument(\
     '--faidx', type=str, required=False, help='Fasta index file')
+parser.add_argument(\
+    '--max-intron-length', type=int, required=False,default=1000000,
+    help='Filters out all potential introns longer than this length')
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
@@ -229,6 +232,9 @@ def formatList(s,l):
 
 # Print all listed introns to stdout and the flanking sequences
 def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,outhandle):
+    if abs(in_end-in_start) > args.max_intron_length:
+        return
+    
     global nout
     offset = args.splice_overlap
     fw_char = "+" if fw else "-"
