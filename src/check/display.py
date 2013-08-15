@@ -87,9 +87,9 @@ def LeftSite2str(seqid,exon,site,annot_site,win_radius,display_st,display_end,fn
         "Region    "+"%s:%d-%d"%(site[2],display_st,display_end),
         "Site pos  "+"%s:%d-%d"%(site[2],site[0],site[1]),
         "Annotated "+"%s:%d-%d"%(annot_site[2],annot_site[0],annot_site[1]),
-        "Exon      "+format_seq(exon_seq),
-        "Intron    "+format_seq(" "*eLen + intron_seq),
-        "Site      "+format_seq(" "*site_st+"**")),site_seq
+        "Exon     "+format_seq(exon_seq),
+        "Intron   "+format_seq(" "*eLen + intron_seq),
+        "Site     "+format_seq(" "*site_st+"**")),site_seq
 
 
     #print "Normals  ",format_seq(" "*(site_st-swin_radius)+format_list(norm_score))
@@ -224,7 +224,7 @@ For each false positive, display
 2) Annotations
 3) Sites
 """
-def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,fnh):
+def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,win_radius,fnh):
     _,_,seqid,_ = site
     close = search.find_tuple(annotDict[seqid],site)
     annot_site = close
@@ -234,7 +234,7 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,f
     xscript = xscriptDict[xscript_id]
 
     #Display everything around the splice site by a 50 bp radius
-    win_radius = 50
+    #win_radius = 50
     pos1,pos2 = site[0],site[1]  #positions of the estimated splice site
     #Get indexes of displayed exons.  Note that one of them should be -1
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
@@ -263,7 +263,7 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,f
 """
 Prints the flanking sequences, the annotated region and the site
 """
-def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,fnh):
+def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,win_radius,fnh):
     _,_,seqid,_ = site
     close = search.find_tuple(annotDict[seqid],site)
     annot_site = close
@@ -278,7 +278,7 @@ def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,f
     xscript = xscriptDict[xscriptID]
 
     #Display everything around the splice site by a 50 bp radius
-    win_radius = 50
+    #win_radius = 50
     pos1,pos2 = site[0],site[1]  #positions of the estimated splice site
     #Get indexes of displayed exons.  Note that one of them should be -1 unless one of the exons are really short
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
@@ -318,25 +318,25 @@ def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,f
 
 pattern = re.compile("(\S+):(\d+)-(\d+)") #parses chromosome name and positions
 
-def incorrect(args,fps,fns,flankDict,xscriptDict,annotDict,region,cov_sts,cov_ends,fnh):
+def incorrect(args,fps,fns,flankDict,xscriptDict,annotDict,region,cov_sts,cov_ends,win_radius,fnh):
 
     if region!="":
         seqid,st,end = pattern.findall(region)[0]
         if args.false_positives:
             for fp in fps:
                 if sseqid==seqid and spos1>=st and spos2<=end:
-                    falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,cov_sts,cov_ends,fnh)
+                    falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,cov_sts,cov_ends,win_radius,fnh)
         if args.false_negatives:
             for fn in fns:
                 if sseqid==seqid and spos1>=st and spos2<=end:
-                    falseNegativeDisplay(flankDict,xscriptDict,fn,annotDict,cov_sts,cov_ends,fnh)
+                    falseNegativeDisplay(flankDict,xscriptDict,fn,annotDict,cov_sts,cov_ends,win_radius,fnh)
     else:
         if args.false_positives:
             for fp in fps:
-                falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,cov_sts,cov_ends,fnh)
+                falsePositiveDisplay(flankDict,xscriptDict,fp,annotDict,cov_sts,cov_ends,win_radius,fnh)
         if args.false_negatives:
             for fn in fns:
-                falseNegativeDisplay(flankDict,xscriptDict,fn,annotDict,cov_sts,cov_ends,fnh)
+                falseNegativeDisplay(flankDict,xscriptDict,fn,annotDict,cov_sts,cov_ends,win_radius,fnh)
 
 
 _revcomp_trans = string.maketrans("ACGT", "TGCA")

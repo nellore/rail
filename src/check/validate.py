@@ -48,12 +48,15 @@ parser.add_argument(\
     '--radius', type=int, required=False,default=10,
     help='The radius of tolerance for identifying splice site neighborhoods')
 parser.add_argument(\
+    '--window-radius', type=int, required=False,default=50,
+    help='The radius of display window')
+parser.add_argument(\
     '--refseq', type=str, required=True,
     help='The reference sequence')
 parser.add_argument(\
-                    '--region',type=str,required=False,default="",help='The coordinates of the sites to be displayed (e.g. chrX:1-100)')
+    '--region',type=str,required=False,default="",help='The coordinates of the sites to be displayed (e.g. chrX:1-100)')
 parser.add_argument(\
-                    '--flank-seqs', type=str,required=True,help='The flanking sequences surrounding the intron')
+    '--flank-seqs', type=str,required=True,help='The flanking sequences surrounding the intron')
 
 display.addArgs(parser)
                     
@@ -201,7 +204,7 @@ def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,region,cov_sts,cov
     xscriptDict = dict()
     for x in xscripts:
         xscriptDict[x.xscript_id] = x
-    display.incorrect(args,fps,fns,flanksDict,xscriptDict,annot_sites,region,cov_sts,cov_ends,fnh)
+    display.incorrect(args,fps,fns,flanksDict,xscriptDict,annot_sites,region,cov_sts,cov_ends,args.window_radius,fnh)
 
 if __name__=="__main__":
     #sites = readOverlappedSites(args.site_file)
