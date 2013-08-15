@@ -542,7 +542,6 @@ def go():
     
     import time
     timeSt = time.time()
-    print >> sys.stderr, "Starting clock: " + time.strftime('%X %x')
     
     archiveFh, archiveDir = None, None
     if args.archive is not None:
@@ -594,7 +593,6 @@ def go():
         import shutil
         shutil.rmtree(tmpdir)
     
-    print >> sys.stderr, "Stopping clock: " + time.strftime('%X %x')
     print >> sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, time.time()-timeSt)
 
 #Only used for testing

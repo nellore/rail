@@ -59,7 +59,7 @@ parser.add_argument(\
     '--flank-seqs', type=str,required=True,help='The flanking sequences surrounding the intron')
 
 display.addArgs(parser)
-
+                    
 args = parser.parse_args()
 
 
@@ -242,7 +242,7 @@ if __name__=="__main__":
     close_sites.sort(key=lambda tup:tup[0])
 
 
-    missed = len(intersect_sites)
+    missed = len(missed_sites)
     total = len(total_sites)
     sim_total = len(sim_sites)
     correct = len(found_sites)
