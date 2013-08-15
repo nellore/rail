@@ -63,7 +63,7 @@ def proc(args, readFn=None, bowtieArgs=None, sam=False, outHandler=None, errHand
     mycmd = cmd(args, readFn=readFn, bowtieArgs=bowtieArgs, sam=sam)
     print >> sys.stderr, "Starting command: '%s'" % mycmd
     proc = subprocess.Popen(\
-        mycmd, shell=True, stdin=stdin_pipe, stdout=stdout_pipe, stderr=stderr_pipe)
+        mycmd, shell=True, stdin=stdin_pipe, stdout=stdout_pipe, stderr=stderr_pipe, bufsize=-1)
     if outHandler is not None:
         print >> sys.stderr, "  Starting stdout handler"
         t = threading.Thread(target=outHandler, args=(proc.stdout,))
