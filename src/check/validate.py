@@ -242,7 +242,7 @@ if __name__=="__main__":
     close_sites.sort(key=lambda tup:tup[0])
 
 
-    missed = len(intersection_sites)
+    missed = len(intersect_sites)
     total = len(total_sites)
     sim_total = len(sim_sites)
     correct = len(found_sites)
