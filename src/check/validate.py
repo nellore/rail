@@ -253,7 +253,7 @@ if __name__=="__main__":
     #print "Annotated site stats\t",annot_site_stats
     false_sites = false_sites+close_sites
 
-    displayIncorrect(false_sites,missed_sites,args.flank_seqs,xscripts,annot_sites,args.region,cov_sts,cov_ends,fastaH)
+    displayIncorrect(false_sites,intersect_sites,args.flank_seqs,xscripts,annot_sites,args.region,cov_sts,cov_ends,fastaH)
 
     #print >>sys.stderr, "Annotated   ",annot_sites
     #print >>sys.stderr, "Total annot sites",total_sites
