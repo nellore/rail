@@ -67,9 +67,6 @@ parser.add_argument(\
     '--indel_rate', metavar='float', action='store', type=float, default=0.0002,
     help='The rate of inserts or deletions')
 parser.add_argument(\
-    '--variants_file', metavar='PATH', action='store', type=str, default="variants.txt",
-    help='Stores a list of variants for each transcript')
-parser.add_argument(\
     '--chrsizes', type=str, required=False,
     help='The sizes of each chromosome')
 parser.add_argument(\
@@ -360,7 +357,7 @@ def go():
     print >> sys.stderr,"Indel Rate",args.indel_rate
     seq_sizes = chrsizes.getSizes(args.chrsizes)
     annots_handle = open(args.output_annotations,'w')
-    var_handle = open(args.variants_file,'w')
+    var_handle = open(args.output_prefix+".variants",'w')
     annots = gtf.parseGTF(args.gtf)
     fastadb = gtf.parseFASTA(args.fasta)
     xscripts = gtf.assembleTranscripts(annots,fastadb)

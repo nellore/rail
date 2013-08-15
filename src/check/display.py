@@ -290,27 +290,29 @@ def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,w
         return
 
     if len(flanks)==0:
-        print "False negative ~ no flanking sequences"
         if exon_li!=-1:
+            print "False negative ~ no flanking sequences"
             exon = xscript.exons[exon_li]
             site_str,_ = LeftSite2str(xscript.seqid,exon,site,site,win_radius,display_st,display_end,fnh)
             print site_str
             coverageTrack(cov_sts,cov_ends,display_st,display_end)
         if exon_ri!=-1:
+            print "False negative ~ no flanking sequences"
             exon = xscript.exons[exon_ri]
             site_str,_ = RightSite2str(xscript.seqid,exon,site,site,win_radius,display_st,display_end,fnh)
             print site_str
             coverageTrack(cov_sts,cov_ends,display_st,display_end)
     else:
         for flank in flanks:
-            print "False negative ~ misclassified"
             #flank_seq,flank_st = flank  #Note
             if exon_li!=-1:
+                print "False negative ~ misclassified"
                 exon = xscript.exons[exon_li]
                 site_str,_ = LeftSeq2str(xscript.seqid,flank,exon,site,site,win_radius,display_st,display_end,fnh)
                 print site_str
                 coverageTrack(cov_sts,cov_ends,display_st,display_end)
             if exon_ri!=-1:
+                print "False negative ~ misclassified"
                 exon = xscript.exons[exon_ri]
                 site_str,_ = RightSeq2str(xscript.seqid,flank,exon,site,site,win_radius,display_st,display_end,fnh)
                 print site_str
