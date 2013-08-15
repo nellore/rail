@@ -182,9 +182,6 @@ def overlapping_sites(xscript,read_st,read_end):
         if read_st<=xsites[i][0] and read_end>=xsites[i][1]:
             overlaps.append(sites[2*i])
             overlaps.append(sites[2*i+1])
-            print >> sys.stderr,"sites",sites[2*i],sites[2*i+1]
-            print >> sys.stderr,"xsites",xsites[i]
-            print >> sys.stderr,"read bounds",read_st,read_end
         diff = sites[2*i+1][1] - sites[2*i][0] + 1
         if read_st>=xsites[i][0]:
             st+=diff
@@ -381,7 +378,7 @@ def go():
     sim_sites.sort()
     real_sites = "\t".join(map(str,real_sites))
     sim_sites = "\t".join(map(str,sim_sites))
-
+    
     pickle.dump(sites,open(args.output_prefix+".sites",'wb'))
     print >> sys.stderr,"Total number of reads",total_reads
     print >> sys.stderr,"Total number of mismatched reads",total_mismatches
@@ -428,39 +425,21 @@ if __name__=="__main__":
                 xscripts = gtf.assembleTranscripts(annots,fastadb)
                 print readableFormat(fastadb["chr2R"])
                 read_st,read_end = 5,15
-                overlaps,st,end = overlapping_sites(xscripts[0],read_st,read_end)
+                _,st,end = overlapping_sites(xscripts[0],read_st,read_end)
                 print >> sys.stderr,"read",read_st,read_end
                 print >> sys.stderr,"ref",st,end
-                print >> sys.stderr,"overlaps",overlaps
                 self.assertEquals(15,st)
                 self.assertEquals(35,end)
-                self.assertEquals(len(overlaps),2)
             def test_overlap2(self):
                 annots = gtf.parseGTF([self.gtf])
                 fastadb = gtf.parseFASTA([self.fasta])
                 xscripts = gtf.assembleTranscripts(annots,fastadb)
                 print readableFormat(fastadb["chr2R"])
                 read_st,read_end = 5,25
-                overlaps,st,end = overlapping_sites(xscripts[0],read_st,read_end)
+                _,st,end = overlapping_sites(xscripts[0],read_st,read_end)
                 print >> sys.stderr,"read",read_st,read_end
                 print >> sys.stderr,"ref",st,end
-                print >> sys.stderr,"overlaps",overlaps
                 self.assertEquals(15,st)
                 self.assertEquals(55,end)
-                self.assertEquals(len(overlaps),4)
-            def test_overlap3(self):
-                annots = gtf.parseGTF([self.gtf])
-                fastadb = gtf.parseFASTA([self.fasta])
-                xscripts = gtf.assembleTranscripts(annots,fastadb)
-                print readableFormat(fastadb["chr2R"])
-                read_st,read_end = 15,25
-                overlaps,st,end = overlapping_sites(xscripts[0],read_st,read_end)
-                print >> sys.stderr,"read",read_st,read_end
-                print >> sys.stderr,"ref",st,end
-                print >> sys.stderr,"overlaps",overlaps
-                self.assertEquals(35,st)
-                self.assertEquals(55,end)
-                self.assertEquals(len(overlaps),2)
-
 
         unittest.main()

@@ -451,8 +451,7 @@ def writeReads(fhs, reportMult=1.2):
     global ninp
     report = 1.0
     for ln in sys.stdin:
-        ln = ln.rstrip()
-        toks = ln.split('\t')
+        toks = ln.rstrip().split('\t')
         ninp += 1
         pair = False
         nm, seq, qual = None, None, None
@@ -540,10 +539,10 @@ def writeReads(fhs, reportMult=1.2):
                 for fh in fhs: fh.write(rdStr)
 
 def go():
-
+    
     import time
-    timeSt = time.clock()
-
+    timeSt = time.time()
+    
     archiveFh, archiveDir = None, None
     if args.archive is not None:
         archiveDir = os.path.join(args.archive, str(os.getpid()))
@@ -587,15 +586,14 @@ def go():
     proc.stdout.close()
     if args.verbose:
         print >>sys.stderr, "Bowtie finished"
-
+    
     # Remove any temporary reads files created
     if args.serial and args.write_reads is None and not args.keep_reads:
         print >>sys.stderr, "Cleaning up temporary files"
         import shutil
         shutil.rmtree(tmpdir)
-
-    timeEn = time.clock()
-    print >>sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
+    
+    print >> sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, time.time()-timeSt)
 
 #Only used for testing
 def createTestFasta(fname,refid,refseq):
