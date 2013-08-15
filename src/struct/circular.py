@@ -4,8 +4,6 @@ circular.py
 Circular buffers.
 '''
 
-import sys
-
 class CircularCountBuffer(object):
     
     """ Buffer for holding integer counts temporarily as we move sequentially
