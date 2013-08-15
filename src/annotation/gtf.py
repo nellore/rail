@@ -94,6 +94,16 @@ class Transcript(object):
             sites.append( (site5, site5+1, self.seqid, self.xscript_id) )
             sites.append( (site3-2, site3-1, self.seqid, self.xscript_id) )
         return sites
+    """Retrieves all pairs of splice sites"""
+    def getSitePairs(self):
+        sites = []
+        for i in range(1,len(self.exons)):
+            site5 = self.exons[i-1].en0
+            site3 = self.exons[i].st0
+            sites.append( ( (site5, site5+1, self.seqid, self.xscript_id) ,
+                          (site3-2, site3-1, self.seqid, self.xscript_id) ) )
+        return sites
+        
     """
     Given a base position, find the exon that it overlaps, return -1 if nonexistant
     """
@@ -126,7 +136,7 @@ class Transcript(object):
                 while c==lseq[i]: #Can't be equal
                     lseq[i] = c
                     c = "ACGT"[random.randint(0,3)]
-                var_handle.write("%s\tsnp%d"%(self.gene_id,i))
+                var_handle.write("%s\tsnp\t%d\n"%(self.gene_id,i))
             else:
                 r = random.random()
                 if r<indel_rate:
@@ -136,12 +146,12 @@ class Transcript(object):
                         seq1 = lseq[:i]
                         seq2 = lseq[i:]
                         lseq = seq1+[ins]+seq2
-                        var_handle.write("%s\tinsert%d"%(self.gene_id,i))
+                        var_handle.write("%s\tinsert\t%d\n"%(self.gene_id,i))
                     else:
                         seq1 = lseq[:i]
                         seq2 = lseq[i+1:]
                         lseq = seq1+seq2
-                        var_handle.write("%s\tdelete%d"%(self.gene_id,i))
+                        var_handle.write("%s\tdelete%\td\n"%(self.gene_id,i))
         self.seq = "".join(lseq)
 
     def __str__(self):
