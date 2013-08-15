@@ -14,9 +14,8 @@ Tab-delimited input tuple columns:
  1. Partition ID for partition overlapped by interval
  2. Interval start
  3. Interval end (exclusive)
- 4. Reference ID
- 5. Interval count
- 6. Sample label
+ 4. Interval count
+ 5. Sample label
 
 Binning/sorting prior to this step:
  1. Binned by partition
@@ -27,10 +26,6 @@ Tab-delimited output tuple columns:
  2. Chromosome name
  3. Genome Position
  4. Count (at some position)
-
-TODO:
- - Do input tuples really need the refid (4th) field?  Can't we recover from
-   partition ID?
 
 '''
 
@@ -100,8 +95,8 @@ def go():
     for ln in sys.stdin:
         ln = ln.rstrip()
         toks = ln.split('\t')
-        assert len(toks) == 6
-        pt, st, en, _, weight, lab = toks  
+        assert len(toks) == 5
+        pt, st, en, weight, lab = toks
         st, en, weight = int(st), int(en), int(weight)
         _, part_st, part_en = partition.parse(pt, binsz)
         assert en > st

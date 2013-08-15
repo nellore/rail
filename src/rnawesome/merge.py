@@ -7,24 +7,26 @@ merge.py
 If there are a lot of intervals that are identical given a particular label &
 partition, merge them down into a single interval with counter >1.
 
+Also, we re-partition them into smaller partitions (cleverly) in an effort to
+make partitions with approximately equal interval membership.  This gives the
+following walk_prenorm and walk_fit steps much better load balance.
+
 Tab-delimited input tuple columns:
  1. Partition ID for partition overlapped by interval
  2. Interval start
  3. Interval end (exclusive)
- 4. Reference ID
- 5. Sample label
+ 4. Sample label
 
 Binning/sorting prior to this step:
  1. Binned by partition
  2. Bins sorted by Interval start
 
 Tab-delimited output tuple columns (only column 5 is new):
- 1. Partition ID for partition overlapped by interval
+ 1. New Partition ID
  2. Interval start
  3. Interval end (exclusive)
- 4. Reference ID
- 5. Interval count
- 6. Sample label
+ 4. Interval count
+ 5. Sample label
 """
 
 import sys
@@ -41,23 +43,22 @@ parser.add_argument(\
 
 args = parser.parse_args()
 
-ndigits = 12
 prefix = "o\t" if args.partition_stats else ""
 
-def flushCnts(pt, refid, st, en, cnts):
+def flushCnts(pt, st, en, cnts):
     nout = 0
     for k, v in cnts.iteritems():
         # k is group label, v is # times the interval occurred
-        start = str(st)
-        assert len(start) <= ndigits
-        print "%s%s\t%012d\t%d\t%s\t%d\t%s" % (prefix, pt, st, en, refid, v, k)
+        assert len(str(st)) <= 12
+        # we have the option of attaching a new partition label here, perhaps
+        # to load balance the tuples better
+        print "%s%s\t%012d\t%d\t%d\t%s" % (prefix, pt, st, en, v, k)
         nout += 1
     return nout
 
 def go():
     ninp, nout = 0, 0 # # lines input/output so far
     last_pt = "\t"    # last partition id
-    last_refid = "\t" # last ref id
     last_st = -1      # last start pos
     last_en = -1      # last end pos
     cnts = dict()     # per-label counts for a given rdid
@@ -69,8 +70,8 @@ def go():
     for ln in sys.stdin:
         ln = ln.rstrip()
         toks = ln.split('\t')
-        assert len(toks) == 5, "Bad input:\n" + ln
-        pt, st, en, refid, lab = toks
+        assert len(toks) == 4, "Bad input:\n" + ln
+        pt, st, en, lab = toks
         st, en = int(st), int(en)
         assert pt != last_pt or st >= last_st
         if pt != last_pt:
@@ -88,9 +89,9 @@ def go():
         else:
             # Flush previous dict
             if last_st >= 0:
-                nout += flushCnts(last_pt, last_refid, last_st, last_en, cnts)
+                nout += flushCnts(last_pt, last_st, last_en, cnts)
             cnts = {lab:1}
-        last_pt, last_refid, last_st, last_en = pt, refid, st, en
+        last_pt, last_st, last_en = pt, st, en
         ninp += 1
     
     if last_pt != '\t' and args.partition_stats:
@@ -98,7 +99,7 @@ def go():
         print '\t'.join(['partstats', str(nInBin), str(timeBin)])
     
     if last_st >= 0:
-        nout += flushCnts(last_pt, last_refid, last_st, last_en, cnts)
+        nout += flushCnts(last_pt, last_st, last_en, cnts)
     
     timeEn = time.clock()
     

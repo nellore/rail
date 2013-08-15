@@ -216,7 +216,7 @@ def correctSplice(read,ref_left,ref_right,fw):
 def printExons(refid,in_start,in_end,rdnm):
     global nout
     for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
-        print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, in_start, in_end, refid, sample.parseLab(rdnm))
+        print "exon\t%s\t%012d\t%d\t%s" % (pt, in_start, in_end, sample.parseLab(rdnm))
         nout += 1
 
 """
@@ -227,7 +227,7 @@ def readableFormat(s):
 def formatList(s,l):
     return (" "*l).join( list( str(s) ) )
 
-#Print all listed introns to stdout and the flanking sequences
+# Print all listed introns to stdout and the flanking sequences
 def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,outhandle):
     global nout
     offset = args.splice_overlap
@@ -364,7 +364,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             # Add a partition id that combines the ref id and some function of
             # the offsets
             for pt in iter(partition.partition(k, st, en, binsz)):
-                print "exon\t%s\t%012d\t%d\t%s\t%s" % (pt, st, en, k, sample.parseLab(rdnm))
+                print "exon\t%s\t%012d\t%d\t%s" % (pt, st, en, sample.parseLab(rdnm))
                 nout += 1
 
 def bowtieOutReadlets(st, reportMult=1.2):
