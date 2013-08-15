@@ -26,10 +26,9 @@ gpositions = defaultdict(counter.Counter)
 for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split("\t")
-    assert len(toks)>=5
-
-    pt,st,en,refid,lab = toks[0],int(toks[1]),int(toks[2]),toks[3],toks[4]
-
+    assert len(toks) >= 4
+    pt,st,en,lab = toks[0],int(toks[1]),int(toks[2]),toks[3]
+    refid = pt[:pt.index(';')]
     gpositions = addRead(refid,st,en,gpositions)
 
 for d,c in gpositions.iteritems():
