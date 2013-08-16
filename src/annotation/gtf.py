@@ -10,6 +10,7 @@ import re
 from operator import itemgetter
 from collections import defaultdict
 import random
+import sys 
 
 #parser = argparse.ArgumentParser(description='Parse a GTF file.')
 def addArgs(parser):
@@ -132,10 +133,9 @@ class Transcript(object):
         for i in range(0,len(lseq)):
             r = random.random()
             if r<mm_rate:
-                c = "ACGT"[random.randint(0,3)]
-                while c==lseq[i]: #Can't be equal
-                    lseq[i] = c
-                    c = "ACGT"[random.randint(0,3)]
+                bases = ["A","C","G","T"]
+                bases.remove(lseq[i])
+                c = bases[random.randint(0,2)]
                 var_handle.write("%s\tsnp\t%d\n"%(self.gene_id,i))
             else:
                 r = random.random()

@@ -72,6 +72,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--test', action='store_const', const=True, default=False,
     help='Run unit tests')
+parser.add_argument(\
+    '--profile', action='store_const', const=True, default=False,
+    help='Profile simulation generation')
 
 gtf.addArgs(parser)
 args = parser.parse_args()
@@ -91,6 +94,10 @@ class WeightedRandomGenerator(object):
 
     def __call__(self):
         return self.next()
+
+#Creates an error model using a binomial random number generator based off of read length=N
+def errorPMF(N,mm_rate):
+    return WeightedRandomGenerator([ (1-mm_rate)**(N-i) * mm_rate**i for i in range(0,N)])
 
 #Make weighted random generator for transcriptome
 def makeWeights(xscripts,seq_sizes,annots_handle):
@@ -138,18 +145,26 @@ total_mismatches = 0
 """
 Incorporates sequencing error into reads
 """
-def sequencingError(read,mm_rate):
+def sequencingError(read,errModel):
     global total_reads
     global total_mismatches
     length = len(read)
     lread = list(read)
-    for i in range(1,len(lread)-1):
-        r = random.random()
-        if r<mm_rate:
-            lread[i] = "ACGT"[random.randint(0,3)]
+    #num = random.expovariate(1.0/mm_rate)
+    #print >> sys.stderr,"expo num",num,"mean",(1.0/mm_rate)
+    errs = errModel.next()
+    if errs==0:
+        total_reads+=1
+        return "".join(lread)
+
+    for i in range(0,errs):
+        r = random.randint(1,len(lread)-1)
+        bases = ["A","C","G","T"]
+        bases.remove(lread[r])
+        lread[r] = bases[random.randint(0,2)]
+        
     nread = "".join(lread)
-    if nread!=read:
-        total_mismatches+=1
+    total_mismatches+=1
     total_reads+=1
     return nread
 
@@ -190,24 +205,20 @@ def overlapping_sites(xscript,read_st,read_end):
     return overlaps,st,en
 
 
-def simulateSingle(xscript,sites,readlen):
+def simulateSingle(xscript,readlen,errModel):
     start,end,seqid = 0,len(xscript.seq)-readlen,xscript.seqid
     if end<start or len(xscript.seq)<readlen:
-        #print >> sys.stderr,"end<start",(end<start)
-        #print >> sys.stderr,"len(x.seq)<readlen",(len(xscript.seq)<readlen)
         return None,None,None
-        #continue
     i = random.randint(start,end)
     if xscript.orient=="+":
         read = xscript.seq[i:i+readlen]
     else:
         read = revcomp(xscript.seq[i:i+readlen])
-    overlaps,st,end = overlapping_sites(xscript,i,i+readlen)
-    sites = sites.union(overlaps)
-    read = sequencingError(read,args.readmm_rate)
+    sites,st,end = overlapping_sites(xscript,i,i+readlen)
+    read = sequencingError(read,errModel)
     return read,sites,(st,end)
 
-def simulatePairedEnd(xscript,sites,readlen):
+def simulatePairedEnd(xscript,readlen,errModel):
     start,end,seqid = 0,len(xscript.seq)-readlen,xscript.seqid
     if end<start or len(xscript.seq)<readlen:
         #print >> sys.stderr, xscript.seq
@@ -229,10 +240,12 @@ def simulatePairedEnd(xscript,sites,readlen):
 
     overlaps1,st1,end1 = overlapping_sites(xscript,i,i+readlen)
     overlaps2,st2,end2 = overlapping_sites(xscript,j,j+readlen)
-    sites = sites.union(overlaps1)
-    sites = sites.union(overlaps2)
-    mate1 = sequencingError(mate1,args.readmm_rate)
-    mate2 = sequencingError(mate2,args.readmm_rate)
+    #sites = sites.union(overlaps1)
+    #sites = sites.union(overlaps2)
+    sites = set(overlaps1)
+    sites |= set(overlaps2)
+    mate1 = sequencingError(mate1,errModel)
+    mate2 = sequencingError(mate2,errModel)
 
     return (mate1,mate2),sites,(st1,end1),(st2,end2)
 
@@ -247,6 +260,7 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
     incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
     sim_xscripts = set()
     sites = set()
+    errModel = errorPMF(readlen,args.readmm_rate)
     while n<targetNucs:
         #Pick a transcript at weighted random
         i = gen.next()
@@ -255,11 +269,12 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
             sim_xscripts.add(x)
         #print x.gene_id,x.xscript_id,x.seqid
         if args.paired_end:
-            tmp_reads,tmp_sites,bounds1,bounds2 = simulatePairedEnd(x,sites,readlen)
+            tmp_reads,tmp_sites,bounds1,bounds2,overlaps= simulatePairedEnd(x,readlen,errModel)
             if tmp_reads==None and tmp_sites==None:
                 continue
             else:
-                reads,sites = tmp_reads,tmp_sites
+                reads = tmp_reads
+                sites|= set(tmp_sites)
             n+=readlen+readlen
             cov_sts[ bounds1[0] ]+=1
             cov_sts[ bounds2[0] ]+=1
@@ -267,11 +282,12 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
             cov_ends[ bounds2[1] ]+=1
             seqs.append(reads) #Appends a pair of reads
         else:
-            tmp_reads,tmp_sites,bounds = simulateSingle(x,sites,readlen)
+            tmp_reads,tmp_sites,bounds = simulateSingle(x,readlen,errModel)
             if tmp_reads==None and tmp_sites==None:
                 continue
             else:
-                reads,sites = tmp_reads,tmp_sites
+                reads = tmp_reads
+                sites|= set(tmp_sites)
             n+=readlen
             cov_sts[ bounds[0] ]+=1
             cov_ends[ bounds[1] ]+=1
@@ -400,8 +416,11 @@ def readableFormat(s):
     return "\t".join([s[i:i+10] + " " + str(i+10) for i in range(0,len(s),10)])
 
 if __name__=="__main__":
-    if not args.test:
-        go()
+    if not args.test and not args.profile:
+        go() 
+    elif args.profile:
+        import cProfile
+        cProfile.run('go()')
     else:
         del sys.argv[1:]
         import unittest
@@ -441,5 +460,17 @@ if __name__=="__main__":
                 print >> sys.stderr,"ref",st,end
                 self.assertEquals(15,st)
                 self.assertEquals(55,end)
+            def test_errorPMF(self):
+                N = 1000000
+                n = 100
+                rate = 0.01
+                cnts = counter.Counter()
+                model = errorPMF(n,rate)
+                for i in range(0,N):
+                    cnts[model.next()]+=1
+                print >> sys.stderr,"Histogram",cnts
+                self.assertGreater(cnts[0],cnts[1]) 
+                self.assertGreater(cnts[0],cnts[2])
+                self.assertGreater(cnts[1],cnts[2])
 
         unittest.main()
