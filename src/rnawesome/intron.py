@@ -12,13 +12,18 @@ Tab-delimited input tuple columns:
 8. Readlet Sequence before 3' site
 9. Readlet Sequence after 3' site
 
-Tab-delimited output tuple columns:
+Tab-delimited splice site output tuple columns:
 1. Reference ID
 2. 5' start
 3. 3' start
 4. Sample label
 5. Read frequency (number of times sample read overlapped junction)
 
+Tab-delimited cooccurence output tuple columns:
+1. rdid
+2. refID
+3. left_site
+4. right_site
 
 TODO:
 1) Fix the sliding window skewness problem
@@ -58,10 +63,12 @@ parser.add_argument(\
 parser.add_argument(\
     '--refseq', type=str, required=False,
     help='The fasta sequence of the reference genome. The fasta index of the reference genome is also required')
-
 parser.add_argument(\
     '--radius', type=int, required=False,default=10,
     help='The radius of the clustering algorithm and the radius of the sliding window algorithm.')
+parser.add_argument(\
+    '--scores-file', type=str, required=False,default="",
+    help='The location of the scores output file')
 
 
 readlet.addArgs(parser)
@@ -81,8 +88,8 @@ def cluster(ivals):
     rIval = args.radius
     p = ivals[0]
     points.append(p)
-    key = "%s,%s"%(p[0],p[1])
-    bins[key].append(ivals[0])
+    #key = "%s,%s"%(p[0],p[1])
+    bins[p].append(ivals[0])
     notFound = True
     for i in range(1,len(ivals)):
         for j in range(0,len(points)): #Check all the neighborhood of all points
@@ -90,15 +97,16 @@ def cluster(ivals):
             ival = ivals[i]
             if (ival[0]>(p[0]-rIval) and ival[0]<(p[0]+rIval) and
                 ival[1]>(p[1]-rIval) and ival[1]<(p[1]+rIval) ):
-                key = "%s,%s"%(p[0],p[1])
-                bins[key].append(ivals[i])
+                #key = "%s,%s"%(p[0],p[1])
+                #bins[key].append(ivals[i])
+                bins[p].append(ivals[i])
                 notFound = False
                 break
         if notFound:
             p = ivals[i]
             points.append(p)
-            key = "%s,%s"%(p[0],p[1])
-            bins[key].append(ivals[i])
+            #key = "%s,%s"%(p[0],p[1])
+            bins[p].append(ivals[i])
         notFound = True
     return bins
 
@@ -107,10 +115,9 @@ def cluster(ivals):
 Just a fancier way to print out lists
 """
 def format_list(L):
-    s = ""
-    for i in L:
-        s+="%.3f "%i
-    return s
+    return "\t".join(["%.2f"%i for i in L])
+def format_seq(L):
+    return "\t".join( map( str,L))
 
 """
 Note: site is formatted as follows: XX-XX (e.g. GT-AG)
@@ -127,13 +134,22 @@ def sliding_window(refID, sts,ens, site, fastaF):
     mean5,std5 = hist5.index(max(hist5))+1,   histogram.stddev(hist5) #offset bias correction for 5' end
     mean3,std3 = hist3.index(max(hist3)),   histogram.stddev(hist3)
     #Create a normal distributed scoring scheme based off of candidates
-    h5,h3 = histogram.normal_score(2*n+1,mean5,std5), histogram.normal_score(2*n+1,mean3,std3)
+    cost,win_length = -3,2*n+1
+    h5 = histogram.normal_score(win_length,mean5,std5)
+    h3 = histogram.normal_score(win_length,mean3,std3)
     """Remember that fasta index is base 1 indexing"""
     seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n).upper()
     seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n).upper()
-    cost = -3
     score5 = window.score(seq5,site5p,h5,cost)
     score3 = window.score(seq3,site3p,h3,cost)
+    # print >> sys.stderr,"Site",site
+    # print >> sys.stderr,"Region",in_start-n,in_start+n
+    # print >> sys.stderr,"Seq left   \t",format_seq(seq5)
+    # print >> sys.stderr,"Hist left  \t",format_list(h5)
+    # print >> sys.stderr,"Score left \t",format_list(score5)
+    # print >> sys.stderr,"Seq right  \t",format_seq(seq3)
+    # print >> sys.stderr,"Hist right \t",format_list(h3)
+    # print >> sys.stderr,"Score right\t",format_list(score3)
     #Find candidates in sliding window scores
     maxwin_5,score_5 = window.findSite(score5,"5")
     maxwin_3,score_3 = window.findSite(score3,"3")
@@ -208,6 +224,31 @@ def nw_correct(refID,site5,site3,introns,strand,fastaF):
     del M
     return sites5,sites3
 
+"""Weighs different canonical and non-canonical sites and weighs them
+Note that fw_site,rev_site and weight are zipped up in each site
+"""
+def findBestSite(refID,sts,ens,sites,introns,strand,fastaF):
+    bs5,bs3 = 0,0  #Best sites
+    bscore = 0     #Best score
+    bseq = ""      #Best seq
+    for s in sites:
+        seq = s[0] if strand=='+' else s[1]
+        w = s[2] #weight
+        #print >> sys.stderr,"Site",seq
+        site5,s5,site3,s3 = sliding_window(refID,sts,ens,seq,fastaF)
+        #print >> sys.stderr,"First guess",site5,site3,"Scores",s5,s3
+        sites5,sites3   = nw_correct(refID,site5,site3,introns,strand,fastaF)
+        #print >> sys.stderr,"Second guess",findMode(sites5),findMode(sites3)
+        site5,s5,site3,s3 = sliding_window(refID,sites5,sites3,seq,fastaF) #Retrain using nw
+        #print >> sys.stderr,"Third guess",site5,site3,"Scores",s5,s3
+        if (s5+s3)*w > bscore:
+            bscore = s5+s3
+            bs5,bs3 = site5,site3
+            bseq = seq
+    return bs5,bs3,bseq
+
+
+
 """
 Finds canonical sites (e.g GT-AG sites)
 """
@@ -220,9 +261,20 @@ def getJunctionSites(pt,refID,bins,fastaF):
         coOccurences = defaultdict( list )
         splice_site = "GT-AG" if strand=="+" else "CT-AC"  #only consider canonical sites
         sts,ens,labs,_,_,rdids = zip(*introns)
+
         site5,_,site3,_ = sliding_window(refID,sts,ens,splice_site,fastaF)
         sites5,sites3   = nw_correct(refID,site5,site3,introns,strand,fastaF)
-        site5,_,site3,_ = sliding_window(refID,sites5,sites3,splice_site,fastaF) #Retrain using nw
+        site5,s5,site3,s3 = sliding_window(refID,sites5,sites3,splice_site,fastaF) #Retrain using nw
+        # threshold = 1.0
+
+        # handle = open('scores.txt','a')
+        # handle.write("%lf\t%lf\n"%(s5,s3))
+
+        #if s5<threshold or s3<threshold:
+        # splice_sites = [("GT-AG","CT-AC",1.0),
+        #                 ("GC-AC","CT-GC",1.0),
+        #                 ("AT-AC","GT-AT",1.0)]
+        # site5,site3,_ = findBestSite(refID,sts,ens,splice_sites,introns,strand,fastaF)
 
         for intr in introns:
             _,_,lab,_,_,rdid = intr
@@ -332,8 +384,8 @@ else:
 
             refID, splice_site, strand= "test","CT-AC","-"
             left_site,_,right_site,_ = sliding_window(refID,sts,ends,splice_site,fnh)
-            print "left site",left_site,205
-            print "right site",right_site,369
+            # print "left site",left_site,205
+            # print "right site",right_site,369
             self.assertEquals( left_site, 205)
             self.assertEquals( right_site, 369)
             print >> sys.stderr,"Sliding window test passed !"
@@ -341,10 +393,10 @@ else:
             sites5,sites3   = nw_correct(refID,left_site,right_site,introns,strand,fnh)
             left_site,_,right_site,_ = sliding_window(refID,sites5,sites3,splice_site,fnh)
 
-            print "left site ",left_site,205
-            print "left histogram ",sites5
-            print "right site",right_site,369
-            print "right histogram",sites3
+            # print "left site ",left_site,205
+            # print "left histogram ",sites5
+            # print "right site",right_site,369
+            # print "right histogram",sites3
 
             self.assertEquals( left_site, 205)
             self.assertEquals( right_site, 369)
@@ -373,8 +425,8 @@ else:
             fnh = fasta.fasta("test.fa")
             refID, splice_site,strand= "test","GT-AG",'+'
             left_site,_,right_site,_ = sliding_window(refID,sts,ends,splice_site,fnh)
-            print "left site",left_site,57
-            print "right site",right_site,111
+            # print "left site",left_site,57
+            # print "right site",right_site,111
             self.assertEquals( left_site,57)
             self.assertEquals( right_site,110)
             print >> sys.stderr,"Sliding window test passed !"
@@ -382,15 +434,121 @@ else:
             sites5,sites3   = nw_correct(refID,left_site,right_site,introns,strand,fnh)
             left_site,_,right_site,_ = sliding_window(refID,sites5,sites3,splice_site,fnh)
 
-            print "left site ",left_site,57
-            print "left histogram ",sites5
-            print "right site",right_site,110
-            print "right histogram",sites3
-            print "left  seq",self.refseq[:left_site]
-            print "right seq",self.refseq[right_site:]
+            # print "left site ",left_site,57
+            # print "left histogram ",sites5
+            # print "right site",right_site,110
+            # print "right histogram",sites3
+            # print "left  seq",self.refseq[:left_site]
+            # print "right seq",self.refseq[right_site:]
             self.assertEquals( left_site,57)
             self.assertEquals( right_site,110)
             print >> sys.stderr,"Needleman Wunsch test passed ! \n"
+
+    class TestIntronFunctions3(unittest.TestCase):
+        def setUp(self):
+            self.leftseqs =["GCGTGTGCAC","CGTGTGCACG"]
+            self.rightseqs=["GAAACGCCCA","AAACGCCCAG"]
+            "                                                    CG TGTGCACG                                                             AAACGCC CAG"
+            "                                                   GCG TGTGCAC                                                             GAAACGCC CA"
+            "CGACGACACC GACGACGCCA AAGTTGCCAC AGGAAACGGA AATCTGAGCG TGTGCACGTG TGTGTGTGCG CGCACATGGC GTTCATATTT ATTTATTTCT TTTTCGGTAC AGGAAACGCC CAGCAGGATT AAGAATGGAG TAGTCTTGTG ACCATCGGGA ACTTTTCGGG GGACAGCCAT AAGTGTCAAG ACTTAAAGCT G"
+            self.refseq = "CGACGACACCGACGACGCCAAAGTTGCCACAGGAAACGGAAATCTGAGCGTGTGCACGTGTGTGTGTGCGCGCACATGGCGTTCATATTTATTTATTTCTTTTTCGGTACAGGAAACGCCCAGCAGGATTAAGAATGGAGTAGTCTTGTGACCATCGGGAACTTTTCGGGGGACAGCCATAAGTGTCAAGACTTAAAGCTG"
+            self.fasta = "test.fa"
+            self.faidx = "test.fa.fai"
+            createTestFasta(self.fasta,"test",self.refseq)
+
+        def tearDown(self):
+            os.remove(self.fasta)
+            os.remove(self.faidx)
+
+        def test_noncanonical1(self):
+            print >> sys.stderr,"Non canonical 1"
+
+            n = len(self.leftseqs)
+            sts,ends,labs,rdids = [57]*n, [112]*n,["test_labs"]*n, map( str, range(0,n))
+
+            splice_sites = [("GT-AG","CT-AC",1.0),
+                            ("GC-AC","CT-GC",0.0),
+                            ("AT-AC","GT-AT",0.0)]
+
+
+            fnh = fasta.fasta("test.fa")
+            refID,strand= "test",'+'
+            introns = zip(sts,ends,labs,self.leftseqs,self.rightseqs,rdids)
+            left_site,right_site,seq = findBestSite(refID,sts,ends,splice_sites,introns,strand,fnh)
+            self.assertEquals( left_site,57)
+            self.assertEquals( right_site,110)
+            self.assertEquals( seq,"GT-AG")
+            print >> sys.stderr,"Needleman Wunsch test passed ! \n"
+
+    class TestIntronFunctions4(unittest.TestCase):
+        def setUp(self):
+            self.leftseqs =["GCGTGTGCAC","CGTGTGCACC"]
+            self.rightseqs=["GAAACGCCCA","AAACGCCCAG"]
+            "                                                    CG TGTGCACG                                                             AAACGCC CAG"
+            "                                                   GCG TGTGCAC                                                             GAAACGCC CA "
+            "CGACGACACC GACGACGCCA AAGTTGCCAC AGGAAACGGA AATCTGAGCG TGTGCACCTG TGTGTGTGCG CGCACATGGC GTTCATATTT ATTTATTTCT TTTTCGGTAC ACGAAACGCC CAGCAGGATT AAGAATGGAG TAGTCTTGTG ACCATCGGGA ACTTTTCGGG GGACAGCCAT AAGTGTCAAG ACTTAAAGCT G"
+            self.refseq = "CGACGACACCGACGACGCCAAAGTTGCCACAGGAAACGGAAATCTGAGCGTGTGCACCTGTGTGTGTGCGCGCACATGGCGTTCATATTTATTTATTTCTTTTTCGGTACACGAAACGCCCAGCAGGATTAAGAATGGAGTAGTCTTGTGACCATCGGGAACTTTTCGGGGGACAGCCATAAGTGTCAAGACTTAAAGCTG"
+            self.fasta = "test.fa"
+            self.faidx = "test.fa.fai"
+            createTestFasta(self.fasta,"test",self.refseq)
+
+        def tearDown(self):
+            os.remove(self.fasta)
+            os.remove(self.faidx)
+
+        def test_noncanonical2(self):
+            print >> sys.stderr,"Non canonical 2"
+
+            n = len(self.leftseqs)
+            sts,ends,labs,rdids = [57]*n, [112]*n,["test_labs"]*n, map( str, range(0,n))
+
+            splice_sites = [("GT-AG","CT-AC",1.0),
+                            ("GC-AC","CT-GC",0.0),
+                            ("AT-AC","GT-AT",0.0)]
+
+            fnh = fasta.fasta("test.fa")
+            refID,strand= "test",'-'
+            introns = zip(sts,ends,labs,self.leftseqs,self.rightseqs,rdids)
+            left_site,right_site,seq = findBestSite(refID,sts,ends,splice_sites,introns,strand,fnh)
+            self.assertEquals( left_site,57)
+            self.assertEquals( right_site,110)
+            self.assertEquals( seq,"CT-AC")
+            print >> sys.stderr,"Needleman Wunsch test passed ! \n"
+
+
+    class TestIntronFunctions5(unittest.TestCase):
+        def setUp(self):
+            self.leftseqs =["GCGTGTGCAC","CGTGTGCACG"]
+            self.rightseqs=["GAAACGCCCA","AAACGCCCAG"]
+            "                                                    CG TGTGCACG                                                             AAACGCC CAG"
+            "                                                   GCG TGTGCAC                                                             GAAACGCC CA"
+            "CGACGACACC GACGACGCCA AAGTTGCCAC AGGAAACGGA AATCTGAGCG CGCGCACGCG CGCGCGCGCG CGCACATGGC GTTCATATTT ATTTATTTCT TTTTCGGTAC ACGAAACGCC CAGCAGGATT AAGAATGGAG TAGTCTTGTG ACCATCGGGA ACTTTTCGGG GGACAGCCAT AAGTGTCAAG ACTTAAAGCT G"
+
+            self.refseq = "CGACGACACCGACGACGCCAAAGTTGCCACAGGAAACGGAAACCCGAGCGCGCGCACGCGCGCGCGCGCGCGCACATGGCGTTCATATTTATTTATTTCTTTTTCGGTACACGAAACGCCCAGCAGGATTAAGAATGGAGTAGTCTTGTGACCATCGGGAACTTTTCGGGGGACAGCCATAAGTGTCAAGACTTAAAGCTG"
+
+            self.fasta = "test.fa"
+            self.faidx = "test.fa.fai"
+            createTestFasta(self.fasta,"test",self.refseq)
+        def tearDown(self):
+            os.remove(self.fasta)
+            os.remove(self.faidx)
+        def test_noncanonical3(self):
+            print >> sys.stderr,"Non canonical 3"
+            n = len(self.leftseqs)
+            sts,ends,labs,rdids = [57]*n, [112]*n,["test_labs"]*n, map( str, range(0,n))
+            splice_sites = [("GT-AG","CT-AC",1.0),
+                            ("GC-AC","CT-GC",1.0),
+                            ("AT-AC","GT-AT",1.0)]
+            fnh = fasta.fasta("test.fa")
+            refID,strand= "test",'+'
+            introns = zip(sts,ends,labs,self.leftseqs,self.rightseqs,rdids)
+            left_site,right_site,seq = findBestSite(refID,sts,ends,splice_sites,introns,strand,fnh)
+            self.assertEquals( left_site,57)
+            self.assertEquals( right_site,110)
+            self.assertEquals( seq,"GC-AC")
+            print >> sys.stderr,"Needleman Wunsch test passed ! \n"
+
+
 
 
     unittest.main()
