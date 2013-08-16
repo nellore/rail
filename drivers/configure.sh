@@ -1,23 +1,17 @@
-##Modify the parameters below
-NTASKS=20
+#Modify the parameters below
+NTASKS=10000
 HMM_OVERLAP=30
 PERMUTATIONS=5
-READLET_LEN=30
+READLET_LEN=35
 READLET_IVAL=5
 RADIUS=10
 SPLICE_OVERLAP=10
-SITES_FILE="sites.txt"
-IGENOME="../example/drosophila/Drosophila_melanogaster/UCSC/dm3"
-RNASEQ="../example/sim_splice/*.tab"
-MANIFEST="../example/sim_splice/fly.manifest"
-INTERMEDIATE_DIR="../example/sim_splice/intermediate"
+MAIN="$PWD/../example/sim_splice"
+IGENOME="$PWD/../example/drosophila/Drosophila_melanogaster/UCSC/dm3"
+RNASEQ="$MAIN/*.tab"
+MANIFEST="$MAIN/fly.manifest"
+INTERMEDIATE_DIR="$MAIN/intermediate"
 HDFS_DIR="/user/jmorton/sim_splice"
-
-# IGENOME="/damsl/projects/myrna2/langmead/igenomes/Homo_sapiens/UCSC/hg19"
-# RNASEQ="/damsl/projects/myrna2/software/tornado/example/sim_human/*.fastq"
-# MANIFEST="/damsl/projects/myrna2/software/tornado/example/sim_human/human.manifest"
-# INTERMEDIATE_DIR="/damsl/projects/myrna2/software/tornado/example/sim_human/intermediate"
-# HDFS_DIR="/user/jmorton/sim_human"
 
 MODE="local"      #Note: make sure that HADOOP_HOME are already set in .bashrc
 
