@@ -22,7 +22,7 @@ class PreprocessingStep(pipeline.Step):
             url.Url("hdfs:///dummy"),
             name="Preprocess", # name
             inputFormat="org.apache.hadoop.mapred.lib.NLineInputFormat",
-            mapper="python %s/src/rnawesome/preprocess.py --nucs-per-file=10000000 %s--push=%s --ignore-first-token" % (pconf.emrLocalDir, compressArg, output.toUpperUrl()))
+            mapper="python %s/src/rnawesome/preprocess.py --nucs-per-file=5000000 %s--push=%s --ignore-first-token" % (pconf.emrLocalDir, compressArg, output.toUpperUrl()))
 
 class AlignStep(pipeline.Step):
     def __init__(self, inps, output, tconf, pconf):
@@ -69,6 +69,18 @@ class WalkPrenormStep(pipeline.Step):
             name="WalkPreNormalize", # name
             aggr=pipeline.Aggregation(None, 8, 1, 2),
             reducer="python %s/src/rnawesome/walk_prenorm.py --partition-stats --partition-len=%d" % (d, tconf.partitionLen),
+            outputFormat='edu.jhu.cs.MultipleOutputFormat',
+            libjars=['/mnt/lib/multiplefiles.jar'])
+
+class NormalizePreStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, pconf):
+        d = pconf.emrLocalDir
+        super(NormalizePreStep, self).__init__(\
+            inps,
+            output,  # output URL
+            name="NormalizePre", # name
+            aggr=pipeline.Aggregation(None, 8, 1, 2),
+            reducer="python %s/src/rnawesome/normalize_pre.py --partition-stats --partition-len=%d" % (d, tconf.partitionLen),
             outputFormat='edu.jhu.cs.MultipleOutputFormat',
             libjars=['/mnt/lib/multiplefiles.jar'])
 
