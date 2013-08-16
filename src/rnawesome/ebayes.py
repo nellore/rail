@@ -129,7 +129,7 @@ for i in xrange(0, len(tts_mod[0])):
         ttmod, logfchange = ttup[i]
         ttstr_list.append("%f,%f" % (ttmod, logfchange))
     # Place the position within a partition
-    for pt in partition.partition(refids[i], poss[i], poss[i] + args.hmmolap, partition.binSize(args)):
+    for pt, _, _ in partition.partition(refids[i], poss[i], poss[i] + args.hmmolap, partition.binSize(args)):
         print(pt + ("\t%012d\t" % poss[i]) + "\t".join(ttstr_list))
         nout += 1
 

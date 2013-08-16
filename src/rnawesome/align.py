@@ -110,6 +110,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--max-intron-length', type=int, required=False,default=1000000,
     help='Filters out all potential introns longer than this length')
+parser.add_argument(\
+    '--differentials', action='store_const', const=True, default=False,
+    help='Print exon differentials (+1s and -1s) rather than intervals')
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
@@ -215,12 +218,25 @@ def correctSplice(read,ref_left,ref_right,fw):
     r = numpy.argmax(total[:,c])
     return r,c,total[r,c],leftDP,rightDP,total
 
-#Print all listed exons to stdout
+# Print all listed exons to stdout
 def printExons(refid,in_start,in_end,rdnm):
     global nout
-    for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
-        print "exon\t%s\t%012d\t%d\t%s" % (pt, in_start, in_end, sample.parseLab(rdnm))
-        nout += 1
+    lab = sample.parseLab(rdnm)
+    if args.differentials:
+        for pt, pt_st, pt_en in iter(partition.partition(refid, in_start, in_end, binsz)):
+            # Print increment at interval start
+            assert in_start < pt_en
+            print "exon\t%s\t%012d\t%s\t1" % (pt, max(pt_st, in_start), lab)
+            nout += 1
+            # Possibly print decrement at interval end
+            assert in_end > pt_st
+            if in_end < pt_en:
+                print "exon\t%s\t%012d\t%s\t-1" % (pt, in_end, lab)
+                nout += 1
+    else:
+        for pt, _, _ in iter(partition.partition(refid, in_start, in_end, binsz)):
+            print "exon\t%s\t%012d\t%d\t%s" % (pt, in_start, in_end, lab)
+            nout += 1
 
 """
 Returns a more human readable format of the string
@@ -369,9 +385,7 @@ def composeReadletAlignments(rdnm, rdals, rdseq):
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets
-            for pt in iter(partition.partition(k, st, en, binsz)):
-                print "exon\t%s\t%012d\t%d\t%s" % (pt, st, en, sample.parseLab(rdnm))
-                nout += 1
+            printExons(k, st, en, rdnm)
 
 def bowtieOutReadlets(st, reportMult=1.2):
     ''' Process standard out (stdout) output from Bowtie.  Each line of output

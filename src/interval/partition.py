@@ -29,7 +29,7 @@ def partition(refid, st, en, binSize):
         positions. '''
     binid_st = int(st / binSize)
     binid_en = int((en-1) / binSize)
-    return [ ";".join([refid, str(i)]) for i in xrange(binid_st, binid_en+1) ]
+    return [ (";".join([refid, str(i)]), i * binSize, (i+1) * binSize) for i in xrange(binid_st, binid_en+1) ]
 
 def parse(st, binSz):
     ''' Parse a partition id. '''
