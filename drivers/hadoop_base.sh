@@ -148,6 +148,7 @@ hadoop dfs -rmr $ALIGN_OUT
 time hadoop jar $STREAMING \
     -D mapred.text.key.partitioner.options=-k1,1 \
     -D stream.num.map.output.key.fields=1 \
+    -D mapred.reduce.tasks=0 \
     -libjars multiplefiles.jar \
     -cmdenv PYTHONPATH=$PYTHONPATH \
     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
@@ -174,7 +175,6 @@ time hadoop jar $STREAMING \
     -file "$BOWTIE_EXE" \
     -outputformat edu.jhu.cs.MultipleOutputFormat \
     -mapper "$ALIGN_ARGS" \
-    -reducer cat \
     -input $ALIGN_IN/*.tab -output $ALIGN_OUT
 
 
@@ -232,9 +232,9 @@ fi
 mkdir ${INTERMEDIATE_DIR}/align_out
 mkdir ${INTERMEDIATE_DIR}/splice_sites
 hadoop dfs -copyToLocal $ALIGN_OUT/exon/part* ${INTERMEDIATE_DIR}/align_out
-cat ${INTERMEDIATE_DIR}/align_out/* > ${INTERMEDIATE_DIR}/align_out.tsv
+cat ${INTERMEDIATE_DIR}/align_out/* | sort -n -k2,2 | sort -s -k1,1 > ${INTERMEDIATE_DIR}/align_out.tsv
 hadoop dfs -copyToLocal $SITEBED_OUT/part* ${INTERMEDIATE_DIR}/splice_sites
-cat ${INTERMEDIATE_DIR}/splice_sites/* > ${INTERMEDIATE_DIR}/splice_sites.tab
+cat ${INTERMEDIATE_DIR}/splice_sites/* | sort -n -k2,2 | sort -s -k1,1 > ${INTERMEDIATE_DIR}/splice_sites.bed
 
 # # #Sort MERGE output
 

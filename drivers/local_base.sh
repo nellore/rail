@@ -115,7 +115,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 		--refseq=$GENOME \
 		--faidx=$FASTA_IDX \
                 --splice-overlap=$SPLICE_OVERLAP \
-		-- -v 2 -m 1 -p 15 \
+		-- -v 2 -m 1 -p 10 \
 		| tee ${INTERMEDIATE_DIR}/align_out.tsv \
 	| grep '^exon' | $MERGE_AGGR2 | $MERGE_AGGR3 | $MERGE_AGGR4 | $MERGE \
 	| tee $WALK_IN_TMP | $WALK_PRENORM \
@@ -151,6 +151,8 @@ cat ${INTERMEDIATE_DIR}/align_out.tsv \
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
     | grep '^exon' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $EXONS2BED > ${INTERMEDIATE_DIR}/exons.bed
 
+cat ${INTERMEDIATE_DIR}/align_out.tsv \
+    | grep '^exon' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 > ${INTERMEDIATE_DIR}/align_out_exons.tsv
  
 # cat $WALK_IN_TMP \  
 # 	| tee ${INTERMEDIATE_DIR}/walk_fit_in.tsv | $WALK_FIT \
