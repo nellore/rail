@@ -119,8 +119,8 @@ hadoop dfs -mkdir $SAMPLE_OUT
 hadoop dfs -rmr $PERM_OUT
 hadoop dfs -mkdir $PERM_OUT
 
-# hadoop dfs -rmr $ALIGN_IN
-# hadoop dfs -mkdir $ALIGN_IN
+hadoop dfs -rmr $ALIGN_IN
+hadoop dfs -mkdir $ALIGN_IN
 # for FASTQ in $RNASEQ
 # do
 #   FILE=`basename $FASTQ`  
@@ -136,56 +136,108 @@ hadoop dfs -mkdir $PERM_OUT
 #   rm $FASTQsh
 # done
 
-# for FASTQ in *.tab
-# do
-#   FILE=`basename $FASTQ`  
-#   cat $FILE | hadoop dfs -put - "$ALIGN_IN/$FILE"
-#   rm $FILE
-# done
+for TAB in $RNASEQ
+do
+  FILE=`basename $TAB`  
+  cat $TAB | hadoop dfs -put - "$ALIGN_IN/$FILE"
+  #rm $FILE
+done
 
-# #Step 1 ALIGN
-# hadoop dfs -rmr $ALIGN_OUT
-# time hadoop jar $STREAMING \
-#     -D mapred.text.key.partitioner.options=-k1,1 \
-#     -D stream.num.map.output.key.fields=1 \
-#     -D mapred.reduce.tasks=0 \
-#     -libjars multiplefiles.jar \
-#     -cmdenv PYTHONPATH=$PYTHONPATH \
-#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-#     -file "$SCR_DIR/rnawesome/align.py" \
-#     -file "$SCR_DIR/bowtie/bowtie.py" \
-#     -file "$SCR_DIR/read/readlet.py" \
-#     -file "$SCR_DIR/read/truncate.py" \
-#     -file "$SCR_DIR/interval/interval.py" \
-#     -file "$SCR_DIR/interval/partition.py" \
-#     -file "$SCR_DIR/manifest/manifest.py" \
-#     -file "$SCR_DIR/sample/sample.py" \
-#     -file "$SCR_DIR/util/path.py" \
-#     -file "$GENOME" \
-#     -file "$FASTA_IDX" \
-#     -file "$INDEX1"\
-#     -file "$INDEX2"\
-#     -file "$INDEX3"\
-#     -file "$INDEX4"\
-#     -file "$INDEX5"\
-#     -file "$INDEX6"\
-#     -file "$GENOME"\
-#     -file "$BOWTIE_EXE" \
-#     -outputformat edu.jhu.cs.MultipleOutputFormat \
-#     -mapper "$ALIGN_ARGS" \
-#     -input $ALIGN_IN/*.tab -output $ALIGN_OUT
+#Step 1 ALIGN
+hadoop dfs -rmr $ALIGN_OUT
+time hadoop jar $STREAMING \
+    -D mapred.text.key.partitioner.options=-k1,1 \
+    -D stream.num.map.output.key.fields=1 \
+    -libjars multiplefiles.jar \
+    -cmdenv PYTHONPATH=$PYTHONPATH \
+    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+    -file "$SCR_DIR/rnawesome/align.py" \
+    -file "$SCR_DIR/bowtie/bowtie.py" \
+    -file "$SCR_DIR/read/readlet.py" \
+    -file "$SCR_DIR/read/truncate.py" \
+    -file "$SCR_DIR/interval/interval.py" \
+    -file "$SCR_DIR/interval/partition.py" \
+    -file "$SCR_DIR/manifest/manifest.py" \
+    -file "$SCR_DIR/sample/sample.py" \
+    -file "$SCR_DIR/util/path.py" \
+    -file "$GENOME" \
+    -file "$FASTA_IDX" \
+    -file "$INDEX1"\
+    -file "$INDEX2"\
+    -file "$INDEX3"\
+    -file "$INDEX4"\
+    -file "$INDEX5"\
+    -file "$INDEX6"\
+    -file "$GENOME"\
+    -file "$BOWTIE_EXE" \
+    -outputformat edu.jhu.cs.MultipleOutputFormat \
+    -mapper "$ALIGN_ARGS" \
+    -reducer cat \
+    -input $ALIGN_IN/*.tab -output $ALIGN_OUT
 
 
-# ##Check $? after completion.  If not 0, then print an error message and quit
-# if [ $? -ne 0 ] ; then
-#     echo "ALIGN step failed, now exiting"
-#     exit 1
-# fi
+##Check $? after completion.  If not 0, then print an error message and quit
+if [ $? -ne 0 ] ; then
+    echo "ALIGN step failed, now exiting"
+    exit 1
+fi
 
+
+#Step 6 INTRON
+hadoop dfs -rmr $INTRON_OUT
+time hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
+    -D mapred.text.key.partitioner.options=-k1,1 \
+    -D stream.num.map.output.key.fields=3 \
+    -libjars multiplefiles.jar \
+    -cmdenv PYTHONPATH=$PYTHONPATH \
+    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+    -outputformat edu.jhu.cs.MultipleOutputFormat \
+    -file "$SCR_DIR/rnawesome/intron.py" \
+    -mapper 'cat' \
+    -reducer "$INTRON_ARGS" \
+    -input $ALIGN_OUT/intron/*part* -output $INTRON_OUT
+
+if [ $? -ne 0 ] ; then
+    echo "INTRON step failed, now exiting"
+    exit 1
+fi
+
+
+#Step 5c
+hadoop dfs -rmr $SITEBED_OUT
+time hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
+    -D mapred.text.key.partitioner.options=-k1,1 \
+    -D stream.num.map.output.key.fields=3 \
+    -cmdenv PYTHONPATH=$PYTHONPATH \
+    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+    -cmdenv PYTHONCOMPILED=$PYTHONCOMPILED \
+    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+    -file "$SCR_DIR/util/site2bed.py" \
+    -mapper cat \
+    -reducer "$SITE2BED" \
+    -input $INTRON_OUT/site/*part* -output $SITEBED_OUT
+
+if [ $? -ne 0 ] ; then
+    echo "SITEBED step failed, now exiting"
+    exit 1
+fi
+
+mkdir ${INTERMEDIATE_DIR}/align_out
+mkdir ${INTERMEDIATE_DIR}/splice_sites
+hadoop dfs -copyToLocal $ALIGN_OUT/exon/part* ${INTERMEDIATE_DIR}/align_out
+cat ${INTERMEDIATE_DIR}/align_out/* > ${INTERMEDIATE_DIR}/align_out.tsv
+hadoop dfs -copyToLocal $SITEBED_OUT/part* ${INTERMEDIATE_DIR}/splice_sites
+cat ${INTERMEDIATE_DIR}/splice_sites/* > ${INTERMEDIATE_DIR}/splice_sites.tab
 
 # # #Sort MERGE output
+
 # hadoop dfs -rmr $MERGE_OUT
 # time hadoop jar $STREAMING \
 #     -D mapred.reduce.tasks=32 \
@@ -270,147 +322,104 @@ hadoop dfs -mkdir $PERM_OUT
 #     exit 1
 # fi
 
-#Step 6 INTRON
-hadoop dfs -rmr $INTRON_OUT
-time hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=3 \
-    -libjars multiplefiles.jar \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -outputformat edu.jhu.cs.MultipleOutputFormat \
-    -file "$SCR_DIR/rnawesome/intron.py" \
-    -mapper 'cat' \
-    -reducer "$INTRON_ARGS" \
-    -input $ALIGN_OUT/intron/*part* -output $INTRON_OUT
-
-if [ $? -ne 0 ] ; then
-    echo "INTRON step failed, now exiting"
-    exit 1
-fi
 
 
-#Step 5c
-hadoop dfs -rmr $SITEBED_OUT
-time hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=3 \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -cmdenv PYTHONCOMPILED=$PYTHONCOMPILED \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -file "$SCR_DIR/util/site2bed.py" \
-    -mapper cat \
-    -reducer "$SITE2BED" \
-    -input $INTRON_OUT/site/*part* -output $SITEBED_OUT
-
-if [ $? -ne 0 ] ; then
-    echo "SITEBED step failed, now exiting"
-    exit 1
-fi
+# #Copy files to local machine
+# rm ${INTERMEDIATE_DIR}/normalize
+# mkdir ${INTERMEDIATE_DIR}/normalize
+# hadoop dfs -copyToLocal $NORMALIZE_POST_OUT/part* ${INTERMEDIATE_DIR}/normalize
+# cat ${INTERMEDIATE_DIR}/normalize/* > ${INTERMEDIATE_DIR}/norm.tsv
+# rm ${INTERMEDIATE_DIR}/walk_in_input
+# mkdir ${INTERMEDIATE_DIR}/walk_in_input
+# hadoop dfs -copyToLocal $MERGE_OUT/part* ${INTERMEDIATE_DIR}/walk_in_input
+# rm ${INTERMEDIATE_DIR}/splice_sites
+# mkdir ${INTERMEDIATE_DIR}/splice_sites
+# hadoop dfs -copyToLocal $SITEBED_OUT/part* ${INTERMEDIATE_DIR}/splice_sites
 
 
-#Copy files to local machine
-rm ${INTERMEDIATE_DIR}/normalize
-mkdir ${INTERMEDIATE_DIR}/normalize
-hadoop dfs -copyToLocal $NORMALIZE_POST_OUT/part* ${INTERMEDIATE_DIR}/normalize
-cat ${INTERMEDIATE_DIR}/normalize/* > ${INTERMEDIATE_DIR}/norm.tsv
-rm ${INTERMEDIATE_DIR}/walk_in_input
-mkdir ${INTERMEDIATE_DIR}/walk_in_input
-hadoop dfs -copyToLocal $MERGE_OUT/part* ${INTERMEDIATE_DIR}/walk_in_input
-rm ${INTERMEDIATE_DIR}/splice_sites
-mkdir ${INTERMEDIATE_DIR}/splice_sites
-hadoop dfs -copyToLocal $SITEBED_OUT/part* ${INTERMEDIATE_DIR}/splice_sites
+# #Step 6 WALK_FIT 
+# hadoop dfs -rmr $WALK_FIT_OUT
+# hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=32 \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=2 \
+#     -cmdenv PYTHONPATH=$PYTHONPATH \
+#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+#     -file "$SCR_DIR/rnawesome/walk_fit.py" \
+#     -file "$SCR_DIR/rnawesome/ebayes.py" \
+#     -file "$SCR_DIR/interval/partition.py" \
+#     -file "$SCR_DIR/struct/circular.py" \
+#     -file "${INTERMEDIATE_DIR}/norm.tsv" \
+#     -mapper cat \
+#     -reducer "$WALK_FIT_ARGS" \
+#     -input $MERGE_OUT/*part* -output $WALK_FIT_OUT
 
+# #Step 7 EBAYES
+# hadoop dfs -rmr $EBAYES_OUT
+# hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=32 \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=2 \
+#     -cmdenv PYTHONPATH=$PYTHONPATH \
+#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+#     -file "$SCR_DIR/rnawesome/ebayes.py" \
+#     -file "$SCR_DIR/interval/partition.py" \
+#     -file "$SCR_DIR/struct/circular.py" \
+#     -mapper cat \
+#     -reducer "$EBAYES_ARGS" \
+#     -input $WALK_FIT_OUT/*part* -output $EBAYES_OUT
 
-#Step 6 WALK_FIT 
-hadoop dfs -rmr $WALK_FIT_OUT
-hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=2 \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -file "$SCR_DIR/rnawesome/walk_fit.py" \
-    -file "$SCR_DIR/rnawesome/ebayes.py" \
-    -file "$SCR_DIR/interval/partition.py" \
-    -file "$SCR_DIR/struct/circular.py" \
-    -file "${INTERMEDIATE_DIR}/norm.tsv" \
-    -mapper cat \
-    -reducer "$WALK_FIT_ARGS" \
-    -input $MERGE_OUT/*part* -output $WALK_FIT_OUT
+# # # #Step 8 HMM_PARAMS
+# hadoop dfs -rmr $HMM_PARAMS_OUT
+# hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=32 \
+#     -cmdenv PYTHONPATH=$PYTHONPATH \
+#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+#     -file "$SCR_DIR/rnawesome/hmm_params.py" \
+#     -mapper cat \
+#     -reducer "$HMM_PARAMS_ARGS" \
+#     -input $EBAYES_OUT/*part* -output $HMM_PARAMS_OUT
 
-#Step 7 EBAYES
-hadoop dfs -rmr $EBAYES_OUT
-hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=2 \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -file "$SCR_DIR/rnawesome/ebayes.py" \
-    -file "$SCR_DIR/interval/partition.py" \
-    -file "$SCR_DIR/struct/circular.py" \
-    -mapper cat \
-    -reducer "$EBAYES_ARGS" \
-    -input $WALK_FIT_OUT/*part* -output $EBAYES_OUT
+# # #Copy HMM params to local machine
+# hadoop dfs -copyToLocal $HMM_PARAMS_OUT/part* ${INTERMEDIATE_DIR}/hmm_params.tsv
 
-# # #Step 8 HMM_PARAMS
-hadoop dfs -rmr $HMM_PARAMS_OUT
-hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -file "$SCR_DIR/rnawesome/hmm_params.py" \
-    -mapper cat \
-    -reducer "$HMM_PARAMS_ARGS" \
-    -input $EBAYES_OUT/*part* -output $HMM_PARAMS_OUT
+# #Step 9 HMM
+# hadoop dfs -rmr $HMM_OUT
+# hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=32 \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=2 \
+#     -cmdenv PYTHONPATH=$PYTHONPATH \
+#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+#     -file "$SCR_DIR/rnawesome/hmm.py" \
+#     -file "$SCR_DIR/interval/partition.py" \
+#     -file "$INTERMEDIATE_DIR/hmm_params.tsv" \
+#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+#     -mapper cat \
+#     -reducer "$HMM_ARGS" \
+#     -input $EBAYES_OUT/*part* -output $HMM_OUT
 
-# #Copy HMM params to local machine
-hadoop dfs -copyToLocal $HMM_PARAMS_OUT/part* ${INTERMEDIATE_DIR}/hmm_params.tsv
-
-#Step 9 HMM
-hadoop dfs -rmr $HMM_OUT
-hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=2 \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -file "$SCR_DIR/rnawesome/hmm.py" \
-    -file "$SCR_DIR/interval/partition.py" \
-    -file "$INTERMEDIATE_DIR/hmm_params.tsv" \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -mapper cat \
-    -reducer "$HMM_ARGS" \
-    -input $EBAYES_OUT/*part* -output $HMM_OUT
-
-#Step 10 AGGR_PATH
-hadoop dfs -rmr $NULL_OUT
-hadoop jar $STREAMING \
-    -D mapred.reduce.tasks=32 \
-    -D mapred.text.key.partitioner.options=-k1,1 \
-    -D stream.num.map.output.key.fields=3 \
-    -cmdenv PYTHONPATH=$PYTHONPATH \
-    -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-    -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-    -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
-    -file "$SCR_DIR/rnawesome/aggr_path.py" \
-    -file "$CHROM_SIZES" \
-    -file "$BIGBED_EXE" \
-    -mapper cat \
-    -reducer "$AGGR_PATH_ARGS" \
-    -input $HMM_OUT/*part* -output $NULL_OUT
+# #Step 10 AGGR_PATH
+# hadoop dfs -rmr $NULL_OUT
+# hadoop jar $STREAMING \
+#     -D mapred.reduce.tasks=32 \
+#     -D mapred.text.key.partitioner.options=-k1,1 \
+#     -D stream.num.map.output.key.fields=3 \
+#     -cmdenv PYTHONPATH=$PYTHONPATH \
+#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+#     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+#     -file "$SCR_DIR/rnawesome/aggr_path.py" \
+#     -file "$CHROM_SIZES" \
+#     -file "$BIGBED_EXE" \
+#     -mapper cat \
+#     -reducer "$AGGR_PATH_ARGS" \
+#     -input $HMM_OUT/*part* -output $NULL_OUT
 
 
