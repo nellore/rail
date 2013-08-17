@@ -150,6 +150,8 @@ parser.add_argument(\
 parser.add_argument(\
     '--no-add-swap', action='store_const', const=True, help='Do not add swap memory to the cluster.')
 parser.add_argument(\
+    '--no-speculative', action='store_const', const=True, help='Do not use Hadoop speculative execution.')
+parser.add_argument(\
     '--name', metavar='STR', type=str, help='Amazon Elastic MapReduce job name.')
 parser.add_argument(\
     '--no-emr-debug', action='store_const', const=True, help='Don\'t enable EMR debugging functions.')
@@ -509,12 +511,19 @@ if mode == 'emr':
         cmdl.append('--bootstrap-name')
         cmdl.append('"add swap"')
         cmdl.append('--args "%d"' % emrCluster.swap())
+    numCore = emrCluster.numCoreProcessors()
+    hadoopConfigs = []
+    hadoopConfigs.append('-s,mapred.job.reuse.jvm.num.tasks=1')
+    hadoopConfigs.append('-s,mapred.tasktracker.reduce.tasks.maximum=%d' % numCore)
+    hadoopConfigs.append('-s,mapred.tasktracker.map.tasks.maximum=%d' % numCore)
     cmdl.append('--bootstrap-action')
     cmdl.append('s3://elasticmapreduce/bootstrap-actions/configure-hadoop')
     cmdl.append('--bootstrap-name')
     cmdl.append('"configure hadoop"')
-    numCore = emrCluster.numCoreProcessors()
-    cmdl.append('--args "-s,mapred.job.reuse.jvm.num.tasks=1,-s,mapred.tasktracker.reduce.tasks.maximum=%d,-s,mapred.tasktracker.map.tasks.maximum=%d"' % (numCore, numCore))
+    if args.no_speculative:
+        hadoopConfigs.append('-m,mapred.map.tasks.speculative.execution=false')
+        hadoopConfigs.append('-m,mapred.reduce.tasks.speculative.execution=false')
+    cmdl.append('--args "%s"' % ','.join(hadoopConfigs))
     
     cmdl.extend(emrArgs)
     
