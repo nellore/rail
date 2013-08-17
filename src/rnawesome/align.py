@@ -445,18 +445,7 @@ def bowtieOutReadlets(st, reportMult=1.2):
         raise
     assert len(mem) == 0
     assert len(cnt) == 0
-    bowtieOutDone.set()
-
-def bowtieOut(st):
-    ''' Process standard out (stdout) output from Bowtie.  Each line of output
-        is another readlet alignment.  We *could* try to perform operations
-        over all readlet alignments from the same read here.  Currently, we
-        follow this step with an aggregation that bins by read id, then
-        operate over bins in splice.py. '''
-    global nout
-    for line in st:
-        sys.stdout.write(line)
-        nout += 1
+    sys.stdout.flush()
     bowtieOutDone.set()
 
 def writeReads(fhs, reportMult=1.2):
@@ -579,10 +568,16 @@ def go():
             if args.archive is not None: fhs.append(archiveFh)
             writeReads(fhs)
         assert os.path.exists(readFn)
-        proc, mycmd = bowtie.proc(args, readFn=readFn, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, stdinPipe=False)
+        proc, mycmd, threads = bowtie.proc(args, readFn=readFn,
+                                           bowtieArgs=bowtieArgs, sam=True,
+                                           outHandler=bowtieOutReadlets,
+                                           stdinPipe=False)
     else:
         # Reads are written to Bowtie process's stdin directly
-        proc, mycmd = bowtie.proc(args, readFn=None, bowtieArgs=bowtieArgs, sam=True, outHandler=bowtieOutReadlets, stdinPipe=True)
+        proc, mycmd, threads = bowtie.proc(args, readFn=None,
+                                           bowtieArgs=bowtieArgs, sam=True,
+                                           outHandler=bowtieOutReadlets,
+                                           stdinPipe=True)
         fhs = [proc.stdin]
         if args.archive is not None: fhs.append(archiveFh)
         writeReads(fhs)
@@ -594,10 +589,13 @@ def go():
             ofh.write(mycmd + '\n')
         with open(os.path.join(archiveDir, "align_py_cmd.sh"), 'w') as ofh:
             ofh.write(' '.join(sys.argv) + '\n')
-    if args.verbose:
-        print >>sys.stderr, "Waiting for Bowtie to finish"
+    if args.verbose: print >>sys.stderr, "Waiting for Bowtie to finish"
     bowtieOutDone.wait()
-    proc.stdout.close()
+    for thread in threads:
+        if args.verbose: print >> sys.stderr, "  Joining a thread..."
+        thread.join()
+        if args.verbose: print >> sys.stderr, "    ...joined!"
+    sys.stdout.flush()
     if args.verbose:
         print >>sys.stderr, "Bowtie finished"
     
