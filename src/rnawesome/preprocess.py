@@ -239,7 +239,12 @@ if __name__ == '__main__':
     assert len(inp1) == len(inp2)
     assert len(inp1) == len(out)
     if len(inp1) > 0:
-        push = url.Url(args.push) if args.push is not None else None
+        push = args.push
+        if push is not None:
+            push = url.Url(push)
+            if push.toUrl()[-1] != '/':
+                push = url.Url(push.toUrl() + '/')
+            assert push.toUrl()[-1] == '/'
         mover = filemover.FileMover(args=args)
         for fn1, fn2, outfn, lab in zip(inp1, inp2, out, lab):
             if fn2 is None:
