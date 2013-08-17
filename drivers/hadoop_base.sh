@@ -284,7 +284,7 @@ cat ${INTERMEDIATE_DIR}/splice_sites/* | sort -n -k2,2 | sort -s -k1,1 > ${INTER
 # time hadoop jar $STREAMING \
 #     -D mapred.reduce.tasks=32 \
 #     -D mapred.text.key.partitioner.options=-k1,1 \
-#     -D stream.num.map.output.key.fields=2 \
+#     -D stream.num.map.output.key.fields=3 \
 #     -cmdenv PYTHONPATH=$PYTHONPATH \
 #     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
 #     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \

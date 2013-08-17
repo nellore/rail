@@ -55,8 +55,7 @@ WALK_PRENORM="python $SCR_DIR/walk_prenorm.py"
 
 # Step 4: For all samples, take all coverage tuples for the sample and
 #         from them calculate a normalization factor
-NORMALIZE_AGGR1="sort -n -k2,2"
-NORMALIZE_AGGR2="sort -s -k1,1"
+NORMALIZE_AGGR="sort -k1,3"
 NORMALIZE="python $SCR_DIR/normalize.py"
 SAMPLE_OUT=$INTERMEDIATE_DIR/samples
 mkdir -p  $SAMPLE_OUT
@@ -121,11 +120,11 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 	| tee $WALK_IN_TMP | $WALK_PRENORM \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
-	| $NORMALIZE_AGGR1 | $NORMALIZE_AGGR2 | $NORMALIZE \
+	| $NORMALIZE_AGGR | $NORMALIZE \
 		--percentile 0.75 \
 		--out_dir $SAMPLE_OUT \
-                --bigbed_exe $BIGBED_EXE \
-                --chrom_sizes $CHROM_SIZES \
+		--bigbed_exe $BIGBED_EXE \
+		--chrom_sizes $CHROM_SIZES \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
 		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}/norm.tsv
 
