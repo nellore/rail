@@ -6,7 +6,7 @@ Helper functions for checking for and parsing sample names.
 
 import re
 
-parseLabReStr = ".*;LB:(.*)$"
+parseLabReStr = ".*;LB:([^;]*)"
 parseLabRe = re.compile(parseLabReStr)
 
 def parseLab(nm):
