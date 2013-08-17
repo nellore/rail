@@ -22,7 +22,7 @@ class PreprocessingStep(pipeline.Step):
             url.Url("hdfs:///dummy"),
             name="Preprocess", # name
             inputFormat="org.apache.hadoop.mapred.lib.NLineInputFormat",
-            mapper="python %s/src/rnawesome/preprocess.py --nucs-per-file=5000000 %s--push=%s --ignore-first-token" % (pconf.emrLocalDir, compressArg, output.toUpperUrl()))
+            mapper="python %s/src/rnawesome/preprocess.py --nucs-per-file=8000000 %s--push=%s --ignore-first-token" % (pconf.emrLocalDir, compressArg, output.toUpperUrl()))
 
 class AlignStep(pipeline.Step):
     def __init__(self, inps, output, tconf, pconf):
@@ -34,7 +34,7 @@ class AlignStep(pipeline.Step):
             inps,
             output,
             name="Align",
-            mapper="python %s/src/rnawesome/align.py --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s--bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
+            mapper="python %s/src/rnawesome/align.py --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s--bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d --differentials --verbose -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
             outputFormat='edu.jhu.cs.MultipleOutputFormat',
             libjars=['/mnt/lib/multiplefiles.jar'])
 
@@ -92,7 +92,7 @@ class NormalizeStep(pipeline.Step):
             output,  # output URL
             name="Normalize", # name
             aggr=pipeline.Aggregation(None, 4, 1, 1),
-            reducer="python %s/src/rnawesome/normalize.py --percentile %f --out_dir=%s/coverage --bigbed_exe=%s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai" % (d, tconf.normPercentile, pconf.out.toUpperUrl(), d, d))
+            reducer="python %s/src/rnawesome/normalize.py --percentile %f --out_dir=%s/coverage --bigbed_exe=%s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai --verbose" % (d, tconf.normPercentile, pconf.out.toUpperUrl(), d, d))
 
 class NormalizePostStep(pipeline.Step):
     def __init__(self, inps, output, tconf, pconf):
