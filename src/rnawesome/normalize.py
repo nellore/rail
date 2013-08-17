@@ -54,7 +54,7 @@ parser.add_argument(\
     help='For a given sample, the per-position percentile to extract as the normalization factor')
 
 parser.add_argument(\
-    '--out_dir', type=str, required=True, default="",
+    '--out_dir', type=str, required=True, default=".",
     help='The URL where all of the coverage vectors for each sample will be stored')
 
 parser.add_argument(\
@@ -62,15 +62,15 @@ parser.add_argument(\
     help='The location of the hadoop executable.')
 
 parser.add_argument(\
-    '--bigbed_exe', type=str, required=False, default="",
+    '--bigbed_exe', type=str, required=False, default="bedToBigBed",
     help='The location of the bigbed executable.')
 
 parser.add_argument(\
-    '--chrom_sizes', type=str, required=False, default="",
+    '--chrom_sizes', type=str, required=False,
     help='The location of chrom_sizes file required for bigbed conversion.')
 
 parser.add_argument(\
-    '--faidx', type=str, required=False, default="",
+    '--faidx', type=str, required=False,
     help='Path to a FASTA index that we can use instead of --chrom_sizes.')
 
 parser.add_argument(\
@@ -79,6 +79,9 @@ parser.add_argument(\
 filemover.addArgs(parser)
 
 args = parser.parse_args()
+
+if path.which(args.bigbed_exe) is None:
+    raise RuntimeError("Could not find bedToBigBed exe; tried '%s'" % args.bigbed_exe)
 
 ninp = 0                   # # lines input so far
 nout = 0                   # # lines output so far
@@ -127,18 +130,21 @@ if chromSizes is None:
     chromSizes = fh.name
     delChromSizes = True
 
+assert os.path.exists(chromSizes)
+
 def bedToBigBed(ifn, ofn, chromSizes):
     """ Run bedToBigBed on input file ifn, specifying chromSizes as file with
         reference lengths, and store output BigBed in ofn """
     assert os.path.exists(ifn)
-    assert os.path.exists(ofn)
     assert os.path.exists(chromSizes)
+    assert not os.path.exists(ofn), "Already wrote '%s'" % ofn
     bigbed_cmd = [args.bigbed_exe, ifn, chromSizes, ofn]
     bigbed_proc = subprocess.Popen(bigbed_cmd)
     ret = bigbed_proc.wait()
     if ret != 0:
         raise RuntimeError("bedToBigBed command '%s' returned exitlevel %d" % (' '.join(bigbed_cmd), ret))
     if args.verbose:
+        assert os.path.exists(ofn)
         print >> sys.stderr, "bedToBigBed command '%s' succeeded" % ' '.join(bigbed_cmd)
 
 for ln in sys.stdin:
