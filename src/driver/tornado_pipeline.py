@@ -91,7 +91,7 @@ class NormalizeStep(pipeline.Step):
             inps,
             output,  # output URL
             name="Normalize", # name
-            aggr=pipeline.Aggregation(None, 4, 1, 1),
+            aggr=pipeline.Aggregation(None, 1, 1, 3),
             reducer="python %s/src/rnawesome/normalize.py --percentile %f --out_dir=%s/coverage --bigbed_exe=%s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai --verbose" % (d, tconf.normPercentile, pconf.out.toUpperUrl(), d, d))
 
 class NormalizePostStep(pipeline.Step):
