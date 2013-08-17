@@ -73,6 +73,9 @@ parser.add_argument(\
     '--faidx', type=str, required=False, default="",
     help='Path to a FASTA index that we can use instead of --chrom_sizes.')
 
+parser.add_argument(\
+    '--verbose', action='store_const', const=True, default=False, help='Prints out extra debugging statements')
+
 filemover.addArgs(parser)
 
 args = parser.parse_args()
@@ -83,8 +86,7 @@ cov = dict()               # coverage histogram
 totcov = 0                 # total coverage
 totnonz = 0                # total positions with non-0 coverage
 
-fname = "temp_file"        #temp file used to make a global file handle
-samp_out = open(fname,'w')
+ofn, ofh = ".tmp.bed", None
 last_chr = "\t"            # name of previous chromosome
 last_samp = "\t"           # last sample last
 frag_st  = -1              # start offset of current fragment
@@ -125,11 +127,26 @@ if chromSizes is None:
     chromSizes = fh.name
     delChromSizes = True
 
+def bedToBigBed(ifn, ofn, chromSizes):
+    """ Run bedToBigBed on input file ifn, specifying chromSizes as file with
+        reference lengths, and store output BigBed in ofn """
+    assert os.path.exists(ifn)
+    assert os.path.exists(ofn)
+    assert os.path.exists(chromSizes)
+    bigbed_cmd = [args.bigbed_exe, ifn, chromSizes, ofn]
+    bigbed_proc = subprocess.Popen(bigbed_cmd)
+    ret = bigbed_proc.wait()
+    if ret != 0:
+        raise RuntimeError("bedToBigBed command '%s' returned exitlevel %d" % (' '.join(bigbed_cmd), ret))
+    if args.verbose:
+        print >> sys.stderr, "bedToBigBed command '%s' succeeded" % ' '.join(bigbed_cmd)
+
 for ln in sys.stdin:
-    ln = ln.rstrip()
-    toks = ln.split('\t')
+    
+    toks = ln.rstrip().split('\t')
     assert len(toks) == 4
-    samp, chr_name, pos, cv = toks[0],toks[1],int(toks[2]),int(toks[3])
+    samp, chr_name, pos, cv = toks[0], toks[1], int(toks[2]), int(toks[3])
+    
     if samp != last_samp and last_samp != "\t":
         print "%s\t%s" % (last_samp, percentile(cov)) 
         nout += 1
@@ -137,29 +154,29 @@ for ln in sys.stdin:
         totcov, totnonz = 0, 0
         
     if last_samp == "\t":
-        os.remove(fname)
-        samp_out.close()
-        last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
-        samp_out = open(fname,'w')
+        last_chr, frag_st, frag_dep, ofn = chr_name, pos, cv, samp
+        ofh = open(ofn, 'w')
     elif last_samp != samp:  #initialize file handles and convert to bigbed
-        samp_out.close()
+        assert ofh is not None
+        ofh.close()
+        assert os.path.exists(ofn)
         bb_file = "%s.bb" % (last_samp) if outUrl.isNotLocal() else "%s/%s.bb" % (args.out_dir,last_samp)
-        bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, chromSizes, bb_file])
-        bigbed_proc.wait()
+        bedToBigBed(ofn, bb_file, chromSizes)
         if outUrl.isNotLocal():
-            mover.put(bb_file, '/'.join([outUrl.toNonNativeUrl(), bb_file]))
-        os.remove(fname)
-        last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
-        samp_out = open(fname,'w')
-    elif last_chr!=chr_name:
-        last_chr, frag_st, frag_dep, fname = chr_name, pos, cv, samp
+            assert os.path.exists(bb_file)
+            mover.put(bb_file, outUrl.plus(bb_file).toNonNativeUrl())
+        os.remove(ofn)
+        last_chr, frag_st, frag_dep, ofn = chr_name, pos, cv, samp
+        ofh = open(ofn, 'w')
+    elif last_chr != chr_name:
+        last_chr, frag_st, frag_dep, ofn = chr_name, pos, cv, samp
     elif frag_dep!=cv and abs(last_pos-pos)==1: #record a new entry
         line = "%s\t%d\t%d\t%d\n"%(chr_name,frag_st,pos,frag_dep)
-        samp_out.write(line)
+        ofh.write(line)
         frag_st, frag_dep = pos, cv
     elif abs(last_pos-pos)>1:
         line = "%s\t%d\t%d\t%d\n"%(chr_name,frag_st,pos,0)
-        samp_out.write(line)
+        ofh.write(line)
         frag_st,frag_dep = pos, cv
     
     last_pos = pos
@@ -169,16 +186,16 @@ for ln in sys.stdin:
     totcov += cv
     totnonz += 1
 
-if last_samp != "\t":
+if ofh is not None:
     print "%s\t%s" % (last_samp, percentile(cov))
     nout += 1
-    samp_out.close()
+    ofh.close()
     bb_file = "%s.bb" % (last_samp) if outUrl.isNotLocal() else "%s/%s.bb" % (args.out_dir,last_samp)
-    bigbed_proc = subprocess.Popen([args.bigbed_exe, fname, chromSizes, bb_file])
-    bigbed_proc.wait()
+    bedToBigBed(ofn, bb_file, chromSizes)
     if outUrl.isNotLocal():
-        mover.put(bb_file, '/'.join([outUrl.toNonNativeUrl(), bb_file]))
-    os.remove(fname)
+        assert os.path.exists(bb_file)
+        mover.put(bb_file, outUrl.plus(bb_file).toNonNativeUrl())
+    os.remove(ofn)
 
 if delChromSizes:
     os.remove(chromSizes)
