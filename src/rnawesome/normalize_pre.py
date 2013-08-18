@@ -7,14 +7,14 @@ coverage information.  We go bin-by-bin.
 
 Tab-delimited input tuple columns:
  1. Partition ID for partition overlapped by interval
- 2. Position
- 3. Sample label
+ 2. Sample label
+ 3. Position
  4. Differential (-1 or +1, unless they've been aggregated)
 
 Binning/sorting prior to this step:
  1. Binned by partition (field 1)
- 2. Sorted by position (field 2)
- 3. Sorted by sample label (field 3)
+ 2. Binned by sample label (field 2)
+ 3. Sorted by position (field 3)
 
 Tab-delimited output tuple columns:
  1. Sample label
@@ -64,13 +64,13 @@ def go():
         ninp += 1
         toks = ln.rstrip().split('\t')
         assert len(toks) == 4, "Bad input line:\n" + ln
-        pt, off, lab, diff = toks[0], int(toks[1]), toks[2], int(toks[3])
-        refid, part_st, part_en = partition.parse(pt, binsz)
-        assert off >= part_st and off < part_en
-        if last_pt != '\t' and cnt > 0 and (pt != last_pt or off != last_off or lab != last_lab):
-            # New position with non-zero count
+        pt, lab, off, diff = toks[0], toks[1], int(toks[2]), int(toks[3])
+        refid, _, _ = partition.parse(pt, binsz)
+        newChunk = pt != last_pt or lab != last_lab
+        if newChunk: cnt = 0
+        newOff = newChunk or off != last_off
+        if newOff and last_off is not None:
             nout += output(last_lab, last_refid, last_off, cnt)
-            cnt = 0
         cnt += diff
         
         if pt != last_pt:
@@ -90,6 +90,7 @@ def go():
         print '\t'.join(['partstats', str(ninbin), str(timeDiff)])
     
     if last_pt != '\t':
+        assert last_off is not None
         nout += output(last_lab, last_refid, last_off, cnt)
     
     timeEn = time.time()
