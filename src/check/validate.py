@@ -57,9 +57,12 @@ parser.add_argument(\
     '--region',type=str,required=False,default="",help='The coordinates of the sites to be displayed (e.g. chrX:1-100)')
 parser.add_argument(\
     '--flank-seqs', type=str,required=True,help='The flanking sequences surrounding the intron')
+parser.add_argument(\
+    '--profile', action='store_const', const=True, default=False,
+    help='Profile simulation generation')
 
 display.addArgs(parser)
-                    
+
 args = parser.parse_args()
 
 
@@ -206,7 +209,7 @@ def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,region,cov_sts,cov
         xscriptDict[x.xscript_id] = x
     display.incorrect(args,fps,fns,flanksDict,xscriptDict,annot_sites,region,cov_sts,cov_ends,args.window_radius,fnh)
 
-if __name__=="__main__":
+def go():
     #sites = readOverlappedSites(args.site_file)
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
     sim_sites = pickle.load(open(args.sites_file,'rb')) #simulated sites
@@ -268,3 +271,9 @@ if __name__=="__main__":
     print "Nearby              \t",nearby
     print "False positives     \t",incorrect
     print "False negatives     \t",missed
+if __name__=="__main__":
+    if args.profile:
+        import cProfile
+        cProfile.run('go()')
+    else:
+        go()
