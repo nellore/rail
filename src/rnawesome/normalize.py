@@ -15,6 +15,8 @@ Tab-delimited input tuple columns:
 
 Binning/sorting prior to this step:
  1. Binned by sample label
+ 2. Sorted by reference id
+ 3. Sorted by genome position
 
 Other files:
  Sample files specified by sample name
@@ -92,6 +94,7 @@ totnonz = 0                # total positions with non-0 coverage
 ofn, ofh = ".tmp.bed", None
 last_chr = "\t"            # name of previous chromosome
 last_samp = "\t"           # last sample last
+last_chr_name = "\t"       # last reference id
 frag_st  = -1              # start offset of current fragment
 last_pos = -1              # the last position 
 frag_dep = -1              # depth count of the current fragment
@@ -109,7 +112,7 @@ def percentile(cov):
     raise RuntimeError("Should not reach this point")
 
 def moveToHDFS(fin,fout):
-    put_proc = subprocess.Popen([args.hadoop_exe, 'fs', '-put',fin, fout])
+    put_proc = subprocess.Popen([args.hadoop_exe, 'fs', '-put',fin, fout], stdout=sys.stderr)
     put_proc.wait()
 
 mover = filemover.FileMover(args=args)
@@ -139,7 +142,7 @@ def bedToBigBed(ifn, ofn, chromSizes):
     assert os.path.exists(chromSizes)
     assert not os.path.exists(ofn), "Already wrote '%s'" % ofn
     bigbed_cmd = [args.bigbed_exe, ifn, chromSizes, ofn]
-    bigbed_proc = subprocess.Popen(bigbed_cmd)
+    bigbed_proc = subprocess.Popen(bigbed_cmd, stdout=sys.stderr)
     ret = bigbed_proc.wait()
     if ret != 0:
         raise RuntimeError("bedToBigBed command '%s' returned exitlevel %d" % (' '.join(bigbed_cmd), ret))
@@ -152,6 +155,7 @@ for ln in sys.stdin:
     toks = ln.rstrip().split('\t')
     assert len(toks) == 4
     samp, chr_name, pos, cv = toks[0], toks[1], int(toks[2]), int(toks[3])
+    assert samp != last_samp or pos != last_pos or chr_name != last_chr_name
     
     if samp != last_samp and last_samp != "\t":
         print "%s\t%s" % (last_samp, percentile(cov)) 
@@ -170,7 +174,7 @@ for ln in sys.stdin:
         bedToBigBed(ofn, bb_file, chromSizes)
         if outUrl.isNotLocal():
             assert os.path.exists(bb_file)
-            mover.put(bb_file, outUrl.plus(bb_file).toNonNativeUrl())
+            mover.put(bb_file, outUrl.plus(bb_file))
         os.remove(ofn)
         last_chr, frag_st, frag_dep, ofn = chr_name, pos, cv, samp
         ofh = open(ofn, 'w')
@@ -187,6 +191,7 @@ for ln in sys.stdin:
     
     last_pos = pos
     last_samp = samp
+    last_chr_name = chr_name
     ninp += 1
     cov[cv] = cov.get(cv, 0) + 1
     totcov += cv
@@ -200,7 +205,7 @@ if ofh is not None:
     bedToBigBed(ofn, bb_file, chromSizes)
     if outUrl.isNotLocal():
         assert os.path.exists(bb_file)
-        mover.put(bb_file, outUrl.plus(bb_file).toNonNativeUrl())
+        mover.put(bb_file, outUrl.plus(bb_file))
     os.remove(ofn)
 
 if delChromSizes:
