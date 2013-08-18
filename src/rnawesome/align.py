@@ -111,8 +111,11 @@ parser.add_argument(\
     '--max-intron-length', type=int, required=False,default=1000000,
     help='Filters out all potential introns longer than this length')
 parser.add_argument(\
-    '--differentials', action='store_const', const=True, default=False,
-    help='Print exon differentials (+1s and -1s) rather than intervals')
+    '--exon-differentials', action='store_const', const=True, default=False,
+    help='Print exon differentials (+1s and -1s)')
+parser.add_argument(\
+    '--exon-intervals', action='store_const', const=True, default=False,
+    help='Print exon intervals')
 
 bowtie.addArgs(parser)
 readlet.addArgs(parser)
@@ -222,20 +225,20 @@ def correctSplice(read,ref_left,ref_right,fw):
 def printExons(refid,in_start,in_end,rdnm):
     global nout
     lab = sample.parseLab(rdnm)
-    if args.differentials:
+    if args.exon_differentials:
         for pt, pt_st, pt_en in iter(partition.partition(refid, in_start, in_end, binsz)):
             # Print increment at interval start
             assert in_start < pt_en
-            print "exon\t%s\t%012d\t%s\t1" % (pt, max(pt_st, in_start), lab)
+            print "exon_diff\t%s\t%s\t%012d\t1" % (pt, lab, max(pt_st, in_start))
             nout += 1
             # Possibly print decrement at interval end
             assert in_end > pt_st
             if in_end < pt_en:
-                print "exon\t%s\t%012d\t%s\t-1" % (pt, in_end, lab)
+                print "exon_diff\t%s\t%s\t%012d\t-1" % (pt, lab, in_end)
                 nout += 1
-    else:
+    if args.exon_intervals:
         for pt, _, _ in iter(partition.partition(refid, in_start, in_end, binsz)):
-            print "exon\t%s\t%012d\t%d\t%s" % (pt, in_start, in_end, lab)
+            print "exon_ival\t%s\t%012d\t%d\t%s" % (pt, in_start, in_end, lab)
             nout += 1
 
 """
