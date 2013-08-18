@@ -150,7 +150,7 @@ parser.add_argument(\
 parser.add_argument(\
     '--no-add-swap', action='store_const', const=True, help='Do not add swap memory to the cluster.')
 parser.add_argument(\
-    '--no-speculative', action='store_const', const=True, help='Do not use Hadoop speculative execution.')
+    '--enable-speculative', action='store_const', const=True, help='Enable Hadoop speculative execution for EMR runs (not recommended).')
 parser.add_argument(\
     '--name', metavar='STR', type=str, help='Amazon Elastic MapReduce job name.')
 parser.add_argument(\
@@ -520,7 +520,7 @@ if mode == 'emr':
     cmdl.append('s3://elasticmapreduce/bootstrap-actions/configure-hadoop')
     cmdl.append('--bootstrap-name')
     cmdl.append('"configure hadoop"')
-    if args.no_speculative:
+    if not args.enable_speculative:
         hadoopConfigs.append('-m,mapred.map.tasks.speculative.execution=false')
         hadoopConfigs.append('-m,mapred.reduce.tasks.speculative.execution=false')
     cmdl.append('--args "%s"' % ','.join(hadoopConfigs))
