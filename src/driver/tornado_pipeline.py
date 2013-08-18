@@ -34,7 +34,7 @@ class AlignStep(pipeline.Step):
             inps,
             output,
             name="Align",
-            mapper="python %s/src/rnawesome/align.py --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s--bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d --differentials --verbose -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
+            mapper="python %s/src/rnawesome/align.py --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s--bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d --exon-differentials --verbose -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
             outputFormat='edu.jhu.cs.MultipleOutputFormat',
             libjars=['/mnt/lib/multiplefiles.jar'])
 
@@ -79,7 +79,7 @@ class NormalizePreStep(pipeline.Step):
             inps,
             output,  # output URL
             name="NormalizePre", # name
-            aggr=pipeline.Aggregation(None, 8, 1, 2),
+            aggr=pipeline.Aggregation(None, 8, 2, 3),
             reducer="python %s/src/rnawesome/normalize_pre.py --partition-stats --partition-len=%d" % (d, tconf.partitionLen),
             outputFormat='edu.jhu.cs.MultipleOutputFormat',
             libjars=['/mnt/lib/multiplefiles.jar'])
@@ -92,7 +92,7 @@ class NormalizeStep(pipeline.Step):
             output,  # output URL
             name="Normalize", # name
             aggr=pipeline.Aggregation(None, 1, 1, 3),
-            reducer="python %s/src/rnawesome/normalize.py --percentile %f --out_dir=%s/coverage --bigbed_exe=%s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai --verbose" % (d, tconf.normPercentile, pconf.out.toUpperUrl(), d, d))
+            reducer="python %s/src/rnawesome/normalize2.py --percentile %f --out_dir=%s/coverage --bigbed_exe=%s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai --verbose" % (d, tconf.normPercentile, pconf.out.toUpperUrl(), d, d))
 
 class NormalizePostStep(pipeline.Step):
     def __init__(self, inps, output, tconf, pconf):
