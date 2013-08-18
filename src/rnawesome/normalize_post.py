@@ -42,11 +42,19 @@ parser = argparse.ArgumentParser(description=\
 parser.add_argument(\
     '--out', metavar='URL', type=str, required=False, default=None,
     help='URL to write output to.  Goes to stdout by default.')
+parser.add_argument(\
+    '--verbose', action='store_const', const=True, default=False,
+    help='Prints out extra debugging statements')
 
 manifest.addArgs(parser)
 filemover.addArgs(parser)
 
 args = parser.parse_args()
+
+if args.verbose:
+    print >> sys.stderr, " vvv Manifest file vvv"
+    with open(args.manifest) as fh: print >> sys.stderr, fh.read()
+    print >> sys.stderr, " ^^^ Manifest file ^^^"
 
 # Get the set of all labels by parsing the manifest file, given on the
 # filesystem or in the Hadoop file cache
@@ -58,6 +66,7 @@ facts = dict() # Normalization factors
 
 for ln in sys.stdin:
     ln = ln.rstrip()
+    if len(ln) == 0: continue
     toks = ln.split('\t')
     assert len(toks) == 2
     facts[toks[0]] = int(toks[1])
