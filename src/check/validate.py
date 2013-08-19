@@ -219,7 +219,7 @@ def go():
     #print annot_sites
     found_sites,close_sites,false_sites,missed_sites,total_sites = compare(bed_sites,annot_sites,args.radius)
     fastaH = fasta.fasta(args.refseq)
-
+    sim_sites       = set([(x[0],x[1],x[2],'') for x in list(sim_sites)])
     intersect_sites = list(missed_sites.intersection(sim_sites))
     missed_sites    = list(missed_sites)
     total_sites     = list(total_sites)
@@ -256,7 +256,7 @@ def go():
     #print "Annotated site stats\t",annot_site_stats
     false_sites = false_sites+close_sites
 
-    displayIncorrect(false_sites,intersect_sites,args.flank_seqs,xscripts,annot_sites,args.region,cov_sts,cov_ends,fastaH)
+    #displayIncorrect(false_sites,intersect_sites,args.flank_seqs,xscripts,annot_sites,args.region,cov_sts,cov_ends,fastaH)
 
     #print >>sys.stderr, "Annotated   ",annot_sites
     #print >>sys.stderr, "Total annot sites",total_sites
@@ -271,6 +271,7 @@ def go():
     print "Nearby              \t",nearby
     print "False positives     \t",incorrect
     print "False negatives     \t",missed
+
 if __name__=="__main__":
     if args.profile:
         import cProfile
