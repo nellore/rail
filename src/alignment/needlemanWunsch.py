@@ -61,18 +61,16 @@ Returns a cigar like format of the alignment
 def cigar(alignment):
     count = 1
     letter = alignment[0]
-    s = ""
+    s = []
     for i in range(1,len(alignment)):
         if letter!=alignment[i]:
-            s+="%d%s"%(count,letter)
+            s.append("%d%s" % (count, letter))
             letter = alignment[i]
             count = 1
         else:
             count+=1
-    s+="%d%s"%(count,letter)
-    letter = alignment[i]
-    count = 1
-    return s
+    s.append("%d%s" % (count, letter))
+    return ''.join(s)
 
 def char2index(string):
     return [ "ACGTN-".index(c) for c in string ]
