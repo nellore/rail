@@ -122,7 +122,11 @@ parser.add_argument(\
 parser.add_argument(\
     '--stop-after-junction', action='store_const', const=True, help='Stop after the junction pipeline.')
 parser.add_argument(\
+    '--no-coverage', action='store_const', const=True, help='Don\'t run the coverage pipeline.')
+parser.add_argument(\
     '--no-junction', action='store_const', const=True, help='Don\'t run the junction pipeline.')
+parser.add_argument(\
+    '--no-differential', action='store_const', const=True, help='Don\'t run the differential expression pipeline.')
 
 #
 # Hadoop params
@@ -370,9 +374,12 @@ if args.stop_after_align:
 if args.stop_after_coverage or args.stop_after_junction:
     pipelines.remove("differential")
 
-# Might skip junction pipeline
+if args.no_coverage:
+    pipelines.remove("coverage")
 if args.no_junction:
     pipelines.remove("junction")
+if args.no_differential:
+    pipelines.remove("differential")
 
 # Might just be running one pipeline
 if args.just_preprocess:
@@ -420,17 +427,17 @@ allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
 # Tornado is organized as a tree, but this struct also allows us to
 # organize it as a DAG
 stepInfo = {\
-    'preprocess'     : ([                              ], tornado_pipeline.PreprocessingStep),
-    'align'          : ([('preprocess',     ''        )], tornado_pipeline.AlignStep),
-    'intron'         : ([('align',          '/intron' )], tornado_pipeline.IntronStep),
-    'normalize_pre'  : ([('align',          '/exon'   )], tornado_pipeline.NormalizePreStep),
-    'normalize'      : ([('normalize_pre',  '/o'      )], tornado_pipeline.NormalizeStep),
-    'normalize_post' : ([('normalize',      ''        )], tornado_pipeline.NormalizePostStep),
-    'walk_fit'       : ([('normalize_post', ''        )], tornado_pipeline.WalkFitStep),
-    'ebayes'         : ([('walk_fit',       ''        )], tornado_pipeline.EbayesStep),
-    'hmm_params'     : ([('ebayes',         ''        )], tornado_pipeline.HmmParamsStep),
-    'hmm'            : ([('hmm_params',     ''        )], tornado_pipeline.HmmStep),
-    'aggr_path'      : ([('hmm',            ''        )], tornado_pipeline.AggrPathStep) }
+    'preprocess'     : ([                                 ], tornado_pipeline.PreprocessingStep),
+    'align'          : ([('preprocess',     ''           )], tornado_pipeline.AlignStep),
+    'intron'         : ([('align',          '/intron'    )], tornado_pipeline.IntronStep),
+    'normalize_pre'  : ([('align',          '/exon_diff' )], tornado_pipeline.NormalizePreStep),
+    'normalize'      : ([('normalize_pre',  '/o'         )], tornado_pipeline.NormalizeStep),
+    'normalize_post' : ([('normalize',      ''           )], tornado_pipeline.NormalizePostStep),
+    'walk_fit'       : ([('normalize_post', ''           )], tornado_pipeline.WalkFitStep),
+    'ebayes'         : ([('walk_fit',       ''           )], tornado_pipeline.EbayesStep),
+    'hmm_params'     : ([('ebayes',         ''           )], tornado_pipeline.HmmParamsStep),
+    'hmm'            : ([('hmm_params',     ''           )], tornado_pipeline.HmmStep),
+    'aggr_path'      : ([('hmm',            ''           )], tornado_pipeline.AggrPathStep) }
 
 # 'normalize_post' sends pushes normalization-factor .tsv to out/normalization_factors.tsv
 # 'normalize' sends per-sample coverage bigBed to out
@@ -520,7 +527,7 @@ if mode == 'emr':
     cmdl.append('s3://elasticmapreduce/bootstrap-actions/configure-hadoop')
     cmdl.append('--bootstrap-name')
     cmdl.append('"configure hadoop"')
-    if not args.enable_speculative:
+    if not                      args.enable_speculative:
         hadoopConfigs.append('-m,mapred.map.tasks.speculative.execution=false')
         hadoopConfigs.append('-m,mapred.reduce.tasks.speculative.execution=false')
     cmdl.append('--args "%s"' % ','.join(hadoopConfigs))
