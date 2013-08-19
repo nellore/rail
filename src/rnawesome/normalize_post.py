@@ -90,7 +90,7 @@ if args.out is not None:
     ofh.close()
     if not outUrl.isLocal():
         mover = filemover.FileMover(args=args)
-        mover.put(outFn, outUrl.plus("normalization_factors.tsv").toNonNativeUrl())
+        mover.put(outFn, outUrl.plus("normalization_factors.tsv"))
         os.remove(outFn)
 
 # Done
