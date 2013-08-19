@@ -46,6 +46,14 @@ WALK_PRENORM="$PYTHON $RNAWESOME/walk_prenorm.py"
 WALK_PRENORM_OUT=$HADOOP_FILES/walk_prenorm_output
 WALK_ARGS=''$WALK_PRENORM' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN''
 
+NORMALIZE_PRE="$PYTHON $RNAWESOME/normalize_pre.py"
+NORMALIZE_PRE_OUT=$HADOOP_FILES/normalize_pre_output
+NORMALIZE_PRE_ARGS=$NORMALIZE_PRE' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN
+
+NORMALIZE2="$PYTHON $RNAWESOME/normalize2.py"
+NORMALIZE2_OUT=$HADOOP_FILES/normalize2_output
+NORMALIZE2_ARGS=$NORMALIZE2' --percentile 0.75 --out_dir='$SAMPLE_OUT' --bigbed_exe='$BIGBED_EXE' --chrom_sizes='$CHROM_SIZES' --hadoop_exe='$HADOOP_EXE
+
 # Step 4: For all samples, take all coverage tuples for the sample and
 #         from them calculate a normalization factor
 SAMPLE_OUT=$HADOOP_FILES/sample_output
@@ -236,6 +244,40 @@ cat ${INTERMEDIATE_DIR}/align_out/* | sort -n -k2,2 | sort -s -k1,1 > ${INTERMED
 hadoop dfs -copyToLocal $SITEBED_OUT/part* ${INTERMEDIATE_DIR}/splice_sites
 cat ${INTERMEDIATE_DIR}/splice_sites/* | sort -n -k2,2 | sort -s -k1,1 > ${INTERMEDIATE_DIR}/splice_sites.bed
 
+hadoop dfs -rmr $NORMALIZE_PRE_OUT
+time hadoop jar $STREAMING \
+     -D mapred.reduce.tasks=32 \
+     -D mapred.text.key.partitioner.options=-k1,2 \
+     -D stream.num.map.output.key.fields=3 \
+     -cmdenv PYTHONPATH=$PYTHONPATH \
+     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+     -file "$SCR_DIR/interval/partition.py" \
+     -file "$SCR_DIR/rnawesome/normalize_pre.py" \
+     -mapper 'cat' \
+     -reducer "$NORMALIZE_PRE_ARGS" \
+     -input $ALIGN_OUT/exon_diff/part* \
+     -output $NORMALIZE_PRE_OUT
+
+hadoop dfs -rmr $NORMALIZE2_OUT
+time hadoop jar $STREAMING \
+     -D mapred.reduce.tasks=32 \
+     -D mapred.text.key.partitioner.options=-k1,1 \
+     -D stream.num.map.output.key.fields=3 \
+     -cmdenv PYTHONPATH=$PYTHONPATH \
+     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+     -partitioner org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner \
+     -file "$SCR_DIR/rnawesome/normalize2.py" \
+     -file "$SCR_DIR/interval/partition.py" \
+     -file "$SCR_DIR/manifest/manifest.py" \
+     -file "$CHROM_SIZES" \
+     -file "$BIGBED_EXE" \
+     -mapper cat \
+     -reducer "$NORMALIZE2_ARGS" \
+     -input $NORMALIZE_PRE_OUT/*part* -output $NORMALIZE2_OUT
+
 # # #Sort MERGE output
 
 # hadoop dfs -rmr $MERGE_OUT
@@ -305,17 +347,17 @@ cat ${INTERMEDIATE_DIR}/splice_sites/* | sort -n -k2,2 | sort -s -k1,1 > ${INTER
 # fi
 
 # #Step 5 NORMALIZE_POST
-# hadoop dfs -rmr $NORMALIZE_POST_OUT
-# time hadoop jar $STREAMING \
-#     -D mapred.reduce.tasks=32 \
-#     -cmdenv PYTHONPATH=$PYTHONPATH \
-#     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
-#     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
-#     -file "$SCR_DIR/rnawesome/normalize_post.py" \
-#     -file "$SCR_DIR/manifest/manifest.py" \
-#     -mapper cat \
-#     -reducer "$NORMALIZE_POST_ARGS" \
-#     -input $NORMALIZE_OUT/*part* -output $NORMALIZE_POST_OUT
+hadoop dfs -rmr $NORMALIZE_POST_OUT
+time hadoop jar $STREAMING \
+    -D mapred.reduce.tasks=32 \
+    -cmdenv PYTHONPATH=$PYTHONPATH \
+     -cmdenv PYTHONUSERBASE=$PYTHONUSERBASE \
+     -cmdenv PYTHONUSERSITE=$PYTHONUSERSITE \
+     -file "$SCR_DIR/rnawesome/normalize_post.py" \
+     -file "$SCR_DIR/manifest/manifest.py" \
+     -mapper cat \
+     -reducer "$NORMALIZE_POST_ARGS" \
+     -input $NORMALIZE2_OUT/*part* -output $NORMALIZE_POST_OUT
 
 # if [ $? -ne 0 ] ; then
 #     echo "NORMALIZE_POST step failed, now exiting"

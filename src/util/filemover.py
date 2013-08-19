@@ -7,6 +7,7 @@ filesystems.
 
 import os
 import sys
+import subprocess
 
 def addArgs(parser):
     """ Set up arguments related to moving files around """
@@ -47,7 +48,7 @@ class FileMover(object):
             cmdl.append('/'.join([url.toUrl(), os.path.basename(fn)]))
         cmd = ' '.join(cmdl)
         print >> sys.stderr, "  Push command: '%s'" % cmd
-        extl = os.system(cmd)
+        extl = subprocess.Popen(cmdl, stdout=sys.stderr).wait()
         print >> sys.stderr, "    Exitlevel: %d" % extl
         if extl > 0:
             raise RuntimeError("Non-zero exitlevel %d from push command '%s'" % (extl, cmd))
@@ -63,7 +64,7 @@ class FileMover(object):
             cmdl.append(url.toNonNativeUrl())
             cmdl.append(dest)
             cmd = ' '.join(cmdl)
-            extl = os.system(cmd)
+            extl = subprocess.Popen(cmdl, stdout=sys.stderr).wait()
             if extl > 0:
                 raise RuntimeError("Non-zero exitlevel %d from s3cmd get command '%s'" % (extl, cmd))
         elif url.isWgettable():
@@ -72,7 +73,7 @@ class FileMover(object):
             cmdl = ['wget', '-t', '4', '-T', '20', '-w', '25']
             cmdl.append(url.toUrl())
             cmd = ' '.join(cmdl)
-            extl = os.system(cmd)
+            extl = subprocess.Popen(cmdl, stdout=sys.stderr).wait()
             os.chdir(oldp)
             if extl > 0:
                 raise RuntimeError("Non-zero exitlevel %d from wget command '%s'" % (extl, cmd))
@@ -81,6 +82,6 @@ class FileMover(object):
             cmdl.append(url.toUrl())
             cmdl.append(dest)
             cmd = ' '.join(cmdl)
-            extl = os.system(cmd)
+            extl = subprocess.Popen(cmdl, stdout=sys.stderr).wait()
             if extl > 0:
                 raise RuntimeError("Non-zero exitlevel %d from hadoop fs -get command '%s'" % (extl, cmd))
