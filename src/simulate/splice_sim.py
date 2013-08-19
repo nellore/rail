@@ -162,7 +162,7 @@ def sequencingError(read,errModel):
         bases = ["A","C","G","T"]
         bases.remove(lread[r])
         lread[r] = bases[random.randint(0,2)]
-        
+
     nread = "".join(lread)
     total_mismatches+=1
     total_reads+=1
@@ -269,18 +269,19 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
             sim_xscripts.add(x)
         #print x.gene_id,x.xscript_id,x.seqid
         if args.paired_end:
-            tmp_reads,tmp_sites,bounds1,bounds2,overlaps= simulatePairedEnd(x,readlen,errModel)
-            if tmp_reads==None and tmp_sites==None:
+            
+            tmp_mates,tmp_sites,bounds1,bounds2 = simulatePairedEnd(x,readlen,errModel)
+            if tmp_mates==None and tmp_sites==None:
                 continue
             else:
-                reads = tmp_reads
+                reads = tmp_mates
                 sites|= set(tmp_sites)
             n+=readlen+readlen
             cov_sts[ bounds1[0] ]+=1
             cov_sts[ bounds2[0] ]+=1
             cov_ends[ bounds1[1] ]+=1
             cov_ends[ bounds2[1] ]+=1
-            seqs.append(reads) #Appends a pair of reads
+            seqs.append(tmp_mates) #Appends a pair of reads
         else:
             tmp_reads,tmp_sites,bounds = simulateSingle(x,readlen,errModel)
             if tmp_reads==None and tmp_sites==None:
@@ -394,7 +395,7 @@ def go():
     sim_sites.sort()
     real_sites = "\t".join(map(str,real_sites))
     sim_sites = "\t".join(map(str,sim_sites))
-    
+
     pickle.dump(sites,open(args.output_prefix+".sites",'wb'))
     print >> sys.stderr,"Total number of reads",total_reads
     print >> sys.stderr,"Total number of mismatched reads",total_mismatches
@@ -417,7 +418,7 @@ def readableFormat(s):
 
 if __name__=="__main__":
     if not args.test and not args.profile:
-        go() 
+        go()
     elif args.profile:
         import cProfile
         cProfile.run('go()')
@@ -469,7 +470,7 @@ if __name__=="__main__":
                 for i in range(0,N):
                     cnts[model.next()]+=1
                 print >> sys.stderr,"Histogram",cnts
-                self.assertGreater(cnts[0],cnts[1]) 
+                self.assertGreater(cnts[0],cnts[1])
                 self.assertGreater(cnts[0],cnts[2])
                 self.assertGreater(cnts[1],cnts[2])
 
