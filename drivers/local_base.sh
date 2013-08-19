@@ -30,6 +30,9 @@ MERGE_AGGR3="sort -n -k2,2"
 MERGE_AGGR4="sort -s -k1,1"
 MERGE="python $SCR_DIR/merge.py"
 
+NORMALIZE_PRE_AGGR="sort -n -k1,3"
+NORMALIZE_PRE="python $SCR_DIR/normalize_pre.py"
+
 INTRON_AGGR1="grep '^intron'"
 INTRON_AGGR2="cut -f 2-"
 INTRON_AGGR3="sort -n -k2,2"
@@ -46,19 +49,13 @@ SITE_AGGR2="cut -f 2-"
 CO_AGGR1="grep '^cooccurence'"
 CO_AGGR2="cut -f 2-"
 
-
-# Step 3: Walk over genome windows and emit per-sample, per-position
-#         coverage tuples
-WALK_PRENORM_AGGR1="sort -n -k2,2"
-WALK_PRENORM_AGGR2="sort -s -k1,1"
-WALK_PRENORM="python $SCR_DIR/walk_prenorm.py"
-
 # Step 4: For all samples, take all coverage tuples for the sample and
 #         from them calculate a normalization factor
 NORMALIZE_AGGR="sort -k1,3"
-NORMALIZE="python $SCR_DIR/normalize.py"
+NORMALIZE="python $SCR_DIR/normalize2.py"
 SAMPLE_OUT=$INTERMEDIATE_DIR/samples
-mkdir -p  $SAMPLE_OUT
+mkdir -p $SAMPLE_OUT
+rm -f $SAMPLE_OUT/*
 CHROM_SIZES=$PWD/chrom.sizes
 cat $FASTA_IDX | cut -f -2 > $CHROM_SIZES
 # Step 5: Collect all the norm factors together and write to file
@@ -113,14 +110,16 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 		--readletIval $READLET_IVAL \
 		--refseq=$GENOME \
 		--faidx=$FASTA_IDX \
-                --splice-overlap=$SPLICE_OVERLAP \
+		--splice-overlap=$SPLICE_OVERLAP \
+		--exon-differentials \
+		--exon-intervals \
+		--verbose \
 		-- -v 2 -m 1 -p 10 \
 		| tee ${INTERMEDIATE_DIR}/align_out.tsv \
-	| grep '^exon' | $MERGE_AGGR2 | $MERGE_AGGR3 | $MERGE_AGGR4 | $MERGE \
-	| tee $WALK_IN_TMP | $WALK_PRENORM \
+	| grep '^exon_diff' | cut -f 2- | $NORMALIZE_PRE_AGGR | tee ${INTERMEDIATE_DIR}/pre_normalize_pre.tsv | $NORMALIZE_PRE \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
-	| $NORMALIZE_AGGR | $NORMALIZE \
+	| $NORMALIZE_AGGR | tee ${INTERMEDIATE_DIR}/pre_normalize.tsv | $NORMALIZE \
 		--percentile 0.75 \
 		--out_dir $SAMPLE_OUT \
 		--bigbed_exe $BIGBED_EXE \
@@ -144,7 +143,10 @@ cat ${INTERMEDIATE_DIR}/align_out.tsv \
     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $INTRONS2BED > ${INTERMEDIATE_DIR}/flanks.bed
 
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
-    | grep '^exon' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $EXONS2BED > ${INTERMEDIATE_DIR}/exons.bed
+    | grep '^exon_ival' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $EXONS2BED > ${INTERMEDIATE_DIR}/exons.bed
+
+cat ${INTERMEDIATE_DIR}/align_out.tsv \
+    | grep '^exon_ival' | cut -f 2- | sort -k1,3 > ${INTERMEDIATE_DIR}/exon_ivals.bed
 
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
     | grep '^exon' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 > ${INTERMEDIATE_DIR}/align_out_exons.tsv
