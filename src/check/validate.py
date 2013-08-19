@@ -227,9 +227,7 @@ def go():
     cov_sts,cov_ends = pickle.load(open(args.coverage_file,'rb'))
     bed_sites = readBedSites(args.bed_file)
     annot_sites = annotated_sites(xscripts)
-    print >> sys.stderr,annot_sites
     annot_sites_wk = conformKey(annot_sites) #without xscript id key
-    print >> sys.stderr,annot_sites
     #print annot_sites
     found_sites,close_sites,false_sites,missed_sites,total_sites = compare(bed_sites,annot_sites_wk,args.radius)
     fastaH = fasta.fasta(args.refseq)
@@ -269,7 +267,7 @@ def go():
     #print "Bed site stats      \t",bed_site_stats
     #print "Annotated site stats\t",annot_site_stats
     false_sites = false_sites+close_sites
-
+   
     displayIncorrect(false_sites,intersect_sites,args.flank_seqs,xscripts,annot_sites,annot_sites_wk,args.region,cov_sts,cov_ends,fastaH)
 
     #print >>sys.stderr, "Annotated   ",annot_sites

@@ -10,7 +10,7 @@ import re
 from operator import itemgetter
 from collections import defaultdict
 import random
-import sys 
+import sys
 
 #parser = argparse.ArgumentParser(description='Parse a GTF file.')
 def addArgs(parser):
@@ -104,7 +104,7 @@ class Transcript(object):
             sites.append( ( (site5, site5+1, self.seqid, self.xscript_id) ,
                           (site3-2, site3-1, self.seqid, self.xscript_id) ) )
         return sites
-        
+
     """
     Given a base position, find the exon that it overlaps, return -1 if nonexistant
     """
@@ -113,6 +113,21 @@ class Transcript(object):
             if bpos>=self.exons[i].st0 and bpos<=self.exons[i].en0:
                 return i
         return -1
+    """
+    Return a list of exons between st and end inclusive
+    """
+    def getExonRange(self,st,end):
+        exons = []
+        for i in range(0,len(self.exons)):
+            if ( (st >=self.exons[i].st0 and st<=self.exons[i].en0) or
+                 (end>=self.exons[i].st0 and st<=self.exons[i].en0) or
+                 (st<=self.exons[i].st0 and end>=self.exons[i].en0) ):
+                exons.append(self.exons[i])
+        if len(exons)>0:
+            exons.sort()
+            return exons
+        return None
+
     """
     Get all splice sites in terms of transcript sequence
     Note that this only returns the break point boundaries

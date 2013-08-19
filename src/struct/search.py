@@ -16,10 +16,19 @@ Find an element out of a list of tuples with form
 """
 def find_tuple(tups,x):
     i = bisect.bisect_left(tups,x)
-    if i < len(tups)-1:
-        return tups[i] if abs(tups[i][0]-x[0]) < abs(tups[i+1][0]-x[0]) else tups[i+1]
+
+    if i>0 and i<len(tups):
+        return tups[i-1] if abs(tups[i-1][0]-x[0]) < abs(tups[i][0]-x[0]) else tups[i]
     else:
-        return tups[ len(tups)-1 ]
+        if i==0:
+            return tups[0]
+        else:
+            return tups[ i-1 ]
+
+    # if i < len(tups)-1:
+    #     return tups[i] if abs(tups[i][0]-x[0]) < abs(tups[i+1][0]-x[0]) else tups[i+1]
+    # else:
+    #     return tups[ len(tups)-1 ]
 
 def find(a,x):
     'Find the closest value to x'
