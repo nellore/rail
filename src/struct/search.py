@@ -15,20 +15,11 @@ Find an element out of a list of tuples with form
 (pos1,pos2,chromosome,transcript_id)
 """
 def find_tuple(tups,x):
-    pos1,pos2,seqids,_ = zip(*tups)
-    xpos1,xpos2,xseqid,_ = x
-    #Narrow down search based on chromosome
-    left_i  = bisect.bisect_left(seqids,xseqid)
-    right_i = bisect.bisect_right(seqids,xseqid)
-    i = bisect.bisect_left(pos1[left_i:right_i],xpos1)
-    diff = right_i-left_i
-    if i > 0 and i<diff:
-        return tups[left_i+i-1] if abs(tups[i-1][0]-x[0])< abs(tups[i][0]-x[0]) else tups[left_i+i]
+    i = bisect.bisect_left(tups,x)
+    if i < len(tups)-1:
+        return tups[i] if abs(tups[i][0]-x[0]) < abs(tups[i+1][0]-x[0]) else tups[i+1]
     else:
-        if i==0:
-            return tups[left_i]
-        else:
-            return tups[left_i+diff-1]
+        return tups[ len(tups)-1 ]
 
 def find(a,x):
     'Find the closest value to x'
@@ -83,7 +74,7 @@ def find_gt(a, x):
 
 class TestSearchFunctions(unittest.TestCase):
     def setUp(self):
-        N = 10
+        N = 10000000
         R = 1
         pos1 = range(N)
         pos2 = range(N)
@@ -104,6 +95,19 @@ class TestSearchFunctions(unittest.TestCase):
         result = find_tuple(self.tups,element)
         self.assertTrue(result[0]+1==element[0] and result[1]+1==element[1])
 
+    def test_search3(self):
+        trials = 1000
+        for i in range(0,trials):
+            element = random.choice(self.tups)
+            self.assertTrue(element in self.tups)
+            element = (element[0]+1,element[1]+1,element[2],element[3])
+            result = find_tuple(self.tups,element)
+            self.assertTrue(result[0]+1==element[0] and result[1]+1==element[1])
+        for i in range(0,trials):
+            element = random.choice(self.tups)
+            self.assertTrue(element in self.tups)
+            result = find_tuple(self.tups,element)
+            self.assertTrue(result==element)
 
 if __name__=='__main__':
     unittest.main()

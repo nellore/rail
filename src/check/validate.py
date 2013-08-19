@@ -15,6 +15,7 @@ import sys
 import math
 import pickle
 import bisect
+import copy
 from collections import Counter
 from collections import defaultdict
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -199,15 +200,25 @@ def binFlanks(annot_sites,flanks_file):
 Prints out false positives and false negatives specified by a region
 as well as flanking sequences
 """
-def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,region,cov_sts,cov_ends,fnh):
+def displayIncorrect(fps,fns,flanks_file,xscripts,annot_sites,annot_sites_wk,region,cov_sts,cov_ends,fnh):
     #print >> sys.stderr, annot_sites
-    flanksDict = binFlanks(annot_sites,flanks_file)
+    #annot_sites = [(x[0],x[1],x[2]) for x in annot_sites]
+    flanksDict = binFlanks(annot_sites_wk,flanks_file)
     #Convert xscripts into dictionary
     #xscriptDict = {x.seqid: x for x in xscripts}  #Only available for >=python2.7
+    #print >> sys.stderr,annot_sites
     xscriptDict = dict()
     for x in xscripts:
         xscriptDict[x.xscript_id] = x
     display.incorrect(args,fps,fns,flanksDict,xscriptDict,annot_sites,region,cov_sts,cov_ends,args.window_radius,fnh)
+
+#Gets rid of xscript id in annot_sites
+def conformKey(annot_sites):
+    annot_sites_wk = copy.deepcopy(annot_sites)
+    for k,v in annot_sites.iteritems():
+        for i in range(0,len(v)):
+            annot_sites_wk[k][i] = (v[i][0],v[i][1],v[i][2],'') 
+    return annot_sites_wk
 
 def go():
     #sites = readOverlappedSites(args.site_file)
@@ -216,8 +227,11 @@ def go():
     cov_sts,cov_ends = pickle.load(open(args.coverage_file,'rb'))
     bed_sites = readBedSites(args.bed_file)
     annot_sites = annotated_sites(xscripts)
+    print >> sys.stderr,annot_sites
+    annot_sites_wk = conformKey(annot_sites) #without xscript id key
+    print >> sys.stderr,annot_sites
     #print annot_sites
-    found_sites,close_sites,false_sites,missed_sites,total_sites = compare(bed_sites,annot_sites,args.radius)
+    found_sites,close_sites,false_sites,missed_sites,total_sites = compare(bed_sites,annot_sites_wk,args.radius)
     fastaH = fasta.fasta(args.refseq)
     sim_sites       = set([(x[0],x[1],x[2],'') for x in list(sim_sites)])
     intersect_sites = list(missed_sites.intersection(sim_sites))
@@ -256,7 +270,7 @@ def go():
     #print "Annotated site stats\t",annot_site_stats
     false_sites = false_sites+close_sites
 
-    #displayIncorrect(false_sites,intersect_sites,args.flank_seqs,xscripts,annot_sites,args.region,cov_sts,cov_ends,fastaH)
+    displayIncorrect(false_sites,intersect_sites,args.flank_seqs,xscripts,annot_sites,annot_sites_wk,args.region,cov_sts,cov_ends,fastaH)
 
     #print >>sys.stderr, "Annotated   ",annot_sites
     #print >>sys.stderr, "Total annot sites",total_sites
