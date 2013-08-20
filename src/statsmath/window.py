@@ -1,5 +1,6 @@
 import histogram
 import sys
+import unittest
 
 """
 Returns the site by finding the maximum in the scores
@@ -22,7 +23,7 @@ def findSite(scores,direction):
 
 
 """
-Scores a set of windows based off of splice site
+Scores a set of windows based off of splice site with matches and mismatches
 """
 def score(seq, site, hist,cost):
     wsize = len(site) # window size
@@ -34,6 +35,20 @@ def score(seq, site, hist,cost):
             s = 1 if site[j]==seq[i+j] else cost
             wins[i]+=s*hist[i+j]
     return wins
+
+"""
+Scores a set of windows based off of splice site with only matches
+"""
+def match(seq,site,hist,cost):
+    wsize = len(site) # window size
+    nwins = len(seq)-wsize+1
+    wins = [0]*nwins
+
+    for i in range(0,nwins):
+        s = 1 if site== seq[i:i+2] else cost
+        wins[i] = s*(hist[i]+hist[i+1])
+    return wins
+
 
 """
 Note:  Site = XX (e.g. GT)
@@ -56,3 +71,25 @@ def slide_left(refID, sts, site, fastaF, radius):
     #returned transformed coordinates of junction sites
     return ref_site, norm_score, win_score, total_score
 
+class TestDisplayFunctions(unittest.TestCase):
+    def setUp(self):
+        self.seq1 = "AAAAAAAAAAGTAAAAAAAAAA"
+        self.seq2 = "AAAAAAAAAAAAAAAAAAAAAA"
+    def test_sliding_window1(self):
+        cost = -10000
+        site = "GT"
+        hist = [1]*21
+        scores1 = match(self.seq1,site,hist,cost)
+        actual1 = [cost]*10+[1]+[cost]*10
+        self.assertEquals(scores1,actual1)
+    def test_sliding_window2(self):
+        cost = -10000
+        site = "GT"
+        hist = [1]*21
+        scores1 = match(self.seq2,site,hist,cost)
+        actual1 = [cost]*21
+        self.assertEquals(scores1,actual1)
+
+
+if __name__=="__main__":
+    unittest.main()
