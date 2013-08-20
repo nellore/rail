@@ -33,7 +33,7 @@ FASTQ2TAB="$PYTHON $SCR_DIR/fasta/fastq2tab.py"
 
 # Step 1: Readletize input reads and use Bowtie to align the readlets 
 ALIGN="$PYTHON $RNAWESOME/align.py"
-ALIGN_ARGS=''$ALIGN' --bowtieExe '$BOWTIE_EXE' --bowtieIdx='$BOWTIE_IDX' --readletLen '$READLET_LEN' --readletIval '$READLET_IVAL' --refseq='$GENOME' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --faidx='$FASTA_IDX' --splice-overlap='$SPLICE_OVERLAP' -- -v 2 -m 1 --mm'
+ALIGN_ARGS=''$ALIGN' --bowtieExe '$BOWTIE_EXE' --bowtieIdx='$BOWTIE_IDX' --readletLen '$READLET_LEN' --readletIval '$READLET_IVAL' --refseq='$GENOME' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN' --faidx='$FASTA_IDX' --splice-overlap='$SPLICE_OVERLAP' --exon-differentials -- -v 2 -m 1 --mm'
 ALIGN_OUT=$HADOOP_FILES/align_output
 
 # Step 2: Collapse identical intervals from same sample
@@ -50,13 +50,14 @@ NORMALIZE_PRE="$PYTHON $RNAWESOME/normalize_pre.py"
 NORMALIZE_PRE_OUT=$HADOOP_FILES/normalize_pre_output
 NORMALIZE_PRE_ARGS=$NORMALIZE_PRE' --ntasks='$NTASKS' --genomeLen='$GENOME_LEN
 
+SAMPLE_OUT=$HADOOP_FILES/sample_output
+
 NORMALIZE2="$PYTHON $RNAWESOME/normalize2.py"
 NORMALIZE2_OUT=$HADOOP_FILES/normalize2_output
 NORMALIZE2_ARGS=$NORMALIZE2' --percentile 0.75 --out_dir='$SAMPLE_OUT' --bigbed_exe='$BIGBED_EXE' --chrom_sizes='$CHROM_SIZES' --hadoop_exe='$HADOOP_EXE
 
 # Step 4: For all samples, take all coverage tuples for the sample and
 #         from them calculate a normalization factor
-SAMPLE_OUT=$HADOOP_FILES/sample_output
 NORMALIZE="$PYTHON $RNAWESOME/normalize.py"
 NORMALIZE_OUT=$HADOOP_FILES/normalize_output
 NORMALIZE_ARGS=''$NORMALIZE' --percentile 0.75 --out_dir='$SAMPLE_OUT' --bigbed_exe='$BIGBED_EXE' --chrom_sizes='$CHROM_SIZES' --hadoop_exe='$HADOOP_EXE''
