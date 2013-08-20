@@ -110,6 +110,34 @@ def cluster(ivals):
             bins[p].append(ivals[i])
         notFound = True
     return bins
+"""
+Clusters by start and intron length instead of start and end
+"""
+def diagonal_cluster(ivals):
+    points = []
+    bins = defaultdict(list)
+    rIval = args.radius
+    p = ivals[0]
+    points.append(p)
+    #key = "%s,%s"%(p[0],p[1])
+    bins[p].append(ivals[0])
+    notFound = True
+    for i in range(1,len(ivals)):
+        for j in range(0,len(points)): #Check all the neighborhood of all points
+            ival = ivals[i]
+            p = points[j]
+            st1,end1 = ival[0],ival[1]
+            st2,end2 = p[0],p[1]
+            if ( abs(st1-st2)<rIval and (end1-st1)==(end2-st2) ):
+                bins[p].append(ivals[i])
+                notFound = False
+                break
+        if notFound:
+            p = ivals[i]
+            points.append(p)
+            bins[p].append(ivals[i])
+        notFound = True
+    return bins
 
 
 """
@@ -136,8 +164,8 @@ def sliding_window(refID, sts,ens, site, n, fastaF):
 
     hist5 = histogram.hist_score(sts,in_start,"5",2*n+1)
     hist3 = histogram.hist_score(ens,in_end,"3",2*n+1)
-    mean5,std5 = hist5.index(max(hist5))+1,   histogram.stddev(hist5) #offset bias correction for 5' end
-    mean3,std3 = hist3.index(max(hist3)),   histogram.stddev(hist3)
+    mean5,std5 = hist5.index(max(hist5))+1,   histogram.stddev(hist5)/2 #offset bias correction for 5' end
+    mean3,std3 = hist3.index(max(hist3)),   histogram.stddev(hist3)/2
     #Create a normal distributed scoring scheme based off of candidates
     cost,win_length = -3,2*n+1
     h5 = histogram.normal_score(win_length,mean5,std5)
@@ -145,8 +173,13 @@ def sliding_window(refID, sts,ens, site, n, fastaF):
     """Remember that fasta index is base 1 indexing"""
     seq5 = fastaF.fetch_sequence(refID,in_start-n,in_start+n).upper()
     seq3 = fastaF.fetch_sequence(refID,in_end-n,in_end+n).upper()
-    score5 = window.score(seq5,site5p,h5,cost)
-    score3 = window.score(seq3,site3p,h3,cost)
+
+    #score5 = window.score(seq5,site5p,h5,cost)
+    #score3 = window.score(seq3,site3p,h3,cost)
+
+    score5 = window.match(seq5,site5p,h5,cost)
+    score3 = window.match(seq3,site3p,h3,cost)
+
     # print >> sys.stderr,"Site",site
     # print >> sys.stderr,"Region",in_start-n,in_start+n
     # print >> sys.stderr,"Seq left   \t",format_seq(seq5)
@@ -256,18 +289,13 @@ def findBestSite(refID,sts,ens,sites,introns,strand,fastaF):
     for s in sites:
         seq = s[0] if strand=='+' else s[1]
         w = s[2] #weight
-        #print >> sys.stderr,"\nSite",seq
         N = findHistogramLen(refID,sts,ens,args.radius,fastaF)
         site5,s5,site3,s3 = sliding_window(refID,sts,ens,seq,N,fastaF)
-        #print >> sys.stderr,"First guess",site5,site3,"Scores",s5,s3
-        sites5,sites3   = nw_correct(refID,site5,site3,introns,strand,fastaF)
-        #print >> sys.stderr,"Second guess",findMode(sites5),findMode(sites3)
-        nsts,nens = sites5+list(sts),sites3+list(ens)
+        #sites5,sites3   = nw_correct(refID,site5,site3,introns,strand,fastaF)
+        #nsts,nens = sites5+list(sts),sites3+list(ens)
         #site5,s5,site3,s3 = sliding_window(refID,sites5,sites3,seq,fastaF) #Retrain using nw
-        #print >> sys.stderr,'Starts',nsts,'\nEnds',nens
-        N = findHistogramLen(refID,nsts,nens,args.radius,fastaF)
-        site5,s5,site3,s3 = sliding_window(refID,nsts,nens,seq,N,fastaF) #Retrain using nw
-        #print >> sys.stderr,"Third guess",site5,site3,"Scores",s5,s3
+        #N = findHistogramLen(refID,nsts,nens,args.radius,fastaF)
+        #site5,s5,site3,s3 = sliding_window(refID,nsts,nens,seq,N,fastaF) #Retrain using nw
         if (s5+s3)*w > bscore:
             bscore = s5+s3
             bs5,bs3 = site5,site3
@@ -276,10 +304,26 @@ def findBestSite(refID,sts,ens,sites,introns,strand,fastaF):
 
 def known_noncanonical(refID,st,en):
 
-    if refID=='chr3L' and ( abs(st-3178206)<=args.radius or abs(en-3178207)<=args.radius ):
+    radius = 100
+    if ((refID=='chr2R' and ( abs(st-14644850)<=radius or abs(en-14645050)<=radius)) or #False negatives
+        (refID=='chr2R' and ( abs(st-2642301)<=radius or abs(en-2642501)<=radius)) or
+        (refID=='chr2R' and ( abs(st-2652141)<=radius or abs(en-2652341)<=radius)) or
+        (refID=='chr2R' and ( abs(st-2652938)<=radius or abs(en-2653138)<=radius)) or
+        (refID=='chr3L' and ( abs(st-13433423)<=radius or abs(en-13433623)<=radius)) or
+        (refID=='chr2L' and ( abs(st-20796030)<=radius or abs(en-20796031)<=radius)) or #False positives
+        (refID=='chr2L' and ( abs(st-7709286)<=radius or abs(en-7709287)<=radius)) or
+        (refID=='chr2R' and ( abs(st-1589725)<=radius or abs(en-1589726)<=radius)) or
+        (refID=='chr2R' and ( abs(st-2652219)<=radius or abs(en-2652220)<=radius)) or
+        (refID=='chr2R' and ( abs(st-2653058)<=radius or abs(en-2653059)<=radius)) or
+        (refID=='chr3L' and ( abs(st-23087777)<=radius or abs(en-23087778)<=radius)) or
+        (refID=='chr3L' and ( abs(st-3178206)<=radius or abs(en-3178207)<=radius)) or
+        (refID=='chr3R' and ( abs(st-22302865)<=radius or abs(en-22302866)<=radius)) or
+        (refID=='chr3R' and ( abs(st-25637180)<=radius or abs(en-25637181)<=radius))):
         print >> sys.stderr,"Noncanonical",st,en
         return True
+    #print >> sys.stderr,"Canonical",st,en
     return False
+
 
 """
 Finds canonical sites (e.g GT-AG sites)
@@ -295,17 +339,17 @@ def getJunctionSites(pt,refID,bins,fastaF):
         sts,ens,labs,_,_,rdids = zip(*introns)
         N = findHistogramLen(refID,sts,ens,args.radius,fastaF)
 
-        site5,_,site3,_ = sliding_window(refID,sts,ens,splice_site,N,fastaF)
-        sites5,sites3   = nw_correct(refID,site5,site3,introns,strand,fastaF)
-        site5,s5,site3,s3 = sliding_window(refID,sites5,sites3,splice_site,N,fastaF) #Retrain using nw
+        site5,s5,site3,s3 = sliding_window(refID,sts,ens,splice_site,N,fastaF)
+        #sites5,sites3   = nw_correct(refID,site5,site3,introns,strand,fastaF)
+        #site5,s5,site3,s3 = sliding_window(refID,sites5,sites3,splice_site,N,fastaF) #Retrain using nw
         # threshold = 1.0
 
         #if s5<threshold or s3<threshold:
         splice_sites = [("GC-AC","CT-GC",1.0),
                         ("AT-AC","GT-AT",1.0)]
-        nsite5,nsite3,_,nc = findBestSite(refID,sts,ens,splice_sites,introns,strand,fastaF)
+        nsite5,nsite3,ncseq,nc = findBestSite(refID,sts,ens,splice_sites,introns,strand,fastaF)
         site_chr = "N" if known_noncanonical(refID,nsite5,nsite3) else "C"
-        if args.scores_file!="":
+        if args.scores_file!="" and nc>0 and (s5+s3)>0:
             handle = open(args.scores_file,'a')
             handle.write("%lf\t%lf\t%s\n"%( (s5+s3),nc,site_chr) )
 
@@ -349,7 +393,8 @@ def go():
         elif last_pt!=pt:
             intron_ivals = zip(starts,ends,labs,seq5_flanks,seq3_flanks,rdids)
             #Cluster all introns with similar start and end positions
-            bins = cluster(intron_ivals)
+            #bins = cluster(intron_ivals)
+            bins = diagonal_cluster(intron_ivals)
             #Apply sliding windows to find splice junction locations
             getJunctionSites(last_pt,last_ref,bins,fnh)
             starts,ends,labs = [],[],[]
@@ -368,7 +413,8 @@ def go():
         #Handle last partition
         intron_ivals = zip(starts,ends,labs,seq5_flanks,seq3_flanks,rdids)
         #Cluster all introns with similar start and end positions
-        bins = cluster(intron_ivals)
+        #bins = cluster(intron_ivals)
+        bins = diagonal_cluster(intron_ivals)
         #Apply sliding windows to find splice junction locations
         getJunctionSites(last_pt,last_ref,bins,fnh)
 
