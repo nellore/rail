@@ -5,9 +5,7 @@ Doesn't take into consideration sample label atm
 """
 import os
 import sys
-import argparse
 import site
-import time
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "util"))
