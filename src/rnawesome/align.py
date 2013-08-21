@@ -132,6 +132,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--archive', metavar="PATH", type=str, help='Save input and command to a subdirectory (named using this process\'s PID) of PATH')
 parser.add_argument(\
+    '--intron-partition-overlap', type=int, required=False, default=20,
+    help='Amount that partitions overlap their left and right neighbors by.')
+parser.add_argument(\
     '--profile', action='store_const', const=True, default=False, help='Profile the code')
 parser.add_argument(\
     '--verbose', action='store_const', const=True, default=False, help='Prints out extra debugging statements')
@@ -281,9 +284,8 @@ def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdnm,fw,rdid,o
     if ( len(left_flank) == len(right_flank) and
          len(left_overlap) == len(right_overlap) and
          len(left_flank) == len(left_overlap)):
-         for pt in iter(partition.partition(refid, in_start, in_end, binsz)):
-            print >> outhandle,"intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, refid, sample.parseLab(rdnm),left_flank,left_overlap,rdid)
-
+        for pt, _, _ in iter(partition.partitionStartOverlaps(refid, in_start, in_end, binsz, fudge=args.intron_partition_overlap)):
+            print >> outhandle, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, sample.parseLab(rdnm),left_flank,left_overlap,rdid)
             nout += 1
 
 def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdnm,fw,fnh,offset,rdid):

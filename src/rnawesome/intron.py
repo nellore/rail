@@ -5,12 +5,11 @@ Tab-delimited input tuple columns:
 1. Partition ID for partition overlapped by interval (also includes strand information)
 2. Interval start
 3. Interval end (exclusive)
-4. Reference ID
-5. Sample label
-6. Readlet Sequence before 5' site
-7. Readlet Sequence after 5' site
-8. Readlet Sequence before 3' site
-9. Readlet Sequence after 3' site
+4. Sample label
+5. Readlet Sequence before 5' site
+6. Readlet Sequence after 5' site
+7. Readlet Sequence before 3' site
+8. Readlet Sequence after 3' site
 
 Tab-delimited splice site output tuple columns:
 1. Reference ID
@@ -386,8 +385,10 @@ def go():
         # Parse next read
         ln = ln.rstrip()
         toks = ln.split('\t')
-        assert len(toks)>=8
-        pt, st, en, refid, lab, seq5_flank, seq3_flank, rdid = toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6], toks[7]
+        assert len(toks) >= 7
+        pt, st, en, lab, seq5_flank, seq3_flank, rdid = \
+            toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6]
+        refid = pt[:pt.rfind(';')]
         if last_pt=='\t':
             last_pt, last_ref = pt, refid
         elif last_pt!=pt:
