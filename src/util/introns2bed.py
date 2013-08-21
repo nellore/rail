@@ -27,10 +27,11 @@ gpositions = defaultdict(counter.Counter)
 for ln in sys.stdin:
     ln = ln.rstrip()
     toks = ln.split("\t")
-    assert len(toks)>=5
-
-    pt,st,en,refid,lab,seq5,seq3 = toks[0],int(toks[1]),int(toks[2]),toks[3],toks[4],toks[5],toks[6]
-
+    assert len(toks) >= 6
+    
+    pt,st,en,lab,seq5,seq3 = toks[0],int(toks[1]),int(toks[2]),toks[3],toks[4],toks[5]
+    refid = pt[:pt.rfind(';')][:-1]
+    
     gpositions = addRead(refid,st-len(seq5),st,gpositions)
     gpositions = addRead(refid,en,en+len(seq3),gpositions)
 
