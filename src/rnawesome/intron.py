@@ -397,7 +397,7 @@ def go():
             bins = diagonal_cluster(intron_ivals)
             #Apply sliding windows to find splice junction locations
             getJunctionSites(last_pt,last_ref,bins,fnh)
-            starts,ends,labs = [],[],[]
+            starts, ends, labs, rdids = [], [], [], []
             seq5_flanks,seq3_flanks = [],[]
 
         starts.append(st)
