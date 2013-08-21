@@ -33,9 +33,8 @@ class Strip(object):
         
     """
     
-    def __init__(self, elts, nrow, ncol):
+    def __init__(self, elts):
         """ elts is a list of (count, i, j) tuples """
-        self.nrow, self.ncol = nrow, ncol
         self.elts = elts
         self.elts.sort(reverse=True)
         self.eltset = set()
@@ -45,30 +44,28 @@ class Strip(object):
     @classmethod
     def fromDenseMatrix(cls, mat):
         """ Create a strip from a dense 2D matrix with elts = counts """
-        nrow, ncol = len(mat), len(mat[0])
         elts = []
+        nrow, ncol = len(mat), len(mat[0])
         for i in xrange(0, nrow):
             for j in xrange(0, ncol):
                 if mat[i][j] > 0:
                     elts.append((mat[i][j], i, j))
-        return cls(elts, nrow, ncol)
+        return cls(elts)
     
     @classmethod
-    def fromHistogram(cls, hist, nrow, ncol):
+    def fromHistogram(cls, hist):
         """ Create a strip from a histogram of (st, en): count """
         elts = [ (cnt, c[0], c[1]) for c, cnt in hist.iteritems() ]
-        return cls(elts, nrow, ncol)
+        return cls(elts)
 
 def cluster(strip, N=5):
-    assert strip.nrow > 0
-    assert strip.ncol > 0
     clusters = []
     covered = set()
     for _, i, j in strip.elts:
         if (i, j) not in covered:
             covered.add((i, j))
             clusters.append([(i, j)])
-            for j2 in xrange(max(j-N, 0), min(j+N+1, strip.ncol)):
+            for j2 in xrange(j-N, j+N+1):
                 if (i, j2) in strip.eltset and (i, j2) not in covered:
                     clusters[-1].append((i, j2))
                     covered.add((i, j2))
@@ -76,23 +73,6 @@ def cluster(strip, N=5):
             if len(covered) == len(strip.elts):
                 return SpliceClustering.fromClusterList(clusters)
     raise RuntimeError("Should not get here!")
-
-def clusterExtra(strip, npad, N=5):
-    """ Handle a strip where 'npad' columns on the left and right sides are
-        """
-    clusters = cluster(strip, N=N)
-    newclusters = []
-    assert strip.ncol > 2*npad
-    newncol = strip.ncol - 2*npad
-    for clust in clusters.clist:
-        newclusters.append([])
-        leftmost = strip.ncol
-        for i, j in clust:
-            leftmost = min(leftmost, j-npad)
-            newclusters[-1].append((i, j-npad))
-        if len(newclusters[-1]) == 0 or leftmost < 0 or leftmost >= newncol:
-            newclusters.pop()
-    return SpliceClustering.fromClusterList(newclusters)
 
 if __name__ == '__main__':
     import unittest
@@ -154,7 +134,7 @@ if __name__ == '__main__':
         def test5(self):
             mat = [ (1, 0, 4), (2, 1, 3), (3, 2, 2), (3, 2, 4),
                     (5, 3, 0), (4, 3, 1), (4, 3, 2), (4, 3, 3) ]
-            clusters = cluster(Strip(mat, 4, 6), 2)
+            clusters = cluster(Strip(mat), 2)
             clist = clusters.clist
             self.assertEqual(5, len(clist))
             self.assertTrue([(3, 0), (3, 1), (3, 2)] in clist)
@@ -162,36 +142,5 @@ if __name__ == '__main__':
             self.assertTrue([(2, 4), (2, 2)] in clist)
             self.assertTrue([(1, 3)] in clist)
             self.assertTrue([(0, 4)] in clist)
-        
-        def test6(self):
-            mat = [ (1, 0, 4), (2, 1, 3), (3, 2, 2), (3, 2, 4),
-                    (5, 3, 0), (4, 3, 1), (4, 3, 2), (4, 3, 3) ]
-            clusters = clusterExtra(Strip(mat, 4, 6), 1, N=2)
-            clist = clusters.clist
-            self.assertEqual(4, len(clist))
-            self.assertTrue([(3, 2)] in clist)
-            self.assertTrue([(2, 3), (2, 1)] in clist)
-            self.assertTrue([(1, 2)] in clist)
-            self.assertTrue([(0, 3)] in clist)
-        
-        def test7(self):
-            mat = [ (1, 0, 4), (2, 1, 3), (3, 2, 2), (3, 2, 4),
-                    (5, 3, 0), (4, 3, 1), (4, 3, 2), (4, 3, 3) ]
-            clusters = clusterExtra(Strip(mat, 4, 6), 2, N=2)
-            clist = clusters.clist
-            self.assertEqual(3, len(clist))
-            self.assertTrue([(2, 2), (2, 0)] in clist)
-            self.assertTrue([(1, 1)] in clist)
-            self.assertTrue([(3, 1)] in clist)
-        
-        def test8(self):
-            hist = { (0, 4) : 1, (1, 3) : 2, (2, 2) : 3, (2, 4) : 3,
-                     (3, 0) : 5, (3, 1) : 4, (3, 2) : 4, (3, 3) : 4 }
-            clusters = clusterExtra(Strip.fromHistogram(hist, 4, 6), 2, N=2)
-            clist = clusters.clist
-            self.assertEqual(3, len(clist))
-            self.assertTrue([(2, 2), (2, 0)] in clist)
-            self.assertTrue([(1, 1)] in clist)
-            self.assertTrue([(3, 1)] in clist)
     
     unittest.main()

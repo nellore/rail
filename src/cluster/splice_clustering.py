@@ -40,3 +40,38 @@ class SpliceClustering(object):
     def fromClusterMap(cls, cmap):
         clist = SpliceClustering.mapToList(cmap)
         return cls(clist, cmap)
+    
+    def limitTo(self, sti, stf):
+        """ Modify the clustering so that it only contains clusters whose
+            leftmost element is within the given range of start positions """
+        newclist = []
+        for clust in self.clist:
+            leftmost = min([ j for _, j in clust ])
+            if leftmost >= sti and leftmost < stf:
+                newclist.append(clust)
+        self.cmap = SpliceClustering.listToMap(newclist)
+        self.clist = newclist
+
+if __name__ == '__main__':
+    import unittest
+    from strip import Strip, cluster
+
+    class TestCircularCountBuffer(unittest.TestCase):
+        
+        def test1(self):
+            mat = [[0, 0, 0, 0, 1, 0],
+                   [0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 2, 0, 0],
+                   [0, 0, 0, 0, 0, 0],
+                   [0, 0, 3, 0, 3, 0],
+                   [0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0],
+                   [4, 4, 0, 0, 0, 0]]
+            strip = Strip.fromDenseMatrix(mat)
+            clustering = cluster(strip, N=2)
+            self.assertEqual(4, len(clustering))
+            clustering.limitTo(1, 5)
+            self.assertEqual(3, len(clustering))
+            self.assertIn([(4, 4), (4, 2)], clustering.clist)
+    
+    unittest.main()
