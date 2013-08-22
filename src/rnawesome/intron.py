@@ -266,7 +266,7 @@ def findHistogramLen(refID,sts,ends,radius,fastaF):
     min_st, max_st = min(sts), max(sts)
     min_end, max_end = min(ends), max(ends)
     stR = max_st-min_st
-    endR = max_end-max_end
+    endR = max_end-min_end
 
     n = max( 2*stR, 2*endR, 2*radius )
     #print >> sys.stderr,stR,endR,radius
