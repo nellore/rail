@@ -41,6 +41,9 @@ class Strip(object):
         for _, i, j in self.elts:
             self.eltset.add((i, j))
     
+    def __len__(self):
+        return len(self.elts)
+    
     @classmethod
     def fromDenseMatrix(cls, mat):
         """ Create a strip from a dense 2D matrix with elts = counts """

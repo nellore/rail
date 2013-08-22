@@ -80,15 +80,18 @@ Returns the 5' and 3' splice sites within multiple intervals
 n is length of the histogram window, which is specified by user
 """
 def sliding_window(refID, sts,ens, site, n, fastaF):
+    # Site is a single donor/acceptor motif, not a list of motifs.  I guess
+    # this isn't strand-agnostic.
+    
     #n,r = 2*args.radius, args.radius
-
-    in_start, in_end = min(sts),max(ens)
+    
+    in_start, in_end = min(sts), max(ens)
     toks = site.split("-")
-    assert len(toks)==2
-    site5p,site3p = toks[0],toks[1]
+    assert len(toks) == 2
+    site5p, site3p = toks[0], toks[1]
 
-    hist5 = histogram.hist_score(sts,in_start,"5",2*n+1)
-    hist3 = histogram.hist_score(ens,in_end,"3",2*n+1)
+    hist5 = histogram.hist_score(sts, in_start, "5", 2*n+1)
+    hist3 = histogram.hist_score(ens, in_end, "3", 2*n+1)
     mean5,std5 = hist5.index(max(hist5))+1,   histogram.stddev(hist5)/2 #offset bias correction for 5' end
     mean3,std3 = hist3.index(max(hist3)),   histogram.stddev(hist3)/2
     #Create a normal distributed scoring scheme based off of candidates
@@ -112,87 +115,19 @@ def sliding_window(refID, sts,ens, site, n, fastaF):
     junc5, junc3 = maxwin_5+in_start-n-1, maxwin_3+(in_end-n-1)
     return junc5,score_5,junc3,score_3  #returned transformed coordinates of junction sites
 
-cigar_pattern = re.compile(r"(\d+)(\S)")
-
-_revcomp_trans = string.maketrans("ACGT", "TGCA")
-def revcomp(s):
-    return s[::-1].translate(_revcomp_trans)
-
-"""
-Generates a distribution and finds the most likely occurrance
-"""
-def findMode(sites):
-    hist = counter.Counter()
-    for s in sites:
-        hist[s]+=1
-    return (hist.most_common(1)[0])[0]
-
-"""
-This calculates the corrected position of the site given the cigar alignment
-Note that read_site must be in terms of read coordinates"""
-def cigar_correct(read_site,cigar,site5,site3):
-    left_site,right_site = site5,site3
-    align = cigar_pattern.findall(cigar)
-    i,j = 0,0  #pointers in Needleman Wunsch trace back matrix.  i = ref, j = read
-    for k in range(0,len(align)):
-        cnt,char = int(align[k][0]),align[k][1]
-        if char=="M" or char=="R":
-            i,j = i+cnt,j+cnt
-        elif char=="D":
-            if read_site>j and read_site<j+cnt:
-                diff = j+cnt-read_site
-                left_site,right_site = left_site+diff,right_site-diff
-            j+=cnt
-        elif char=="I":
-            if read_site>i and read_site<i+cnt:
-                diff = i+cnt-read_site
-                left_site,right_site = left_site-diff,right_site+diff
-            i+=cnt
-    #left_site,right_site indicate starting positions of splice site
-    return left_site,right_site
-
-"""
-Applies the Needleman-Wunsch algorithm to provide a list of candiadtes
-"""
-def nw_correct(refID,site5,site3,introns,strand,fastaF):
-    sites5,sites3 = [],[]
-    M = needlemanWunsch.lcsCost()
-    for intr in introns:
-        in_st,in_en,lab,rdseq5_flank,rdseq3_flank,_ = intr
-        rdseq5_over,rdseq3_over = rdseq3_flank,rdseq5_flank
-        rdseq5 = rdseq5_flank+rdseq5_over
-        rdseq3 = rdseq3_flank+rdseq3_over
-        n = len(rdseq5_flank)
-        overlap = len(rdseq5_over)
-        st,en = site5-n,site3+n
-        refseq5_flank = fastaF.fetch_sequence(refID,st-1,site5-1).upper()
-        refseq3_flank = fastaF.fetch_sequence(refID,site3+3,en+3).upper()
-        refseq5_over = refseq3_flank[:overlap]
-        refseq3_over = refseq5_flank[-overlap:]
-        refseq5 = refseq5_flank+refseq5_over
-        refseq3 = refseq3_flank+refseq3_over
-        _,cigar5 = needlemanWunsch.needlemanWunschXcript(refseq5,rdseq5,M)
-        nsite5_1,nsite3_1 = cigar_correct(len(rdseq5_flank),cigar5,site5,site3)
-        sites5.append(nsite5_1)
-        sites3.append(nsite3_1+2) #Adjust for 3' end offset bias in nw alignment
-    del M
-    return sites5,sites3
-
-
 def findHistogramLen(refID,sts,ends,radius,fastaF):
     min_st, max_st = min(sts), max(sts)
     min_end, max_end = min(ends), max(ends)
-    stR = max_st-min_st
-    endR = max_end-max_end
-
-    n = max( 2*stR, 2*endR, 2*radius )
-    #print >> sys.stderr,stR,endR,radius
-
+    stR = max_st - min_st
+    endR = max_end - min_end
+    
+    n = max(2 * stR, 2 * endR, 2 * radius)
+    
     lengths = chrsizes.getSizes(fastaF.fasta_file+".fai")
     #Check bounds to make sure that sliding window won't over-extend genome coordinates
     if min_st-n<0 or max_end+n>lengths[refID]:
         n = 2 * radius
-
+    
     return n
 
 """Weighs different canonical and non-canonical sites and weighs them
@@ -227,9 +162,9 @@ def getJunctionSites(refID, strand, bins, fastaF, radius):
     global nout
     for introns in bins.itervalues():
         samples = counter.Counter()
-        coOccurences = defaultdict( list )
         splice_site = "GT-AG" if strand=="+" else "CT-AC"  #only consider canonical sites
         sts, ens, lab, rdid = zip(*introns)
+        
         N = findHistogramLen(refID,sts,ens,radius,fastaF)
 
         site5,s5,site3,s3 = sliding_window(refID,sts,ens,splice_site,N,fastaF)
@@ -238,9 +173,8 @@ def getJunctionSites(refID, strand, bins, fastaF, radius):
         # threshold = 1.0
 
         #if s5<threshold or s3<threshold:
-        splice_sites = [("GC-AC","CT-GC",1.0),
-                        ("AT-AC","GT-AT",1.0)]
-        _, _, _,nc = findBestSite(refID, sts, ens, splice_sites, introns, strand, radius, fastaF)
+        splice_sites = [("GC-AC","CT-GC",1.0), ("AT-AC","GT-AT",1.0)]
+        _, _, _, nc = findBestSite(refID, sts, ens, splice_sites, introns, strand, radius, fastaF)
         
         # I don't get why findBestSite can't return "N" or "C"
         site_chr = "C"
@@ -250,20 +184,17 @@ def getJunctionSites(refID, strand, bins, fastaF, radius):
         
         for intr in introns:
             _, _, lab, rdid = intr
-            coOccurences[rdid].append( (site5,site3) )
-            samples[lab]+=1
+            # Co-occurrence output.  Potentially big, but contains info needed
+            # to know junction coverage and how junctions co-occur on reads
+            if args.cooccurrences:
+                print "cooccurrence\t%s\t%s\t%s\t%d\t%d" % (rdid, refID, strand, site5, site3)
+            samples[lab] += 1
         
-        # Output for bed sites
-        for sam,counts in samples.items():
-            print "site\t%s\t%012d\t%d\t%s\t%d"%(refID,site5,site3,sam,counts)
-            nout+=1
-        
-        # Output for co-occurences
-        for rdid,sites in coOccurences.items():
-            if len(sites)>1:
-                for s in sites:
-                    left_site,right_site = s
-                    print "cooccurence\t%s\t%s\t%d\t%d"%(rdid,refID,left_site,right_site)
+        # Concise bed output, to see what junctions were found and how many
+        # reads cover each
+        for sam, counts in samples.items():
+            print "site\t%s\t%012d\t%d\t%s\t%d" % (refID, site5, site3, sam, counts)
+            nout += 1
 
 def go():
 
@@ -275,13 +206,16 @@ def go():
     last_pt_st, last_pt_en = None, None
     fnh = fasta.fasta(args.refseq)
     binsz = partition.binSize(args)
+    fudge = args.intron_partition_overlap
     mat = {}
     
     def binIntervals(clustering):
         bins = {}
         for st, en, lab, rdid in zip(starts, ends, labs, rdids):
-            assert (st, en) in clustering.cmap
-            idx = clustering.cmap[(st, en)]
+            i, j = en - st, st
+            if (i, j) not in clustering.cmap:
+                continue
+            idx = clustering.cmap[(i, j)]
             if idx in bins:
                 bins[idx].append((st, en, lab, rdid))
             else:
@@ -289,12 +223,21 @@ def go():
         return bins
     
     def handlePartition():
+        print >> sys.stderr, "For partition %s:[%d, %d)" % (last_pt, last_pt_st, last_pt_en)
+        if len(mat) == 0: return
+        
         # Step 1. Make a strip
         strip = Strip.fromHistogram(mat)
+        nelts = len(strip)
         
         # Step 2. Cluster splice sites within strip
         clustering = cluster(strip, N=args.cluster_radius)
+        nclustsPre = len(clustering)
+        print >> sys.stderr, "  %d possible splice junction clustered down to %d" % (nelts, nclustsPre)
+        
         clustering.limitTo(last_pt_st, last_pt_en)
+        nclustsPost = len(clustering)
+        print >> sys.stderr, "  %d after overlap removal" % (nclustsPost)
         
         # Step 3. Build a bins object
         bins = binIntervals(clustering)
@@ -308,8 +251,10 @@ def go():
         assert len(toks) >= 7
         pt, st, en, lab, seq5_flank, seq3_flank, rdid = \
             toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6]
+        assert en > st
         refid, pt_st, pt_en = partition.parse(pt[:-1], binsz)
-        assert st >= pt_st and st < pt_en, "Intron start %d not in partition [%d, %d), partition id=%s" % (st, pt_st, pt_en, pt)
+        assert st >= pt_st - fudge and st < pt_en + fudge, \
+            "Intron start %d not in partition [%d, %d), partition id=%s" % (st, pt_st, pt_en, pt)
         
         if last_pt != pt and last_pt != '\t':
             handlePartition()
@@ -317,8 +262,8 @@ def go():
             seq5_flanks, seq3_flanks = [], []
             mat = {}
         
-        # Compile histogram of how many times a start, end 
-        mat[(st, en)] = mat.get((st, en), 0) + 1
+        i, j = en - st, st
+        mat[(i, j)] = mat.get((i, j), 0) + 1
         
         starts.append(st)
         ends.append(en)
