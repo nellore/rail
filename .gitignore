@@ -11,3 +11,4 @@ drivers/chrom.sizes
 drivers/run.sh
 refs
 lib
+.DS_Store
