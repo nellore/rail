@@ -5,12 +5,9 @@ Parses gtf files
 """
 import os
 import string
-import argparse
 import re
-from operator import itemgetter
 from collections import defaultdict
 import random
-import sys
 
 #parser = argparse.ArgumentParser(description='Parse a GTF file.')
 def addArgs(parser):
@@ -27,10 +24,9 @@ def addArgs(parser):
         '--exons-out', metavar='PATH', type=str, required=False,
         help='File to write exon information to')
 
-    #args = parser.parse_args()
-
 gene_id_re = re.compile("gene_id \"([^\"]+)\"")
 xscript_id_re = re.compile("transcript_id \"([^\"]+)\"")
+
 """
 Stores objects such as exons and introns
 """
@@ -140,6 +136,7 @@ class Transcript(object):
             total+=len(self.exons[i-1])
             sites.append( (total, total+1, self.seqid, self.xscript_id) )
         return sites
+    
     """
     Incorporates variants into transcriptome such as SNPs and indels
     """
@@ -147,26 +144,22 @@ class Transcript(object):
         lseq = list(self.seq)
         for i in range(0,len(lseq)):
             r = random.random()
-            if r<mm_rate:
+            if r < mm_rate:
                 bases = ["A","C","G","T"]
                 bases.remove(lseq[i])
-                c = bases[random.randint(0,2)]
-                var_handle.write("%s\tsnp\t%d\n"%(self.gene_id,i))
-            else:
-                r = random.random()
-                if r<indel_rate:
-                    indel = "ID"[random.randint(0,1)]
-                    if indel=="I":
-                        ins = "ACGT"[random.randint(0,3)]
-                        seq1 = lseq[:i]
-                        seq2 = lseq[i:]
-                        lseq = seq1+[ins]+seq2
-                        var_handle.write("%s\tinsert\t%d\n"%(self.gene_id,i))
-                    else:
-                        seq1 = lseq[:i]
-                        seq2 = lseq[i+1:]
-                        lseq = seq1+seq2
-                        var_handle.write("%s\tdelete%\td\n"%(self.gene_id,i))
+                lseq[i] = random.choice(bases)
+                var_handle.write("%s\tsnp\t%d\n" % (self.gene_id,i))
+            elif random.random() < indel_rate:
+                indel = random.choice("ID")
+                if indel=="I":
+                    ins = random.choice("ACGT")
+                    seq1, seq2 = lseq[:i], lseq[i:]
+                    lseq = seq1+[ins]+seq2
+                    var_handle.write("%s\tinsert\t%d\n" % (self.gene_id,i))
+                else:
+                    seq1, seq2 = lseq[:i], lseq[i+1:]
+                    lseq = seq1+seq2
+                    var_handle.write("%s\tdelete%\td\n" % (self.gene_id,i))
         self.seq = "".join(lseq)
 
     def __str__(self):
@@ -176,6 +169,7 @@ class Transcript(object):
             lns.append("%s\n"%(str(e)))
         lns.append("%s\n"%(str(self.seq)))
         return "".join(lns)
+
 """
 Constructs a dictionary of fasta seqs
 """
@@ -190,7 +184,6 @@ def parseFASTA(fns):
                 if ln[0] == '>':
                     if seqid!="":
                         seqs[seqid] = ''.join(lns)
-
                     seqid = ln.split(" ")[0][1:].rstrip()
                     lns = []
                     numseqs+=1
@@ -211,12 +204,8 @@ def parseGTF(fns):
             last_gene_id = None
             for line in gtfFh:
                 gene_id, xscript_id = None, None
-                refid, source, feature, start1, end1, score, orient, frame, attr = string.split(line, '\t')
-                if feature == "CDS":
-                    continue
-                if feature == "start_codon":
-                    continue
-                if feature == "stop_codon":
+                refid, _, feature, start1, end1, score, orient, frame, attr = string.split(line, '\t')
+                if feature in [ "CDS", "start_codon", "stop_codon" ]:
                     continue
                 assert feature == "exon"
                 start1, end1 = int(start1), int(end1)
@@ -232,7 +221,7 @@ def parseGTF(fns):
                 if gene_id != last_gene_id:
                     last_gene_id = gene_id
                 attrs = "%s\t%s"%(gene_id,xscript_id)
-                annot = Annot(refid, start1-1, end1,orient,feature,score,frame,attrs)
+                annot = Annot(refid, start1-1, end1, orient, feature, score, frame, attrs)
                 exons.append(annot)
     return exons
 
@@ -240,14 +229,14 @@ def parseGTF(fns):
 Input: sorted exons and a dictionary of fasta seqs
 Chain all exons into transcript via transcript id
 """
-def assembleTranscripts(exons,fastaseqs):
+def assembleTranscripts(exons, fastaseqs):
     exonlist = defaultdict(list)
-    #Bin all exons by transcript id
+    # Bin all exons by transcript id
     for E in exons:
-        gene_id,xscript_id = E.attrs.split("\t")
+        _, xscript_id = E.attrs.split("\t")
         exonlist[xscript_id].append(E)
     xscripts = list()
-    for tr_id,exons in exonlist.iteritems():
+    for _, exons in exonlist.iteritems():
         x = Transcript(exons)
         x.buildSeq(fastaseqs)
         xscripts.append(x)
@@ -271,7 +260,9 @@ def readableFormat(s):
     return "\t".join([s[i:i+10] + " " + str(i+10) for i in range(0,len(s),10)])
 
 import unittest
+
 class TestDisplayFunctions(unittest.TestCase):
+    
     def setUp(self):
         refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAACGTCTGGATCCGCCTGAAGCATATTGGCAATAAGATCGCGCA"""
         annots="""chr2R\tunknown\texon\t11\t20\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t51\t60\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\n"""
@@ -280,10 +271,12 @@ class TestDisplayFunctions(unittest.TestCase):
         self.gtf   = "test.gtf"
         createTestFasta(self.fasta,"chr2R",refseq)
         createTestGTF(self.gtf,annots)
+    
     def tearDown(self):
         os.remove(self.fasta)
         os.remove(self.faidx)
         os.remove(self.gtf)
+    
     def test1(self):
         annots = parseGTF([self.gtf])
         fastadb = parseFASTA([self.fasta])
@@ -297,7 +290,4 @@ class TestDisplayFunctions(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
-
-
-
 
