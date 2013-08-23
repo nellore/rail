@@ -46,7 +46,9 @@ class IntronStep(pipeline.Step):
             output,  # output URL
             name="Intron", # name
             aggr=pipeline.Aggregation(None, 8, 1, 2), # 8 tasks per reducer
-            reducer="python %s/src/rnawesome/intron.py --refseq=%s/fasta/genome.fa --radius=%d --readletLen=%d --readletIval=%d" % (d, d, tconf.clusterRadius, tconf.readletLen, tconf.readletIval))
+            reducer="python %s/src/rnawesome/intron.py --refseq=%s/fasta/genome.fa --radius=%d --readletLen=%d --readletIval=%d" % (d, d, tconf.clusterRadius, tconf.readletLen, tconf.readletIval),
+            outputFormat='edu.jhu.cs.MultipleOutputFormat',
+            libjars=['/mnt/lib/multiplefiles.jar'])
 
 class MergeStep(pipeline.Step):
     def __init__(self, inps, output, tconf, pconf):
