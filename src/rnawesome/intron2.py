@@ -28,9 +28,6 @@ import sys
 import argparse
 import site
 import time
-import re
-import string
-from collections import defaultdict
 timeSt = time.time()
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -66,6 +63,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--scores-file', type=str, required=False,default="",
     help='The location of the scores output file')
+parser.add_argument(\
+    '--cooccurrences', action='store_const', const=True, default=False,
+    help='Output junction cooccurrence records')
 
 readlet.addArgs(parser)
 partition.addArgs(parser)
@@ -134,6 +134,9 @@ def findHistogramLen(refID,sts,ends,radius,fastaF):
 Note that fw_site,rev_site and weight are zipped up in each site
 """
 def findBestSite(refID,sts,ens,sites,introns,strand,radius,fastaF):
+    
+    # sites is something like [("GC-AC","CT-GC",1.0), ("AT-AC","GT-AT",1.0)]
+    
     bs5,bs3 = 0,0  #Best sites
     bscore = 0     #Best score
     bseq = ""      #Best seq
@@ -278,7 +281,7 @@ def go():
     if last_pt != '\t': handlePartition()
     
     timeEn = time.time()
-    print >>sys.stderr, "DONE with intron.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
+    print >>sys.stderr, "DONE with intron2.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
 
 def createTestFasta(fname,refid,refseq):
     fastaH = open(fname,'w')
