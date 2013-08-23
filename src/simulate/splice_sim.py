@@ -173,8 +173,7 @@ def makeWeights(xscripts, seq_sizes, annots_handle):
     # We're picking the first num_xscripts transcripts, but we're constrained
     # to alternate between Watson and Crick being the sense strand.
     while i < len(weights) and num < num_xscripts:
-        assert xscripts[i].seqid in seq_sizes
-        if xscripts[i].orient != last_strand:
+        if xscripts[i].orient != last_strand and xscripts[i].seqid in seq_sizes:
             weights[i] = random.random()
             last_strand = xscripts[i].orient
             annots_handle.write(xscripts[i].xscript_id)
