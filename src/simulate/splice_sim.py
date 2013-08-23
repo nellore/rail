@@ -1,19 +1,80 @@
 """
 sim_splice.py
 
-Simulates differiential gene expression using annotated genes
+Simulates differiential gene expression using annotated genes.
+
+Outputs
+=======
+
+The simulator outputs several kinds of objects:
+
+1. Simulated reads
+2. Manifest file
+3. File describing sequence variants added
+4. Transcripts sampled
+5. Coverage
+6. List of sites traversed
+
+Strandedness
+============
+
+A few notes about strands and strandedness of RNA-seq protocols.  For a given
+gene, the DNA strand that contains the actual translated codon sequences is
+called the "sense" strand, and its complement is the "anti-sense" strand.  For
+a given gene, the sense strand might be either the Watson or the Crick strand.
+It varies from gene to gene.
+
+An RNA-seq protocol (lab procedures used to generate the RNA-seq data) is
+either "stranded" or not.  In a stranded protocol, the reads always (or almost
+always, since no protocol is 100% efficient) comes from the sense strand.  In a
+non-stranded protocol, the read is equally likely to come from either strand
+(either sense or anti-sense or, equivalently, either Watson or Crick).  Most
+RNA-seq datasets were generated with non-stranded protocols.
+
+See also:
+
+Levin JZ, Yassour M, Adiconis X, Nusbaum C, Thompson DA, Friedman N, Gnirke A,
+Regev A. Comprehensive comparative analysis of strand-specific RNA sequencing
+methods. Nat Methods. 2010 Sep;7(9):709-15.
+
+The --stranded option tells us to sample reads only from the sense strand.
+When --stranded is not specified, we sample reads from both the sense and
+anti-sense strands approximately equally
+
+Paired-end
+==========
+
+A brief note about paired-end sequencing.  When doing paired-end sequencing,
+we're really sequencing in from both ends of a larger fragment, i.e.:
+
+ GGTCATCTGCACGTAT
+ >>>>>>>>>>>>>>>>
+ GGTCATCTGCACGTATCGTACGTACGTTCACTACTCTGGACTACGTACGAG
+                                  <<<<<<<<<<<<<<<<<<
+                                  CTCTGGACTACGTACGAG
+
+Mate #1 on top, mate #2 on bottom.  Two important things to note.  First: the
+fragment itself might have come from the Watson or Crick stand of the genome.
+Second: mate #2 is reverse-complemented with respect to mate #1.
+
+TODO:
+- Output a bed file with the simulated reads w/ splices.  Stick
+  "name=junctions" at the top so that viewers know to show connecting arcs,
+  per: http://www.broadinstitute.org/igv/splice_junctions
+- Fix issue in test_alternativeSplicing (see my comment)
+- Clarify purpose of st and en in overlapping_sites (see my comment)
+- Refine simulatePairedEnd (see my comment)
+
 """
+
 import string
 import os
 import site
 import argparse
 import sys
 import random
-import math
-import re
 import bisect
 import pickle
-from operator import itemgetter
 from collections import defaultdict
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -80,103 +141,92 @@ gtf.addArgs(parser)
 args = parser.parse_args()
 
 class WeightedRandomGenerator(object):
-
+    
     def __init__(self, weights):
         self.totals = []
         running_total = 0
         for w in weights:
             running_total += w
             self.totals.append(running_total)
-
+    
     def next(self):
         rnd = random.random() * self.totals[-1]
         return bisect.bisect_right(self.totals, rnd)
-
+    
     def __call__(self):
         return self.next()
 
-#Creates an error model using a binomial random number generator based off of read length=N
+# Creates an error model using a binomial random number generator based off of read length=N
 def errorPMF(N,mm_rate):
     return WeightedRandomGenerator([ (1-mm_rate)**(N-i) * mm_rate**i for i in range(0,N)])
 
-#Make weighted random generator for transcriptome
-def makeWeights(xscripts,seq_sizes,annots_handle):
-    if args.num_xscripts==0:
-        num_xscripts= len(xscripts)
-    else:
-        num_xscripts = args.num_xscripts
-    weights = [1.0] * len(xscripts)
-    num = 0
-    for i in range(0,len(weights)):
-        if num<num_xscripts and xscripts[i].seqid in seq_sizes: #Can't have no existent chromosome
-            weights[i] = random.random()
-            if num==0:
-                annots_handle.write(xscripts[i].xscript_id)
-            else:
-                annots_handle.write("\n"+xscripts[i].xscript_id)
-            num+=1
-        else:
-            weights[i] = 0
-    return WeightedRandomGenerator(weights),weights
-
 """
-Randomly picks transcripts such that half of the transcripts come from one strand and the other half come from the other strand
+Picks transcripts arbitrarily (i.e. starting from the beginning of the
+xscripts list) such that half of the transcripts come from the Watson strand
+and the other half from Crick.
 """
-def makeStrandedWeights(xscripts,seq_sizes,annots_handle):
+def makeWeights(xscripts, seq_sizes, annots_handle):
     num_xscripts = args.num_xscripts
     weights = [1.0] * len(xscripts)
     last_strand = "+"
-    num = 0
-    for i in range(0,len(weights)):
-        if num<num_xscripts and xscripts[i].orient!=last_strand and xscripts[i].seqid in seq_sizes:  #Can't have no existent chromosome
+    num, i = 0, 0
+    # We're picking the first num_xscripts transcripts, but we're constrained
+    # to alternate between Watson and Crick being the sense strand.
+    while i < len(weights) and num < num_xscripts:
+        assert xscripts[i].seqid in seq_sizes
+        if xscripts[i].orient != last_strand:
             weights[i] = random.random()
             last_strand = xscripts[i].orient
-            if num==0:
-                annots_handle.write(xscripts[i].xscript_id)
-            else:
-                annots_handle.write("\n"+xscripts[i].xscript_id)
-            num+=1
-        else:
-            weights[i] = 0
-    return WeightedRandomGenerator(weights),weights
+            annots_handle.write(xscripts[i].xscript_id)
+            annots_handle.write('\n')
+            num += 1
+        i += 1
+    return WeightedRandomGenerator(weights), weights
 
 total_reads = 0
 total_mismatches = 0
+
 """
 Incorporates sequencing error into reads
 """
+_otherNucs = { 'A' : ['C', 'G', 'T'],
+               'C' : ['A', 'G', 'T'],
+               'G' : ['A', 'C', 'T'],
+               'T' : ['A', 'C', 'G'],
+               'N' : ['N'] }
+
 def sequencingError(read,errModel):
     global total_reads
     global total_mismatches
+    
     length = len(read)
     lread = list(read)
     #num = random.expovariate(1.0/mm_rate)
     #print >> sys.stderr,"expo num",num,"mean",(1.0/mm_rate)
     errs = errModel.next()
-    if errs==0:
-        total_reads+=1
+    if errs == 0:
+        total_reads += 1
         return "".join(lread)
-
-    for i in range(0,errs):
-        r = random.randint(1,len(lread)-1)
-        bases = ["A","C","G","T"]
-        bases.remove(lread[r])
-        lread[r] = bases[random.randint(0,2)]
-
-    nread = "".join(lread)
-    total_mismatches+=1
-    total_reads+=1
-    return nread
+    
+    for _ in xrange(errs):
+        r = random.randint(0, length - 1)
+        c = lread[r]
+        if c not in _otherNucs: c = 'N'
+        lread[r] = random.choice(_otherNucs[c])
+    
+    total_mismatches += 1
+    total_reads += 1
+    return "".join(lread)
 
 """
-Incorporants variants into transcripts with nonzero weights
+Incorporates variants into transcripts with nonzero weights
 """
 def incorporateVariants(weights,xscripts,mm_rate,indel_rate,var_handle):
-    for i in range(0,len(weights)):
-        if weights[i]!=0:
+    for i in xrange(len(weights)):
+        if weights[i] != 0:
             oldseq = xscripts[i].seq
             xscripts[i].incorporateVariants(mm_rate,indel_rate,var_handle)
-            if xscripts[i].seq!=oldseq:
+            if xscripts[i].seq != oldseq:
                 print >> sys.stderr, "No variants!"
     return xscripts
 
@@ -184,60 +234,74 @@ _revcomp_trans = string.maketrans("ACGT", "TGCA")
 def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
-def overlapping_sites(xscript,read_st,read_end):
+def overlapping_sites(xscript, read_st, read_end):
+    """ Given a transcript and an interval on the transcript, return a list of
+        splice sites that are spanned by the interval """
     sites = xscript.getSites()         #in the genome coordinate frame
     xsites = xscript.getXcriptSites()  #in the transcript coordinate frame
+    # sites is twice as long as xsites??
+    
     # sites.sort(key=lambda tup:tup[1])
     # sites.sort(key=lambda tup:tup[0])
     # xsites.sort(key=lambda tup:tup[1])
     # xsites.sort(key=lambda tup:tup[0])
     overlaps = []
-    st,en = read_st+xscript.st0,read_end+xscript.st0
-    for i in range(0,len(xsites)):
-        if read_st<=xsites[i][0] and read_end>=xsites[i][1]:
+    st, en = read_st + xscript.st0, read_end + xscript.st0
+    for i in xrange(len(xsites)):
+        if read_st <= xsites[i][0] and read_end >= xsites[i][1]:
             overlaps.append(sites[2*i])
             overlaps.append(sites[2*i+1])
         diff = sites[2*i+1][1] - sites[2*i][0] + 1
-        if read_st>=xsites[i][0]:
-            st+=diff
-        if read_end>=xsites[i][0]:
-            en+=diff
-    return overlaps,st,en
+        if read_st >= xsites[i][0]:
+            st += diff
+        if read_end >= xsites[i][0]:
+            en += diff
+    # BTL: what are st and en?
+    return overlaps, st, en
 
-
-def simulateSingle(xscript,readlen,errModel):
-    start,end,seqid = 0,len(xscript.seq)-readlen,xscript.seqid
-    if end<start or len(xscript.seq)<readlen:
+def simulateSingle(xscript, readlen, errModel):
+    """ Simulate a single unpaired read from the given transcript """
+    start, end = 0, len(xscript.seq) - readlen
+    if end < start or len(xscript.seq) < readlen:
         return None,None,None
-    i = random.randint(start,end)
-    if xscript.orient=="+":
-        read = xscript.seq[i:i+readlen]
-    else:
-        read = revcomp(xscript.seq[i:i+readlen])
-    sites,st,end = overlapping_sites(xscript,i,i+readlen)
-    read = sequencingError(read,errModel)
-    return read,sites,(st,end)
+    i = random.randint(start, end)
+    # Read is always taken from sense strand?
+    read = xscript.seq[i:i+readlen]
+    if args.stranded:
+        if xscript.orient == "-":
+            read = revcomp(read)
+    elif random.random() < 0.5:
+        read = revcomp(read)
+    
+    sites, st, end = overlapping_sites(xscript, i, i + readlen)
+    read = sequencingError(read, errModel)
+    return read, sites, (st, end)
 
 def simulatePairedEnd(xscript,readlen,errModel):
-    start,end,seqid = 0,len(xscript.seq)-readlen,xscript.seqid
-    if end<start or len(xscript.seq)<readlen:
+    start, end = 0, len(xscript.seq) - readlen
+    if end < start or len(xscript.seq) < readlen:
         #print >> sys.stderr, xscript.seq
         #print >> sys.stderr,"end<start",(end<start)
         #print >> sys.stderr,"len(x.seq)<readlen",(len(xscript.seq)<readlen)
-        return None,None,None,None
-        #continue
-    i = random.randint(start,end)
-    j = random.randint(start,end)
+        return None, None, None, None
+    
+    # BTL: I don't quite understand the stuff below.  I would have suggested
+    # just calling simulateSingle to get a fragment (note that it will do the
+    # right thing re: strandedness), then drawing the two reads from either
+    # end of it.
+    
+    i, j = random.randint(start, end), random.randint(start, end)
     while j < i-readlen or j>i+readlen: #get other mate
         j = random.randint(start,end)
-
+    
+    # This is the --ff relative orienatation
     if xscript.orient=="+":
         mate1 = xscript.seq[i:i+readlen]
         mate2 = xscript.seq[j:j+readlen]
     else:
         mate1 = revcomp(xscript.seq[i:i+readlen])
         mate2 = revcomp(xscript.seq[j:j+readlen])
-
+    
     overlaps1,st1,end1 = overlapping_sites(xscript,i,i+readlen)
     overlaps2,st2,end2 = overlapping_sites(xscript,j,j+readlen)
     #sites = sites.union(overlaps1)
@@ -246,37 +310,45 @@ def simulatePairedEnd(xscript,readlen,errModel):
     sites |= set(overlaps2)
     mate1 = sequencingError(mate1,errModel)
     mate2 = sequencingError(mate2,errModel)
-
+    
     return (mate1,mate2),sites,(st1,end1),(st2,end2)
 
 def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_handle):
-    if args.stranded:
-        gen,weights = makeStrandedWeights(xscripts,seq_sizes,annots_handle)
-    else:
-        gen,weights = makeWeights(xscripts,seq_sizes,annots_handle)
+    #
+    # Step 1: Assign weights to isoforms
+    #
+    gen, weights = makeWeights(xscripts,seq_sizes,annots_handle)
     n = 0
     seqs = []
     cov_sts, cov_ends = counter.Counter(), counter.Counter()
+    
+    #
+    # Step 2: Incorporate sequence variants
+    #
     incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
+    
+    #
+    # Step 3: Generate sequence reads
+    #
     sim_xscripts = set()
     sites = set()
     errModel = errorPMF(readlen,args.readmm_rate)
-    while n<targetNucs:
-        #Pick a transcript at weighted random
+    while n < targetNucs:
+        # Pick a transcript at weighted random
         i = gen.next()
         x = xscripts[i]
         if x not in sim_xscripts:
             sim_xscripts.add(x)
-        #print x.gene_id,x.xscript_id,x.seqid
+        # print x.gene_id,x.xscript_id,x.seqid
         if args.paired_end:
             
             tmp_mates,tmp_sites,bounds1,bounds2 = simulatePairedEnd(x,readlen,errModel)
-            if tmp_mates==None and tmp_sites==None:
+            if tmp_mates is None and tmp_sites is None:
                 continue
             else:
                 reads = tmp_mates
-                sites|= set(tmp_sites)
-            n+=readlen+readlen
+                sites |= set(tmp_sites)
+            n += readlen + readlen
             cov_sts[ bounds1[0] ]+=1
             cov_sts[ bounds2[0] ]+=1
             cov_ends[ bounds1[1] ]+=1
@@ -284,17 +356,18 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
             seqs.append(tmp_mates) #Appends a pair of reads
         else:
             tmp_reads,tmp_sites,bounds = simulateSingle(x,readlen,errModel)
-            if tmp_reads==None and tmp_sites==None:
+            if tmp_reads is None and tmp_sites is None:
                 continue
             else:
                 reads = tmp_reads
-                sites|= set(tmp_sites)
+                sites |= set(tmp_sites)
             n+=readlen
+            # What's up with cov_sts and cov_ends??
             cov_sts[ bounds[0] ]+=1
             cov_ends[ bounds[1] ]+=1
             seqs.append(reads) #Appends just one read
-
-    return seqs,weights,list(sim_xscripts),sites,cov_sts,cov_ends
+    
+    return seqs, weights, list(sim_xscripts), sites, cov_sts, cov_ends
 
 def replicateize(seqs1, seqs2, nreps):
     """ Take all the sequence reads for groups 1 and 2 and split them into into
@@ -362,8 +435,9 @@ def test_alternativeSplicing(xscripts):
     axscripts = []
     for x in xscripts:
         genes[x.gene_id].append(x)
-    for gene_ids,isoforms in genes.iteritems():
-        if len(isoforms)>1:
+    # BTL: this doesn't look right.  Return axscripts with only one element?
+    for _, isoforms in genes.iteritems():
+        if len(isoforms) > 1:
             axscripts+=isoforms
             return axscripts
     #return axscripts
@@ -380,7 +454,7 @@ def go():
     xscripts = gtf.assembleTranscripts(annots,fastadb)
     if args.alternative_spliced:
         xscripts = test_alternativeSplicing(xscripts)
-    seqs,weights,xscripts,sites,cov_sts,cov_ends = simulate(xscripts,args.read_len,args.num_nucs,args.fasta,var_handle,seq_sizes,annots_handle)
+    seqs, _, xscripts, sites, cov_sts, cov_ends = simulate(xscripts,args.read_len,args.num_nucs,args.fasta,var_handle,seq_sizes,annots_handle)
     seqs1,seqs2 = replicateize(seqs,seqs,args.num_replicates)
     if args.paired_end:
         writePairedEndReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
@@ -467,11 +541,10 @@ if __name__=="__main__":
                 rate = 0.01
                 cnts = counter.Counter()
                 model = errorPMF(n,rate)
-                for i in range(0,N):
-                    cnts[model.next()]+=1
+                for _ in xrange(N): cnts[model.next()] += 1
                 print >> sys.stderr,"Histogram",cnts
                 self.assertGreater(cnts[0],cnts[1])
                 self.assertGreater(cnts[0],cnts[2])
                 self.assertGreater(cnts[1],cnts[2])
-
+        
         unittest.main()
