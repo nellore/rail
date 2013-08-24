@@ -21,6 +21,22 @@ Tab-delimited cooccurence output tuple columns:
 2. refID
 3. left_site
 4. right_site
+
+Strandedness
+============
+
+If the input reads are *not* stranded, then we have to allow for all relevant
+splice junction (donor/acceptor) motifs, including e.g. both GT-AG and CT-AC.
+If the input reads are stranded, we might wish to ignore motifs that are
+inconsistent with the strand of the flanking aligned sequences.  I added the
+--stranded option to 
+
+TODO:
+- getJunctionSites seems to pick a splice motif based upon the strand of the
+  flanking aligned sequences.  When the protocol is unstranded, this isn't
+  reasonable; we have to allow for either the forward or reverse-complement
+  motif.
+
 """
 
 import os
@@ -66,6 +82,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--cooccurrences', action='store_const', const=True, default=False,
     help='Output junction cooccurrence records')
+parser.add_argument(\
+    '--stranded', action='store_const', const=True, default=False,
+    help='Assume input reads come from the sense strand')
 
 readlet.addArgs(parser)
 partition.addArgs(parser)
