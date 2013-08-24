@@ -63,7 +63,6 @@ TODO:
   per: http://www.broadinstitute.org/igv/splice_junctions
 - Fix issue in test_alternativeSplicing (see my comment)
 - Clarify purpose of st and en in overlapping_sites (see my comment)
-- Refine simulatePairedEnd (see my comment)
 
 """
 
@@ -116,8 +115,14 @@ parser.add_argument(\
     '--alternative-spliced', metavar='int', action='store', type=int, default=False,
     help='Indicates if alternatively spliced transcripts should be simulated')
 parser.add_argument(\
-    '--paired-end', metavar='int', action='store', type=int, default=False,
-    help='Indicates if the reads are paired end')
+    '--paired-end', action='store_const', const=True, default=False,
+    help='Generate paired-end reads')
+parser.add_argument(\
+    '--fragment-mean', metavar='float', action='store', type=float, default=300.0,
+    help='Mean of (gaussian) fragment distribution')
+parser.add_argument(\
+    '--fragment-sd', metavar='float', action='store', type=float, default=15.0,
+    help='Standard deviation of (gaussian) fragment distribution')
 parser.add_argument(\
     '--readmm_rate', metavar='float', action='store', type=float, default=0.01,
     help='The rate of mismatches')
@@ -276,33 +281,25 @@ def simulateSingle(xscript, readlen, errModel):
     read = sequencingError(read, errModel)
     return read, sites, (st, end)
 
-def simulatePairedEnd(xscript,readlen,errModel):
-    start, end = 0, len(xscript.seq) - readlen
-    if end < start or len(xscript.seq) < readlen:
-        #print >> sys.stderr, xscript.seq
-        #print >> sys.stderr,"end<start",(end<start)
-        #print >> sys.stderr,"len(x.seq)<readlen",(len(xscript.seq)<readlen)
+def simulatePairedEnd(xscript, readlen, errModel, fraglenGen=lambda: None):
+    fraglen = fraglenGen()
+    if fraglen is None:
+        fraglen = readlen * 2.5
+    if len(xscript.seq) < fraglen:
         return None, None, None, None
+    start, end = 0, len(xscript.seq) - fraglen
     
-    # BTL: I don't quite understand the stuff below.  I would have suggested
-    # just calling simulateSingle to get a fragment (note that it will do the
-    # right thing re: strandedness), then drawing the two reads from either
-    # end of it.
+    frag_i = random.randint(start, end)
+    i, j = frag_i, frag_i + fraglen - readlen
+    mate1 = xscript.seq[i : i + readlen]
+    mate2 = revcomp(xscript.seq[j : j + readlen])
+    if (args.stranded and xscript.orient == "-") or \
+       (not args.stranded and random.random() < 0.5):
+        # If mate1 and mate2 are different lengths, i and j must be adjusted
+        mate1, mate2 = revcomp(mate2), revcomp(mate1)
     
-    i, j = random.randint(start, end), random.randint(start, end)
-    while j < i-readlen or j>i+readlen: #get other mate
-        j = random.randint(start,end)
-    
-    # This is the --ff relative orienatation
-    if xscript.orient=="+":
-        mate1 = xscript.seq[i:i+readlen]
-        mate2 = xscript.seq[j:j+readlen]
-    else:
-        mate1 = revcomp(xscript.seq[i:i+readlen])
-        mate2 = revcomp(xscript.seq[j:j+readlen])
-    
-    overlaps1,st1,end1 = overlapping_sites(xscript,i,i+readlen)
-    overlaps2,st2,end2 = overlapping_sites(xscript,j,j+readlen)
+    overlaps1, st1, end1 = overlapping_sites(xscript, i, i + readlen)
+    overlaps2, st2, end2 = overlapping_sites(xscript, j, j + readlen)
     #sites = sites.union(overlaps1)
     #sites = sites.union(overlaps2)
     sites = set(overlaps1)
@@ -340,8 +337,9 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
             sim_xscripts.add(x)
         # print x.gene_id,x.xscript_id,x.seqid
         if args.paired_end:
-            
-            tmp_mates,tmp_sites,bounds1,bounds2 = simulatePairedEnd(x,readlen,errModel)
+            def fraglenGen():
+                return int(random.gauss(args.fragment_mean, args.fragment_sd))
+            tmp_mates,tmp_sites,bounds1,bounds2 = simulatePairedEnd(x, readlen, errModel, fraglenGen)
             if tmp_mates is None and tmp_sites is None:
                 continue
             else:
