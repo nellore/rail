@@ -3,11 +3,12 @@ gtf.py
 
 Parses gtf files
 """
+
+import numpy
 import os
 import string
 import re
 from collections import defaultdict
-import random
 
 #parser = argparse.ArgumentParser(description='Parse a GTF file.')
 def addArgs(parser):
@@ -48,6 +49,35 @@ class Annot(object):
 
     def __str__(self):
         return "%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s"%(self.refid, self.st0, self.en0, self.orient, self.feature, self.score, self.frame,self.attrs)
+
+class NucRandomGen(object):
+    
+    def __init__(self, N=int(1e7)):
+        self.rs4 = numpy.random.randint(0, 4, N)
+        self.n4 = 0
+        self.rs3 = numpy.random.uniform(0, 3, N)
+        self.n3 = 0
+        self.nucs = ['A', 'C', 'G', 'T']
+        self.nucsExcept = {
+            'A' : ['C', 'G', 'T'],
+            'C' : ['A', 'G', 'T'],
+            'G' : ['A', 'C', 'T'],
+            'T' : ['A', 'C', 'G'] }
+    
+    def nextNuc(self):
+        yield self.nucs[self.rs4[self.n4]]
+        self.n4 += 1
+        if self.n4 >= len(self.rs4):
+            self.n4 = 0
+    
+    def nextNucExcept(self, n):
+        yield self.nucsExcept[n][self.rs3[self.n3]]
+        self.n3 += 1
+        if self.n3 >= len(self.rs3):
+            self.n3 = 0
+
+ngen = NucRandomGen()
+
 """
 Stores a chain of annotation objects
 """
@@ -140,28 +170,22 @@ class Transcript(object):
     """
     Incorporates variants into transcriptome such as SNPs and indels
     """
-    def incorporateVariants(self,mm_rate,indel_rate,var_handle):
+    def incorporateVariants(self, mm_rate, indel_rate, var_handle):
         lseq = list(self.seq)
-        for i in range(0,len(lseq)):
-            r = random.random()
-            if r < mm_rate:
-                bases = ["A","C","G","T"]
-                bases.remove(lseq[i])
-                lseq[i] = random.choice(bases)
+        rs = numpy.random.uniform(0, 1, len(lseq))
+        for i in xrange(len(lseq)):
+            if rs[i] < mm_rate:
+                lseq[i] = ngen.nextNucExcept(lseq[i])
                 var_handle.write("%s\tsnp\t%d\n" % (self.gene_id,i))
-            elif random.random() < indel_rate:
-                indel = random.choice("ID")
-                if indel=="I":
-                    ins = random.choice("ACGT")
-                    seq1, seq2 = lseq[:i], lseq[i:]
-                    lseq = seq1+[ins]+seq2
+            elif rs[i] < indel_rate + mm_rate:
+                if rs[i] < mm_rate + (indel_rate / 2):
+                    lseq[i] += ngen.nextNuc()
                     var_handle.write("%s\tinsert\t%d\n" % (self.gene_id,i))
                 else:
-                    seq1, seq2 = lseq[:i], lseq[i+1:]
-                    lseq = seq1+seq2
+                    lseq[i] = ''
                     var_handle.write("%s\tdelete%\td\n" % (self.gene_id,i))
         self.seq = "".join(lseq)
-
+    
     def __str__(self):
         lns = []
         lns.append("%d\t%s\t%d\n"%(self.st0,self.seqid,self.en0))
