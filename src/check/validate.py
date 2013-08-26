@@ -184,15 +184,16 @@ def binFlanks(annot_sites,flanks_file):
             st,end,seqid,flank_left,flank_right = int(toks[2]), int(toks[3]), toks[4], toks[6], toks[7]
             #Search for nearby sites
             guess5,guess3 = (st,st+1,seqid,""), (end-1,end,seqid,"")
-            site5 = search.find_tuple(annot_sites[seqid],guess5)
-            site3 = search.find_tuple(annot_sites[seqid],guess3)
-            #Create key and bin flanking sequences
-            key5 = (site5[0],site5[1],site5[2])
-            key3 = (site3[0],site3[1],site3[2])
-            #print "Left Site: Exact",key5,"Guess",st
-            #print "Right Site: Exact",key3,"Guess",end+1
-            flanks[key5].append( (flank_left,st)  )
-            flanks[key3].append( (flank_right,end+1) )
+            if len(annot_sites[seqid])>0:
+                site5 = search.find_tuple(annot_sites[seqid],guess5)
+                site3 = search.find_tuple(annot_sites[seqid],guess3)
+                #Create key and bin flanking sequences
+                key5 = (site5[0],site5[1],site5[2])
+                key3 = (site3[0],site3[1],site3[2])
+                #print "Left Site: Exact",key5,"Guess",st
+                #print "Right Site: Exact",key3,"Guess",end+1
+                flanks[key5].append( (flank_left,st)  )
+                flanks[key3].append( (flank_right,end+1) )
     return flanks
 
 
@@ -217,7 +218,7 @@ def conformKey(annot_sites):
     annot_sites_wk = copy.deepcopy(annot_sites)
     for k,v in annot_sites.iteritems():
         for i in range(0,len(v)):
-            annot_sites_wk[k][i] = (v[i][0],v[i][1],v[i][2],'') 
+            annot_sites_wk[k][i] = (v[i][0],v[i][1],v[i][2],'')
     return annot_sites_wk
 
 def go():
@@ -267,7 +268,7 @@ def go():
     #print "Bed site stats      \t",bed_site_stats
     #print "Annotated site stats\t",annot_site_stats
     false_sites = false_sites+close_sites
-   
+
     displayIncorrect(false_sites,intersect_sites,args.flank_seqs,xscripts,annot_sites,annot_sites_wk,args.region,cov_sts,cov_ends,fastaH)
 
     #print >>sys.stderr, "Annotated   ",annot_sites

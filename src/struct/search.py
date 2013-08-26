@@ -15,6 +15,7 @@ Find an element out of a list of tuples with form
 (pos1,pos2,chromosome,transcript_id)
 """
 def find_tuple(tups,x):
+    assert len(tups)>0
     i = bisect.bisect_left(tups,x)
 
     if i>0 and i<len(tups):
