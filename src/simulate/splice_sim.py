@@ -167,9 +167,16 @@ class WeightedRandomGenerator(object):
     def __call__(self):
         return self.next()
 
+def factorial(x):
+    return 1 if x==0 else x*factorial(x-1)
+
+# n choose k
+# n = read length, k = number of sequencing errors
+# binomial coefficient
+b_coeff = [ factorial(args.read_len)/(factorial(k)*factorial(args.read_len-k)) for k in range(0,args.read_len+1)]
 # Creates an error model using a binomial random number generator based off of read length=N
 def errorPMF(N,mm_rate):
-    return WeightedRandomGenerator([ (1-mm_rate)**(N-i) * mm_rate**i for i in range(0,N)])
+    return WeightedRandomGenerator([ b_coeff[i] * (1-mm_rate)**(N-i) * mm_rate**i for i in range(0,N)])
 
 """
 Picks transcripts arbitrarily (i.e. starting from the beginning of the
@@ -245,7 +252,7 @@ def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
 def overlapCanonical(xscript,read_st,read_end):
-"""Checks to see if the read spans a canonical splice site"""
+    """Checks to see if the read spans a canonical splice site"""
     st, en = read_st + xscript.st0, read_end + xscript.st0
     sites = xscript.getSitePairs()               #in the genome coordinate frame
     can_sites = set(xscript.getCanonicalSites()) #canonical sites in the genome coordinate frame
@@ -256,7 +263,7 @@ def overlapCanonical(xscript,read_st,read_end):
     return False
 
 def overlapNonCanonical(xscript,read_st,read_end):
-"""Checks to see if the read spans a canonical splice site"""
+    """Checks to see if the read spans a canonical splice site"""
     st, en = read_st + xscript.st0, read_end + xscript.st0
     sites = xscript.getSitePairs()                  #in the genome coordinate frame
     can_sites = set(xscript.getNonCanonicalSites()) #noncanonical sites in the genome coordinate frame
@@ -602,7 +609,7 @@ if __name__=="__main__":
                 model = errorPMF(n,rate)
                 for _ in xrange(N): cnts[model.next()] += 1
                 print >> sys.stderr,"Histogram",cnts
-                self.assertGreater(cnts[0],cnts[1])
+                self.assertGreater(cnts[1],cnts[0])
                 self.assertGreater(cnts[0],cnts[2])
                 self.assertGreater(cnts[1],cnts[2])
 
