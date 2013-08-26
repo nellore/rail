@@ -31,8 +31,29 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
- 
- 
+
+def writeIndexedFasta(name, seq, perline=50):
+    """ Given a sequence name and a sequence, write it to a FASTA file with
+        accompanying index file (per samtools faidx).  Return the filenames of
+        the two files written.  Does not handle multiple sequences per FASTA
+        file """
+    import os
+    import tempfile
+    d = tempfile.mkdtemp()
+    fafn, faidxfn = os.path.join(d, 'seq.fa'), os.path.join(d, 'seq.fa.fai')
+    fafh, faidxfh = open(fafn, 'wb'), open(faidxfn, 'wb')
+    fafh.write(">%s\n" % name)
+    off_post_name = fafh.tell()
+    i = 0
+    while i < len(seq):
+        fafh.write(seq[i:min(i+perline, len(seq))])
+        fafh.write('\n')
+        i += perline
+    fafh.close()
+    faidxfh.write('\t'.join([name, str(len(seq)), str(off_post_name), str(perline), str(perline+1)]))
+    faidxfh.write('\n')
+    return fafn, faidxfn
+
 class fasta:
     def __init__(self, fasta_file):        
         self.faidx = {}
@@ -98,6 +119,25 @@ class fasta:
         #chomp off extra bases
         return seq[:end-start]
      
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, _, value, traceback):
         self.fasta_handle.close()
         self.faidx_handle.close()
+
+if __name__ == '__main__':
+    import unittest
+    
+    class TestFasta(unittest.TestCase):
+        
+        def test1(self):
+            fafn, _ = writeIndexedFasta("ref1", "ACGT" * 100)
+            fa = fasta(fafn)
+            st = fa.fetch_sequence("ref1", 1, 4)
+            self.assertEqual("ACGT", st)
+        
+        def test2(self):
+            fafn, _ = writeIndexedFasta("ref1 2 4 5 6245234 sd", "ACGT" * 100)
+            fa = fasta(fafn)
+            st = fa.fetch_sequence("ref1 2 4 5 6245234 sd", 1, 400)
+            self.assertEqual("ACGT" * 100, st)
+    
+    unittest.main()
