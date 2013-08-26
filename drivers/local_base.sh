@@ -37,9 +37,9 @@ INTRON_AGGR1="grep '^intron'"
 INTRON_AGGR2="cut -f 2-"
 INTRON_AGGR3="sort -n -k2,2"
 INTRON_AGGR4="sort -s -k1,1"
-INTRON="python $SCR_DIR/intron.py"
+INTRON="python $SCR_DIR/intron2.py"
 UTIL=../src/util
-SITE2BED="python $UTIL/site2bed.py"
+SITE2BED="python $UTIL/site2bed2.py"
 EXONS2BED="python $UTIL/exons2bed.py"
 INTRONS2BED="python $UTIL/introns2bed.py"
 
@@ -114,6 +114,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 		--exon-differentials \
 		--exon-intervals \
 		--verbose \
+		--intron-partition-overlap=30 \
 		-- -v 2 -m 1 -p 10 \
 		| tee ${INTERMEDIATE_DIR}/align_out.tsv \
 	| grep '^exon_diff' | cut -f 2- | $NORMALIZE_PRE_AGGR | tee ${INTERMEDIATE_DIR}/pre_normalize_pre.tsv | $NORMALIZE_PRE \
@@ -130,8 +131,17 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 cp $WALK_IN_TMP ${INTERMEDIATE_DIR}/walk_in_input.tsv
 
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
-    | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 \
-    | $INTRON --refseq=$GENOME --readletIval $READLET_IVAL --readletLen $READLET_LEN  --radius=$RADIUS > ${INTERMEDIATE_DIR}/intron_out.tsv 
+	| grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $INTRON \
+		--ntasks=$NTASKS \
+		--genomeLen=$GENOME_LEN \
+		--refseq=$GENOME \
+		--readletIval $READLET_IVAL \
+		--readletLen $READLET_LEN  \
+		--intron-partition-overlap=30 \
+		--cluster-radius=$RADIUS \
+		--per-span \
+		--per-site \
+		> ${INTERMEDIATE_DIR}/intron_out.tsv 
 
 cat ${INTERMEDIATE_DIR}/intron_out.tsv \
     | grep '^site' | $SITE_AGGR2 | $SITE2BED > ${INTERMEDIATE_DIR}/splice_sites.bed
