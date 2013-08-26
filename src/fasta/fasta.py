@@ -84,7 +84,11 @@ class fasta:
             chrom = cols[0]
             slen,offset,blen,bytelen=[int(i) for i in cols[1:]]
             self.faidx[chrom]=(slen,offset,blen,bytelen)
-     
+    
+    def length(self, refid):
+        assert refid in self.faidx
+        return self.faidx[refid][0]
+    
     #Function to fetch sequence from an indexed fasta
     #*chrom--Chromosome name (str)
     #*start--Start position (1-based) (int)
