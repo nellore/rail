@@ -252,11 +252,11 @@ _revcomp_trans = string.maketrans("ACGT", "TGCA")
 def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
-def overlapCanonical(xscript,read_st,read_end,fastaHandle):
+def overlapCanonical(xscript,read_st,read_end,can_sites):
     """Checks to see if the read spans a canonical splice site"""
     st, en = read_st + xscript.st0, read_end + xscript.st0
     sites = xscript.getSitePairs()                          #in the genome coordinate frame
-    can_sites = set(xscript.getCanonicalSites(fastaHandle)) #canonical sites in the genome coordinate frame
+    #can_sites = set(xscript.getCanonicalSites(fastaHandle)) #canonical sites in the genome coordinate frame
     xsites = xscript.getXcriptSites()                       #in the transcript coordinate frame
     print "Canonical sites",can_sites
     print "Sites",sites
@@ -267,17 +267,25 @@ def overlapCanonical(xscript,read_st,read_end,fastaHandle):
                 return True
     return False
 
-def overlapNonCanonical(xscript,read_st,read_end,fastaHandle):
+def overlapNonCanonical(xscript,read_st,read_end,ncan_sites):
     """Checks to see if the read spans a canonical splice site"""
     st, en = read_st + xscript.st0, read_end + xscript.st0
     sites = xscript.getSitePairs()                  #in the genome coordinate frame
-    ncan_sites = set(xscript.getNonCanonicalSites(fastaHandle)) #noncanonical sites in the genome coordinate frame
+    #ncan_sites = set(xscript.getNonCanonicalSites(fastaHandle)) #noncanonical sites in the genome coordinate frame
     xsites = xscript.getXcriptSites()               #in the transcript coordinate frame
     for i in xrange(len(xsites)):
         if read_st <= xsites[i][0] and read_end >= xsites[i][1] and sites[i] in ncan_sites:
             return True
     return False
 
+def overlapSpecificSites(xscript,read_st,read_end,siteType, fastaHandle):
+    """Returns true if the read overlaps a set of either canonical or noncanonical sites as specified by siteType"""
+    if siteType=="canonical":
+        can_sites = set(xscript.getCanonicalSites(fastaHandle)) #canonical sites in the genome coordinate frame
+        return overlapCanonical(xscript,read_st,read_end,can_sites)
+    else:
+        ncan_sites = set(xscript.getNonCanonicalSites(fastaHandle)) #canonical sites in the genome coordinate frame
+        return overlapNonCanonical(xscript,read_st,read_end,ncan_sites)
 
 def overlapping_sites(xscript, read_st, read_end):
     """ Given a transcript and an interval on the transcript, return a list of
@@ -314,14 +322,16 @@ def overlapping_sites(xscript, read_st, read_end):
     # are being converted to genome coordinates
     return overlaps, st, en
 
-def simulateCanonical(xscript, readlen, errModel):
-    """Simulate a single unpaired read from a given transcript that overlaps a canonical site"""
+def simulateSpanningSingle(xscript, readlen, errModel, siteType, fastaHandle):
+    """Simulate a single unpaired read from a given transcript that overlaps a either a canonical site ir a noncanonical site"""
     start, end = 0, len(xscript.seq) - readlen
     if end < start or len(xscript.seq) < readlen or len(xscript.getCanonicalSites())==0:
         return None,None,None
 
-
     i = random.randint(start, end)
+    while not overlapCanonical(xscript,i,i+readlen,fastaHandle):
+        i = random.randint(start, end)
+
     # Read is always taken from sense strand?
     read = xscript.seq[i:i+readlen]
 
@@ -382,6 +392,9 @@ def simulatePairedEnd(xscript, readlen, errModel, fraglenGen=lambda: None):
     return (mate1,mate2),sites,(st1,end1),(st2,end2)
 
 def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_handle):
+    #TODO: Think about using fasta dictionary instead ...
+    fastaHandle = fasta.fasta(args.fasta[0])#Just look at first fasta file for now
+
     #
     # Step 1: Assign weights to isoforms
     #
@@ -408,7 +421,15 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
         if x not in sim_xscripts:
             sim_xscripts.add(x)
         # print x.gene_id,x.xscript_id,x.seqid
-        if args.paired_end:
+        if args.canonical_sites or args.noncanonical_sites:
+            siteType = "canonical" if args.canonical else "noncanonical"
+            tmp_reads,tmp_sites,bounds = simulateSpanningSingle(x,readlen,errModel,fastaHandle)
+            if tmp_reads is None and tmp_sites is None:
+                continue
+            else:
+                reads = tmp_reads
+                sites |= set(tmp_sites)                
+        elif args.paired_end:
             def fraglenGen():
                 return int(random.gauss(args.fragment_mean, args.fragment_sd))
             tmp_mates,tmp_sites,bounds1,bounds2 = simulatePairedEnd(x, readlen, errModel, fraglenGen)
@@ -649,17 +670,17 @@ if __name__=="__main__":
                 print readableFormat(fastadb["chr2R"])
                 read_st,read_end = 1,10
                 fastaHandle = fasta.fasta(self.fasta)
-                didOverlap = overlapCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                didOverlap = overlapSpecificSites(xscripts[0],read_st,read_end,"canonical",fastaHandle)
                 print >> sys.stderr,"read",read_st,read_end,didOverlap
                 self.assertEquals(didOverlap, True)
 
                 read_st,read_end = 22,32
-                didOverlap = overlapCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                didOverlap = overlapSpecificSites(xscripts[0],read_st,read_end,"canonical",fastaHandle)
                 print >> sys.stderr,"read",read_st,read_end,didOverlap
                 self.assertEquals(didOverlap, True)
 
                 read_st,read_end = 32,42
-                didOverlap = overlapCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                didOverlap = overlapSpecificSites(xscripts[0],read_st,read_end,"canonical",fastaHandle)
                 print >> sys.stderr,"read",read_st,read_end,didOverlap
                 self.assertEquals(didOverlap, False)
 
@@ -670,17 +691,17 @@ if __name__=="__main__":
                 print readableFormat(fastadb["chr2R"])
                 read_st,read_end = 1,10
                 fastaHandle = fasta.fasta(self.fasta)
-                didOverlap = overlapNonCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                didOverlap = overlapSpecificSites(xscripts[0],read_st,read_end,"noncanonical",fastaHandle)
                 print >> sys.stderr,"read",read_st,read_end,didOverlap
                 self.assertEquals(didOverlap, False)
 
                 read_st,read_end = 22,32
-                didOverlap = overlapNonCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                didOverlap = overlapSpecificSites(xscripts[0],read_st,read_end,"noncanonical",fastaHandle)
                 print >> sys.stderr,"read",read_st,read_end,didOverlap
                 self.assertEquals(didOverlap, False)
 
                 read_st,read_end = 32,42
-                didOverlap = overlapNonCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                didOverlap = overlapSpecificSites(xscripts[0],read_st,read_end,"noncanonical",fastaHandle)
                 print >> sys.stderr,"read",read_st,read_end,didOverlap
                 self.assertEquals(didOverlap, True)
 
