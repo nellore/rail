@@ -136,6 +136,12 @@ parser.add_argument(\
     '--chrsizes', type=str, required=False,
     help='The sizes of each chromosome')
 parser.add_argument(\
+    '--canonical-sites', action='store_const', const=True, default=False,
+    help='Only simulates reads spanning canonical sites')
+parser.add_argument(\
+    '--noncanonical-sites', action='store_const', const=True, default=False,
+    help='Only simulates reads spanning noncanonical sites')
+parser.add_argument(\
     '--test', action='store_const', const=True, default=False,
     help='Run unit tests')
 parser.add_argument(\
@@ -238,6 +244,29 @@ _revcomp_trans = string.maketrans("ACGT", "TGCA")
 def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
+def overlapCanonical(xscript,read_st,read_end):
+"""Checks to see if the read spans a canonical splice site"""
+    st, en = read_st + xscript.st0, read_end + xscript.st0
+    sites = xscript.getSitePairs()               #in the genome coordinate frame
+    can_sites = set(xscript.getCanonicalSites()) #canonical sites in the genome coordinate frame
+    xsites = xscript.getXcriptSites()            #in the transcript coordinate frame
+    for i in xrange(len(xsites)):
+        if read_st <= xsites[i][0] and read_end >= xsites[i][1] and sites[i] in can_sites:
+            return True
+    return False
+
+def overlapNonCanonical(xscript,read_st,read_end):
+"""Checks to see if the read spans a canonical splice site"""
+    st, en = read_st + xscript.st0, read_end + xscript.st0
+    sites = xscript.getSitePairs()                  #in the genome coordinate frame
+    can_sites = set(xscript.getNonCanonicalSites()) #noncanonical sites in the genome coordinate frame
+    xsites = xscript.getXcriptSites()               #in the transcript coordinate frame
+    for i in xrange(len(xsites)):
+        if read_st <= xsites[i][0] and read_end >= xsites[i][1] and sites[i] in can_sites:
+            return True
+    return False
+
+
 def overlapping_sites(xscript, read_st, read_end):
     """ Given a transcript and an interval on the transcript, return a list of
         splice sites that are spanned by the interval """
@@ -268,7 +297,31 @@ def overlapping_sites(xscript, read_st, read_end):
         if read_end >= xsites[i][0]:
             en += diff
     # BTL: what are st and en?
+    # Jamie: They are the adjusted starts and ends of the reads
+    # It is adjusted because the read positions in transcriptome coordinates
+    # are being converted to genome coordinates
     return overlaps, st, en
+
+def simulateCanonical(xscript, readlen, errModel):
+    """Simulate a single unpaired read from a given transcript that overlaps a canonical site"""
+    start, end = 0, len(xscript.seq) - readlen
+    if end < start or len(xscript.seq) < readlen or len(xscript.getCanonicalSites())==0:
+        return None,None,None
+
+
+    i = random.randint(start, end)
+    # Read is always taken from sense strand?
+    read = xscript.seq[i:i+readlen]
+
+    if args.stranded:
+        if xscript.orient == "-":
+            read = revcomp(read)
+    elif random.random() < 0.5:
+        read = revcomp(read)
+    sites, st, end = overlapping_sites(xscript, i, i + readlen)
+    read = sequencingError(read, errModel)
+    return read, sites, (st, end)
+
 
 def simulateSingle(xscript, readlen, errModel):
     """ Simulate a single unpaired read from the given transcript """
@@ -367,6 +420,7 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
                 sites |= set(tmp_sites)
             n+=readlen
             # What's up with cov_sts and cov_ends??
+            # Jamie: cov_sts and cov_ends keeps a count of start and end positions
             cov_sts[ bounds[0] ]+=1
             cov_ends[ bounds[1] ]+=1
             seqs.append(reads) #Appends just one read
