@@ -136,6 +136,12 @@ parser.add_argument(\
     '--chrsizes', type=str, required=False,
     help='The sizes of each chromosome')
 parser.add_argument(\
+    '--canonical-sites', action='store_const', const=True, default=False,
+    help='Only simulates reads spanning canonical sites')
+parser.add_argument(\
+    '--noncanonical-sites', action='store_const', const=True, default=False,
+    help='Only simulates reads spanning noncanonical sites')
+parser.add_argument(\
     '--test', action='store_const', const=True, default=False,
     help='Run unit tests')
 parser.add_argument(\
@@ -146,18 +152,18 @@ gtf.addArgs(parser)
 args = parser.parse_args()
 
 class WeightedRandomGenerator(object):
-    
+
     def __init__(self, weights):
         self.totals = []
         running_total = 0
         for w in weights:
             running_total += w
             self.totals.append(running_total)
-    
+
     def next(self):
         rnd = random.random() * self.totals[-1]
         return bisect.bisect_right(self.totals, rnd)
-    
+
     def __call__(self):
         return self.next()
 
@@ -202,7 +208,7 @@ _otherNucs = { 'A' : ['C', 'G', 'T'],
 def sequencingError(read,errModel):
     global total_reads
     global total_mismatches
-    
+
     length = len(read)
     lread = list(read)
     #num = random.expovariate(1.0/mm_rate)
@@ -211,13 +217,13 @@ def sequencingError(read,errModel):
     if errs == 0:
         total_reads += 1
         return "".join(lread)
-    
+
     for _ in xrange(errs):
         r = random.randint(0, length - 1)
         c = lread[r]
         if c not in _otherNucs: c = 'N'
         lread[r] = random.choice(_otherNucs[c])
-    
+
     total_mismatches += 1
     total_reads += 1
     return "".join(lread)
@@ -238,13 +244,43 @@ _revcomp_trans = string.maketrans("ACGT", "TGCA")
 def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
+def overlapCanonical(xscript,read_st,read_end):
+"""Checks to see if the read spans a canonical splice site"""
+    st, en = read_st + xscript.st0, read_end + xscript.st0
+    sites = xscript.getSitePairs()               #in the genome coordinate frame
+    can_sites = set(xscript.getCanonicalSites()) #canonical sites in the genome coordinate frame
+    xsites = xscript.getXcriptSites()            #in the transcript coordinate frame
+    for i in xrange(len(xsites)):
+        if read_st <= xsites[i][0] and read_end >= xsites[i][1] and sites[i] in can_sites:
+            return True
+    return False
+
+def overlapNonCanonical(xscript,read_st,read_end):
+"""Checks to see if the read spans a canonical splice site"""
+    st, en = read_st + xscript.st0, read_end + xscript.st0
+    sites = xscript.getSitePairs()                  #in the genome coordinate frame
+    can_sites = set(xscript.getNonCanonicalSites()) #noncanonical sites in the genome coordinate frame
+    xsites = xscript.getXcriptSites()               #in the transcript coordinate frame
+    for i in xrange(len(xsites)):
+        if read_st <= xsites[i][0] and read_end >= xsites[i][1] and sites[i] in can_sites:
+            return True
+    return False
+
+
 def overlapping_sites(xscript, read_st, read_end):
     """ Given a transcript and an interval on the transcript, return a list of
         splice sites that are spanned by the interval """
     sites = xscript.getSites()         #in the genome coordinate frame
     xsites = xscript.getXcriptSites()  #in the transcript coordinate frame
     # sites is twice as long as xsites??
-    
+    # sites is twice as long as xsite for the following reason
+    """
+    =======|^^ ^^|==========   reference genome
+    -------^     ^----------   transcript
+    Splice sites aren't present in the transcript, so only two break points are necessary.
+    For completeness sake, the splice sites in the reference genome are included, making sites = 2*xsites
+    """
+
     # sites.sort(key=lambda tup:tup[1])
     # sites.sort(key=lambda tup:tup[0])
     # xsites.sort(key=lambda tup:tup[1])
@@ -261,7 +297,31 @@ def overlapping_sites(xscript, read_st, read_end):
         if read_end >= xsites[i][0]:
             en += diff
     # BTL: what are st and en?
+    # Jamie: They are the adjusted starts and ends of the reads
+    # It is adjusted because the read positions in transcriptome coordinates
+    # are being converted to genome coordinates
     return overlaps, st, en
+
+def simulateCanonical(xscript, readlen, errModel):
+    """Simulate a single unpaired read from a given transcript that overlaps a canonical site"""
+    start, end = 0, len(xscript.seq) - readlen
+    if end < start or len(xscript.seq) < readlen or len(xscript.getCanonicalSites())==0:
+        return None,None,None
+
+
+    i = random.randint(start, end)
+    # Read is always taken from sense strand?
+    read = xscript.seq[i:i+readlen]
+
+    if args.stranded:
+        if xscript.orient == "-":
+            read = revcomp(read)
+    elif random.random() < 0.5:
+        read = revcomp(read)
+    sites, st, end = overlapping_sites(xscript, i, i + readlen)
+    read = sequencingError(read, errModel)
+    return read, sites, (st, end)
+
 
 def simulateSingle(xscript, readlen, errModel):
     """ Simulate a single unpaired read from the given transcript """
@@ -276,7 +336,7 @@ def simulateSingle(xscript, readlen, errModel):
             read = revcomp(read)
     elif random.random() < 0.5:
         read = revcomp(read)
-    
+
     sites, st, end = overlapping_sites(xscript, i, i + readlen)
     read = sequencingError(read, errModel)
     return read, sites, (st, end)
@@ -288,7 +348,7 @@ def simulatePairedEnd(xscript, readlen, errModel, fraglenGen=lambda: None):
     if len(xscript.seq) < fraglen:
         return None, None, None, None
     start, end = 0, len(xscript.seq) - fraglen
-    
+
     frag_i = random.randint(start, end)
     i, j = frag_i, frag_i + fraglen - readlen
     mate1 = xscript.seq[i : i + readlen]
@@ -297,7 +357,7 @@ def simulatePairedEnd(xscript, readlen, errModel, fraglenGen=lambda: None):
        (not args.stranded and random.random() < 0.5):
         # If mate1 and mate2 are different lengths, i and j must be adjusted
         mate1, mate2 = revcomp(mate2), revcomp(mate1)
-    
+
     overlaps1, st1, end1 = overlapping_sites(xscript, i, i + readlen)
     overlaps2, st2, end2 = overlapping_sites(xscript, j, j + readlen)
     #sites = sites.union(overlaps1)
@@ -306,7 +366,7 @@ def simulatePairedEnd(xscript, readlen, errModel, fraglenGen=lambda: None):
     sites |= set(overlaps2)
     mate1 = sequencingError(mate1,errModel)
     mate2 = sequencingError(mate2,errModel)
-    
+
     return (mate1,mate2),sites,(st1,end1),(st2,end2)
 
 def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_handle):
@@ -317,12 +377,12 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
     n = 0
     seqs = []
     cov_sts, cov_ends = counter.Counter(), counter.Counter()
-    
+
     #
     # Step 2: Incorporate sequence variants
     #
     incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
-    
+
     #
     # Step 3: Generate sequence reads
     #
@@ -360,10 +420,11 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
                 sites |= set(tmp_sites)
             n+=readlen
             # What's up with cov_sts and cov_ends??
+            # Jamie: cov_sts and cov_ends keeps a count of start and end positions
             cov_sts[ bounds[0] ]+=1
             cov_ends[ bounds[1] ]+=1
             seqs.append(reads) #Appends just one read
-    
+
     return seqs, weights, list(sim_xscripts), sites, cov_sts, cov_ends
 
 def replicateize(seqs1, seqs2, nreps):
@@ -425,7 +486,7 @@ def writePairedEndReads(seqs1rep,seqs2rep,fnPre,manifestFn):
                         fh.write("%s\t%s\t%s\t%s\t%s\n" % (nm, mate1, qual, mate2, qual))
 
 """
-Get all transcripts that exhibit alternative splicing
+Randomly gets a set of transcript isoforms from the same transcript that exhibit alternative splicing
 """
 def test_alternativeSplicing(xscripts):
     genes = defaultdict(list)
@@ -433,6 +494,7 @@ def test_alternativeSplicing(xscripts):
     for x in xscripts:
         genes[x.gene_id].append(x)
     # BTL: this doesn't look right.  Return axscripts with only one element?
+    # Jamie: Yeah, it isn't right.  I addressed it in the above comment
     for _, isoforms in genes.iteritems():
         if len(isoforms) > 1:
             axscripts+=isoforms
@@ -543,5 +605,5 @@ if __name__=="__main__":
                 self.assertGreater(cnts[0],cnts[1])
                 self.assertGreater(cnts[0],cnts[2])
                 self.assertGreater(cnts[1],cnts[2])
-        
+
         unittest.main()
