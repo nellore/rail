@@ -51,7 +51,7 @@ class Annot(object):
         return "%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s"%(self.refid, self.st0, self.en0, self.orient, self.feature, self.score, self.frame,self.attrs)
 
 class NucRandomGen(object):
-    
+
     def __init__(self, N=int(1e7)):
         self.rs4 = numpy.random.randint(0, 4, N)
         self.n4 = 0
@@ -63,13 +63,13 @@ class NucRandomGen(object):
             'C' : ['A', 'G', 'T'],
             'G' : ['A', 'C', 'T'],
             'T' : ['A', 'C', 'G'] }
-    
+
     def nextNuc(self):
         yield self.nucs[self.rs4[self.n4]]
         self.n4 += 1
         if self.n4 >= len(self.rs4):
             self.n4 = 0
-    
+
     def nextNucExcept(self, n):
         yield self.nucsExcept[n][self.rs3[self.n3]]
         self.n3 += 1
@@ -118,9 +118,11 @@ class Transcript(object):
         for i in range(1,len(self.exons)):
             site5 = self.exons[i-1].en0
             site3 = self.exons[i].st0
+
             sites.append( (site5, site5+1, self.seqid, self.xscript_id) )
             sites.append( (site3-2, site3-1, self.seqid, self.xscript_id) )
         return sites
+
     """Retrieves all pairs of splice sites"""
     def getSitePairs(self):
         sites = []
@@ -129,6 +131,34 @@ class Transcript(object):
             site3 = self.exons[i].st0
             sites.append( ( (site5, site5+1, self.seqid, self.xscript_id) ,
                           (site3-2, site3-1, self.seqid, self.xscript_id) ) )
+        return sites
+
+    """Retrieves all pairs of canonical splice sites"""
+    def getCanonicalSites(self,fastaDict):
+        sites = []
+        fastaseq = fastaDict[self.refid]
+        for i in range(1,len(self.exons)):
+            site5 = self.exons[i-1].en0
+            site3 = self.exons[i].st0
+            site5_seq = fastaseq[site5:site5+2]
+            site3_seq = fastaseq[site3-2:site3]
+            if (site5_seq=="GT" and site3=="AG") or (site5_seq=="CT" and site3=="AC"):
+                sites.append( ( (site5, site5+1, self.seqid, self.xscript_id) ,
+                                (site3-2, site3-1, self.seqid, self.xscript_id) ) )
+        return sites
+
+    """Retrieves all pairs of noncanonical splice sites"""
+    def getNonCanonicalSites(self,fastaHandle):
+        sites = []
+        #fastaseq = fastaDict[self.refid]
+        for i in range(1,len(self.exons)):
+            site5 = self.exons[i-1].en0
+            site3 = self.exons[i].st0
+            site5_seq = fastaseq[site5:site5+2]
+            site3_seq = fastaseq[site3-2:site3]
+            if not ((site5_seq=="GT" and site3=="AG") or (site5_seq=="CT" and site3=="AC")):
+                sites.append( ( (site5, site5+1, self.seqid, self.xscript_id) ,
+                                (site3-2, site3-1, self.seqid, self.xscript_id) ) )
         return sites
 
     """
@@ -166,7 +196,7 @@ class Transcript(object):
             total+=len(self.exons[i-1])
             sites.append( (total, total+1, self.seqid, self.xscript_id) )
         return sites
-    
+
     """
     Incorporates variants into transcriptome such as SNPs and indels
     """
@@ -185,7 +215,7 @@ class Transcript(object):
                     lseq[i] = ''
                     var_handle.write("%s\tdelete%\td\n" % (self.gene_id,i))
         self.seq = "".join(lseq)
-    
+
     def __str__(self):
         lns = []
         lns.append("%d\t%s\t%d\n"%(self.st0,self.seqid,self.en0))
@@ -285,8 +315,8 @@ def readableFormat(s):
 
 import unittest
 
-class TestDisplayFunctions(unittest.TestCase):
-    
+class TestAnnotationFunctions1(unittest.TestCase):
+
     def setUp(self):
         refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAACGTCTGGATCCGCCTGAAGCATATTGGCAATAAGATCGCGCA"""
         annots="""chr2R\tunknown\texon\t11\t20\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t51\t60\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\n"""
@@ -295,12 +325,12 @@ class TestDisplayFunctions(unittest.TestCase):
         self.gtf   = "test.gtf"
         createTestFasta(self.fasta,"chr2R",refseq)
         createTestGTF(self.gtf,annots)
-    
+
     def tearDown(self):
         os.remove(self.fasta)
         os.remove(self.faidx)
         os.remove(self.gtf)
-    
+
     def test1(self):
         annots = parseGTF([self.gtf])
         fastadb = parseFASTA([self.fasta])
@@ -312,6 +342,37 @@ class TestDisplayFunctions(unittest.TestCase):
         self.assertEqual( xscript.exons[0].seq,exon1 )
         self.assertEqual( xscript.exons[1].seq,exon2 )
 
+        
+class TestAnnotationFunctions2(unittest.TestCase):
+    
+    def setUp(self):
+        """       [AACTGTGAT CAAGGA]GTC TTCGCTTGTG AAACGAG[GT CTGGATCCG] GCGAAGCACA TTGGCAC[AA GATCGCGC]"""
+        """       CAACTGTGAT CAAGGATGTC TTCGCTTGTG AAACGAGCGT CTGGATCCGC CTGAAGCACA TTGGCACTAA GATCGCGCA"""
+        refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAGCGTCTGGATCCGCCTGAAGCACATTGGCACTAAGATCGCGCA"""
+        annots="""chr2R\tunknown\texon\t11\t20\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t51\t60\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\n"""
+        self.fasta = "test.fa"
+        self.faidx = "test.fa.fai"
+        self.gtf   = "test.gtf"
+        createTestFasta(self.fasta,"chr2R",refseq)
+        createTestGTF(self.gtf,annots)
+
+    def tearDown(self):
+        os.remove(self.fasta)
+        os.remove(self.faidx)
+        os.remove(self.gtf)
+
+    def test1(self):
+        annots = parseGTF([self.gtf])
+        fastadb = parseFASTA([self.fasta])
+        xscripts = assembleTranscripts(annots,fastadb)
+        print readableFormat(fastadb["chr2R"])
+        exon1,exon2 = "CAAGGATGTC","CTGAAGCATA"
+        #print xscripts[0]
+        xscript = xscripts[0]
+        self.assertEqual( xscript.exons[0].seq,exon1 )
+        self.assertEqual( xscript.exons[1].seq,exon2 )
+
+        
 if __name__=="__main__":
     unittest.main()
 
