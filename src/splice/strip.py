@@ -15,7 +15,7 @@ finding a clustering that is globally correct, with the hope that we can
 correct globally inconsistent results later.
 """
 
-from splice_clustering import SpliceClustering
+from clustering import SpliceClustering
 
 class Strip(object):
     """ This is a vertical strip from the stretch of diagonals that can hold
