@@ -84,6 +84,7 @@ site.addsitedir(os.path.join(base_path, "util"))
 import gtf
 import chrsizes
 import counter
+import fasta
 
 parser = argparse.ArgumentParser(description=\
                                      'Transcript simulator')
@@ -251,25 +252,29 @@ _revcomp_trans = string.maketrans("ACGT", "TGCA")
 def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
-def overlapCanonical(xscript,read_st,read_end):
+def overlapCanonical(xscript,read_st,read_end,fastaHandle):
     """Checks to see if the read spans a canonical splice site"""
     st, en = read_st + xscript.st0, read_end + xscript.st0
-    sites = xscript.getSitePairs()               #in the genome coordinate frame
-    can_sites = set(xscript.getCanonicalSites()) #canonical sites in the genome coordinate frame
-    xsites = xscript.getXcriptSites()            #in the transcript coordinate frame
+    sites = xscript.getSitePairs()                          #in the genome coordinate frame
+    can_sites = set(xscript.getCanonicalSites(fastaHandle)) #canonical sites in the genome coordinate frame
+    xsites = xscript.getXcriptSites()                       #in the transcript coordinate frame
+    print "Canonical sites",can_sites
+    print "Sites",sites
     for i in xrange(len(xsites)):
-        if read_st <= xsites[i][0] and read_end >= xsites[i][1] and sites[i] in can_sites:
-            return True
+        if read_st <= xsites[i][0] and read_end >= xsites[i][1]:
+            print "Cur",xsites[i],sites[i]
+            if sites[i] in can_sites:
+                return True
     return False
 
-def overlapNonCanonical(xscript,read_st,read_end):
+def overlapNonCanonical(xscript,read_st,read_end,fastaHandle):
     """Checks to see if the read spans a canonical splice site"""
     st, en = read_st + xscript.st0, read_end + xscript.st0
     sites = xscript.getSitePairs()                  #in the genome coordinate frame
-    can_sites = set(xscript.getNonCanonicalSites()) #noncanonical sites in the genome coordinate frame
+    ncan_sites = set(xscript.getNonCanonicalSites(fastaHandle)) #noncanonical sites in the genome coordinate frame
     xsites = xscript.getXcriptSites()               #in the transcript coordinate frame
     for i in xrange(len(xsites)):
-        if read_st <= xsites[i][0] and read_end >= xsites[i][1] and sites[i] in can_sites:
+        if read_st <= xsites[i][0] and read_end >= xsites[i][1] and sites[i] in ncan_sites:
             return True
     return False
 
@@ -493,7 +498,7 @@ def writePairedEndReads(seqs1rep,seqs2rep,fnPre,manifestFn):
                         fh.write("%s\t%s\t%s\t%s\t%s\n" % (nm, mate1, qual, mate2, qual))
 
 """
-Randomly gets a set of transcript isoforms from the same transcript that exhibit alternative splicing
+Randomly gets the first set of transcript isoforms from the same transcript that exhibit alternative splicing
 """
 def test_alternativeSplicing(xscripts):
     genes = defaultdict(list)
@@ -565,7 +570,7 @@ if __name__=="__main__":
     else:
         del sys.argv[1:]
         import unittest
-        class TestSimulationFunctions(unittest.TestCase):
+        class TestSimulationFunctions1(unittest.TestCase):
             def setUp(self):
                 """       CAACTGTGAT (CAAGGATGTC) TTCGCTTGTG (AAACGAACGT) CTGGATCCGC (CTGAAGCATA) TTGGCAATAA GATCGCGCA"""
                 refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAACGTCTGGATCCGCCTGAAGCATATTGGCAATAAGATCGCGCA"""
@@ -575,10 +580,12 @@ if __name__=="__main__":
                 self.gtf   = "test.gtf"
                 createTestFasta(self.fasta,"chr2R",refseq)
                 createTestGTF(self.gtf,annots)
+
             def tearDown(self):
                 os.remove(self.fasta)
                 os.remove(self.faidx)
                 os.remove(self.gtf)
+
             def test_overlap1(self):
                 annots = gtf.parseGTF([self.gtf])
                 fastadb = gtf.parseFASTA([self.fasta])
@@ -590,6 +597,7 @@ if __name__=="__main__":
                 print >> sys.stderr,"ref",st,end
                 self.assertEquals(15,st)
                 self.assertEquals(35,end)
+
             def test_overlap2(self):
                 annots = gtf.parseGTF([self.gtf])
                 fastadb = gtf.parseFASTA([self.fasta])
@@ -601,6 +609,83 @@ if __name__=="__main__":
                 print >> sys.stderr,"ref",st,end
                 self.assertEquals(15,st)
                 self.assertEquals(55,end)
+
+            def test_errorPMF(self):
+                N = 1000000
+                n = 100
+                rate = 0.01
+                cnts = counter.Counter()
+                model = errorPMF(n,rate)
+                for _ in xrange(N): cnts[model.next()] += 1
+                print >> sys.stderr,"Histogram",cnts
+                self.assertGreater(cnts[1],cnts[0])
+                self.assertGreater(cnts[0],cnts[2])
+                self.assertGreater(cnts[1],cnts[2])
+
+        class TestSimulationFunctions2(unittest.TestCase):
+            def setUp(self):
+                """           ^^                        ^^      ^^        """
+                """       CAACTGATGT CTTCGCTTGT GAAACGAACC ATATTGATCGC GCA"""
+                """       0          1          2          3          4          5          6          7         8        """
+                """       [AAC]GTGAT CAAG[ATGTC TTCGCTTGTG AAACGAA]GT CTGGATCCGC CTGAAG[ATA TT]GCAATAA GATCGCGCAG [TCGCGC]"""
+                """       CAACTGTGAT CAAGGATGTC TTCGCTTGTG AAACGAACGT CTGGATCCGC CTGAAGCATA TTGGCAATAA GATCGCGCAG ATCGCGCA"""
+                refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAACGTCTGGATCCGCCTGAAGCATATTGGCAATAAGATCGCGCAGATCGCGCA"""
+                annots="""chr2R\tunknown\texon\t1\t5\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t15\t38\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t57\t63\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t80\t88\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\n"""
+                self.fasta = "test.fa"
+                self.faidx = "test.fa.fai"
+                self.gtf   = "test.gtf"
+                createTestFasta(self.fasta,"chr2R",refseq)
+                createTestGTF(self.gtf,annots)
+
+            def tearDown(self):
+                os.remove(self.fasta)
+                os.remove(self.faidx)
+                os.remove(self.gtf)
+
+            def test_canonical_overlap1(self):
+                annots = gtf.parseGTF([self.gtf])
+                fastadb = gtf.parseFASTA([self.fasta])
+                xscripts = gtf.assembleTranscripts(annots,fastadb)
+                print readableFormat(fastadb["chr2R"])
+                read_st,read_end = 1,10
+                fastaHandle = fasta.fasta(self.fasta)
+                didOverlap = overlapCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                print >> sys.stderr,"read",read_st,read_end,didOverlap
+                self.assertEquals(didOverlap, True)
+
+                read_st,read_end = 22,32
+                didOverlap = overlapCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                print >> sys.stderr,"read",read_st,read_end,didOverlap
+                self.assertEquals(didOverlap, True)
+
+                read_st,read_end = 32,42
+                didOverlap = overlapCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                print >> sys.stderr,"read",read_st,read_end,didOverlap
+                self.assertEquals(didOverlap, False)
+
+            def test_noncanonical_overlap1(self):
+                annots = gtf.parseGTF([self.gtf])
+                fastadb = gtf.parseFASTA([self.fasta])
+                xscripts = gtf.assembleTranscripts(annots,fastadb)
+                print readableFormat(fastadb["chr2R"])
+                read_st,read_end = 1,10
+                fastaHandle = fasta.fasta(self.fasta)
+                didOverlap = overlapNonCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                print >> sys.stderr,"read",read_st,read_end,didOverlap
+                self.assertEquals(didOverlap, False)
+
+                read_st,read_end = 22,32
+                didOverlap = overlapNonCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                print >> sys.stderr,"read",read_st,read_end,didOverlap
+                self.assertEquals(didOverlap, False)
+
+                read_st,read_end = 32,42
+                didOverlap = overlapNonCanonical(xscripts[0],read_st,read_end,fastaHandle)
+                print >> sys.stderr,"read",read_st,read_end,didOverlap
+                self.assertEquals(didOverlap, True)
+
+
+
             def test_errorPMF(self):
                 N = 1000000
                 n = 100

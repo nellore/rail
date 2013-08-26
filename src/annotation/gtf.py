@@ -9,7 +9,12 @@ import os
 import string
 import re
 from collections import defaultdict
+import site
 
+base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+site.addsitedir(os.path.join(base_path, "fasta"))
+
+import fasta
 #parser = argparse.ArgumentParser(description='Parse a GTF file.')
 def addArgs(parser):
     parser.add_argument(\
@@ -134,15 +139,17 @@ class Transcript(object):
         return sites
 
     """Retrieves all pairs of canonical splice sites"""
-    def getCanonicalSites(self,fastaDict):
+    def getCanonicalSites(self,fastaHandle):
         sites = []
-        fastaseq = fastaDict[self.refid]
+        #fastaseq = fastaDict[self.seqid]
         for i in range(1,len(self.exons)):
             site5 = self.exons[i-1].en0
-            site3 = self.exons[i].st0
-            site5_seq = fastaseq[site5:site5+2]
-            site3_seq = fastaseq[site3-2:site3]
-            if (site5_seq=="GT" and site3=="AG") or (site5_seq=="CT" and site3=="AC"):
+            site3 = self.exons[i].st0 
+            site5_seq = fastaHandle.fetch_sequence(self.seqid,site5+1,site5+2)
+            site3_seq = fastaHandle.fetch_sequence(self.seqid,site3-1,site3)
+           #site5_seq = fastaseq[site5:site5+2]
+            #site3_seq = fastaseq[site3-2:site3]
+            if (site5_seq=="GT" and site3_seq=="AG") or (site5_seq=="CT" and site3_seq=="AC"):
                 sites.append( ( (site5, site5+1, self.seqid, self.xscript_id) ,
                                 (site3-2, site3-1, self.seqid, self.xscript_id) ) )
         return sites
@@ -154,9 +161,9 @@ class Transcript(object):
         for i in range(1,len(self.exons)):
             site5 = self.exons[i-1].en0
             site3 = self.exons[i].st0
-            site5_seq = fastaseq[site5:site5+2]
-            site3_seq = fastaseq[site3-2:site3]
-            if not ((site5_seq=="GT" and site3=="AG") or (site5_seq=="CT" and site3=="AC")):
+            site5_seq = fastaHandle.fetch_sequence(self.seqid,site5+1,site5+2)
+            site3_seq = fastaHandle.fetch_sequence(self.seqid,site3-1,site3)
+            if not ((site5_seq=="GT" and site3_seq=="AG") or (site5_seq=="CT" and site3_seq=="AC")):
                 sites.append( ( (site5, site5+1, self.seqid, self.xscript_id) ,
                                 (site3-2, site3-1, self.seqid, self.xscript_id) ) )
         return sites
@@ -342,14 +349,14 @@ class TestAnnotationFunctions1(unittest.TestCase):
         self.assertEqual( xscript.exons[0].seq,exon1 )
         self.assertEqual( xscript.exons[1].seq,exon2 )
 
-        
+
 class TestAnnotationFunctions2(unittest.TestCase):
-    
+
     def setUp(self):
         """       [AACTGTGAT CAAGGA]GTC TTCGCTTGTG AAACGAG[GT CTGGATCCG] GCGAAGCACA TTGGCAC[AA GATCGCGC]"""
-        """       CAACTGTGAT CAAGGATGTC TTCGCTTGTG AAACGAGCGT CTGGATCCGC CTGAAGCACA TTGGCACTAA GATCGCGCA"""
-        refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAGCGTCTGGATCCGCCTGAAGCACATTGGCACTAAGATCGCGCA"""
-        annots="""chr2R\tunknown\texon\t11\t20\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t51\t60\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\n"""
+        """       CAACTGTGAT CAAGGATGTC TTCGCTTGTG AAACGAGCGT CTGGATCCGC GCGAAGCACA TTGGCAGTAA GATCGCGCA"""
+        refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAGCGTCTGGATCCGCGCGAAGCACATTGGCAGTAAGATCGCGCA"""
+        annots="""chr2R\tunknown\texon\t1\t17\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t38\t50\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t68\t80\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\n"""
         self.fasta = "test.fa"
         self.faidx = "test.fa.fai"
         self.gtf   = "test.gtf"
@@ -366,13 +373,52 @@ class TestAnnotationFunctions2(unittest.TestCase):
         fastadb = parseFASTA([self.fasta])
         xscripts = assembleTranscripts(annots,fastadb)
         print readableFormat(fastadb["chr2R"])
-        exon1,exon2 = "CAAGGATGTC","CTGAAGCATA"
+        exon1,exon2, exon3 = "CAACTGTGATCAAGGAT","CGTCTGGATCCGC","TAAGATCGCGCA"
         #print xscripts[0]
         xscript = xscripts[0]
         self.assertEqual( xscript.exons[0].seq,exon1 )
         self.assertEqual( xscript.exons[1].seq,exon2 )
+        self.assertEqual( xscript.exons[2].seq,exon3 )
 
-        
+    def test2(self):
+        annots = parseGTF([self.gtf])
+        fastadb = parseFASTA([self.fasta])
+        xscripts = assembleTranscripts(annots,fastadb)
+        print readableFormat(fastadb["chr2R"])
+        exon1,exon2, exon3 = "CAACTGTGATCAAGGAT","CGTCTGGATCCGC","TAAGATCGCGCA"
+        #print xscripts[0]
+        xscript = xscripts[0]
+        fastaHandle = fasta.fasta(self.fasta)
+        can_sites = xscript.getCanonicalSites(fastaHandle)
+        self.assertEqual( len(can_sites) , 1)
+        print can_sites
+        left_site,right_site = can_sites[0]
+        self.assertEqual(left_site[0],18)
+        self.assertEqual(left_site[1],19)
+        self.assertEqual(right_site[0],36)
+        self.assertEqual(right_site[1],37)
+
+    def test3(self):
+        annots = parseGTF([self.gtf])
+        fastadb = parseFASTA([self.fasta])
+        xscripts = assembleTranscripts(annots,fastadb)
+        print readableFormat(fastadb["chr2R"])
+        exon1,exon2, exon3 = "CAACTGTGATCAAGGAT","CGTCTGGATCCGC","TAAGATCGCGCA"
+        #print xscripts[0]
+        fastaHandle = fasta.fasta(self.fasta)
+        xscript = xscripts[0]
+        can_sites = xscript.getNonCanonicalSites(fastaHandle)
+        print can_sites
+        self.assertEqual( len(can_sites) , 1)
+        left_site,right_site = can_sites[0]
+        self.assertEqual(left_site[0],51)
+        self.assertEqual(left_site[1],52)
+        self.assertEqual(right_site[0],66)
+        self.assertEqual(right_site[1],67)
+
+
+
+
 if __name__=="__main__":
     unittest.main()
 
