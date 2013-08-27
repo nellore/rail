@@ -187,8 +187,7 @@ def makeWeights(xscripts, seq_sizes, annots_handle):
         if xscripts[i].orient != last_strand and xscripts[i].seqid in seq_sizes:
             weights[i] = random.random()
             last_strand = xscripts[i].orient
-            annots_handle.write(xscripts[i].xscript_id)
-            annots_handle.write('\n')
+            annots_handle.write( str(xscripts[i]) + "\n")
             num += 1
         i += 1
     return WeightedRandomGenerator(weights), weights
@@ -245,7 +244,7 @@ def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
 def overlapCanonical(xscript,read_st,read_end):
-"""Checks to see if the read spans a canonical splice site"""
+    """Checks to see if the read spans a canonical splice site"""
     st, en = read_st + xscript.st0, read_end + xscript.st0
     sites = xscript.getSitePairs()               #in the genome coordinate frame
     can_sites = set(xscript.getCanonicalSites()) #canonical sites in the genome coordinate frame
@@ -256,7 +255,7 @@ def overlapCanonical(xscript,read_st,read_end):
     return False
 
 def overlapNonCanonical(xscript,read_st,read_end):
-"""Checks to see if the read spans a canonical splice site"""
+    """Checks to see if the read spans a canonical splice site"""
     st, en = read_st + xscript.st0, read_end + xscript.st0
     sites = xscript.getSitePairs()                  #in the genome coordinate frame
     can_sites = set(xscript.getNonCanonicalSites()) #noncanonical sites in the genome coordinate frame

@@ -47,8 +47,11 @@ class Annot(object):
     def __len__(self):
         return self.en0-self.st0
 
+    # def __str__(self):
+    #     return "%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s"%(self.refid, self.st0, self.en0, self.orient, self.feature, self.score, self.frame,self.attrs)
     def __str__(self):
-        return "%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s"%(self.refid, self.st0, self.en0, self.orient, self.feature, self.score, self.frame,self.attrs)
+        gene_id,x_id = self.attrs.split("\t")
+        return "%s\tunknown\t%s\t%d\t%d\t%s\t%s\t%s\tgene_id \"%s\";gene_name \"%s\";transcript_id \"%s\";"%(self.refid, self.feature, self.st0, self.en0, self.score, self.orient, self.frame,gene_id,gene_id,x_id)
 
 class NucRandomGen(object):
 
@@ -216,13 +219,15 @@ class Transcript(object):
                     var_handle.write("%s\tdelete%\td\n" % (self.gene_id,i))
         self.seq = "".join(lseq)
 
+    # def __str__(self):
+    #     lns = []
+    #     lns.append("%d\t%s\t%d\n"%(self.st0,self.seqid,self.en0))
+    #     for e in self.exons:
+    #         lns.append("%s\n"%(str(e)))
+    #     lns.append("%s\n"%(str(self.seq)))
+    #     return "".join(lns)
     def __str__(self):
-        lns = []
-        lns.append("%d\t%s\t%d\n"%(self.st0,self.seqid,self.en0))
-        for e in self.exons:
-            lns.append("%s\n"%(str(e)))
-        lns.append("%s\n"%(str(self.seq)))
-        return "".join(lns)
+        return "\n".join([ str(e) for e in self.exons ])
 
 """
 Constructs a dictionary of fasta seqs
@@ -342,9 +347,9 @@ class TestAnnotationFunctions1(unittest.TestCase):
         self.assertEqual( xscript.exons[0].seq,exon1 )
         self.assertEqual( xscript.exons[1].seq,exon2 )
 
-        
+
 class TestAnnotationFunctions2(unittest.TestCase):
-    
+
     def setUp(self):
         """       [AACTGTGAT CAAGGA]GTC TTCGCTTGTG AAACGAG[GT CTGGATCCG] GCGAAGCACA TTGGCAC[AA GATCGCGC]"""
         """       CAACTGTGAT CAAGGATGTC TTCGCTTGTG AAACGAGCGT CTGGATCCGC CTGAAGCACA TTGGCACTAA GATCGCGCA"""
@@ -372,7 +377,7 @@ class TestAnnotationFunctions2(unittest.TestCase):
         self.assertEqual( xscript.exons[0].seq,exon1 )
         self.assertEqual( xscript.exons[1].seq,exon2 )
 
-        
+
 if __name__=="__main__":
     unittest.main()
 
