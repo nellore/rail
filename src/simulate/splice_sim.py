@@ -178,7 +178,7 @@ and the other half from Crick.
 """
 def makeWeights(xscripts, seq_sizes, annots_handle):
     num_xscripts = args.num_xscripts
-    weights = [1.0] * len(xscripts)
+    weights = [0.0] * len(xscripts)
     last_strand = "+"
     num, i = 0, 0
     # We're picking the first num_xscripts transcripts, but we're constrained
@@ -520,6 +520,7 @@ def go():
     else:
         writeSingleReads(seqs1,seqs2,args.output_prefix,args.output_prefix+".manifest")
     #This stores the list in pickle files for serialization
+    print "Num Transcripts",len(xscripts)
     pickle.dump(xscripts,open(args.output_prefix+".xscripts",'wb'))
     ###BIG NOTE:  This pickles a tuple of counter objects
     pickle.dump( (cov_sts,cov_ends) ,open(args.output_prefix+".cov",'wb'))
