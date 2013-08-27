@@ -240,6 +240,8 @@ def sequencingError(read,errModel):
 Incorporates variants into transcripts with nonzero weights
 """
 def incorporateVariants(weights,xscripts,mm_rate,indel_rate,var_handle):
+    if mm_rate==0 and indel_rate==0:
+        return xscripts
     for i in xrange(len(weights)):
         if weights[i] != 0:
             oldseq = xscripts[i].seq
@@ -258,11 +260,8 @@ def overlapCanonical(xscript,read_st,read_end,can_sites):
     sites = xscript.getSitePairs()                          #in the genome coordinate frame
     #can_sites = set(xscript.getCanonicalSites(fastaHandle)) #canonical sites in the genome coordinate frame
     xsites = xscript.getXcriptSites()                       #in the transcript coordinate frame
-    print "Canonical sites",can_sites
-    print "Sites",sites
     for i in xrange(len(xsites)):
         if read_st <= xsites[i][0] and read_end >= xsites[i][1]:
-            print "Cur",xsites[i],sites[i]
             if sites[i] in can_sites:
                 return True
     return False
@@ -325,11 +324,14 @@ def overlapping_sites(xscript, read_st, read_end):
 def simulateSpanningSingle(xscript, readlen, errModel, siteType, fastaHandle):
     """Simulate a single unpaired read from a given transcript that overlaps a either a canonical site ir a noncanonical site"""
     start, end = 0, len(xscript.seq) - readlen
-    if end < start or len(xscript.seq) < readlen or len(xscript.getCanonicalSites())==0:
+    if end < start or len(xscript.seq) < readlen:
+        return None,None,None
+    if (( len(xscript.getCanonicalSites(fastaHandle))==0 and args.canonical_sites ) or
+        ( len(xscript.getNonCanonicalSites(fastaHandle))==0 and args.noncanonical_sites )):
         return None,None,None
 
     i = random.randint(start, end)
-    while not overlapCanonical(xscript,i,i+readlen,fastaHandle):
+    while not overlapSpecificSites(xscript,start,end,siteType, fastaHandle):
         i = random.randint(start, end)
 
     # Read is always taken from sense strand?
@@ -422,13 +424,13 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
             sim_xscripts.add(x)
         # print x.gene_id,x.xscript_id,x.seqid
         if args.canonical_sites or args.noncanonical_sites:
-            siteType = "canonical" if args.canonical else "noncanonical"
-            tmp_reads,tmp_sites,bounds = simulateSpanningSingle(x,readlen,errModel,fastaHandle)
+            siteType = "canonical" if args.canonical_sites else "noncanonical"
+            tmp_reads,tmp_sites,bounds = simulateSpanningSingle(x,readlen,errModel,siteType,fastaHandle)
             if tmp_reads is None and tmp_sites is None:
                 continue
             else:
                 reads = tmp_reads
-                sites |= set(tmp_sites)                
+                sites |= set(tmp_sites)
         elif args.paired_end:
             def fraglenGen():
                 return int(random.gauss(args.fragment_mean, args.fragment_sd))

@@ -393,10 +393,10 @@ class TestAnnotationFunctions2(unittest.TestCase):
         self.assertEqual( len(can_sites) , 1)
         print can_sites
         left_site,right_site = can_sites[0]
-        self.assertEqual(left_site[0],18)
-        self.assertEqual(left_site[1],19)
-        self.assertEqual(right_site[0],36)
-        self.assertEqual(right_site[1],37)
+        self.assertEqual(left_site[0],17)
+        self.assertEqual(left_site[1],18)
+        self.assertEqual(right_site[0],35)
+        self.assertEqual(right_site[1],36)
 
     def test3(self):
         annots = parseGTF([self.gtf])
@@ -411,12 +411,11 @@ class TestAnnotationFunctions2(unittest.TestCase):
         print can_sites
         self.assertEqual( len(can_sites) , 1)
         left_site,right_site = can_sites[0]
-        self.assertEqual(left_site[0],51)
-        self.assertEqual(left_site[1],52)
-        self.assertEqual(right_site[0],66)
-        self.assertEqual(right_site[1],67)
+        self.assertEqual(left_site[0],50)
+        self.assertEqual(left_site[1],51)
 
-
+        self.assertEqual(right_site[0],65)
+        self.assertEqual(right_site[1],66)
 
 
 if __name__=="__main__":
