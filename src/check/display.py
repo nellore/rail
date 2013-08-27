@@ -24,7 +24,7 @@ site.addsitedir(os.path.join(base_path, "annotation"))
 site.addsitedir(os.path.join(base_path, "struct"))
 site.addsitedir(os.path.join(base_path, "fasta"))
 site.addsitedir(os.path.join(base_path, "statsmath"))
-
+site.addsitedir(os.path.join(base_path, "util"))
 import gtf
 import search
 import fasta
@@ -72,7 +72,7 @@ def LeftSite2str(seqid,exon,site,annot_site,win_radius,display_st,display_end,fn
     site_seq = intron_seq[0:2]
     swin_radius = win_radius/4
     site_st = site[0] - display_st - 1
-    
+
     return "%s\n%s\n%s\n%s\n%s\n%s"%(
         "Region    "+"%s:%d-%d"%(site[2],display_st,display_end),
         "Site pos  "+"%s:%d-%d"%(site[2],site[0],site[1]),
@@ -141,7 +141,7 @@ def RightSeq2str(seqid,flank,exon,site,annot_site,win_radius,display_st,display_
     flank_seq,flank_st = flank  #Note
     site_str,site_seq = RightSite2str(seqid,exon,site,annot_site,win_radius,display_st,display_end,fnh)
     #Place flank_st and site_st in display coordinate frame
-    flank_st = (flank_st) -  display_st
+    flank_st = (flank_st) -  display_st +1
     return "%s\n%s"%(site_str,"Flanks  "+format_seq(" "*flank_st + flank_seq)), site_seq
 
 def printShortExon(display_st,display_end,xscript,site,fnh):
@@ -162,8 +162,8 @@ def printShortExon(display_st,display_end,xscript,site,fnh):
     right_in_start, right_in_end = short_exon.en0, display_end     #Right intron
     display_exon_st = short_exon.st0-display_st
     display_exon_end = short_exon.en0-display_st
-    assert left_in_start+1>left_in_end+1, "st:%s end:%s"(left_in_start+1,left_in_end+1)
-    assert right_in_start+1>right_in_end+1, "st:%s end:%s"(right_in_start+1,right_in_end+1)
+    assert left_in_start+1<left_in_end+1, "st:%s end:%s"%(left_in_start+1,left_in_end+1)
+    assert right_in_start+1<right_in_end+1, "st:%s end:%s"%(right_in_start+1,right_in_end+1)
     left_in_seq = fnh.fetch_sequence(seqid,left_in_start+1,left_in_end+1)
     right_in_seq = fnh.fetch_sequence(seqid,right_in_start+1,right_in_end+1)
     exon_seq = exon.seq[display_exon_st:display_exon_end]
@@ -222,7 +222,6 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,w
     #Get indexes of displayed exons.  Note that one of them should be -1
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
     exon_li, exon_ri = xscript.getExon(display_st), xscript.getExon(display_end)
-
     for flank in flanks:
         if exon_li!=-1:
             exon = xscript.exons[exon_li]
@@ -362,7 +361,7 @@ class TestDisplayFunctions(unittest.TestCase):
         print "Test print 1"
         #site = (440,441,'chr2R',"NM_001042999")
         site = (439,440,'chr2R',"NM_001042999")
-        cov_sts,cov_ends = {420:1},{420:1}
+        cov_sts, cov_ends = Counter( range(500) ), Counter( range(500) )
         # print >> sys.stderr,'fasta file',self.fasta
         # print >> sys.stderr,'gtf file  ',self.gtf
         annots = gtf.parseGTF([self.gtf])
@@ -381,13 +380,14 @@ class TestDisplayFunctions(unittest.TestCase):
         flankDict = { key: flanks  }
         annotDict = {x.seqid: x.getSites() for x in xscripts}
         xscriptDict = {x.xscript_id: x for x in xscripts}
-        falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,fnh)
+        win_radius = 50
+        falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,win_radius,fnh)
         print
 
     def testPrint2(self):
         print "Test print 2"
         site = (500,501,'chr2R',"NM_001042999")
-        cov_sts,cov_ends = {420:1},{420:1}
+        cov_sts, cov_ends = Counter( range(500) ), Counter( range(500) )
         flanks = [("TAGAAGATTC",502),("TAGAAGATTC",502)]
         annots = gtf.parseGTF([self.gtf])
         fastadb = gtf.parseFASTA([self.fasta])
@@ -400,21 +400,25 @@ class TestDisplayFunctions(unittest.TestCase):
         flankDict = { key: flanks  }
         annotDict = {x.seqid: x.getSites() for x in xscripts}
         xscriptDict = {x.xscript_id: x for x in xscripts}
-        falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,fnh)
+        win_radius = 50
+        falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,win_radius,fnh)
         print
 
     def testFalseNegative1(self):
         print "Test false negative 1"
         site = (500,501,'chr2R',"NM_001042999")
         flanks = []
+        cov_sts, cov_ends = Counter( range(500) ), Counter( range(500) )
+        print "cov_sts",cov_sts
         annots = gtf.parseGTF([self.gtf])
         fastadb = gtf.parseFASTA([self.fasta])
         xscripts = gtf.assembleTranscripts(annots,fastadb)
         fnh = fasta.fasta(self.fasta)
-        flankDict = {}
+        flankDict = {(500, 501, 'chr2R'): flanks}
         annotDict = {x.seqid: x.getSites() for x in xscripts}
         xscriptDict = {x.xscript_id: x for x in xscripts}
-        falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,fnh)
+        win_radius = 50
+        falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,win_radius,fnh)
         print
     def testShortExon(self):
         site = (500,501,'chr2R',"NM_001042999")
