@@ -9,12 +9,7 @@ import os
 import string
 import re
 from collections import defaultdict
-import site
 
-base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-site.addsitedir(os.path.join(base_path, "fasta"))
-
-import fasta
 #parser = argparse.ArgumentParser(description='Parse a GTF file.')
 def addArgs(parser):
     parser.add_argument(\
@@ -52,8 +47,11 @@ class Annot(object):
     def __len__(self):
         return self.en0-self.st0
 
+    # def __str__(self):
+    #     return "%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s"%(self.refid, self.st0, self.en0, self.orient, self.feature, self.score, self.frame,self.attrs)
     def __str__(self):
-        return "%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s"%(self.refid, self.st0, self.en0, self.orient, self.feature, self.score, self.frame,self.attrs)
+        gene_id,x_id = self.attrs.split("\t")
+        return "%s\tunknown\t%s\t%d\t%d\t%s\t%s\t%s\tgene_id \"%s\";gene_name \"%s\";transcript_id \"%s\";"%(self.refid, self.feature, self.st0, self.en0, self.score, self.orient, self.frame,gene_id,gene_id,x_id)
 
 class NucRandomGen(object):
 
@@ -139,17 +137,15 @@ class Transcript(object):
         return sites
 
     """Retrieves all pairs of canonical splice sites"""
-    def getCanonicalSites(self,fastaHandle):
+    def getCanonicalSites(self,fastaDict):
         sites = []
-        #fastaseq = fastaDict[self.seqid]
+        fastaseq = fastaDict[self.refid]
         for i in range(1,len(self.exons)):
             site5 = self.exons[i-1].en0
-            site3 = self.exons[i].st0 
-            site5_seq = fastaHandle.fetch_sequence(self.seqid,site5+1,site5+2)
-            site3_seq = fastaHandle.fetch_sequence(self.seqid,site3-1,site3)
-           #site5_seq = fastaseq[site5:site5+2]
-            #site3_seq = fastaseq[site3-2:site3]
-            if (site5_seq=="GT" and site3_seq=="AG") or (site5_seq=="CT" and site3_seq=="AC"):
+            site3 = self.exons[i].st0
+            site5_seq = fastaseq[site5:site5+2]
+            site3_seq = fastaseq[site3-2:site3]
+            if (site5_seq=="GT" and site3=="AG") or (site5_seq=="CT" and site3=="AC"):
                 sites.append( ( (site5, site5+1, self.seqid, self.xscript_id) ,
                                 (site3-2, site3-1, self.seqid, self.xscript_id) ) )
         return sites
@@ -161,9 +157,9 @@ class Transcript(object):
         for i in range(1,len(self.exons)):
             site5 = self.exons[i-1].en0
             site3 = self.exons[i].st0
-            site5_seq = fastaHandle.fetch_sequence(self.seqid,site5+1,site5+2)
-            site3_seq = fastaHandle.fetch_sequence(self.seqid,site3-1,site3)
-            if not ((site5_seq=="GT" and site3_seq=="AG") or (site5_seq=="CT" and site3_seq=="AC")):
+            site5_seq = fastaseq[site5:site5+2]
+            site3_seq = fastaseq[site3-2:site3]
+            if not ((site5_seq=="GT" and site3=="AG") or (site5_seq=="CT" and site3=="AC")):
                 sites.append( ( (site5, site5+1, self.seqid, self.xscript_id) ,
                                 (site3-2, site3-1, self.seqid, self.xscript_id) ) )
         return sites
@@ -223,13 +219,15 @@ class Transcript(object):
                     var_handle.write("%s\tdelete%\td\n" % (self.gene_id,i))
         self.seq = "".join(lseq)
 
+    # def __str__(self):
+    #     lns = []
+    #     lns.append("%d\t%s\t%d\n"%(self.st0,self.seqid,self.en0))
+    #     for e in self.exons:
+    #         lns.append("%s\n"%(str(e)))
+    #     lns.append("%s\n"%(str(self.seq)))
+    #     return "".join(lns)
     def __str__(self):
-        lns = []
-        lns.append("%d\t%s\t%d\n"%(self.st0,self.seqid,self.en0))
-        for e in self.exons:
-            lns.append("%s\n"%(str(e)))
-        lns.append("%s\n"%(str(self.seq)))
-        return "".join(lns)
+        return "\n".join([ str(e) for e in self.exons ])
 
 """
 Constructs a dictionary of fasta seqs
@@ -354,9 +352,9 @@ class TestAnnotationFunctions2(unittest.TestCase):
 
     def setUp(self):
         """       [AACTGTGAT CAAGGA]GTC TTCGCTTGTG AAACGAG[GT CTGGATCCG] GCGAAGCACA TTGGCAC[AA GATCGCGC]"""
-        """       CAACTGTGAT CAAGGATGTC TTCGCTTGTG AAACGAGCGT CTGGATCCGC GCGAAGCACA TTGGCAGTAA GATCGCGCA"""
-        refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAGCGTCTGGATCCGCGCGAAGCACATTGGCAGTAAGATCGCGCA"""
-        annots="""chr2R\tunknown\texon\t1\t17\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t38\t50\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t68\t80\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\n"""
+        """       CAACTGTGAT CAAGGATGTC TTCGCTTGTG AAACGAGCGT CTGGATCCGC CTGAAGCACA TTGGCACTAA GATCGCGCA"""
+        refseq="""CAACTGTGATCAAGGATGTCTTCGCTTGTGAAACGAGCGTCTGGATCCGCCTGAAGCACATTGGCACTAAGATCGCGCA"""
+        annots="""chr2R\tunknown\texon\t11\t20\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\nchr2R\tunknown\texon\t51\t60\t.\t-\t.\tgene_id "CG17528"; gene_name "CG17528"; p_id "P21588"; transcript_id "NM_001042999"; tss_id "TSS13109";\n"""
         self.fasta = "test.fa"
         self.faidx = "test.fa.fai"
         self.gtf   = "test.gtf"
@@ -373,49 +371,11 @@ class TestAnnotationFunctions2(unittest.TestCase):
         fastadb = parseFASTA([self.fasta])
         xscripts = assembleTranscripts(annots,fastadb)
         print readableFormat(fastadb["chr2R"])
-        exon1,exon2, exon3 = "CAACTGTGATCAAGGAT","CGTCTGGATCCGC","TAAGATCGCGCA"
+        exon1,exon2 = "CAAGGATGTC","CTGAAGCATA"
         #print xscripts[0]
         xscript = xscripts[0]
         self.assertEqual( xscript.exons[0].seq,exon1 )
         self.assertEqual( xscript.exons[1].seq,exon2 )
-        self.assertEqual( xscript.exons[2].seq,exon3 )
-
-    def test2(self):
-        annots = parseGTF([self.gtf])
-        fastadb = parseFASTA([self.fasta])
-        xscripts = assembleTranscripts(annots,fastadb)
-        print readableFormat(fastadb["chr2R"])
-        exon1,exon2, exon3 = "CAACTGTGATCAAGGAT","CGTCTGGATCCGC","TAAGATCGCGCA"
-        #print xscripts[0]
-        xscript = xscripts[0]
-        fastaHandle = fasta.fasta(self.fasta)
-        can_sites = xscript.getCanonicalSites(fastaHandle)
-        self.assertEqual( len(can_sites) , 1)
-        print can_sites
-        left_site,right_site = can_sites[0]
-        self.assertEqual(left_site[0],17)
-        self.assertEqual(left_site[1],18)
-        self.assertEqual(right_site[0],35)
-        self.assertEqual(right_site[1],36)
-
-    def test3(self):
-        annots = parseGTF([self.gtf])
-        fastadb = parseFASTA([self.fasta])
-        xscripts = assembleTranscripts(annots,fastadb)
-        print readableFormat(fastadb["chr2R"])
-        exon1,exon2, exon3 = "CAACTGTGATCAAGGAT","CGTCTGGATCCGC","TAAGATCGCGCA"
-        #print xscripts[0]
-        fastaHandle = fasta.fasta(self.fasta)
-        xscript = xscripts[0]
-        can_sites = xscript.getNonCanonicalSites(fastaHandle)
-        print can_sites
-        self.assertEqual( len(can_sites) , 1)
-        left_site,right_site = can_sites[0]
-        self.assertEqual(left_site[0],50)
-        self.assertEqual(left_site[1],51)
-
-        self.assertEqual(right_site[0],65)
-        self.assertEqual(right_site[1],66)
 
 
 if __name__=="__main__":
