@@ -380,7 +380,8 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
     #
     # Step 2: Incorporate sequence variants
     #
-    incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
+    if args.indel_rate>0 and args.snp_rate>0:
+        incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
 
     #
     # Step 3: Generate sequence reads
