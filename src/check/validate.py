@@ -225,6 +225,7 @@ def go():
     #sites = readOverlappedSites(args.site_file)
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
     sim_sites = pickle.load(open(args.sites_file,'rb')) #simulated sites
+    print "Num Transcripts",len(xscripts)
     cov_sts,cov_ends = pickle.load(open(args.coverage_file,'rb'))
     bed_sites = readBedSites(args.bed_file)
     annot_sites = annotated_sites(xscripts)
