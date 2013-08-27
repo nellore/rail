@@ -181,7 +181,8 @@ def binFlanks(annot_sites,flanks_file):
             ln = ln.rstrip()
             toks = ln.split("\t")
             assert len(toks)>=8
-            st,end,seqid,flank_left,flank_right = int(toks[2]), int(toks[3]), toks[4], toks[6], toks[7]
+            pt,st,end,flank_left,flank_right = toks[1], int(toks[2]), int(toks[3]), toks[5], toks[6]
+            seqid = pt[:pt.rfind(';')][:]
             #Search for nearby sites
             guess5,guess3 = (st,st+1,seqid,""), (end-1,end,seqid,"")
             if len(annot_sites[seqid])>0:
@@ -258,7 +259,6 @@ def go():
     close_sites.sort(key=lambda tup:tup[1])
     close_sites.sort(key=lambda tup:tup[0])
 
-
     missed = len(intersect_sites)
     total = len(total_sites)
     sim_total = len(sim_sites)
@@ -269,15 +269,16 @@ def go():
     #print "Bed site stats      \t",bed_site_stats
     #print "Annotated site stats\t",annot_site_stats
     false_sites = false_sites+close_sites
+    #print annot_sites
 
     displayIncorrect(false_sites,intersect_sites,args.flank_seqs,xscripts,annot_sites,annot_sites_wk,args.region,cov_sts,cov_ends,fastaH)
 
     #print >>sys.stderr, "Annotated   ",annot_sites
     #print >>sys.stderr, "Total annot sites",total_sites
-    # print >>sys.stderr, "Close Sites      ",close_sites
-    # print >>sys.stderr, "Missed Sites     ",missed_sites
-    # print >>sys.stderr, "False Sites      ",false_sites
-    # print >>sys.stderr, "Intersect        ",intersect_sites
+    #print >>sys.stderr, "Close Sites      ",close_sites
+    #print >>sys.stderr, "Missed Sites     ",missed_sites
+    #print >>sys.stderr, "False Sites      ",false_sites
+    #print >>sys.stderr, "Intersect        ",intersect_sites
     #print "Bed sites on chr3R",bed_sites['chr3R']
 
     print "Num sim sites       \t",sim_total

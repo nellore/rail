@@ -141,7 +141,7 @@ def RightSeq2str(seqid,flank,exon,site,annot_site,win_radius,display_st,display_
     flank_seq,flank_st = flank  #Note
     site_str,site_seq = RightSite2str(seqid,exon,site,annot_site,win_radius,display_st,display_end,fnh)
     #Place flank_st and site_st in display coordinate frame
-    flank_st = (flank_st) -  display_st +1
+    flank_st = (flank_st) -  display_st
     return "%s\n%s"%(site_str,"Flanks  "+format_seq(" "*flank_st + flank_seq)), site_seq
 
 def printShortExon(display_st,display_end,xscript,site,fnh):
