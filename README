@@ -104,6 +104,7 @@ The first four files listed in the validation options above are required.  Using
 
 The --bed-file option needs to specify the file that contains the output splice sites from the Myrna pipeline
 The --flank-seqs option needs to specify the file that contains the flanking sequences bed file from the Mynra pipeline.  Note that this file only contains the intron lines in the align output in the Mynra pipeline.  This can be obtained by applying grep '^intron' to the align output file
+The --radius option is used to differientiate between false positives and nearby.  All detected splice sites outside of the nearest annotated splice site are considered false positives.  By default, this is set to 10.  
 
 example script
 
