@@ -24,8 +24,8 @@ s2f = (1, 'GC', 'AG')
 s2r = (1, 'CT', 'GC')
 s2 = (s2f, s2r)
 
-s3f = (2, 'GT', 'AT')
-s3r = (2, 'AT', 'AC')
+s3f = (2, 'AT', 'AC')
+s3r = (2, 'GT', 'AT')
 s3 = (s3f, s3r)
 
 saf = [s1f, s2f, s3f]
