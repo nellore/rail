@@ -64,7 +64,8 @@ class SiteSelector(object):
         minst, maxst = min(sts), max(sts)
         minen, maxen = min(ens), max(ens)
         minst, minen = max(minst - 2, 0), max(minen - 2, 0)
-        maxst, maxen = maxst + 2, maxen + 2
+        reflen = self.fastafh.length(refid)
+        maxst, maxen = min(maxst + 2, reflen), min(maxen + 2, reflen)
         assert maxst >= minst and maxen >= minen, "%d >= %d, %d >= %d" % (maxst, minst, maxen, minen)
         stseq = self.fastafh.fetch_sequence(refid, minst+1, maxst+1)
         enseq = self.fastafh.fetch_sequence(refid, minen+1, maxen+1)
