@@ -12,9 +12,22 @@ COV=$SIM_SPLICE/fly.cov
 
 cat $SIM_SPLICE/intermediate/align_out.tsv | grep intron > $FLANKS   #really just the intron.py input
 
-# echo "Myrna Aligner validation"
-sh run.sh
-python $CHECK/validate.py --xscripts-file=$XSCRIPTS --bed-file=$BEDSITES --radius=10 --refseq=$GENOME --sites-file=$SITES --flank-seqs=$FLANKS --coverage-file=$COV --window-radius=100
+# Don't re-run run.sh unless it seems to be needed
+if [ ! -f $BEDSITES -o ! -f $SITES -o ! -f $FLANKS -o ! -f $COV -o ! -f $XSCRIPTS ] ; then
+	sh run.sh
+fi
+
+python $CHECK/validate.py \
+	--xscripts-file=$XSCRIPTS \
+	--bed-file=$BEDSITES \
+	--radius=10 \
+	--refseq=$GENOME \
+	--sites-file=$SITES \
+	--flank-seqs=$FLANKS \
+	--coverage-file=$COV \
+	--window-radius=100 \
+	$*
+
 #python $CHECK/validate.py --xscripts-file=$XSCRIPTS --bed-file=$BEDSITES --radius=10 --refseq=$GENOME --sites-file=$SITES --flank-seqs=$FLANKS --coverage-file=$COV --window-radius=100 --false-negatives  | sed -e '/False/,/Region/!d' | paste -d " " - - | uniq > myrna_out
 
 # python $CHECK/validate.py --xscripts-file=$XSCRIPTS --bed-file=$BEDSITES --radius=10 --refseq=$GENOME --sites-file=$SITES --flank-seqs=$FLANKS --coverage-file=$COV --window-radius=100 --false-negatives  > myrna_false_negatives
