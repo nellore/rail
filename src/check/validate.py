@@ -181,7 +181,8 @@ def binFlanks(annot_sites,flanks_file):
             ln = ln.rstrip()
             toks = ln.split("\t")
             assert len(toks)>=8
-            st,end,seqid,flank_left,flank_right = int(toks[2]), int(toks[3]), toks[4], toks[6], toks[7]
+            st,end,flank_left,flank_right = int(toks[2]), int(toks[3]), toks[5], toks[6]
+            seqid = toks[1].split(";")[0]
             #Search for nearby sites
             guess5,guess3 = (st,st+1,seqid,""), (end-1,end,seqid,"")
             if len(annot_sites[seqid])>0:
@@ -194,6 +195,8 @@ def binFlanks(annot_sites,flanks_file):
                 #print "Right Site: Exact",key3,"Guess",end+1
                 flanks[key5].append( (flank_left,st)  )
                 flanks[key3].append( (flank_right,end+1) )
+            else:
+                print seqid
     return flanks
 
 
