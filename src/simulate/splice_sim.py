@@ -186,7 +186,7 @@ and the other half from Crick.
 """
 def makeWeights(xscripts, seq_sizes, annots_handle):
     num_xscripts = args.num_xscripts
-    weights = [1.0] * len(xscripts)
+    weights = [0.0] * len(xscripts)
     last_strand = "+"
     num, i = 0, 0
     # We're picking the first num_xscripts transcripts, but we're constrained
@@ -406,7 +406,8 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
     #
     # Step 2: Incorporate sequence variants
     #
-    incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
+    if args.indel_rate>0 and args.snp_rate>0:
+        incorporateVariants(weights,xscripts,args.snp_rate,args.indel_rate,var_handle)
 
     #
     # Step 3: Generate sequence reads
@@ -428,7 +429,7 @@ def simulate(xscripts,readlen,targetNucs,fastaseqs,var_handle,seq_sizes,annots_h
                 continue
             else:
                 reads = tmp_reads
-                sites |= set(tmp_sites)                
+                sites |= set(tmp_sites)
         elif args.paired_end:
             def fraglenGen():
                 return int(random.gauss(args.fragment_mean, args.fragment_sd))
