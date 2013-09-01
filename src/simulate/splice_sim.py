@@ -516,8 +516,9 @@ def writePairedEndReads(seqs1rep,seqs2rep,fnPre,manifestFn):
                         pair = sr[rep][i]
                         mate1,mate2 = pair
                         qual = "I" * len(mate1)
-                        nm = "r_n%d;LB:splice-%d-%d" % (i, group, rep)
-                        fh.write("%s\t%s\t%s\t%s\t%s\n" % (nm, mate1, qual, mate2, qual))
+                        nm1 = "r_n%d;LB:splice-%d-%d/1" % (i, group, rep)
+                        nm2 = "r_n%d;LB:splice-%d-%d/2" % (i, group, rep)
+                        fh.write("%s\t%s\t%s\t%s\t%s\t%s\n" % (nm1, mate1, qual, nm2, mate2, qual))
 
 """
 Randomly gets the first set of transcript isoforms from the same transcript that exhibit alternative splicing
