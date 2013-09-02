@@ -160,8 +160,8 @@ def printShortExon(display_st,display_end,xscript,site,fnh):
     seqid = xscript.seqid
     left_in_start, left_in_end = display_st, short_exon.st0 - 1    #Left intron
     right_in_start, right_in_end = short_exon.en0, display_end     #Right intron
-    display_exon_st = short_exon.st0-display_st
-    display_exon_end = short_exon.en0-display_st
+    display_exon_st = 0
+    display_exon_end = short_exon.en0-short_exon.st0
     assert left_in_start+1<left_in_end+1, "st:%s end:%s"%(left_in_start+1,left_in_end+1)
     assert right_in_start+1<right_in_end+1, "st:%s end:%s"%(right_in_start+1,right_in_end+1)
     left_in_seq = fnh.fetch_sequence(seqid,left_in_start+1,left_in_end+1)
@@ -170,13 +170,54 @@ def printShortExon(display_st,display_end,xscript,site,fnh):
     i1Len,eLen,i2Len = len(left_in_seq), len(exon_seq), len(right_in_seq)
     display_i1_st, display_i2_st = 0, right_in_start-display_st
     eLen = len(exon_seq)
+    iLen = len(left_in_seq)
     site_st  = site[0] - display_st
+    entire_seq = fnh.fetch_sequence(seqid,display_st+1,display_end+1)
     print "Region   ","%s:%d-%d"%(site[2],display_st,display_end)
     print "Site pos ","%s:%d-%d"%(site[2],site[0],site[1])
     print "Annotated","%s:%d-%d"%(site[2],site[0],site[1])
-    print "Exon    ",format_seq(" "*display_exon_st +exon_seq)
+    print "Exon    ",format_seq(" "*iLen +exon_seq)
     print "Intron  ",format_seq(left_in_seq+" "*eLen+right_in_seq)
     print "Site    ",format_seq(" "*site_st+"**")
+    print "Ref seq ",format_seq(entire_seq)
+    return
+
+def printShortIntron(seqid,display_st,display_end,exon_left,exon_right,site,fnh):
+    """
+    display_window                 (----------------------)
+    exons        <----------------------|         |-----------------...--->
+    intron                              |---------|
+    ref_start     <--------------------------------------------------...--->
+    """
+    # win_length = 2*win_radius
+    # display_st,display_end = site[0] - win_radius, site[0] + win_radius
+    in_start,in_end = exon_left.en0,exon_right.st0-1
+    left_exon_st = exon_left.en0-display_st
+    left_exonseq = exon_left.seq[-left_exon_st:]
+    right_exon_end = display_end-exon_right.st0+1
+    right_exonseq = exon_right.seq[:right_exon_end]
+    eLen = len(left_exonseq)
+
+    #Stay in reference coordinates for intron
+    display_intron_st = in_start-display_st
+    display_intron_end= in_end-display_st
+    assert display_intron_st+1<display_intron_end+1, "st:%s end:%s"(display_intron_st+1,display_intron_end+1)
+    intron_seq = fnh.fetch_sequence(seqid,in_start+1,in_end+1)
+    site_seq = intron_seq[0:2]
+    site_st = site[0] - display_st - 1
+
+    entire_seq = fnh.fetch_sequence(seqid,display_st+1,display_end+1)
+    iLen = len(intron_seq)
+    site_seq = intron_seq[-2:]
+    site_st  = site[0] - display_st
+
+    print "Region   ","%s:%d-%d"%(site[2],display_st,display_end)
+    print "Site pos ","%s:%d-%d"%(site[2],site[0],site[1])
+    print "Annotated","%s:%d-%d"%(site[2],site[0],site[1])
+    print "Exon    ",format_seq(left_exonseq+" "*iLen+right_exonseq)
+    print "Intron  ",format_seq(" "*eLen+intron_seq)
+    print "Site    ",format_seq(" "*site_st+"**")
+    print "Ref seq ",format_seq(entire_seq)
     return
 
 def coverageTrack(stsCnt,endsCnt,region_st,region_end):
@@ -223,7 +264,11 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,w
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
     exon_li, exon_ri = xscript.getExon(display_st), xscript.getExon(display_end)
     for flank in flanks:
-        if exon_li!=-1:
+        if exon_li!=-1 and exon_ri!=-1:
+            print "False positive ~ short intron"
+            exon_left,exon_right = xscript.exons[exon_li],xscript.exons[exon_ri]
+            printShortIntron(xscript.seqid,display_st,display_end,exon_left,exon_right,site,fnh)
+        elif exon_li!=-1:
             exon = xscript.exons[exon_li]
             site_str,site_seq = LeftSeq2str(xscript.seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh)
             if site_seq=="GT" or site_seq=="CT":
@@ -232,7 +277,7 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,w
                 print "False positive ~ non-canonical site"
             print site_str
             coverageTrack(cov_sts,cov_ends,display_st,display_end)
-        if exon_ri!=-1:
+        elif exon_ri!=-1:
             exon = xscript.exons[exon_ri]
             site_str,site_seq = RightSeq2str(xscript.seqid,flank,exon,site,annot_site,win_radius,display_st,display_end,fnh)
             if site_seq=="AG" or site_seq=="AC":
@@ -241,7 +286,8 @@ def falsePositiveDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,w
                 print "False positive ~ non-canonical site"
             print site_str
             coverageTrack(cov_sts,cov_ends,display_st,display_end)
-
+        else:
+            print "Unhandled scenario","Region: %s:%d-%d"%(xscript.seqid,display_st,display_end)
 """
 Prints the flanking sequences, the annotated region and the site
 """
@@ -264,39 +310,56 @@ def falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,w
     #Get indexes of displayed exons.  Note that one of them should be -1 unless one of the exons are really short
     display_st,display_end = site[0] - win_radius, site[0] + win_radius
     exon_li, exon_ri = xscript.getExon(display_st), xscript.getExon(display_end)
-    if exon_li==-1 and exon_ri==-1:  #most likely a really short exon
+    if exon_li!=-1 and exon_ri!=-1:
+            print "False negative ~ short intron"
+            exon_left,exon_right = xscript.exons[exon_li],xscript.exons[exon_ri]
+            printShortIntron(xscript.seqid,display_st,display_end,exon_left,exon_right,site,fnh)
+    elif exon_li==-1 and exon_ri==-1:  #most likely a really short exon
         print "False negative ~ short exon"
         printShortExon(display_st,display_end,xscript,site,fnh)
         coverageTrack(cov_sts,cov_ends,display_st,display_end)
         return
 
-    if len(flanks)==0:
-        if exon_li!=-1:
+    elif len(flanks)==0:
+        if exon_li!=-1 and exon_ri!=-1:
+            print "False negative ~ short intron"
+            exon_left,exon_right = xscript.exons[exon_li],xscript.exons[exon_ri]
+            printShortIntron(xscript.seqid,display_st,display_end,exon_left,exon_right,site,fnh)
+        elif exon_li!=-1:
             print "False negative ~ no flanking sequences"
             exon = xscript.exons[exon_li]
             site_str,_ = LeftSite2str(xscript.seqid,exon,site,site,win_radius,display_st,display_end,fnh)
             print site_str
             coverageTrack(cov_sts,cov_ends,display_st,display_end)
-        if exon_ri!=-1:
+        elif exon_ri!=-1:
             print "False negative ~ no flanking sequences"
             exon = xscript.exons[exon_ri]
             site_str,_ = RightSite2str(xscript.seqid,exon,site,site,win_radius,display_st,display_end,fnh)
             print site_str
             coverageTrack(cov_sts,cov_ends,display_st,display_end)
+        else:
+            print "Unhandled scenario","Region: %s:%d-%d"%(xscript.seqid,display_st,display_end)
+
     else:
         for flank in flanks:
-            if exon_li!=-1:
+            if exon_li!=-1 and exon_ri!=-1:
+                print "False negative ~ short intron"
+                exon_left,exon_right = xscript.exons[exon_li],xscript.exons[exon_ri]
+                printShortIntron(xscript.seqid,display_st,display_end,exon_left,exon_right,site,fnh)
+            elif exon_li!=-1:
                 print "False negative ~ misclassified"
                 exon = xscript.exons[exon_li]
                 site_str,_ = LeftSeq2str(xscript.seqid,flank,exon,site,site,win_radius,display_st,display_end,fnh)
                 print site_str
                 coverageTrack(cov_sts,cov_ends,display_st,display_end)
-            if exon_ri!=-1:
+            elif exon_ri!=-1:
                 print "False negative ~ misclassified"
                 exon = xscript.exons[exon_ri]
                 site_str,_ = RightSeq2str(xscript.seqid,flank,exon,site,site,win_radius,display_st,display_end,fnh)
                 print site_str
                 coverageTrack(cov_sts,cov_ends,display_st,display_end)
+            else:
+                print "Unhandled scenario","Region: %s:%d-%d"%(xscript.seqid,display_st,display_end)
 
 pattern = re.compile("(\S+):(\d+)-(\d+)") #parses chromosome name and positions
 
@@ -420,6 +483,7 @@ class TestDisplayFunctions(unittest.TestCase):
         win_radius = 50
         falseNegativeDisplay(flankDict,xscriptDict,site,annotDict,cov_sts,cov_ends,win_radius,fnh)
         print
+
     def testShortExon(self):
         site = (500,501,'chr2R',"NM_001042999")
         #exon bounds (503,648)
@@ -430,6 +494,18 @@ class TestDisplayFunctions(unittest.TestCase):
         fnh = fasta.fasta(self.fasta)
         xscript = xscripts[0]
         printShortExon(display_st,display_end,xscript,site,fnh)
+
+    def testShortIntron(self):
+        site = (500,501,'chr2R',"NM_001042999")
+        #exon bounds (503,648)
+        display_st,display_end = 420,520
+        annots = gtf.parseGTF([self.gtf])
+        fastadb = gtf.parseFASTA([self.fasta])
+        xscripts = gtf.assembleTranscripts(annots,fastadb)
+        fnh = fasta.fasta(self.fasta)
+        xscript = xscripts[0]
+        left_exon,right_exon = xscript.exons[0],xscript.exons[1]
+        printShortIntron(xscript.seqid,display_st,display_end,left_exon,right_exon,site,fnh)
 
     ###Note:  Need to test for the case where exon.st0 > display window.  aka, exon is way too short
 
