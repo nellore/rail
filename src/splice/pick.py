@@ -190,5 +190,46 @@ if __name__ == '__main__':
             self.assertEqual(10, st)
             # Even though 32 is nearby, 30 should win because it's just to the
             # left of the intronic interval end-point mean at 31
+        
+        def test9(self):
+            # GTs at offsets 10 and 20, AGs at offsets 30 and 40
+            fafn, _ = fasta.writeIndexedFasta(\
+                "ref1", "GGGGGGGGGGGTGGGGGGGGGCAAAAAAAAAGGGGG")
+            #                      ^10       ^20       ^30
+            fafh = fasta.fasta(fafn)
+            sel = SiteSelector(fafh, motifs.sa)
+            sts = [ 10, 20 ]
+            ens = [ 32, 32 ]
+            ssite = sel.handleCluster("ref1", sts, ens)
+            self.assertEqual(2, len(ssite))
+            pri, _, motif, st, en = ssite[0]
+            self.assertEqual(0, pri)
+            self.assertEqual((0, 'GT', 'AG'), motif)
+            self.assertEqual(10, st)
+            self.assertEqual(30, en)
+            pri, _, _, st, _ = ssite[1]
+            self.assertEqual(1, pri)
+            self.assertEqual(20, st)
+        
+        def test10(self):
+            # GTs at offsets 10 and 20, AGs at offsets 30 and 40
+            fafn, _ = fasta.writeIndexedFasta(\
+                "ref1", "GGGGGGGGGGGCGGGGGGGGATAAAAAAAAAGACCCCC")
+            #                      ^10       ^20       ^30
+            #                                            ^32
+            fafh = fasta.fasta(fafn)
+            sel = SiteSelector(fafh, motifs.sa)
+            sts = [ 10, 20 ]
+            ens = [ 32, 34 ]
+            ssite = sel.handleCluster("ref1", sts, ens)
+            self.assertEqual(2, len(ssite))
+            pri, _, motif, st, en = ssite[0]
+            self.assertEqual(1, pri)
+            self.assertEqual((1, 'GC', 'AG'), motif)
+            self.assertEqual(10, st)
+            self.assertEqual(30, en)
+            pri, _, _, st, _ = ssite[1]
+            self.assertEqual(2, pri)
+            self.assertEqual(20, st)
     
     unittest.main()

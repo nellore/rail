@@ -1,5 +1,5 @@
 URL_DIR=http://sammeth.net/artifactory/barna/barna/barna.simulator
-VER=1.2
+VER=1.2.1
 NORM_NM=flux-simulator
 NM=$(NORM_NM)-$(VER)
 PKG=$(NM).tgz
