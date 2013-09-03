@@ -1,0 +1,27 @@
+To use Flux Simulator, follow these steps:
+
+Before you do any runs:
+
+1. Run 'make', which downloads and extracts Flux
+
+If you want to do one or more runs w/r/t some iGenomes archive:
+
+2. Set the IGENOMES_DIR environment variable to point to the directory where
+   you've expanded the iGenomes archive.  I.e. IGENOMES_DIR directory should
+   have a subdirectory for every species you have an iGenomes archive for.
+
+3. Run 'sh igenomes_setup.sh' with appropriate arguments.  E.g. for the
+   iGenomes dm3 archive:
+   
+   sh igenomes_setup.sh Drosophila_melanogaster UCSC dm3
+
+If you want to customize how Flux Simulator runs:
+
+4. Edit parameters/sailfish.par or make a new .par file
+
+Finally:
+
+5. Run flux-simulator:
+   
+   ./flux-simulator/bin/flux-simulator -p parameters/sailfish.par
+   (or replace .par file with one you created)
