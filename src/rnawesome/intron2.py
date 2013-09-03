@@ -87,7 +87,7 @@ args = parser.parse_args()
 
 ninp, nout = 0, 0 # # lines input/output so far
 
-def go():
+def go(ifh, ofh, verbose=False, refseq=None):
 
     global ninp
     
@@ -96,7 +96,7 @@ def go():
     last_pt, last_refid = '\t', '\t'
     last_strand = None
     last_pt_st, last_pt_en = None, None
-    fnh = fasta.fasta(args.refseq)
+    fnh = fasta.fasta(refseq)
     binsz = partition.binSize(args)
     fudge = args.intron_partition_overlap
     mat = {}
@@ -121,7 +121,8 @@ def go():
         assert last_strand is not None
         assert last_pt != '\t'
         
-        print >> sys.stderr, "For partition %s:[%d, %d)" % (last_pt, last_pt_st, last_pt_en)
+        if verbose:
+            print >> sys.stderr, "For partition %s:[%d, %d)" % (last_pt, last_pt_st, last_pt_en)
         if len(mat) == 0: return
         
         # Step 1. Make a strip
@@ -131,11 +132,13 @@ def go():
         # Step 2. Cluster splice sites within strip
         clustering = cluster(strip, N=args.cluster_radius)
         nclustsPre = len(clustering)
-        print >> sys.stderr, "  %d possible splice junction clustered down to %d" % (nelts, nclustsPre)
+        if verbose:
+            print >> sys.stderr, "  %d possible splice junction clustered down to %d" % (nelts, nclustsPre)
         
         clustering.limitTo(last_pt_st, last_pt_en)
         nclustsPost = len(clustering)
-        print >> sys.stderr, "  %d after overlap removal" % (nclustsPost)
+        if verbose:
+            print >> sys.stderr, "  %d after overlap removal" % (nclustsPost)
         
         # Step 3. Build a bins object
         bins = binIntervals(clustering)
@@ -152,7 +155,7 @@ def go():
             else:
                 ssites = sel.handleCluster(last_refid, sts, ens)
             if len(ssites) == 0:
-                if args.verbose:
+                if verbose:
                     print >> sys.stderr, "Warning: A cluster with %d intronic chunks had no splice site" % len(introns)
                 continue
             _, _, motif, st, en = ssites[0] # just take highest-scoring
@@ -160,14 +163,14 @@ def go():
             if args.per_span:
                 for intron in introns:
                     _, _, l, rdid = intron
-                    print "span\t%s\t%s\t%012d\t%d\t%s\t%s\t%s" % (rdid, last_refid, st, en+2, motifl, motifr, l)
+                    ofh.write("span\t%s\t%s\t%012d\t%d\t%s\t%s\t%s\n" % (rdid, last_refid, st, en+2, motifl, motifr, l))
             if args.per_site:
                 d = defaultdict(int)
                 for l in lab: d[l] += 1
                 for l, c in d.iteritems():
-                    print "site\t%s\t%012d\t%d\t%s\t%s\t%s\t%d" % (last_refid, st, en+2, motifl, motifr, l, c)
+                    ofh.write("site\t%s\t%012d\t%d\t%s\t%s\t%s\t%d\n" % (last_refid, st, en+2, motifl, motifr, l, c))
     
-    for ln in sys.stdin:
+    for ln in ifh:
         # Parse next read
         toks = ln.rstrip().split('\t')
         assert len(toks) >= 7
@@ -203,4 +206,19 @@ def go():
     timeEn = time.time()
     print >>sys.stderr, "DONE with intron2.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
 
-go()
+if not args.test:
+    go(sys.stdin, sys.stdout, args.verbose, args.refseq)
+else:
+    del sys.argv[1:]
+    import unittest
+    from cStringIO import StringIO
+    
+    class TestIntronFunctions1(unittest.TestCase):
+        
+        def test1(self):
+            fafn, _ = fasta.writeIndexedFasta("ref1", "G" * 100 + "GT" + "T" * 96 + "AG")
+            inp = StringIO('\t'.join(['ref1;0', '100', '200', 'A', 'ACGT', 'TGCA', 'read1']))
+            out = StringIO()
+            go(inp, out, False, fafn)
+    
+    unittest.main()
