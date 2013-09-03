@@ -7,7 +7,7 @@ BEDSITES=$SIM_SPLICE/intermediate/splice_sites.bed
 TOPHAT_SITES=$SIM_SPLICE/tophat_out/tophat_sites.bed
 SITES=$SIM_SPLICE/fly.sites
 GENOME=../example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa
-FLANKS=$SIM_SPLICE/intermediate/flanks.tab
+FLANKS=$SIM_SPLICE/intermediate/flanks.bed
 COV=$SIM_SPLICE/fly.cov
 
 cat $SIM_SPLICE/intermediate/align_out.tsv | grep intron > $FLANKS   #really just the intron.py input
