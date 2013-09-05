@@ -1,0 +1,100 @@
+"""
+Generates the run_hadoop.sh header
+"""
+import sys
+import argparse
+import os
+import site
+
+parser = argparse.ArgumentParser(description=\
+                                     'Creates simulated data via flux simulator.')
+parser.add_argument(\
+    '--output-dir',type=str,required=True,help='Output directory of simulated reads'
+)
+parser.add_argument(\
+    '--flux-path',type=str,required=True,help='Number of simulated samples'
+)
+parser.add_argument(\
+    '--gtf-file',type=str,required=True,help='The fixed gtf file'
+)
+parser.add_argument(\
+    '--chromosomes',type=str,required=True,help='The chromosomes directory'
+)
+parser.add_argument(\
+    '--num-samples',type=int,required=True,help='Number of simulated samples'
+)
+parser.add_argument(\
+    '--num-reads',type=int,required=False,default=500000,help='Number of simulated reads'
+)
+parser.add_argument(\
+    '--num-molecules',type=int,required=False,default=500,help='Number of simulated molecules'
+)
+parser.add_argument(\
+    '--tss-mean',type=int,required=False,default=50,help='Average deviation from the annotated transcription start site (TSS)'
+)
+parser.add_argument(\
+    '--polya-scale',type=str,required=False,default='NaN',help='Scale of the Weibull distribution, shifts the average length of poly-A tail sizes'
+)
+parser.add_argument(\
+    '--polya-shape',type=str,required=False,default='NaN',help='Shape of the Weibull distribution describing poly-A tail sizes'
+)
+parser.add_argument(\
+    '--frag-ur-eta',type=int,required=False,default=350,help='Average expected framgent size after fragmentations, i.e., number of breaks per unit length (exhautiveness of fragmentation)'
+)
+parser.add_argument(\
+    '--frag-ur-d0',type=int,required=False,default=350,help='Minimum length of fragments produced by UR fragmentation'
+)
+parser.add_argument(\
+    '--rt-min',type=int,required=False,default=500,help='Minimum length observed after reverse transcription of full-length transcripts'
+)
+parser.add_argument(\
+    '--rt-max',type=int,required=False,default=5500,help='Maximum length observed after reverse transcription of full-length transcripts'
+)
+parser.add_argument(\
+    '--pcr-probability',type=float,required=False,default=0.05,help='Default PCR distribution with 15 rounds and 20 bins'
+)
+parser.add_argument(\
+    '--read-length',type=int,required=False,default=76,help='Length of reads'
+)
+parser.add_argument(\
+    '--err-file',type=int,required=False,default=76,help='Error file specifications'
+)
+args=parser.parse_args()
+
+def createParameterFile(par_name):
+    """Creates parameter file for flux simulator"""
+    par_out = open("%s/%s"%(args.output_dir,par_name),'w')
+    par_out.write("NB_MOLECULES\t%d\n"%args.num_molecules)
+    par_out.write("REF_FILE_NAME\t%s\n"%args.gtf_file)
+    par_out.write("GEN_DIR\t%s\n"%args.chromosomes)
+    par_out.write("LOAD_NONCODING\tNO\n")
+    par_out.write("TSS_MEAN\t%d\n"%args.tss_mean)
+    par_out.write("POLYA_SCALE\t%s\n"%args.polya_scale)
+    par_out.write("POLYA_SHAPE\t%s\n"%args.polya_shape)
+    par_out.write("FRAG_SUBSTRATE\tRNA\n")
+    par_out.write("FRAG_METHOD\tUR\n")
+    par_out.write("FRAG_UR_ETA\t%d\n"%args.frag_ur_eta)
+    par_out.write("FRAG_UR_D0\t%d\n"%args.frag_ur_d0)
+    par_out.write("RTRANSCRIPTION\tYES\n")
+    par_out.write("RT_PRIMER\tRH\n")
+    par_out.write("RT_LOSSLESS\tYES\n")
+    par_out.write("RT_MIN\t%d\n"%args.rt_min)
+    par_out.write("RT_MAX\t%d\n"%args.rt_max)
+    par_out.write("GC_MEAN\tNaN\n")
+    par_out.write("PCR_PROBABILITY\t%f\n"% args.pcr_probability)
+    par_out.write("FILTERING\tNO\n")
+    par_out.write("READ_NUMBER\t%d\n"%args.num_reads)
+    par_out.write("READ_LENGTH\t%d\n"%args.read_length)
+    par_out.write("PAIRED_END\tYES\n")
+    par_out.write("ERR_FILE\t%d\n"%args.err_file)
+    par_out.write("FASTA\tYES\n")
+    par_out.write("UNIQUE_IDS\tYES\n")
+
+    pass
+
+def runFlux():
+    """Runs Flux Simulator on a particular sample name"""
+
+if __name__=="__main__":
+    #sample_files = ["sample-%d"%i for i in range(0,args.num_samples)]
+    createParameterFile("fly.par")
