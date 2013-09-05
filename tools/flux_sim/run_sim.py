@@ -5,6 +5,7 @@ import sys
 import argparse
 import os
 import site
+import subprocess
 
 parser = argparse.ArgumentParser(description=\
                                      'Creates simulated data via flux simulator.')
@@ -42,7 +43,7 @@ parser.add_argument(\
     '--frag-ur-eta',type=int,required=False,default=350,help='Average expected framgent size after fragmentations, i.e., number of breaks per unit length (exhautiveness of fragmentation)'
 )
 parser.add_argument(\
-    '--frag-ur-d0',type=int,required=False,default=350,help='Minimum length of fragments produced by UR fragmentation'
+    '--frag-ur-d0',type=int,required=False,default=1,help='Minimum length of fragments produced by UR fragmentation'
 )
 parser.add_argument(\
     '--rt-min',type=int,required=False,default=500,help='Minimum length observed after reverse transcription of full-length transcripts'
@@ -89,12 +90,28 @@ def createParameterFile(par_name):
     par_out.write("ERR_FILE\t%d\n"%args.err_file)
     par_out.write("FASTA\tYES\n")
     par_out.write("UNIQUE_IDS\tYES\n")
-
-    pass
-
-def runFlux():
+    par_out.close()
+def runFlux(par_name):
     """Runs Flux Simulator on a particular sample name"""
+    flux_cmd="./%s/bin/flux-simulator -p %s/%s"%(args.flux_path,args.output_dir,par_name)
+    flux_proc = subprocess.Popen(flux_cmd,shell=True)
+    return flux_proc #return process for parallelism
 
+def wait(procs): #wait for processes to finish
+    for p in procs:
+        p.wait()
+
+def createManifest(manifest_name,samples):
+    manifest_out = open("%s/%s"%(args.output_dir,manifest_name),'w')
+    #TODO: Need to correct the manifest format below
+    for samp in samples:
+        manifest_out.write("%s\t0\t%s\n"%(samp,samp))
+    manifest_out.close()
 if __name__=="__main__":
-    #sample_files = ["sample-%d"%i for i in range(0,args.num_samples)]
-    createParameterFile("fly.par")
+    sample_files = ["fly-sample-%d"%i for i in range(0,args.num_samples)]
+    procs = []
+    for fn in sample_files:
+        createParameterFile(fn)
+        procs.append(runFlux(fn))
+    wait(procs)
+    createManifest("fly.manifest",sample_files)

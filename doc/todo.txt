@@ -12,3 +12,5 @@ Implementation TODOs:
 
 Validation TODOs:
 - Reasonable results from a simulation?
+- Simulator script to generate multiple samples and manifest file
+- Find a way to distinguish between false positives and false negatives on igv using the .lib file
