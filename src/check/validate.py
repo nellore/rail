@@ -34,16 +34,16 @@ import counter
 parser = argparse.ArgumentParser(description=\
                                      'Splice junction validator')
 parser.add_argument(\
-    '--xscripts-file', metavar='path', type=str, required=True,
+    '--xscripts-file', metavar='path', type=str, required=False, default="",
     help='Path of the transcripts pickle file')
 parser.add_argument(\
-    '--sites-file', metavar='path', type=str, required=True,
+    '--sites-file', metavar='path', type=str, required=False, default=""
     help='Path of the annotated splice sites pickle file')
 parser.add_argument(\
-    '--coverage-file', metavar='path', type=str, required=True,
+    '--coverage-file', metavar='path', type=str, required=False, default=""
     help='Path of the coverage pickle file')
 parser.add_argument(\
-    '--bed-file', metavar='path', type=str, required=True,
+    '--bed-file', metavar='path', type=str, required=False, default=""
     help='Path of the estimated splice sites bed file')
 parser.add_argument(\
     '--radius', type=int, required=False,default=10,
@@ -52,15 +52,22 @@ parser.add_argument(\
     '--window-radius', type=int, required=False,default=50,
     help='The radius of display window')
 parser.add_argument(\
-    '--refseq', type=str, required=True,
+    '--refseq', type=str, required=False, default=""
     help='The reference sequence')
 parser.add_argument(\
     '--region',type=str,required=False,default="",help='The coordinates of the sites to be displayed (e.g. chrX:1-100)')
 parser.add_argument(\
-    '--flank-seqs', type=str,required=True,help='The flanking sequences surrounding the intron')
+    '--flank-seqs', type=str,required=False, default="",help='The flanking sequences surrounding the intron')
 parser.add_argument(\
     '--profile', action='store_const', const=True, default=False,
     help='Profile simulation generation')
+parser.add_argument(\
+    '--flux', action='store_const', const=True, default=False,
+    help='Enable flux validation')
+parser.add_argument(\
+    '--lib-file', type=str, required=False, default=""
+    help='The library file containing all of the correct positions of the fragments')
+
 
 display.addArgs(parser)
 
@@ -225,6 +232,11 @@ def conformKey(annot_sites):
     return annot_sites_wk
 
 def go():
+    assert args.xscript_file!="","Need xscripts file"
+    assert args.sites_file!="","Need sites file"
+    assert args.coverage_file!="","Need coverage file"
+    assert args.bed_file!="","Need bed file"
+    assert args.flank_seqs!="","Need flank seqs file"
     #sites = readOverlappedSites(args.site_file)
     xscripts = pickle.load(open(args.xscripts_file,'rb'))
     sim_sites = pickle.load(open(args.sites_file,'rb')) #simulated sites
@@ -289,9 +301,24 @@ def go():
     print "False positives     \t",incorrect
     print "False negatives     \t",missed
 
+
+def go_flux():
+    #Step 1: Isolate all read in .lib file that span splice junctions.  These are the annotated splice junctions
+    
+    #Step 2: Compare detected splice junctions to annotated splice junctions
+
+    #Step 3: Output two files: false positive regions and false negative regions
+
+    
 if __name__=="__main__":
     if args.profile:
         import cProfile
-        cProfile.run('go()')
+        if args.flux:
+            cProfile.run('go_flux()')
+        else:
+            cProfile.run('go()')
     else:
-        go()
+        if args.flux:
+            go()
+        else:
+            go_flux()

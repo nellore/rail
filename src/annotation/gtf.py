@@ -165,6 +165,22 @@ class Transcript(object):
         return sites
 
     """
+    Returns all splice sites between a given exonic start and exonic end
+    e.g. start and end coordinates are in the xcript coordinates
+    """
+    def getOverlapSites(self,est,eend):
+        xsites = self.getXcriptSites()  #in transcript coordinates
+        site_pairs = self.getSitePairs()#in reference coordinates
+        ovr_sites = []
+        for i in range(0,len(site_pairs)):
+            left, right = xsites[2*i][0], xsites[2*i][1]
+            sp_left,sp_right = site_pairs[i]
+            if left>est and right<eend:
+                ovr_sites.append(sp_left)
+                ovr_sites.append(sp_right)
+        return ovr_sites
+
+    """
     Given a base position, find the exon that it overlaps, return -1 if nonexistant
     """
     def getExon(self,bpos):
@@ -346,7 +362,20 @@ class TestAnnotationFunctions1(unittest.TestCase):
         xscript = xscripts[0]
         self.assertEqual( xscript.exons[0].seq,exon1 )
         self.assertEqual( xscript.exons[1].seq,exon2 )
+    def test_overlap1(self):
+        annots = parseGTF([self.gtf])
+        fastadb = parseFASTA([self.fasta])
+        xscripts = assembleTranscripts(annots,fastadb)
+        print readableFormat(fastadb["chr2R"])
+        xscript = xscripts[0]
+        ovr_sites = xscript.getOverlapSites(5,15)
+        self.assertEqual(len(ovr_sites),2)
+        site1,site2 = ovr_sites
 
+        self.assertEqual(site1[0],20)
+        self.assertEqual(site1[1],21)
+        self.assertEqual(site2[0],48)
+        self.assertEqual(site2[1],49)
 
 class TestAnnotationFunctions2(unittest.TestCase):
 
@@ -371,7 +400,7 @@ class TestAnnotationFunctions2(unittest.TestCase):
         fastadb = parseFASTA([self.fasta])
         xscripts = assembleTranscripts(annots,fastadb)
         print readableFormat(fastadb["chr2R"])
-        exon1,exon2 = "CAAGGATGTC","CTGAAGCATA"
+        exon1,exon2 = "CAAGGATGTC","CTGAAGCACA"
         #print xscripts[0]
         xscript = xscripts[0]
         self.assertEqual( xscript.exons[0].seq,exon1 )
