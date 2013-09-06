@@ -97,6 +97,8 @@ def runFlux(par_name):
     flux_proc = subprocess.Popen(flux_cmd,shell=True)
     return flux_proc #return process for parallelism
 
+#TODO: Incorporate load balancing!!!
+#Cannot allocate more processes than cores available
 def wait(procs): #wait for processes to finish
     for p in procs:
         p.wait()
