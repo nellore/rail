@@ -173,7 +173,7 @@ class Transcript(object):
         site_pairs = self.getSitePairs()#in reference coordinates
         ovr_sites = []
         for i in range(0,len(site_pairs)):
-            left, right = xsites[2*i][0], xsites[2*i][1]
+            left, right = xsites[i][0], xsites[i][1]
             sp_left,sp_right = site_pairs[i]
             if left>est and right<eend:
                 ovr_sites.append(sp_left)
