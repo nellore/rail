@@ -15,6 +15,9 @@ SCR_DIR=$TORNADO/src/rnawesome
 #mkdir -p intermediate
 #INTERMEDIATE_DIR=intermediate/
 
+# Step 0: Format Fastq files into tab delimited format
+FASTQ2TAB="python $TORNADO/src/fasta/fastq2tab.py"
+
 # Step 1: Readletize input reads and use Bowtie to align the readlets 
 ALIGN_AGGR="cat"
 ALIGN="python $SCR_DIR/align.py"
@@ -100,7 +103,13 @@ HMM_IN_TMP=${TMPDIR}hmm_in.tsv
 echo "Temporary file for walk_fit.py input is '$WALK_IN_TMP'" 1>&2
 echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 
- cat $RNASEQ \
+for FASTQ in $RNASEQ
+do
+  FILE=`basename $FASTQ`  
+  cat $FASTQ | $FASTQ2TAB > $INPUT_DIR/$FILE.tab
+done
+
+cat $INPUT_DIR/*.tab \
  	| $ALIGN_AGGR | $ALIGN \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
@@ -109,7 +118,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 		--readletLen $READLET_LEN \
 		--readletIval $READLET_IVAL \
 		--refseq=$GENOME \
-		--faidx=$FASTA_IDX \
+ 		--faidx=$FASTA_IDX \
 		--splice-overlap=$SPLICE_OVERLAP \
 		--exon-differentials \
 		--exon-intervals \
@@ -128,7 +137,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
 		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}/norm.tsv
 
-cp $WALK_IN_TMP ${INTERMEDIATE_DIR}/walk_in_input.tsv
+#cp $WALK_IN_TMP ${INTERMEDIATE_DIR}/walk_in_input.tsv
 
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
 	| grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $INTRON \
