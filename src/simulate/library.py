@@ -31,6 +31,12 @@ class library(object):
         self.junctions = defaultdict( list )
         self.findAnnotatedJunctions(xscripts)
 
+    def getSites(self):
+        sites = []
+        for juncs in self.junctions.itervalues():#remove duplicates
+            sites+=juncs
+        return sites
+    
     def findAnnotatedJunctions(self,xscripts):
         """
         Finds all splice sites that are spanned by a library fragment
@@ -55,6 +61,7 @@ class library(object):
     (st,en,refid,'')
     """
     def find(self,refid,guess_site):
+        assert self.junctions[refid]>0
         return search.find_tuple(self.junctions[refid],guess_site)
 
 def createTestFasta(fname,refid,refseq):

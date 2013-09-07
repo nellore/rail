@@ -24,7 +24,7 @@ site.addsitedir(os.path.join(base_path, "struct"))
 site.addsitedir(os.path.join(base_path, "fasta"))
 site.addsitedir(os.path.join(base_path, "statsmath"))
 site.addsitedir(os.path.join(base_path, "util"))
-site.addsitedir(os.path.join(base_path, "simulation"))
+site.addsitedir(os.path.join(base_path, "simulate"))
 
 import gtf
 import search
@@ -37,7 +37,7 @@ import library
 parser = argparse.ArgumentParser(description=\
                                      'Splice junction validator')
 parser.add_argument(\
-    '--bed-file', metavar='path', type=str, required=False, default=""
+    '--bed-file', metavar='path', type=str, required=False, default="",
     help='Path of the estimated splice sites bed file')
 parser.add_argument(\
     '--radius', type=int, required=False,default=10,
@@ -46,16 +46,16 @@ parser.add_argument(\
     '--window-radius', type=int, required=False,default=50,
     help='The radius of display window')
 parser.add_argument(\
-    '--refseq', type=str, required=False, default=""
-    help='The reference sequence')
+    '--refseq', type=str, required=True, nargs='+', default="",
+    help='FASTA file(s) containing reference genome sequences')
 parser.add_argument(\
-    '--gtf', type=str, required=False, default=""
-    help='The annotated transcripts file')
+    '--gtf', metavar='path', type=str, nargs='+', required=False,
+    help='GTF file(s) containing gene annotations')
 parser.add_argument(\
-    '--lib-file', type=str, required=False, default=""
+    '--lib-file', type=str, required=False, default="",
     help='The library file containing all of the correct positions of the fragments')
 parser.add_argument(\
-    '--out-dir', type=str, required=False, default=""
+    '--out-dir', type=str, required=False, default="",
     help='The output directory of the false positive and false negative regions')
 parser.add_argument(\
     '--profile', action='store_const', const=True, default=False,
@@ -86,42 +86,57 @@ def readBedSites(bedfile):
         sites[k].sort(key=lambda tup:tup[0])
     return sites
 
+def writeBedSites(bedfile,sites):
+    handle = open(bedfile,'w')
+    for site in sites:
+        handle.write("%d\t%d\t1\n"%(site[0],site[1]))
+    handle.close()
+
 """
 Compares the simulated sites and the output from the pipeline
 """
-#TODO: Modify for flux simulator
-def compare(bed_sites,annot_sites,radius):
+def compare(bed_sites,lib):
     correct = 0
     nearby  = 0
     incorrect = 0
-    total_sites = unique_sites(annot_sites)
-    missed_sites = unique_sites(annot_sites) #false negatives
-    found_sites = set() #correct sites
-    false_sites = set() #false positives
-    total = len(missed_sites)
-    for k,v in bed_sites.iteritems():
-        for guess in v:
-            if len(annot_sites[k])==0:
-                continue
-            exact = search.find_tuple(annot_sites[k],guess)
+    missed_sites = set(lib.getSites()) #false negatives
+    found_sites  = set()               #correct sites
+    false_sites  = set()               #false positives
+    for refid,guesses in bed_sites.iteritems():
+        for guess in guesses:
+            exact = lib.find(refid,guess)
             if (guess[0],guess[1],guess[2]) == (exact[0],exact[1],exact[2]):
                 found_sites.add(exact)
                 missed_sites.discard(guess)
             else:
-                #NOTE: This contains both false positives and false negatives
                 false_sites.add(guess)
+                missed_sites.discard(guess)
 
-    return found_sites,close_sites,false_sites,missed_sites,total_sites
+    return found_sites,false_sites,missed_sites
 
 def go():
 
     #Step 1: Isolate all read in .lib file that span splice junctions.  These are the annotated splice junctions
     annots = gtf.parseGTF(args.gtf)
-    lib_frags = library.library(args.lib_file,annots)
+    fastadb  = gtf.parseFASTA(args.refseq)
+    xscripts = gtf.assembleTranscripts(annots,fastadb)
+    lib_frags = library.library(args.lib_file,xscripts)
     bed_sites = readBedSites(args.bed_file)
     #Step 2: Compare detected splice junctions to annotated splice junctions
-
-    #Step 3: Output two files: false positive regions and false negative regions
+    found_sites,false_sites,missed_sites = compare(bed_sites,lib_frags)
+    #Step 3: Sort sites
+    annot_sites = list(lib_frags.getSites())
+    found_sites = list(found_sites)
+    false_sites = list(false_sites)
+    missed_sites = list(missed_sites)
+    annot_sites.sort(key=lambda tup:tup[0])
+    found_sites.sort(key=lambda tup:tup[0])
+    false_sites.sort(key=lambda tup:tup[0])
+    missed_sites.sort(key=lambda tup:tup[0])
+    #Step 4: Output two files: false positive regions and false negative regions
+    writeBedSites("%s/false_positives.bed"%(args.out_dir),false_sites)
+    writeBedSites("%s/false_negatives.bed"%(args.out_dir),missed_sites)
+    writeBedSites("%s/annotated.bed"%(args.out_dir),annot_sites)
 
 
 if __name__=="__main__":
@@ -129,4 +144,4 @@ if __name__=="__main__":
         import cProfile
         cProfile.run('go()')
     else:
-        go_flux()
+        go()
