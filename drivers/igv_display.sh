@@ -1,16 +1,15 @@
-#First gather all of the tracks
-IGV_TRACKS=igv_tracks
-mkdir $IGV_TRACKS
 
-IGENOME=/media/91356d9c-b219-4f38-a6a3-ff802758da9c/home/morton/Documents/Bioinformatics/JHU/Drosophila_melanogaster/UCSC/dm3
-VALIDATE_OUT=/media/91356d9c-b219-4f38-a6a3-ff802758da9c/home/morton/Documents/Bioinformatics/JHU/tornado/tools/flux_sim/small_test/validation_output
+# IGENOME=/media/91356d9c-b219-4f38-a6a3-ff802758da9c/home/morton/Documents/Bioinformatics/JHU/Drosophila_melanogaster/UCSC/dm3
+# VALIDATE_OUT=/media/91356d9c-b219-4f38-a6a3-ff802758da9c/home/morton/Documents/Bioinformatics/JHU/tornado/tools/flux_sim/small_test/validation_output
+# IGV_HOME=/media/91356d9c-b219-4f38-a6a3-ff802758da9c/home/morton/Documents/Bioinformatics/JHU/tornado/tools/igv/IGV
+
+VALIDATE_OUT=$SIM_HOME/validation_output
 #False positives track
 FALSE_POSITIVES=$VALIDATE_OUT/false_positives
 FALSE_NEGATIVES=$VALIDATE_OUT/false_negatives
 ANNOTATED_SITES=$VALIDATE_OUT/annotated
 DETECTED_SITES=$VALIDATE_OUT/../intermediate/splice_sites
-GENES=$IGENOME/Annotation/Genes/genes.gtf
-IGV_HOME=/media/91356d9c-b219-4f38-a6a3-ff802758da9c/home/morton/Documents/Bioinformatics/JHU/tornado/tools/igv/IGV
+GENES=$IGENOMES_DIR/Annotation/Genes/genes.gtf
 
 #Sort and index all of the files
 igvtools sort $FALSE_POSITIVES.bed $FALSE_POSITIVES'_sort.bed'

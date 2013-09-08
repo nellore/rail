@@ -89,7 +89,7 @@ def readBedSites(bedfile):
 def writeBedSites(bedfile,sites):
     handle = open(bedfile,'w')
     for site in sites:
-        handle.write("%d\t%d\t1\n"%(site[0],site[1]))
+        handle.write("%s\t%d\t%d\t1\n"%(site[2],site[0],site[1]))
     handle.close()
 
 """
@@ -105,6 +105,7 @@ def compare(bed_sites,lib):
     for refid,guesses in bed_sites.iteritems():
         for guess in guesses:
             exact = lib.find(refid,guess)
+            #print "Exact",exact,"Guess",guess
             if (guess[0],guess[1],guess[2]) == (exact[0],exact[1],exact[2]):
                 found_sites.add(exact)
                 missed_sites.discard(guess)
@@ -137,8 +138,10 @@ def go():
     writeBedSites("%s/false_positives.bed"%(args.out_dir),false_sites)
     writeBedSites("%s/false_negatives.bed"%(args.out_dir),missed_sites)
     writeBedSites("%s/annotated.bed"%(args.out_dir),annot_sites)
-
-
+    print "Correct sites  ", len(found_sites)
+    print "False positives", len(false_sites)
+    print "False negatives", len(missed_sites)
+    
 if __name__=="__main__":
     if args.profile:
         import cProfile
