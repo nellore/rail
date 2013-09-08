@@ -126,7 +126,7 @@ cat $INPUT_DIR/*.tab \
 		--intron-partition-overlap=30 \
 		-- -v 2 -m 1 -p 10 \
 		| tee ${INTERMEDIATE_DIR}/align_out.tsv \
-	| grep '^exon_diff' | cut -f 2- | $NORMALIZE_PRE_AGGR | tee ${INTERMEDIATE_DIR}/pre_normalize_pre.tsv | $NORMALIZE_PRE \
+	| grep '^exon_diff' | cut -f 2- | $NORMALIZE_PRE_AGGR | tee $WALK_IN_TMP | $NORMALIZE_PRE \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
 	| $NORMALIZE_AGGR | tee ${INTERMEDIATE_DIR}/pre_normalize.tsv | $NORMALIZE \
@@ -137,7 +137,7 @@ cat $INPUT_DIR/*.tab \
 	| $NORMALIZE_POST_AGGR | $NORMALIZE_POST \
 		--manifest $MANIFEST_FN > ${INTERMEDIATE_DIR}/norm.tsv
 
-#cp $WALK_IN_TMP ${INTERMEDIATE_DIR}/walk_in_input.tsv
+cp $WALK_IN_TMP ${INTERMEDIATE_DIR}/walk_in_input.tsv
 
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
 	| grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $INTRON \
