@@ -9,7 +9,7 @@ FALSE_POSITIVES=$VALIDATE_OUT/false_positives
 FALSE_NEGATIVES=$VALIDATE_OUT/false_negatives
 ANNOTATED_SITES=$VALIDATE_OUT/annotated
 DETECTED_SITES=$VALIDATE_OUT/../intermediate/splice_sites
-GENES=$IGENOMES_DIR/Annotation/Genes/genes.gtf
+GENES=$IGENOMES_DIR/$SPECIES/$DB/$ASM/Annotation/Genes/genes.gtf
 
 #Sort and index all of the files
 igvtools sort $FALSE_POSITIVES.bed $FALSE_POSITIVES'_sort.bed'
@@ -28,4 +28,8 @@ echo "load $FALSE_NEGATIVES""_sort.bed">> batch.txt
 echo "load $ANNOTATED_SITES""_sort.bed">> batch.txt
 echo "load $DETECTED_SITES""_sort.bed">> batch.txt
 echo "load $GENES">> batch.txt
+
+echo "prefix=`dirname $(readlink $0 || echo $0)`">$IGV_HOME/igv.sh
+echo "exec java -Xmx2000m -Dproduction=true -Dapple.laf.useScreenMenuBar=true -Djava.net.preferIPv4Stack=true -jar "$IGV_HOME/$prefix"/igv.jar -b "$PWD/batch.txt" "$@" &">>$IGV_HOME/igv.sh
+
 sh $IGV_HOME/igv.sh
