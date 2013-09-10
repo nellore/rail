@@ -16,6 +16,7 @@ import math
 import pickle
 import bisect
 import copy
+import itertools
 from collections import Counter
 from collections import defaultdict
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -32,7 +33,6 @@ import fasta
 import window
 import display
 import counter
-import bed
 
 parser = argparse.ArgumentParser(description=\
                                      'Splice junction validator')
@@ -55,7 +55,7 @@ parser.add_argument(\
     '--lib-file', type=str, required=False, default="",
     help='The library file containing all of the correct positions of the fragments')
 parser.add_argument(\
-    '--actual-reads', type=str, required=False, default="",
+    '--actual-sites', type=str, required=False, default="",
     help='The bed file containing all of the correct positions of the reads')
 parser.add_argument(\
     '--out-dir', type=str, required=False, default="",
@@ -98,16 +98,19 @@ def writeBedSites(bedfile,sites):
 """
 Compares the simulated sites and the output from the pipeline
 """
-def compare(bed_sites,lib):
+def compare(bed_sites,annot_sites):
     correct = 0
     nearby  = 0
-    incorrect = 0
-    missed_sites = set(lib.getSites()) #false negatives
-    found_sites  = set()               #correct sites
-    false_sites  = set()               #false positives
+    incorrect = 0 
+    a = [v for v in annot_sites.itervalues()]
+    missed_sites = set(itertools.chain.from_iterable(a))    #false negatives
+    found_sites  = set()                                    #correct sites
+    false_sites  = set()                                    #false positives
     for refid,guesses in bed_sites.iteritems():
         for guess in guesses:
-            exact = lib.find(refid,guess)
+            if len(annot_sites[refid])==0:
+                continue
+            exact = search.find_tuple(annot_sites[refid],guess)
             #print "Exact",exact,"Guess",guess
             if (guess[0],guess[1],guess[2]) == (exact[0],exact[1],exact[2]):
                 found_sites.add(exact)
@@ -124,15 +127,15 @@ def go():
     annots = gtf.parseGTF(args.gtf)
     fastadb  = gtf.parseFASTA(args.refseq)
     xscripts = gtf.assembleTranscripts(annots,fastadb)
-    lib_frags = bed.bed(args.actual_reads,xscripts)
+    annot_sites = readBedSites(args.actual_sites)
     bed_sites = readBedSites(args.bed_file)
     #Step 2: Compare detected splice junctions to annotated splice junctions
-    found_sites,false_sites,missed_sites = compare(bed_sites,lib_frags)
+    found_sites,false_sites,missed_sites = compare(bed_sites,annot_sites)
     #Step 3: Sort sites
-    annot_sites = list(lib_frags.getSites())
     found_sites = list(found_sites)
     false_sites = list(false_sites)
     missed_sites = list(missed_sites)
+    annot_sites = list(set(itertools.chain.from_iterable([v for v in annot_sites.itervalues()])))
     annot_sites.sort(key=lambda tup:tup[0])
     found_sites.sort(key=lambda tup:tup[0])
     false_sites.sort(key=lambda tup:tup[0])
@@ -144,7 +147,7 @@ def go():
     print "Correct sites  ", len(found_sites)
     print "False positives", len(false_sites)
     print "False negatives", len(missed_sites)
-    
+
 if __name__=="__main__":
     if args.profile:
         import cProfile
