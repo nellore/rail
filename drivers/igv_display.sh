@@ -28,7 +28,7 @@ echo "load $FALSE_NEGATIVES""_sort.bed">> batch.txt
 echo "load $ANNOTATED_SITES""_sort.bed">> batch.txt
 echo "load $DETECTED_SITES""_sort.bed">> batch.txt
 echo "load $GENES">> batch.txt
-
+IGV_HOME=$TORNADO_HOME/tools/igv/IGV
 echo "prefix=`dirname $(readlink $0 || echo $0)`">$IGV_HOME/igv.sh
 echo "exec java -Xmx2000m -Dproduction=true -Dapple.laf.useScreenMenuBar=true -Djava.net.preferIPv4Stack=true -jar "$IGV_HOME/$prefix"/igv.jar -b "$PWD/batch.txt" "$@" &">>$IGV_HOME/igv.sh
 
