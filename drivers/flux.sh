@@ -7,11 +7,9 @@ python $TORNADO_HOME/src/simulate/flux.py \
     --chromosomes=$PWD/Chromosomes \
     --num-reads=1500 \
     --num-molecules=5000 \
-    --pcr-probability=1 \
-    --num-samples=2
+    --num-samples=1
     
 #appends the file name in front of every read name
-#ex: sh format_sim.sh small_test
 echo "Reformatting simuated data"
 for FASTQ in $SIM_HOME/*.fastq
 do
