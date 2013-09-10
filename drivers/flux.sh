@@ -16,5 +16,6 @@ for FASTQ in $SIM_HOME/*.fastq
 do
     name=`basename $FASTQ .fastq`
     echo $name
-    sed -i -e '1~4 s/\@/\@'$name'./' $FASTQ
+    #sed -i -e '1~4 s/\@/\@'$name'./' $FASTQ
+    python reformat.py --input $FASTQ --basename $name
 done
