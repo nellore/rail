@@ -106,6 +106,7 @@ echo "Temporary file for hmm.py input is '$HMM_IN_TMP'" 1>&2
 for FASTQ in $RNASEQ
 do
   FILE=`basename $FASTQ`  
+  INPUT_DIR=`dirname $FASTQ`
   cat $FASTQ | $FASTQ2TAB > $INPUT_DIR/$FILE.tab
 done
 
