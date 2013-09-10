@@ -7,8 +7,11 @@ TOPHAT_SITES=$SIM_HOME/tophat_out/tophat_sites.bed
 GENOME=$IGENOMES_DIR/$SPECIES/$DB/$ASM/Sequence/WholeGenomeFasta/genome.fa
 ANNOTATIONS=$IGENOMES_DIR/$SPECIES/$DB/$ASM/Annotation/Genes/genes.gtf
 echo $SIM_HOME/*.bed
-cat $SIM_HOME/*.bed > $SIM_HOME/fly.bed
-SIM_READS=$SIM_HOME/fly.bed
+UTIL=$TORNADO_HOME/src/util
+rm $SIM_HOME/fly.sites
+cat $SIM_HOME/*.bed | python $UTIL/junc2site.py | sort -k2,2 | sort -k1,1 > $SIM_HOME/fly.sites
+
+SIM_READS=$SIM_HOME/fly.sites
 VALIDATE_OUT=$SIM_HOME/validation_output
 mkdir $VALIDATE_OUT
 
@@ -21,6 +24,6 @@ python $CHECK/validate2.py \
         --refseq=$GENOME \
 	--bed-file=$BEDSITES \
         --gtf=$ANNOTATIONS \
-        --actual-reads=$SIM_READS \
+        --actual-sites=$SIM_READS \
         --out-dir=$VALIDATE_OUT \
 	$*

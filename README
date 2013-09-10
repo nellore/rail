@@ -27,7 +27,6 @@ Declare the following variables in .bashrc
 IGENOMES_DIR
 TORNADO_HOME
 FLUX_HOME
-IGV_HOME
 SIM_HOME
 SPECIES
 DB
