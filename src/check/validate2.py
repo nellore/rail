@@ -32,7 +32,7 @@ import fasta
 import window
 import display
 import counter
-import library
+import bed
 
 parser = argparse.ArgumentParser(description=\
                                      'Splice junction validator')
@@ -54,6 +54,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--lib-file', type=str, required=False, default="",
     help='The library file containing all of the correct positions of the fragments')
+parser.add_argument(\
+    '--actual-reads', type=str, required=False, default="",
+    help='The bed file containing all of the correct positions of the reads')
 parser.add_argument(\
     '--out-dir', type=str, required=False, default="",
     help='The output directory of the false positive and false negative regions')
@@ -117,11 +120,11 @@ def compare(bed_sites,lib):
 
 def go():
 
-    #Step 1: Isolate all read in .lib file that span splice junctions.  These are the annotated splice junctions
+    #Step 1: Isolate all read in .red file that span splice junctions.  These are the annotated splice junctions
     annots = gtf.parseGTF(args.gtf)
     fastadb  = gtf.parseFASTA(args.refseq)
     xscripts = gtf.assembleTranscripts(annots,fastadb)
-    lib_frags = library.library(args.lib_file,xscripts)
+    lib_frags = bed.bed(args.actual_reads,xscripts)
     bed_sites = readBedSites(args.bed_file)
     #Step 2: Compare detected splice junctions to annotated splice junctions
     found_sites,false_sites,missed_sites = compare(bed_sites,lib_frags)
