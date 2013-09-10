@@ -11,11 +11,9 @@ VERSION: $(NORM_NM)/bin/flux-simulator
 $(NORM_NM)/bin/flux-simulator: $(NORM_NM)
 	touch $@
 
-$(NORM_NM): $(NM)
-	mv $< $@
-
-$(NM): $(PKG)
+$(NORM_NM): $(PKG)
 	tar zxvf $<
+	mv $< $(NORM_NM)
 
 $(PKG):
 	wget $(URL)
