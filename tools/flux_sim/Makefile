@@ -13,7 +13,8 @@ $(NORM_NM)/bin/flux-simulator: $(NORM_NM)
 
 $(NORM_NM): $(PKG)
 	tar zxvf $<
-	mv $< $(NORM_NM)
+	mv $(NM) $(NORM_NM)
+	rm -f $<
 
 $(PKG):
 	wget $(URL)
