@@ -42,6 +42,8 @@ class FileMover(object):
             cmdl.append(url.toNonNativeUrl())
         elif url.isWgettable():
             raise RuntimeError("I don't know how to upload to http/ftp URLs")
+        elif url.isLocal():
+            cmdl = ['cp', fn, url.toUrl()]
         else:
             cmdl = ['hadoop', 'fs', '-put']
             cmdl.append(fn)
@@ -77,6 +79,8 @@ class FileMover(object):
             os.chdir(oldp)
             if extl > 0:
                 raise RuntimeError("Non-zero exitlevel %d from wget command '%s'" % (extl, cmd))
+        elif url.isLocal():
+            cmdl = ['cp', url.toUrl(), dest]
         else:
             cmdl = ["hadoop", "fs", "-get"]
             cmdl.append(url.toUrl())
