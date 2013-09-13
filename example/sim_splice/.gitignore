@@ -3,4 +3,6 @@ fly.genes*
 *.manifest
 *.sites
 *.xscripts
+*.cov
+*.variants
 intermediate
