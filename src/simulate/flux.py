@@ -1,14 +1,20 @@
 """
-Generates the run_hadoop.sh header
+flux.py
+
+Wrapper for flux simulator that generates the .par file automatically from
+various command-line options.  Also potentially handles many technical
+replicates in parallel.
 """
-import sys
+
 import argparse
-import os
-import site
 import subprocess
+from multiprocessing import Pool
 
 parser = argparse.ArgumentParser(description=\
                                      'Creates simulated data via flux simulator.')
+parser.add_argument(\
+    '--name', type=str, required=True, help='Name of the experiment.  All the flux files will have this as a prefix.'
+)
 parser.add_argument(\
     '--output-dir',type=str,required=True,help='Output directory of simulated reads'
 )
@@ -20,6 +26,9 @@ parser.add_argument(\
 )
 parser.add_argument(\
     '--chromosomes',type=str,required=True,help='The chromosomes directory'
+)
+parser.add_argument(\
+    '--num-processes', type=int, default=1, help='Number of flux-simulator processes are allowed to run at once'
 )
 parser.add_argument(\
     '--num-samples',type=int,required=True,help='Number of simulated samples'
@@ -63,7 +72,9 @@ parser.add_argument(\
 args=parser.parse_args()
 
 def createParameterFile(par_name):
-    """Creates parameter file for flux simulator"""
+    """ Creates parameter file for flux-simulator.  See:
+        http://sammeth.net/confluence/display/SIM/.PAR+Simulation+Parameters
+    """
     par_out = open("%s/%s"%(args.output_dir,par_name),'w')
     par_out.write("NB_MOLECULES\t%d\n"%args.num_molecules)
     par_out.write("REF_FILE_NAME\t%s\n"%args.gtf_file)
@@ -91,32 +102,29 @@ def createParameterFile(par_name):
     par_out.write("FASTA\tYES\n")
     par_out.write("UNIQUE_IDS\tYES\n")
     par_out.close()
+
 def runFlux(par_name):
-    """Runs Flux Simulator on a particular sample name"""
+    """ Runs Flux Simulator on a particular sample name """
     flux_cmd="%s/bin/flux-simulator -p %s/%s"%(args.flux_path,args.output_dir,par_name)
-    flux_proc = subprocess.Popen(flux_cmd,shell=True)
+    flux_proc = subprocess.Popen(flux_cmd, bufsize=-1, shell=True)
     return flux_proc #return process for parallelism
 
-#TODO: Incorporate load balancing!!!
-#Cannot allocate more processes than cores available
-def wait(procs): #wait for processes to finish
-    for p in procs:
-        p.wait()
-
 def createManifest(manifest_name,samples):
+    """ Create a flux-simulator parameters file """
     manifest_out = open("%s/%s"%(args.output_dir,manifest_name),'w')
     #TODO: Need to correct the manifest format below
     for samp in samples:
         manifest_out.write("%s\t0\t%s\n"%(samp,samp))
     manifest_out.close()
-if __name__=="__main__":
-    sample_files = ["fly-sample-%d"%i for i in range(0,args.num_samples)]
-    procs = []
-    for fn in sample_files:
-        createParameterFile(fn)
-        proc = runFlux(fn)
-        proc.wait()
-        #procs.append(runFlux(fn))
 
-    #wait(procs)
-    createManifest("fly.manifest",sample_files)
+def doTechRep(nm):
+    """ Run flux-simulator for a single technical replicate.  Argument is the
+        sample name. """
+    createParameterFile(nm + ".par")
+    exitlevel = runFlux(nm + ".par").wait()
+    if exitlevel != 0:
+        raise RuntimeError("Got exitlevel %d from a flux-simulator process" % exitlevel)
+
+if __name__=="__main__":
+    pool = Pool(args.num_processes)
+    pool.map(doTechRep, [ "%s-%d" % (args.name, i) for i in xrange(args.num_samples) ])
