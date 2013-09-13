@@ -19,4 +19,3 @@ for ln in sys.stdin:
         print "%s\t%d\t%d\t%d"%(seqid,left+1,left+2,depth)
         print "%s\t%d\t%d\t%d"%(seqid,right-2,right-1,depth)
         print "%s\t%d\t%d\t%d"%(seqid,right-1,right,depth)
-d
