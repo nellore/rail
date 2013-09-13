@@ -5,3 +5,7 @@ Chromosomes
 *.lib
 *.par
 *.manifest
+intermediate
+preprocessed_reads
+*.gtf
+chrom.sizes
