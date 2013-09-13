@@ -114,10 +114,10 @@ def compare(bed_sites,annot_sites):
             #print "Exact",exact,"Guess",guess
             if (guess[0],guess[1],guess[2]) == (exact[0],exact[1],exact[2]):
                 found_sites.add(exact)
-                missed_sites.discard(guess)
+                missed_sites.discard(exact)
             else:
                 false_sites.add(guess)
-                missed_sites.discard(guess)
+                missed_sites.discard(exact)
 
     return found_sites,false_sites,missed_sites
 
