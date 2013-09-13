@@ -81,7 +81,7 @@ inps = args.input
 output = args.output
 intermediate = args.intermediate
 if intermediate is None:
-    intermediate = output + ".map.pre"
+    intermediate = output + ".m.int"
 
 message('==========================')
 message('Step "%s" MAPPER' % args.name)
