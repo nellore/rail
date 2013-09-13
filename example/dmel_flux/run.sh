@@ -61,6 +61,7 @@ UTIL=$TORNADO_HOME/src/util
 SITE2BED="python $UTIL/site2bed2.py"
 EXONS2BED="python $UTIL/exons2bed.py"
 INTRONS2BED="python $UTIL/introns2bed.py"
+JUNCS2BED="python $UTIL/junc2site.py"
 
 SITE_AGGR1="grep '^site'"
 SITE_AGGR2="cut -f 2-"
@@ -165,20 +166,20 @@ cat ${INTERMEDIATE_DIR}/align_out.tsv \
 cat ${INTERMEDIATE_DIR}/intron_out.tsv \
     | grep '^site' | $SITE_AGGR2 | $SITE2BED > ${INTERMEDIATE_DIR}/splice_sites.bed
 
-cat ${INTERMEDIATE_DIR}/intron_out.tsv \
-    | grep '^cooccurence' | $CO_AGGR2 > ${INTERMEDIATE_DIR}/cooccurences.tab
+#cat ${INTERMEDIATE_DIR}/intron_out.tsv \
+#    | grep '^cooccurence' | $CO_AGGR2 > ${INTERMEDIATE_DIR}/cooccurences.tab
 
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
     | grep '^intron' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $INTRONS2BED > ${INTERMEDIATE_DIR}/flanks.bed
 
-cat ${INTERMEDIATE_DIR}/align_out.tsv \
-    | grep '^exon_ival' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $EXONS2BED > ${INTERMEDIATE_DIR}/exons.bed
+# cat ${INTERMEDIATE_DIR}/align_out.tsv \
+#     | grep '^exon_ival' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 | $EXONS2BED | $JUNCS2BED > ${INTERMEDIATE_DIR}/exons.bed
 
 cat ${INTERMEDIATE_DIR}/align_out.tsv \
-    | grep '^exon_ival' | cut -f 2- | sort -k1,3 > ${INTERMEDIATE_DIR}/exon_ivals.bed
+    | grep '^exon_ival' | cut -f 2- | sort -k1,3 | awk '{split($0,array,";")}{print array[1]"\t"$2"\t"$3"\t"$4}' > ${INTERMEDIATE_DIR}/exon.bed
 
-cat ${INTERMEDIATE_DIR}/align_out.tsv \
-    | grep '^exon' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 > ${INTERMEDIATE_DIR}/align_out_exons.tsv
+#cat ${INTERMEDIATE_DIR}/align_out.tsv \
+#    | grep '^exon' | $INTRON_AGGR2 | $INTRON_AGGR3 | $INTRON_AGGR4 > ${INTERMEDIATE_DIR}/align_out_exons.tsv
  
 # cat $WALK_IN_TMP \  
 # 	| tee ${INTERMEDIATE_DIR}/walk_fit_in.tsv | $WALK_FIT \
