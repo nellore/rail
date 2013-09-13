@@ -199,6 +199,8 @@ if __name__ == '__main__':
     parser.add_argument(\
         '--ignore-first-token', action='store_const', const=True, default=False, help='Throw away first token of input; useful in Hadoop streaming context')
     parser.add_argument(\
+        '--include-filename', action='store_const', const=True, default=False, help='Put filename in FN: name field')
+    parser.add_argument(\
         '--fasta', action='store_const', const=True, default=False, help='Force preprocessor to consider input to be FASTA')
     parser.add_argument(\
         '--keep', action='store_const', const=True, default=False, help='Keep input files that were downloaded; default is to delete them once preprocessed')
@@ -272,5 +274,5 @@ if __name__ == '__main__':
             # Come up with an output filename
             if outfn is None: outfn = hashize(fn1)
             handler = RecordHandler(outfn, push, mover, args.nucs_per_file, args.gzip_output, args.keep)
-            preprocess(handler, lab, fn1, fn2, inputFormat)
+            preprocess(handler, lab, fn1, fn2, inputFormat, includeFilename=args.include_filename)
             for fn in toDelete: os.remove(fn)
