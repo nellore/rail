@@ -212,7 +212,7 @@ def correctSplice(read,ref_left,ref_right,fw):
     #Once NW is applied, the right DP matrix must be transformed in the same coordinate frame as the left DP matrix
     rightDP = numpy.fliplr(rightDP)
     rightDP = numpy.flipud(rightDP)
-
+    
     total = leftDP+rightDP
     index = numpy.argmax(total)
     max_  = numpy.max(total)
@@ -252,43 +252,51 @@ def readableFormat(s):
 def formatList(s,l):
     return (" "*l).join( list( str(s) ) )
 
+
 # Print all listed introns to stdout and the flanking sequences
 def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdid,fw,outhandle):
     if abs(in_end-in_start) > args.max_intron_length:
+        if args.verbose or args.test: print >> sys.stderr,"Huge candidate intron filtered at %s:%d-%d"%(refid,in_start,in_end)
         return
-    
+
     global nout
     offset = args.splice_overlap
     fw_char = "+" if fw else "-"
     #Obtain coordinates for flanking coordinate frames
     left_st,left_end = region_st-offset,region_st
     right_st,right_end = region_end,region_end+offset
+    """
+    Scenario 1: Most common scenario
+    Read   |============================================|
+                                  /\
+    Genome |======================--=====================|
+    Flanks                   ^===^  ^===^  
+    
+    Scenario 2: Unmapped region                    
+                                   ^   ^ (Unmapped region)  
+    Read   |=======================-----======================|
+                                  /     \
+    Genome |======================-------=====================|
+    Flanks                   ^===^       ^===^  
+    
+    Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read                    
+                                  ^^   
+    Read   |=============================================|
+                                  /      \
+    Genome |======================-------=====================|
+    Flanks                      ^===^  ^===^
+    """
+    """This handles scenario 1 just fine. But what about scenario 2?"""
+    left_flank  = rdseq[left_st:left_end]   if fw else revcomp(rdseq[left_st:left_end])
+    right_flank = rdseq[right_st:right_end] if fw else revcomp(rdseq[right_st:right_end])  
 
-    flank1 = rdseq[left_st:left_end]
-    overlap1 = rdseq[left_end:left_end+offset]
-    overlap2 = rdseq[right_st-offset:right_st]
-    flank2 = rdseq[right_st:right_end]
-    if not fw:
-        left_overlap = revcomp(flank1)
-        left_flank = revcomp(overlap1)
-        right_overlap = revcomp(flank2)
-        right_flank = revcomp(overlap2)
-        rdseq = revcomp(rdseq)
-    else:
-        left_flank = flank1
-        left_overlap = overlap1
-        right_flank = flank2
-        right_overlap = overlap2
-    """Since there is a possibility that one of the sequences may be out of boundaries (e.g. mapping error),
-    the following checks to see if all of the sequences are valid"""
-    if ( len(left_flank) == len(right_flank) and
-         len(left_overlap) == len(right_overlap) and
-         len(left_flank) == len(left_overlap)):
-        for pt, _, _ in iter(partition.partitionStartOverlaps(refid, in_start, in_end, binsz, fudge=args.intron_partition_overlap)):
-            print >> outhandle, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, sample.parseLab(rdid),left_flank,left_overlap,rdid)
-            nout += 1
+    lab = sample.parseLab(rdid)
+    for pt, _, _ in iter(partition.partitionStartOverlaps(refid, in_start, in_end, binsz, fudge=args.intron_partition_overlap)):
+        print >> outhandle, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, lab,left_flank,right_flank,rdid)
+        nout += 1
 
-def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdid,fw,fnh,offset):
+def handleIntron(refid,in_start,in_end,rdseq,unmapped_st,unmapped_end,
+                 region_st,region_end,rdid,fw,fnh,offset):
     """
     in_start: reference offset for beginning of intron
     in_end: reference offset for end of intron
@@ -299,30 +307,30 @@ def handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,regi
     """
     assert unmapped_end >= region_end
     assert unmapped_st <= region_st
-    diff = unmapped_end - unmapped_st - 1
-    # Obtain coordinates of flanking sequences surrounding splice site
-    left_st,right_end = in_start-offset+1,in_end+offset
-    left_end,right_st = left_st+diff,right_end-diff
-    # Print directly to stdout if flanking sequences overlap too much
-    if left_end<=left_st or right_end<=right_st:
-        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdid,fw,sys.stdout)
-    else:
-        ref_left = fnh.fetch_sequence(k,left_st, left_end).upper()
-        ref_right = fnh.fetch_sequence(k,right_st, right_end).upper()
-        if not fw:
-            readseq = revcomp(rdseq)
-            unmapped = revcomp(rdseq[unmapped_st:unmapped_end])
-        else:
-            readseq = rdseq
-            unmapped = rdseq[unmapped_st:unmapped_end]
+    ulen = unmapped_end - unmapped_st - 1 #length of the unmapped region
+    # Obtain reference genome coordinates of flanking sequences surrounding splice site
+    left_st,  right_end = in_start-offset+1,   in_end+offset
+    left_end, right_st  = left_st+ulen,        right_end-ulen
 
-        _, dj,score,leftDP,rightDP,total = correctSplice(unmapped,ref_left,ref_right,fw)
-        left_diff,right_diff = dj, len(unmapped)-dj
-        left_in_diff,right_in_diff = left_diff-offset,right_diff-offset
+    
+    #Scenario 3: obtain estimate for new flanking sequence coordinates and plug them into correctSplice
+    if left_end<=left_st or right_end<=right_st: 
+        if args.verbose or args.test: print >> sys.stderr,"Overlapping Flanking sequence scenario"
+        printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdid,fw,sys.stdout)
+        
+    else:
+        ref_left = fnh.fetch_sequence(refid,left_st, left_end).upper()
+        ref_right = fnh.fetch_sequence(refid,right_st, right_end).upper()
+        unmapped = rdseq[unmapped_st:unmapped_end] if fw else revcomp(rdseq[unmapped_st:unmapped_end])
+        
+        _, diffpos, score, leftDP, rightDP, total = correctSplice(unmapped,ref_left,ref_right,fw)
+        left_diff,    right_diff    = diffpos,          len(unmapped)-diffpos
+        left_in_diff, right_in_diff = left_diff-offset, right_diff-offset
         if score>0:   #If crappy alignment, disregard corrections
-            region_st,region_end = unmapped_st+left_diff,unmapped_end-right_diff
-            in_start,in_end = in_start+left_in_diff,in_end-right_in_diff
-        printIntrons(k,rdseq,region_st,region_end,in_start,in_end,rdid,fw,sys.stdout)
+            if args.verbose or args.test: print >> sys.stderr,"Bad Needleman-Wunsch realignment"
+            region_st,  region_end = unmapped_st+left_diff,  unmapped_end-right_diff
+            in_start,   in_end     = in_start+left_in_diff,  in_end-right_in_diff
+        printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdid,fw,sys.stdout)
 
 
 """
@@ -355,8 +363,6 @@ def getIntervals(rdals):
         ivals[(refid, fw)].add(interval.Interval(refoff0, refoff0 + seqlen))
     return ivals, positions
 
-test_id = set(["r_n1688","r_n2805","r_n4526","r_n4833","r_n2020","r_n3512","r_n4446","r_n279","r_n1828","r_n5035","r_n1848","r_n2403","r_n3163","r_n3944","r_n4211"])
-test_exons = open("test_exons.txt",'w')
 
 def composeReadletAlignments(rdid, rdals, rdseq):
     global nout
@@ -379,7 +385,7 @@ def composeReadletAlignments(rdid, rdals, rdseq):
                 offset = args.splice_overlap
                 unmapped_st,unmapped_end = region_st-offset,region_end+offset
                 reflen,rdlet_len = in_end-in_start, abs(region_end-region_st)
-                
+
                 assert in_start < in_end
                 if abs(reflen-rdlet_len)/float(rdlet_len+1) < 0.05:
                     #Note: just a readlet missing due to sequencing error or variant
@@ -422,7 +428,7 @@ def bowtieOutReadlets(st, reportMult=1.2):
             toks = string.split(rdid, ';')
             # Make sure mate id is part of the read name for now, so we don't
             # accidentally investigate the gap between the mates as though it's
-            # a spliced alignment 
+            # a spliced alignment
             rdid = ';'.join(toks[:-3])
             cnt[rdid] = cnt.get(rdid, 0) + 1
             rd_name, rlet_nm, rdseq = toks[0], toks[3], toks[5]
@@ -508,8 +514,7 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1), seq1, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        if args.verbose:
-                            print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
                 rlets2 = readlet.readletize(args, nm2 + ';2', seq2, qual2)
                 for i in xrange(0, len(rlets2)):
@@ -517,15 +522,13 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2), seq2, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        if args.verbose:
-                            print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
                 if ninp >= report:
                     report *= reportMult
-                    if args.verbose:
-                        print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
+                    if args.verbose: print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
         else:
             # Unpaired
@@ -540,22 +543,20 @@ def writeReads(fhs, reportMult=1.2):
                     rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
-                        if args.verbose:
-                            print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                        if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
                     for fh in fhs: fh.write(rdletStr)
             else:
                 rdStr = "%s\t%s\t%s\n" % (nm, seq, qual)
                 if ninp >= report:
                     report *= reportMult
-                    if args.verbose:
-                        print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
+                    if args.verbose: print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
 
 def go():
-    
+
     import time
     timeSt = time.time()
-    
+
     archiveFh, archiveDir = None, None
     if args.archive is not None:
         archiveDir = os.path.join(args.archive, str(os.getpid()))
@@ -608,13 +609,13 @@ def go():
     sys.stdout.flush()
     if args.verbose:
         print >>sys.stderr, "Bowtie finished"
-    
+
     # Remove any temporary reads files created
     if args.serial and args.write_reads is None and not args.keep_reads:
         print >>sys.stderr, "Cleaning up temporary files"
         import shutil
         shutil.rmtree(tmpdir)
-    
+
     print >> sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, time.time()-timeSt)
 
 #Only used for testing
@@ -652,22 +653,28 @@ else:
     class TestAlignFunctions1(unittest.TestCase):
         def setUp(self):
             #A visual representation of the reference sequence and the read
-            """ACGAAGGACT GCTTGACATC GGCCACGATA AC                                                                                                                 AACCT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
+            """Read"""
+            """ACGAAGGACT GCTTGACATC GGCCACGATA ACAACCTTTT TTGCGCCAAT CTTAAGAGCC TTCT"""
+            #           ^10        ^20        ^30        ^40        ^50        ^60         ^150
+            """Genome"""
             """ACGAAGGACT GCTTGACATC GGCCACGATA ACCTGAGTCG ATAGGACGAA ACAAGTATAT ATTCGAAAAT TAATTAATTC CGAAATTTCA ATTTCATCCG ACATGTATCT ACATATGCCA CACTTCTGGT TGGACAACCT TTTTTGCGCC A"""
+            """ACGAAGGACT GCTTGACATC GGCCACGATA AC                                                                                                                 AACCT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
+            #           ^10        ^20        ^30        ^40        ^50        ^60        ^70        ^80        ^90        ^100       ^110       ^120       ^130       ^140       ^150
             self.rdseq  = "ACGAAGGACTGCTTGACATCGGCCACGATAACAACCTTTTTTGCGCCAATCTTAAGAGCCTTCT"
             self.refseq = "ACGAAGGACTGCTTGACATCGGCCACGATAACCTGAGTCGATAGGACGAAACAAGTATATATTCGAAAATTAATTAATTCCGAAATTTCAATTTCATCCGACATGTATCTACATATGCCACACTTCTGGTTGGACAACCTTTTTTGCGCCA"
-
+            self.testDump = "test.out"
             self.fasta = "test.fa"
             self.faidx = "test.fa.fai"
             createTestFasta(self.fasta,"test",self.refseq)
-
+            open(self.testDump,'w') #Just to initialize file
         def tearDown(self):
             os.remove(self.fasta)
             os.remove(self.faidx)
-
+            os.remove(self.testDump)
+            
         def test_short_alignment1(self):
 
-            sys.stdout = open("test.out",'w')
+            sys.stdout = open(self.testDump,'w')
             rdid,fw,refid = "0;LB:test",True,"test"
             #mapped reads:
             #ref st,end = (0,33),(135,166)
@@ -677,20 +684,16 @@ else:
             region_st,region_end=32,33
             in_start,in_end=31,132
             offset = 5
-            rdid = "testid"
             unmapped_st,unmapped_end = region_st-offset,region_end+offset
-            printIntrons(refid,self.rdseq,region_st,region_end,31,132,rdid,fw,rdid,sys.stdout)
-            handleIntron(refid,in_start,in_end,self.rdseq,unmapped_st,unmapped_end,region_st,region_end,rdid,fw,fnh,offset,"testid")
+            printIntrons(refid,self.rdseq,region_st,region_end,in_start,in_end,rdid,fw,sys.stdout)
+            handleIntron(refid,in_start,in_end,self.rdseq,unmapped_st,unmapped_end,region_st,region_end,rdid,fw,fnh,offset)
             sys.stdout.close()
-            test_out = open("test.out",'r')
+            test_out = open(self.testDump,'r')
             line = test_out.readline().rstrip()
             testline = test_out.readline().rstrip()
-            print >> sys.stderr, readableFormat(self.rdseq)
-            print >> sys.stderr, line,'\n',testline
+            # print >> sys.stderr, readableFormat(self.rdseq)
+            # print >> sys.stderr, line,'\n',testline
             self.assertEquals(line,testline)
-
-
-
 
         def test_correct_splice1(self):
             left = "TTACGAAGGTTTGTA"
@@ -744,29 +747,76 @@ else:
             win_left = numpy.matrix([0]+windowTransform(left,left_site,cost)+[0])
             win_right = numpy.matrix([0]+[0]+windowTransform(right,right_site,cost))
 
-            print >> sys.stderr,"Before window transform"
-            print >> sys.stderr,"read ",read
-            print >> sys.stderr,"left ",left
-            print >> sys.stderr,"right",right
-            print >> sys.stderr,"leftDP\n",leftDP
-            print >> sys.stderr,"rightDP\n",rightDP
+            # print >> sys.stderr,"Before window transform"
+            # print >> sys.stderr,"read ",read
+            # print >> sys.stderr,"left ",left
+            # print >> sys.stderr,"right",right
+            # print >> sys.stderr,"leftDP\n",leftDP
+            # print >> sys.stderr,"rightDP\n",rightDP
 
             leftDP = leftDP+win_left
             rightDP = rightDP+win_right
             total = leftDP+rightDP
             win_right[0,16] = -10
             win_left[0,16] = -10
-            print >> sys.stderr,"After window transform"
-            print >> sys.stderr,"read\n   ",formatList(read,3)
-            print >> sys.stderr,"left\n   ",formatList(left,3)
-            print >> sys.stderr,win_left
-            print >> sys.stderr,"leftDP\n",leftDP
-            print >> sys.stderr,"right\n   ",formatList(right,3)
-            print >> sys.stderr,win_right
-            print >> sys.stderr,"rightDP\n",rightDP
-            print >> sys.stderr,"read\n   ",formatList(read,3)
-            print >> sys.stderr,"total\n",total
-
+            # print >> sys.stderr,"After window transform"
+            # print >> sys.stderr,"read\n   ",formatList(read,3)
+            # print >> sys.stderr,"left\n   ",formatList(left,3)
+            # print >> sys.stderr,win_left
+            # print >> sys.stderr,"leftDP\n",leftDP
+            # print >> sys.stderr,"right\n   ",formatList(right,3)
+            # print >> sys.stderr,win_right
+            # print >> sys.stderr,"rightDP\n",rightDP
+            # print >> sys.stderr,"read\n   ",formatList(read,3)
+            # print >> sys.stderr,"total\n",total
+        """
+        Scenario 1: Most common scenario
+        Read   |============================================|
+                                      /\
+        Genome |======================--=====================|
+        Flanks                   ^===^  ^===^  
+        """
+        def testScenario1(self):
+            sys.stdout = open(self.testDump,'w')
+            rdid,fw,refid = "0;LB:test",True,"test"
+            iSt,iEnd = 32,145 #intron coords
+            uSt,uEnd = 27,38  #unmapped coords
+            rSt,rEnd = 32,33  #region coords
+            offset = 5
+            fnh = fasta.fasta(self.fasta)
+            handleIntron(refid,iSt,iEnd,self.rdseq,uSt,uEnd,
+                         rSt,rEnd,rdid,fw,fnh,offset)
+            sys.stdout.close()
+            test_out = open(self.testDump,'r')
+            testLine = test_out.readline().rstrip()
+            toks = testLine.split("\t")
+            st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+            self.assertEquals(st,32)
+            self.assertEquals(end,145)
+            self.assertEquals(leftFlank,"CCACGATAAC")
+            self.assertEquals(rightFlank,"AACCTTTTTT")
+            pass
+        """
+        Scenario 2: Unmapped region                    
+                                       ^   ^ (Unmapped region)  
+        Read   |=======================-----======================|
+                                      /     \
+        Genome |======================-------=====================|
+        Flanks                   ^===^       ^===^  
+        """       
+        def testScenario2(self):
+            pass
+        """
+            Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read                    
+                                      ^^   
+        Read   |=============================================|
+                                      /      \
+        Genome |======================-------=====================|
+        Flanks                      ^===^  ^===^
+        """
+        def testScenario3(self):
+            pass
+        
 
     unittest.main()
 
