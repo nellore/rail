@@ -32,13 +32,13 @@ parser.add_argument(\
 parser.add_argument(\
     '--num-tasks', metavar='INT', type=int, required=True, help='Divide input into this many tasks.')
 parser.add_argument(\
-    '--bin-fields', metavar='INT', type=int, required=True, help='# fields to bin by.')
+    '--bin-fields', metavar='INT', type=int, help='# fields to bin by.')
 parser.add_argument(\
-    '--sort-fields', metavar='INT', type=int, required=True, help='# fields to sort by.')
+    '--sort-fields', metavar='INT', type=int, help='# fields to sort by.')
 parser.add_argument(\
     '--external-sort', action='store_const', const=True, default=False, help='Use external program to sort tuples.')
 parser.add_argument(\
-    '--sort-size', metavar='INT', type=int, required=True, help='Memory cap on sorts.')
+    '--sort-size', metavar='INT', type=int, default=1024 * 300, help='Memory cap on sorts.')
 parser.add_argument(\
     '--messages', metavar='PATH', type=str, help='File to store stderr messages to')
 parser.add_argument(\
@@ -72,6 +72,7 @@ for i in xrange(1, len(sys.argv)):
         in_args = True
 
 args = parser.parse_args(argv[1:])
+assert args.num_tasks > 0
 
 msgfhs = [ sys.stderr ]
 
@@ -106,7 +107,11 @@ message('Intermediate: "%s"' % intermediate)
 num_processes = args.num_processes or multiprocessing.cpu_count()
 message('# parallel processes: %d' % num_processes)
 message('Retries=%d, delay=%d seconds' % (args.num_retries, args.delay))
-message('Bin fields=%d, sort fields=%d' % (args.bin_fields, args.sort_fields))
+message('# tasks=%d' % (args.num_tasks))
+if args.num_tasks == 1:
+    message('No binning and sorting')
+else:
+    message('Bin fields=%d, sort fields=%d' % (args.bin_fields, args.sort_fields))
 message('Max sort memory footprint=%d' % (args.sort_size))
 
 options = []
@@ -124,7 +129,7 @@ def checkDir(d, lev):
             shutil.rmtree(d)
         else:
             mydie('Output directory "%s" already exists' % d, lev)
-    os.mkdir(d)
+    os.makedirs(d)
     if not os.path.exists(d) and os.path.isdir(d):
         mydie('Could not create new directory "%s"' % d, lev + 5)
 
@@ -158,6 +163,24 @@ def openex(fn):
     if fn.endswith('.gz'): return gzip.GzipFile(fn, 'r')
     elif fn.endswith('.bz2'): return bz2.BZ2File(fn, 'r')
     else: return open(fn, 'r')
+
+def fileizeInput(inps):
+    """ If any inputs are directories, replace the directory with all the
+        files within. """
+    newinps = []
+    for inp in inps:
+        if os.path.isdir(inp):
+            for fn in os.listdir(inp):
+                fn = os.path.join(inp, fn)
+                if os.path.isfile(fn):
+                    newinps.append(fn)
+        else:
+            newinps.append(inp)
+    return newinps
+
+assert len(inps) > 0
+inps = fileizeInput(inps)
+assert len(inps) > 0
 
 failQ = multiprocessing.Queue()
 
@@ -238,27 +261,30 @@ for fh in ofhs.itervalues():
 # Stage 2. Sort and reduce each task
 ########################################
 
-def doSort(task, external=True, keep=args.keep_all):
-    assert external # only know how to use external sort for now
-    inputFn, sortedFn = os.path.join(taskDir, task), os.path.join(staskDir, task)
-    sortErrFn = os.path.join(sortErrDir, task)
-    cmd = 'sort -S %d -k1,%d %s >%s 2>%s' % (args.sort_size, args.sort_fields, inputFn, sortedFn, sortErrFn)
-    el = os.system(cmd)
-    if el != 0:
-        msg = 'Sort command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
-        failQ.put((msg, inputFn, sortErrFn, cmd))
-    elif not keep:
-        os.remove(inputFn)
-        os.remove(sortErrFn)
-
-sortPool = multiprocessing.Pool(num_processes)
-sortPool.map(doSort, taskNames)
-checkFailQueue()
+needSort = args.num_tasks > 1 or args.sort_fields > args.bin_fields
+if needSort:
+    def doSort(task, external=True, keep=args.keep_all):
+        assert external # only know how to use external sort for now
+        inputFn, sortedFn = os.path.join(taskDir, task), os.path.join(staskDir, task)
+        sortErrFn = os.path.join(sortErrDir, task)
+        cmd = 'sort -S %d -k1,%d %s >%s 2>%s' % (args.sort_size, args.sort_fields, inputFn, sortedFn, sortErrFn)
+        el = os.system(cmd)
+        if el != 0:
+            msg = 'Sort command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
+            failQ.put((msg, inputFn, sortErrFn, cmd))
+        elif not keep:
+            os.remove(inputFn)
+            os.remove(sortErrFn)
+    
+    sortPool = multiprocessing.Pool(num_processes)
+    sortPool.map(doSort, taskNames)
+    checkFailQueue()
 
 reduceCmd = ' '.join(reduceArgv)
+reduceInpDir = staskDir if needSort else taskDir
 
 def doReduce(task, keep=args.keep_all):
-    sortedFn = os.path.join(staskDir, task)
+    sortedFn = os.path.join(reduceInpDir, task)
     sortedFn = os.path.abspath(sortedFn)
     if not os.path.exists(sortedFn):
         raise RuntimeError('No such sorted task: "%s"' % sortedFn)

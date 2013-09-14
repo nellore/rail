@@ -15,7 +15,9 @@ import time
 import subprocess
 import gzip
 import bz2
+import string
 import multiprocessing
+from collections import defaultdict
 
 parser = argparse.ArgumentParser(description=\
     'Simple wrapper that mimics some of Hadoop\'s behavior during the Map step of a MapReduce computation.')
@@ -52,13 +54,13 @@ parser.add_argument(\
     '--verbose', action='store_const', const=True, default=False, help='Prints out extra debugging statements')
 
 # Collect the bowtie arguments first
-argv = sys.argv
+argv = sys.argv[:]
 mapargv = []
 in_args = False
 for i in xrange(1, len(sys.argv)):
     if in_args:
         mapargv.append(sys.argv[i])
-    if sys.argv[i] == '--':
+    elif sys.argv[i] == '--':
         argv = sys.argv[:i]
         in_args = True
 
@@ -78,6 +80,9 @@ def mydie(msg, lev):
 if args.messages: msgfhs.append(open(args.messages, 'w'))
 
 inps = args.input
+for inp in inps:
+    if not os.path.exists(inp):
+        raise RuntimeError("--input doesn't exist: \"%s\"" % inp)
 output = args.output
 intermediate = args.intermediate
 if intermediate is None:
@@ -92,6 +97,7 @@ for inp in args.input: message('  "%s"' % inp)
 message('Output: "%s"' % output)
 message('Intermediate: "%s"' % intermediate)
 num_processes = args.num_processes or multiprocessing.cpu_count()
+assert num_processes > 0
 message('# parallel processes: %d' % num_processes)
 message('Retries=%d, delay=%d seconds' % (args.num_retries, args.delay))
 
@@ -111,7 +117,7 @@ def checkDir(d, lev):
             shutil.rmtree(d)
         else:
             mydie('Output directory "%s" already exists' % d, lev)
-    os.mkdir(d)
+    os.makedirs(d)
     if not os.path.exists(d) and os.path.isdir(d):
         mydie('Could not create new directory "%s"' % d, lev + 5)
 
@@ -137,6 +143,24 @@ def openex(fn):
     elif fn.endswith('.bz2'): return bz2.BZ2File(fn, 'r')
     else: return open(fn, 'r')
 
+def fileizeInput(inps):
+    """ If any inputs are directories, replace the directory with all the
+        files within. """
+    newinps = []
+    for inp in inps:
+        if os.path.isdir(inp):
+            for fn in os.listdir(inp):
+                fn = os.path.join(inp, fn)
+                if os.path.isfile(fn):
+                    newinps.append(fn)
+        else:
+            newinps.append(inp)
+    return newinps
+
+assert len(inps) > 0
+inps = fileizeInput(inps)
+assert len(inps) > 0
+
 # If input is line-by-line, read lines into lineinp list
 lineinp = []
 for inp in map(os.path.abspath, inps):
@@ -153,19 +177,38 @@ for inp in map(os.path.abspath, inps):
                 lineinp.append(ln)
 
 def mkdirQuiet(d, lev):
-    try: os.mkdir(d)
+    try: os.makedirs(d)
     except OSError: pass
     if not os.path.exists(d) and os.path.isdir(d):
         mydie('Could not create directory "%s"' % d, lev)
 
 failQ = multiprocessing.Queue()
+
+def checkFailQueue():
+    if not failQ.empty():
+        while not failQ.empty():
+            err, inp, errfn, cmd = failQ.get()
+            message('******')
+            message('* ' + err)
+            message('* Command was:')
+            message('*   ' + cmd)
+            message('* Input file/string was:')
+            message('*   ' + inp)
+            message('* Error message is in file:')
+            message('*   ' + errfn)
+            # TODO: echo error message from error file
+            message('******')
+        message('FAILED')
+        sys.exit(1)
+
 cmd = ' '.join(mapargv)
 taskn = len(inps)
 
-def worker(tup):
-    """ Worker task """
+def doMapper(tup):
+    """ Run a single mapper task """
     inp, taski = tup
-    if not failQ.empty(): return 'Canceled'
+    if not failQ.empty():
+        return None
     message('Pid %d processing input "%s" [%d of %d]' % (os.getpid(), inp, taski, taskn))
     ofn = "map-%05d" % taski
     mkdirQuiet(output, 700)
@@ -192,11 +235,13 @@ def worker(tup):
             pipe.stdin.write(inp + '\n')
             pipe.stdin.close()
             ret = pipe.wait()
-            if ret == 0: return 'Succeeded'
+            if ret == 0:
+                return outFullFn
             message('Non-zero return (%d) after closing pipe "%s"' % pipe)
         else:
             ret = os.system(fullcmd)
-            if ret == 0: return 'Succeeded'
+            if ret == 0:
+                return outFullFn
             message('Non-zero return (%d) after executing "%s"' % fullcmd)
         message('Retrying in %d seconds...' % args.delay)
         time.sleep(args.delay)
@@ -204,7 +249,7 @@ def worker(tup):
     failQ.put([\
         "Mapper %d of %d (pid %d) failed the maximum # of times %d" % (taski, taskn, os.getpid(), args.num_retries+1),
         inp, errFullFn, fullcmd])
-    return 'Failed'
+    return outFullFn
 
 num_processes = min(num_processes, len(inps))
 message('Starting %d processes with command: "%s"' % (num_processes, cmd))
@@ -216,27 +261,65 @@ for inp in map(os.path.abspath, inps):
     taski += 1
 
 pool = multiprocessing.Pool(num_processes)
-pool.map(worker, tasks)
+outfns = pool.map(doMapper, tasks)
+checkFailQueue()
 
-if not failQ.empty():
-    while not failQ.empty():
-        err, inp, errfn, cmd = failQ.get()
-        message('******\n')
-        message('* ' +err + '\n')
-        message('* Command was:\n')
-        message('*   ' + cmd + '\n')
-        message('* Input file/string was:\n')
-        message('*   ' + inp + '\n')
-        message('* Error message is in file:\n')
-        message('*   ' + errfn + '\n')
-        # TODO: echo error message from error file
-        message('******\n')
-    message('FAILED\n')
-    sys.exit(1)
-
-#msg("-- Map counters --");
-#Wrap::getAndPrintLocalCounters($errDir, \&msg);
-#Wrap::getAndPrintLocalCounters($errDir, \&cnt) if defined($cntfh);
+if args.multiple_outputs:
+    
+    def doSplit(tup, keep=args.keep_all):
+        task, outFn = tup
+        splitDir = os.path.join(output, '_'.join([task, 'split']))
+        checkDir(splitDir, 900)
+        kToFh, kToFn = {}, {}
+        with openex(outFn) as fh:
+            for ln in fh:
+                ln = ln.rstrip()
+                if len(ln) == 0: continue
+                toks = string.split(ln, '\t')
+                if toks[0] not in kToFh:
+                    fn = os.path.join(splitDir, '_'.join([toks[0], task]))
+                    kToFn[toks[0]] = fn
+                    kToFh[toks[0]] = open(fn, 'w')
+                kToFh[toks[0]].write('\t'.join(toks[1:]))
+                kToFh[toks[0]].write('\n')
+        for ofh in kToFh.itervalues():
+            ofh.close()
+        if not keep:
+            os.remove(outFn)
+        return kToFn
+    
+    splitTups = []
+    i = 0
+    for outfn in outfns:
+        splitTups.append(('task-%05d' % i, outfn))
+        i += 1
+    splitPool = multiprocessing.Pool(num_processes)
+    kToFns = splitPool.map(doSplit, splitTups)
+    checkFailQueue()
+    kToFnList = defaultdict(list)
+    for kToFn in kToFns:
+        for k, v in kToFn.iteritems():
+            kToFnList[k].append(v)
+    
+    # Now join them back up
+    for k, vl in kToFnList.iteritems():
+        kOutDir = os.path.join(output, k)
+        checkDir(kOutDir, 900)
+        for v in vl:
+            fn = os.path.basename(v)
+            shutil.copyfile(v, os.path.join(kOutDir, fn))
+            if not args.keep_all:
+                os.remove(v)
+    
+    # Remove all the split directories
+    if not args.keep_all:
+        removedAlready = set()
+        for k, vl in kToFnList.iteritems():
+            for v in vl:
+                vdir = os.path.dirname(v)
+                if vdir not in removedAlready:
+                    shutil.rmtree(vdir)
+                    removedAlready.add(vdir)
 
 if not args.keep_all:
     message('Removing intermediate directory "%s"\n' % intermediate)
