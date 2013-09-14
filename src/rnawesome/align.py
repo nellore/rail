@@ -290,16 +290,17 @@ def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdi
 
     ref_left = fnh.fetch_sequence(refid,leftSt+1, leftEnd).upper()
     ref_right = fnh.fetch_sequence(refid,rightSt+1, rightEnd).upper()
-    unmapped = rdseq[regionSt:regionEnd] if fw else revcomp(rdseq[unmapped_st:unmapped_end])
+
+    unmapped = rdseq[regionSt:regionEnd] if fw else revcomp(rdseq[regionSt:regionEnd])
     _, diffpos, score, leftDP, rightDP, total = correctSplice(unmapped,ref_left,ref_right,fw)
     left_diff, right_diff  = diffpos, len(unmapped)-diffpos
-    if score<uLen and (args.verbose or args.test): print >> sys.stderr,"Bad Needleman-Wunsch realignment"
+    if score<uLen and (args.verbose or args.test): print >> sys.stderr,"Bad Needleman-Wunsch realignment with %s = %s + %s found intron %s:%d-%d and read region %s-%s\n"%(unmapped,ref_left,ref_right,refid,intronSt,intronEnd,regionSt,regionEnd)
     regionSt,  regionEnd = regionSt+left_diff-1,  regionEnd-right_diff
     intronSt,   intronEnd     = intronSt+left_diff,  intronEnd-right_diff
 
     printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,sys.stdout)
 
-def handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset):
+def handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset):
     """Remaps unmapped portions of the original read between mapped readlets"""
     """
     Left Flank                    ===|=
@@ -308,21 +309,20 @@ def handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,region_st,region_end,
     Ref           |=============------------------==========|
     Mapped Flanks            ====                ====
     """
-    assert region_st>region_end
-    regLen = region_st-region_end
-    region_st,region_end = region_end,region_st
-    intronSt, intronEnd = intronSt-regLen, intronEnd+regLen #readjust intron boundaries
-    handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset)
+    assert regionSt>regionEnd
+    regLen = regionSt-regionEnd
+    regionSt,regionEnd = regionEnd,regionSt
+    intronSt, intronEnd = intronSt-regLen, intronEnd+regLen #read just intron boundaries
+    handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
 
-def handleIntron(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset):
+def handleIntron(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset):
     """
     intronSt: reference offset for beginning of intron
     intronEnd: reference offset for end of intron
-    region_st: offset from 5' end of read of LHS of splice
-    region_end: offset from 5' end of read of RHS of splice
+    regionSt: offset from 5' end of read of LHS of splice
+    regionEnd: offset from 5' end of read of RHS of splice
     """
-
-    if region_st==region_end:
+    if regionSt==regionEnd:
         """
         Scenario 1: The perfect scenario - the flanking sequences already have a good estimate
         Read   |============================================|
@@ -330,18 +330,18 @@ def handleIntron(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh
         Genome |======================--=====================|
         Flanks                   ^===^  ^===^
         """
-        printIntrons(refid,rdseq,region_st,region_end,intronSt,intronEnd,rdid,fw,sys.stdout)
+        printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,sys.stdout)
         return
-    elif region_st<region_end:
+    elif regionSt<regionEnd:
         """
-        Scenario 2: Unmapped region: Need Needleman-Wunsch to remap unmapped portions
+        Scenario 2: Unmapped region - Need Needleman-Wunsch to remap unmapped portions
                                        ^   ^ (Unmapped region)
         Read   |=======================-----======================|
                                       /     \
         Genome |======================-------=====================|
         Flanks                   ^===^       ^===^
         """
-        handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset)
+        handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
     else:
         """
         Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read
@@ -351,35 +351,7 @@ def handleIntron(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh
         Genome |======================-------=====================|
         Flanks                      ^===^  ^===^
         """
-        handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset)
-
-    # ulen = unmapped_end - unmapped_st - 1 #length of the unmapped region
-    # # Obtain reference genome coordinates of flanking sequences surrounding splice site
-    # #TODO: Something funky is going on with this calculation
-    # leftSt,  rightEnd = intronSt-offset+1,   intronEnd+offset
-    # leftEnd, rightSt  = leftSt+ulen,        rightEnd-ulen
-
-    #Scenario 3:
-    # if leftEnd<=leftSt or rightEnd<=rightSt:
-    #     if args.verbose or args.test: print >> sys.stderr,"Overlapping Flanking sequence scenario"
-    #     printIntrons(refid,rdseq,region_st,region_end,intronSt,intronEnd,rdid,fw,sys.stdout)
-
-    # else:
-    # ref_left = fnh.fetch_sequence(refid,leftSt, leftEnd).upper()
-    # ref_right = fnh.fetch_sequence(refid,rightSt, rightEnd).upper()
-
-    # unmapped = rdseq[unmapped_st:unmapped_end] if fw else revcomp(rdseq[unmapped_st:unmapped_end])
-
-    # _, diffpos, score, leftDP, rightDP, total = correctSplice(unmapped,ref_left,ref_right,fw)
-    # left_diff,    right_diff    = diffpos,          len(unmapped)-diffpos
-    # left_in_diff, right_in_diff = left_diff-offset, right_diff-offset
-    # if score>0:   #If crappy alignment, disregard corrections
-    #     if args.verbose or args.test: print >> sys.stderr,"Bad Needleman-Wunsch realignment"
-    #     region_st,  region_end = unmapped_st+left_diff,  unmapped_end-right_diff
-    #     intronSt,   intronEnd     = intronSt+left_in_diff,  intronEnd-right_in_diff
-
-    #printIntrons(refid,rdseq,region_st,region_end,intronSt,intronEnd,rdid,fw,sys.stdout)
-
+        handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
 
 """
 Compares potential short intron with readlet to check if it should be an exon instead
