@@ -139,6 +139,10 @@ with open(chromSizes, 'r') as fh:
 
 assert os.path.exists(chromSizes)
 
+if outUrl.isLocal():
+    try: os.makedirs(outUrl.toUrl())
+    except: pass
+
 def bedToBigBed(ifn, ofn, chromSizes):
     """ Run bedToBigBed on input file ifn, specifying chromSizes as file with
         reference lengths, and store output BigBed in ofn """
