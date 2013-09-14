@@ -238,7 +238,7 @@ for fh in ofhs.itervalues():
 # Stage 2. Sort and reduce each task
 ########################################
 
-def doSort(task, external=True, keep=False):
+def doSort(task, external=True, keep=args.keep_all):
     assert external # only know how to use external sort for now
     inputFn, sortedFn = os.path.join(taskDir, task), os.path.join(staskDir, task)
     sortErrFn = os.path.join(sortErrDir, task)
@@ -257,7 +257,7 @@ checkFailQueue()
 
 reduceCmd = ' '.join(reduceArgv)
 
-def doReduce(task, keep=False):
+def doReduce(task, keep=args.keep_all):
     sortedFn = os.path.join(staskDir, task)
     sortedFn = os.path.abspath(sortedFn)
     if not os.path.exists(sortedFn):
@@ -276,10 +276,63 @@ def doReduce(task, keep=False):
         os.remove(sortedFn)
         os.remove(errFn)
         shutil.rmtree(wd)
+    return outFn
 
 reducePool = multiprocessing.Pool(num_processes)
-reducePool.map(doReduce, taskNames)
+outfns = reducePool.map(doReduce, taskNames)
 checkFailQueue()
+
+if args.multiple_outputs:
+    
+    def doSplit(task, keep=args.keep_all):
+        outFn = os.path.join(output, task)
+        splitDir = os.path.join(output, '_'.join([task, 'split']))
+        checkDir(splitDir, 900)
+        kToFh, kToFn = {}, {}
+        with openex(outFn) as fh:
+            for ln in fh:
+                ln = ln.rstrip()
+                if len(ln) == 0: continue
+                toks = string.split(ln, '\t')
+                if toks[0] not in kToFh:
+                    fn = os.path.join(splitDir, '_'.join([toks[0], task]))
+                    kToFn[toks[0]] = fn
+                    kToFh[toks[0]] = open(fn, 'w')
+                kToFh[toks[0]].write('\t'.join(toks[1:]))
+                kToFh[toks[0]].write('\n')
+        for ofh in kToFh.itervalues():
+            ofh.close()
+        if not keep:
+            os.remove(outFn)
+        return kToFn
+    
+    splitPool = multiprocessing.Pool(num_processes)
+    kToFns = splitPool.map(doSplit, taskNames)
+    checkFailQueue()
+    kToFnList = defaultdict(list)
+    for kToFn in kToFns:
+        for k, v in kToFn.iteritems():
+            kToFnList[k].append(v)
+    
+    # Now join them back up
+    for k, vl in kToFnList.iteritems():
+        kOutDir = os.path.join(output, k)
+        checkDir(kOutDir, 900)
+        for v in vl:
+            fn = os.path.basename(v)
+            shutil.copyfile(v, os.path.join(kOutDir, fn))
+            if not args.keep_all:
+                os.remove(v)
+    
+    # Remove all the split directories
+    if not args.keep_all:
+        removedAlready = set()
+        for k, vl in kToFnList.iteritems():
+            for v in vl:
+                vdir = os.path.dirname(v)
+                if vdir not in removedAlready:
+                    shutil.rmtree(vdir)
+                    removedAlready.add(vdir)
 
 if not args.keep_all:
     message('Removing intermediate directory "%s"\n' % intermediate)
