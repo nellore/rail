@@ -103,7 +103,7 @@ parser.add_argument(\
     help='The fasta sequence of the reference genome. The fasta index of the '
          'reference genome is also required to be built via samtools')
 parser.add_argument(\
-    '--splice-overlap', type=int, default=5,
+    '--splice-overlap', type=int, default=10,
     help='The overlap length of spanning readlets when evaluating splice junctions')
 parser.add_argument(\
     '--faidx', type=str, required=False, help='Fasta index file')
@@ -212,7 +212,7 @@ def correctSplice(read,ref_left,ref_right,fw):
     #Once NW is applied, the right DP matrix must be transformed in the same coordinate frame as the left DP matrix
     rightDP = numpy.fliplr(rightDP)
     rightDP = numpy.flipud(rightDP)
-    
+
     total = leftDP+rightDP
     index = numpy.argmax(total)
     max_  = numpy.max(total)
@@ -254,83 +254,131 @@ def formatList(s,l):
 
 
 # Print all listed introns to stdout and the flanking sequences
-def printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdid,fw,outhandle):
-    if abs(in_end-in_start) > args.max_intron_length:
-        if args.verbose or args.test: print >> sys.stderr,"Huge candidate intron filtered at %s:%d-%d"%(refid,in_start,in_end)
+def printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,outhandle):
+    if abs(intronEnd-intronSt) > args.max_intron_length:
+        if args.verbose or args.test: print >> sys.stderr,"Huge candidate intron filtered at %s:%d-%d"%(refid,intronSt,intronEnd)
         return
 
     global nout
     offset = args.splice_overlap
     fw_char = "+" if fw else "-"
     #Obtain coordinates for flanking coordinate frames
-    left_st,left_end = region_st-offset,region_st
-    right_st,right_end = region_end,region_end+offset
-    """
-    Scenario 1: Most common scenario
-    Read   |============================================|
-                                  /\
-    Genome |======================--=====================|
-    Flanks                   ^===^  ^===^  
-    
-    Scenario 2: Unmapped region                    
-                                   ^   ^ (Unmapped region)  
-    Read   |=======================-----======================|
-                                  /     \
-    Genome |======================-------=====================|
-    Flanks                   ^===^       ^===^  
-    
-    Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read                    
-                                  ^^   
-    Read   |=============================================|
-                                  /      \
-    Genome |======================-------=====================|
-    Flanks                      ^===^  ^===^
-    """
-    """This handles scenario 1 just fine. But what about scenario 2?"""
+    left_st,left_end = regionSt-offset,regionSt
+    right_st,right_end = regionEnd,regionEnd+offset
     left_flank  = rdseq[left_st:left_end]   if fw else revcomp(rdseq[left_st:left_end])
-    right_flank = rdseq[right_st:right_end] if fw else revcomp(rdseq[right_st:right_end])  
-
+    right_flank = rdseq[right_st:right_end] if fw else revcomp(rdseq[right_st:right_end])
+    assert len(left_flank)==len(right_flank),"Bad flanks %s %s found in %s:%d-%d"%(left_flank,right_flank,refid,intronSt,intronEnd)
     lab = sample.parseLab(rdid)
-    for pt, _, _ in iter(partition.partitionStartOverlaps(refid, in_start, in_end, binsz, fudge=args.intron_partition_overlap)):
-        print >> outhandle, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, in_start, in_end, lab,left_flank,right_flank,rdid)
+    for pt, _, _ in iter(partition.partitionStartOverlaps(refid, intronSt, intronEnd, binsz, fudge=args.intron_partition_overlap)):
+        print >> outhandle, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, intronSt, intronEnd, lab,left_flank,right_flank,rdid)
         nout += 1
 
-def handleIntron(refid,in_start,in_end,rdseq,unmapped_st,unmapped_end,
-                 region_st,region_end,rdid,fw,fnh,offset):
+def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset):
+    """Remaps unmapped portions of the original read between mapped readlets"""
     """
-    in_start: reference offset for beginning of intron
-    in_end: reference offset for end of intron
-    unmapped_st: region_st minus some radius
-    unmapped_end: region_en plus some radius
+    Flanks                      ====    ====
+    Read          |=================----====================|
+    Ref           |=============------------------==========|
+    Mapped Flanks           ====----          ----====
+    """
+    assert region_st<region_end
+    uLen = region_end-region_st #unmapped portion
+    print >> sys.stderr,"uLen",uLen
+    leftSt,  leftEnd  = intronSt, intronSt+uLen
+    rightSt, rightEnd = intronEnd-uLen, intronEnd
+
+    ref_left = fnh.fetch_sequence(refid,leftSt+1, leftEnd).upper()
+    ref_right = fnh.fetch_sequence(refid,rightSt+1, rightEnd).upper()
+
+    unmapped = rdseq[region_st:region_end] if fw else revcomp(rdseq[unmapped_st:unmapped_end])
+    _, diffpos, score, leftDP, rightDP, total = correctSplice(unmapped,ref_left,ref_right,fw)
+    left_diff, right_diff    = diffpos, len(unmapped)-diffpos
+    if score<uLen and (args.verbose or args.test): print >> sys.stderr,"Bad Needleman-Wunsch realignment"
+    region_st,  region_end = region_st+left_diff,  region_end-right_diff
+    intronSt,   intronEnd     = intronSt+left_diff,  intronEnd-right_diff
+
+    printIntrons(refid,rdseq,region_st,region_end,intronSt,intronEnd,rdid,fw,sys.stdout)
+
+def handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset):
+    """Remaps unmapped portions of the original read between mapped readlets"""
+    """
+    Left Flank                    ===|=
+    Right Flank                     =|===
+    Read          |==================|===================|
+    Ref           |=============------------------==========|
+    Mapped Flanks            ====                ====
+    """
+    assert region_st>region_end
+    regLen = region_st-region_end
+    region_st,region_end = region_end,region_st
+    intronSt, intronEnd = intronSt-regLen, intronEnd+regLen
+    handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset)
+
+def handleIntron(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset):
+    """
+    intronSt: reference offset for beginning of intron
+    intronEnd: reference offset for end of intron
     region_st: offset from 5' end of read of LHS of splice
     region_end: offset from 5' end of read of RHS of splice
     """
-    assert unmapped_end >= region_end
-    assert unmapped_st <= region_st
-    ulen = unmapped_end - unmapped_st - 1 #length of the unmapped region
-    # Obtain reference genome coordinates of flanking sequences surrounding splice site
-    left_st,  right_end = in_start-offset+1,   in_end+offset
-    left_end, right_st  = left_st+ulen,        right_end-ulen
 
-    
-    #Scenario 3: obtain estimate for new flanking sequence coordinates and plug them into correctSplice
-    if left_end<=left_st or right_end<=right_st: 
-        if args.verbose or args.test: print >> sys.stderr,"Overlapping Flanking sequence scenario"
-        printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdid,fw,sys.stdout)
-        
+    if region_st==region_end:
+        """
+        Scenario 1: The perfect scenario - the flanking sequences already have a good estimate
+        Read   |============================================|
+                                      /\
+        Genome |======================--=====================|
+        Flanks                   ^===^  ^===^
+        """
+        printIntrons(refid,rdseq,region_st,region_end,intronSt,intronEnd,rdid,fw,sys.stdout)
+        return
+    elif region_st<region_end:
+        """
+        Scenario 2: Unmapped region: Need Needleman-Wunsch to remap unmapped portions
+                                       ^   ^ (Unmapped region)
+        Read   |=======================-----======================|
+                                      /     \
+        Genome |======================-------=====================|
+        Flanks                   ^===^       ^===^
+        """
+        handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset)
     else:
-        ref_left = fnh.fetch_sequence(refid,left_st, left_end).upper()
-        ref_right = fnh.fetch_sequence(refid,right_st, right_end).upper()
-        unmapped = rdseq[unmapped_st:unmapped_end] if fw else revcomp(rdseq[unmapped_st:unmapped_end])
-        
-        _, diffpos, score, leftDP, rightDP, total = correctSplice(unmapped,ref_left,ref_right,fw)
-        left_diff,    right_diff    = diffpos,          len(unmapped)-diffpos
-        left_in_diff, right_in_diff = left_diff-offset, right_diff-offset
-        if score>0:   #If crappy alignment, disregard corrections
-            if args.verbose or args.test: print >> sys.stderr,"Bad Needleman-Wunsch realignment"
-            region_st,  region_end = unmapped_st+left_diff,  unmapped_end-right_diff
-            in_start,   in_end     = in_start+left_in_diff,  in_end-right_in_diff
-        printIntrons(refid,rdseq,region_st,region_end,in_start,in_end,rdid,fw,sys.stdout)
+        """
+        Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read
+                                      ^^
+        Read   |=============================================|
+                                      /      \
+        Genome |======================-------=====================|
+        Flanks                      ^===^  ^===^
+        """
+        handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset)
+
+    # ulen = unmapped_end - unmapped_st - 1 #length of the unmapped region
+    # # Obtain reference genome coordinates of flanking sequences surrounding splice site
+    # #TODO: Something funky is going on with this calculation
+    # leftSt,  rightEnd = intronSt-offset+1,   intronEnd+offset
+    # leftEnd, rightSt  = leftSt+ulen,        rightEnd-ulen
+
+    #Scenario 3:
+    # if leftEnd<=leftSt or rightEnd<=rightSt:
+    #     if args.verbose or args.test: print >> sys.stderr,"Overlapping Flanking sequence scenario"
+    #     printIntrons(refid,rdseq,region_st,region_end,intronSt,intronEnd,rdid,fw,sys.stdout)
+
+    # else:
+    # ref_left = fnh.fetch_sequence(refid,leftSt, leftEnd).upper()
+    # ref_right = fnh.fetch_sequence(refid,rightSt, rightEnd).upper()
+
+    # unmapped = rdseq[unmapped_st:unmapped_end] if fw else revcomp(rdseq[unmapped_st:unmapped_end])
+
+    # _, diffpos, score, leftDP, rightDP, total = correctSplice(unmapped,ref_left,ref_right,fw)
+    # left_diff,    right_diff    = diffpos,          len(unmapped)-diffpos
+    # left_in_diff, right_in_diff = left_diff-offset, right_diff-offset
+    # if score>0:   #If crappy alignment, disregard corrections
+    #     if args.verbose or args.test: print >> sys.stderr,"Bad Needleman-Wunsch realignment"
+    #     region_st,  region_end = unmapped_st+left_diff,  unmapped_end-right_diff
+    #     intronSt,   intronEnd     = intronSt+left_in_diff,  intronEnd-right_in_diff
+
+    #printIntrons(refid,rdseq,region_st,region_end,intronSt,intronEnd,rdid,fw,sys.stdout)
 
 
 """
@@ -393,7 +441,7 @@ def composeReadletAlignments(rdid, rdals, rdseq):
                 elif rdlet_len>reflen:
                     printExons(k,in_start,in_end,rdid)
                 else:
-                    handleIntron(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdid,fw,fnh,offset)
+                    handleIntron(k,in_start,in_end,rdseq,region_st,region_end,rdid,fw,fnh,offset)
                 in_start, in_end = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
@@ -651,15 +699,16 @@ else:
     #test()
 
     class TestAlignFunctions1(unittest.TestCase):
+        ###Big Note:  We are going to assume base-0 indexing for everything
         def setUp(self):
             #A visual representation of the reference sequence and the read
             """Read"""
             """ACGAAGGACT GCTTGACATC GGCCACGATA ACAACCTTTT TTGCGCCAAT CTTAAGAGCC TTCT"""
-            #           ^10        ^20        ^30        ^40        ^50        ^60         ^150
+            #             ^10        ^20        ^30        ^40        ^50        ^60
             """Genome"""
             """ACGAAGGACT GCTTGACATC GGCCACGATA ACCTGAGTCG ATAGGACGAA ACAAGTATAT ATTCGAAAAT TAATTAATTC CGAAATTTCA ATTTCATCCG ACATGTATCT ACATATGCCA CACTTCTGGT TGGACAACCT TTTTTGCGCC A"""
             """ACGAAGGACT GCTTGACATC GGCCACGATA AC                                                                                                                 AACCT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
-            #           ^10        ^20        ^30        ^40        ^50        ^60        ^70        ^80        ^90        ^100       ^110       ^120       ^130       ^140       ^150
+            #             ^10        ^20        ^30        ^40        ^50        ^60        ^70        ^80        ^90        ^100       ^110       ^120       ^130       ^140       ^150
             self.rdseq  = "ACGAAGGACTGCTTGACATCGGCCACGATAACAACCTTTTTTGCGCCAATCTTAAGAGCCTTCT"
             self.refseq = "ACGAAGGACTGCTTGACATCGGCCACGATAACCTGAGTCGATAGGACGAAACAAGTATATATTCGAAAATTAATTAATTCCGAAATTTCAATTTCATCCGACATGTATCTACATATGCCACACTTCTGGTTGGACAACCTTTTTTGCGCCA"
             self.testDump = "test.out"
@@ -671,29 +720,7 @@ else:
             os.remove(self.fasta)
             os.remove(self.faidx)
             os.remove(self.testDump)
-            
-        def test_short_alignment1(self):
 
-            sys.stdout = open(self.testDump,'w')
-            rdid,fw,refid = "0;LB:test",True,"test"
-            #mapped reads:
-            #ref st,end = (0,33),(135,166)
-            #region_st,region_end=32,33
-            #in_start,in_end=31,134
-            fnh = fasta.fasta(self.fasta)
-            region_st,region_end=32,33
-            in_start,in_end=31,132
-            offset = 5
-            unmapped_st,unmapped_end = region_st-offset,region_end+offset
-            printIntrons(refid,self.rdseq,region_st,region_end,in_start,in_end,rdid,fw,sys.stdout)
-            handleIntron(refid,in_start,in_end,self.rdseq,unmapped_st,unmapped_end,region_st,region_end,rdid,fw,fnh,offset)
-            sys.stdout.close()
-            test_out = open(self.testDump,'r')
-            line = test_out.readline().rstrip()
-            testline = test_out.readline().rstrip()
-            # print >> sys.stderr, readableFormat(self.rdseq)
-            # print >> sys.stderr, line,'\n',testline
-            self.assertEquals(line,testline)
 
         def test_correct_splice1(self):
             left = "TTACGAAGGTTTGTA"
@@ -770,21 +797,23 @@ else:
             # print >> sys.stderr,"read\n   ",formatList(read,3)
             # print >> sys.stderr,"total\n",total
         """
-        Scenario 1: Most common scenario
+        Scenario 1:
         Read   |============================================|
                                       /\
         Genome |======================--=====================|
-        Flanks                   ^===^  ^===^  
+        Flanks                   ^===^  ^===^
         """
         def testScenario1(self):
             sys.stdout = open(self.testDump,'w')
             rdid,fw,refid = "0;LB:test",True,"test"
-            iSt,iEnd = 32,145 #intron coords
-            uSt,uEnd = 27,38  #unmapped coords
-            rSt,rEnd = 32,33  #region coords
-            offset = 5
+            #leftSt,leftEnd = 21,37  #left coords
+            #rightSt,rightEnd = 143,154  #left coords
+
+            iSt,iEnd = 32,135 #intron coords
+            rSt,rEnd = 32,32  #region coords
+            offset = 10
             fnh = fasta.fasta(self.fasta)
-            handleIntron(refid,iSt,iEnd,self.rdseq,uSt,uEnd,
+            handleIntron(refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh,offset)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -792,31 +821,76 @@ else:
             toks = testLine.split("\t")
             st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
             self.assertEquals(st,32)
-            self.assertEquals(end,145)
+            self.assertEquals(end,135)
             self.assertEquals(leftFlank,"CCACGATAAC")
             self.assertEquals(rightFlank,"AACCTTTTTT")
-            pass
+
         """
-        Scenario 2: Unmapped region                    
-                                       ^   ^ (Unmapped region)  
+        Scenario 2: Unmapped region
+                                       ^   ^ (Unmapped region)
         Read   |=======================-----======================|
                                       /     \
         Genome |======================-------=====================|
-        Flanks                   ^===^       ^===^  
-        """       
-        def testScenario2(self):
-            pass
+        Flanks                   ^===^       ^===^
         """
-            Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read                    
-                                      ^^   
+        def testScenario2(self):
+            sys.stdout = open(self.testDump,'w')
+            rdid,fw,refid = "0;LB:test",True,"test"
+            #leftSt,leftEnd = 21,37  #left coords
+            #rightSt,rightEnd = 143,154  #left coords
+
+            iSt,iEnd = 28,139 #intron coords
+            rSt,rEnd = 28,36  #region coords
+            offset = 10
+            fnh = fasta.fasta(self.fasta)
+            handleIntron(refid,iSt,iEnd,self.rdseq,
+                         rSt,rEnd,rdid,fw,fnh,offset)
+            sys.stdout.close()
+            test_out = open(self.testDump,'r')
+            testLine = test_out.readline().rstrip()
+            toks = testLine.split("\t")
+            st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+            self.assertTrue( abs(st-32) < 4)
+            self.assertTrue( abs(end-135) < 4)
+            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.matchCost())
+            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.matchCost())
+            print >> sys.stderr,"Scores",scoreLeft,scoreRight
+            self.assertTrue(scoreLeft > 4)
+            self.assertTrue(scoreRight > 4)
+        """
+            Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read
+                                      ^^
         Read   |=============================================|
                                       /      \
         Genome |======================-------=====================|
         Flanks                      ^===^  ^===^
         """
         def testScenario3(self):
-            pass
-        
+            sys.stdout = open(self.testDump,'w')
+            rdid,fw,refid = "0;LB:test",True,"test"
+            #leftSt,leftEnd = 21,37  #left coords
+            #rightSt,rightEnd = 143,154  #left coords
+
+            iSt,iEnd = 36,131 #intron coords
+            rSt,rEnd = 36,28  #region coords
+            offset = 10
+            fnh = fasta.fasta(self.fasta)
+            handleIntron(refid,iSt,iEnd,self.rdseq,
+                         rSt,rEnd,rdid,fw,fnh,offset)
+            sys.stdout.close()
+            test_out = open(self.testDump,'r')
+            testLine = test_out.readline().rstrip()
+            toks = testLine.split("\t")
+            st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+
+            self.assertTrue( abs(st-32) < 4)
+            self.assertTrue( abs(end-135) < 4)
+            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.matchCost())
+            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.matchCost())
+            print >> sys.stderr,"Scores",scoreLeft,scoreRight
+            self.assertTrue(scoreLeft > 4)
+            self.assertTrue(scoreRight > 4)
+
 
     unittest.main()
 
