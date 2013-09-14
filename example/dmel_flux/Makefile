@@ -63,14 +63,12 @@ $(IGV_DIR)/IGV/igv.jar:
 
 # Make sure D. melanogaster archive from iGenomes is present
 IG_URL=ftp://igenome:G3nom3s4u@ussd-ftp.illumina.com
-$(IGENOMES_HOME)/Drosophila_melanogaster: $(IGENOMES_HOME)/Drosophila_melanogaster_UCSC_dm3.tar.gz
-	cd $(IGENOMES_HOME) && tar zxvf Drosophila_melanogaster_UCSC_dm3.tar.gz
-
-$(IGENOMES_HOME)/Drosophila_melanogaster_UCSC_dm3.tar.gz:
+$(IGENOMES_HOME)/Drosophila_melanogaster:
 	mkdir -p $(IGENOMES_HOME)
 	cd $(IGENOMES_HOME) && wget $(IG_URL)/Drosophila_melanogaster/UCSC/dm3/Drosophila_melanogaster_UCSC_dm3.tar.gz
+	cd $(IGENOMES_HOME) && tar zxvf Drosophila_melanogaster_UCSC_dm3.tar.gz
 
 .PHONY: clean
 clean:
-	rm -f *.bed *.fastq *.lib *.pro *.par *.gtf Chromosomes *.manifest
-	rm -rf preprocessed_reads
+	rm -f *.bed *.fastq *.lib *.pro *.par *.gtf Chromosomes *.manifest chrom.sizes
+	rm -rf preprocessed_reads intermediate
