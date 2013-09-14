@@ -203,6 +203,7 @@ def windowTransform(read,site,cost):
 Applies Needleman Wunsch to correct splice junction gaps
 """
 def correctSplice(read,ref_left,ref_right,fw):
+
     revread = revcomp(read)
     """Needleman-Wunsch is a directional algorithm.  Since we are interested in scoring the 3' end of the right ref sequence,    we reverse complement the right ref sequence before applying the NW algorithm"""
     ref_right = revcomp(ref_right)
@@ -222,6 +223,7 @@ def correctSplice(read,ref_left,ref_right,fw):
 
     c = medianTieBreaker(total,c)
     r = numpy.argmax(total[:,c])
+
     return r,c,total[r,c],leftDP,rightDP,total
 
 # Print all listed exons to stdout
@@ -273,7 +275,7 @@ def printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,outha
         print >> outhandle, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, intronSt, intronEnd, lab,left_flank,right_flank,rdid)
         nout += 1
 
-def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset):
+def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset):
     """Remaps unmapped portions of the original read between mapped readlets"""
     """
     Flanks                      ====    ====
@@ -281,23 +283,21 @@ def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,region_st,region_end,r
     Ref           |=============------------------==========|
     Mapped Flanks           ====----          ----====
     """
-    assert region_st<region_end
-    uLen = region_end-region_st #unmapped portion
-    print >> sys.stderr,"uLen",uLen
+    assert regionSt<regionEnd
+    uLen = regionEnd-regionSt #unmapped portion
     leftSt,  leftEnd  = intronSt, intronSt+uLen
     rightSt, rightEnd = intronEnd-uLen, intronEnd
 
     ref_left = fnh.fetch_sequence(refid,leftSt+1, leftEnd).upper()
     ref_right = fnh.fetch_sequence(refid,rightSt+1, rightEnd).upper()
-
-    unmapped = rdseq[region_st:region_end] if fw else revcomp(rdseq[unmapped_st:unmapped_end])
+    unmapped = rdseq[regionSt:regionEnd] if fw else revcomp(rdseq[unmapped_st:unmapped_end])
     _, diffpos, score, leftDP, rightDP, total = correctSplice(unmapped,ref_left,ref_right,fw)
-    left_diff, right_diff    = diffpos, len(unmapped)-diffpos
+    left_diff, right_diff  = diffpos, len(unmapped)-diffpos
     if score<uLen and (args.verbose or args.test): print >> sys.stderr,"Bad Needleman-Wunsch realignment"
-    region_st,  region_end = region_st+left_diff,  region_end-right_diff
+    regionSt,  regionEnd = regionSt+left_diff-1,  regionEnd-right_diff
     intronSt,   intronEnd     = intronSt+left_diff,  intronEnd-right_diff
 
-    printIntrons(refid,rdseq,region_st,region_end,intronSt,intronEnd,rdid,fw,sys.stdout)
+    printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,sys.stdout)
 
 def handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset):
     """Remaps unmapped portions of the original read between mapped readlets"""
@@ -311,7 +311,7 @@ def handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,region_st,region_end,
     assert region_st>region_end
     regLen = region_st-region_end
     region_st,region_end = region_end,region_st
-    intronSt, intronEnd = intronSt-regLen, intronEnd+regLen
+    intronSt, intronEnd = intronSt-regLen, intronEnd+regLen #readjust intron boundaries
     handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset)
 
 def handleIntron(refid,intronSt,intronEnd,rdseq,region_st,region_end,rdid,fw,fnh,offset):
@@ -702,6 +702,7 @@ else:
         ###Big Note:  We are going to assume base-0 indexing for everything
         def setUp(self):
             #A visual representation of the reference sequence and the read
+            #Test1
             """Read"""
             """ACGAAGGACT GCTTGACATC GGCCACGATA ACAACCTTTT TTGCGCCAAT CTTAAGAGCC TTCT"""
             #             ^10        ^20        ^30        ^40        ^50        ^60
@@ -709,6 +710,7 @@ else:
             """ACGAAGGACT GCTTGACATC GGCCACGATA ACCTGAGTCG ATAGGACGAA ACAAGTATAT ATTCGAAAAT TAATTAATTC CGAAATTTCA ATTTCATCCG ACATGTATCT ACATATGCCA CACTTCTGGT TGGACAACCT TTTTTGCGCC A"""
             """ACGAAGGACT GCTTGACATC GGCCACGATA AC                                                                                                                 AACCT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
             #             ^10        ^20        ^30        ^40        ^50        ^60        ^70        ^80        ^90        ^100       ^110       ^120       ^130       ^140       ^150
+
             self.rdseq  = "ACGAAGGACTGCTTGACATCGGCCACGATAACAACCTTTTTTGCGCCAATCTTAAGAGCCTTCT"
             self.refseq = "ACGAAGGACTGCTTGACATCGGCCACGATAACCTGAGTCGATAGGACGAAACAAGTATATATTCGAAAATTAATTAATTCCGAAATTTCAATTTCATCCGACATGTATCTACATATGCCACACTTCTGGTTGGACAACCTTTTTTGCGCCA"
             self.testDump = "test.out"
@@ -734,7 +736,6 @@ else:
             #print >> sys.stderr,read
             #print >> sys.stderr,left[:c],right[c:]
             assert left[:c]+right[c:] == read
-            print >> sys.stderr,"Correct Splice Test Successful!!!"
 
         def test_correct_splice2(self):
 
@@ -746,7 +747,6 @@ else:
             #print >> sys.stderr,read
             #print >> sys.stderr,left[:c],right[c:]
             assert left[:c]+right[c:] == read
-            print >> sys.stderr,"Correct Splice Test Successful!!!"
 
         def test_windowTransform(self):
             left = "ACGATAACCTGAGTCG"
@@ -803,7 +803,7 @@ else:
         Genome |======================--=====================|
         Flanks                   ^===^  ^===^
         """
-        def testScenario1(self):
+        def test1Scenario1(self):
             sys.stdout = open(self.testDump,'w')
             rdid,fw,refid = "0;LB:test",True,"test"
             #leftSt,leftEnd = 21,37  #left coords
@@ -833,7 +833,7 @@ else:
         Genome |======================-------=====================|
         Flanks                   ^===^       ^===^
         """
-        def testScenario2(self):
+        def test1Scenario2(self):
             sys.stdout = open(self.testDump,'w')
             rdid,fw,refid = "0;LB:test",True,"test"
             #leftSt,leftEnd = 21,37  #left coords
@@ -850,13 +850,16 @@ else:
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
             st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
-            self.assertTrue( abs(st-32) < 4)
-            self.assertTrue( abs(end-135) < 4)
-            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.matchCost())
-            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.matchCost())
-            print >> sys.stderr,"Scores",scoreLeft,scoreRight
-            self.assertTrue(scoreLeft > 4)
-            self.assertTrue(scoreRight > 4)
+            perfectScore,_  = needlemanWunsch.needlemanWunsch("TTTTTTTTTT","TTTTTTTTTT" , needlemanWunsch.hamCost())
+            scoreLeft,ML  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.hamCost())
+            scoreRight,MR = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.hamCost())
+            # print >> sys.stderr,"Left Flank\n",leftFlank,"\nCCACGATAAC\n",ML
+            # print >> sys.stderr,"Right Flank\n",rightFlank,"\nAACCTTTTTT\n",MR
+            self.assertTrue( abs(scoreLeft-perfectScore)<4)
+            self.assertTrue( abs(scoreRight-perfectScore)<4)
+            self.assertTrue( abs(st-32)<4 )
+            self.assertTrue( abs(end-135)<4 )
+
         """
             Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read
                                       ^^
@@ -865,7 +868,7 @@ else:
         Genome |======================-------=====================|
         Flanks                      ^===^  ^===^
         """
-        def testScenario3(self):
+        def test1Scenario3(self):
             sys.stdout = open(self.testDump,'w')
             rdid,fw,refid = "0;LB:test",True,"test"
             #leftSt,leftEnd = 21,37  #left coords
@@ -883,14 +886,117 @@ else:
             toks = testLine.split("\t")
             st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
 
-            self.assertTrue( abs(st-32) < 4)
-            self.assertTrue( abs(end-135) < 4)
-            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.matchCost())
-            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.matchCost())
+            perfectScore,_  = needlemanWunsch.needlemanWunsch("TTTTTTTTTT","TTTTTTTTTT" , needlemanWunsch.hamCost())
+            scoreLeft,ML  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.hamCost())
+            scoreRight,MR = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.hamCost())
+            # print >> sys.stderr,"Left Flank\n",leftFlank,"\nCCACGATAAC\n",ML
+            # print >> sys.stderr,"Right Flank\n",rightFlank,"\nAACCTTTTTT\n",MR
+            self.assertTrue( abs(scoreLeft-perfectScore)<4)
+            self.assertTrue( abs(scoreRight-perfectScore)<4)
+            self.assertTrue( abs(st-32)<4 )
+            self.assertTrue( abs(end-135)<4 )
+
+    class TestAlignFunctions2(unittest.TestCase):
+        ###Big Note:  We are going to assume base-0 indexing for everything
+        def setUp(self):
+            #A visual representation of the reference sequence and the read
+
+            #Test2
+            """Read"""
+            """ACGAAGGACT GCTTGACATC GGCCACGATA ACAACCTTTT TTGCGCCAAT CTTAAGAGCC TTCT"""
+            #             ^10        ^20        ^30        ^40        ^50        ^60
+            """Genome"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AACTGAGTCG ATAGGACGAA ACAAGTATAT ATTCGAAAAT TAATTAATTC CGAAATTTCA ATTTCATCCG ACATGTATCT ACATATGCCA CACTTCTGGT TGGACTTTTT TTTTTGCGCC A"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AA                                                                                                                 TTTTT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
+            #             ^10        ^20        ^30        ^40        ^50        ^60        ^70        ^80        ^90        ^100       ^110       ^120       ^130       ^140       ^150
+
+            self.rdseq  = "ACGAAGGACTGCTTGACATCGGCCAAAAAAAATTTTTTTTTTGCGCCAATCTTAAGAGCCTTCT"
+            self.refseq = "ACGAAGGACTGCTTGACATCGGCCAAAAAAAACTGAGTCGATAGGACGAAACAAGTATATATTCGAAAATTAATTAATTCCGAAATTTCAATTTCATCCGACATGTATCTACATATGCCACACTTCTGGTTGGACTTTTTTTTTTGCGCCA"
+            self.testDump = "test.out"
+            self.fasta = "test.fa"
+            self.faidx = "test.fa.fai"
+            createTestFasta(self.fasta,"test",self.refseq)
+            open(self.testDump,'w') #Just to initialize file
+        def tearDown(self):
+            os.remove(self.fasta)
+            os.remove(self.faidx)
+            os.remove(self.testDump)
+
+
+        """
+        Scenario 2: Unmapped region
+                                       ^   ^ (Unmapped region)
+        Read   |=======================-----======================|
+                                      /     \
+        Genome |======================-------=====================|
+        Flanks                   ^===^       ^===^
+        """
+        def test2Scenario2(self):
+            sys.stdout = open(self.testDump,'w')
+            rdid,fw,refid = "0;LB:test",True,"test"
+            #leftSt,leftEnd = 21,37  #left coords
+            #rightSt,rightEnd = 143,154  #left coords
+
+            iSt,iEnd = 28,139 #intron coords
+            rSt,rEnd = 28,36  #region coords
+            offset = 10
+            fnh = fasta.fasta(self.fasta)
+            handleIntron(refid,iSt,iEnd,self.rdseq,
+                         rSt,rEnd,rdid,fw,fnh,offset)
+            sys.stdout.close()
+            test_out = open(self.testDump,'r')
+            testLine = test_out.readline().rstrip()
+            toks = testLine.split("\t")
+            st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+
+            self.assertEquals( st,32 )
+            self.assertEquals( end,135 )
+            perfectScore,_  = needlemanWunsch.needlemanWunsch("TTTTTTTTTT","TTTTTTTTTT" , needlemanWunsch.matchCost())
+            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"GCCAAAAAAA" , needlemanWunsch.matchCost())
+            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"TTTTTTTTTT" , needlemanWunsch.matchCost())
+            self.assertEquals(scoreLeft,perfectScore)
+            self.assertEquals(scoreRight,perfectScore)
+
+        """
+            Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read
+                                      ^^
+        Read   |=============================================|
+                                      /      \
+        Genome |======================-------=====================|
+        Flanks                      ^===^  ^===^
+        """
+        def test2Scenario3(self):
+            sys.stdout = open(self.testDump,'w')
+            rdid,fw,refid = "0;LB:test",True,"test"
+            #leftSt,leftEnd = 21,37  #left coords
+            #rightSt,rightEnd = 143,154  #left coords
+
+            iSt,iEnd = 36,131 #intron coords
+            rSt,rEnd = 36,28  #region coords
+            offset = 10
+            fnh = fasta.fasta(self.fasta)
+            handleIntron(refid,iSt,iEnd,self.rdseq,
+                         rSt,rEnd,rdid,fw,fnh,offset)
+            sys.stdout.close()
+            test_out = open(self.testDump,'r')
+            testLine = test_out.readline().rstrip()
+            toks = testLine.split("\t")
+            st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+
+            self.assertEquals( st,32 )
+            self.assertEquals( end,135 )
+            self.assertEquals( st,32 )
+            self.assertEquals( end,135 )
+            perfectScore,_  = needlemanWunsch.needlemanWunsch("TTTTTTTTTT","TTTTTTTTTT" , needlemanWunsch.matchCost())
+            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"GCCAAAAAAA" , needlemanWunsch.matchCost())
+            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"TTTTTTTTTT" , needlemanWunsch.matchCost())
             print >> sys.stderr,"Scores",scoreLeft,scoreRight
-            self.assertTrue(scoreLeft > 4)
-            self.assertTrue(scoreRight > 4)
+            self.assertEquals(scoreLeft,perfectScore)
+            self.assertEquals(scoreRight,perfectScore)
 
 
     unittest.main()
+
+
+
 
