@@ -45,7 +45,7 @@ $(OUTPUT_DIR)/Chromosomes: $(IGENOMES_HOME)/Drosophila_melanogaster
 	cd $(OUTPUT_DIR) && ln -s -f $(IGENOMES_HOME)/Drosophila_melanogaster/UCSC/dm3/Sequence/Chromosomes Chromosomes
 
 # Make sure flux fixed gtf file is in place
-$(OUTPUT_DIR)/genes.fixed.gtf: $(IGENOMES_HOME)/Drosophila_melanogaster
+$(OUTPUT_DIR)/genes.fixed.gtf: $(IGENOMES_HOME)/Drosophila_melanogaster $(FLUX_DIR)/VERSION
 	python $(FLUX_DIR)/gtf_flux_fix.py \
 		--fasta $(IGENOMES_HOME)/Drosophila_melanogaster/UCSC/dm3/Sequence/Chromosomes/*.fa \
 		--gtf $(IGENOMES_HOME)/Drosophila_melanogaster/UCSC/dm3/Annotation/Genes/genes.gtf \
