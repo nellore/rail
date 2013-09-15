@@ -4,7 +4,6 @@ Chromosomes
 *.fastq
 *.lib
 *.par
-*.manifest
 intermediate
 preprocessed_reads
 local_out
