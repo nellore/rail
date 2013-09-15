@@ -2,7 +2,7 @@
 
 BUCKET=langmead
 
-if [ $1 = "upload" ] ; then
+if [ "$1" = "upload" ] ; then
 	s3cmd put *.fastq s3://$BUCKET/dmel_flux/fastq/
 	
 	cat >dmel_flux.s3.manifest <<EOF
@@ -15,6 +15,9 @@ s3://$BUCKET/dmel_flux/fastq/dmel_flux-5.fastq	0	dmel_flux-0-5
 EOF
 	s3cmd put dmel_flux.s3.manifest s3://$BUCKET/dmel_flux/manifest/
 fi
+
+s3cmd del --recursive s3://$BUCKET/dmel_flux/intermediate
+s3cmd del --recursive s3://$BUCKET/dmel_flux/output
 
 python $TORNADO_HOME/src/driver/tornado.py \
 	--emr \
