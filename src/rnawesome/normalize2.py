@@ -82,7 +82,8 @@ filemover.addArgs(parser)
 
 args = parser.parse_args()
 
-if path.which(args.bigbed_exe) is None:
+bigbed_exe = path.which(args.bigbed_exe)
+if bigbed_exe is None:
     raise RuntimeError("Could not find bedToBigBed exe; tried '%s'" % args.bigbed_exe)
 
 ninp, nout = 0, 0          # # lines input/output so far
@@ -149,8 +150,9 @@ def bedToBigBed(ifn, ofn, chromSizes):
     assert os.path.exists(ifn)
     assert os.path.exists(chromSizes)
     assert not os.path.exists(ofn), "Already wrote '%s'" % ofn
-    bigbed_cmd = [args.bigbed_exe, ifn, chromSizes, ofn]
-    bigbed_proc = subprocess.Popen(bigbed_cmd, stdout=sys.stderr)
+    assert path.is_exe(bigbed_exe)
+    bigbed_cmd = [bigbed_exe, ifn, chromSizes, ofn]
+    bigbed_proc = subprocess.Popen(' '.join(bigbed_cmd), shell=True, bufsize=-1, stdout=sys.stderr)
     ret = bigbed_proc.wait()
     if ret != 0:
         raise RuntimeError("bedToBigBed command '%s' returned exitlevel %d" % (' '.join(bigbed_cmd), ret))
