@@ -237,12 +237,12 @@ def doMapper(tup):
             ret = pipe.wait()
             if ret == 0:
                 return outFullFn
-            message('Non-zero return (%d) after closing pipe "%s"' % pipe)
+            message('Non-zero return (%d) after closing pipe "%s"' % (ret, mycmd))
         else:
             ret = os.system(fullcmd)
             if ret == 0:
                 return outFullFn
-            message('Non-zero return (%d) after executing "%s"' % fullcmd)
+            message('Non-zero return (%d) after executing "%s"' % (ret, fullcmd))
         message('Retrying in %d seconds...' % args.delay)
         time.sleep(args.delay)
     # Finished

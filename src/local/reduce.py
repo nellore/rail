@@ -215,6 +215,7 @@ def binCountWorker(fn):
             if len(ln) == 0: continue
             toks = string.split(ln, '\t')
             if toks[0] == 'DUMMY': continue
+            assert len(toks) >= args.bin_fields
             cnt['\t'.join(toks[:args.bin_fields])] += 1
     binCountQueue.put(cnt)
 
@@ -254,7 +255,9 @@ if tot > 0:
                 if len(ln) == 0: continue
                 toks = string.split(ln, '\t')
                 if toks[0] == 'DUMMY': continue
+                assert len(toks) >= args.bin_fields
                 k = '\t'.join(toks[:args.bin_fields])
+                assert k in keyToTask
                 task = keyToTask[k]
                 if task not in ofhs:
                     ofhs[task] = open(os.path.join(taskDir, task), 'w')
