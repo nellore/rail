@@ -30,8 +30,8 @@ for ln in sys.stdin:
     assert len(toks) >= 6
     
     pt,st,en,lab,seq5,seq3 = toks[0],int(toks[1]),int(toks[2]),toks[3],toks[4],toks[5]
-    refid = pt[:pt.rfind(';')][:-1]
-    
+    #refid = pt[:pt.rfind(';')][:]
+    refid = pt
     gpositions = addRead(refid,st-len(seq5),st,gpositions)
     gpositions = addRead(refid,en,en+len(seq3),gpositions)
 

@@ -26,7 +26,9 @@ for ln in sys.stdin:
     toks = ln.split("\t")
     assert len(toks) >= 4
     pt,st,en,lab = toks[0],int(toks[1]),int(toks[2]),toks[3]
-    refid = pt[:pt.index(';')]
+    refid = pt
+    #refid = pt[:pt.index(';')]
+    #refid = pt[:pt.rfind(';')][:]
     gpositions = addRead(refid,st,en,gpositions)
 
 for d,c in gpositions.iteritems():
