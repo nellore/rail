@@ -182,6 +182,8 @@ def go():
     
     for ln in sys.stdin:
         toks = ln.rstrip().split('\t')
+        if toks[0] == 'DUMMY':
+            continue
         assert len(toks) == 4, "Bad input:\n" + ln
         pt, st, en, lab = toks[0], int(toks[1]), int(toks[2]), toks[3]
         assert pt != last_pt or st >= last_st

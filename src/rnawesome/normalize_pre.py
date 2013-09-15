@@ -63,6 +63,8 @@ def go():
     for ln in sys.stdin:
         ninp += 1
         toks = ln.rstrip().split('\t')
+        if toks[0] == 'DUMMY':
+            continue
         assert len(toks) == 4, "Bad input line:\n" + ln
         pt, lab, off, diff = toks[0], toks[1], int(toks[2]), int(toks[3])
         refid, _, _ = partition.parse(pt, binsz)
