@@ -214,6 +214,7 @@ def binCountWorker(fn):
             ln = ln.rstrip()
             if len(ln) == 0: continue
             toks = string.split(ln, '\t')
+            if toks[0] == 'DUMMY': continue
             cnt['\t'.join(toks[:args.bin_fields])] += 1
     binCountQueue.put(cnt)
 
@@ -222,143 +223,151 @@ countPool = multiprocessing.Pool(num_processes)
 countPool.map(binCountWorker, inps)
 checkFailQueue()
 
+tot = 0
 while not binCountQueue.empty():
     cnt = binCountQueue.get()
     for k, v in cnt.iteritems():
         binCount[k] += v
+        tot += v
 
-# Allocate bins to tasks, always adding to task with least tuples so far
-taskNames = [ "task-%05d" % i for i in xrange(args.num_tasks) ]
-taskq = [ (0, taskNames[i], []) for i in xrange(args.num_tasks) ]
-keyToTask = {}
-for k, v in binCount.iteritems():
-    sz, nm, klist = heapq.heappop(taskq)
-    sz += v
-    klist.append(k)
-    assert k not in keyToTask
-    heapq.heappush(taskq, (sz, nm, klist))
-    keyToTask[k] = nm
-
-# Write out all the tasks to files within 'taskDir'
-ofhs = {}
-for inp in inps:
-    with openex(inp) as fh:
-        for ln in fh:
-            ln = ln.rstrip()
-            if len(ln) == 0: continue
-            toks = string.split(ln, '\t')
-            k = '\t'.join(toks[:args.bin_fields])
-            task = keyToTask[k]
-            if task not in ofhs:
-                ofhs[task] = open(os.path.join(taskDir, task), 'w')
-            ofhs[task].write(ln)
-            ofhs[task].write('\n')
-
-for fh in ofhs.itervalues():
-    fh.close()
-
-########################################
-# Stage 2. Sort and reduce each task
-########################################
-
-needSort = args.num_tasks > 1 or args.sort_fields > args.bin_fields
-if needSort:
-    def doSort(task, external=True, keep=args.keep_all):
-        assert external # only know how to use external sort for now
-        inputFn, sortedFn = os.path.join(taskDir, task), os.path.join(staskDir, task)
-        sortErrFn = os.path.join(sortErrDir, task)
-        cmd = 'sort -S %d -k1,%d %s >%s 2>%s' % (args.sort_size, args.sort_fields, inputFn, sortedFn, sortErrFn)
-        el = os.system(cmd)
-        if el != 0:
-            msg = 'Sort command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
-            failQ.put((msg, inputFn, sortErrFn, cmd))
-        elif not keep:
-            os.remove(inputFn)
-            os.remove(sortErrFn)
+if tot > 0:
+    message('Handling %d input records' % tot)
     
-    sortPool = multiprocessing.Pool(num_processes)
-    sortPool.map(doSort, taskNames)
-    checkFailQueue()
-
-reduceCmd = ' '.join(reduceArgv)
-reduceInpDir = staskDir if needSort else taskDir
-
-def doReduce(task, keep=args.keep_all):
-    sortedFn = os.path.join(reduceInpDir, task)
-    sortedFn = os.path.abspath(sortedFn)
-    if not os.path.exists(sortedFn):
-        raise RuntimeError('No such sorted task: "%s"' % sortedFn)
-    outFn, errFn = os.path.join(output, task), os.path.join(errDir, task)
-    outFn, errFn = os.path.abspath(outFn), os.path.abspath(errFn)
-    cmd = 'cat %s | %s >%s 2>%s' % (sortedFn, reduceCmd, outFn, errFn)
-    wd = os.path.join(workingDir, task)
-    checkDir(wd, 800)
-    pipe = subprocess.Popen(cmd, bufsize=-1, shell=True, cwd=wd)
-    el = pipe.wait()
-    if el != 0:
-        msg = 'Reduce command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
-        failQ.put((msg, sortedFn, errFn, cmd))
-    elif not keep:
-        os.remove(sortedFn)
-        os.remove(errFn)
-        shutil.rmtree(wd)
-    return outFn
-
-reducePool = multiprocessing.Pool(num_processes)
-outfns = reducePool.map(doReduce, taskNames)
-checkFailQueue()
-
-if args.multiple_outputs:
+    # Allocate bins to tasks, always adding to task with least tuples so far
+    taskNames = [ "task-%05d" % i for i in xrange(args.num_tasks) ]
+    taskq = [ (0, taskNames[i], []) for i in xrange(args.num_tasks) ]
+    keyToTask = {}
+    for k, v in binCount.iteritems():
+        sz, nm, klist = heapq.heappop(taskq)
+        sz += v
+        klist.append(k)
+        assert k not in keyToTask
+        heapq.heappush(taskq, (sz, nm, klist))
+        keyToTask[k] = nm
     
-    def doSplit(task, keep=args.keep_all):
-        outFn = os.path.join(output, task)
-        splitDir = os.path.join(output, '_'.join([task, 'split']))
-        checkDir(splitDir, 900)
-        kToFh, kToFn = {}, {}
-        with openex(outFn) as fh:
+    # Write out all the tasks to files within 'taskDir'
+    ofhs = {}
+    for inp in inps:
+        with openex(inp) as fh:
             for ln in fh:
                 ln = ln.rstrip()
                 if len(ln) == 0: continue
                 toks = string.split(ln, '\t')
-                if toks[0] not in kToFh:
-                    fn = os.path.join(splitDir, '_'.join([toks[0], task]))
-                    kToFn[toks[0]] = fn
-                    kToFh[toks[0]] = open(fn, 'w')
-                kToFh[toks[0]].write('\t'.join(toks[1:]))
-                kToFh[toks[0]].write('\n')
-        for ofh in kToFh.itervalues():
-            ofh.close()
-        if not keep:
-            os.remove(outFn)
-        return kToFn
+                if toks[0] == 'DUMMY': continue
+                k = '\t'.join(toks[:args.bin_fields])
+                task = keyToTask[k]
+                if task not in ofhs:
+                    ofhs[task] = open(os.path.join(taskDir, task), 'w')
+                ofhs[task].write(ln)
+                ofhs[task].write('\n')
     
-    splitPool = multiprocessing.Pool(num_processes)
-    kToFns = splitPool.map(doSplit, taskNames)
+    for fh in ofhs.itervalues():
+        fh.close()
+    
+    ########################################
+    # Stage 2. Sort and reduce each task
+    ########################################
+    
+    needSort = args.num_tasks > 1 or args.sort_fields > args.bin_fields
+    if needSort:
+        def doSort(task, external=True, keep=args.keep_all):
+            assert external # only know how to use external sort for now
+            inputFn, sortedFn = os.path.join(taskDir, task), os.path.join(staskDir, task)
+            sortErrFn = os.path.join(sortErrDir, task)
+            cmd = 'sort -S %d -k1,%d %s >%s 2>%s' % (args.sort_size, args.sort_fields, inputFn, sortedFn, sortErrFn)
+            el = os.system(cmd)
+            if el != 0:
+                msg = 'Sort command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
+                failQ.put((msg, inputFn, sortErrFn, cmd))
+            elif not keep:
+                os.remove(inputFn)
+                os.remove(sortErrFn)
+        
+        sortPool = multiprocessing.Pool(num_processes)
+        sortPool.map(doSort, taskNames)
+        checkFailQueue()
+    
+    reduceCmd = ' '.join(reduceArgv)
+    reduceInpDir = staskDir if needSort else taskDir
+    
+    def doReduce(task, keep=args.keep_all):
+        sortedFn = os.path.join(reduceInpDir, task)
+        sortedFn = os.path.abspath(sortedFn)
+        if not os.path.exists(sortedFn):
+            raise RuntimeError('No such sorted task: "%s"' % sortedFn)
+        outFn, errFn = os.path.join(output, task), os.path.join(errDir, task)
+        outFn, errFn = os.path.abspath(outFn), os.path.abspath(errFn)
+        cmd = 'cat %s | %s >%s 2>%s' % (sortedFn, reduceCmd, outFn, errFn)
+        wd = os.path.join(workingDir, task)
+        checkDir(wd, 800)
+        pipe = subprocess.Popen(cmd, bufsize=-1, shell=True, cwd=wd)
+        el = pipe.wait()
+        if el != 0:
+            msg = 'Reduce command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
+            failQ.put((msg, sortedFn, errFn, cmd))
+        elif not keep:
+            os.remove(sortedFn)
+            os.remove(errFn)
+            shutil.rmtree(wd)
+        return outFn
+    
+    reducePool = multiprocessing.Pool(num_processes)
+    outfns = reducePool.map(doReduce, taskNames)
     checkFailQueue()
-    kToFnList = defaultdict(list)
-    for kToFn in kToFns:
-        for k, v in kToFn.iteritems():
-            kToFnList[k].append(v)
     
-    # Now join them back up
-    for k, vl in kToFnList.iteritems():
-        kOutDir = os.path.join(output, k)
-        checkDir(kOutDir, 900)
-        for v in vl:
-            fn = os.path.basename(v)
-            shutil.copyfile(v, os.path.join(kOutDir, fn))
-            if not args.keep_all:
-                os.remove(v)
-    
-    # Remove all the split directories
-    if not args.keep_all:
-        removedAlready = set()
+    if args.multiple_outputs:
+        
+        def doSplit(task, keep=args.keep_all):
+            outFn = os.path.join(output, task)
+            splitDir = os.path.join(output, '_'.join([task, 'split']))
+            checkDir(splitDir, 900)
+            kToFh, kToFn = {}, {}
+            with openex(outFn) as fh:
+                for ln in fh:
+                    ln = ln.rstrip()
+                    if len(ln) == 0: continue
+                    toks = string.split(ln, '\t')
+                    if toks[0] not in kToFh:
+                        fn = os.path.join(splitDir, '_'.join([toks[0], task]))
+                        kToFn[toks[0]] = fn
+                        kToFh[toks[0]] = open(fn, 'w')
+                    kToFh[toks[0]].write('\t'.join(toks[1:]))
+                    kToFh[toks[0]].write('\n')
+            for ofh in kToFh.itervalues():
+                ofh.close()
+            if not keep:
+                os.remove(outFn)
+            return kToFn
+        
+        splitPool = multiprocessing.Pool(num_processes)
+        kToFns = splitPool.map(doSplit, taskNames)
+        checkFailQueue()
+        kToFnList = defaultdict(list)
+        for kToFn in kToFns:
+            for k, v in kToFn.iteritems():
+                kToFnList[k].append(v)
+        
+        # Now join them back up
         for k, vl in kToFnList.iteritems():
+            kOutDir = os.path.join(output, k)
+            checkDir(kOutDir, 900)
             for v in vl:
-                vdir = os.path.dirname(v)
-                if vdir not in removedAlready:
-                    shutil.rmtree(vdir)
-                    removedAlready.add(vdir)
+                fn = os.path.basename(v)
+                shutil.copyfile(v, os.path.join(kOutDir, fn))
+                if not args.keep_all:
+                    os.remove(v)
+        
+        # Remove all the split directories
+        if not args.keep_all:
+            removedAlready = set()
+            for k, vl in kToFnList.iteritems():
+                for v in vl:
+                    vdir = os.path.dirname(v)
+                    if vdir not in removedAlready:
+                        shutil.rmtree(vdir)
+                        removedAlready.add(vdir)
+else:
+    message("0 input records!  Skipping binning, sorting, reducing, etc...")
 
 if not args.keep_all:
     message('Removing intermediate directory "%s"\n' % intermediate)
