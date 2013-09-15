@@ -28,7 +28,7 @@ FALSE_NEGATIVES=$VALIDATE_OUT/false_negatives
 ANNOTATED_SITES=$VALIDATE_OUT/annotated
 DETECTED_SITES=$VALIDATE_OUT/../intermediate/splice_sites
 EXONS=$VALIDATE_OUT/../intermediate/exon
-GENES=$IGENOMES_DIR/$SPECIES/$DB/$ASM/Annotation/Genes/genes.gtf
+GENES=$IGENOMES_HOME/$SPECIES/$DB/$ASM/Annotation/Genes/genes.gtf
 
 #Sort and index all of the files
 igvtools sort $FALSE_POSITIVES.bed $FALSE_POSITIVES'_sort.bed'
