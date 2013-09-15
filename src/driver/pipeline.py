@@ -13,6 +13,7 @@ This module helps to compose flows and to construct the appropriate
 shell/Hadoop/EMR scripts for running the flow. 
 """
 
+import os
 import hadoop
 
 class Aggregation(object):
@@ -24,6 +25,16 @@ class Aggregation(object):
         assert nsort >= nbin
         self.nbin = nbin
         self.nsort = nsort
+    
+    def toLocalArgs(self, nReducers):
+        args = []
+        ntasks = self.ntasks
+        if ntasks is None:
+            ntasks = self.ntasksPerReducer * nReducers
+        args.append('    --num-tasks=%d \\' % ntasks)
+        args.append('    --bin-fields=%d \\' % self.nbin)
+        args.append('    --sort-fields=%d \\' % self.nsort)
+        return args
     
     def toHadoopArgs(self, config):
         begArgs, endArgs = [], []
@@ -43,7 +54,7 @@ class PipelineConfig(object):
     """ Information about the particular system we're going to run on, which
         changes some of the exact arguments we use """
     
-    def __init__(self, hadoopVersion, waitOnFail, emrStreamJar, nReducers, emrLocalDir, preprocCompress, out):
+    def __init__(self, hadoopVersion, waitOnFail, emrStreamJar, nReducers, emrLocalDir):
         # Hadoop version used on EMR cluster
         self.hadoopVersion = hadoopVersion
         # Whether to keep the EMR cluster running if job fails
@@ -54,25 +65,96 @@ class PipelineConfig(object):
         self.nReducers = nReducers
         # Local directory where reference jar and scripts have been installed
         self.emrLocalDir = emrLocalDir
-        # Whether & how to compress output from preprocessor
-        self.preprocCompress = preprocCompress
-        # Output URL
-        self.out = out
 
 class Step(object):
     """ Encapsulates a single step of the pipeline, i.e. a single
         MapReduce/Hadoop job """
     
-    def __init__(self, inps, output, name="(no name)", inputFormat=None, outputFormat=None, aggr=None, mapper="cat", reducer=None, libjars=[]):
+    def __init__(\
+        self,
+        inps,
+        output,
+        name="(no name)",
+        aggr=None,
+        mapper=None,
+        reducer=None,
+        lineByLine=False,
+        multipleOutput=False):
+        
         self.name = name
         self.inputs = inps
         self.output = output
-        self.inputFormat = inputFormat
-        self.outputFormat = outputFormat
         self.aggr = aggr
         self.mapper = mapper
         self.reducer = reducer
-        self.libjars = libjars
+        self.lineByLine = lineByLine
+        self.multipleOutput = multipleOutput
+        self.inputFormat = None
+        self.outputFormat = None
+    
+    def toLocalCmd(self, localConf):
+        lines = []
+        glue = None
+        
+        if self.mapper is not None:
+            final = self.reducer is None
+            lines.append('python %BASE%/src/local/map.py \\')
+            lines.append('    --name "%s" \\' % self.name)
+            for inp in self.inputs:
+                lines.append('    --input "%s" \\' % inp.toUrl())
+            if final:
+                if self.output is not None:
+                    lines.append('    --output "%s" \\' % self.output.toUrl())
+            else:
+                # Pick an output directory that will feed reducer
+                lines.append('    --output "%s" \\' % glue)
+            if final and self.multipleOutput:
+                lines.append('    --multiple-outputs \\')
+            if self.lineByLine:   lines.append('    --line-by-line \\')
+            if localConf.keepAll: lines.append('    --keep-all \\')
+            if localConf.force:   lines.append('    --force \\')
+            lines.append('    --num-processes %d \\' % localConf.numProcesses)
+            # Separator between wrapper arguments and mapper command
+            lines.append('    -- \\')
+            lines.append('    ' + self.mapper)
+            
+            lines.append('''
+if [ $? != 0 ] ; then
+    echo "ERROR: map step %s failed with exitlevel $?"
+    exit 1
+fi
+''' % (self.name))
+        
+        if self.reducer is not None:
+            first = self.mapper is None
+            lines.append('python %BASE%/src/local/reduce.py \\')
+            lines.append('    --name "%s" \\' % self.name)
+            if first:
+                for inp in self.inputs:
+                    lines.append('    --input "%s" \\' % inp.toUrl())
+            else:
+                lines.append('    --input "%s" \\' % glue)
+            if self.output is not None:
+                lines.append('    --output "%s" \\' % self.output.toUrl())
+            if self.multipleOutput:
+                lines.append('    --multiple-outputs \\')
+            assert not first or not self.lineByLine
+            if localConf.keepAll: lines.append('    --keep-all \\')
+            if localConf.force:   lines.append('    --force \\')
+            lines.append('    --num-processes %d \\' % localConf.numProcesses)
+            lines.extend(self.aggr.toLocalArgs(localConf.numProcesses))
+            # Separator between wrapper arguments and reducer command
+            lines.append('    -- \\')
+            lines.append('    ' + self.reducer)
+            
+            lines.append('''
+if [ $? != 0 ] ; then
+    echo "ERROR: reduce step %s failed with exitlevel $?"
+    exit 1
+fi
+''' % (self.name))
+        
+        return '\n'.join(lines)
     
     def toHadoopCmd(self):
         raise RuntimeError("toHadoopCmd not yet implemented")
@@ -90,12 +172,21 @@ class Step(object):
         if self.aggr is not None:
             begArgs, endArgs = self.aggr.toHadoopArgs(config)
         
-        for libjar in self.libjars:
-            begArgs.append('"-libjars", "%s",' % libjar)
+        if self.multipleOutput:
+            self.outputFormat = 'edu.jhu.cs.MultipleOutputFormat'
+            begArgs.append('"-libjars", "%BASE%/lib/multiplefiles.jar",')
+        if self.lineByLine:
+            self.inputFormat = 'org.apache.hadoop.mapred.lib.NLineInputFormat'
         
         endArgs.append('"-input", "%s",' % ','.join(map(lambda x: x.toUrl(), self.inputs)))
-        endArgs.append('"-output", "%s",' % self.output.toUrl())
-        endArgs.append('"-mapper", "%s",' % self.mapper)
+        if self.output is None:
+            endArgs.append('"-output", "hdfs:///tmp/dummy1",')
+        else:
+            endArgs.append('"-output", "%s",' % self.output.toUrl())
+        if self.mapper is not None:
+            endArgs.append('"-mapper", "%s",' % self.mapper)
+        else:
+            endArgs.append('"-mapper", "cat",')
         
         if self.reducer is not None:
             endArgs.append('"-reducer", "%s",' % self.reducer)
