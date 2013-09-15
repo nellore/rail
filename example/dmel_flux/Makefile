@@ -9,8 +9,8 @@ endif
 FLUX_DIR=$(TORNADO_HOME)/tools/flux_sim
 IGV_DIR=$(TORNADO_HOME)/tools/igv
 OUTPUT_DIR=.
-NUM_READS=1500
-NUM_MOLECULES=5000
+NUM_READS=100000
+NUM_MOLECULES=500000
 
 all: $(OUTPUT_DIR)/preprocessed_reads $(TORNADO_HOME)/tools/igv/IGV/igv.jar
 
@@ -24,6 +24,8 @@ $(OUTPUT_DIR)/dmel_flux.manifest: dmel_flux-0.fastq
 	echo "$(OUTPUT_DIR)/dmel_flux-1.fastq\t0\tdmel_flux-0-1" >> $@
 	echo "$(OUTPUT_DIR)/dmel_flux-2.fastq\t0\tdmel_flux-0-2" >> $@
 	echo "$(OUTPUT_DIR)/dmel_flux-3.fastq\t0\tdmel_flux-0-3" >> $@
+	echo "$(OUTPUT_DIR)/dmel_flux-4.fastq\t0\tdmel_flux-0-4" >> $@
+	echo "$(OUTPUT_DIR)/dmel_flux-5.fastq\t0\tdmel_flux-0-5" >> $@
 
 # Run flux, many in parallel so we have essentially tech reps
 $(OUTPUT_DIR)/dmel_flux-0.fastq: $(OUTPUT_DIR)/Chromosomes $(OUTPUT_DIR)/genes.fixed.gtf $(FLUX_DIR)/VERSION
@@ -35,8 +37,8 @@ $(OUTPUT_DIR)/dmel_flux-0.fastq: $(OUTPUT_DIR)/Chromosomes $(OUTPUT_DIR)/genes.f
 		--chromosomes=$(OUTPUT_DIR)/Chromosomes \
 		--num-reads=$(NUM_READS) \
 		--num-molecules=$(NUM_MOLECULES) \
-		--num-samples=4 \
-		--num-processes=4
+		--num-samples=6 \
+		--num-processes=6
 
 # Make the link to the directory with 1 FASTA file per chromosome
 $(OUTPUT_DIR)/Chromosomes: $(IGENOMES_HOME)/Drosophila_melanogaster
@@ -71,4 +73,4 @@ $(IGENOMES_HOME)/Drosophila_melanogaster:
 .PHONY: clean
 clean:
 	rm -f *.bed *.fastq *.lib *.pro *.par *.gtf Chromosomes *.manifest chrom.sizes
-	rm -rf preprocessed_reads intermediate
+	rm -rf preprocessed_reads intermediate local_out
