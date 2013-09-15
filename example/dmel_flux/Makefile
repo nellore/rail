@@ -14,18 +14,9 @@ NUM_MOLECULES=500000
 
 all: $(OUTPUT_DIR)/preprocessed_reads $(TORNADO_HOME)/tools/igv/IGV/igv.jar
 
-$(OUTPUT_DIR)/preprocessed_reads: $(OUTPUT_DIR)/dmel_flux.manifest
+$(OUTPUT_DIR)/preprocessed_reads: $(OUTPUT_DIR)/dmel_flux.manifest $(OUTPUT_DIR)/dmel_flux-0.fastq
 	mkdir -p $@
 	cat $< | python $(TORNADO_HOME)/src/rnawesome/preprocess.py --gzip-output --push=$@
-
-# Run the pipeline
-$(OUTPUT_DIR)/dmel_flux.manifest: dmel_flux-0.fastq
-	echo "$(OUTPUT_DIR)/dmel_flux-0.fastq\t0\tdmel_flux-0-0" > $@
-	echo "$(OUTPUT_DIR)/dmel_flux-1.fastq\t0\tdmel_flux-0-1" >> $@
-	echo "$(OUTPUT_DIR)/dmel_flux-2.fastq\t0\tdmel_flux-0-2" >> $@
-	echo "$(OUTPUT_DIR)/dmel_flux-3.fastq\t0\tdmel_flux-0-3" >> $@
-	echo "$(OUTPUT_DIR)/dmel_flux-4.fastq\t0\tdmel_flux-0-4" >> $@
-	echo "$(OUTPUT_DIR)/dmel_flux-5.fastq\t0\tdmel_flux-0-5" >> $@
 
 # Run flux, many in parallel so we have essentially tech reps
 $(OUTPUT_DIR)/dmel_flux-0.fastq: $(OUTPUT_DIR)/Chromosomes $(OUTPUT_DIR)/genes.fixed.gtf $(FLUX_DIR)/VERSION
