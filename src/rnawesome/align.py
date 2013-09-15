@@ -451,7 +451,7 @@ def bowtieOutReadlets(st, reportMult=1.2):
             # a spliced alignment
             rdid = ';'.join(toks[:-3])
             cnt[rdid] = cnt.get(rdid, 0) + 1
-            rd_name, rlet_nm, rdseq = toks[0], toks[3], toks[5]
+            rd_name, rlet_nm, rdseq = toks[0], toks[4], toks[6]
             rdlet_n = int(toks[-2])
             if flags != 4:
                 fw = (flags & 16) == 0

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 """
 preprocess.py
 
@@ -119,11 +118,11 @@ def preprocess(handler, lab, fh1, fh2=None, inputFormat="fastq", filename=None, 
     n = 0
     fields = []
     if includeFilename:
-        # TOOD: should be careful not to pass on any undesirable chars
+        # TODO: should be careful not to pass on any undesirable chars
         fields.append("FN:" + filename.replace(';', '_'))
     fields.append("FH:" + fullnameHash)
-    fields.append("LB:" + lab.replace(';', '_'))
-    handler.setPrefix(';'.join(fields))
+    label = "LB:" + lab.replace(';', '_')
+    handler.setPrefix('|'.join(fields)+";%s"%label)
     
     if inputFormat == "fastq":
         while True:
