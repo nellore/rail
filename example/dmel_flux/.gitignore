@@ -9,3 +9,4 @@ preprocessed_reads
 local_out
 *.gtf
 chrom.sizes
+tophat_out
