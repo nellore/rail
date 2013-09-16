@@ -11,8 +11,16 @@ IGV_DIR=$(TORNADO_HOME)/tools/igv
 OUTPUT_DIR=.
 NUM_READS=100000
 NUM_MOLECULES=500000
+TOPHAT_DIR=../../tools/tophat2
+TOPHAT_EXE=$(TOPHAT_DIR)/tophat/install-root/bin/tophat2
 
 all: $(OUTPUT_DIR)/preprocessed_reads $(TORNADO_HOME)/tools/igv/IGV/igv.jar
+
+tophat_out/accepted_hits.bam: $(OUTPUT_DIR)/dmel_flux-0.fastq $(TOPHAT_EXE)
+	$(TOPHAT_EXE) $(IGENOMES_HOME)/Drosophila_melanogaster/UCSC/dm3/Sequence/Bowtie2Index/genome dmel_flux-*.fastq
+
+$(TOPHAT_EXE):
+	make -C $(TOPHAT_DIR)
 
 $(OUTPUT_DIR)/preprocessed_reads: $(OUTPUT_DIR)/dmel_flux.manifest $(OUTPUT_DIR)/dmel_flux-0.fastq
 	mkdir -p $@
