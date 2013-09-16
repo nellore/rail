@@ -92,7 +92,7 @@ def readBedSites(bedfile):
 def writeBedSites(bedfile,sites):
     handle = open(bedfile,'w')
     for site in sites:
-        handle.write("%s\t%d\t%d\t1\n"%(site[2],site[0],site[1]))
+        handle.write("%s\t%d\t%d\t1\n"%(site[2],site[0],site[1]+1))
     handle.close()
 
 """
@@ -101,7 +101,7 @@ Compares the simulated sites and the output from the pipeline
 def compare(bed_sites,annot_sites):
     correct = 0
     nearby  = 0
-    incorrect = 0 
+    incorrect = 0
     a = [v for v in annot_sites.itervalues()]
     missed_sites = set(itertools.chain.from_iterable(a))    #false negatives
     found_sites  = set()                                    #correct sites
@@ -132,10 +132,10 @@ def go():
     #Step 2: Compare detected splice junctions to annotated splice junctions
     found_sites,false_sites,missed_sites = compare(bed_sites,annot_sites)
     #Step 3: Sort sites
-    found_sites = list(found_sites)
-    false_sites = list(false_sites)
+    found_sites  = list(found_sites)
+    false_sites  = list(false_sites)
     missed_sites = list(missed_sites)
-    annot_sites = list(set(itertools.chain.from_iterable([v for v in annot_sites.itervalues()])))
+    annot_sites  = list( set( itertools.chain.from_iterable([v for v in annot_sites.itervalues()])))
     annot_sites.sort(key=lambda tup:tup[0])
     found_sites.sort(key=lambda tup:tup[0])
     false_sites.sort(key=lambda tup:tup[0])
