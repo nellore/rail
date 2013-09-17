@@ -79,7 +79,12 @@ if args.out is not None:
     # If --out is a local file, just write directly to that file.  Otherwise,
     # write to a temporary file that we will later upload to destination.
     outUrl = url.Url(args.out)
-    outFn = args.out if outUrl.isLocal() else "normalize_post.temp"
+    if outUrl.isLocal():
+        try: os.makedirs(outUrl.toUrl())
+        except: pass
+        outFn = os.path.join(args.out, 'normalization_factors.tsv')
+    else:
+        outFn = "normalize_post.temp"
     ofh = open(outFn, 'w')
 
 for l in ls:

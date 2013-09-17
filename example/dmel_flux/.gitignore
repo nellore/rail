@@ -1,0 +1,12 @@
+Chromosomes
+*.pro
+*.bed
+*.fastq
+*.lib
+*.par
+intermediate
+preprocessed_reads
+local_out
+*.gtf
+chrom.sizes
+tophat_out

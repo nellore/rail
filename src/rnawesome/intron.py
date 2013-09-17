@@ -385,6 +385,8 @@ def go():
         # Parse next read
         ln = ln.rstrip()
         toks = ln.split('\t')
+        if toks[0] == 'DUMMY':
+            continue
         assert len(toks) >= 7
         pt, st, en, lab, seq5_flank, seq3_flank, rdid = \
             toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6]

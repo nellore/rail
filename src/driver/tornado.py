@@ -49,46 +49,27 @@ import site
 import aws
 import pipeline
 import tornado_pipeline
-import tools
 import tornado_config
+from config import addConfigArgs, GenericConfig
+from tools import ToolConfigLocal, ToolConfigHadoop, ToolConfigEmr, bootstrapTool
+from ref import RefConfigLocal, RefConfigHadoop, RefConfigEmr
+from app import AppConfigLocal, AppConfigHadoop, AppConfigEmr
+from files import FileConfigLocal, FileConfigHadoop, FileConfigEmr, addFileArgs
+from tempfile import mkdtemp
+from emr_mode import addEmrModeArgs
+from hadoop_mode import addHadoopModeArgs
+from local_mode import addLocalModeArgs, LocalConfig
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "util"))
 
-import url
-import path
+from url import Url
+from path import is_exe
 
 parser = argparse.ArgumentParser(description='Generate and run a script for Tornado.')
 
-#
-# Modes of operation
-#
-parser.add_argument(\
-    '--local', action='store_const', const=True, help='Run in local mode.')
-parser.add_argument(\
-    '--hadoop', action='store_const', const=True, help='Run in Hadoop mode.')
-parser.add_argument(\
-    '--emr', action='store_const', const=True, help='Run in Elastic MapReduce mode.')
-parser.add_argument(\
-    '--test', action='store_const', const=True, help='Just test to see if requisite files are around.')
-
-#
-# Basic plumbing
-#
-parser.add_argument(\
-    '--manifest', metavar='PATH', type=str, required=False, help='URL for manifest file')
-parser.add_argument(\
-    '--input', metavar='PATH', type=str, required=False, help='URL for input directory')
-parser.add_argument(\
-    '--output', metavar='PATH', type=str, required=True, help='URL for output directory')
-parser.add_argument(\
-    '--reference', metavar='PATH', type=str, required=False, help='URL for reference archive')
-parser.add_argument(\
-    '--intermediate', metavar='PATH', type=str, help='URL for intermediate files')
-parser.add_argument(\
-    '--keep-intermediates', action='store_const', const=True, help='Keep intermediate files in addition to final output files.')
-parser.add_argument(\
-    '--dry-run', action='store_const', const=True, help='Just generate script for launching EMR cluster, but don\'t launch it.')
+addConfigArgs(parser)
+addFileArgs(parser)
 
 #
 # Advanced plumbing
@@ -128,113 +109,55 @@ parser.add_argument(\
 parser.add_argument(\
     '--no-differential', action='store_const', const=True, help='Don\'t run the differential expression pipeline.')
 
-#
-# Hadoop params
-#
-parser.add_argument(\
-    '--hadoop-script', metavar='PATH', type=str, help='Location of Hadoop script')
-parser.add_argument(\
-    '--streaming-jar', metavar='PATH', type=str, help='Location of Hadoop streaming jar')
-
-#
-# Elastic MapReduce params
-#
-parser.add_argument(\
-    '--emr-script', metavar='PATH', type=str, help='Path to Amazon elastic-mapreduce script')
-parser.add_argument(\
-    '--emr-local-dir', metavar='PATH', type=str, help='Path to a local directory on the EMR nodes where the reference archive and Tornado scripts will be copied.')
-parser.add_argument(\
-    '--hadoop-version', metavar='VERS', type=str, help='Hadoop version number to use')
-parser.add_argument(\
-    '--credentials', metavar='PATH', type=str, help='Amazon Elastic MapReduce credentials file')
-parser.add_argument(\
-    '--alive', action='store_const', const=True, help='Keep cluster alive after it finishes job.')
-parser.add_argument(\
-    '--no-memory-intensive', action='store_const', const=True, help='Do not set memory-intensive mode on the cluster.')
-parser.add_argument(\
-    '--no-add-swap', action='store_const', const=True, help='Do not add swap memory to the cluster.')
-parser.add_argument(\
-    '--enable-speculative', action='store_const', const=True, help='Enable Hadoop speculative execution for EMR runs (not recommended).')
-parser.add_argument(\
-    '--name', metavar='STR', type=str, help='Amazon Elastic MapReduce job name.')
-parser.add_argument(\
-    '--no-emr-debug', action='store_const', const=True, help='Don\'t enable EMR debugging functions.')
-parser.add_argument(\
-    '--instance-type', metavar='STR', type=str, help='Amazon EC2 instance type to use for all nodes.')
-parser.add_argument(\
-    '--instance-types', metavar='STR,STR,STR', type=str, help='Comma-separated list of EC2 instance types to use for MASTER, CORE and TASK nodes.')
-parser.add_argument(\
-    '--instance-count', metavar='INT', type=int, help='Number of EC2 instances to use (1 MASTER, rest will be CORE).')
-parser.add_argument(\
-    '--instance-counts', metavar='INT,INT,INT', type=str, help='Comma-separated list of number of EC2 instances to use for MASTER, CODE and TASK nodes.')
-parser.add_argument(\
-    '--bid-price', metavar='FLOAT', type=float, help='EC2 spot instance bid price.  If this is specified, TASK nodes will be spot instances.')
-
-#
-# Preprocessing params
-#
-parser.add_argument(\
-    '--preprocess-output', metavar='PATH', type=str, help='Put output from preprocessing step here')
-parser.add_argument(\
-    '--preprocess-compress', metavar='gzip|none|bzip2', type=str, default='gzip', help='Type of compression to use for preprocessing output.')
+addEmrModeArgs(parser)
+addHadoopModeArgs(parser)
+addLocalModeArgs(parser)
 
 tornado_config.addArgs(parser)
 
-#
-# Other params
-#
-parser.add_argument(\
-    '--verbose', action='store_const', const=True, help='Print lots of info to stderr.')
-parser.add_argument(\
-    '--version', action='store_const', const=True, help='Just print version information and quit.')
-parser.add_argument(\
-    '--set-version', metavar='VER', type=str, help='Force Tornado to use a particular version.')
-
 args = parser.parse_args()
-if args.local:
-    raise RuntimeError("--local mode not yet implemented")
 if args.hadoop:
     raise RuntimeError("--hadoop mode not yet implemented")
 
+appName = "Myrna2" # app name
+
 def parseVersion():
-    tornado_path = os.path.dirname(base_path)
-    for basename in [ "VERSION", "TORNADO_VERSION" ]:
-        vpath = os.path.join(tornado_path, basename)
+    path = os.path.dirname(base_path)
+    for basename in [ "VERSION", appName.upper() + "_VERSION" ]:
+        vpath = os.path.join(path, basename)
         if os.path.exists(vpath):
             with open(vpath, 'r') as fh:
                 return fh.readline().rstrip()
     else:
-        raise RuntimeError("Could not find VERSION file (looked in '%s') and --set-version not specified" % tornado_path)
+        raise RuntimeError("Could not find VERSION file (looked in '%s') and --set-version not specified" % path)
 
 ver = args.set_version
 if ver is None:
     ver = parseVersion()
 
-print >> sys.stderr, "Tornado v" + ver
+print >> sys.stderr, "Myrna2 v" + ver
 
 assert ver is not None
 
-appName = "tornado" # app name
-
-# TODO: also support local and Hadoop modes
 mode = "emr"
+if args.local: mode = 'local'
+if args.hadoop: mode = 'hadoop'
 
 # For URLs, remove trailing slash(es) and parse
 inp = None
 if args.input is not None:
-    inp = url.Url(args.input.rstrip('/'))
+    inp = Url(args.input.rstrip('/'))
 manifest = None
 if args.manifest is not None:
-    manifest = url.Url(args.manifest.rstrip('/'))
-out = url.Url(args.output.rstrip('/'))
-logUrl = url.Url(out.toUrl() + '/' + "logs")
+    manifest = Url(args.manifest.rstrip('/'))
+out = Url(args.output.rstrip('/'))
+logUrl = Url(out.toUrl() + '/' + "logs")
+intermediate = None
 if args.intermediate is not None:
-    intermediate = url.Url(args.intermediate.rstrip('/'))
-else:
-    intermediate = url.Url("hdfs:///%s/intermediate" % appName)
-ref = None
+    intermediate = Url(args.intermediate.rstrip('/'))
+reference = None
 if args.reference is not None:
-    ref = url.Url(args.reference.rstrip('/'))
+    reference = Url(args.reference.rstrip('/'))
 
 jobName = None
 swapAdd = 0
@@ -293,16 +216,16 @@ if mode == 'emr':
     emrCluster = aws.EmrCluster(itMaster, numMaster, itCore, numCore, itTask, numTask, args.bid_price)
     
     # Parse a few more EMR arguments
-    jobName = args.name or "Tornado job"
+    jobName = args.name or appName + " job"
     
     # Get AWS credentials
     cred = args.credentials
-    if cred is not None and not path.is_exe(cred):
+    if cred is not None and not is_exe(cred):
         raise RuntimeError("File specified with --credentials ('%s') doesn't exist or isn't executable" % args.credentials)
     
     # Get EMR script
     emrScript = args.emr_script
-    if emrScript is not None and not path.is_exe(emrScript):
+    if emrScript is not None and not is_exe(emrScript):
         raise RuntimeError("File specified with --emr-script ('%s') doesn't exist or isn't executable" % args.emrScript)
     
     # Sanity check Hadoop version
@@ -335,7 +258,7 @@ if mode == 'emr':
     if waitFail:
         emrArgs.append("--alive")
     
-    # Local dir, where ref genome and Tornado scripts are installed
+    # Local dir, where ref genome and scripts are installed
     emrLocalDir = args.emr_local_dir or "/mnt"
     
     # Set up name of streaming jar for EMR mode
@@ -348,13 +271,14 @@ if mode == 'emr':
         raise RuntimeError("--input argument '%s' is not an S3 URL" % inp)
     if not out.isS3():
         raise RuntimeError("--output argument '%s' is not an S3 URL" % out)
-    if ref is not None and not ref.isS3():
-        raise RuntimeError("--reference argument '%s' is not an S3 URL" % ref)
+    if reference is not None and not reference.isS3():
+        raise RuntimeError("--reference argument '%s' is not an S3 URL" % reference)
     if args.intermediate is not None and not intermediate.isS3():
         raise RuntimeError("--intermediate argument '%s' is not an S3 URL" % args.intermediate)
 
+# Parameters governing the algorithm
 tconf = tornado_config.TornadoConfig(args)
-pconf = pipeline.PipelineConfig(hadoopVersionToks, waitFail, emrStreamJar, emrCluster.numCoreOrTaskProcessors(), emrLocalDir, args.preprocess_compress, out)
+gconf = GenericConfig(args, out)
 
 pipelines = ["preprocess", "align", "coverage", "junction", "differential"]
 
@@ -407,9 +331,9 @@ useManifest = 'coverage' in pipelines
 useInput = 'preprocess' not in pipelines
 
 if useManifest and manifest is None:
-    raise RuntimeError("Must specify --manifest when job involves preprocessing")
+    raise RuntimeError("Must specify --manifest when job involves the coverage pipeline")
 
-if useRef and ref is None:
+if useRef and reference is None:
     raise RuntimeError("Must specify --reference when job involves alignment or junction pipelines")
 
 if useInput and inp is None:
@@ -424,8 +348,6 @@ pipelineSteps = {
 
 allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
 
-# Tornado is organized as a tree, but this struct also allows us to
-# organize it as a DAG
 stepInfo = {\
     'preprocess'     : ([                                 ], tornado_pipeline.PreprocessingStep),
     'align'          : ([('preprocess',     ''           )], tornado_pipeline.AlignStep),
@@ -450,17 +372,75 @@ def buildFlow(allSteps, stepInfo, inp, out, inter, manifest):
         indirs = []
         if len(prvs) == 0: indirs.append(manifest)
         for prv, subdir in prvs:
-            base = inter if prv in allSteps else inp
-            assert base is not None, "Step=%s" % cur
-            indirs.append(base.plus(prv + subdir))
+            if prv in allSteps:
+                indirs.append(inter.plus(prv + subdir))
+            else:
+                indirs.append(inp)
         outdir = inter.plus(cur)
-        steps.append(cl(indirs, outdir, tconf, pconf))
+        steps.append(cl(indirs, outdir, tconf, gconf))
     return steps
 
+if intermediate is None:
+    if mode == 'local':
+        intermediate = Url(os.path.join(mkdtemp(), 'intermediate'))
+        if args.verbose:
+            print >> sys.stderr, 'Temporary directory for local mode: "%s"' % intermediate
+    elif mode == 'hadoop':
+        intermediate = Url("hdfs:///%s/intermediate" % appName)
+    elif mode == 'emr':
+        intermediate = Url("hdfs:///%s/intermediate" % appName)
+assert intermediate is not None
+
+# Need to set default intermediate dir
 steps = buildFlow(allSteps, stepInfo, inp, out, intermediate, manifest)
 
-if mode == 'emr':
+if mode == 'local':
+    appConf = AppConfigLocal(appName, True)
+    toolConf = ToolConfigLocal(appName, True)
+    refConf, fileConf = None, None
+    if useRef:
+        refConf = RefConfigLocal(reference.toUrl(), args.igenomes, True)
+    if useManifest:
+        fileConf = FileConfigLocal(manifest, True)
+    localConf = LocalConfig(args)
+    
+    shStr = '#!/bin/sh\n'
+    if localConf.force:
+        shStr += 'rm -rf %s\n' % out.toUrl()
+    shStr += '\n'.join([ step.toLocalCmd(localConf) for step in steps ])
+    if refConf is not None: shStr = refConf.config(shStr)
+    if fileConf is not None: shStr = fileConf.config(shStr)
+    shStr = toolConf.config(appConf.config(shStr))
+    
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as shFh:
+        shFn = shFh.name
+        shFh.write(shStr)
+    print >> sys.stderr, "Shell output in: '%s'" % shFn
+    
+    cmdl = [ 'sh', shFn ]
+    cmd = ' '.join(cmdl)
+    if not args.dry_run:
+        os.system(cmd)
+    else:
+        print >> sys.stderr, "--dry-run mode: not running shell script"
+elif mode == 'hadoop':
+    raise RuntimeError('--hadoop mode not implemented yet')
+elif mode == 'emr':
+    
+    appConf = AppConfigEmr(emrLocalDir)
+    toolConf = ToolConfigEmr(emrLocalDir)
+    refConf, fileConf = None, None
+    if useRef: refConf = RefConfigEmr(emrLocalDir, args.igenomes)
+    if useManifest: fileConf = FileConfigEmr(emrLocalDir)
+    
+    # Parameters governing how to run the pipeline
+    pconf = pipeline.PipelineConfig(hadoopVersionToks, waitFail, emrStreamJar, emrCluster.numCoreOrTaskProcessors(), emrLocalDir)
+
     jsonStr = "[\n" + ",\n".join([ step.toEmrCmd(pconf) for step in steps ]) + "\n]\n"
+    if refConf is not None: jsonStr = refConf.config(jsonStr)
+    if fileConf is not None: jsonStr = fileConf.config(jsonStr)
+    jsonStr = toolConf.config(appConf.config(jsonStr))
+    
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as jsonFh:
         jsonFn = jsonFh.name
         jsonFh.write(jsonStr)
@@ -480,28 +460,28 @@ if mode == 'emr':
         cmdl.extend(["-c", cred])
     
     cmdl.append(emrCluster.emrArgs())
-    tornadoUrl = url.Url("s3://tornado-emr/bin/tornado-%s.tar.gz" % ver)
+    tornadoUrl = Url("s3://tornado-emr/bin/tornado-%s.tar.gz" % ver)
     
-    cmdl.append(tools.bootstrapTool("python"))
+    cmdl.append(bootstrapTool("python"))
     if useBowtie:
-        cmdl.append(tools.bootstrapTool("bowtie"))
+        cmdl.append(bootstrapTool("bowtie"))
     if useSraToolkit:
-        cmdl.append(tools.bootstrapTool("sra-toolkit"))
+        cmdl.append(bootstrapTool("sra-toolkit"))
     if useR:
-        cmdl.append(tools.bootstrapTool("R"))
+        cmdl.append(bootstrapTool("R"))
     if useKenttools:
-        cmdl.append(tools.bootstrapTool("kenttools", dest="/mnt/bin"))
+        cmdl.append(bootstrapTool("kenttools", dest="/mnt/bin"))
     if useSamtools:
-        cmdl.append(tools.bootstrapTool("samtools"))
+        cmdl.append(bootstrapTool("samtools"))
     # Get Tornado scripts and run Makefile for swig code
-    cmdl.append(tools.bootstrapTool("tornado", src=tornadoUrl, dest="/mnt"))
+    cmdl.append(bootstrapTool("tornado", src=tornadoUrl, dest="/mnt"))
     tarballs = []
     if useIndex:
-        tarballs.append(url.Url(ref.toUrl().replace('.tar.gz', '.index.tar.gz')))
+        tarballs.append(Url(reference.toUrl().replace('.tar.gz', '.index.tar.gz')))
     if useGtf:
-        tarballs.append(url.Url(ref.toUrl().replace('.tar.gz', '.gtf.tar.gz')))
+        tarballs.append(Url(reference.toUrl().replace('.tar.gz', '.gtf.tar.gz')))
     if useFasta:
-        tarballs.append(url.Url(ref.toUrl().replace('.tar.gz', '.fasta.tar.gz')))
+        tarballs.append(Url(reference.toUrl().replace('.tar.gz', '.fasta.tar.gz')))
     if len(tarballs) > 0:
         cmdl.append(aws.bootstrapFetchTarballs("reference archives", tarballs, emrLocalDir))
     if useManifest:

@@ -6,153 +6,213 @@ tornado_pipeline.py
 import pipeline
 import os
 import site
+import re
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "util"))
 
 import url
 
+#
+# Note: All the %%(somthing)%% placeholders below are substituted in a
+# mode-dependent manner.  That is, a different string could be substituted
+# depending on whether we're in local, hadoop or emr mode.  This module tries
+# to stay as mode-agnostic as possible.
+#
+# %%BASE%%: Base Myrna 2 directory
+# %%MANIFEST%%: Manifest file
+# %%BOWTIE%%: Path to Bowtie executable on workers/local machine
+# %%BEDTOBIGBED%%: Path to bedToBigBed executable on workers/local machine
+#
+
 class PreprocessingStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
+    def __init__(self, inps, output, tconf, gconf):
         compressArg = ""
-        if pconf.preprocCompress is not None and pconf.preprocCompress == "gzip":
+        if gconf.preprocCompress is not None and gconf.preprocCompress == "gzip":
             compressArg = "--gzip-output "
+        mapperStr = """
+            python %%BASE%%/src/rnawesome/preprocess.py 
+                --nucs-per-file=8000000
+                %s
+                --push=%s
+                --ignore-first-token""" % (compressArg, output.toUpperUrl())
+        mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(PreprocessingStep, self).__init__(\
             inps,
-            url.Url("hdfs:///dummy"),
+            None, # dummy: url.Url("hdfs:///dummy"),
             name="Preprocess", # name
-            inputFormat="org.apache.hadoop.mapred.lib.NLineInputFormat",
-            mapper="python %s/src/rnawesome/preprocess.py --nucs-per-file=8000000 %s--push=%s --ignore-first-token" % (pconf.emrLocalDir, compressArg, output.toUpperUrl()))
+            lineByLine=True,
+            mapper=mapperStr)
 
 class AlignStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
-        bexe = ""
-        if tconf.bowtieExe is not None:
-            bexe = "--bowtieExe='%s' " % tconf.bowtieExe
+    def __init__(self, inps, output, tconf, gconf):
+        mapperStr = """
+            python %%BASE%%/src/rnawesome/align.py
+                --refseq=%%REF_FASTA%% 
+                --faidx=%%REF_FASTA_INDEX%% 
+                --bowtieIdx=%%REF_BOWTIE_INDEX%% 
+                --bowtieExe=%%BOWTIE%% 
+                --readletLen %d 
+                --readletIval %d 
+                --partition-len %d 
+                --exon-differentials 
+                --verbose 
+                -- 
+                %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
+        mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(AlignStep, self).__init__(\
             inps,
             output,
             name="Align",
-            mapper="python %s/src/rnawesome/align.py --refseq=%s/fasta/genome.fa --faidx=%s/fasta/genome.fa.fai %s--bowtieIdx=%s/index/genome --readletLen %d --readletIval %d --partition-len %d --exon-differentials --verbose -- %s" % (d, d, d, bexe, d, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs()),
-            outputFormat='edu.jhu.cs.MultipleOutputFormat',
-            libjars=['/mnt/lib/multiplefiles.jar'])
+            mapper=mapperStr,
+            multipleOutput=True)
 
 class IntronStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rnawesome/intron.py 
+                --refseq=%%REF_FASTA%% 
+                --radius=%d 
+                --readletLen=%d 
+                --readletIval=%d""" % (tconf.clusterRadius, tconf.readletLen, tconf.readletIval)
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(IntronStep, self).__init__(\
             inps,
             output,  # output URL
             name="Intron", # name
             aggr=pipeline.Aggregation(None, 8, 1, 2), # 8 tasks per reducer
-            reducer="python %s/src/rnawesome/intron.py --refseq=%s/fasta/genome.fa --radius=%d --readletLen=%d --readletIval=%d" % (d, d, tconf.clusterRadius, tconf.readletLen, tconf.readletIval),
-            outputFormat='edu.jhu.cs.MultipleOutputFormat',
-            libjars=['/mnt/lib/multiplefiles.jar'])
+            reducer=reducerStr,
+            multipleOutput=True)
 
 class MergeStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = "python %%BASE%%/src/rnawesome/merge.py --partition-stats"
         super(MergeStep, self).__init__(\
             inps,
             output,  # output URL
             name="Merge", # name
             aggr=pipeline.Aggregation(None, 8, 1, 2),
-            reducer="python %s/src/rnawesome/merge.py --partition-stats" % d,
-            outputFormat='edu.jhu.cs.MultipleOutputFormat',
-            libjars=['/mnt/lib/multiplefiles.jar'])
+            reducer=reducerStr,
+            multipleOutput=True)
 
 class WalkPrenormStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rnawesome/walk_prenorm.py 
+                --partition-stats 
+                --partition-len=%d""" % (tconf.partitionLen)
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(WalkPrenormStep, self).__init__(\
             inps,
             output,  # output URL
             name="WalkPreNormalize", # name
             aggr=pipeline.Aggregation(None, 8, 1, 2),
-            reducer="python %s/src/rnawesome/walk_prenorm.py --partition-stats --partition-len=%d" % (d, tconf.partitionLen),
-            outputFormat='edu.jhu.cs.MultipleOutputFormat',
-            libjars=['/mnt/lib/multiplefiles.jar'])
+            reducer=reducerStr,
+            multipleOutput=True)
 
 class NormalizePreStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rnawesome/normalize_pre.py 
+                --partition-stats 
+                --partition-len=%d""" % (tconf.partitionLen)
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(NormalizePreStep, self).__init__(\
             inps,
             output,  # output URL
             name="NormalizePre", # name
             aggr=pipeline.Aggregation(None, 8, 2, 3),
-            reducer="python %s/src/rnawesome/normalize_pre.py --partition-stats --partition-len=%d" % (d, tconf.partitionLen),
-            outputFormat='edu.jhu.cs.MultipleOutputFormat',
-            libjars=['/mnt/lib/multiplefiles.jar'])
+            reducer=reducerStr,
+            multipleOutput=True)
 
 class NormalizeStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rnawesome/normalize2.py 
+                --percentile %f
+                --out_dir=%s/coverage
+                --bigbed_exe=%%BEDTOBIGBED%%
+                --faidx=%%REF_FASTA_INDEX%%
+                --verbose""" % (tconf.normPercentile, gconf.out)
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(NormalizeStep, self).__init__(\
             inps,
             output,  # output URL
             name="Normalize", # name
             aggr=pipeline.Aggregation(None, 1, 1, 3),
-            reducer="python %s/src/rnawesome/normalize2.py --percentile %f --out_dir=%s/coverage --bigbed_exe=%s/bin/bedToBigBed --faidx=%s/fasta/genome.fa.fai --verbose" % (d, tconf.normPercentile, pconf.out.toUpperUrl(), d, d))
+            reducer=reducerStr)
 
 class NormalizePostStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rnawesome/normalize_post.py 
+                --out=%s/normalize 
+                --manifest=%%MANIFEST%%""" % (gconf.out)
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(NormalizePostStep, self).__init__(\
             inps,
             output,  # output URL
             name="NormalizePost", # name
             aggr=pipeline.Aggregation(1, None, 0, 0),
-            reducer="python %s/src/rnawesome/normalize_post.py --out=%s/normalize --manifest=%s/MANIFEST" % (d, pconf.out.toUpperUrl(), d))
+            reducer=reducerStr)
 
 class WalkFitStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rnawesome/walk_fit.py"""
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(WalkFitStep, self).__init__(\
             inps,
             output,  # output URL
             name="WalkFit", # name
             aggr=pipeline.Aggregation(None, 8, 1, 2),
-            reducer="python %s/src/rnawesome/walk_fit.py" % d)
+            reducer=reducerStr)
 
 class EbayesStep(pipeline.Step):
     """ Just 1 reduce task """
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rnawesome/walk_fit.py"""
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(EbayesStep, self).__init__(\
             inps,
             output,
             name="EmpiricalBayes", # name
             aggr=pipeline.Aggregation(1, None, 0, 0),
-            reducer="python %s/src/rnawesome/ebayes.py" % d)
+            reducer=reducerStr)
 
 class HmmParamsStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rnawesome/hmm_params.py"""
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(HmmParamsStep, self).__init__(\
             inps,
             output,
             name="HMMparams", # name
             aggr=pipeline.Aggregation(1, None, 0, 0),
-            reducer="python %s/src/rnawesome/hmm_params.py" % d)
+            reducer=reducerStr)
 
 class HmmStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rnawesome/hmm.py"""
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(HmmStep, self).__init__(\
             inps,
             output,
             name="HMM", # name
             aggr=pipeline.Aggregation(None, 8, 1, 2),
-            reducer="python %s/src/rnawesome/hmm.py" % d)  # reducer
+            reducer=reducerStr)
 
 class AggrPathStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, pconf):
-        d = pconf.emrLocalDir
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rnawesome/aggr_path.py"""
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(AggrPathStep, self).__init__(\
             inps,
             output,
             name="HMMPaths", # name
             aggr=pipeline.Aggregation(tconf.numPermutations * 2, None, 1, 2),
-            reducer="python %s/src/rnawesome/aggr_path.py" % d)
+            reducer=reducerStr)

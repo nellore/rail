@@ -153,6 +153,11 @@ for i in xrange(1, len(sys.argv)):
 
 args = parser.parse_args(argv[1:])
 
+# So that all appropriate output directories are at least created, even if
+# they perhaps end up empty
+if args.exon_differentials: print 'exon_diff\tDUMMY'
+if args.exon_intervals: print 'exon_ival\tDUMMY'
+print 'intron\tDUMMY'
 
 def xformRead(seq, qual):
     # Possibly truncate and/or modify quality values
