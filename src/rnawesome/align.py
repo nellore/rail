@@ -264,15 +264,9 @@ def printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,outha
     global nout
     offset = args.splice_overlap
     fw_char = "+" if fw else "-"
-    #Obtain coordinates for flanking coordinate frames
-    left_st,left_end = regionSt-offset,regionSt
-    right_st,right_end = regionEnd,regionEnd+offset
-    left_flank  = rdseq[left_st:left_end]   if fw else revcomp(rdseq[left_st:left_end])
-    right_flank = rdseq[right_st:right_end] if fw else revcomp(rdseq[right_st:right_end])
-    assert len(left_flank)==len(right_flank),"Bad flanks %s %s found in %s:%d-%d"%(left_flank,right_flank,refid,intronSt,intronEnd)
     lab = sample.parseLab(rdid)
     for pt, _, _ in iter(partition.partitionStartOverlaps(refid, intronSt, intronEnd, binsz, fudge=args.intron_partition_overlap)):
-        print >> outhandle, "intron\t%s%s\t%012d\t%d\t%s\t%s\t%s\t%s" % (pt, fw_char, intronSt, intronEnd, lab,left_flank,right_flank,rdid)
+        print >> outhandle, "intron\t%s%s\t%012d\t%d\t%s\t%s" % (pt, fw_char, intronSt, intronEnd, lab,rdid)
         nout += 1
 
 def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset):
@@ -390,31 +384,31 @@ def composeReadletAlignments(rdid, rdals, rdseq):
     ivals, positions = getIntervals(rdals)
     for kfw in ivals.iterkeys(): # for each chromosome covered by >= 1 readlet
         k, fw = kfw
-        in_end, in_start = -1, -1
+        intronEnd, intronSt = -1, -1
         for iv in sorted(iter(ivals[kfw])): # for each covered interval, left-to-right
             st, en = iv.start, iv.end
             assert en > st
             assert st >= 0 and en >= 0
-            if in_end == -1 and in_start >= 0:
-                in_end = st
-            if in_start == -1:
-                in_start = en
-            if in_start >= 0 and in_end >= 0:
-                region_st, region_end = positions[(k, fw, in_start)], positions[(k, fw, in_end)]
-                if not fw: region_st, region_end = region_end, region_st
+            if intronEnd == -1 and intronSt >= 0:
+                intronEnd = st
+            if intronSt == -1:
+                intronSt = en
+            if intronSt >= 0 and intronEnd >= 0:
+                regionSt, regionEnd = positions[(k, fw, intronSt)], positions[(k, fw, intronEnd)]
+                if not fw: regionSt, regionEnd = regionEnd, regionSt
                 offset = args.splice_overlap
-                unmapped_st,unmapped_end = region_st-offset,region_end+offset
-                reflen,rdlet_len = in_end-in_start, abs(region_end-region_st)
+                unmapped_st,unmapped_end = regionSt-offset,regionEnd+offset
+                reflen,rdlet_len = intronEnd-intronSt, abs(regionEnd-regionSt)
 
-                assert in_start < in_end
-                if abs(reflen-rdlet_len)/float(rdlet_len+1) < 0.05:
+                assert intronSt < intronEnd
+                if abs(reflen-rdlet_len)/float(rdlet_len+1) < 0.01:
                     #Note: just a readlet missing due to sequencing error or variant
-                    handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdid,fw,fnh)
+                    handleShortAlignment(k,intronSt,intronEnd,rdseq,unmapped_st,unmapped_end,regionSt,regionEnd,rdid,fw,fnh)
                 elif rdlet_len>reflen:
-                    printExons(k,in_start,in_end,rdid)
+                    printExons(k, intronSt,intronEnd, rdid)
                 else:
-                    handleIntron(k,in_start,in_end,rdseq,region_st,region_end,rdid,fw,fnh,offset)
-                in_start, in_end = en, -1
+                    handleIntron(k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
+                intronSt, intronEnd = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets

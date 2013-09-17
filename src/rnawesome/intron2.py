@@ -92,7 +92,6 @@ def go(ifh, ofh, verbose=False, refseq=None):
     global ninp
     
     starts, ends, labs, rdids = [], [], [], []
-    seq5_flanks, seq3_flanks = [], []
     last_pt, last_refid = '\t', '\t'
     last_strand = None
     last_pt_st, last_pt_en = None, None
@@ -173,9 +172,9 @@ def go(ifh, ofh, verbose=False, refseq=None):
     for ln in ifh:
         # Parse next read
         toks = ln.rstrip().split('\t')
-        assert len(toks) >= 7
-        pt, st, en, lab, seq5_flank, seq3_flank, rdid = \
-            toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4], toks[5], toks[6]
+        assert len(toks) >= 5
+        pt, st, en, lab, rdid = \
+            toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4]
         assert en > st
         refid, pt_st, pt_en = partition.parse(pt[:-1], binsz)
         strand = pt[-1]
@@ -185,7 +184,6 @@ def go(ifh, ofh, verbose=False, refseq=None):
         if last_pt != pt and last_pt != '\t':
             handlePartition()
             starts, ends, labs, rdids = [], [], [], []
-            seq5_flanks, seq3_flanks = [], []
             mat = {}
         
         i, j = en - st, st
@@ -194,8 +192,6 @@ def go(ifh, ofh, verbose=False, refseq=None):
         starts.append(st)
         ends.append(en)
         labs.append(lab)
-        seq5_flanks.append(seq5_flank)
-        seq3_flanks.append(seq3_flank)
         rdids.append(rdid)
         last_pt, last_strand, last_refid = pt, strand, refid
         last_pt_st, last_pt_en = pt_st, pt_en
