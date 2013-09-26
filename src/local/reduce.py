@@ -225,14 +225,15 @@ countPool.map(binCountWorker, inps)
 checkFailQueue()
 
 tot = 0
-while not binCountQueue.empty():
+for _ in xrange(num_processes):
     cnt = binCountQueue.get()
+    assert cnt is not None
     for k, v in cnt.iteritems():
         binCount[k] += v
         tot += v
 
 if tot > 0:
-    message('Handling %d input records' % tot)
+    message('Allocating %d input records to %d tasks' % (tot, args.num_tasks))
     
     # Allocate bins to tasks, always adding to task with least tuples so far
     taskNames = [ "task-%05d" % i for i in xrange(args.num_tasks) ]
@@ -246,6 +247,8 @@ if tot > 0:
         heapq.heappush(taskq, (sz, nm, klist))
         keyToTask[k] = nm
     
+    message('Writing tasks')
+    
     # Write out all the tasks to files within 'taskDir'
     ofhs = {}
     for inp in inps:
@@ -257,7 +260,7 @@ if tot > 0:
                 if toks[0] == 'DUMMY': continue
                 assert len(toks) >= args.bin_fields
                 k = '\t'.join(toks[:args.bin_fields])
-                assert k in keyToTask
+                assert k in keyToTask, 'No such key: "%s"' % k
                 task = keyToTask[k]
                 if task not in ofhs:
                     ofhs[task] = open(os.path.join(taskDir, task), 'w')
@@ -271,6 +274,7 @@ if tot > 0:
     # Stage 2. Sort and reduce each task
     ########################################
     
+    message('Sorting tasks')
     needSort = args.num_tasks > 1 or args.sort_fields > args.bin_fields
     if needSort:
         def doSort(task, external=True, keep=args.keep_all):
@@ -294,6 +298,7 @@ if tot > 0:
     reduceInpDir = staskDir if needSort else taskDir
     
     def doReduce(task, keep=args.keep_all):
+        message('Pid %d processing task "%s"' % (os.getpid(), task))
         sortedFn = os.path.join(reduceInpDir, task)
         sortedFn = os.path.abspath(sortedFn)
         if not os.path.exists(sortedFn):
@@ -314,6 +319,7 @@ if tot > 0:
             shutil.rmtree(wd)
         return outFn
     
+    message('Performing reduce')
     reducePool = multiprocessing.Pool(num_processes)
     outfns = reducePool.map(doReduce, taskNames)
     checkFailQueue()
