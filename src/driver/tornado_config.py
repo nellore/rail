@@ -24,6 +24,8 @@ def addArgs(parser):
     parser.add_argument(\
         '--cluster-radius', metavar='INT', type=int, default="2", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
+        '--intron-partition-overlap', metavar='INT', type=int, default="20", help='# of nucleotides of overlap between intron-finding partitions.')
+    parser.add_argument(\
         '--bowtie-exe', metavar='STR', type=str, help='Bowtie executable to use.  Must exist at this path on all the cluster nodes.')
     parser.add_argument(\
         '--bowtie-args', metavar='STR', type=str, help='Arguments to pass to Bowtie.')
@@ -46,6 +48,8 @@ def addArgs(parser):
     parser.add_argument(\
         '--pool-bio-replicates', action='store_const', const=True, help='Pool together biological and technical replicates instead of treating them separately (not recommended).')
     parser.add_argument(\
+        '--stranded', action='store_const', const=True, help='RNA-seq data is stranded?')
+    parser.add_argument(\
         '--hmm-overlap', metavar='INT', type=int, default=100, help='Number of positions of overlap between adjacent emission strings.')
 
 class TornadoConfig(object):
@@ -64,6 +68,9 @@ class TornadoConfig(object):
         r = self.clusterRadius = args.cluster_radius
         if r < 0:
             raise RuntimeError("Argument for --cluster-radius must be >= 0; was %d" % r)
+        i = self.intronPartitionOlap = args.intron_partition_overlap
+        if i < 0:
+            raise RuntimeError("Argument for --intron-partition-overlap must be >= 0; was %d" % i)
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
@@ -85,6 +92,7 @@ class TornadoConfig(object):
             raise RuntimeError("Argument for --permutations must be >= 0; was %d" % p)
         self.discardMate1 = args.discard_mate1
         self.discardMate2 = args.discard_mate2
+        self.stranded = args.stranded
         self.poolTech = args.pool_tech_replicates
         self.poolBio = args.pool_bio_replicates
         o = self.hmmOlap = args.hmm_overlap

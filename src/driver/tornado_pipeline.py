@@ -70,11 +70,19 @@ class AlignStep(pipeline.Step):
 class IntronStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/intron.py 
-                --refseq=%%REF_FASTA%% 
-                --radius=%d 
-                --readletLen=%d 
-                --readletIval=%d""" % (tconf.clusterRadius, tconf.readletLen, tconf.readletIval)
+            python %%BASE%%/src/rnawesome/intron2.py
+                --refseq=%%REF_FASTA%%
+                --cluster-radius=%d
+                --intron-partition-overlap=%d
+                --per-span
+                --per-site
+                --readletLen %d
+                --readletIval %d
+                --partition-len %d
+                %s
+        """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
+               tconf.readletLen, tconf.readletIval, tconf.partitionLen,
+               '--stranded' if tconf.stranded else '')
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(IntronStep, self).__init__(\
             inps,
