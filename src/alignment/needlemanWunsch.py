@@ -15,15 +15,6 @@ def lcsCost():
         M[i,i] = -1
     return M
 
-# def matchCost():
-#     """ Return a substitution matrix where match=+1, everything else=-1.  The
-#         6 symbols are 0=A, 1=C, 2=G, 3=T, 4=N, 5=- (gap). """
-#     M = numpy.zeros((6,6), dtype=numpy.int32)
-#     M.fill(-1)
-#     for i in range(0,6):
-#         M[i,i] = 1
-#     return M
-
 def matchCost():
     """ Return a substitution matrix where match=+1, gap=-2, everything else=-1.  The
         6 symbols are 0=A, 1=C, 2=G, 3=T, 4=N, 5=- (gap). """
@@ -43,6 +34,27 @@ def inverseMatchCost():
     for i in range(0,6):
         M[i,i] = 0
     return M
+
+"""
+Breaks ties in the Needleman-Wunsch algorithm by selecting the middle column
+from among all the columns containing an element maximal w/r/t the whole
+matrix.
+
+e.g.  The 3rd column will be chosen
+matrix = [ 1 2 3 4 5
+           6 8 6 4 1
+           1 2 8 4 5
+           6 7 6 8 1
+           1 2 3 4 5]
+"""
+def medianTieBreaker(dpmat,m_ind):
+    m_elem = numpy.max(dpmat[:,m_ind])
+    st = m_ind
+    _, c = dpmat.shape
+    while m_ind >=0 and m_ind<c and numpy.max(dpmat[:,m_ind])==m_elem:
+        m_ind+=1
+    end = m_ind
+    return (st+end)/2
 
 cigar_pattern = re.compile(r"(\d+)(\S)")
 def sumcigar(alignment):
