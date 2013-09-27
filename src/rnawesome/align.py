@@ -203,10 +203,10 @@ def correctSplice(read,ref_left,ref_right,fw):
     return r,c,total[r,c],leftDP,rightDP,total
 
 # Print all listed exons to stdout
-def printExons(refid,in_start,in_end,rdid):
+def printExons(refid,in_start,in_end,rdid,exon_differentials,exon_intervals):
     global nout
     lab = sample.parseLab(rdid)
-    if args.exon_differentials:
+    if exon_differentials:
         for pt, pt_st, pt_en in iter(partition.partition(refid, in_start, in_end, binsz)):
             # Print increment at interval start
             assert in_start < pt_en
@@ -217,7 +217,7 @@ def printExons(refid,in_start,in_end,rdid):
             if in_end < pt_en:
                 print "exon_diff\t%s\t%s\t%012d\t-1" % (pt, lab, in_end)
                 nout += 1
-    if args.exon_intervals:
+    if exon_intervals:
         for pt, _, _ in iter(partition.partition(refid, in_start, in_end, binsz)):
             print "exon_ival\t%s\t%012d\t%d\t%s" % (pt, in_start, in_end, lab)
             nout += 1
@@ -313,17 +313,18 @@ def handleIntron(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,o
         """
         handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
 
-def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdid,fw,fnh):
+def handleShortAlignment(k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,exon_differentials,exon_intervals):
     """
     When the intervals of unaligned read & reference characters are similar in
     length, we say there's no intron but we also check to see if there's
     enough similarity in there to say that the middle is also part of the
     exon.
     """
-    refseq = fnh.fetch_sequence(k, in_start + 1, in_end + 1).upper() # Sequence from genome
-    assert unmapped_st < len(rdseq)
-    assert unmapped_end < len(rdseq)
-    rdsubseq = rdseq[unmapped_st:unmapped_end]
+    if regionSt>=regionEnd:
+        #Reject because this exon interval has already been evaluated by the surrouding readlets
+        return
+    refseq = fnh.fetch_sequence(k, intronSt + 1, intronEnd + 1).upper() # Sequence from genome
+    rdsubseq = rdseq[regionSt:regionEnd]
     if not fw:
         rdsubseq = revcomp(rdsubseq)
     score = needlemanWunsch.needlemanWunsch(refseq, rdsubseq, needlemanWunsch.matchCost())
@@ -331,7 +332,7 @@ def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region
     # other measure that adapts to length of the missing bit,
     # not just a raw score
     if score >= len(rdsubseq)*(9.0/10):
-        printExons(k,in_start,in_end,rdid)
+        printExons(k,intronSt,intronEnd,rdid,exon_differentials, exon_intervals)
 
 def getIntervals(rdals):
     """ Given a collection of readlet-alignment tuples, then them into a set
@@ -352,6 +353,7 @@ def getIntervals(rdals):
     return ivals, positions
 
 def composeReadletAlignments(rdid, rdals, rdseq):
+    rdseq = rdseq.upper()
     ivals, positions = getIntervals(rdals)
     for kfw in ivals.iterkeys(): # for each chromosome covered by >= 1 readlet
         k, fw = kfw
@@ -365,18 +367,17 @@ def composeReadletAlignments(rdid, rdals, rdseq):
                 if not fw: regionSt, regionEnd = regionEnd, regionSt
                 # Now regionSt, regionEn are w/r/t alignment's "left" end
                 offset = args.splice_overlap
-                unmapped_st, unmapped_end = regionSt-offset, regionEnd+offset
                 reflen, readlen = intronEnd - intronSt, regionEnd - regionSt
                 potentialIntronLen = reflen - readlen
                 if potentialIntronLen < args.min_intron_length:
-                    handleShortAlignment(k, intronSt, intronEnd, rdseq, unmapped_st, unmapped_end, regionSt, regionEnd, rdid, fw, fnh)
+                    handleShortAlignment(k, intronSt, intronEnd, rdseq, regionSt, regionEnd, rdid, fw, fnh,args.exon_differentials,args.exon_intervals)
                 else:
                     handleIntron(k, intronSt, intronEnd, rdseq, regionSt, regionEnd, rdid, fw, fnh, offset)
                 intronSt, intronEnd = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets
-            printExons(k, st, en, rdid)
+            printExons(k, st, en, rdid, args.exon_differentials, args.exon_intervals)
             lastEn = en
 
 class OutputThread(threading.Thread):
@@ -680,6 +681,22 @@ else:
             os.remove(self.faidx)
             os.remove(self.testDump)
 
+        def test_short_alignment1(self):
+            sys.stdout = open(self.testDump,'w')
+            rdid,fw,refid = "0;LB:test",True,"test"
+            iSt,iEnd = 10,19  #intron coords
+            rSt,rEnd = 10,19  #region coords
+            offset = 10
+            fnh = fasta.fasta(self.fasta)
+            handleShortAlignment(refid,iSt,iEnd,self.rdseq,
+                                 rSt,rEnd,rdid,fw,fnh,0,True)
+            sys.stdout.close()
+            test_out = open(self.testDump,'r')
+            testLine = test_out.readline().rstrip()
+            toks = testLine.split("\t")
+            st,end = int(toks[2]), int(toks[3])
+            self.assertEquals(st,10)
+            self.assertEquals(end,19)
 
         def test_correct_splice1(self):
             left = "TTACGAAGGTTTGTA"
