@@ -56,8 +56,8 @@ def cmd(args, readFn=None, bowtieArgs=None, sam=False):
     mycmd += ("-" if readFn is None else readFn)
     return mycmd
 
-def proc(args, readFn=None, bowtieArgs=None, sam=False, outHandler=None, errHandler=None, stdinPipe=True):
-    stdout_pipe = None if outHandler is None else subprocess.PIPE
+def proc(args, readFn=None, bowtieArgs=None, sam=False, stdoutPipe=False, outHandler=None, errHandler=None, stdinPipe=True):
+    stdout_pipe = None if (outHandler is None and not stdoutPipe) else subprocess.PIPE
     stderr_pipe = None if errHandler is None else subprocess.PIPE
     stdin_pipe = subprocess.PIPE if stdinPipe else None
     mycmd = cmd(args, readFn=readFn, bowtieArgs=bowtieArgs, sam=sam)
