@@ -323,15 +323,17 @@ def handleShortAlignment(k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,f
     if regionSt>=regionEnd:
         #Reject because this exon interval has already been evaluated by the surrouding readlets
         return
-    refseq = fnh.fetch_sequence(k, intronSt + 1, intronEnd + 1).upper() # Sequence from genome
+    #Note: fetch_sequence is base 1 indexed ainclusive
+    refseq = fnh.fetch_sequence(k, intronSt + 1, intronEnd).upper() # Sequence from genome
     rdsubseq = rdseq[regionSt:regionEnd]
     if not fw:
         rdsubseq = revcomp(rdsubseq)
-    score = needlemanWunsch.needlemanWunsch(refseq, rdsubseq, needlemanWunsch.matchCost())
+    score,scoreMat = needlemanWunsch.needlemanWunsch(refseq, rdsubseq, needlemanWunsch.matchCost())
+
     # TODO: redo this in terms of percent identity or some
     # other measure that adapts to length of the missing bit,
     # not just a raw score
-    if score >= len(rdsubseq)*(9.0/10):
+    if score >= len(rdsubseq)*(5.0/10):
         printExons(k,intronSt,intronEnd,rdid,exon_differentials, exon_intervals)
 
 def getIntervals(rdals):
@@ -877,6 +879,68 @@ else:
             self.assertEquals( st,32 )
             self.assertEquals( end,135 )
 
+    class TestAlignFunctions3(unittest.TestCase):
+        ###Big Note:  We are going to assume base-0 indexing for everything
+        def setUp(self):
+            #A visual representation of the reference sequence and the read
+
+            #Test2
+            """Read"""
+            """ACGAAGGACT GCTTGACATC GGCCACGATA ACAACCTTTT TTGCGCCAAT CTTAAGAGCC TTCT"""
+            #             ^10        ^20        ^30        ^40        ^50        ^60
+            """Genome"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AACTGAGTCG ATAGGACGAA ACAAGTATAT ATTCGAAAAT TAATTAATTC CGAAATTTCA ATTTCATCCG ACATGTATCT ACATATGCCA CACTTCTGGT TGGACTTTTT TTTTTGCGCC A"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AA                                                                                                                 TTTTT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
+            #             ^10        ^20        ^30        ^40        ^50        ^60        ^70        ^80        ^90        ^100       ^110       ^120       ^130       ^140       ^150
+
+            self.rdseq  = "ACGATGGACTGCTTGACTCGGCCAAAAAAAATTTTTTTTTTGCGCCAATCTTAAGAGCCTTCT"
+            self.refseq = "ACGAAGGACTGCTTGACATCGGCCAAAAAAAACTGAGTCGATAGGACGAAACAAGTATATATTCGAAAATTAATTAATTCCGAAATTTCAATTTCATCCGACATGTATCTACATATGCCACACTTCTGGTTGGACTTTTTTTTTTGCGCCA"
+            self.testDump = "test.out"
+            self.fasta = "test.fa"
+            self.faidx = "test.fa.fai"
+            createTestFasta(self.fasta,"test",self.refseq)
+            open(self.testDump,'w') #Just to initialize file
+        def tearDown(self):
+            os.remove(self.fasta)
+            os.remove(self.faidx)
+            os.remove(self.testDump)
+
+
+        def test_short_alignment1(self):
+            """Tests mismatches: ~ score=7"""
+            sys.stdout = open(self.testDump,'w')
+            rdid,fw,refid = "0;LB:test",True,"test"
+            iSt,iEnd = 0,9  #intron coords
+            rSt,rEnd = 0,9  #region coords
+            offset = 10
+            fnh = fasta.fasta(self.fasta)
+            handleShortAlignment(refid,iSt,iEnd,self.rdseq,
+                                 rSt,rEnd,rdid,fw,fnh,0,True)
+            sys.stdout.close()
+            test_out = open(self.testDump,'r')
+            testLine = test_out.readline().rstrip()
+            toks = testLine.split("\t")
+            st,end = int(toks[2]), int(toks[3])
+            self.assertEquals(st,0)
+            self.assertEquals(end,9)
+
+        def test_short_alignment2(self):
+            """Tests mismatches: ~ score=5"""
+            sys.stdout = open(self.testDump,'w')
+            rdid,fw,refid = "0;LB:test",True,"test"
+            iSt,iEnd = 10,19  #intron coords
+            rSt,rEnd = 10,19  #region coords
+            offset = 10
+            fnh = fasta.fasta(self.fasta)
+            handleShortAlignment(refid,iSt,iEnd,self.rdseq,
+                                 rSt,rEnd,rdid,fw,fnh,0,True)
+            sys.stdout.close()
+            test_out = open(self.testDump,'r')
+            testLine = test_out.readline().rstrip()
+            toks = testLine.split("\t")
+            st,end = int(toks[2]), int(toks[3])
+            self.assertEquals(st,10)
+            self.assertEquals(end,19)
 
     unittest.main()
 
