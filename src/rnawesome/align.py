@@ -360,7 +360,7 @@ def composeReadletAlignments(rdid, rdals, rdseq):
             st, en = iv.start, iv.end
             assert en > st and st >= 0 and en >= 0
             if lastEn is not None:
-                intronSt, intronEnd = lastEn, st 
+                intronSt, intronEnd = lastEn, st
                 regionSt, regionEnd = positions[(k, fw, intronSt)], positions[(k, fw, intronEnd)]
                 if not fw: regionSt, regionEnd = regionEnd, regionSt
                 # Now regionSt, regionEn are w/r/t alignment's "left" end
@@ -380,7 +380,7 @@ def composeReadletAlignments(rdid, rdals, rdseq):
             lastEn = en
 
 class OutputThread(threading.Thread):
-    
+
     """ A worker thread that examines SAM output from Bowtie and emits
         appropriate tuples for exons and introns.  Each line of output
         is another SAM readlet alignment. """
@@ -392,7 +392,7 @@ class OutputThread(threading.Thread):
         self.done = done
         self.outq = outq
         self.stoprequest = threading.Event()
-    
+
     def run(self):
         """ Main driver method for the output thread """
         mem, cnt = {}, {}
@@ -453,7 +453,7 @@ class OutputThread(threading.Thread):
         else:
             assert len(mem) == 0
             assert len(cnt) == 0
-        
+
 def writeReads(fhs, reportMult=1.2):
     """ Parse input reads, optionally transform them and/or turn them into
         readlets. """
@@ -548,13 +548,13 @@ def go():
 
     import time
     timeSt = time.time()
-    
+
     # So that all appropriate output directories are at least created, even if
     # they perhaps end up empty
     if args.exon_differentials: print 'exon_diff\tDUMMY'
     if args.exon_intervals: print 'exon_ival\tDUMMY'
     print 'intron\tDUMMY'
-    
+
     archiveFh, archiveDir = None, None
     if args.archive is not None:
         archiveDir = os.path.join(args.archive, str(os.getpid()))
@@ -563,10 +563,10 @@ def go():
         if not os.path.exists(archiveDir):
             os.makedirs(archiveDir)
         archiveFh = open(os.path.join(archiveDir, "reads.tab5"), 'w')
-    
+
     outq = Queue()
     threads = []
-    
+
     if args.serial:
         # Reads are written to a file, then Bowtie reads them from the file
         import tempfile
@@ -653,7 +653,7 @@ else:
     import unittest
     binsz = 10000
     #test()
-    
+
     class TestAlignFunctions1(unittest.TestCase):
         ###Big Note:  We are going to assume base-0 indexing for everything
         def setUp(self):
@@ -674,7 +674,7 @@ else:
             self.faidx = "test.fa.fai"
             createTestFasta(self.fasta,"test",self.refseq)
             open(self.testDump,'w') #Just to initialize file
-        
+
         def tearDown(self):
             os.remove(self.fasta)
             os.remove(self.faidx)
@@ -691,17 +691,15 @@ else:
             fw = True
             _, c, _, _, _, _ = correctSplice(read,left,right,fw)
             assert left[:c]+right[c:] == read
-        
+
         def test_correct_splice2(self):
             read = "ACGATAACCTTTTTT"
             left = "ACGATAACCTGAGTC"
             right= "TGGACAACCTTTTTT"
             fw = True
             _,c,_,_,_,_ = correctSplice(read,left,right,fw)
-            #print >> sys.stderr,read
-            #print >> sys.stderr,left[:c],right[c:]
             assert left[:c]+right[c:] == read
-        
+
         def test1Scenario1(self):
             sys.stdout = open(self.testDump,'w')
             rdid,fw,refid = "0;LB:test",True,"test"
@@ -717,11 +715,9 @@ else:
             test_out = open(self.testDump,'r')
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
-            st,end,_,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+            st,end,rdid = int(toks[2]), int(toks[3]), toks[4]
             self.assertEquals(st,32)
             self.assertEquals(end,135)
-            self.assertEquals(leftFlank,"CCACGATAAC")
-            self.assertEquals(rightFlank,"AACCTTTTTT")
 
         """
         Scenario 2: Unmapped region
@@ -747,14 +743,7 @@ else:
             test_out = open(self.testDump,'r')
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
-            st,end,_,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
-            perfectScore,_  = needlemanWunsch.needlemanWunsch("TTTTTTTTTT","TTTTTTTTTT" , needlemanWunsch.hamCost())
-            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.hamCost())
-            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.hamCost())
-            # print >> sys.stderr,"Left Flank\n",leftFlank,"\nCCACGATAAC\n",ML
-            # print >> sys.stderr,"Right Flank\n",rightFlank,"\nAACCTTTTTT\n",MR
-            self.assertTrue( abs(scoreLeft-perfectScore)<4)
-            self.assertTrue( abs(scoreRight-perfectScore)<4)
+            st,end,rdid = int(toks[2]), int(toks[3]), toks[4]
             self.assertTrue( abs(st-32)<4 )
             self.assertTrue( abs(end-135)<4 )
 
@@ -769,8 +758,6 @@ else:
         def test1Scenario3(self):
             sys.stdout = open(self.testDump,'w')
             rdid,fw,refid = "0;LB:test",True,"test"
-            #leftSt,leftEnd = 21,37  #left coords
-            #rightSt,rightEnd = 143,154  #left coords
 
             iSt,iEnd = 36,131 #intron coords
             rSt,rEnd = 36,28  #region coords
@@ -782,15 +769,7 @@ else:
             test_out = open(self.testDump,'r')
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
-            st,end,_,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
-
-            perfectScore,_  = needlemanWunsch.needlemanWunsch("TTTTTTTTTT","TTTTTTTTTT" , needlemanWunsch.hamCost())
-            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.hamCost())
-            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.hamCost())
-            # print >> sys.stderr,"Left Flank\n",leftFlank,"\nCCACGATAAC\n",ML
-            # print >> sys.stderr,"Right Flank\n",rightFlank,"\nAACCTTTTTT\n",MR
-            self.assertTrue( abs(scoreLeft-perfectScore)<4)
-            self.assertTrue( abs(scoreRight-perfectScore)<4)
+            st,end,rdid = int(toks[2]), int(toks[3]), toks[4]
             self.assertTrue( abs(st-32)<4 )
             self.assertTrue( abs(end-135)<4 )
 
@@ -845,15 +824,10 @@ else:
             test_out = open(self.testDump,'r')
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
-            st,end,_,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+            st,end,rdid = int(toks[2]), int(toks[3]), toks[4]
 
             self.assertEquals( st,32 )
             self.assertEquals( end,135 )
-            perfectScore,_  = needlemanWunsch.needlemanWunsch("TTTTTTTTTT","TTTTTTTTTT" , needlemanWunsch.matchCost())
-            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"GCCAAAAAAA" , needlemanWunsch.matchCost())
-            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"TTTTTTTTTT" , needlemanWunsch.matchCost())
-            self.assertEquals(scoreLeft,perfectScore)
-            self.assertEquals(scoreRight,perfectScore)
 
         """
             Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read
@@ -879,18 +853,12 @@ else:
             test_out = open(self.testDump,'r')
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
-            st,end,_,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+            st,end,rdid = int(toks[2]), int(toks[3]), toks[4]
 
             self.assertEquals( st,32 )
             self.assertEquals( end,135 )
             self.assertEquals( st,32 )
             self.assertEquals( end,135 )
-            perfectScore,_  = needlemanWunsch.needlemanWunsch("TTTTTTTTTT","TTTTTTTTTT" , needlemanWunsch.matchCost())
-            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"GCCAAAAAAA" , needlemanWunsch.matchCost())
-            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"TTTTTTTTTT" , needlemanWunsch.matchCost())
-            print >> sys.stderr,"Scores",scoreLeft,scoreRight
-            self.assertEquals(scoreLeft,perfectScore)
-            self.assertEquals(scoreRight,perfectScore)
 
 
     unittest.main()
