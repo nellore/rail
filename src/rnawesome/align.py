@@ -31,7 +31,9 @@ Tab-delimited input tuple columns; can be in any of 3 formats:
   5. Nucleotide sequence for mate 2
   6. Quality sequence for mate 2
 
--Binning/sorting prior to this step:
+An input stream can be a mix of the above formats.
+
+Binning/sorting prior to this step:
  (none)
 
 Exons:
@@ -59,6 +61,7 @@ import os
 import site
 import argparse
 import threading
+from Queue import Queue
 import string
 import numpy
 
@@ -83,7 +86,7 @@ import window
 ninp = 0               # # lines input so far
 nout = 0               # # lines output so far
 pe = False             # What is this variable?
-discardMate = None
+discardMate = -1       # don't discard mates by default
 lengths = dict()       # read lengths after truncation
 rawLengths = dict()    # read legnths prior to truncation
 qualCnts = dict()      # quality counts after adjustments
@@ -91,7 +94,6 @@ rawQualCnts = dict()   # quality counts before adjustments
 qualAdd = None         # amt to add to qualities
 truncateAmt = None     # amount to truncate reads
 truncateTo = None      # amount to truncate reads
-
 readletize = None      # if we're going to readletize,
 
 xformReads = qualAdd is not None or truncateAmt is not None or truncateTo is not None
@@ -110,6 +112,9 @@ parser.add_argument(\
 parser.add_argument(\
     '--max-intron-length', type=int, required=False,default=1000000,
     help='Filters out all potential introns longer than this length')
+parser.add_argument(\
+    '--min-intron-length', type=int, required=False,default=10,
+    help='Filters out all potential introns shorter than this length')
 parser.add_argument(\
     '--exon-differentials', action='store_const', const=True, default=False,
     help='Print exon differentials (+1s and -1s)')
@@ -139,7 +144,6 @@ parser.add_argument(\
 parser.add_argument(\
     '--verbose', action='store_const', const=True, default=False, help='Prints out extra debugging statements')
 
-
 # Collect the bowtie arguments first
 argv = sys.argv
 bowtieArgs = []
@@ -152,12 +156,6 @@ for i in xrange(1, len(sys.argv)):
         in_args = True
 
 args = parser.parse_args(argv[1:])
-
-# So that all appropriate output directories are at least created, even if
-# they perhaps end up empty
-if args.exon_differentials: print 'exon_diff\tDUMMY'
-if args.exon_intervals: print 'exon_ival\tDUMMY'
-print 'intron\tDUMMY'
 
 def xformRead(seq, qual):
     # Possibly truncate and/or modify quality values
@@ -178,55 +176,28 @@ def revcomp(s):
 bowtieOutDone = threading.Event()
 
 """
-Breaks ties in the Needleman-Wunsch algorithm by selecting the middle element in a set of maxes
-
-e.g.  The 3rd row will be chosen
-matrix = [ 1 2 3 4 5
-           6 8 6 4 1
-           1 2 8 4 5
-           6 7 6 8 1
-           1 2 3 4 5]
-"""
-def medianTieBreaker(dpmat,m_ind):
-    m_elem = numpy.max(dpmat[:,m_ind])
-    st = m_ind
-    r,c = dpmat.shape
-    while m_ind>=0 and m_ind<c and numpy.max(dpmat[:,m_ind])==m_elem:
-        m_ind+=1
-    end = m_ind
-    return (st+end)/2
-
-"""
-Uses the sliding window algorithm to help place the flanking sequences close to the junction sites
-"""
-def windowTransform(read,site,cost):
-    hist = [1]*( len(read) )
-    scores = window.score(read, site, hist, cost)
-    return scores
-
-"""
 Applies Needleman Wunsch to correct splice junction gaps
 """
 def correctSplice(read,ref_left,ref_right,fw):
 
     revread = revcomp(read)
-    """Needleman-Wunsch is a directional algorithm.  Since we are interested in scoring the 3' end of the right ref sequence,    we reverse complement the right ref sequence before applying the NW algorithm"""
+    # Needleman-Wunsch is a directional algorithm.  Since we are interested in scoring the 3' end of the right ref sequence,    we reverse complement the right ref sequence before applying the NW algorithm"""
     ref_right = revcomp(ref_right)
-    score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
-    score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
+    _, leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
+    _, rightDP = needlemanWunsch.needlemanWunsch(ref_right, revread, needlemanWunsch.matchCost())
 
-    #Once NW is applied, the right DP matrix must be transformed in the same coordinate frame as the left DP matrix
+    # Once NW is applied, right DP matrix must be transformed in the same
+    # coordinate frame as the left DP matrix
     rightDP = numpy.fliplr(rightDP)
     rightDP = numpy.flipud(rightDP)
 
     total = leftDP+rightDP
     index = numpy.argmax(total)
-    max_  = numpy.max(total)
 
     n = len(read)+1
-    r,c = index%n, index/n
+    _, c = index%n, index/n
 
-    c = medianTieBreaker(total,c)
+    c = needlemanWunsch.medianTieBreaker(total,c)
     r = numpy.argmax(total[:,c])
 
     return r,c,total[r,c],leftDP,rightDP,total
@@ -251,15 +222,6 @@ def printExons(refid,in_start,in_end,rdid):
             print "exon_ival\t%s\t%012d\t%d\t%s" % (pt, in_start, in_end, lab)
             nout += 1
 
-"""
-Returns a more human readable format of the string
-"""
-def readableFormat(s):
-    return " ".join([s[i:i+10] for i in range(0,len(s),10)])
-def formatList(s,l):
-    return (" "*l).join( list( str(s) ) )
-
-
 # Print all listed introns to stdout and the flanking sequences
 def printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,outhandle):
     if abs(intronEnd-intronSt) > args.max_intron_length:
@@ -267,7 +229,6 @@ def printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,outha
         return
 
     global nout
-    offset = args.splice_overlap
     fw_char = "+" if fw else "-"
     lab = sample.parseLab(rdid)
     for pt, _, _ in iter(partition.partitionStartOverlaps(refid, intronSt, intronEnd, binsz, fudge=args.intron_partition_overlap)):
@@ -291,7 +252,7 @@ def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdi
     ref_right = fnh.fetch_sequence(refid,rightSt+1, rightEnd).upper()
 
     unmapped = rdseq[regionSt:regionEnd] if fw else revcomp(rdseq[regionSt:regionEnd])
-    _, diffpos, score, leftDP, rightDP, total = correctSplice(unmapped,ref_left,ref_right,fw)
+    _, diffpos, score, _, _, _ = correctSplice(unmapped,ref_left,ref_right,fw)
     left_diff, right_diff  = diffpos, len(unmapped)-diffpos
     if score<uLen and (args.verbose or args.test): print >> sys.stderr,"Bad Needleman-Wunsch realignment with %s = %s + %s found intron %s:%d-%d and read region %s-%s\n"%(unmapped,ref_left,ref_right,refid,intronSt,intronEnd,regionSt,regionEnd)
     regionSt,  regionEnd = regionSt+left_diff-1,  regionEnd-right_diff
@@ -352,11 +313,16 @@ def handleIntron(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,o
         """
         handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
 
-"""
-Compares potential short intron with readlet to check if it should be an exon instead
-"""
 def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region_st,region_end,rdid,fw,fnh):
-    refseq = fnh.fetch_sequence(k,in_start + 1, in_end + 1).upper() # Sequence from genome
+    """
+    When the intervals of unaligned read & reference characters are similar in
+    length, we say there's no intron but we also check to see if there's
+    enough similarity in there to say that the middle is also part of the
+    exon.
+    """
+    refseq = fnh.fetch_sequence(k, in_start + 1, in_end + 1).upper() # Sequence from genome
+    assert unmapped_st < len(rdseq)
+    assert unmapped_end < len(rdseq)
     rdsubseq = rdseq[unmapped_st:unmapped_end]
     if not fw:
         rdsubseq = revcomp(rdsubseq)
@@ -368,6 +334,9 @@ def handleShortAlignment(k,in_start,in_end,rdseq,unmapped_st,unmapped_end,region
         printExons(k,in_start,in_end,rdid)
 
 def getIntervals(rdals):
+    """ Given a collection of readlet-alignment tuples, then them into a set
+        of interval.Interval objects, one per chromosome overlapped at least
+        once. """
     ivals, positions = {}, {}
     for rdal in rdals:
         refid, fw, refoff0, seqlen, rlet_nm, _ = rdal
@@ -382,113 +351,117 @@ def getIntervals(rdals):
         ivals[(refid, fw)].add(interval.Interval(refoff0, refoff0 + seqlen))
     return ivals, positions
 
-
 def composeReadletAlignments(rdid, rdals, rdseq):
-    global nout
-    # Add this interval to the flattened interval collection for current read
     ivals, positions = getIntervals(rdals)
     for kfw in ivals.iterkeys(): # for each chromosome covered by >= 1 readlet
         k, fw = kfw
-        intronEnd, intronSt = -1, -1
+        lastEn = None
         for iv in sorted(iter(ivals[kfw])): # for each covered interval, left-to-right
             st, en = iv.start, iv.end
-            assert en > st
-            assert st >= 0 and en >= 0
-            if intronEnd == -1 and intronSt >= 0:
-                intronEnd = st
-            if intronSt == -1:
-                intronSt = en
-            if intronSt >= 0 and intronEnd >= 0:
+            assert en > st and st >= 0 and en >= 0
+            if lastEn is not None:
+                intronSt, intronEnd = lastEn, st 
                 regionSt, regionEnd = positions[(k, fw, intronSt)], positions[(k, fw, intronEnd)]
                 if not fw: regionSt, regionEnd = regionEnd, regionSt
+                # Now regionSt, regionEn are w/r/t alignment's "left" end
                 offset = args.splice_overlap
-                unmapped_st,unmapped_end = regionSt-offset,regionEnd+offset
-                reflen,rdlet_len = intronEnd-intronSt, abs(regionEnd-regionSt)
-
-                assert intronSt < intronEnd
-                if abs(reflen-rdlet_len)/float(rdlet_len+1) < 0.01:
-                    #Note: just a readlet missing due to sequencing error or variant
-                    handleShortAlignment(k,intronSt,intronEnd,rdseq,unmapped_st,unmapped_end,regionSt,regionEnd,rdid,fw,fnh)
-                elif rdlet_len>reflen:
-                    printExons(k, intronSt,intronEnd, rdid)
+                unmapped_st, unmapped_end = regionSt-offset, regionEnd+offset
+                reflen, readlen = intronEnd - intronSt, regionEnd - regionSt
+                potentialIntronLen = reflen - readlen
+                if potentialIntronLen < args.min_intron_length:
+                    handleShortAlignment(k, intronSt, intronEnd, rdseq, unmapped_st, unmapped_end, regionSt, regionEnd, rdid, fw, fnh)
                 else:
-                    handleIntron(k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
+                    handleIntron(k, intronSt, intronEnd, rdseq, regionSt, regionEnd, rdid, fw, fnh, offset)
                 intronSt, intronEnd = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
             # the offsets
             printExons(k, st, en, rdid)
+            lastEn = en
 
-def bowtieOutReadlets(st, reportMult=1.2):
-    ''' Process standard out (stdout) output from Bowtie.  Each line of output
-        is another readlet alignment.  We *could* try to perform operations
-        over all readlet alignments from the same read here.  Currently, we
-        follow this step with an aggregation that bins by read id, then
-        operate over bins in splice.py. '''
-    global nout
-    mem, cnt = {}, {}
-    report = 1
-    line_nm = 0
-    try:
-        while True:
-            line = st.readline()
-            if len(line) == 0:
-                break # no more output
-            if line[0] == '@':
-                continue # skip header
-            nout += 1
-            rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
-            flags, refoff1 = int(flags), int(refoff1)
-            if nout >= report:
-                report *= reportMult
-                if args.verbose:
-                    print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nout, rdid, flags)
-            seqlen = len(seq)
-            toks = string.split(rdid, ';')
-            # Make sure mate id is part of the read name for now, so we don't
-            # accidentally investigate the gap between the mates as though it's
-            # a spliced alignment
-            rdid = ';'.join(toks[:-3])
-            cnt[rdid] = cnt.get(rdid, 0) + 1
-            rd_name, rlet_nm, rdseq = toks[0], toks[4], toks[6]
-            rdlet_n = int(toks[-2])
-            if flags != 4:
-                fw = (flags & 16) == 0
-                if rdid not in mem: mem[rdid] = [ ]
-                mem[rdid].append((refid, fw, refoff1-1, seqlen, rlet_nm, rd_name))
-            if cnt[rdid] == rdlet_n:
-                # Last readlet
-                if rdid in mem:
-                    # Remove mate ID so that rest of pipeline sees same rdid
-                    # for both mates
-                    composeReadletAlignments(rdid[:-2], mem[rdid],rdseq)
-                    del mem[rdid]
-                del cnt[rdid]
-            line_nm += 1
-    except IOError as e:
-        print >> sys.stderr, "I/O error while reading output from Bowtie ({0}): {1}".format(e.errno, e.strerror)
-        sys.exit(20)
-    except ValueError as e:
-        print >> sys.stderr, "Value error while reading output from Bowtie: " + str(e)
-        sys.exit(30)
-    except TypeError as e:
-        print >> sys.stderr, "Type error while reading output from Bowtie: " + str(e)
-        raise
-        sys.exit(35)
-    except:
-        print >> sys.stderr, "Unexpected error while reading output from Bowtie:%s" % (sys.exc_info()[0])
-        raise
-    assert len(mem) == 0
-    assert len(cnt) == 0
-    sys.stdout.flush()
-    bowtieOutDone.set()
-
+class OutputThread(threading.Thread):
+    
+    """ A worker thread that examines SAM output from Bowtie and emits
+        appropriate tuples for exons and introns.  Each line of output
+        is another SAM readlet alignment. """
+    def __init__(self, st, done, outq, reportMult=1.2):
+        super(OutputThread, self).__init__()
+        self.st = st
+        self.reportMult = 1.2
+        self.nout = 0
+        self.done = done
+        self.outq = outq
+        self.stoprequest = threading.Event()
+    
+    def run(self):
+        """ Main driver method for the output thread """
+        mem, cnt = {}, {}
+        report = 1
+        line_nm = 0
+        st = self.st
+        exc = None
+        nsam = 0
+        exitlevel = 0
+        try:
+            while not self.stoprequest.isSet():
+                line = st.readline()
+                if len(line) == 0:
+                    break # no more output
+                if line[0] == '@':
+                    continue # skip header
+                nsam += 1
+                rdid, flags, refid, refoff1, _, _, _, _, _, seq, _, _ = string.split(line.rstrip(), '\t', 11)
+                flags, refoff1 = int(flags), int(refoff1)
+                if nsam >= report:
+                    report *= self.reportMult
+                    if args.verbose:
+                        print >> sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nsam, rdid, flags)
+                seqlen = len(seq)
+                toks = string.split(rdid, ';')
+                # Make sure mate id is part of the read name for now, so we don't
+                # accidentally investigate the gap between the mates as though it's
+                # a spliced alignment
+                rdid = ';'.join(toks[:-3])
+                cnt[rdid] = cnt.get(rdid, 0) + 1
+                rd_name, rlet_nm, rdseq = toks[0], toks[4], toks[6]
+                rdlet_n = int(toks[-2])
+                if flags != 4:
+                    fw = (flags & 16) == 0
+                    if rdid not in mem: mem[rdid] = [ ]
+                    mem[rdid].append((refid, fw, refoff1-1, seqlen, rlet_nm, rd_name))
+                if cnt[rdid] == rdlet_n:
+                    # Last readlet
+                    if rdid in mem:
+                        # Remove mate ID so that rest of pipeline sees same rdid
+                        # for both mates
+                        composeReadletAlignments(rdid[:-2], mem[rdid], rdseq)
+                        del mem[rdid]
+                    del cnt[rdid]
+                line_nm += 1
+        except Exception as e:
+            print >> sys.stderr, "Exception while reading output from Bowtie"
+            exitlevel = 1
+            exc = e
+        sys.stdout.flush()
+        self.outq.put(exitlevel)
+        self.done.set()
+        while len(st.readline()) > 0:
+            pass
+        if exc is not None:
+            import traceback
+            traceback.print_exc()
+        else:
+            assert len(mem) == 0
+            assert len(cnt) == 0
+        
 def writeReads(fhs, reportMult=1.2):
     """ Parse input reads, optionally transform them and/or turn them into
         readlets. """
     global ninp
     report = 1.0
     for ln in sys.stdin:
+        if bowtieOutDone.is_set():
+            return
         toks = ln.rstrip().split('\t')
         ninp += 1
         pair = False
@@ -511,9 +484,9 @@ def writeReads(fhs, reportMult=1.2):
             sample.hasLab(nm1, mustHave=True) # check that label is present in name
             if discardMate is not None:
                 # We have been asked to discard one mate or the other
-                if discardMate == 1:
+                if (discardMate & 1) != 0:
                     nm, seq, qual = nm2, seq2, qual2 # discard mate 1
-                else:
+                if (discardMate & 2) != 0:
                     nm, seq, qual = nm1, seq1, qual1 # discard mate 2
             else:
                 pair = True # paired-end read
@@ -575,7 +548,13 @@ def go():
 
     import time
     timeSt = time.time()
-
+    
+    # So that all appropriate output directories are at least created, even if
+    # they perhaps end up empty
+    if args.exon_differentials: print 'exon_diff\tDUMMY'
+    if args.exon_intervals: print 'exon_ival\tDUMMY'
+    print 'intron\tDUMMY'
+    
     archiveFh, archiveDir = None, None
     if args.archive is not None:
         archiveDir = os.path.join(args.archive, str(os.getpid()))
@@ -584,7 +563,10 @@ def go():
         if not os.path.exists(archiveDir):
             os.makedirs(archiveDir)
         archiveFh = open(os.path.join(archiveDir, "reads.tab5"), 'w')
-
+    
+    outq = Queue()
+    threads = []
+    
     if args.serial:
         # Reads are written to a file, then Bowtie reads them from the file
         import tempfile
@@ -600,14 +582,18 @@ def go():
         assert os.path.exists(readFn)
         proc, mycmd, threads = bowtie.proc(args, readFn=readFn,
                                            bowtieArgs=bowtieArgs, sam=True,
-                                           outHandler=bowtieOutReadlets,
-                                           stdinPipe=False)
+                                           stdoutPipe=True, stdinPipe=False)
+        outThread = OutputThread(proc.stdout, bowtieOutDone, outq)
+        threads.append(outThread)
+        outThread.start()
     else:
         # Reads are written to Bowtie process's stdin directly
         proc, mycmd, threads = bowtie.proc(args, readFn=None,
                                            bowtieArgs=bowtieArgs, sam=True,
-                                           outHandler=bowtieOutReadlets,
-                                           stdinPipe=True)
+                                           stdoutPipe=True, stdinPipe=True)
+        outThread = OutputThread(proc.stdout, bowtieOutDone, outq)
+        threads.append(outThread)
+        outThread.start()
         fhs = [proc.stdin]
         if args.archive is not None: fhs.append(archiveFh)
         writeReads(fhs)
@@ -621,6 +607,9 @@ def go():
             ofh.write(' '.join(sys.argv) + '\n')
     if args.verbose: print >>sys.stderr, "Waiting for Bowtie to finish"
     bowtieOutDone.wait()
+    exitlevel = outq.get()
+    if exitlevel != 0:
+        raise RuntimeError('Bad exitlevel from output thread: %d' % exitlevel)
     for thread in threads:
         if args.verbose: print >> sys.stderr, "  Joining a thread..."
         thread.join()
@@ -647,28 +636,24 @@ def createTestFasta(fname,refid,refseq):
     fastaIdx.close()
 
 
-if not args.test and not args.profile:
+if not args.test:
     binsz = partition.binSize(args)
     if not os.path.exists(args.refseq):
         raise RuntimeError("No such --refseq file: '%s'" % args.refseq)
     if not os.path.exists(args.faidx):
         raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
     fnh = fasta.fasta(args.refseq)
-    go()
-elif args.profile:
-    binsz = partition.binSize(args)
-    if not os.path.exists(args.refseq):
-        raise RuntimeError("No such --refseq file: '%s'" % args.refseq)
-    if not os.path.exists(args.faidx):
-        raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
-    import cProfile
-    cProfile.run('go()')
+    if args.profile:
+        import cProfile
+        cProfile.run('go()')
+    else:
+        go()
 else:
     del sys.argv[1:]
     import unittest
     binsz = 10000
     #test()
-
+    
     class TestAlignFunctions1(unittest.TestCase):
         ###Big Note:  We are going to assume base-0 indexing for everything
         def setUp(self):
@@ -689,6 +674,7 @@ else:
             self.faidx = "test.fa.fai"
             createTestFasta(self.fasta,"test",self.refseq)
             open(self.testDump,'w') #Just to initialize file
+        
         def tearDown(self):
             os.remove(self.fasta)
             os.remove(self.faidx)
@@ -703,83 +689,24 @@ else:
             # right= "TAATATTTTCTTTTGAAATTTAATTTAGATGGAGAAATGGAAGCAGAGTGGCTAG"
             # read = "AGTATCGAACCTGAAGCAAGTTACGAAGATGGAGAAATGGAAGCAGAGTGGCTAG"
             fw = True
-            r,c,score,_,_,_ = correctSplice(read,left,right,fw)
-            #print >> sys.stderr,read
-            #print >> sys.stderr,left[:c],right[c:]
+            _, c, _, _, _, _ = correctSplice(read,left,right,fw)
             assert left[:c]+right[c:] == read
-
+        
         def test_correct_splice2(self):
-
             read = "ACGATAACCTTTTTT"
             left = "ACGATAACCTGAGTC"
             right= "TGGACAACCTTTTTT"
             fw = True
-            r,c,score,_,_,_ = correctSplice(read,left,right,fw)
+            _,c,_,_,_,_ = correctSplice(read,left,right,fw)
             #print >> sys.stderr,read
             #print >> sys.stderr,left[:c],right[c:]
             assert left[:c]+right[c:] == read
-
-        def test_windowTransform(self):
-            left = "ACGATAACCTGAGTCG"
-            right= "GGTTGGACAACCTTTT"
-            read     = "ACGATAACAACCTTTT"
-            ref_left,ref_right = left,right
-            revread = revcomp(read)
-            """Needleman-Wunsch is a directional algorithm.  Since we are interested in scoring the 3' end of the right ref sequence,    we reverse complement the right ref sequence before applying the NW algorithm"""
-            ref_right = revcomp(ref_right)
-            score1,leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
-            score2,rightDP = needlemanWunsch.needlemanWunsch(ref_right,revread, needlemanWunsch.matchCost())
-
-            #Once NW is applied, the right DP matrix must be transformed in the same coordinate frame as the left DP matrix
-            rightDP = numpy.fliplr(rightDP)
-            rightDP = numpy.flipud(rightDP)
-
-            #Apply window transform to find proper sites for flanking sequences
-            left_site,right_site = ("CT","AC")
-            """
-            Need to offset windows
-            ref  --------------GT.........AG-----------
-                              ^<          >>^
-            """
-            cost = -2
-            win_left = numpy.matrix([0]+windowTransform(left,left_site,cost)+[0])
-            win_right = numpy.matrix([0]+[0]+windowTransform(right,right_site,cost))
-
-            # print >> sys.stderr,"Before window transform"
-            # print >> sys.stderr,"read ",read
-            # print >> sys.stderr,"left ",left
-            # print >> sys.stderr,"right",right
-            # print >> sys.stderr,"leftDP\n",leftDP
-            # print >> sys.stderr,"rightDP\n",rightDP
-
-            leftDP = leftDP+win_left
-            rightDP = rightDP+win_right
-            total = leftDP+rightDP
-            win_right[0,16] = -10
-            win_left[0,16] = -10
-            # print >> sys.stderr,"After window transform"
-            # print >> sys.stderr,"read\n   ",formatList(read,3)
-            # print >> sys.stderr,"left\n   ",formatList(left,3)
-            # print >> sys.stderr,win_left
-            # print >> sys.stderr,"leftDP\n",leftDP
-            # print >> sys.stderr,"right\n   ",formatList(right,3)
-            # print >> sys.stderr,win_right
-            # print >> sys.stderr,"rightDP\n",rightDP
-            # print >> sys.stderr,"read\n   ",formatList(read,3)
-            # print >> sys.stderr,"total\n",total
-        """
-        Scenario 1:
-        Read   |============================================|
-                                      /\
-        Genome |======================--=====================|
-        Flanks                   ^===^  ^===^
-        """
+        
         def test1Scenario1(self):
             sys.stdout = open(self.testDump,'w')
             rdid,fw,refid = "0;LB:test",True,"test"
             #leftSt,leftEnd = 21,37  #left coords
             #rightSt,rightEnd = 143,154  #left coords
-
             iSt,iEnd = 32,135 #intron coords
             rSt,rEnd = 32,32  #region coords
             offset = 10
@@ -790,7 +717,7 @@ else:
             test_out = open(self.testDump,'r')
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
-            st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+            st,end,_,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
             self.assertEquals(st,32)
             self.assertEquals(end,135)
             self.assertEquals(leftFlank,"CCACGATAAC")
@@ -820,10 +747,10 @@ else:
             test_out = open(self.testDump,'r')
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
-            st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+            st,end,_,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
             perfectScore,_  = needlemanWunsch.needlemanWunsch("TTTTTTTTTT","TTTTTTTTTT" , needlemanWunsch.hamCost())
-            scoreLeft,ML  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.hamCost())
-            scoreRight,MR = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.hamCost())
+            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.hamCost())
+            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.hamCost())
             # print >> sys.stderr,"Left Flank\n",leftFlank,"\nCCACGATAAC\n",ML
             # print >> sys.stderr,"Right Flank\n",rightFlank,"\nAACCTTTTTT\n",MR
             self.assertTrue( abs(scoreLeft-perfectScore)<4)
@@ -855,11 +782,11 @@ else:
             test_out = open(self.testDump,'r')
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
-            st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+            st,end,_,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
 
             perfectScore,_  = needlemanWunsch.needlemanWunsch("TTTTTTTTTT","TTTTTTTTTT" , needlemanWunsch.hamCost())
-            scoreLeft,ML  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.hamCost())
-            scoreRight,MR = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.hamCost())
+            scoreLeft,_  = needlemanWunsch.needlemanWunsch(leftFlank,"CCACGATAAC" , needlemanWunsch.hamCost())
+            scoreRight,_ = needlemanWunsch.needlemanWunsch(rightFlank,"AACCTTTTTT" , needlemanWunsch.hamCost())
             # print >> sys.stderr,"Left Flank\n",leftFlank,"\nCCACGATAAC\n",ML
             # print >> sys.stderr,"Right Flank\n",rightFlank,"\nAACCTTTTTT\n",MR
             self.assertTrue( abs(scoreLeft-perfectScore)<4)
@@ -918,7 +845,7 @@ else:
             test_out = open(self.testDump,'r')
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
-            st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+            st,end,_,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
 
             self.assertEquals( st,32 )
             self.assertEquals( end,135 )
@@ -952,7 +879,7 @@ else:
             test_out = open(self.testDump,'r')
             testLine = test_out.readline().rstrip()
             toks = testLine.split("\t")
-            st,end,lab,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
+            st,end,_,leftFlank,rightFlank,rdid = int(toks[2]), int(toks[3]), toks[4], toks[5], toks[6], toks[7]
 
             self.assertEquals( st,32 )
             self.assertEquals( end,135 )
