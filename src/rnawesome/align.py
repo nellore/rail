@@ -554,9 +554,9 @@ def go():
 
     # So that all appropriate output directories are at least created, even if
     # they perhaps end up empty
-    if args.exon_differentials: print 'exon_diff\tDUMMY'
-    if args.exon_intervals: print 'exon_ival\tDUMMY'
-    print 'intron\tDUMMY'
+    # if args.exon_differentials: print 'exon_diff\tDUMMY'
+    # if args.exon_intervals: print 'exon_ival\tDUMMY'
+    # print 'intron\tDUMMY'
 
     archiveFh, archiveDir = None, None
     if args.archive is not None:

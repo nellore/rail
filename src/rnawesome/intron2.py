@@ -90,7 +90,7 @@ ninp, nout = 0, 0 # # lines input/output so far
 def go(ifh, ofh, verbose=False, refseq=None):
 
     global ninp
-    
+
     starts, ends, labs, rdids = [], [], [], []
     last_pt, last_refid = '\t', '\t'
     last_strand = None
@@ -102,7 +102,7 @@ def go(ifh, ofh, verbose=False, refseq=None):
     sel, selwat, selcri = \
         SiteSelector(fnh, motifs.sa), SiteSelector(fnh, motifs.saf), \
         SiteSelector(fnh, motifs.sar)
-    
+
     def binIntervals(clustering):
         bins = {}
         for st, en, lab, rdid in zip(starts, ends, labs, rdids):
@@ -115,33 +115,33 @@ def go(ifh, ofh, verbose=False, refseq=None):
             else:
                 bins[idx] = [(st, en, lab, rdid)]
         return bins
-    
+
     def handlePartition():
         assert last_strand is not None
         assert last_pt != '\t'
-        
+
         if verbose:
             print >> sys.stderr, "For partition %s:[%d, %d)" % (last_pt, last_pt_st, last_pt_en)
         if len(mat) == 0: return
-        
+
         # Step 1. Make a strip
         strip = Strip.fromHistogram(mat)
         nelts = len(strip)
-        
+
         # Step 2. Cluster splice sites within strip
         clustering = cluster(strip, N=args.cluster_radius)
         nclustsPre = len(clustering)
         if verbose:
             print >> sys.stderr, "  %d possible splice junction clustered down to %d" % (nelts, nclustsPre)
-        
+
         clustering.limitTo(last_pt_st, last_pt_en)
         nclustsPost = len(clustering)
         if verbose:
             print >> sys.stderr, "  %d after overlap removal" % (nclustsPost)
-        
+
         # Step 3. Build a bins object
         bins = binIntervals(clustering)
-        
+
         # Step 4: Apply sliding windows to find splice junction locations
         for introns in bins.itervalues():
             sts, ens, lab, rdid = zip(*introns)
@@ -168,10 +168,11 @@ def go(ifh, ofh, verbose=False, refseq=None):
                 for l in lab: d[l] += 1
                 for l, c in d.iteritems():
                     ofh.write("site\t%s\t%012d\t%d\t%s\t%s\t%s\t%d\n" % (last_refid, st, en+2, motifl, motifr, l, c))
-    
+
     for ln in ifh:
         # Parse next read
         toks = ln.rstrip().split('\t')
+        print >> sys.stderr,toks
         assert len(toks) >= 5
         pt, st, en, lab, rdid = \
             toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4]
@@ -180,15 +181,15 @@ def go(ifh, ofh, verbose=False, refseq=None):
         strand = pt[-1]
         assert st >= pt_st - fudge and st < pt_en + fudge, \
             "Intron start %d not in partition [%d, %d), partition id=%s" % (st, pt_st, pt_en, pt)
-        
+
         if last_pt != pt and last_pt != '\t':
             handlePartition()
             starts, ends, labs, rdids = [], [], [], []
             mat = {}
-        
+
         i, j = en - st, st
         mat[(i, j)] = mat.get((i, j), 0) + 1
-        
+
         starts.append(st)
         ends.append(en)
         labs.append(lab)
@@ -196,9 +197,9 @@ def go(ifh, ofh, verbose=False, refseq=None):
         last_pt, last_strand, last_refid = pt, strand, refid
         last_pt_st, last_pt_en = pt_st, pt_en
         ninp += 1
-    
+
     if last_pt != '\t': handlePartition()
-    
+
     timeEn = time.time()
     print >>sys.stderr, "DONE with intron2.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, timeEn-timeSt)
 
@@ -208,13 +209,13 @@ else:
     del sys.argv[1:]
     import unittest
     from cStringIO import StringIO
-    
+
     class TestIntronFunctions1(unittest.TestCase):
-        
+
         def test1(self):
             fafn, _ = fasta.writeIndexedFasta("ref1", "G" * 100 + "GT" + "T" * 96 + "AG")
             inp = StringIO('\t'.join(['ref1;0', '100', '200', 'A', 'ACGT', 'TGCA', 'read1']))
             out = StringIO()
             go(inp, out, False, fafn)
-    
+
     unittest.main()
