@@ -1,0 +1,8 @@
+Sometimes it's necessary to write a little Java class that we can plug
+into Hadoop, e.g. to enable new input and output formats or to
+customize the shuffle/sort step.
+
+Right now we just have one class here that extends
+MultipleTextOutputFormat and makes it so that the output from a compute
+step gets divvied up into subdirectories with names equal to the first
+field of output.
