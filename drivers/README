@@ -1,0 +1,8 @@
+This directory is deprecated.
+
+This directory contains the driver scripts that Jamie Morton developed in
+summer 2012.  We used these both to run a local (non-Hadoop) version of the
+pipeline, and to run a Hadoop version of the pipeline.  These are now
+deprecated, in favor of the Pythons scripts in the src/driver dir.
+
+BTL, 10/8/2013
