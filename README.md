@@ -4,7 +4,12 @@ software that has yet to be named.
 Design
 ------
 
+Repository layout
+-----------------
 
+* `src`: All sources, including Python, R and C
+* `old`: Deprecated code from pre-Fall-2013
+* data
 
 TODO list
 ---------
