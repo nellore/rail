@@ -1,49 +1,54 @@
-Setting up Myrna2
+This is the source repository for the scalable suite RNA-seq analysis
+software that has yet to be named.
 
-Make sure to install:
-samtools
-swig
-bowtie
+Design
+------
 
-bedToBigBed: http://hgdownload.cse.ucsc.edu/admin/exe/
 
-Make sure that all of these executables can be found in PATH
 
-Then run Make in the src directory
+TODO list
+---------
 
-To run the code, go into drivers and modify the configure.sh
-Then run
+* Pick a name!  Or a temporary codename.  Replace old name(s) like Myrna 2,
+  Tornado and RNAwesome, with new name.  Make it easier to change name in
+  future by minimizing number of places where it's hard-coded.
+* Carefully audit the code in `src/rnawesome/align.py` and add a comprehensive
+  suite of unit tests.
+* Move this TODO list to GitHub issue tracker
 
-sh configure
-sh run.sh
+Running the drosophila example
+------------------------------
 
-To enable IGV and flux simulator
-run Make in tools/flux_sim and
-sh download.sh in tools/IGV
+Tool prerequisites:
+* [Python]
+* [SWIG]
+* [Bowtie]
+* [bedToBigBed]
 
-Remember to add both the directories for IGV and flux_sim/flux-simulator to PATH
-Declare the following variables in .bashrc
+[Python]: http://www.python.org
+[SWIG]: http://www.swig.org
+[Bowtie]: http://bowtie-bio.sourceforge.net/index.shtml
+[bedToBigBed]: http://hgdownload.cse.ucsc.edu/admin/exe/
 
-IGENOMES_DIR
-TORNADO_HOME
-FLUX_HOME
-SIM_HOME
-SPECIES
-DB
-ASM
+Data prerequisites:
+* Expanded dm3 [iGenomes] tarball somewhere on your machine
 
-To run the simulation, first go to the drivers folder and run
+[iGenomes]: http://support.illumina.com/sequencing/sequencing_software/igenome.ilmn
 
-sh igenome_setup
-sh flux.sh
+Configuration:
+* Set `TORNADO_HOME` environment variable to point to base of this checkout
+* Set `IGENOMES_HOME` environment variable to point to directory that has
+  `Drosophila_melanogaster` from iGenomes tarball as a subdirectory
 
-Then run the pipeline like usual
+To prepare for the test:
 
-To run the validation run
+    cd $TORNADO_HOME
+    make -C src
+    cd example/dmel_flux
+    make
+    (alternately, do "make -jN" where N = number of cores you can spare)
 
-sh validate2.sh
-sh igv_display.sh
+That last make command will take a while.  To run the test do the following
+from `$TORNADO_HOME/example/dmel_flux`):
 
-When the IGV window pops up, go to Tools, run batch script and select batch.txt in the drivers folder.
-This batch.txt file contains commands produced by igv_display.sh to load up the necessary tracks
-
+    sh local.sh
