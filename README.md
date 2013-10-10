@@ -4,12 +4,22 @@ software that has yet to be named.
 Design
 ------
 
+TODO
+
 Repository layout
 -----------------
 
 * `src`: All sources, including Python, R and C
+* `data`: Manifest files describing big datasets and some scripts for running
+  them through this pipeline as well as Myrna
+* `doc`: Documentation
+* `emr`: Scripts related to EMR mode
+* `example`: Some examples of how to run the pipeline
+* `hadoop`: Source related to the modes that use Hadoop
+* `lib`: Required Java libraries
 * `old`: Deprecated code from pre-Fall-2013
-* data
+* `package`: Scripts for packaging up the tool and reference archives
+* `tools`: Scripts for building some helpful tools
 
 TODO list
 ---------
