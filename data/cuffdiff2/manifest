@@ -1,0 +1,16 @@
+# Myrna-style manifest file for data from Cuffdiff2 paper
+# Note: input is NCBI SRA -- should switch to European
+
+# Run SRR493371 (GSM925767: LFB_HOXA1KD_hiseq_repC; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493371/SRR493371.sra	0	LFB-HOXA1KD_hiseq-repC
+# Run SRR493370 (GSM925766: LFB_HOXA1KD_hiseq_repB; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493370/SRR493370.sra	0	LFB-HOXA1KD_hiseq-repB
+# Run SRR493369 (GSM925765: LFB_HOXA1KD_hiseq_repA; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493369/SRR493369.sra	0	LFB-HOXA1KD_hiseq-repA
+
+# Run SRR493368 (GSM925764: LFB_scramble_hiseq_repC; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493368/SRR493368.sra	0	LFB-scramble_hiseq-repC
+# Run SRR493367 (GSM925763: LFB_scramble_hiseq_repB; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493367/SRR493367.sra	0	LFB-scramble_hiseq-repB
+# Run SRR493366 (GSM925762: LFB_scramble_hiseq_repA; Homo sapiens; RNA-Seq)
+ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/SRR493/SRR493366/SRR493366.sra	0	LFB-scramble_hiseq-repA

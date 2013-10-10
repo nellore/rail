@@ -1,0 +1,95 @@
+# Myrna-style manifest file for bodymap2 project
+# I've listed files in the European Nucleotide Archive
+
+# GB so far: 243.919
+# Saw 64 URLs
+# Saw 48 SRRs
+# Saw 17 base names (48 names)
+
+# Kidney - HCT20142
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030893/ERR030893.fastq.gz	0	kidney-HCT20142-ERR030893
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030885/ERR030885_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030885/ERR030885_2.fastq.gz	0	kidney-HCT20142-ERR030885
+
+# Heart - HCT20143
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030894/ERR030894.fastq.gz	0	heart-HCT20143-ERR030894
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030886/ERR030886_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030886/ERR030886_2.fastq.gz	0	heart-HCT20143-ERR030886
+
+# Liver - HCT20144
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030895/ERR030895.fastq.gz	0	liver-HCT20144-ERR030895
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030887/ERR030887_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030887/ERR030887_2.fastq.gz	0	liver-HCT20144-ERR030887
+
+# Lung - HCT20145
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030879/ERR030879_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030879/ERR030879_2.fastq.gz	0	lung-HCT20145-ERR030879
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030896/ERR030896.fastq.gz	0	lung-HCT20145-ERR030896
+
+# Lymph node - HCT20146
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030878/ERR030878_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030878/ERR030878_2.fastq.gz	0	lymph_node-HCT20146-ERR030878
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030897/ERR030897.fastq.gz	0	lymph_node-HCT20146-ERR030897
+
+# Prostate - HCT20147
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030877/ERR030877_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030877/ERR030877_2.fastq.gz	0	prostate-HCT20147-ERR030877
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030898/ERR030898.fastq.gz	0	prostate-HCT20147-ERR030898
+
+# Skeletal muscle - HCT20148
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030876/ERR030876_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030876/ERR030876_2.fastq.gz	0	skeletal_muscle-HCT20148-ERR030876
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030899/ERR030899.fastq.gz	0	skeletal_muscle-HCT20148-ERR030899
+
+# White blood cells - HCT20149
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030875/ERR030875_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030875/ERR030875_2.fastq.gz	0	white_blood_cells-HCT20149-ERR030875
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030900/ERR030900.fastq.gz	0	white_blood_cells-HCT20149-ERR030900
+
+# Ovary - HCT20150
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030874/ERR030874_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030874/ERR030874_2.fastq.gz	0	ovary-HCT20150-ERR030874
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030901/ERR030901.fastq.gz	0	ovary-HCT20150-ERR030901
+
+# Testes - HCT20151
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030873/ERR030873_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030873/ERR030873_2.fastq.gz	0	testes-HCT20151-ERR030873
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030902/ERR030902.fastq.gz	0	testes-HCT20151-ERR030902
+
+# Thyroid - HCT20152
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030872/ERR030872_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030872/ERR030872_2.fastq.gz	0	thyroid-HCT20152-ERR030872
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030903/ERR030903.fastq.gz	0	thyroid-HCT20152-ERR030903
+
+# Adipose - HCT20158
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030888/ERR030888.fastq.gz	0	adipose-HCT20158-ERR030888
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030880/ERR030880_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030880/ERR030880_2.fastq.gz	0	adipose-HCT20158-ERR030880
+
+# Adrenal - HCT20159
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030889/ERR030889.fastq.gz	0	adrenal-HCT20159-ERR030889
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030881/ERR030881_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030881/ERR030881_2.fastq.gz	0	adrenal-HCT20159-ERR030881
+
+# Brain - HCT20160
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030890/ERR030890.fastq.gz	0	brain-HCT20160-ERR030890
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030882/ERR030882_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030882/ERR030882_2.fastq.gz	0	brain-HCT20160-ERR030882
+
+# Breast - HCT20161
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030891/ERR030891.fastq.gz	0	breast-HCT20161-ERR030891
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030883/ERR030883_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030883/ERR030883_2.fastq.gz	0	breast-HCT20161-ERR030883
+
+# Colon - HCT20162
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030892/ERR030892.fastq.gz	0	colon-HCT20162-ERR030892
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030884/ERR030884_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030884/ERR030884_2.fastq.gz	0	colon-HCT20162-ERR030884
+
+# Mixture
+
+# HCT20170
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030856/ERR030856.fastq.gz	0	mixture-HCT20170-ERR030856
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030857/ERR030857.fastq.gz	0	mixture-HCT20170-ERR030857
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030858/ERR030858.fastq.gz	0	mixture-HCT20170-ERR030858
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030864/ERR030864.fastq.gz	0	mixture-HCT20170-ERR030864
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030865/ERR030865.fastq.gz	0	mixture-HCT20170-ERR030865
+
+# HCT20172
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030859/ERR030859.fastq.gz	0	mixture-HCT20172-ERR030859
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030860/ERR030860.fastq.gz	0	mixture-HCT20172-ERR030860
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030861/ERR030861.fastq.gz	0	mixture-HCT20172-ERR030861
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030866/ERR030866.fastq.gz	0	mixture-HCT20172-ERR030866
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030867/ERR030867.fastq.gz	0	mixture-HCT20172-ERR030867
+
+# HCT20173
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030862/ERR030862.fastq.gz	0	mixture-HCT20173-ERR030862
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030863/ERR030863.fastq.gz	0	mixture-HCT20173-ERR030863
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030868/ERR030868.fastq.gz	0	mixture-HCT20173-ERR030868
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030869/ERR030869.fastq.gz	0	mixture-HCT20173-ERR030869
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030870/ERR030870.fastq.gz	0	mixture-HCT20173-ERR030870
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR030/ERR030871/ERR030871.fastq.gz	0	mixture-HCT20173-ERR030871

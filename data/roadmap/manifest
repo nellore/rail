@@ -1,0 +1,73 @@
+# http://www.ncbi.nlm.nih.gov/geo/roadmap/epigenomics/?search=mrna-seq&display=50
+
+# H1 cell line UCSD
+# ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByExp/sra/SRX/SRX007/SRX007165
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR020/SRR020287/SRR020287.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS004212_SRX007165_SRR020287-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR020/SRR020288/SRR020288.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS004212_SRX007165_SRR020288-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR020/SRR020289/SRR020289.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS004212_SRX007165_SRR020289-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR020/SRR020290/SRR020290.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS004212_SRX007165_SRR020290-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR020/SRR020291/SRR020291.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS004212_SRX007165_SRR020291-1
+
+# IMR90 cell line UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR020/SRR020292/SRR020292.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS004214_SRX007167_SRR020292-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR020/SRR020293/SRR020293.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS004214_SRX007167_SRR020293-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR020/SRR020294/SRR020294.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS004214_SRX007167_SRR020294-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR020/SRR020295/SRR020295.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS004214_SRX007167_SRR020295-1
+
+# H1 cell line UCSF-UBC
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031628/SRR031628_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031628/SRR031628_2.fastq.gz	0	roadmap-PRJNA34535_SRP000930_SRS008392_SRX014392_SRR031628-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031629/SRR031629_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031629/SRR031629_2.fastq.gz	0	roadmap-PRJNA34535_SRP000930_SRS008392_SRX014392_SRR031629-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031630/SRR031630_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031630/SRR031630_2.fastq.gz	0	roadmap-PRJNA34535_SRP000930_SRS008392_SRX014392_SRR031630-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031631/SRR031631_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031631/SRR031631_2.fastq.gz	0	roadmap-PRJNA34535_SRP000930_SRS008392_SRX014392_SRR031631-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031632/SRR031632_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031632/SRR031632_2.fastq.gz	0	roadmap-PRJNA34535_SRP000930_SRS008392_SRX014392_SRR031632-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031633/SRR031633_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031633/SRR031633_2.fastq.gz	0	roadmap-PRJNA34535_SRP000930_SRS008392_SRX014392_SRR031633-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031634/SRR031634_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR031/SRR031634/SRR031634_2.fastq.gz	0	roadmap-PRJNA34535_SRP000930_SRS008392_SRX014392_SRR031634-1
+
+# CD34 mobilized primary cells - UW
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453391/SRR453391_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453391/SRR453391_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453391-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453392/SRR453392_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453392/SRR453392_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453392-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453393/SRR453393_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453393/SRR453393_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453393-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453394/SRR453394_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453394/SRR453394_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453394-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453395/SRR453395_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453395/SRR453395_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453395-1	
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453396/SRR453396_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453396/SRR453396_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453396-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453397/SRR453397_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453397/SRR453397_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453397-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453398/SRR453398_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453398/SRR453398_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453398-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453399/SRR453399_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453399/SRR453399_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453399-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453400/SRR453400_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453400/SRR453400_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453400-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453401/SRR453401_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453401/SRR453401_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453401-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453402/SRR453402_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453402/SRR453402_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453402-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453403/SRR453403_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453403/SRR453403_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453403-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453404/SRR453404_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453404/SRR453404_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453404-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453405/SRR453405_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453405/SRR453405_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453405-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453406/SRR453406_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453406/SRR453406_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453406-1
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453407/SRR453407_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR453/SRR453407/SRR453407_2.fastq.gz	0	roadmap-PRJNA34535_SRP001371_SRS114974_SRX135562_SRR453407-1
+
+# H1 BMP4 derived trophoblast cultured cells - UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486237/SRR486237_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486237/SRR486237_2.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS309359_SRX142107_SRR486237-1
+
+# H1 BMP4 derived trophoblast cultured cells - UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486238/SRR486238_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486238/SRR486238_2.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS309360_SRX142108_SRR486238-1
+
+# H1 derived mesenchymal stem cells - UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486239/SRR486239_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486239/SRR486239_2.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS309361_SRX142109_SRR486239-1
+
+# H1 derived mesenchymal stem cells - UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486240/SRR486240_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486240/SRR486240_2.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS309362_SRX142110_SRR486240-1
+
+# H1 BMP4 derived mesendoderm cultured cells - UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR488/SRR488136/SRR488136_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR488/SRR488136/SRR488136_2.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS309363_SRX142111_SRR488136-1
+
+# H1 BMP4 derived mesendoderm cultured cells - UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR488/SRR488137/SRR488137_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR488/SRR488137/SRR488137_2.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS309364_SRX142112_SRR488137-1
+
+# H1 derived neuronal progenitor cultured cells - UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486241/SRR486241_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486241/SRR486241_2.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS309365_SRX142113_SRR486241-1
+
+# H1 derived neuronal progenitor cultured cells - UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486242/SRR486242_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR486/SRR486242/SRR486242_2.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS309366_SRX142114_SRR486242-1
+
+# H1 cell line - UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR488/SRR488684/SRR488684_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR488/SRR488684/SRR488684_2.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS309367_SRX142115_SRR488684-1
+
+# H1 cell line - UCSD
+ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR488/SRR488685/SRR488685_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR488/SRR488685/SRR488685_2.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS309368_SRX142116_SRR488685-1

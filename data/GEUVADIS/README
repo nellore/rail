@@ -1,0 +1,33 @@
+
+http://www.ebi.ac.uk/ena/data/view/ERP001942
+not sure if this is everything including microRNAs or what
+
+I clicked Download: TEXT link in the upper right.  Got a file.
+
+there seem to be >650 rows in this file:
+
+$ wc -l ~/Downloads/ena.text 
+     668 /Users/langmead/Downloads/ena.text
+
+Even though the consortium sequenced 460-some
+
+AHA!!
+
+$ cat ~/Downloads/ena.text  | awk -v 'FS=\t' '{print $3}' | sort -u | wc -l
+     465
+
+Hmm.. but only 464 without column labels:
+$ cat ~/Downloads/ena.text  | awk -v 'FS=\t' '{print $3}' | grep -v sample | sort -u | wc -l
+     464
+
+Here's how to get the FTP URLs
+head ~/Downloads/ena.text  | awk -v 'FS=\t' '{print $9}'
+
+Seems like a typical file is about 3 GB:
+
+$ curl -sI ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188029/ERR188029_1.fastq.gz | grep Content-Length
+Content-Length: 2866825986
+$ curl -sI ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188029/ERR188029_2.fastq.gz | grep Content-Length
+Content-Length: 2885694636
+
+so extrapolate to 3 GB * 2 (pairs) * 465 (samples) and you get about 3 TB.

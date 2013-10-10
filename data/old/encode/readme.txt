@@ -20,8 +20,3 @@ NOTE: short RNA-seq below
 
 SRP003754  GSE24565: ENCODE_Cold_Spring_Harbor_Labs_Short_RNA-seq
 http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?study=SRP003754
-
-
-GB so far: 2695.281
-Saw 477 URLs
-Bens-MacBook-Pro:encode langmead$ 
