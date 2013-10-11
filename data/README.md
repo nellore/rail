@@ -45,19 +45,21 @@ but can't gaurantee that I haven't left any samples/files behind.
 Data locations
 --------------
 
-There are multiple sequence read archives, the main one being NCBI's SRA, and
-then two others ([ENA] and [DDBJ]) that are essentially mirrors of NCBI's SRA:
+There are multiple sequence read archives, the main one being NCBI's [SRA], and
+then two others ([ENA] and [DDBJ]) that are essentially mirrors of NCBI's [SRA]:
 
 [SRA]: http://www.ncbi.nlm.nih.gov/sra
 [ENA]: http://www.ebi.ac.uk/ena/
 [DDBJ]: http://www.ddbj.nig.ac.jp
 
-NCBI's SRA is problematic.  Their file format and URLs both change quite
-often.  In addition, their file format (`.sra` / `.lite.sra`) is one that they
+NCBI's [SRA] is problematic.  Their [file format] and URLs both change quite
+often.  In addition, their [file format] (`.sra` / `.lite.sra`) is one that they
 invented and can only be manipulated using their (shaky) tools.  Compressed
 FASTQ is much easier to work with and, luckily, the other two archives store
 reads as gzipped FASTQ, so I prefer to use URLs that point into those other
 archives, not NCBI's.
+
+[file format]: http://www.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?view=toolkit_doc&f=std
 
 Layout
 ------
