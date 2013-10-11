@@ -1,9 +1,31 @@
 Datasets
 --------
 
-See studies.tsv for a description of all the studies collected here and their
-respective sizes.  We're also hoping to include many other studies that
-require us to apply for access, including:
+So far we have compiled manifest files for the following publicly-available
+studies:
+
+* [ENCODE] ([papers][ENCODE papers])
+* [GEUVADIS] ([papers][GEUVADIS papers])
+* [Roadmap Epigenomics] ([papers][[Roadmap Epigenomics papers]])
+* [BodyMap 2.0]
+* [Pickrell et al] ([paper][Pickrell et al paper])
+* [Cuffdiff 2] ([paper][Cuffdiff 2 paper])
+
+[ENCODE]: http://www.genome.gov/10005107
+[ENCODE papers]: http://www.genome.gov/10005107#al-2
+[GEUVADIS]: http://www.geuvadis.org
+[GEUVADIS papers]: http://www.geuvadis.org/web/geuvadis/publications
+[Roadmap Epigenomics]: http://www.roadmapepigenomics.org
+[Roadmap Epigenomics papers]: http://www.roadmapepigenomics.org/publications
+[BodyMap 2.0]: http://www.ensembl.info/blog/2011/05/24/human-bodymap-2-0-data-from-illumina/
+[Pickrell et al]: http://eqtl.uchicago.edu/Home.html
+[Pickrell et al paper]: http://www.ncbi.nlm.nih.gov/pubmed/20220758
+[Cuffdiff 2]: http://cufflinks.cbcb.umd.edu
+[Cuffdiff 2 paper]: http://www.ncbi.nlm.nih.gov/pubmed/23222703
+
+See `studies.tsv` for a more detailed description of the studies collected so
+far and their respective sizes.  We're also hoping to include many other
+studies that require us to apply for access, including:
 
 * [TCGA]
 * [Depression genes and networks]
