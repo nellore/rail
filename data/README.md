@@ -46,7 +46,7 @@ Data locations
 --------------
 
 There are multiple sequence read archives, the main one being NCBI's [SRA], and
-then two others ([ENA] and [DDBJ]) that are essentially mirrors of NCBI's [SRA]:
+then two others ([ENA] and [DDBJ]) that are essentially mirrors of NCBI's [SRA].
 
 [SRA]: http://www.ncbi.nlm.nih.gov/sra
 [ENA]: http://www.ebi.ac.uk/ena/
