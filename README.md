@@ -4,7 +4,7 @@ software that has yet to be named.
 Design
 ------
 
-TODO
+![Design flowchart](doc/design.pdf "Design flowchart")
 
 Repository layout
 -----------------
