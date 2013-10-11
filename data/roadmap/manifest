@@ -1,5 +1,10 @@
 # http://www.ncbi.nlm.nih.gov/geo/roadmap/epigenomics/?search=mrna-seq&display=50
 
+# GB so far: 393.551
+# Saw 77 URLs
+# Saw 43 SRRs
+# Saw 1 groups (9 names unp, 34 names paired)
+
 # H1 cell line UCSD
 # ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByExp/sra/SRX/SRX007/SRX007165
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR020/SRR020287/SRR020287.fastq.gz	0	roadmap-PRJNA34535_SRP000941_SRS004212_SRX007165_SRR020287-1
