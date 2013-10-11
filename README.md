@@ -83,7 +83,21 @@ To prepare for the test:
     make
     (alternately, do "make -jN" where N = number of cores you can spare)
 
-That last make command will take a while.  To run the test do the following
+That last make command will take a while.  Among other things, it calls Flux
+Simulator to simulate some RNA-seq reads.  To run the test do the following
 from `$TORNADO_HOME/example/dmel_flux`):
 
     sh local.sh
+
+Contributors
+------------
+
+* [Ben Langmead]
+* Jamie Morton
+* Abhi Nellore
+* [Jeff Leek]
+* [Alyssa Frazee]
+
+[Ben Langmead]: http://www.cs.jhu.edu/~langmea/index.shtml
+[Jeff Leek]: http://www.biostat.jhsph.edu/~jleek/
+[Alyssa Frazee]: http://alyssafrazee.com
