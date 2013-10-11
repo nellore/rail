@@ -4,7 +4,13 @@ software that has yet to be named.
 Design
 ------
 
-![Design flowchart](doc/design.pdf "Design flowchart")
+Here's a flowchart showing how all the pipeline stages relate to each other,
+and which source file each is implemented in.  The source files referred to
+are in the `src/rnawesome` subdirectory.  More detailed descriptions of the
+input and output tuples for each step can be found in the source file
+headers.
+
+![Design flowchart](doc/design_figure.png "Design flowchart")
 
 Repository layout
 -----------------
