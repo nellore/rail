@@ -10,7 +10,7 @@ are in the `src/rnawesome` subdirectory.  More detailed descriptions of the
 input and output tuples for each step can be found in the source file
 headers.
 
-![Design flowchart](doc/design_figure.pdf "Design flowchart")
+![Design flowchart](doc/design_figure.png "Design flowchart")
 
 Repository layout
 -----------------
