@@ -1,12 +1,16 @@
-This is the source repository for the scalable suite RNA-seq analysis
-software that has yet to be named.
+Rail
+====
+
+This is the source repository for the Rail-*, which currently includes just
+the Rail-RNA suite of RNA-seq analysis software.
 
 Design
 ------
 
 Here's a flowchart showing how all the pipeline stages relate to each other,
 and which source file each is implemented in.  The source files referred to
-are in the `src/rnawesome` subdirectory.  More detailed descriptions of the
+are in the `src/rnawesome` subdirectory (note: rename this to remove
+reference to `rnawesome`).  More detailed descriptions of the
 input and output tuples for each step can be found in the source file
 headers.
 
@@ -38,15 +42,6 @@ Repository layout
 TODO list
 ---------
 
-* Pick a name!  Or a temporary codename.  Replace old name(s) like Myrna 2,
-  Tornado and RNAwesome, with new name.  Make it easier to change name in
-  future by minimizing number of places where it's hard-coded.  Some candidates:
-    * Tornado - since it's weather-related like "cloud", but there are other
-      bioinformatics tools with this name
-    * Rail, Railroad, Railway - the analogy being that our software is
-      analyzing data (moving cargo) in a uniform way across datasets (always
-      along the same track)
-    * Spyder - but this only really refers to the DER-finding functionality
 * Carefully audit the code in `src/rnawesome/align.py` and add a comprehensive
   suite of unit tests.
 * Move this TODO list to GitHub issue tracker
@@ -71,7 +66,7 @@ Data prerequisites:
 [iGenomes]: http://support.illumina.com/sequencing/sequencing_software/igenome.ilmn
 
 Configuration:
-* Set `TORNADO_HOME` environment variable to point to base of this checkout
+* Set `TORNADO_HOME` (note: rename!) environment variable to point to base of this checkout
 * Set `IGENOMES_HOME` environment variable to point to directory that has
   `Drosophila_melanogaster` from iGenomes tarball as a subdirectory
 
