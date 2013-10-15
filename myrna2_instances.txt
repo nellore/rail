@@ -1,0 +1,19 @@
+./old/example/sim_human/run.sh:BOWTIE_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/BowtieIndex/genome
+./old/example/sim_human/run.sh:FASTA_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa.fai
+./old/example/sim_human/run.sh:GENOME=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa
+./old/example/sim_human/run_hadoop.sh:IGENOME=/damsl/projects/myrna2/langmead/igenomes/Homo_sapiens/UCSC/hg19
+./old/example/sim_human/run_hadoop.sh:INPUT=/damsl/projects/myrna2/langmead/tornado/data/trapnell/*.fastq
+./old/example/sim_human/run_hadoop.sh:TORNADO=/damsl/projects/myrna2/software/tornado
+./old/example/sim_simple/run_hadoop.sh:TORNADO=/damsl/projects/myrna2/software/tornado
+./old/example/sim_simple/run_matrix.sh:TORNADO=/damsl/projects/myrna2/software/tornado
+./old/example/sim_splice/run.sh:BOWTIE_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/BowtieIndex/genome
+./old/example/sim_splice/run.sh:FASTA_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa.fai
+./old/example/sim_splice/run.sh:GENOME=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa
+./old/example/sim_splice/run_hadoop.sh:BOWTIE_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/BowtieIndex/genome
+./old/example/sim_splice/run_hadoop.sh:FASTA_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa.fai
+./old/example/sim_splice/run_hadoop.sh:GENOME=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa
+./old/example/sim_splice/run_hadoop.sh:TORNADO=/damsl/projects/myrna2/software/tornado
+./old/example/sim_splice/run_tophat.sh:FASTA_SRC=/damsl/projects/myrna2/software/tornado/src/fasta
+./old/example/sim_splice/run_tophat.sh:UTIL=/damsl/projects/myrna2/software/tornado/src/util
+./src/driver/tornado.py:appName = "Myrna2" # app name
+./src/driver/tornado.py:print >> sys.stderr, "Myrna2 v" + ver

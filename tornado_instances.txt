@@ -1,0 +1,153 @@
+Binary file ./.git/index matches
+Binary file ./.git/objects/pack/pack-8949ce177e0ccb4e3a65ab06e1a1d938ae60fd91.pack matches
+./data/old/bodymap2.0/preprocess.sh:[ -z "$TORNADO_HOME" ] && echo "Must set TORNADO_HOME" && exit 1
+./data/old/bodymap2.0/preprocess.sh:	--push s3://tornado-emr/reads/bodymap2/ \
+./data/old/encode/preprocess.sh:[ -z "$TORNADO_HOME" ] && echo "Must set TORNADO_HOME" && exit 1
+./data/old/encode/preprocess.sh:	--push s3://tornado-emr/reads/bodymap2/ \
+./emr/bootstrap/install-tornado.sh:# install-tornado.sh
+./emr/push_bootstrap.sh:s3cmd put --acl-public bootstrap/* s3://tornado-emr/bootstrap/
+./example/cuffdiff2_small/get_reads.sh:s3cmd $* get s3://tornado-emr/reads/cuffdiff2_small/* .
+./example/cuffdiff2_small/preprocess.sh:if [ -z "$TORNADO_HOME" ] ; then
+./example/cuffdiff2_small/preprocess.sh:	echo "TORNADO_HOME is not set"
+./example/cuffdiff2_small/preprocess.sh:python $TORNADO_HOME/src/rnawesome/preprocess.py --gzip-output
+./example/dmel_flux/emr.sh:python $TORNADO_HOME/src/driver/tornado.py \
+./example/dmel_flux/emr.sh:	--reference s3://tornado-emr/refs/dm3_UCSC.tar.gz \
+./example/dmel_flux/local.sh:[ -z "$TORNADO_HOME" ] && echo "Set TORNADO_HOME" && exit 1
+./example/dmel_flux/local.sh:python $TORNADO_HOME/src/driver/tornado.py \
+./example/dmel_flux/Makefile:ifeq (,$(TORNADO_HOME))
+./example/dmel_flux/Makefile:$(error "Set TORNADO_HOME")
+./example/dmel_flux/Makefile:FLUX_DIR=$(TORNADO_HOME)/tools/flux_sim
+./example/dmel_flux/Makefile:IGV_DIR=$(TORNADO_HOME)/tools/igv
+./example/dmel_flux/Makefile:all: $(OUTPUT_DIR)/preprocessed_reads $(TORNADO_HOME)/tools/igv/IGV/igv.jar
+./example/dmel_flux/Makefile:	cat $< | python $(TORNADO_HOME)/src/rnawesome/preprocess.py --gzip-output --push=$@
+./example/dmel_flux/Makefile:	python $(TORNADO_HOME)/src/simulate/flux.py \
+./example/dmel_flux/run.sh:SCR_DIR=$TORNADO_HOME/src/rnawesome
+./example/dmel_flux/run.sh:UTIL=$TORNADO_HOME/src/util
+./example/dmel_flux/validate.sh:UTIL=$TORNADO_HOME/src/util
+./example/dmel_flux/validate.sh:CHECK=$TORNADO_HOME/src/check
+./example/dmel_flux/validate.sh:IGV_HOME=$TORNADO_HOME/tools/igv/IGV
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493366_1.1.fastq.gz	0	LFB_scramble_hiseq-A-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493366_1.2.fastq.gz	0	LFB_scramble_hiseq-A-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493367_1.1.fastq.gz	0	LFB_scramble_hiseq-B-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493367_1.2.fastq.gz	0	LFB_scramble_hiseq-B-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493368_1.1.fastq.gz	0	LFB_scramble_hiseq-C-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493368_1.2.fastq.gz	0	LFB_scramble_hiseq-C-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493369_1.1.fastq.gz	0	LFB_HOXA1KD_hiseq-A-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493369_1.2.fastq.gz	0	LFB_HOXA1KD_hiseq-A-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493370_1.1.fastq.gz	0	LFB_HOXA1KD_hiseq-B-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493370_1.2.fastq.gz	0	LFB_HOXA1KD_hiseq-B-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493371_1.1.fastq.gz	0	LFB_HOXA1KD_hiseq-C-0
+./example/emr_tests/cuffdiff2_small.manifest:s3://tornado-emr/raw_reads/cuffdiff2_small/SRR493371_1.2.fastq.gz	0	LFB_HOXA1KD_hiseq-C-0
+./example/emr_tests/just_align_cuffdiff2.sh:if [ -z "$TORNADO_HOME" ] ; then
+./example/emr_tests/just_align_cuffdiff2.sh:	echo "Set TORNADO_HOME first"
+./example/emr_tests/just_align_cuffdiff2.sh:s3cmd del --recursive s3://langmead/tornado_${PROJ}/manifest
+./example/emr_tests/just_align_cuffdiff2.sh:s3cmd del --recursive s3://langmead/tornado_${PROJ}/output
+./example/emr_tests/just_align_cuffdiff2.sh:s3cmd put ${d}/cuffdiff2_small.manifest s3://langmead/tornado_${PROJ}/manifest/
+./example/emr_tests/just_align_cuffdiff2.sh:python $TORNADO_HOME/src/driver/tornado.py \
+./example/emr_tests/just_align_cuffdiff2.sh:	--manifest s3://langmead/tornado_${PROJ}/manifest/cuffdiff2_small.manifest \
+./example/emr_tests/just_align_cuffdiff2.sh:	--output s3://langmead/tornado_${PROJ}/output \
+./example/emr_tests/just_align_cuffdiff2.sh:	--reference s3://tornado-emr/refs/hg19_UCSC.tar.gz \
+./example/emr_tests/just_align_cuffdiff2.sh:echo "s3cmd del --recursive s3://langmead/tornado_${PROJ}"
+./old/drivers/flux.sh:FLUX_HOME=$TORNADO_HOME/tools/flux_sim/flux-simulator
+./old/drivers/flux.sh:python $TORNADO_HOME/src/simulate/flux.py \
+./old/drivers/gen_script.py:    print "TORNADO=%s/.."%cwd
+./old/drivers/hadoop_base.sh:EXAMPLE=$TORNADO/example
+./old/drivers/hadoop_base.sh:SCR_DIR=$TORNADO/src
+./old/drivers/igenomes_setup.sh:	if [ -z "$TORNADO_HOME" ] ; then
+./old/drivers/igenomes_setup.sh:		echo "Neither IGENOMES_DIR nor TORNADO_HOME set"
+./old/drivers/igenomes_setup.sh:	IGENOMES_DIR=$TORNADO_HOME/igenomes
+./old/drivers/igenomes_setup.sh:python $TORNADO_HOME/src/simulate/gtf_flux_fix.py \
+./old/drivers/igv_display.sh:# VALIDATE_OUT=/media/91356d9c-b219-4f38-a6a3-ff802758da9c/home/morton/Documents/Bioinformatics/JHU/tornado/tools/flux_sim/small_test/validation_output
+./old/drivers/igv_display.sh:# IGV_HOME=/media/91356d9c-b219-4f38-a6a3-ff802758da9c/home/morton/Documents/Bioinformatics/JHU/tornado/tools/igv/IGV
+./old/drivers/igv_display.sh:IGV_HOME=$TORNADO_HOME/tools/igv/IGV
+./old/drivers/local_base.sh:SCR_DIR=$TORNADO/src/rnawesome
+./old/drivers/local_base.sh:FASTQ2TAB="python $TORNADO/src/fasta/fastq2tab.py"
+./old/drivers/validate2.sh:UTIL=$TORNADO_HOME/src/util
+./old/example/sim_human/run.sh:BOWTIE_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/BowtieIndex/genome
+./old/example/sim_human/run.sh:FASTA_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa.fai
+./old/example/sim_human/run.sh:GENOME=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa
+./old/example/sim_human/run.sh:TORNADO=../..
+./old/example/sim_human/run.sh:TOOLS=$TORNADO/tools
+./old/example/sim_human/run_hadoop.sh:INPUT=/damsl/projects/myrna2/langmead/tornado/data/trapnell/*.fastq
+./old/example/sim_human/run_hadoop.sh:#Note: Must copy over the entire tornado directory
+./old/example/sim_human/run_hadoop.sh:TORNADO=/damsl/projects/myrna2/software/tornado
+./old/example/sim_human/run_hadoop.sh:EXAMPLE=$TORNADO/example
+./old/example/sim_human/run_hadoop.sh:SCR_DIR=$TORNADO/src
+./old/example/sim_human/run_hadoop.sh:UCSC_TOOLS=$TORNADO/tools/ucsc_tools
+./old/example/sim_simple/run.sh:TORNADO=../..
+./old/example/sim_simple/run.sh:TOOLS=$TORNADO/tools
+./old/example/sim_simple/run_hadoop.sh:#Note: Must copy over the entire tornado directory
+./old/example/sim_simple/run_hadoop.sh:TORNADO=/damsl/projects/myrna2/software/tornado
+./old/example/sim_simple/run_hadoop.sh:EXAMPLE=$TORNADO/example
+./old/example/sim_simple/run_hadoop.sh:SCR_DIR=$TORNADO/src
+./old/example/sim_simple/run_hadoop.sh:UCSC_TOOLS=$TORNADO/tools/ucsc_tools
+./old/example/sim_simple/run_hadoop.sh:BOWTIE=$TORNADO/tools/bowtie-0.12.8/bowtie
+./old/example/sim_simple/run_matrix.sh:#Note: Must copy over the entire tornado directory
+./old/example/sim_simple/run_matrix.sh:TORNADO=/damsl/projects/myrna2/software/tornado
+./old/example/sim_simple/run_matrix.sh:EXAMPLE=$TORNADO/example
+./old/example/sim_simple/run_matrix.sh:SCR_DIR=$TORNADO/src
+./old/example/sim_simple/run_matrix.sh:BOWTIE=$TORNADO/tools/bowtie-0.12.8/bowtie
+./old/example/sim_simple/run_matrix.sh:UCSC_TOOLS=$TORNADO/tools/ucsc_tools
+./old/example/sim_splice/run.sh:BOWTIE_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/BowtieIndex/genome
+./old/example/sim_splice/run.sh:FASTA_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa.fai
+./old/example/sim_splice/run.sh:GENOME=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa
+./old/example/sim_splice/run.sh:TORNADO=../..
+./old/example/sim_splice/run.sh:TOOLS=$TORNADO/tools
+./old/example/sim_splice/run_hadoop.sh:BOWTIE_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/BowtieIndex/genome
+./old/example/sim_splice/run_hadoop.sh:FASTA_IDX=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa.fai
+./old/example/sim_splice/run_hadoop.sh:GENOME=/damsl/projects/myrna2/software/tornado/example/drosophila/Drosophila_melanogaster/UCSC/dm3/Sequence/WholeGenomeFasta/genome.fa
+./old/example/sim_splice/run_hadoop.sh:#Note: Must copy over the entire tornado directory
+./old/example/sim_splice/run_hadoop.sh:TORNADO=/damsl/projects/myrna2/software/tornado
+./old/example/sim_splice/run_hadoop.sh:EXAMPLE=$TORNADO/example
+./old/example/sim_splice/run_hadoop.sh:SCR_DIR=$TORNADO/src
+./old/example/sim_splice/run_hadoop.sh:UCSC_TOOLS=$TORNADO/tools/ucsc_tools
+./old/example/sim_splice/run_tophat.sh:FASTA_SRC=/damsl/projects/myrna2/software/tornado/src/fasta
+./old/example/sim_splice/run_tophat.sh:UTIL=/damsl/projects/myrna2/software/tornado/src/util
+./old/example/test_align/run.sh:SCR_DIR=$TORNADO_HOME/src/rnawesome
+./old/example/test_align/run.sh:UTIL=$TORNADO_HOME/src/util
+./package/package_igenomes.sh:# to create a reference archive for Tornado
+./package/package_tornado.sh:# package_tornado.sh
+./package/package_tornado.sh:# Make a tarball out of all the tornado scripts 
+./package/package_tornado.sh:ARNAME=tornado-${VER}.tar.gz
+./package/package_tornado.sh:echo "s3cmd put --acl-public ${ARNAME} s3://tornado-emr/bin/"
+./package/README:package_tornado.sh: Put together archive with all files needed for someone else to run Tornado
+./package/README:package_igenomes.sh: In an iGenomes directory, put together an archive that can be used with Tornado
+./README.md:* Set `TORNADO_HOME` (note: rename!) environment variable to point to base of this checkout
+./README.md:    cd $TORNADO_HOME
+./README.md:from `$TORNADO_HOME/example/dmel_flux`):
+./src/driver/aws.py:    ret = ['--bootstrap-action s3://tornado-emr/bootstrap/s3cmd_s3.sh',
+./src/driver/aws.py:    ret = ['--bootstrap-action s3://tornado-emr/bootstrap/s3cmd_s3_tarball.sh',
+./src/driver/aws.py:    ret = ['--bootstrap-action s3://tornado-emr/bootstrap/s3cmd_s3_tarball.sh',
+./src/driver/config.py:        '--set-version', metavar='VER', type=str, help='Force Tornado to use a particular version.')
+./src/driver/emr_mode.py:        '--emr-local-dir', metavar='PATH', type=str, help='Path to a local directory on the EMR nodes where the reference archive and Tornado scripts will be copied.')
+./src/driver/tools.py:        s3://tornado-emr/bootstrap directory and the script must not need any
+./src/driver/tools.py:    ret = ['--bootstrap-action s3://tornado-emr/bootstrap/install-%s.sh' % name,
+./src/driver/tornado.py:tornado.py
+./src/driver/tornado.py:Driver script for the Tornado pipeline.  Right now, just does Amazon Elastic
+./src/driver/tornado.py:- Tornado scripts
+./src/driver/tornado.py:import tornado_pipeline
+./src/driver/tornado.py:import tornado_config
+./src/driver/tornado.py:parser = argparse.ArgumentParser(description='Generate and run a script for Tornado.')
+./src/driver/tornado.py:tornado_config.addArgs(parser)
+./src/driver/tornado.py:tconf = tornado_config.TornadoConfig(args)
+./src/driver/tornado.py:    'preprocess'     : ([                                 ], tornado_pipeline.PreprocessingStep),
+./src/driver/tornado.py:    'align'          : ([('preprocess',     ''           )], tornado_pipeline.AlignStep),
+./src/driver/tornado.py:    'intron'         : ([('align',          '/intron'    )], tornado_pipeline.IntronStep),
+./src/driver/tornado.py:    'normalize_pre'  : ([('align',          '/exon_diff' )], tornado_pipeline.NormalizePreStep),
+./src/driver/tornado.py:    'normalize'      : ([('normalize_pre',  '/o'         )], tornado_pipeline.NormalizeStep),
+./src/driver/tornado.py:    'normalize_post' : ([('normalize',      ''           )], tornado_pipeline.NormalizePostStep),
+./src/driver/tornado.py:    'walk_fit'       : ([('normalize_post', ''           )], tornado_pipeline.WalkFitStep),
+./src/driver/tornado.py:    'ebayes'         : ([('walk_fit',       ''           )], tornado_pipeline.EbayesStep),
+./src/driver/tornado.py:    'hmm_params'     : ([('ebayes',         ''           )], tornado_pipeline.HmmParamsStep),
+./src/driver/tornado.py:    'hmm'            : ([('hmm_params',     ''           )], tornado_pipeline.HmmStep),
+./src/driver/tornado.py:    'aggr_path'      : ([('hmm',            ''           )], tornado_pipeline.AggrPathStep) }
+./src/driver/tornado.py:    tornadoUrl = Url("s3://tornado-emr/bin/tornado-%s.tar.gz" % ver)
+./src/driver/tornado.py:    # Get Tornado scripts and run Makefile for swig code
+./src/driver/tornado.py:    cmdl.append(bootstrapTool("tornado", src=tornadoUrl, dest="/mnt"))
+./src/driver/tornado_config.py:tornado_config.py
+./src/driver/tornado_config.py:Parse and organize parameters controlling the behavior of the Tornado pipeline.
+./src/driver/tornado_config.py:class TornadoConfig(object):
+./src/driver/tornado_pipeline.py:tornado_pipeline.py
+./tools/flux_sim/igenomes_setup.sh:	if [ -z "$TORNADO_HOME" ] ; then
+./tools/flux_sim/igenomes_setup.sh:		echo "Neither IGENOMES_DIR nor TORNADO_HOME set"
+./tools/flux_sim/igenomes_setup.sh:	IGENOMES_DIR=$TORNADO_HOME/igenomes

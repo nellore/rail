@@ -1,0 +1,3 @@
+./src/driver/config.py:        '--igenomes', action='store_const', const=True, help='--reference specifies an iGenomes archive/directory, not a Myrna 2 reference')
+./src/driver/ref.py:# Reference file subdirs when reference directory is a Myrna 2 archive
+./src/driver/tornado_pipeline.py:# %%BASE%%: Base Myrna 2 directory

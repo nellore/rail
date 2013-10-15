@@ -1,0 +1,142 @@
+Binary file ./.git/index matches
+Binary file ./.git/objects/pack/pack-8949ce177e0ccb4e3a65ab06e1a1d938ae60fd91.pack matches
+./data/old/bodymap2.0/preprocess.sh:python ../../src/rnawesome/preprocess.py \
+./data/old/encode/preprocess.sh:python ../../src/rnawesome/preprocess.py \
+./example/cuffdiff2_small/preprocess.sh:python $TORNADO_HOME/src/rnawesome/preprocess.py --gzip-output
+./example/dmel_flux/Makefile:	cat $< | python $(TORNADO_HOME)/src/rnawesome/preprocess.py --gzip-output --push=$@
+./example/dmel_flux/run.sh:SCR_DIR=$TORNADO_HOME/src/rnawesome
+./old/drivers/hadoop_base.sh:RNAWESOME=$SCR_DIR/rnawesome
+./old/drivers/hadoop_base.sh:ALIGN="$PYTHON $RNAWESOME/align.py"
+./old/drivers/hadoop_base.sh:MERGE="$PYTHON $RNAWESOME/merge.py"
+./old/drivers/hadoop_base.sh:WALK_PRENORM="$PYTHON $RNAWESOME/walk_prenorm.py"
+./old/drivers/hadoop_base.sh:NORMALIZE_PRE="$PYTHON $RNAWESOME/normalize_pre.py"
+./old/drivers/hadoop_base.sh:NORMALIZE2="$PYTHON $RNAWESOME/normalize2.py"
+./old/drivers/hadoop_base.sh:NORMALIZE="$PYTHON $RNAWESOME/normalize.py"
+./old/drivers/hadoop_base.sh:NORMALIZE_POST="$PYTHON $RNAWESOME/normalize_post.py"
+./old/drivers/hadoop_base.sh:INTRON="$PYTHON $RNAWESOME/intron.py"
+./old/drivers/hadoop_base.sh:WALK_FIT="$PYTHON $RNAWESOME/walk_fit.py"
+./old/drivers/hadoop_base.sh:EBAYES="$PYTHON $RNAWESOME/ebayes.py"
+./old/drivers/hadoop_base.sh:HMM_PARAMS="$PYTHON $RNAWESOME/hmm_params.py"
+./old/drivers/hadoop_base.sh:HMM="$PYTHON $RNAWESOME/hmm.py"
+./old/drivers/hadoop_base.sh:AGGR_PATH="$PYTHON $RNAWESOME/aggr_path.py"
+./old/drivers/hadoop_base.sh:    -file "$SCR_DIR/rnawesome/align.py" \
+./old/drivers/hadoop_base.sh:    -file "$SCR_DIR/rnawesome/intron.py" \
+./old/drivers/hadoop_base.sh:     -file "$SCR_DIR/rnawesome/normalize_pre.py" \
+./old/drivers/hadoop_base.sh:     -file "$SCR_DIR/rnawesome/normalize2.py" \
+./old/drivers/hadoop_base.sh:#     -file "$SCR_DIR/rnawesome/walk_prenorm.py" \
+./old/drivers/hadoop_base.sh:#     -file "$SCR_DIR/rnawesome/normalize.py" \
+./old/drivers/hadoop_base.sh:     -file "$SCR_DIR/rnawesome/normalize_post.py" \
+./old/drivers/hadoop_base.sh:#     -file "$SCR_DIR/rnawesome/walk_fit.py" \
+./old/drivers/hadoop_base.sh:#     -file "$SCR_DIR/rnawesome/ebayes.py" \
+./old/drivers/hadoop_base.sh:#     -file "$SCR_DIR/rnawesome/ebayes.py" \
+./old/drivers/hadoop_base.sh:#     -file "$SCR_DIR/rnawesome/hmm_params.py" \
+./old/drivers/hadoop_base.sh:#     -file "$SCR_DIR/rnawesome/hmm.py" \
+./old/drivers/hadoop_base.sh:#     -file "$SCR_DIR/rnawesome/aggr_path.py" \
+./old/drivers/local_base.sh:SCR_DIR=$TORNADO/src/rnawesome
+./old/example/sim_human/run.sh:SCR_DIR=../../src/rnawesome
+./old/example/sim_human/run_hadoop.sh:RNAWESOME=$SCR_DIR/rnawesome
+./old/example/sim_human/run_hadoop.sh:ALIGN="python $RNAWESOME/align.py"
+./old/example/sim_human/run_hadoop.sh:MERGE="python $RNAWESOME/merge.py"
+./old/example/sim_human/run_hadoop.sh:WALK_PRENORM="python $RNAWESOME/walk_prenorm.py"
+./old/example/sim_human/run_hadoop.sh:NORMALIZE="python $RNAWESOME/normalize.py"
+./old/example/sim_human/run_hadoop.sh:NORMALIZE_POST="python $RNAWESOME/normalize_post.py"
+./old/example/sim_human/run_hadoop.sh:INTRON="python $RNAWESOME/intron.py"
+./old/example/sim_human/run_hadoop.sh:WALK_FIT="python $RNAWESOME/walk_fit.py"
+./old/example/sim_human/run_hadoop.sh:EBAYES="python $RNAWESOME/ebayes.py"
+./old/example/sim_human/run_hadoop.sh:HMM_PARAMS="python $RNAWESOME/hmm_params.py"
+./old/example/sim_human/run_hadoop.sh:HMM="python $RNAWESOME/hmm.py"
+./old/example/sim_human/run_hadoop.sh:AGGR_PATH="python $RNAWESOME/aggr_path.py"
+./old/example/sim_human/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/align.py" \
+./old/example/sim_human/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/walk_prenorm.py" \
+./old/example/sim_human/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/normalize.py" \
+./old/example/sim_human/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/normalize_post.py" \
+./old/example/sim_human/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/intron.py" \
+./old/example/sim_human/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/walk_fit.py" \
+./old/example/sim_human/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/ebayes.py" \
+./old/example/sim_human/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/ebayes.py" \
+./old/example/sim_human/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/hmm_params.py" \
+./old/example/sim_human/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/hmm.py" \
+./old/example/sim_human/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/aggr_path.py" \
+./old/example/sim_simple/run.sh:SCR_DIR=../../src/rnawesome
+./old/example/sim_simple/run_hadoop.sh:RNAWESOME=$SCR_DIR/rnawesome
+./old/example/sim_simple/run_hadoop.sh:ALIGN="python $RNAWESOME/align.py"
+./old/example/sim_simple/run_hadoop.sh:SPLICE="python $RNAWESOME/splice.py"
+./old/example/sim_simple/run_hadoop.sh:MERGE="python $RNAWESOME/merge.py"
+./old/example/sim_simple/run_hadoop.sh:WALK_PRENORM="python $RNAWESOME/walk_prenorm.py"
+./old/example/sim_simple/run_hadoop.sh:NORMALIZE="python $RNAWESOME/normalize.py"
+./old/example/sim_simple/run_hadoop.sh:NORMALIZE_POST="python $RNAWESOME/normalize_post.py"
+./old/example/sim_simple/run_hadoop.sh:WALK_FIT="python $RNAWESOME/walk_fit.py"
+./old/example/sim_simple/run_hadoop.sh:EBAYES="python $RNAWESOME/ebayes.py"
+./old/example/sim_simple/run_hadoop.sh:HMM_PARAMS="python $RNAWESOME/hmm_params.py"
+./old/example/sim_simple/run_hadoop.sh:HMM="python $RNAWESOME/hmm.py"
+./old/example/sim_simple/run_hadoop.sh:AGGR_PATH="python $RNAWESOME/aggr_path.py"
+./old/example/sim_simple/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/align.py" \
+./old/example/sim_simple/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/splice.py" \
+./old/example/sim_simple/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/merge.py" \
+./old/example/sim_simple/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/walk_prenorm.py" \
+./old/example/sim_simple/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/normalize.py" \
+./old/example/sim_simple/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/normalize_post.py" \
+./old/example/sim_simple/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/walk_fit.py" \
+./old/example/sim_simple/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/ebayes.py" \
+./old/example/sim_simple/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/ebayes.py" \
+./old/example/sim_simple/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/hmm_params.py" \
+./old/example/sim_simple/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/hmm.py" \
+./old/example/sim_simple/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/aggr_path.py" \
+./old/example/sim_simple/run_matrix.sh:RNAWESOME=$SCR_DIR/rnawesome
+./old/example/sim_simple/run_matrix.sh:ALIGN="python $RNAWESOME/align.py"
+./old/example/sim_simple/run_matrix.sh:SPLICE="python $RNAWESOME/splice.py"
+./old/example/sim_simple/run_matrix.sh:MERGE="python $RNAWESOME/merge.py"
+./old/example/sim_simple/run_matrix.sh:WALK_PRENORM="python $RNAWESOME/walk_prenorm.py"
+./old/example/sim_simple/run_matrix.sh:NORMALIZE="python $RNAWESOME/normalize.py"
+./old/example/sim_simple/run_matrix.sh:NORMALIZE_POST="python $RNAWESOME/normalize_post.py"
+./old/example/sim_simple/run_matrix.sh:WALK_FIT="python $RNAWESOME/walk_fit.py"
+./old/example/sim_simple/run_matrix.sh:EBAYES="python $RNAWESOME/ebayes.py"
+./old/example/sim_simple/run_matrix.sh:HMM_PARAMS="python $RNAWESOME/hmm_params.py"
+./old/example/sim_simple/run_matrix.sh:HMM="python $RNAWESOME/hmm.py"
+./old/example/sim_simple/run_matrix.sh:#     -file "$SCR_DIR/rnawesome/align.py" \
+./old/example/sim_simple/run_matrix.sh:#     -file "$SCR_DIR/rnawesome/splice.py" \
+./old/example/sim_simple/run_matrix.sh:#     -file "$SCR_DIR/rnawesome/merge.py" \
+./old/example/sim_simple/run_matrix.sh:#     -file "$SCR_DIR/rnawesome/normalize.py" \
+./old/example/sim_simple/run_matrix.sh:#     -file "$SCR_DIR/rnawesome/walk_prenorm.py" \
+./old/example/sim_simple/run_matrix.sh:    -file "$SCR_DIR/rnawesome/normalize.py" \
+./old/example/sim_splice/run.sh:SCR_DIR=../../src/rnawesome
+./old/example/sim_splice/run_hadoop.sh:RNAWESOME=$SCR_DIR/rnawesome
+./old/example/sim_splice/run_hadoop.sh:ALIGN="python $RNAWESOME/align.py"
+./old/example/sim_splice/run_hadoop.sh:MERGE="python $RNAWESOME/merge.py"
+./old/example/sim_splice/run_hadoop.sh:WALK_PRENORM="python $RNAWESOME/walk_prenorm.py"
+./old/example/sim_splice/run_hadoop.sh:NORMALIZE="python $RNAWESOME/normalize.py"
+./old/example/sim_splice/run_hadoop.sh:NORMALIZE_POST="python $RNAWESOME/normalize_post.py"
+./old/example/sim_splice/run_hadoop.sh:INTRON="python $RNAWESOME/intron.py"
+./old/example/sim_splice/run_hadoop.sh:WALK_FIT="python $RNAWESOME/walk_fit.py"
+./old/example/sim_splice/run_hadoop.sh:EBAYES="python $RNAWESOME/ebayes.py"
+./old/example/sim_splice/run_hadoop.sh:HMM_PARAMS="python $RNAWESOME/hmm_params.py"
+./old/example/sim_splice/run_hadoop.sh:HMM="python $RNAWESOME/hmm.py"
+./old/example/sim_splice/run_hadoop.sh:AGGR_PATH="python $RNAWESOME/aggr_path.py"
+./old/example/sim_splice/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/align.py" \
+./old/example/sim_splice/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/walk_prenorm.py" \
+./old/example/sim_splice/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/normalize.py" \
+./old/example/sim_splice/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/normalize_post.py" \
+./old/example/sim_splice/run_hadoop.sh:    -file "$SCR_DIR/rnawesome/intron.py" \
+./old/example/sim_splice/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/walk_fit.py" \
+./old/example/sim_splice/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/ebayes.py" \
+./old/example/sim_splice/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/ebayes.py" \
+./old/example/sim_splice/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/hmm_params.py" \
+./old/example/sim_splice/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/hmm.py" \
+./old/example/sim_splice/run_hadoop.sh:#     -file "$SCR_DIR/rnawesome/aggr_path.py" \
+./old/example/test_align/run.sh:SCR_DIR=$TORNADO_HOME/src/rnawesome
+./README.md:are in the `src/rnawesome` subdirectory (note: rename this to remove
+./README.md:reference to `rnawesome`).  More detailed descriptions of the
+./README.md:* Carefully audit the code in `src/rnawesome/align.py` and add a comprehensive
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/preprocess.py 
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/align.py
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/intron2.py
+./src/driver/tornado_pipeline.py:        reducerStr = "python %%BASE%%/src/rnawesome/merge.py --partition-stats"
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/walk_prenorm.py 
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/normalize_pre.py 
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/normalize2.py 
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/normalize_post.py 
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/walk_fit.py"""
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/walk_fit.py"""
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/hmm_params.py"""
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/hmm.py"""
+./src/driver/tornado_pipeline.py:            python %%BASE%%/src/rnawesome/aggr_path.py"""
