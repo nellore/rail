@@ -4,7 +4,7 @@
 # package_igenomes.sh
 #
 # Run from just above the database subdirectory (ususally named UCSC/NCBI/etc)
-# to create a reference archive for Tornado
+# to create a reference archive for Rail
 #
 
 # Get assembly name and database name from the enclosing directories

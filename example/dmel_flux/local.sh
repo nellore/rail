@@ -1,9 +1,9 @@
 #!/bin/sh
 
-[ -z "$TORNADO_HOME" ] && echo "Set TORNADO_HOME" && exit 1
+[ -z "$RAIL_HOME" ] && echo "Set RAIL_HOME" && exit 1
 [ -z "$IGENOMES_HOME" ] && echo "Set IGENOMES_HOME" && exit 1
 
-python $TORNADO_HOME/src/driver/tornado.py \
+python $RAIL_HOME/src/driver/rail-rna.py \
 	--local \
 	--start-with-align --no-differential \
 	--manifest dmel_flux.manifest \

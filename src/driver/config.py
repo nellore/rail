@@ -30,7 +30,7 @@ def addConfigArgs(parser):
     parser.add_argument(\
         '--reference', metavar='PATH', type=str, required=False, help='URL for reference archive')
     parser.add_argument(\
-        '--igenomes', action='store_const', const=True, help='--reference specifies an iGenomes archive/directory, not a Myrna 2 reference')
+        '--igenomes', action='store_const', const=True, help='--reference specifies an iGenomes archive/directory, not a Rail-RNA reference')
     parser.add_argument(\
         '--intermediate', metavar='PATH', type=str, help='URL for intermediate files')
     parser.add_argument(\
@@ -54,7 +54,7 @@ def addConfigArgs(parser):
     parser.add_argument(\
         '--version', action='store_const', const=True, help='Just print version information and quit.')
     parser.add_argument(\
-        '--set-version', metavar='VER', type=str, help='Force Tornado to use a particular version.')
+        '--set-version', metavar='VER', type=str, help='Force Rail to use a particular version.')
 
 class GenericConfig(object):
     def __init__(self, args, out):

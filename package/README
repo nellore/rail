@@ -1,4 +1,4 @@
 Scripts that package things up.
 
-package_tornado.sh: Put together archive with all files needed for someone else to run Tornado
-package_igenomes.sh: In an iGenomes directory, put together an archive that can be used with Tornado
+package_rail.sh: Put together archive with all files needed for someone else to run Rail
+package_igenomes.sh: In an iGenomes directory, put together an archive that can be used with Rail

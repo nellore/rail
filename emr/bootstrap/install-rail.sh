@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# install-tornado.sh
+# install-rail.sh
 #
 # Install SRA toolkit, including fastq-dump.  Version 2.1.7 as of now.
 

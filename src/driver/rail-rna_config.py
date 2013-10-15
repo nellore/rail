@@ -1,7 +1,7 @@
 """
-tornado_config.py
+rail-rna_config.py
 
-Parse and organize parameters controlling the behavior of the Tornado pipeline.
+Parse and organize parameters controlling the behavior of the Rail-RNA pipeline.
 """
 
 import os
@@ -52,7 +52,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--hmm-overlap', metavar='INT', type=int, default=100, help='Number of positions of overlap between adjacent emission strings.')
 
-class TornadoConfig(object):
+class Rail_RNAConfig(object):
     
     def __init__(self, args):
         q = self.quality = args.quality

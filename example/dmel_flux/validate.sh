@@ -1,5 +1,5 @@
-UTIL=$TORNADO_HOME/src/util
-CHECK=$TORNADO_HOME/src/check
+UTIL=$RAIL_HOME/src/util
+CHECK=$RAIL_HOME/src/check
 
 BEDSITES=intermediate/splice_sites.bed
 GENOME=$IGENOMES_HOME/$SPECIES/$DB/$ASM/Sequence/WholeGenomeFasta/genome.fa
@@ -50,7 +50,7 @@ echo "load $ANNOTATED_SITES""_sort.bed">> batch.txt
 echo "load $DETECTED_SITES""_sort.bed">> batch.txt
 echo "load $EXONS""_sort.bed">> batch.txt
 echo "load $GENES">> batch.txt
-IGV_HOME=$TORNADO_HOME/tools/igv/IGV
+IGV_HOME=$RAIL_HOME/tools/igv/IGV
 echo "prefix=`dirname $(readlink $0 || echo $0)`">$IGV_HOME/igv.sh
 echo "exec java -Xmx2000m -Dproduction=true -Dapple.laf.useScreenMenuBar=true -Djava.net.preferIPv4Stack=true -jar "$IGV_HOME/$prefix"/igv.jar -b "$PWD/batch.txt" "$@" &">>$IGV_HOME/igv.sh
 

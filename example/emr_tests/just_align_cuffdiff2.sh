@@ -2,8 +2,8 @@
 
 d=`dirname $0`
 
-if [ -z "$TORNADO_HOME" ] ; then
-	echo "Set TORNADO_HOME first"
+if [ -z "$RAIL_HOME" ] ; then
+	echo "Set RAIL_HOME first"
 	exit 1
 fi
 
@@ -14,7 +14,7 @@ s3cmd del --recursive s3://langmead/tornado_${PROJ}/output
 
 s3cmd put ${d}/cuffdiff2_small.manifest s3://langmead/tornado_${PROJ}/manifest/
 
-python $TORNADO_HOME/src/driver/tornado.py \
+python $RAIL_HOME/src/driver/tornado.py \
 	--emr \
 	--manifest s3://langmead/tornado_${PROJ}/manifest/cuffdiff2_small.manifest \
 	--output s3://langmead/tornado_${PROJ}/output \

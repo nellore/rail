@@ -1,5 +1,5 @@
 """
-tornado_pipeline.py
+rail-rna_pipeline.py
 
 """
 
@@ -19,7 +19,7 @@ import url
 # depending on whether we're in local, hadoop or emr mode.  This module tries
 # to stay as mode-agnostic as possible.
 #
-# %%BASE%%: Base Myrna 2 directory
+# %%BASE%%: Base Rail directory
 # %%MANIFEST%%: Manifest file
 # %%BOWTIE%%: Path to Bowtie executable on workers/local machine
 # %%BEDTOBIGBED%%: Path to bedToBigBed executable on workers/local machine
@@ -31,7 +31,7 @@ class PreprocessingStep(pipeline.Step):
         if gconf.preprocCompress is not None and gconf.preprocCompress == "gzip":
             compressArg = "--gzip-output "
         mapperStr = """
-            python %%BASE%%/src/rnawesome/preprocess.py 
+            python %%BASE%%/src/rail-rna/preprocess.py 
                 --nucs-per-file=8000000
                 %s
                 --push=%s
@@ -47,7 +47,7 @@ class PreprocessingStep(pipeline.Step):
 class AlignStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         mapperStr = """
-            python %%BASE%%/src/rnawesome/align.py
+            python %%BASE%%/src/rail-rna/align.py
                 --refseq=%%REF_FASTA%% 
                 --faidx=%%REF_FASTA_INDEX%% 
                 --bowtieIdx=%%REF_BOWTIE_INDEX%% 
@@ -70,7 +70,7 @@ class AlignStep(pipeline.Step):
 class IntronStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/intron2.py
+            python %%BASE%%/src/rail-rna/intron2.py
                 --refseq=%%REF_FASTA%%
                 --cluster-radius=%d
                 --intron-partition-overlap=%d
@@ -94,7 +94,7 @@ class IntronStep(pipeline.Step):
 
 class MergeStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
-        reducerStr = "python %%BASE%%/src/rnawesome/merge.py --partition-stats"
+        reducerStr = "python %%BASE%%/src/rail-rna/merge.py --partition-stats"
         super(MergeStep, self).__init__(\
             inps,
             output,  # output URL
@@ -106,7 +106,7 @@ class MergeStep(pipeline.Step):
 class WalkPrenormStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/walk_prenorm.py 
+            python %%BASE%%/src/rail-rna/walk_prenorm.py 
                 --partition-stats 
                 --partition-len=%d""" % (tconf.partitionLen)
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
@@ -121,7 +121,7 @@ class WalkPrenormStep(pipeline.Step):
 class NormalizePreStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/normalize_pre.py 
+            python %%BASE%%/src/rail-rna/normalize_pre.py 
                 --partition-stats 
                 --partition-len=%d""" % (tconf.partitionLen)
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
@@ -136,7 +136,7 @@ class NormalizePreStep(pipeline.Step):
 class NormalizeStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/normalize2.py 
+            python %%BASE%%/src/rail-rna/normalize2.py 
                 --percentile %f
                 --out_dir=%s/coverage
                 --bigbed_exe=%%BEDTOBIGBED%%
@@ -153,7 +153,7 @@ class NormalizeStep(pipeline.Step):
 class NormalizePostStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/normalize_post.py 
+            python %%BASE%%/src/rail-rna/normalize_post.py 
                 --out=%s/normalize 
                 --manifest=%%MANIFEST%%""" % (gconf.out)
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
@@ -167,7 +167,7 @@ class NormalizePostStep(pipeline.Step):
 class WalkFitStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/walk_fit.py"""
+            python %%BASE%%/src/rail-rna/walk_fit.py"""
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(WalkFitStep, self).__init__(\
             inps,
@@ -180,7 +180,7 @@ class EbayesStep(pipeline.Step):
     """ Just 1 reduce task """
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/walk_fit.py"""
+            python %%BASE%%/src/rail-rna/walk_fit.py"""
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(EbayesStep, self).__init__(\
             inps,
@@ -192,7 +192,7 @@ class EbayesStep(pipeline.Step):
 class HmmParamsStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/hmm_params.py"""
+            python %%BASE%%/src/rail-rna/hmm_params.py"""
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(HmmParamsStep, self).__init__(\
             inps,
@@ -204,7 +204,7 @@ class HmmParamsStep(pipeline.Step):
 class HmmStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/hmm.py"""
+            python %%BASE%%/src/rail-rna/hmm.py"""
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(HmmStep, self).__init__(\
             inps,
@@ -216,7 +216,7 @@ class HmmStep(pipeline.Step):
 class AggrPathStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rnawesome/aggr_path.py"""
+            python %%BASE%%/src/rail-rna/aggr_path.py"""
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(AggrPathStep, self).__init__(\
             inps,

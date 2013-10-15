@@ -1,12 +1,12 @@
 #!/bin/sh
 
-# package_tornado.sh
+# package_rail.sh
 #
-# Make a tarball out of all the tornado scripts 
+# Make a tarball out of all the Rail scripts 
 #
 
 VER=`cat VERSION`
-ARNAME=tornado-${VER}.tar.gz
+ARNAME=rail-${VER}.tar.gz
 cd src && make clean && cd ..
 
 make -C hadoop

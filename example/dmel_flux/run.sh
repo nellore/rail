@@ -32,7 +32,7 @@ if [ $? -ne 0 ] ; then
 	exit 1
 fi
 
-SCR_DIR=$TORNADO_HOME/src/rnawesome
+SCR_DIR=$RAIL_HOME/src/rail-rna
 
 # Step 1: Readletize input reads and use Bowtie to align the readlets 
 ALIGN_AGGR="cat"
@@ -57,7 +57,7 @@ INTRON_AGGR2="cut -f 2-"
 INTRON_AGGR3="sort -n -k2,2"
 INTRON_AGGR4="sort -s -k1,1"
 INTRON="python $SCR_DIR/intron2.py"
-UTIL=$TORNADO_HOME/src/util
+UTIL=$RAIL_HOME/src/util
 SITE2BED="python $UTIL/site2bed2.py"
 EXONS2BED="python $UTIL/exons2bed.py"
 INTRONS2BED="python $UTIL/introns2bed.py"

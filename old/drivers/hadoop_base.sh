@@ -22,7 +22,7 @@ STREAMING=$HADOOP_HOME/contrib/streaming/hadoop-streaming*.jar
 EXAMPLE=$TORNADO/example
 SCR_DIR=$TORNADO/src
 UTIL=$SCR_DIR/util
-RNAWESOME=$SCR_DIR/rnawesome
+RAIL_RNA=$SCR_DIR/rail-rna
 
 CHROM_SIZES=$PWD/chrom.sizes
 cat $FASTA_IDX | cut -f -2 > $CHROM_SIZES

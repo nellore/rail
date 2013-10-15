@@ -1,9 +1,9 @@
 """
-tornado.py
+rail-rna.py
 
 Ben Langmead, 7/28/2013
 
-Driver script for the Tornado pipeline.  Right now, just does Amazon Elastic
+Driver script for the Rail-RNA pipeline.  Right now, just does Amazon Elastic
 MapReduce mode.  Uses Amazon's elastic-mapreduce Ruby script to actually
 launch the job.  This script creates a shell script and accompanying JSON file
 that are used to run elastic-mapreduce.
@@ -31,7 +31,7 @@ HMM
 aggr_path
 
 TODO: Think about all the file plumbing:
-- Tornado scripts
+- Rail-RNA scripts
 - Bowtie
 - Reference jar (derived from iGenomes)
 
@@ -48,8 +48,9 @@ import site
 
 import aws
 import pipeline
-import tornado_pipeline
-import tornado_config
+# hyphenated filename bars conventional import usages
+rail_rna_pipeline = __import__('rail-rna_pipeline')
+rail_rna_config = __import__('rail-rna_config')
 from config import addConfigArgs, GenericConfig
 from tools import ToolConfigLocal, ToolConfigHadoop, ToolConfigEmr, bootstrapTool
 from ref import RefConfigLocal, RefConfigHadoop, RefConfigEmr
@@ -66,7 +67,7 @@ site.addsitedir(os.path.join(base_path, "util"))
 from url import Url
 from path import is_exe
 
-parser = argparse.ArgumentParser(description='Generate and run a script for Tornado.')
+parser = argparse.ArgumentParser(description='Generate and run a script for Rail-RNA.')
 
 addConfigArgs(parser)
 addFileArgs(parser)
@@ -113,13 +114,13 @@ addEmrModeArgs(parser)
 addHadoopModeArgs(parser)
 addLocalModeArgs(parser)
 
-tornado_config.addArgs(parser)
+rail_rna_config.addArgs(parser)
 
 args = parser.parse_args()
 if args.hadoop:
     raise RuntimeError("--hadoop mode not yet implemented")
 
-appName = "Myrna2" # app name
+appName = "Rail-RNA" # app name
 
 def parseVersion():
     path = os.path.dirname(base_path)
@@ -135,7 +136,7 @@ ver = args.set_version
 if ver is None:
     ver = parseVersion()
 
-print >> sys.stderr, "Myrna2 v" + ver
+print >> sys.stderr, "Rail-RNA v" + ver
 
 assert ver is not None
 
@@ -277,7 +278,7 @@ if mode == 'emr':
         raise RuntimeError("--intermediate argument '%s' is not an S3 URL" % args.intermediate)
 
 # Parameters governing the algorithm
-tconf = tornado_config.TornadoConfig(args)
+tconf = rail_rna_config.Rail_RNAConfig(args)
 gconf = GenericConfig(args, out)
 
 pipelines = ["preprocess", "align", "coverage", "junction", "differential"]
@@ -349,17 +350,17 @@ pipelineSteps = {
 allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
 
 stepInfo = {\
-    'preprocess'     : ([                                 ], tornado_pipeline.PreprocessingStep),
-    'align'          : ([('preprocess',     ''           )], tornado_pipeline.AlignStep),
-    'intron'         : ([('align',          '/intron'    )], tornado_pipeline.IntronStep),
-    'normalize_pre'  : ([('align',          '/exon_diff' )], tornado_pipeline.NormalizePreStep),
-    'normalize'      : ([('normalize_pre',  '/o'         )], tornado_pipeline.NormalizeStep),
-    'normalize_post' : ([('normalize',      ''           )], tornado_pipeline.NormalizePostStep),
-    'walk_fit'       : ([('normalize_post', ''           )], tornado_pipeline.WalkFitStep),
-    'ebayes'         : ([('walk_fit',       ''           )], tornado_pipeline.EbayesStep),
-    'hmm_params'     : ([('ebayes',         ''           )], tornado_pipeline.HmmParamsStep),
-    'hmm'            : ([('hmm_params',     ''           )], tornado_pipeline.HmmStep),
-    'aggr_path'      : ([('hmm',            ''           )], tornado_pipeline.AggrPathStep) }
+    'preprocess'     : ([                                 ], rail_rna_pipeline.PreprocessingStep),
+    'align'          : ([('preprocess',     ''           )], rail_rna_pipeline.AlignStep),
+    'intron'         : ([('align',          '/intron'    )], rail_rna_pipeline.IntronStep),
+    'normalize_pre'  : ([('align',          '/exon_diff' )], rail_rna_pipeline.NormalizePreStep),
+    'normalize'      : ([('normalize_pre',  '/o'         )], rail_rna_pipeline.NormalizeStep),
+    'normalize_post' : ([('normalize',      ''           )], rail_rna_pipeline.NormalizePostStep),
+    'walk_fit'       : ([('normalize_post', ''           )], rail_rna_pipeline.WalkFitStep),
+    'ebayes'         : ([('walk_fit',       ''           )], rail_rna_pipeline.EbayesStep),
+    'hmm_params'     : ([('ebayes',         ''           )], rail_rna_pipeline.HmmParamsStep),
+    'hmm'            : ([('hmm_params',     ''           )], rail_rna_pipeline.HmmStep),
+    'aggr_path'      : ([('hmm',            ''           )], rail_rna_pipeline.AggrPathStep) }
 
 # 'normalize_post' sends pushes normalization-factor .tsv to out/normalization_factors.tsv
 # 'normalize' sends per-sample coverage bigBed to out
@@ -460,7 +461,7 @@ elif mode == 'emr':
         cmdl.extend(["-c", cred])
     
     cmdl.append(emrCluster.emrArgs())
-    tornadoUrl = Url("s3://tornado-emr/bin/tornado-%s.tar.gz" % ver)
+    rail_RNAUrl = Url("s3://tornado-emr/bin/rail-rna-%s.tar.gz" % ver)
     
     cmdl.append(bootstrapTool("python"))
     if useBowtie:
@@ -473,8 +474,8 @@ elif mode == 'emr':
         cmdl.append(bootstrapTool("kenttools", dest="/mnt/bin"))
     if useSamtools:
         cmdl.append(bootstrapTool("samtools"))
-    # Get Tornado scripts and run Makefile for swig code
-    cmdl.append(bootstrapTool("tornado", src=tornadoUrl, dest="/mnt"))
+    # Get Rail-RNA scripts and run Makefile for swig code
+    cmdl.append(bootstrapTool("rail", src=rail_RNAUrl, dest="/mnt"))
     tarballs = []
     if useIndex:
         tarballs.append(Url(reference.toUrl().replace('.tar.gz', '.index.tar.gz')))

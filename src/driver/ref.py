@@ -10,7 +10,7 @@ reducer commands.  E.g. REF_FASTA, REF_BOWTIE_INDEX.
 
 import os
 
-# Reference file subdirs when reference directory is a Myrna 2 archive
+# Reference file subdirs when reference directory is a Rail-RNA archive
 refLoc = { \
     'REF_FASTA'        : 'fasta/genome.fa',
     'REF_FASTA_INDEX'  : 'fasta/genome.fa.fai',

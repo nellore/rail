@@ -11,7 +11,7 @@ def addEmrModeArgs(parser):
     parser.add_argument(\
         '--emr-script', metavar='PATH', type=str, help='Path to Amazon elastic-mapreduce script')
     parser.add_argument(\
-        '--emr-local-dir', metavar='PATH', type=str, help='Path to a local directory on the EMR nodes where the reference archive and Tornado scripts will be copied.')
+        '--emr-local-dir', metavar='PATH', type=str, help='Path to a local directory on the EMR nodes where the reference archive and Rail scripts will be copied.')
     parser.add_argument(\
         '--hadoop-version', metavar='VERS', type=str, help='Hadoop version number to use')
     parser.add_argument(\

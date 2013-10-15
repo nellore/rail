@@ -1,20 +1,20 @@
-ifeq (,$(TORNADO_HOME))
-$(error "Set TORNADO_HOME")
+ifeq (,$(RAIL_HOME))
+$(error "Set RAIL_HOME")
 endif
 
 ifeq (,$(IGENOMES_HOME))
 $(error "Set IGENOMES_HOME")
 endif
 
-FLUX_DIR=$(TORNADO_HOME)/tools/flux_sim
-IGV_DIR=$(TORNADO_HOME)/tools/igv
+FLUX_DIR=$(RAIL_HOME)/tools/flux_sim
+IGV_DIR=$(RAIL_HOME)/tools/igv
 OUTPUT_DIR=.
 NUM_READS=100000
 NUM_MOLECULES=500000
 TOPHAT_DIR=../../tools/tophat2
 TOPHAT_EXE=$(TOPHAT_DIR)/tophat/install-root/bin/tophat2
 
-all: $(OUTPUT_DIR)/preprocessed_reads $(TORNADO_HOME)/tools/igv/IGV/igv.jar
+all: $(OUTPUT_DIR)/preprocessed_reads $(RAIL_HOME)/tools/igv/IGV/igv.jar
 
 tophat_out/accepted_hits.bam: $(OUTPUT_DIR)/dmel_flux-0.fastq $(TOPHAT_EXE)
 	$(TOPHAT_EXE) $(IGENOMES_HOME)/Drosophila_melanogaster/UCSC/dm3/Sequence/Bowtie2Index/genome dmel_flux-*.fastq
@@ -24,11 +24,11 @@ $(TOPHAT_EXE):
 
 $(OUTPUT_DIR)/preprocessed_reads: $(OUTPUT_DIR)/dmel_flux.manifest $(OUTPUT_DIR)/dmel_flux-0.fastq
 	mkdir -p $@
-	cat $< | python $(TORNADO_HOME)/src/rnawesome/preprocess.py --gzip-output --push=$@
+	cat $< | python $(RAIL_HOME)/src/rail-rna/preprocess.py --gzip-output --push=$@
 
 # Run flux, many in parallel so we have essentially tech reps
 $(OUTPUT_DIR)/dmel_flux-0.fastq: $(OUTPUT_DIR)/Chromosomes $(OUTPUT_DIR)/genes.fixed.gtf $(FLUX_DIR)/VERSION
-	python $(TORNADO_HOME)/src/simulate/flux.py \
+	python $(RAIL_HOME)/src/simulate/flux.py \
 		--name=dmel_flux \
 		--output-dir=$(OUTPUT_DIR) \
 		--flux-path=$(FLUX_DIR)/flux-simulator \

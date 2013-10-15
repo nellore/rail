@@ -19,7 +19,7 @@ fi
 s3cmd del --recursive s3://$BUCKET/dmel_flux/intermediate
 s3cmd del --recursive s3://$BUCKET/dmel_flux/output
 
-python $TORNADO_HOME/src/driver/tornado.py \
+python $RAIL_HOME/src/driver/rail-rna.py \
 	--emr \
 	--no-differential \
 	--manifest s3://$BUCKET/dmel_flux/manifest/dmel_flux.s3.manifest \

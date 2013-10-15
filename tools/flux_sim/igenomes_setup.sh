@@ -3,11 +3,11 @@
 # e.g., for drosophila: sh igenomes_setup.sh Drosophila_melanogaster UCSC dm3
 
 if [ -z "$IGENOMES_DIR" ] ; then
-	if [ -z "$TORNADO_HOME" ] ; then
-		echo "Neither IGENOMES_DIR nor TORNADO_HOME set"
+	if [ -z "$RAIL_HOME" ] ; then
+		echo "Neither IGENOMES_DIR nor RAIL_HOME set"
 		exit 10
 	fi
-	IGENOMES_DIR=$TORNADO_HOME/igenomes
+	IGENOMES_DIR=$RAIL_HOME/igenomes
 fi
 
 if [ ! -d "$IGENOMES_DIR" ] ; then
