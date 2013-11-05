@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
 """
-align.py
+alignexperiments.py
 (first step after preprocessing, before splice.py)
+FOR EXPERIMENTING WITH CODE IN align.py
 
 Alignment script for MapReduce pipelines.  Wraps Bowtie.  Has features for (1)
 optionally extracting readlets (substrings) of configurable length, at a
@@ -181,7 +182,7 @@ Applies Needleman Wunsch to correct splice junction gaps
 def correctSplice(read,ref_left,ref_right,fw):
 
     revread = revcomp(read)
-    # Needleman-Wunsch is a directional algorithm.  Since we are interested in scoring the 3' end of the right ref sequence, we reverse complement the right ref sequence before applying the NW algorithm
+    # Needleman-Wunsch is a directional algorithm. Since we are interested in scoring the 3' end of the right ref sequence, we reverse complement the right ref sequence before applying the NW algorithm"""
     ref_right = revcomp(ref_right)
     _, leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
     _, rightDP = needlemanWunsch.needlemanWunsch(ref_right, revread, needlemanWunsch.matchCost())
@@ -244,9 +245,7 @@ def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdi
     Mapped Flanks           ====----          ----====
     """
     assert regionSt<regionEnd
-    #uLen = regionEnd-regionSt #unmapped portion
-    #readlet length may be shorter than expected, so define uLen as follows
-    uLen = len(rdseq[regionSt:regionEnd])
+    uLen = regionEnd-regionSt #unmapped portion
     leftSt,  leftEnd  = intronSt, intronSt+uLen
     rightSt, rightEnd = intronEnd-uLen, intronEnd
 
@@ -632,7 +631,7 @@ def go():
     print >> sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, time.time()-timeSt)
 
 #Only used for testing
-def createTestFasta(fname,refid,refseq):
+'''def createTestFasta(fname,refid,refseq):
     fastaH = open(fname,'w')
     fastaIdx = open(fname+".fai",'w')
     fastaH.write(">%s\n%s\n"%(refid,refseq))
@@ -944,8 +943,7 @@ else:
             self.assertEquals(st,10)
             self.assertEquals(end,19)
 
-    unittest.main()
-
+    unittest.main()'''
 
 
 
