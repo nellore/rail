@@ -85,7 +85,7 @@ import window
 
 ninp = 0               # # lines input so far
 nout = 0               # # lines output so far
-pe = False             # What is this variable?
+pe = False             # What is this variable? (probably means "print exons" -AN)
 discardMate = -1       # don't discard mates by default
 lengths = dict()       # read lengths after truncation
 rawLengths = dict()    # read legnths prior to truncation
@@ -174,6 +174,8 @@ def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
 bowtieOutDone = threading.Event()
+#For storing archiving reads in go()
+archiveFh1, archiveFh2, archiveDir, readFn1, readFn2 = None, None, None, None, None
 
 """
 Applies Needleman Wunsch to correct splice junction gaps
@@ -244,8 +246,9 @@ def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdi
     Mapped Flanks           ====----          ----====
     """
     assert regionSt<regionEnd
-    #uLen = regionEnd-regionSt #unmapped portion
-    #readlet length may be shorter than expected, so define uLen as follows
+    # uLen = regionEnd-regionSt #unmapped portion
+    # readlet length may be shorter than expected, so define uLen as follows
+    # review with Ben
     uLen = len(rdseq[regionSt:regionEnd])
     leftSt,  leftEnd  = intronSt, intronSt+uLen
     rightSt, rightEnd = intronEnd-uLen, intronEnd
@@ -323,7 +326,7 @@ def handleShortAlignment(k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,f
     exon.
     """
     if regionSt>=regionEnd:
-        #Reject because this exon interval has already been evaluated by the surrouding readlets
+        #Reject because this exon interval has already been evaluated by the surrounding readlets
         return
     #Note: fetch_sequence is base 1 indexed ainclusive
     refseq = fnh.fetch_sequence(k, intronSt + 1, intronEnd).upper() # Sequence from genome
@@ -339,7 +342,7 @@ def handleShortAlignment(k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,f
         printExons(k,intronSt,intronEnd,rdid,exon_differentials, exon_intervals)
 
 def getIntervals(rdals):
-    """ Given a collection of readlet-alignment tuples, then them into a set
+    """ Given a collection of readlet-alignment tuples, turn them into a set
         of interval.Interval objects, one per chromosome overlapped at least
         once. """
     ivals, positions = {}, {}
@@ -389,17 +392,18 @@ class OutputThread(threading.Thread):
     """ A worker thread that examines SAM output from Bowtie and emits
         appropriate tuples for exons and introns.  Each line of output
         is another SAM readlet alignment. """
-    def __init__(self, st, done, outq, reportMult=1.2):
+    def __init__(self, st, done, outq, firstPass, reportMult=1.2):
         super(OutputThread, self).__init__()
         self.st = st
-        self.reportMult = 1.2
+        self.reportMult = 1.2 # shouldn't this be self.reportMult = reportMult? -AN
         self.nout = 0
         self.done = done
         self.outq = outq
+        self.firstPass = firstPass
         self.stoprequest = threading.Event()
 
     def run(self):
-        """ Main driver method for the output thread """
+        """ Main driver method for the output thread. """
         mem, cnt = {}, {}
         report = 1
         line_nm = 0
@@ -407,6 +411,19 @@ class OutputThread(threading.Thread):
         exc = None
         nsam = 0
         exitlevel = 0
+        if self.firstPass:
+            # Start a new Bowtie process and feed it unmapped reads in try block below
+            if args.serial:
+                # Reads are written to a file, then Bowtie reads them from the file
+                assert os.path.exists(readFn2)
+                proc, mycmd, threads = bowtie.proc(args, readFn=readFn2,
+                                           bowtieArgs=bowtieArgs, sam=True,
+                                           stdoutPipe=True, stdinPipe=False)
+            else:
+                # Reads are written to Bowtie process's stdin directly
+                proc, mycmd, threads = bowtie.proc(args, readFn=None,
+                                           bowtieArgs=bowtieArgs, sam=True,
+                                           stdoutPipe=True, stdinPipe=True)
         try:
             while not self.stoprequest.isSet():
                 line = st.readline()
@@ -459,9 +476,8 @@ class OutputThread(threading.Thread):
             assert len(mem) == 0
             assert len(cnt) == 0
 
-def writeReads(fhs, reportMult=1.2):
-    """ Parse input reads, optionally transform them and/or turn them into
-        readlets. """
+def writeReads(fhs, firstPass=True, reportMult=1.2):
+    """ Turn unmapped reads into readlets. """
     global ninp
     report = 1.0
     for ln in sys.stdin:
@@ -503,36 +519,43 @@ def writeReads(fhs, reportMult=1.2):
                 # Truncate and transform quality values
                 seq1, qual1 = xformRead(seq1, qual1)
                 seq2, qual2 = xformRead(seq2, qual2)
-            if args.readletLen > 0:
-                # Readletize
+            # Readletize
+            if args.readletLen > 0 and not firstPass:
                 rlets1 = readlet.readletize(args, nm1 + ';1', seq1, qual1)
-                for i in xrange(0, len(rlets1)):
-                    nm_rlet, seq_rlet, qual_rlet = rlets1[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1), seq1, seq_rlet, qual_rlet)
-                    if ninp >= report and i == 0:
-                        report *= reportMult
-                        if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
-                    for fh in fhs: fh.write(rdletStr)
-                rlets2 = readlet.readletize(args, nm2 + ';2', seq2, qual2)
-                for i in xrange(0, len(rlets2)):
-                    nm_rlet, seq_rlet, qual_rlet = rlets2[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2), seq2, seq_rlet, qual_rlet)
-                    if ninp >= report and i == 0:
-                        report *= reportMult
-                        if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
-                    for fh in fhs: fh.write(rdletStr)
             else:
-                rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
+                rlets1 = [(nm1 + ';1', seq1, qual1)]
+            for i in xrange(len(rlets1)):
+                nm_rlet, seq_rlet, qual_rlet = rlets1[i]
+                rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1), seq1, seq_rlet, qual_rlet)
+                if ninp >= report and i == 0:
+                    report *= reportMult
+                    if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                for fh in fhs: fh.write(rdletStr)
+            if args.readletLen > 0 and not firstPass:
+                rlets2 = readlet.readletize(args, nm2 + ';2', seq2, qual2)
+            else:
+                rlets2 = [(nm2 + ';2', seq2, qual2)]
+            for i in xrange(len(rlets2)):
+                nm_rlet, seq_rlet, qual_rlet = rlets2[i]
+                rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2), seq2, seq_rlet, qual_rlet)
+                if ninp >= report and i == 0:
+                    report *= reportMult
+                    if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                for fh in fhs: fh.write(rdletStr)
+            # review with Ben; toks in OutputThread's run() is assumed to take a particular form, which is not output below
+            # workaround: use readlet code above instead even when aligning entire reads
+            '''else:
+               rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
                 if ninp >= report:
                     report *= reportMult
                     if args.verbose: print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
-                for fh in fhs: fh.write(rdStr)
+                for fh in fhs: fh.write(rdStr)'''
         else:
             # Unpaired
             if xformReads:
                 # Truncate and transform quality values
                 seq, qual = xformRead(seq, qual)
-            if args.readletLen > 0:
+            if args.readletLen > 0 and not firstPass:
                 # Readletize
                 rlets = readlet.readletize(args, nm + ';0', seq, qual)
                 for i in xrange(0, len(rlets)):
@@ -549,59 +572,37 @@ def writeReads(fhs, reportMult=1.2):
                     if args.verbose: print >> sys.stderr, "Read %d: '%s'" % (ninp, rdStr.rstrip())
                 for fh in fhs: fh.write(rdStr)
 
-def go():
-
-    import time
-    timeSt = time.time()
-
-    # So that all appropriate output directories are at least created, even if
-    # they perhaps end up empty
-    # if args.exon_differentials: print 'exon_diff\tDUMMY'
-    # if args.exon_intervals: print 'exon_ival\tDUMMY'
-    # print 'intron\tDUMMY'
-
-    archiveFh, archiveDir = None, None
-    if args.archive is not None:
-        archiveDir = os.path.join(args.archive, str(os.getpid()))
-        if args.verbose:
-            print >> sys.stderr, "Putting --archive reads and command in '%s'" % archiveDir
-        if not os.path.exists(archiveDir):
-            os.makedirs(archiveDir)
-        archiveFh = open(os.path.join(archiveDir, "reads.tab5"), 'w')
+def callBowtie(proc, mycmd, threads, firstPass=True):
+    """ Runs Bowtie, using OutputThread to parse output.
+        firstPass = True does first-pass alignment of entire reads;
+        firstPass = False performs alignment of readlets and is called by run()
+        method of OutputThread instance outThread """
+    
+    if firstPass:
+        archiveFh = archiveFh1
+        readFn = readFn1
+    else:
+        archiveFh = archiveFh2
+        readFn = readFn
 
     outq = Queue()
     threads = []
 
     if args.serial:
-        # Reads are written to a file, then Bowtie reads them from the file
-        import tempfile
-        if args.write_reads is None:
-            tmpdir = tempfile.mkdtemp()
-            readFn = os.path.join(tmpdir, 'reads.tab5')
-        else:
-            readFn = args.write_reads
         with open(readFn, 'w') as fh:
             fhs = [fh]
             if args.archive is not None: fhs.append(archiveFh)
-            writeReads(fhs)
-        assert os.path.exists(readFn)
-        proc, mycmd, threads = bowtie.proc(args, readFn=readFn,
-                                           bowtieArgs=bowtieArgs, sam=True,
-                                           stdoutPipe=True, stdinPipe=False)
-        outThread = OutputThread(proc.stdout, bowtieOutDone, outq)
+            writeReads(fhs, firstPass=firstPass)
+        outThread = OutputThread(proc.stdout, bowtieOutDone, outq, firstPass)
         threads.append(outThread)
         outThread.start()
     else:
-        # Reads are written to Bowtie process's stdin directly
-        proc, mycmd, threads = bowtie.proc(args, readFn=None,
-                                           bowtieArgs=bowtieArgs, sam=True,
-                                           stdoutPipe=True, stdinPipe=True)
-        outThread = OutputThread(proc.stdout, bowtieOutDone, outq)
+        outThread = OutputThread(proc.stdout, bowtieOutDone, outq, firstPass)
         threads.append(outThread)
         outThread.start()
         fhs = [proc.stdin]
         if args.archive is not None: fhs.append(archiveFh)
-        writeReads(fhs)
+        writeReads(fhs, firstPass=firstPass)
         proc.stdin.close()
 
     if args.archive is not None:
@@ -610,7 +611,11 @@ def go():
             ofh.write(mycmd + '\n')
         with open(os.path.join(archiveDir, "align_py_cmd.sh"), 'w') as ofh:
             ofh.write(' '.join(sys.argv) + '\n')
-    if args.verbose: print >>sys.stderr, "Waiting for Bowtie to finish"
+    if args.verbose: 
+        if firstPass:
+            print >> sys.stderr, "Waiting for Bowtie's first pass to finish"
+        else:
+            print >> sys.stderr, "Waiting for Bowtie's second pass to finish"
     bowtieOutDone.wait()
     exitlevel = outq.get()
     if exitlevel != 0:
@@ -621,13 +626,58 @@ def go():
         if args.verbose: print >> sys.stderr, "    ...joined!"
     sys.stdout.flush()
     if args.verbose:
-        print >>sys.stderr, "Bowtie finished"
+        if firstPass:
+            print >> sys.stderr, "Bowtie finished its first pass"
+        else:
+            print >> sys.stderr, "Bowtie finished its second pass"
 
     # Remove any temporary reads files created
     if args.serial and args.write_reads is None and not args.keep_reads:
         print >>sys.stderr, "Cleaning up temporary files"
         import shutil
         shutil.rmtree(tmpdir)
+
+def go():
+
+    global archiveDir, archiveFh1, archiveFh2, readFn1, readFn2
+
+    import time
+    timeSt = time.time()
+
+    # So that all appropriate output directories are at least created, even if
+    # they perhaps end up empty
+    # if args.exon_differentials: print 'exon_diff\tDUMMY'
+    # if args.exon_intervals: print 'exon_ival\tDUMMY'
+    # print 'intron\tDUMMY'
+
+    if args.archive is not None:
+        archiveDir = os.path.join(args.archive, str(os.getpid()))
+        if args.verbose:
+            print >> sys.stderr, "Putting --archive reads and command in '%s'" % archiveDir
+        if not os.path.exists(archiveDir):
+            os.makedirs(archiveDir)
+        archiveFh1, archiveFh2 = open(os.path.join(archiveDir, 'reads.tab5'), 'w'), open(os.path.join(archiveDir, 'readlets.tab5'), 'w')
+
+    if args.serial:
+        # Reads are written to a file, then Bowtie reads them from the file
+        import tempfile
+        if args.write_reads is None:
+            tmpdir = tempfile.mkdtemp()
+            readFn1, readFn2 = os.path.join(tmpdir, 'reads.tab5'), os.path.join(tmpdir, 'readlets.tab5')
+        else:
+            readFn1, readFn2 = args.write_reads, args.write_reads
+        assert os.path.exists(readFn1)
+        proc, mycmd, threads = bowtie.proc(args, readFn=readFn1,
+                                           bowtieArgs=bowtieArgs, sam=True,
+                                           stdoutPipe=True, stdinPipe=False)
+    else:
+        # Reads are written to Bowtie process's stdin directly
+        proc, mycmd, threads = bowtie.proc(args, readFn=None,
+                                           bowtieArgs=bowtieArgs, sam=True,
+                                           stdoutPipe=True, stdinPipe=True)
+
+    callBowtie(proc, mycmd, threads, firstPass=True)
+
 
     print >> sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, time.time()-timeSt)
 
