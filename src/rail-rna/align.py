@@ -164,7 +164,7 @@ args = parser.parse_args(argv[1:])
 # shortcut to diagnostics
 # args.archive = '/Users/anellore/sometemp/'
 
-class RenamedTemporaryFile(object):
+'''class RenamedTemporaryFile(object):
     """For creating a temporary file object (using tempfile) that will be renamed
     on exit. From
     http://stackoverflow.com/questions/12003805/threadsafe-and-fault-tolerant-file-writes .
@@ -195,7 +195,7 @@ class RenamedTemporaryFile(object):
         else:
             result = self.tmpfile.__exit__(exc_type, exc_val, exc_tb)
 
-        return result
+        return result'''
 
 def xformRead(seq, qual):
     # Possibly truncate and/or modify quality values
@@ -451,7 +451,7 @@ class OutputThread(threading.Thread):
         exitlevel = 0
         unmappedFn = os.path.join(self.tmpdir, 'unmappedreads.tab5')
         try:
-            with RenamedTemporaryFile(unmappedFn) as unmappedfh:
+            with open(unmappedFn, 'w') as unmappedfh:
                 # This puts unmapped reads in the temporary directory
                 # If it's the second pass, the with above is redundant
                 # but does not affect performance
