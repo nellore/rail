@@ -36,8 +36,8 @@ $(OUTPUT_DIR)/dmel_flux-0.fastq: $(OUTPUT_DIR)/Chromosomes $(OUTPUT_DIR)/genes.f
 		--chromosomes=$(OUTPUT_DIR)/Chromosomes \
 		--num-reads=$(NUM_READS) \
 		--num-molecules=$(NUM_MOLECULES) \
-		--num-samples=6 \
-		--num-processes=6
+		--num-samples=2 \
+		--num-processes=2
 
 # Make the link to the directory with 1 FASTA file per chromosome
 $(OUTPUT_DIR)/Chromosomes: $(IGENOMES_HOME)/Drosophila_melanogaster

@@ -640,6 +640,8 @@ def go():
 
     outq = Queue()
     
+    tmpdir = tempfile.mkdtemp()
+
     if not args.only_readletize:
         threads = []
 
@@ -649,7 +651,6 @@ def go():
         # Reads are written to a file, then Bowtie reads them from the file
         # import tempfile
         if args.write_reads is None:
-            tmpdir = tempfile.mkdtemp()
             readFn = os.path.join(tmpdir, 'reads.tab5')
         else:
             readFn = args.write_reads
