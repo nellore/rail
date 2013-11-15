@@ -10,8 +10,9 @@ python $RAIL_HOME/src/driver/rail-rna.py \
 	--input preprocessed_reads \
 	--intermediate intermediate \
 	--output local_out \
-	--reference $IGENOMES_HOME/Drosophila_melanogaster/UCSC/dm3 \
-	--igenomes \
-	--num-processes=6 \
+        --reference $IGENOMES_HOME/Drosophila_melanogaster/UCSC/dm3 \
+        --igenomes \
+	--stop-after-align \
+        --num-processes=6 \
 	--keep-all \
 	$*

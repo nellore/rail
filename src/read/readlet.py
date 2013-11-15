@@ -13,7 +13,7 @@ def addArgs(parser):
         '--readletIval', metavar='IVAL', type=int, required=False,
         help='If readlets are desired, interval between readlet starts')
 
-#readletize code minus capping and accounting for uncovered edges (as of 11/5/2013)
+# readletize code minus capping and accounting for uncovered edges (as of 11/5/2013)
 '''
 def readletize(args, nm, seq, qual):
     st, en = 0, args.readletLen
@@ -30,7 +30,7 @@ def readletize(args, nm, seq, qual):
     return rlets
 '''
 
-#readletize code with capping and accounting for uncovered edges
+# readletize code with capping and accounting for uncovered edges
 def readletize(args, nm, seq, qual):
     st, en = args.readletIval, args.readletLen + args.readletIval
     seqlen = len(seq)
@@ -43,7 +43,7 @@ def readletize(args, nm, seq, qual):
         rlets.append((nm, rlet_seq, rlet_qual))
         st += args.readletIval
         en += args.readletIval
-    #add caps
+    # add caps
     en = args.readletLen
     while en >= 8:
         rlets.append((nm, seq[:en], qual[:en]))

@@ -281,42 +281,42 @@ if mode == 'emr':
 tconf = rail_rna_config.Rail_RNAConfig(args)
 gconf = GenericConfig(args, out)
 
-pipelines = ["preprocess", "align", "coverage", "junction", "differential"]
+pipelines = set(["preprocess", "align", "coverage", "junction", "differential"])
 
 # Might start partway through
 if args.start_with_align:
-    pipelines.remove("preprocess")
+    pipelines = pipelines - set(["preprocess"])
 if args.start_with_junction or args.start_with_coverage:
-    for s in ["preprocess", "align"]: pipelines.remove(s)
+    pipelines = pipelines - set(["preprocess", "align"])
 if args.start_with_differential:
-    for s in ["preprocess", "align", "junction", "coverage"]: pipelines.remove(s)
+    pipelines = pipelines - set(["preprocess", "align", "junction", "coverage"])
 
 # Might end partway through
 if args.stop_after_preprocess:
-    for s in ["align", "junction", "coverage", "differential"]: pipelines.remove(s)
+    pipelines = pipelines - set(["align", "junction", "coverage", "differential"])
 if args.stop_after_align:
-    for s in ["junction", "coverage", "differential"]: pipelines.remove(s)
+    pipelines = pipelines - set(["junction", "coverage", "differential"])
 if args.stop_after_coverage or args.stop_after_junction:
-    pipelines.remove("differential")
+    pipelines = pipelines - set(["junction", "coverage", "differential"])
 
 if args.no_coverage:
-    pipelines.remove("coverage")
+    pipelines = pipelines - set(["coverage"])
 if args.no_junction:
-    pipelines.remove("junction")
+    pipelines = pipelines - set(["junction"])
 if args.no_differential:
-    pipelines.remove("differential")
+    pipelines = pipelines - set(["differential"])
 
 # Might just be running one pipeline
 if args.just_preprocess:
-    pipelines = ["preprocess"]
+    pipelines = set(["preprocess"])
 elif args.just_align:
-    pipelines = ["align"]
+    pipelines = set(["align"])
 elif args.just_junction:
-    pipelines = ["junction"]
+    pipelines = set(["junction"])
 elif args.just_coverage:
-    pipelines = ["coverage"]
+    pipelines = set(["coverage"])
 elif args.just_differential:
-    pipelines = ["differential"]
+    pipelines = set(["differential"])
 assert len(pipelines) > 0
 
 useBowtie = 'align' in pipelines
