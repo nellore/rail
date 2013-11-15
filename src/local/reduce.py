@@ -225,7 +225,7 @@ countPool.map(binCountWorker, inps)
 checkFailQueue()
 
 tot = 0
-for _ in xrange(num_processes):
+for _ in xrange(len(inps)):
     cnt = binCountQueue.get()
     assert cnt is not None
     for k, v in cnt.iteritems():
