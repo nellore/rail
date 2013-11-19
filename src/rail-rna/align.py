@@ -213,8 +213,6 @@ _revcomp_trans = string.maketrans("ACGT", "TGCA")
 def revcomp(s):
     return s[::-1].translate(_revcomp_trans)
 
-bowtieOutDone = threading.Event()
-
 """
 Applies Needleman-Wunsch to correct splice junction gaps
 """
@@ -263,7 +261,7 @@ def printExons(refid,in_start,in_end,rdid,exon_differentials,exon_intervals):
             nout += 1
 
 # Print all listed introns to stdout and the flanking sequences
-def printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,outhandle):
+def printIntrons(args, refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,outhandle):
     if abs(intronEnd-intronSt) > args.max_intron_length:
         if args.verbose or args.test: print >> sys.stderr,"Huge candidate intron filtered at %s:%d-%d"%(refid,intronSt,intronEnd)
         return
@@ -275,7 +273,7 @@ def printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,outha
         print >> outhandle, "intron\t%s%s\t%012d\t%d\t%s\t%s" % (pt, fw_char, intronSt, intronEnd, lab,rdid)
         nout += 1
 
-def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset):
+def handleUnmappedReadlets(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset):
     """Remaps unmapped portions of the original read between mapped readlets"""
     """
     Flanks                      ====    ====
@@ -300,9 +298,9 @@ def handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdi
     regionSt,  regionEnd = regionSt+left_diff-1,  regionEnd-right_diff
     intronSt,   intronEnd     = intronSt+left_diff,  intronEnd-right_diff
 
-    printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,sys.stdout)
+    printIntrons(args, refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,sys.stdout)
 
-def handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset):
+def handleOverlappingFlanks(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset):
     """Remaps unmapped portions of the original read between mapped readlets"""
     """
     Left Flank                    ===|=
@@ -315,9 +313,9 @@ def handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rd
     regLen = regionSt-regionEnd
     regionSt,regionEnd = regionEnd,regionSt
     intronSt, intronEnd = intronSt-regLen, intronEnd+regLen #read just intron boundaries
-    handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
+    handleUnmappedReadlets(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
 
-def handleIntron(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset):
+def handleIntron(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset):
     """
     intronSt: reference offset for beginning of intron
     intronEnd: reference offset for end of intron
@@ -332,7 +330,7 @@ def handleIntron(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,o
         Genome |======================--=====================|
         Flanks                   ^===^  ^===^
         """
-        printIntrons(refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,sys.stdout)
+        printIntrons(args, refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,sys.stdout)
         return
     elif regionSt<regionEnd:
         """
@@ -343,7 +341,7 @@ def handleIntron(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,o
         Genome |======================-------=====================|
         Flanks                   ^===^       ^===^
         """
-        handleUnmappedReadlets(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
+        handleUnmappedReadlets(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
     else:
         """
         Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read
@@ -353,9 +351,9 @@ def handleIntron(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,o
         Genome |======================-------=====================|
         Flanks                      ^===^  ^===^
         """
-        handleOverlappingFlanks(refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
+        handleOverlappingFlanks(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,offset)
 
-def handleShortAlignment(k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,exon_differentials,exon_intervals):
+def handleShortAlignment(args, k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,exon_differentials,exon_intervals):
     """
     When the intervals of unaligned read & reference characters are similar in
     length, we say there's no intron but we also check to see if there's
@@ -374,11 +372,11 @@ def handleShortAlignment(k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,f
 
     # TODO: redo this in terms of percent identity or some
     # other measure that adapts to length of the missing bit,
-    # not just a raw score
+    # not just a raw score (This is done below, no? -AN)
     if score >= len(rdsubseq)*(5.0/10):
         printExons(k,intronSt,intronEnd,rdid,exon_differentials,exon_intervals)
 
-def getIntervals(rdals):
+def getIntervals(args, rdals):
     """ Given a collection of readlet-alignment tuples, turn them into a set
         of interval.Interval objects, one per chromosome overlapped at least
         once. """
@@ -396,9 +394,9 @@ def getIntervals(rdals):
         ivals[(refid, fw)].add(interval.Interval(refoff0, refoff0 + seqlen))
     return ivals, positions
 
-def composeReadletAlignments(rdid, rdals, rdseq):
+def composeReadletAlignments(args, rdid, rdals, rdseq, fnh):
     rdseq = rdseq.upper()
-    ivals, positions = getIntervals(rdals)
+    ivals, positions = getIntervals(args, rdals)
     for kfw in ivals.iterkeys(): # for each chromosome covered by >= 1 readlet
         k, fw = kfw
         lastEn = None
@@ -414,9 +412,9 @@ def composeReadletAlignments(rdid, rdals, rdseq):
                 reflen, readlen = intronEnd - intronSt, regionEnd - regionSt
                 potentialIntronLen = reflen - readlen
                 if potentialIntronLen < args.min_intron_length:
-                    handleShortAlignment(k, intronSt, intronEnd, rdseq, regionSt, regionEnd, rdid, fw, fnh,args.exon_differentials,args.exon_intervals)
+                    handleShortAlignment(args, k, intronSt, intronEnd, rdseq, regionSt, regionEnd, rdid, fw, fnh,args.exon_differentials,args.exon_intervals)
                 else:
-                    handleIntron(k, intronSt, intronEnd, rdseq, regionSt, regionEnd, rdid, fw, fnh, offset)
+                    handleIntron(args, k, intronSt, intronEnd, rdseq, regionSt, regionEnd, rdid, fw, fnh, offset)
                 intronSt, intronEnd = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
@@ -429,7 +427,7 @@ class OutputThread(threading.Thread):
     """ A worker thread that examines SAM output from Bowtie and emits
         appropriate tuples for exons and introns.  Each line of output
         is another SAM readlet alignment. """
-    def __init__(self, st, done, outq, tmpdir, firstPass=True, reportMult=1.2):
+    def __init__(self, args, st, done, outq, tmpdir, fnh, firstPass=True, reportMult=1.2):
         super(OutputThread, self).__init__()
         self.st = st
         self.firstPass = firstPass
@@ -437,7 +435,9 @@ class OutputThread(threading.Thread):
         self.nout = 0
         self.done = done
         self.outq = outq
+        self.fnh = fnh
         self.tmpdir = tmpdir
+        self.args = args
         self.stoprequest = threading.Event()
 
     def run(self):
@@ -466,7 +466,7 @@ class OutputThread(threading.Thread):
                     flags, refoff1 = int(flags), int(refoff1)
                     if nsam >= report:
                         report *= self.reportMult
-                        if args.verbose:
+                        if self.args.verbose:
                             print >>sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nsam, rdid, flags)
                     seqlen = len(seq)
                     toks = rdid.split(';')
@@ -489,7 +489,7 @@ class OutputThread(threading.Thread):
                         if rdid in mem:
                             # Remove mate ID so that rest of pipeline sees same rdid
                             # for both mates
-                            composeReadletAlignments(rdid[:-2], mem[rdid], rdseq)
+                            composeReadletAlignments(self.args, rdid[:-2], mem[rdid], rdseq, self.fnh)
                             del mem[rdid]
                         del cnt[rdid]
                     line_nm += 1
@@ -509,17 +509,18 @@ class OutputThread(threading.Thread):
             assert len(mem) == 0
             assert len(cnt) == 0
 
-def writeReads(fhs, tmpdir=None, firstPass=True, reportMult=1.2):
+def writeReads(args, fhs, bowtieOutDone, inst=None, tmpdir=None, firstPass=True, reportMult=1.2):
     """ Parse input reads, optionally transform them and/or turn them into
         readlets. """
     global ninp
     report = 1.0
     assert firstPass == (tmpdir is None) # tmpdir is provided only on second pass
-    if firstPass or args.only_readletize:
-        inst = sys.stdin
-    else:
-        unmappedfh = open(os.path.join(tmpdir, 'unmappedreads.tab5'), 'r')
-        inst = unmappedfh
+    if inst is None:
+        if firstPass or args.only_readletize:
+            inst = sys.stdin
+        else:
+            unmappedfh = open(os.path.join(tmpdir, 'unmappedreads.tab5'), 'r')
+            inst = unmappedfh
     for ln in inst:
         if bowtieOutDone.is_set():
             return
@@ -564,27 +565,27 @@ def writeReads(fhs, tmpdir=None, firstPass=True, reportMult=1.2):
                 rlets1 = readlet.readletize(args, nm1 + ';1', seq1, qual1)
                 for i in xrange(len(rlets1)):
                     nm_rlet, seq_rlet, qual_rlet = rlets1[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets1), seq1, seq_rlet, qual_rlet)
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s" % (nm_rlet, i, len(rlets1), seq1, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
                         if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
-                    for fh in fhs: fh.write(rdletStr)
+                    for fh in fhs: print >>fh, rdletStr
                 rlets2 = readlet.readletize(args, nm2 + ';2', seq2, qual2)
                 for i in xrange(len(rlets2)):
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets2), seq2, seq_rlet, qual_rlet)
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s" % (nm_rlet, i, len(rlets2), seq2, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
                         if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
-                    for fh in fhs: fh.write(rdletStr)
+                    for fh in fhs: print >>fh, rdletStr
             else:
                 # Align entire reads first, but use same convention for rdStr as for readlets
                 # Review with Ben; this fixes bug in OutputThread
-                rdStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm + ';0', 0, 1, seq, seq, qual)
+                rdStr = "%s;%d;%d;%s\t%s\t%s" % (nm + ';0', 0, 1, seq, seq, qual)
                 if ninp >= report:
                     report *= reportMult
                     if args.verbose: print >> sys.stderr, "First read %d: '%s'" % (ninp, rdStr.rstrip())
-                for fh in fhs: fh.write(rdStr)
+                for fh in fhs: print >>fh, rdStr
             # Code below was not compatible with that in OutputThread
             '''else:
                 rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
@@ -602,22 +603,26 @@ def writeReads(fhs, tmpdir=None, firstPass=True, reportMult=1.2):
                 rlets = readlet.readletize(args, nm + ';0', seq, qual)
                 for i in xrange(len(rlets)):
                     nm_rlet, seq_rlet, qual_rlet = rlets[i]
-                    rdletStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet)
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s" % (nm_rlet, i, len(rlets), seq, seq_rlet, qual_rlet)
                     if ninp >= report and i == 0:
                         report *= reportMult
                         if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
-                    for fh in fhs: fh.write(rdletStr)
+                    for fh in fhs: print >>fh, rdletStr
             else:
-                rdStr = "%s;%d;%d;%s\t%s\t%s\n" % (nm + ';0', 0, 1, seq, seq, qual)
+                rdStr = "%s;%d;%d;%s\t%s\t%s" % (nm + ';0', 0, 1, seq, seq, qual)
                 if ninp >= report:
                     report *= reportMult
                     if args.verbose: print >> sys.stderr, "First read %d: '%s'" % (ninp, rdStr.rstrip())
-                for fh in fhs: fh.write(rdStr)
+                for fh in fhs: print >>fh, rdStr
 
-def go():
+    for fh in fhs: fh.flush()
+
+def go(args, bowtieArgs, tmpdir, fnh, inst, rdlab="reads.tab5", rdletlab="readlets.tab5"):
 
     import time
     timeSt = time.time()
+
+    bowtieOutDone = threading.Event()
 
     # For quick test:
     # args.only_readletize = True
@@ -636,11 +641,9 @@ def go():
         if not os.path.exists(archiveDir):
             os.makedirs(archiveDir)
         if not args.only_readletize:
-            archiveFh = open(os.path.join(archiveDir, "reads.tab5"), 'w')
+            archiveFh = open(os.path.join(archiveDir, rdlab), 'w')
 
     outq = Queue()
-    
-    tmpdir = tempfile.mkdtemp()
 
     if not args.only_readletize:
         threads = []
@@ -651,18 +654,18 @@ def go():
         # Reads are written to a file, then Bowtie reads them from the file
         # import tempfile
         if args.write_reads is None:
-            readFn = os.path.join(tmpdir, 'reads.tab5')
+            readFn = os.path.join(tmpdir, rdlab)
         else:
             readFn = args.write_reads
         with open(readFn, 'w') as fh:
             fhs = [fh]
             if args.archive is not None: fhs.append(archiveFh)
-            writeReads(fhs, firstPass=True)
+            writeReads(args, fhs, bowtieOutDone, inst=inst, firstPass=True)
         assert os.path.exists(readFn)
         proc, mycmd, threads = bowtie.proc(args, readFn=readFn,
                                            bowtieArgs=bowtieArgs, sam=True,
                                            stdoutPipe=True, stdinPipe=False)
-        outThread = OutputThread(proc.stdout, bowtieOutDone, outq, tmpdir)
+        outThread = OutputThread(args, proc.stdout, bowtieOutDone, outq, tmpdir, fnh)
         threads.append(outThread)
         outThread.start()
         '''else:
@@ -710,7 +713,7 @@ def go():
         # Perform Bowtie's second pass only
         # if readletizing is requested
         if args.archive is not None:
-            archiveFh = open(os.path.join(archiveDir, "readlets.tab5"), 'w')
+            archiveFh = open(os.path.join(archiveDir, rdletlab), 'w')
 
         # outq = Queue()
         threads = []
@@ -718,18 +721,18 @@ def go():
         # if args.serial:
         # Reads are written to a file, then Bowtie reads them from the file
         if args.write_reads is None:
-            readFn = os.path.join(tmpdir, 'readlets.tab5')
+            readFn = os.path.join(tmpdir, rdletlab)
         else:
             readFn = args.write_reads
         with open(readFn, 'w') as fh:
             fhs = [fh]
             if args.archive is not None: fhs.append(archiveFh)
-            writeReads(fhs, tmpdir=tmpdir, firstPass=False)
+            writeReads(args, fhs, bowtieOutDone, tmpdir=tmpdir, firstPass=False)
         assert os.path.exists(readFn)
         proc, mycmd, threads = bowtie.proc(args, readFn=readFn,
                                            bowtieArgs=bowtieArgs, sam=True,
                                            stdoutPipe=True, stdinPipe=False)
-        outThread = OutputThread(proc.stdout, bowtieOutDone, outq, tmpdir)
+        outThread = OutputThread(args, proc.stdout, bowtieOutDone, outq, tmpdir, fnh, firstPass=False)
         threads.append(outThread)
         outThread.start()
         '''else:
@@ -765,41 +768,40 @@ def go():
         if args.verbose:
             print >>sys.stderr, "Bowtie%s finished" % ("" if args.only_readletize else "'s second pass")
 
-        # Remove temporary read files from first and second passes of Bowtie
-        if args.write_reads is None and not args.keep_reads:
-            print >>sys.stderr, "Cleaning up temporary files"
-            import shutil
-            shutil.rmtree(tmpdir)
-
         print >> sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, time.time()-timeSt)
 
-# Only used for testing
-def createTestFasta(fname,refid,refseq):
-    fastaH = open(fname,'w')
-    fastaIdx = open(fname+".fai",'w')
-    fastaH.write(">%s\n%s\n"%(refid,refseq))
-    fastaIdx.write("%s\t%d\t%d\t%d\t%d\n"%(refid,len(refseq),len(refid)+2,len(refseq),len(refseq)+1))
-    fastaH.close()
-    fastaIdx.close()
-
-
 if not args.test:
+
     binsz = partition.binSize(args)
+    fnh = fasta.fasta(args.refseq)
+    tmpdir = tempfile.mkdtemp()
     if not os.path.exists(args.refseq):
         raise RuntimeError("No such --refseq file: '%s'" % args.refseq)
     if not os.path.exists(args.faidx):
         raise RuntimeError("No such --faidx file: '%s'" % args.faidx)
-    fnh = fasta.fasta(args.refseq)
     if args.profile:
         import cProfile
-        cProfile.run('go()')
+        cProfile.run('go(args, bowtieArgs, tmpdir, fnh, sys.stdin)')
     else:
-        go()
+        go(args, bowtieArgs, tmpdir, fnh, sys.stdin)
+    # Remove temporary read files from first and second passes of Bowtie
+    if args.write_reads is None and not args.keep_reads:
+        print >>sys.stderr, "Cleaning up temporary files"
+        import shutil
+        shutil.rmtree(tmpdir)
 else:
     del sys.argv[1:]
     import unittest
     binsz = 10000
-    #test()
+
+    # Only used for testing
+    def createTestFasta(fname,refid,refseq):
+        fastaH = open(fname,'w')
+        fastaIdx = open(fname+".fai",'w')
+        fastaH.write(">%s\n%s\n"%(refid,refseq))
+        fastaIdx.write("%s\t%d\t%d\t%d\t%d\n"%(refid,len(refseq),len(refid)+2,len(refseq),len(refseq)+1))
+        fastaH.close()
+        fastaIdx.close()
 
     class TestAlignFunctions1(unittest.TestCase):
         ###Big Note:  We are going to assume base-0 indexing for everything
@@ -819,6 +821,8 @@ else:
             self.testDump = "test.out"
             self.fasta = "test.fa"
             self.faidx = "test.fa.fai"
+            testargs = ["--refseq", self.fasta, "--exon-differentials"]
+            self.args = parser.parse_args(testargs)
             createTestFasta(self.fasta,"test",self.refseq)
             open(self.testDump,'w') #Just to initialize file
 
@@ -834,7 +838,7 @@ else:
             rSt,rEnd = 10,19  #region coords
             offset = 10
             fnh = fasta.fasta(self.fasta)
-            handleShortAlignment(refid,iSt,iEnd,self.rdseq,
+            handleShortAlignment(self.args,refid,iSt,iEnd,self.rdseq,
                                  rSt,rEnd,rdid,fw,fnh,0,True)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -872,7 +876,7 @@ else:
             rSt,rEnd = 32,32  #region coords
             offset = 10
             fnh = fasta.fasta(self.fasta)
-            handleIntron(refid,iSt,iEnd,self.rdseq,
+            handleIntron(self.args, refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh,offset)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -900,7 +904,7 @@ else:
             rSt,rEnd = 28,36  #region coords
             offset = 10
             fnh = fasta.fasta(self.fasta)
-            handleIntron(refid,iSt,iEnd,self.rdseq,
+            handleIntron(self.args, refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh,offset)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -926,7 +930,7 @@ else:
             rSt,rEnd = 36,28  #region coords
             offset = 10
             fnh = fasta.fasta(self.fasta)
-            handleIntron(refid,iSt,iEnd,self.rdseq,
+            handleIntron(self.args, refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh,offset)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -955,6 +959,8 @@ else:
             self.testDump = "test.out"
             self.fasta = "test.fa"
             self.faidx = "test.fa.fai"
+            testargs = ["--refseq", self.fasta, "--exon-differentials"]
+            self.args = parser.parse_args(testargs)
             createTestFasta(self.fasta,"test",self.refseq)
             open(self.testDump,'w') #Just to initialize file
         def tearDown(self):
@@ -981,7 +987,7 @@ else:
             rSt,rEnd = 28,36  #region coords
             offset = 10
             fnh = fasta.fasta(self.fasta)
-            handleIntron(refid,iSt,iEnd,self.rdseq,
+            handleIntron(self.args, refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh,offset)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1010,7 +1016,7 @@ else:
             rSt,rEnd = 36,28  #region coords
             offset = 10
             fnh = fasta.fasta(self.fasta)
-            handleIntron(refid,iSt,iEnd,self.rdseq,
+            handleIntron(self.args, refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh,offset)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1042,6 +1048,8 @@ else:
             self.testDump = "test.out"
             self.fasta = "test.fa"
             self.faidx = "test.fa.fai"
+            testargs = ["--refseq", self.fasta, "--exon-differentials"]
+            self.args = parser.parse_args(testargs)
             createTestFasta(self.fasta,"test",self.refseq)
             open(self.testDump,'w') #Just to initialize file
         def tearDown(self):
@@ -1058,7 +1066,7 @@ else:
             rSt,rEnd = 0,9  #region coords
             offset = 10
             fnh = fasta.fasta(self.fasta)
-            handleShortAlignment(refid,iSt,iEnd,self.rdseq,
+            handleShortAlignment(self.args,refid,iSt,iEnd,self.rdseq,
                                  rSt,rEnd,rdid,fw,fnh,0,True)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1076,7 +1084,7 @@ else:
             rSt,rEnd = 10,19  #region coords
             offset = 10
             fnh = fasta.fasta(self.fasta)
-            handleShortAlignment(refid,iSt,iEnd,self.rdseq,
+            handleShortAlignment(self.args,refid,iSt,iEnd,self.rdseq,
                                  rSt,rEnd,rdid,fw,fnh,0,True)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1085,6 +1093,140 @@ else:
             st,end = int(toks[2]), int(toks[3])
             self.assertEquals(st,10)
             self.assertEquals(end,19)
+
+    class TestExactMatch(unittest.TestCase):
+        ###Big Note:  We are going to assume base-0 indexing for everything
+        def setUp(self):
+
+            # TestExactMatch -- Does an exact match get aligned on Bowtie's first pass?
+            # -- Other tests on exact matches can be written as test methods like test_first_pass_bowtie
+            """Read"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AACTGAGTCG ATAGGACGAA ACAAGTATAT ATT"""
+            #             ^10        ^20        ^30        ^40        ^50        ^60
+            """Genome"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AACTGAGTCG ATAGGACGAA ACAAGTATAT ATTCGAAAAT TAATTAATTC CGAAATTTCA ATTTCATCCG ACATGTATCT ACATATGCCA CACTTCTGGT TGGACTTTTT TTTTTGCGCC A"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AA                                                                                                                 TTTTT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
+            #             ^10        ^20        ^30        ^40        ^50        ^60        ^70        ^80        ^90        ^100       ^110       ^120       ^130       ^140       ^150
+
+            rdseq  = "ACGAAGGACTGCTTGACATCGGCCAAAAAAAACTGAGTCGATAGGACGAAACAAGTATATATT"
+            refseq = "ACGAAGGACTGCTTGACATCGGCCAAAAAAAACTGAGTCGATAGGACGAAACAAGTATATATTCGAAAATTAATTAATTCCGAAATTTCAATTTCATCCGACATGTATCTACATATGCCACACTTCTGGTTGGACTTTTTTTTTTGCGCCA"
+            self.tmpdir = tempfile.mkdtemp()
+            self.testDump = os.path.join(self.tmpdir, "test.out")
+            fastaf = os.path.join(self.tmpdir, "test.fa")
+            faidx = os.path.join(self.tmpdir, "test.fa.fai")
+            tabinp = os.path.join(self.tmpdir, "test.tsv")
+            self.rdlab = "reads.tab5"
+            self.rdletlab = "readlets.tab5"
+            idxroot = os.path.join(self.tmpdir, "testgenome")
+            bowtieExe = "bowtie"
+            readletLen = 15 # Note readlet length is less than 25 bp!
+            readletIval = 5
+            partitionLen = 30000
+            testargs = ["--refseq", fastaf, "--bowtieIdx", idxroot, "--bowtieExe", bowtieExe, "--readletLen", \
+                str(readletLen), "--readletIval", str(readletIval), "--partition-len", str(partitionLen), "--exon-differentials"]
+            self.args = parser.parse_args(testargs)
+            createTestFasta(fastaf,"test",refseq)
+            self.fnh = fasta.fasta(fastaf)
+            # write 3-token tab-delimited file
+            with open(tabinp, 'w') as oh:
+                oh.write("FH:44d2170ded;LB:testlabel;0\t%s\t%s\n" % (rdseq, "~"*len(rdseq))) # make base quality scores as high as possible
+            self.inst = open(tabinp, 'r')
+            # create Bowtie index files from reference fasta
+            import subprocess
+            with open(os.devnull, 'w') as nullst:
+                proc = subprocess.Popen(['bowtie-build', fastaf, idxroot], stdout=nullst)
+                proc.wait()
+            open(self.testDump,'w') # Just to initialize file
+
+        def tearDown(self):
+            # Remove all temporary files
+            import shutil
+            shutil.rmtree(self.tmpdir)
+
+        def testFirstPassBowtie(self):
+            # An unusually large unit test
+            # Essentially mirrors go(), but archiving is killed
+            # May serve as prototype for better-organized go()
+            # Lines with args.archive and args.verbose from go() are not included
+
+            sys.stdout = open(self.testDump, 'w')
+
+            go(self.args, [], self.tmpdir, self.fnh, inst=self.inst, rdlab=self.rdlab, rdletlab=self.rdletlab)
+
+            sys.stdout.close()
+
+            # reads.tab5 should have data (this file catches first-pass Bowtie output),
+            # while readlets.tab5 should be empty
+
+            # reads5.tab is just os.path.join(self.tmpdir, self.rdlab)
+
+            self.assertNotEqual(os.stat(os.path.join(self.tmpdir, self.rdlab)).st_size, 0)
+            self.assertEqual(os.stat(os.path.join(self.tmpdir, self.rdletlab)).st_size, 0)
+
+    class Test30bpIntron(unittest.TestCase):
+        ###Big Note:  We are going to assume base-0 indexing for everything
+        def setUp(self):
+
+            # TestExactMatch -- Does an exact match get aligned on Bowtie's first pass?
+            # -- Other tests on exact matches can be written as test methods like test_first_pass_bowtie
+            """Read"""
+            """ACGAAGGACT GCTTGACATC                                  ACAAGTATAT ATTCGAAAAT TAATTAATTC"""
+            #             ^10        ^20        ^30        ^40        ^50        ^60
+            """Genome"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AACTGAGTCG ATAGGACGAA ACAAGTATAT ATTCGAAAAT TAATTAATTC CGAAATTTCA ATTTCATCCG ACATGTATCT ACATATGCCA CACTTCTGGT TGGACTTTTT TTTTTGCGCC A"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AA                                                                                                                 TTTTT TTTTTGCGCC AATCTTAAGA GCCTTCT"""
+            #             ^10        ^20        ^30        ^40        ^50        ^60        ^70        ^80        ^90        ^100       ^110       ^120       ^130       ^140       ^150
+
+            rdseq  = "ACGAAGGACTGCTTGACATCACAAGTATATATTCGAAAATTAATTAATTC"
+            refseq = "ACGAAGGACTGCTTGACATCGGCCAAAAAAAACTGAGTCGATAGGACGAAACAAGTATATATTCGAAAATTAATTAATTCCGAAATTTCAATTTCATCCGACATGTATCTACATATGCCACACTTCTGGTTGGACTTTTTTTTTTGCGCCA"
+            self.tmpdir = tempfile.mkdtemp()
+            self.testDump = os.path.join(self.tmpdir, "test.out")
+            fastaf = os.path.join(self.tmpdir, "test.fa")
+            faidx = os.path.join(self.tmpdir, "test.fa.fai")
+            tabinp = os.path.join(self.tmpdir, "test.tsv")
+            self.rdlab = "reads.tab5"
+            self.rdletlab = "readlets.tab5"
+            idxroot = os.path.join(self.tmpdir, "testgenome")
+            bowtieExe = "bowtie"
+            readletLen = 15 # Note readlet length is less than 25 bp here!
+            readletIval = 5
+            partitionLen = 30000
+            testargs = ["--refseq", fastaf, "--bowtieIdx", idxroot, "--bowtieExe", bowtieExe, "--readletLen", \
+                str(readletLen), "--readletIval", str(readletIval), "--partition-len", str(partitionLen), "--exon-differentials"]
+            self.args = parser.parse_args(testargs)
+            createTestFasta(fastaf,"test",refseq)
+            self.fnh = fasta.fasta(fastaf)
+            # write 3-token tab-delimited file
+            with open(tabinp, 'w') as oh:
+                oh.write("FH:44d2170ded;LB:testlabel;0\t%s\t%s\n" % (rdseq, "~"*len(rdseq))) # make base quality scores as high as possible
+            self.inst = open(tabinp, 'r')
+            # create Bowtie index files from reference fasta
+            import subprocess
+            with open(os.devnull, 'w') as nullst:
+                proc = subprocess.Popen(['bowtie-build', fastaf, idxroot], stdout=nullst)
+                proc.wait()
+            open(self.testDump,'w') # Just to initialize file
+
+        def tearDown(self):
+            # Remove all temporary files
+            import shutil
+            shutil.rmtree(self.tmpdir)
+
+        def testSecondPassBowtie(self):
+            # An unusually large unit test
+            # Essentially mirrors go(), but archiving is killed
+            # May serve as prototype for better-organized go()
+            # Lines with args.archive and args.verbose from go() are not included
+            sys.stdout = open(self.testDump, 'w')
+
+            go(self.args, [], self.tmpdir, self.fnh, inst=self.inst, rdlab=self.rdlab, rdletlab=self.rdletlab)
+
+            sys.stdout.close()
+
+            # reads.tab5 should have data (this file catches first-pass Bowtie output),
+            # and readlets.tab5 should ALSO have data (since there are readlets here too)
+            self.assertNotEqual(os.stat(os.path.join(self.tmpdir, self.rdlab)).st_size, 0)
+            self.assertNotEqual(os.stat(os.path.join(self.tmpdir, self.rdletlab)).st_size, 0)
 
     unittest.main()
 
