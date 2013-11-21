@@ -509,6 +509,89 @@ class OutputThread(threading.Thread):
             assert len(mem) == 0
             assert len(cnt) == 0
 
+class OutputThread2(threading.Thread):
+
+    """ A worker thread that examines SAM output from Bowtie and emits
+        appropriate tuples for exons and introns.  Each line of output
+        is another SAM readlet alignment. """
+    def __init__(self, args, st, done, outq, unmappedst, fnh, reportMult=1.2):
+        super(OutputThread2, self).__init__()
+        self.st = st
+        self.reportMult = 1.2 # shouldn't this be self.reportMult = reportMult? -AN
+        self.nout = 0
+        self.done = done
+        self.outq = outq
+        self.fnh = fnh
+        self.args = args
+        self.unmappedst = unmappedst
+        self.stoprequest = threading.Event()
+
+    def run(self):
+        """ Main driver method for the output thread """
+        mem, cnt = {}, {}
+        report = 1
+        line_nm = 0
+        exc = None
+        nsam = 0
+        exitlevel = 0
+        try:
+            # This puts unmapped reads in the temporary directory
+            # If it's the second pass, the with above is redundant
+            # but does not affect performance
+            while not self.stoprequest.isSet():
+                line = self.st.readline()
+                if len(line) == 0:
+                    break # no more output
+                if line[0] == '@':
+                    continue # skip header
+                nsam += 1
+                rdid, flags, refid, refoff1, _, _, _, _, _, seq, qual, _ = string.split(line.rstrip(), '\t', 11)
+                flags, refoff1 = int(flags), int(refoff1)
+                if nsam >= report:
+                    report *= self.reportMult
+                    if self.args.verbose:
+                        print >>sys.stderr, "SAM output record %d: rdname='%s', flags=%d" % (nsam, rdid, flags)
+                seqlen = len(seq)
+                toks = rdid.split(';')
+                # Make sure mate id is part of the read name for now, so we don't
+                # accidentally investigate the gap between the mates as though it's
+                # a spliced alignment
+                rdid = ';'.join(toks[:-3])
+                cnt[rdid] = cnt.get(rdid, 0) + 1
+                rd_name, rlet_nm, rdseq = toks[0], toks[4], toks[6]
+                rdlet_n = int(toks[-2])
+                if flags != 4:
+                    fw = (flags & 16) == 0
+                    if rdid not in mem: mem[rdid] = [ ]
+                    mem[rdid].append((refid, fw, refoff1-1, seqlen, rlet_nm, rd_name))
+                else:
+                    if len(("%s\t%s\t%s" % (rdid[:-2], seq, qual)).split('\t')) == 3 and len(seq) == len(qual):
+                        print >>self.unmappedst, "%s\t%s\t%s" % (rdid[:-2], seq, qual)
+                if cnt[rdid] == rdlet_n:
+                    # Last readlet
+                    if rdid in mem:
+                        # Remove mate ID so that rest of pipeline sees same rdid
+                        # for both mates
+                        composeReadletAlignments(self.args, rdid[:-2], mem[rdid], rdseq, self.fnh)
+                        del mem[rdid]
+                    del cnt[rdid]
+                line_nm += 1
+        except Exception as e:
+            print >> sys.stderr, "Exception while reading output from Bowtie"
+            exitlevel = 1
+            exc = e
+        sys.stdout.flush()
+        self.outq.put(exitlevel)
+        self.done.set()
+        while len(self.st.readline()) > 0:
+            pass
+        if exc is not None:
+            import traceback
+            traceback.print_exc()
+        else:
+            assert len(mem) == 0
+            assert len(cnt) == 0
+
 def writeReads(args, fhs, bowtieOutDone, inst=None, tmpdir=None, firstPass=True, reportMult=1.2):
     """ Parse input reads, optionally transform them and/or turn them into
         readlets. """
@@ -616,6 +699,168 @@ def writeReads(args, fhs, bowtieOutDone, inst=None, tmpdir=None, firstPass=True,
                 for fh in fhs: print >>fh, rdStr
 
     for fh in fhs: fh.flush()
+
+import itertools
+def erat2():
+    # generate primes; uses sieve of eratosthenes
+    # this is used in performBowtieIteration's code to obtain readlets,
+    # ensuring that readlet "breaks" don't overlap
+    # from Python Cookbook
+    D = {}
+    yield 2
+    for q in itertools.islice(itertools.count(3), 0, None, 2):
+        p = D.pop(q, None)
+        if p is None:
+            D[q*q] = q
+            yield q
+        else:
+            x = p + q
+            while x in D or not (x&1):
+                x += p
+            D[x] = p
+
+def performBowtieIteration(args, bowtieArgs, tmpdir, fnh, passNumber=0, readletDepth=3, readLabelRoot="readlets", reportMult=1.2, inst=sys.stdin):
+
+    global ninp
+    itninp = 0
+    bowtieOutDone = threading.Event()
+    threads = []
+    outq = Queue()
+    report = 1.0
+    assert readletDepth >= 1
+
+    # Prepare readlets
+    readletFn = os.path.join(tmpdir, "%s_pass_%d.tsv" % (readLabelRoot, passNumber))
+    with open(readletFn, 'w') as readletfh:
+
+        if not passNumber:
+            # if it's the first pass of Bowtie, don't split reads
+            for ln in inst:
+                toks = ln.rstrip().split('\t')
+                ninp += 1
+                itninp += 1
+                pair = False
+                nm, seq, qual = None, None, None
+                nm1, seq1, qual1 = None, None, None
+                nm2, seq2, qual2 = None, None, None
+                if len(toks) == 3:
+                    # Unpaired read
+                    nm, seq, qual = toks
+                    sample.hasLab(nm, mustHave=True) # check that label is present in name
+                elif len(toks) == 5 or len(toks) == 6:
+                    # Paired-end read
+                    if len(toks) == 5:
+                        # 5-token version
+                        nm1, seq1, qual1, seq2, qual2 = toks
+                        nm2 = nm1
+                    else:
+                        # 6-token version
+                        nm1, seq1, qual1, nm2, seq2, qual2 = toks
+                    sample.hasLab(nm1, mustHave=True) # check that label is present in name
+                    if discardMate is not None:
+                        # We have been asked to discard one mate or the other
+                        if (discardMate & 1) != 0:
+                            nm, seq, qual = nm2, seq2, qual2 # discard mate 1
+                        if (discardMate & 2) != 0:
+                            nm, seq, qual = nm1, seq1, qual1 # discard mate 2
+                    else:
+                        pair = True # paired-end read
+                else:
+                    raise RuntimeError("Wrong number of tokens for line: " + ln)
+                if pair:
+                    # Paired-end
+                    if xformReads:
+                        # Truncate and transform quality values
+                        seq1, qual1 = xformRead(seq1, qual1)
+                        seq2, qual2 = xformRead(seq2, qual2)
+                    else:
+                        # Align entire reads first, but use same convention for rdStr as for readlets
+                        # Review with Ben; this fixes bug in OutputThread
+                        rdStr = "%s;%d;%d;%s\t%s\t%s" % (nm + ';0', 0, 1, seq, seq, qual)
+                        if itninp >= report:
+                            report *= reportMult
+                            if args.verbose: print >> sys.stderr, "First read %d: '%s'" % (itninp, rdStr)
+                        print >>readletfh, rdStr
+                else:
+                    # Unpaired
+                    if xformReads:
+                        # Truncate and transform quality values
+                        seq, qual = xformRead(seq, qual)
+                    else:
+                        rdStr = "%s;%d;%d;%s\t%s\t%s" % (nm + ';0', 0, 1, seq, seq, qual)
+                        if itninp >= report:
+                            report *= reportMult
+                            if args.verbose: print >> sys.stderr, "First read %d: '%s'" % (itninp, rdStr.rstrip())
+                        print >>readletfh, rdStr
+        else:
+            primes = []
+            nextPrimeGen = erat2()
+            nextPrime = nextPrimeGen.next()
+            while nextPrime <= readletDepth:
+                primes.append(nextPrime)
+                nextPrime = nextPrimeGen.next()
+            for ln in inst:
+                ninp += 1
+                itninp += 1
+                toks = ln.rstrip().split('\t')
+                # every performBowtieIteration() call after first should be fed data in three-token format
+                assert len(toks) == 3
+                nm, seq, qual = toks
+                seqlen = len(seq)
+                assert seqlen == len(qual)
+                readlets = []
+                for currentDepth in reversed(primes):
+                    readletLength = seqlen / currentDepth
+                    if readletLength < args.readletLen:
+                        continue # don't output alignments if the readletLength is below some minimum
+                    readlets = readlets + [(nm + ';0', seq[i:i+readletLength], qual[i:i+readletLength]) for i in range(0, seqlen, readletLength)]
+                for i in xrange(len(readlets)):
+                    nm_rlet, seq_rlet, qual_rlet = readlets[i]
+                    rdletStr = "%s;%d;%d;%s\t%s\t%s" % (nm_rlet, i, len(readlets), seq, seq_rlet, qual_rlet)
+                    if itninp >= report and i == 0:
+                        report *= reportMult
+                        if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
+                    print >>readletfh, rdletStr
+            if not itninp: return False # stop bowtying if there are no more readlets to bowtie
+
+    proc, mycmd, threads = bowtie.proc(args, readFn=readletFn,
+                                           bowtieArgs=bowtieArgs, sam=True,
+                                           stdoutPipe=True, stdinPipe=False)
+
+    unmappedFn = os.path.join(tmpdir, "unmapped_%s_pass_%d.tsv" % (readLabelRoot, passNumber))
+    with open(unmappedFn, 'w') as unmappedst:
+        bowtieOutDone.clear()
+        outThread = OutputThread2(args, proc.stdout, bowtieOutDone, outq, unmappedst, fnh)
+        threads.append(outThread)
+        outThread.start()
+        if args.verbose: print >>sys.stderr, "Waiting for pass #%d of Bowtie to finish" % passNumber
+        bowtieOutDone.wait()
+        exitlevel = outq.get()
+        if exitlevel != 0:
+            raise RuntimeError('Bad exitlevel from output thread: %d' % exitlevel)
+        for thread in threads:
+            if args.verbose: print >> sys.stderr, "  Joining a thread..."
+            thread.join()
+            if args.verbose: print >> sys.stderr, "    ...joined!"
+        sys.stdout.flush()
+        if args.verbose: print >>sys.stderr, "Pass #%d of Bowtie is finished" % passNumber
+
+    return unmappedFn
+
+def go2(args, bowtieArgs, tmpdir, fnh, inst):
+
+    import time
+    timeSt = time.time()
+
+    tmpdir = tempfile.mkdtemp()
+    nextfn = performBowtieIteration(args, bowtieArgs, tmpdir, fnh, inst=inst)
+    passNumber = 1
+    while nextfn:
+        with open(nextfn) as nextst:
+            nextfn = performBowtieIteration(args, bowtieArgs, tmpdir, fnh, passNumber=passNumber, inst=nextst)
+            passNumber += 1
+
+    print >> sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, time.time()-timeSt)
 
 def go(args, bowtieArgs, tmpdir, fnh, inst, rdlab="reads.tab5", rdletlab="readlets.tab5"):
 
@@ -783,7 +1028,7 @@ if not args.test:
         import cProfile
         cProfile.run('go(args, bowtieArgs, tmpdir, fnh, sys.stdin)')
     else:
-        go(args, bowtieArgs, tmpdir, fnh, sys.stdin)
+        go(args, bowtieArgs, tmpdir, fnh, sys.stdin) # Replace this with go2() to test alternative readletizing scheme
     # Remove temporary read files from first and second passes of Bowtie
     if args.write_reads is None and not args.keep_reads:
         print >>sys.stderr, "Cleaning up temporary files"
@@ -1119,6 +1364,7 @@ else:
             self.rdletlab = "readlets.tab5"
             idxroot = os.path.join(self.tmpdir, "testgenome")
             bowtieExe = "bowtie"
+            bowtieBuildExe = "bowtie-build"
             readletLen = 15 # Note readlet length is less than 25 bp!
             readletIval = 5
             partitionLen = 30000
@@ -1134,7 +1380,7 @@ else:
             # create Bowtie index files from reference fasta
             import subprocess
             with open(os.devnull, 'w') as nullst:
-                proc = subprocess.Popen(['bowtie-build', fastaf, idxroot], stdout=nullst)
+                proc = subprocess.Popen([bowtieBuildExe, fastaf, idxroot], stdout=nullst)
                 proc.wait()
             open(self.testDump,'w') # Just to initialize file
 
@@ -1188,6 +1434,7 @@ else:
             self.rdletlab = "readlets.tab5"
             idxroot = os.path.join(self.tmpdir, "testgenome")
             bowtieExe = "bowtie"
+            bowtieBuildExe = "bowtie-build"
             readletLen = 15 # Note readlet length is less than 25 bp here!
             readletIval = 5
             partitionLen = 30000
@@ -1203,7 +1450,7 @@ else:
             # create Bowtie index files from reference fasta
             import subprocess
             with open(os.devnull, 'w') as nullst:
-                proc = subprocess.Popen(['bowtie-build', fastaf, idxroot], stdout=nullst)
+                proc = subprocess.Popen([bowtieBuildExe, fastaf, idxroot], stdout=nullst)
                 proc.wait()
             open(self.testDump,'w') # Just to initialize file
 
