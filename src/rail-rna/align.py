@@ -98,6 +98,7 @@ truncateAmt = None     # amount to truncate reads
 truncateTo = None      # amount to truncate reads
 readletize = None      # if we're going to readletize
 
+# Review with Ben: do we want to transform reads?
 xformReads = qualAdd is not None or truncateAmt is not None or truncateTo is not None
 
 parser = argparse.ArgumentParser(description=\
@@ -132,10 +133,12 @@ partition.addArgs(parser)
 #    '--serial', action='store_const', const=True, default=False, help="Run bowtie serially after rather than concurrently with the input-reading loop")
 parser.add_argument(\
     '--only-readletize', action='store_const', const=True, default=False, help="Don't run first pass of Bowtie, where full reads are aligned")
-parser.add_argument(\
-    '--keep-reads', action='store_const', const=True, default=False, help="Don't delete any temporary read file(s) created")
-parser.add_argument(\
-    '--write-reads', type=str, required=False, help='Write input reads to given tab-delimited file')
+# Since args.serial is always true now, keep_reads is equivalent to archive; review with Ben
+#parser.add_argument(\
+#    '--keep-reads', action='store_const', const=True, default=False, help="Don't delete any temporary read file(s) created")
+# args.write_reads would need to accommodate two different filenames (for each pass of Bowtie) now, so kill it; review with Ben
+#parser.add_argument(\
+#    '--write-reads', type=str, required=False, help='Write input reads to given tab-delimited file')
 parser.add_argument(\
     '--test', action='store_const', const=True, default=False, help='Run unit tests')
 parser.add_argument(\
@@ -159,10 +162,10 @@ for i in xrange(1, len(sys.argv)):
         argv = sys.argv[:i]
         in_args = True
 
+# Global args variable below takes input
+# from command line, but args is still
+# an argument of the go() function
 args = parser.parse_args(argv[1:])
-
-# shortcut to diagnostics
-# args.archive = '/Users/anellore/sometemp/'
 
 '''class RenamedTemporaryFile(object):
     """For creating a temporary file object (using tempfile) that will be renamed
@@ -200,6 +203,7 @@ args = parser.parse_args(argv[1:])
 def xformRead(seq, qual):
     # Possibly truncate and/or modify quality values
     # TODO: not implemented yet!
+    # Review with Ben: if we'll never transform reads, we should kill this
     newseq, newqual = "", ""
     if truncateAmt is not None:
         pass
@@ -219,6 +223,7 @@ Applies Needleman-Wunsch to correct splice junction gaps
 def correctSplice(read,ref_left,ref_right,fw):
 
     revread = revcomp(read)
+
     # Needleman-Wunsch is a directional algorithm.  Since we are interested in scoring the 3' end of the right ref sequence, we reverse complement the right ref sequence before applying the NW algorithm
     ref_right = revcomp(ref_right)
     _, leftDP  = needlemanWunsch.needlemanWunsch(ref_left, read, needlemanWunsch.matchCost())
@@ -232,8 +237,8 @@ def correctSplice(read,ref_left,ref_right,fw):
     total = leftDP+rightDP
     index = numpy.argmax(total)
 
-    n = len(read)+1
-    _, c = index%n, index/n
+    n = len(read) + 1
+    _, c = index % n, index / n
 
     c = needlemanWunsch.medianTieBreaker(total,c)
     r = numpy.argmax(total[:,c])
@@ -449,7 +454,7 @@ class OutputThread(threading.Thread):
         exc = None
         nsam = 0
         exitlevel = 0
-        unmappedFn = os.path.join(self.tmpdir, 'unmappedreads.tab5')
+        unmappedFn = os.path.join(self.tmpdir, 'unmappedreads.tsv')
         try:
             with open(unmappedFn, 'w') as unmappedfh:
                 # This puts unmapped reads in the temporary directory
@@ -592,7 +597,7 @@ class OutputThread2(threading.Thread):
             assert len(mem) == 0
             assert len(cnt) == 0
 
-def writeReads(args, fhs, bowtieOutDone, inst=None, tmpdir=None, firstPass=True, reportMult=1.2):
+def writeReads(args, fh, bowtieOutDone, inst=None, tmpdir=None, firstPass=True, reportMult=1.2):
     """ Parse input reads, optionally transform them and/or turn them into
         readlets. """
     global ninp
@@ -602,7 +607,7 @@ def writeReads(args, fhs, bowtieOutDone, inst=None, tmpdir=None, firstPass=True,
         if firstPass or args.only_readletize:
             inst = sys.stdin
         else:
-            unmappedfh = open(os.path.join(tmpdir, 'unmappedreads.tab5'), 'r')
+            unmappedfh = open(os.path.join(tmpdir, 'unmappedreads.tsv'), 'r')
             inst = unmappedfh
     for ln in inst:
         if bowtieOutDone.is_set():
@@ -652,7 +657,7 @@ def writeReads(args, fhs, bowtieOutDone, inst=None, tmpdir=None, firstPass=True,
                     if ninp >= report and i == 0:
                         report *= reportMult
                         if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
-                    for fh in fhs: print >>fh, rdletStr
+                    print >>fh, rdletStr
                 rlets2 = readlet.readletize(args, nm2 + ';2', seq2, qual2)
                 for i in xrange(len(rlets2)):
                     nm_rlet, seq_rlet, qual_rlet = rlets2[i]
@@ -660,7 +665,7 @@ def writeReads(args, fhs, bowtieOutDone, inst=None, tmpdir=None, firstPass=True,
                     if ninp >= report and i == 0:
                         report *= reportMult
                         if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
-                    for fh in fhs: print >>fh, rdletStr
+                    print >>fh, rdletStr
             else:
                 # Align entire reads first, but use same convention for rdStr as for readlets
                 # Review with Ben; this fixes bug in OutputThread
@@ -668,7 +673,7 @@ def writeReads(args, fhs, bowtieOutDone, inst=None, tmpdir=None, firstPass=True,
                 if ninp >= report:
                     report *= reportMult
                     if args.verbose: print >> sys.stderr, "First read %d: '%s'" % (ninp, rdStr.rstrip())
-                for fh in fhs: print >>fh, rdStr
+                print >>fh, rdStr
             # Code below was not compatible with that in OutputThread
             '''else:
                 rdStr = "%s\t%s\t%s\t%s\t%s\n" % (nm1, seq1, qual1, seq2, qual2)
@@ -690,15 +695,15 @@ def writeReads(args, fhs, bowtieOutDone, inst=None, tmpdir=None, firstPass=True,
                     if ninp >= report and i == 0:
                         report *= reportMult
                         if args.verbose: print >> sys.stderr, "First readlet from read %d: '%s'" % (ninp, rdletStr.rstrip())
-                    for fh in fhs: print >>fh, rdletStr
+                    print >>fh, rdletStr
             else:
                 rdStr = "%s;%d;%d;%s\t%s\t%s" % (nm + ';0', 0, 1, seq, seq, qual)
                 if ninp >= report:
                     report *= reportMult
                     if args.verbose: print >> sys.stderr, "First read %d: '%s'" % (ninp, rdStr.rstrip())
-                for fh in fhs: print >>fh, rdStr
+                print >>fh, rdStr
 
-    for fh in fhs: fh.flush()
+    fh.flush()
 
 import itertools
 def erat2():
@@ -862,7 +867,7 @@ def go2(args, bowtieArgs, tmpdir, fnh, inst):
 
     print >> sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, time.time()-timeSt)
 
-def go(args, bowtieArgs, tmpdir, fnh, inst, rdlab="reads.tab5", rdletlab="readlets.tab5"):
+def go(args, bowtieArgs, tmpdir, fnh, inst, rdlab="reads.tsv", rdletlab="readlets.tsv"):
 
     import time
     timeSt = time.time()
@@ -878,7 +883,9 @@ def go(args, bowtieArgs, tmpdir, fnh, inst, rdlab="reads.tab5", rdletlab="readle
     # if args.exon_intervals: print 'exon_ival\tDUMMY'
     # print 'intron\tDUMMY'
 
-    archiveFh, archiveDir = None, None
+    # Instead of using the approach below,
+    # rename temporary directory to archive
+    '''archiveFh, archiveDir = None, None
     if args.archive is not None:
         archiveDir = os.path.join(args.archive, str(os.getpid()))
         if args.verbose:
@@ -886,7 +893,7 @@ def go(args, bowtieArgs, tmpdir, fnh, inst, rdlab="reads.tab5", rdletlab="readle
         if not os.path.exists(archiveDir):
             os.makedirs(archiveDir)
         if not args.only_readletize:
-            archiveFh = open(os.path.join(archiveDir, rdlab), 'w')
+            archiveFh = open(os.path.join(archiveDir, rdlab), 'w')'''
 
     outq = Queue()
 
@@ -898,14 +905,13 @@ def go(args, bowtieArgs, tmpdir, fnh, inst, rdlab="reads.tab5", rdletlab="readle
         # if args.serial:
         # Reads are written to a file, then Bowtie reads them from the file
         # import tempfile
-        if args.write_reads is None:
-            readFn = os.path.join(tmpdir, rdlab)
-        else:
-            readFn = args.write_reads
+        # if args.write_reads is None:
+        readFn = os.path.join(tmpdir, rdlab)
+        #else:
+        #    readFn = args.write_reads
         with open(readFn, 'w') as fh:
-            fhs = [fh]
-            if args.archive is not None: fhs.append(archiveFh)
-            writeReads(args, fhs, bowtieOutDone, inst=inst, firstPass=True)
+            # if args.archive is not None: fhs.append(archiveFh)
+            writeReads(args, fh, bowtieOutDone, inst=inst, firstPass=True)
         assert os.path.exists(readFn)
         proc, mycmd, threads = bowtie.proc(args, readFn=readFn,
                                            bowtieArgs=bowtieArgs, sam=True,
@@ -927,10 +933,9 @@ def go(args, bowtieArgs, tmpdir, fnh, inst, rdlab="reads.tab5", rdletlab="readle
             proc.stdin.close()'''
 
         if args.archive is not None:
-            archiveFh.close()
-            with open(os.path.join(archiveDir, "bowtie_cmd%s.sh" % ("" if args.readletLen <= 0 else "_pass1")), 'w') as ofh:
+            with open(os.path.join(tmpdir, "bowtie_cmd%s.sh" % ("" if args.readletLen <= 0 else "_pass1")), 'w') as ofh:
                 ofh.write(mycmd + '\n')
-            with open(os.path.join(archiveDir, "align_py_cmd%s.sh" % ("" if args.readletLen <= 0 else "_pass1")), 'w') as ofh:
+            with open(os.path.join(tmpdir, "align_py_cmd%s.sh" % ("" if args.readletLen <= 0 else "_pass1")), 'w') as ofh:
                 ofh.write(' '.join(sys.argv) + '\n')
         if args.verbose: 
             print >>sys.stderr, "Waiting for Bowtie%s to finish" % ("" if args.readletLen <= 0 else "'s first pass")
@@ -957,22 +962,22 @@ def go(args, bowtieArgs, tmpdir, fnh, inst, rdlab="reads.tab5", rdletlab="readle
     if args.readletLen > 0:
         # Perform Bowtie's second pass only
         # if readletizing is requested
-        if args.archive is not None:
-            archiveFh = open(os.path.join(archiveDir, rdletlab), 'w')
+        #if args.archive is not None:
+        #    archiveFh = open(os.path.join(archiveDir, rdletlab), 'w')
 
         # outq = Queue()
         threads = []
 
         # if args.serial:
         # Reads are written to a file, then Bowtie reads them from the file
-        if args.write_reads is None:
-            readFn = os.path.join(tmpdir, rdletlab)
-        else:
-            readFn = args.write_reads
+        # if args.write_reads is None:
+        readFn = os.path.join(tmpdir, rdletlab)
+        #else:
+        #    readFn = args.write_reads
         with open(readFn, 'w') as fh:
-            fhs = [fh]
-            if args.archive is not None: fhs.append(archiveFh)
-            writeReads(args, fhs, bowtieOutDone, tmpdir=tmpdir, firstPass=False)
+            # fhs = [fh]
+            # if args.archive is not None: fhs.append(archiveFh)
+            writeReads(args, fh, bowtieOutDone, tmpdir=tmpdir, firstPass=False)
         assert os.path.exists(readFn)
         proc, mycmd, threads = bowtie.proc(args, readFn=readFn,
                                            bowtieArgs=bowtieArgs, sam=True,
@@ -1014,9 +1019,10 @@ def go(args, bowtieArgs, tmpdir, fnh, inst, rdlab="reads.tab5", rdletlab="readle
             print >>sys.stderr, "Bowtie%s finished" % ("" if args.only_readletize else "'s second pass")
 
         print >> sys.stderr, "DONE with align.py; in/out = %d/%d; time=%0.3f secs" % (ninp, nout, time.time()-timeSt)
+        # If 
+        # Remove temporary read files from first and second passes of Bowtie
 
 if not args.test:
-
     binsz = partition.binSize(args)
     fnh = fasta.fasta(args.refseq)
     tmpdir = tempfile.mkdtemp()
@@ -1029,11 +1035,14 @@ if not args.test:
         cProfile.run('go(args, bowtieArgs, tmpdir, fnh, sys.stdin)')
     else:
         go(args, bowtieArgs, tmpdir, fnh, sys.stdin) # Replace this with go2() to test alternative readletizing scheme
-    # Remove temporary read files from first and second passes of Bowtie
-    if args.write_reads is None and not args.keep_reads:
-        print >>sys.stderr, "Cleaning up temporary files"
-        import shutil
-        shutil.rmtree(tmpdir)
+        if args.archive is not None:
+            archiveDir = os.path.join(args.archive, str(os.getpid()))
+            os.rename(tmpdir, archiveDir)
+        #elif args.write_reads is None and not args.keep_reads:
+        else:
+            print >>sys.stderr, "Cleaning up temporary files"
+            import shutil
+            shutil.rmtree(tmpdir)
 else:
     del sys.argv[1:]
     import unittest
@@ -1360,8 +1369,8 @@ else:
             fastaf = os.path.join(self.tmpdir, "test.fa")
             faidx = os.path.join(self.tmpdir, "test.fa.fai")
             tabinp = os.path.join(self.tmpdir, "test.tsv")
-            self.rdlab = "reads.tab5"
-            self.rdletlab = "readlets.tab5"
+            self.rdlab = "reads.tsv"
+            self.rdletlab = "readlets.tsv"
             idxroot = os.path.join(self.tmpdir, "testgenome")
             bowtieExe = "bowtie"
             bowtieBuildExe = "bowtie-build"
@@ -1401,8 +1410,8 @@ else:
 
             sys.stdout.close()
 
-            # reads.tab5 should have data (this file catches first-pass Bowtie output),
-            # while readlets.tab5 should be empty
+            # reads.tsv should have data (this file catches first-pass Bowtie output),
+            # while readlets.tsv should be empty
 
             # reads5.tab is just os.path.join(self.tmpdir, self.rdlab)
 
@@ -1430,8 +1439,8 @@ else:
             fastaf = os.path.join(self.tmpdir, "test.fa")
             faidx = os.path.join(self.tmpdir, "test.fa.fai")
             tabinp = os.path.join(self.tmpdir, "test.tsv")
-            self.rdlab = "reads.tab5"
-            self.rdletlab = "readlets.tab5"
+            self.rdlab = "reads.tsv"
+            self.rdletlab = "readlets.tsv"
             idxroot = os.path.join(self.tmpdir, "testgenome")
             bowtieExe = "bowtie"
             bowtieBuildExe = "bowtie-build"
@@ -1470,13 +1479,74 @@ else:
 
             sys.stdout.close()
 
-            # reads.tab5 should have data (this file catches first-pass Bowtie output),
-            # and readlets.tab5 should ALSO have data (since there are readlets here too)
+            # reads.tsv should have data (this file catches first-pass Bowtie output),
+            # and readlets.tsv should ALSO have data (since there are readlets here too)
             self.assertNotEqual(os.stat(os.path.join(self.tmpdir, self.rdlab)).st_size, 0)
             self.assertNotEqual(os.stat(os.path.join(self.tmpdir, self.rdletlab)).st_size, 0)
 
+    class TestMultimappedRead(unittest.TestCase):
+        ###Big Note:  We are going to assume base-0 indexing for everything
+        def setUp(self):
+
+            # TestExactMatch -- Does an exact match get aligned on Bowtie's first pass?
+            # -- Other tests on exact matches can be written as test methods like test_first_pass_bowtie
+            """Read"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AACTGAGTCG ATAGGACGAA ACAAGTATAT """
+            #             ^10        ^20        ^30        ^40        ^50        
+            """Genome"""
+            """ACGAAGGACT GCTTGACATC GGCCAAAAAA AACTGAGTCG ATAGGACGAA ACAAGTATAT ACGAAGGACT GCTTGACATC GGCCAAAAAA AACTGAGTCG ATAGGACGAA ACAAGTATAT ACGAAGGACT GCTTGACATC GGCCAAAAAA AACTGAGTCG ATAGGACGAA ACAAGTATAT"""
+            #             ^10        ^20        ^30        ^40        ^50        ^60        ^70        ^80        ^90        ^100       ^110       ^120       ^130       ^140       ^150       ^160       ^170
+
+            rdseq  = "ACGAAGGACTGCTTGACATCGGCCAAAAAAAACTGAGTCGATAGGACGAAACAAGTATATATT"
+            refseq = "ACGAAGGACTGCTTGACATCGGCCAAAAAAAACTGAGTCGATAGGACGAAACAAGTATATATTACGAAGGACTGCTTGACATCGGCCAAAAAAAACTGAGTCGATAGGACGAAACAAGTATATATTACGAAGGACTGCTTGACATCGGCCAAAAAAAACTGAGTCGATAGGACGAAACAAGTATATATT"
+            self.tmpdir = tempfile.mkdtemp()
+            self.testDump = os.path.join(self.tmpdir, "test.out")
+            fastaf = os.path.join(self.tmpdir, "test.fa")
+            faidx = os.path.join(self.tmpdir, "test.fa.fai")
+            tabinp = os.path.join(self.tmpdir, "test.tsv")
+            self.rdlab = "reads.tsv"
+            self.rdletlab = "readlets.tsv"
+            idxroot = os.path.join(self.tmpdir, "testgenome")
+            bowtieExe = "bowtie"
+            bowtieBuildExe = "bowtie-build"
+            readletLen = 15 # Note readlet length is less than 25 bp here!
+            readletIval = 5
+            partitionLen = 30000
+            testargs = ["--refseq", fastaf, "--bowtieIdx", idxroot, "--bowtieExe", bowtieExe, "--readletLen", \
+                str(readletLen), "--readletIval", str(readletIval), "--partition-len", str(partitionLen), "--exon-differentials"]
+            self.args = parser.parse_args(testargs)
+            createTestFasta(fastaf,"test",refseq)
+            self.fnh = fasta.fasta(fastaf)
+            # write 3-token tab-delimited file
+            with open(tabinp, 'w') as oh:
+                oh.write("FH:44d2170ded;LB:testlabel;0\t%s\t%s\n" % (rdseq, "~"*len(rdseq))) # make base quality scores as high as possible
+            self.inst = open(tabinp, 'r')
+            # create Bowtie index files from reference fasta
+            import subprocess
+            with open(os.devnull, 'w') as nullst:
+                proc = subprocess.Popen([bowtieBuildExe, fastaf, idxroot], stdout=nullst)
+                proc.wait()
+            open(self.testDump,'w') # Just to initialize file
+
+        def tearDown(self):
+            # Remove all temporary files
+            import shutil
+            shutil.rmtree(self.tmpdir)
+
+        def testMultimappedBowtie(self):
+            # An unusually large unit test
+            # Essentially mirrors go(), but archiving is killed
+            # May serve as prototype for better-organized go()
+            # Lines with args.archive and args.verbose from go() are not included
+            sys.stdout = open(self.testDump, 'w')
+
+            go(self.args, [], self.tmpdir, self.fnh, inst=self.inst, rdlab=self.rdlab, rdletlab=self.rdletlab)
+
+            sys.stdout.close()
+
+            # reads.tsv should have caught alignments, but readlets.tsv should not
+            self.assertNotEqual(os.stat(os.path.join(self.tmpdir, self.rdlab)).st_size, 0)
+            self.assertEqual(os.stat(os.path.join(self.tmpdir, self.rdletlab)).st_size, 0)
+
     unittest.main()
-
-
-
 

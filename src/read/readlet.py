@@ -8,10 +8,13 @@ Description: contains the function readletize, which splits a read into readlets
 def addArgs(parser):
     parser.add_argument(\
         '--readletLen', metavar='LEN', type=int, required=False, default=0,
-         help='If readlets are desired, length of readlets')
+         help='If readlets are desired, length of all readlets but capping readlets')
     parser.add_argument(\
         '--readletIval', metavar='IVAL', type=int, required=False,
         help='If readlets are desired, interval between readlet starts')
+    parser.add_argument(\
+        '--minReadletLen', metavar='MINLEN', type=int, required=False, default=5,
+         help='If readlets are desired, minimum length of capping readlets')
 
 # readletize code minus capping and accounting for uncovered edges (as of 11/5/2013)
 '''
@@ -45,7 +48,7 @@ def readletize(args, nm, seq, qual):
         en += args.readletIval
     # add caps
     en = args.readletLen
-    while en >= 8:
+    while en >= args.minReadletLen:
         rlets.append((nm, seq[:en], qual[:en]))
         rlets.append((nm, seq[-en:], qual[-en:]))
         en -= args.readletIval
