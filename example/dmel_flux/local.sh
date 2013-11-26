@@ -11,7 +11,6 @@ python $RAIL_HOME/src/driver/rail-rna.py \
 	--intermediate intermediate \
 	--output local_out \
         --reference $IGENOMES_HOME/Drosophila_melanogaster/UCSC/dm3 \
-        --stop-after-align \
         --igenomes \
         --num-processes=6 \
 	--keep-all \

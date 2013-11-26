@@ -13,25 +13,11 @@ def addArgs(parser):
         '--readletIval', metavar='IVAL', type=int, required=False,
         help='If readlets are desired, interval between readlet starts')
     parser.add_argument(\
+        '--cappingFraction', metavar='CFRAC', type=float, required=False, default=.8,
+        help='If readlets are desired, the length of each successive capping readlet is multiplied by this fraction')
+    parser.add_argument(\
         '--minReadletLen', metavar='MINLEN', type=int, required=False, default=5,
          help='If readlets are desired, minimum length of capping readlets')
-
-# readletize code minus capping and accounting for uncovered edges (as of 11/5/2013)
-'''
-def readletize(args, nm, seq, qual):
-    st, en = 0, args.readletLen
-    seqlen = len(seq)
-    rlets = []
-    while en <= seqlen:
-        rlet_seq = seq[st:en]
-        rlet_qual = qual[st:en]
-        assert len(rlet_seq) == args.readletLen
-        assert len(rlet_qual) == args.readletLen
-        rlets.append((nm, rlet_seq, rlet_qual))
-        st += args.readletIval
-        en += args.readletIval
-    return rlets
-'''
 
 # readletize code with capping and accounting for uncovered edges
 def readletize(args, nm, seq, qual):
@@ -43,13 +29,14 @@ def readletize(args, nm, seq, qual):
         rlet_qual = qual[st:en]
         assert len(rlet_seq) == args.readletLen
         assert len(rlet_qual) == args.readletLen
-        rlets.append((nm, rlet_seq, rlet_qual))
+        rlets.append((nm, rlet_seq, rlet_qual, st))
         st += args.readletIval
         en += args.readletIval
     # add caps
     en = args.readletLen
     while en >= args.minReadletLen:
-        rlets.append((nm, seq[:en], qual[:en]))
-        rlets.append((nm, seq[-en:], qual[-en:]))
-        en -= args.readletIval
+        rlets.append((nm, seq[:en], qual[:en], 0))
+        rlets.append((nm, seq[-en:], qual[-en:], seqlen-en-1))
+        en *= args.cappingFraction
+        en = int(round(en))
     return rlets
