@@ -239,7 +239,7 @@ def printIntrons(args, refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw
         print >> outhandle, "intron\t%s%s\t%012d\t%d\t%s\t%s" % (pt, fw_char, intronSt, intronEnd, lab,rdid)
         nout += 1
 
-def handleUnmappedReadlets(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh):
+def handle_unmapped_readlets(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh):
     """Remaps unmapped portions of the original read between mapped readlets"""
     """
     Flanks                      ====    ====
@@ -266,7 +266,7 @@ def handleUnmappedReadlets(args, refid,intronSt,intronEnd,rdseq,regionSt,regionE
 
     printIntrons(args, refid,rdseq,regionSt,regionEnd,intronSt,intronEnd,rdid,fw,sys.stdout)
 
-def handleOverlappingFlanks(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh):
+def handle_overlapping_flanks(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh):
     """Remaps unmapped portions of the original read between mapped readlets"""
     """
     Left Flank                    ===|=
@@ -277,11 +277,12 @@ def handleOverlappingFlanks(args, refid,intronSt,intronEnd,rdseq,regionSt,region
     """
     assert regionSt>regionEnd
     regLen = regionSt-regionEnd
+    print >>sys.stderr, 'overlappingflankscalled'
     regionSt,regionEnd = regionEnd,regionSt
     intronSt, intronEnd = intronSt-regLen, intronEnd+regLen #read just intron boundaries
-    handleUnmappedReadlets(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh)
+    handle_unmapped_readlets(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh)
 
-def handleIntron(args,refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh):
+def do_DP_framing(args,refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh):
     """
     intronSt: reference offset for beginning of intron
     intronEnd: reference offset for end of intron
@@ -307,7 +308,7 @@ def handleIntron(args,refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,
         Genome |======================-------=====================|
         Flanks                   ^===^       ^===^
         """
-        handleUnmappedReadlets(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh)
+        handle_unmapped_readlets(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh)
     else:
         """
         Scenario 3: Overlapping flanking sequences - flanking sequences will overlap in the original read
@@ -317,9 +318,9 @@ def handleIntron(args,refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,
         Genome |======================-------=====================|
         Flanks                      ^===^  ^===^
         """
-        handleOverlappingFlanks(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh)
+        handle_overlapping_flanks(args, refid,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh)
 
-def handleShortAlignment(args, k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,exon_differentials,exon_intervals):
+def do_DP_filling(args, k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,exon_differentials,exon_intervals):
     """ When the intervals of unaligned read & reference characters are similar in
     length, we say there's no intron but we also check to see if there's
     enough similarity in there to say that the middle is also part of the
@@ -340,7 +341,7 @@ def handleShortAlignment(args, k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdi
     if score >= len(rdsubseq)*(5.0/10):
         printExons(k,intronSt,intronEnd,rdid,exon_differentials,exon_intervals)
 
-def getIntervals(args, rdals):
+def get_intervals(args, rdals):
     """ Given a collection of readlet-alignment tuples, turn them into a set
         of interval.Interval objects, one per chromosome overlapped at least
         once. """
@@ -358,9 +359,9 @@ def getIntervals(args, rdals):
         ivals[(refid, fw)].add(interval.Interval(refoff0, refoff0 + seqlen))
     return ivals, positions
 
-def composeReadletAlignments(args,rdid,rdals,rdseq,fnh):
+def compose_readlet_alignments(args,rdid,rdals,rdseq,fnh):
     rdseq = rdseq.upper()
-    ivals, positions = getIntervals(args, rdals)
+    ivals, positions = get_intervals(args, rdals)
     for kfw in ivals.iterkeys(): # for each chromosome covered by >= 1 readlet
         k, fw = kfw
         lastEn = None
@@ -373,11 +374,11 @@ def composeReadletAlignments(args,rdid,rdals,rdseq,fnh):
                 if not fw: regionSt, regionEnd = regionEnd, regionSt
                 # Now regionSt, regionEn are w/r/t alignment's "left" end
                 reflen, readlen = intronEnd - intronSt, regionEnd - regionSt
-                potentialIntronLen = reflen - readlen
-                if potentialIntronLen < args.min_intron_length:
-                    handleShortAlignment(args,k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,args.exon_differentials,args.exon_intervals)
-                else:
-                    handleIntron(args,k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh)
+                refreaddiff = reflen - readlen
+                if abs(refreaddiff) < 2:
+                    do_DP_filling(args,k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh,args.exon_differentials,args.exon_intervals)
+                elif refreaddiff > 2:
+                    do_DP_framing(args,k,intronSt,intronEnd,rdseq,regionSt,regionEnd,rdid,fw,fnh)
                 intronSt, intronEnd = en, -1
             # Keep stringing rdid along because it contains the label string
             # Add a partition id that combines the ref id and some function of
@@ -451,7 +452,7 @@ class OutputThread(threading.Thread):
                         if rdid in mem:
                             # Remove mate ID so that rest of pipeline sees same rdid
                             # for both mates
-                            composeReadletAlignments(self.args, rdid[:-2], mem[rdid], rdseq, self.fnh)
+                            compose_readlet_alignments(self.args, rdid[:-2], mem[rdid], rdseq, self.fnh)
                             del mem[rdid]
                         del cnt[rdid]
                     line_nm += 1
@@ -533,7 +534,7 @@ class OutputThread(threading.Thread):
                     if rdid in mem:
                         # Remove mate ID so that rest of pipeline sees same rdid
                         # for both mates
-                        composeReadletAlignments2(self.args, rdid[:-2], mem[rdid], rdseq, self.fnh)
+                        compose_readlet_alignments2(self.args, rdid[:-2], mem[rdid], rdseq, self.fnh)
                         del mem[rdid]
                     del cnt[rdid]
                 line_nm += 1
@@ -977,7 +978,7 @@ else:
             iSt,iEnd = 10,19  #intron coords
             rSt,rEnd = 10,19  #region coords
             fnh = fasta.fasta(self.fasta)
-            handleShortAlignment(self.args,refid,iSt,iEnd,self.rdseq,
+            do_DP_filling(self.args,refid,iSt,iEnd,self.rdseq,
                                  rSt,rEnd,rdid,fw,fnh,0,True)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1024,7 +1025,7 @@ else:
             iSt,iEnd = 32,135 #intron coords
             rSt,rEnd = 32,32  #region coords
             fnh = fasta.fasta(self.fasta)
-            handleIntron(self.args, refid,iSt,iEnd,self.rdseq,
+            do_DP_framing(self.args, refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1051,7 +1052,7 @@ else:
             iSt,iEnd = 28,139 #intron coords
             rSt,rEnd = 28,36  #region coords
             fnh = fasta.fasta(self.fasta)
-            handleIntron(self.args,refid,iSt,iEnd,self.rdseq,
+            do_DP_framing(self.args,refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1076,7 +1077,7 @@ else:
             iSt,iEnd = 36,131 #intron coords
             rSt,rEnd = 36,28  #region coords
             fnh = fasta.fasta(self.fasta)
-            handleIntron(self.args,refid,iSt,iEnd,self.rdseq,
+            do_DP_framing(self.args,refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1119,7 +1120,7 @@ else:
             iSt,iEnd = 28,139 #intron coords
             rSt,rEnd = 28,36  #region coords
             fnh = fasta.fasta(self.fasta)
-            handleIntron(self.args,refid,iSt,iEnd,self.rdseq,
+            do_DP_framing(self.args,refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1144,7 +1145,7 @@ else:
             iSt,iEnd = 36,131 #intron coords
             rSt,rEnd = 36,28  #region coords
             fnh = fasta.fasta(self.fasta)
-            handleIntron(self.args, refid,iSt,iEnd,self.rdseq,
+            do_DP_framing(self.args, refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1201,7 +1202,7 @@ else:
             iSt,iEnd = 28,139 #intron coords
             rSt,rEnd = 28,36  #region coords
             fnh = fasta.fasta(self.fasta)
-            handleIntron(self.args, refid,iSt,iEnd,self.rdseq,
+            do_DP_framing(self.args, refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1229,7 +1230,7 @@ else:
             iSt,iEnd = 36,131 #intron coords
             rSt,rEnd = 36,28  #region coords
             fnh = fasta.fasta(self.fasta)
-            handleIntron(self.args, refid,iSt,iEnd,self.rdseq,
+            do_DP_framing(self.args, refid,iSt,iEnd,self.rdseq,
                          rSt,rEnd,rdid,fw,fnh)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1278,7 +1279,7 @@ else:
             iSt,iEnd = 0,9  #intron coords
             rSt,rEnd = 0,9  #region coords
             fnh = fasta.fasta(self.fasta)
-            handleShortAlignment(self.args,refid,iSt,iEnd,self.rdseq,
+            do_DP_filling(self.args,refid,iSt,iEnd,self.rdseq,
                                  rSt,rEnd,rdid,fw,fnh,0,True)
             sys.stdout.close()
             test_out = open(self.testDump,'r')
@@ -1295,7 +1296,7 @@ else:
             iSt,iEnd = 10,19  #intron coords
             rSt,rEnd = 10,19  #region coords
             fnh = fasta.fasta(self.fasta)
-            handleShortAlignment(self.args,refid,iSt,iEnd,self.rdseq,
+            do_DP_filling(self.args,refid,iSt,iEnd,self.rdseq,
                                  rSt,rEnd,rdid,fw,fnh,0,True)
             sys.stdout.close()
             test_out = open(self.testDump,'r')

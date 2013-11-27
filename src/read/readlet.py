@@ -13,7 +13,7 @@ def addArgs(parser):
         '--readletIval', metavar='IVAL', type=int, required=False,
         help='If readlets are desired, interval between readlet starts')
     parser.add_argument(\
-        '--cappingFraction', metavar='CFRAC', type=float, required=False, default=.8,
+        '--cappingFraction', metavar='CFRAC', type=float, required=False, default=.75,
         help='If readlets are desired, the length of each successive capping readlet is multiplied by this fraction')
     parser.add_argument(\
         '--minReadletLen', metavar='MINLEN', type=int, required=False, default=5,
