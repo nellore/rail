@@ -36,7 +36,7 @@ def readletize(args, nm, seq, qual):
     en = args.readletLen
     while en >= args.minReadletLen:
         rlets.append((nm, seq[:en], qual[:en], 0))
-        rlets.append((nm, seq[-en:], qual[-en:], seqlen-en-1))
+        rlets.append((nm, seq[-en:], qual[-en:], seqlen-en))
         en *= args.cappingFraction
         en = int(round(en))
     return rlets

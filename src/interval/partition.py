@@ -23,12 +23,12 @@ def binSize(args):
     else:
         return 10000
 
-def partition(refid, st, en, binSize):
+def partition(refid, st, en, binSize, fudge=0):
     ''' Assign the interval refid:[st, en) to one or more partitions
         based on partition bin size and the interval's start and end
         positions. '''
-    binid_st = int(st / binSize)
-    binid_en = int((en-1) / binSize)
+    binid_st = int((st - fudge) / binSize)
+    binid_en = int((en + fudge - 1) / binSize)
     return [ (";".join([refid, str(i)]), i * binSize, (i+1) * binSize) for i in xrange(binid_st, binid_en+1) ]
 
 def partitionOverlaps(refid, st, en, binSize, fudge=0):

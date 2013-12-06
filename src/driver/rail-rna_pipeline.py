@@ -50,15 +50,14 @@ class AlignStep(pipeline.Step):
             python %%BASE%%/src/rail-rna/align.py
                 --refseq=%%REF_FASTA%% 
                 --faidx=%%REF_FASTA_INDEX%% 
-                --bowtieIdx=%%REF_BOWTIE_INDEX%% 
-                --bowtieExe=%%BOWTIE%% 
-                --readletLen %d 
-                --readletIval %d 
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
+                --bowtie-exe=%%BOWTIE%% 
+                --max-readlet-size %d 
+                --readlet-interval %d 
                 --partition-len %d 
                 --exon-differentials 
                 --verbose 
-                -- 
-                %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
+                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
         mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(AlignStep, self).__init__(\
             inps,
