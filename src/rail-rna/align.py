@@ -1421,8 +1421,8 @@ else:
                     }
                 )
 
-    class TestUnmappedRegionSplit(unittest.TestCase):
-        """Tests unmapped_region_split(); needs no fixture."""
+    class TestUnmappedRegionSplits(unittest.TestCase):
+        """Tests unmapped_region_splits(); needs no fixture."""
         def test_random_exact_case_1000x(self):
             """Fails if proper split of unmapped region is not identified.
 
