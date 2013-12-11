@@ -46,6 +46,19 @@ class PreprocessingStep(pipeline.Step):
 
 class AlignStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
+        # For profiling, use the following mapperStr
+        '''mapperStr = """
+            python -m cProfile -o ~/align_output_profile %%BASE%%/src/rail-rna/align.py
+                --refseq=%%REF_FASTA%% 
+                --faidx=%%REF_FASTA_INDEX%% 
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
+                --bowtie-exe=%%BOWTIE%% 
+                --max-readlet-size %d 
+                --readlet-interval %d 
+                --partition-len %d 
+                --exon-differentials 
+                --verbose 
+                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())'''
         mapperStr = """
             python %%BASE%%/src/rail-rna/align.py
                 --refseq=%%REF_FASTA%% 
