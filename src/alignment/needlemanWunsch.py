@@ -150,6 +150,10 @@ def needlemanWunsch(first_seq, second_seq, substitution_matrix, check=False):
                       -score_matrix is the score matrix; it's a numpy matrix
                        that can be used to trace back the global alignment.
     """
+    # Make sure cases are the same
+    first_seq = first_seq.upper()
+    second_seq = second_seq.upper()
+
     nrow, ncol = len(first_seq)+1, len(second_seq)+1
     D = numpy.zeros((nrow, ncol), dtype=numpy.int32)
     nw.nw(D, substitution_matrix, first_seq, second_seq)

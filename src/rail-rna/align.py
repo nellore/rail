@@ -162,8 +162,8 @@ parser.add_argument('--max-discrepancy', type=int, required=False,
 parser.add_argument('--min-seq-similarity', type=float, required=False,
     default=0.5, 
     help='If the difference in length between an unmapped region framed by'
-         'two ECs and its corresponding reference is <= the command-line '
-         'option --max-discrepancy AND the score of Needleman-Wunsch '
+         'two ECs and its corresponding gap in the reference is <= the '
+         'command-line option --max-discrepancy AND the score of global '
          'alignment is >= --min-seq-similarity * (length of unmapped region). '
          'the unmapped region is incorporated into a single EC spanning the '
          'two original ECs via DP filling')
@@ -468,6 +468,10 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
     assert k == len(left_reference_seq)
     assert k == len(right_reference_seq)
 
+    unmapped_seq = unmapped_seq.upper()
+    left_reference_seq = left_reference_seq.upper()
+    right_reference_seq = right_reference_seq.upper()
+
     left_score_matrix = needlemanWunsch.needlemanWunsch(
             unmapped_seq, left_reference_seq, 
             substitution_matrix
@@ -512,19 +516,19 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                         considered a candidate for incorporation into a single
                         EC spanning the two original ECs via DP filling.
        min_seq_similarity: if the difference in length between an unmapped
-                           region framed by two ECs and its corresponding 
-                           reference is <= max_discrepancy AND the score of 
-                           Needleman-Wunsch alignment is >= 
+                           region framed by two ECs and its corresponding gap
+                           in the reference is <= max_discrepancy AND the score 
+                           of global alignment is >= 
                            min_seq_similarity * (length of unmapped region),
                            the unmapped region is incorporated into a single EC
                            spanning the two original ECs via DP filling. See 
                            needlemanWunsch.matchCost() for the substitution 
                            matrix used.
        substitution_matrix: 6 x 6 substitution matrix (numpy object or list
-                            of lists) for scoring Needleman-Wunsch filling
-                            and framing alignments; rows and columns correspond
-                            to ACGTN-, where N is aNy and - is a gap. Default:
-                            +1 for match, -2 for gap, -1 for everything else.
+                            of lists) for scoring filling and framing
+                            alignments; rows and columns correspond to ACGTN-,
+                            where N is aNy and - is a gap. Default: +1 for
+                            match, -2 for gap, -1 for everything else.
 
        Return value: tuple (exons, introns).
                        -exons is a list of tuples (rname, reverse_strand, 
@@ -712,7 +716,7 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                     unmapped_displacement += split
                     call_exon, call_intron = True, True
                 else: 
-                    '''discrepancy < -max_discrepancy; again is likely large
+                    '''discrepancy < -max_discrepancy; is also likely large
                     insertion with respect to reference, but not too large:
                     EC #2 never begins before EC #1 on the reference.
                     Again, merge ECs.
@@ -801,8 +805,8 @@ class BowtieOutputThread(threading.Thread):
                             DP filling.
            min_seq_similarity: if the difference in length between an unmapped
                                region framed by two ECs and its corresponding 
-                               reference is <= max_discrepancy AND the score of 
-                               Needleman-Wunsch alignment is >= 
+                               gap in the reference is <= max_discrepancy AND
+                               the score of global alignment is >= 
                                min_seq_similarity *
                                (length of unmapped region), the unmapped region
                                is incorporated into a single EC spanning the
@@ -816,11 +820,11 @@ class BowtieOutputThread(threading.Thread):
                                      position of intron when computing genome
                                      partitions it is in.
            substitution_matrix: 6 x 6 substitution matrix (numpy object or list
-                                of lists) for scoring Needleman-Wunsch filling
-                                and framing alignments; rows and columns
-                                correspond to ACGTN-, where N is aNy and - is
-                                a gap. Default: +1 for match, -2 for gap, -1
-                                for everything else.
+                                of lists) for scoring filling and framing
+                                alignments; rows and columns correspond to 
+                                ACGTN-, where N is aNy and - is a gap.
+                                Default: +1 for match, -2 for gap, -1 for
+                                everything else.
            report_multiplier: if verbose is True, the line number of an
                               alignment written to stderr increases 
                               exponentially with base report_multiplier.
@@ -1158,8 +1162,8 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                         DP filling.
        min_seq_similarity: if the difference in length between an unmapped
                            region framed by two ECs and its corresponding 
-                           reference is <= max_discrepancy AND the score of 
-                           Needleman-Wunsch alignment is >= min_seq_similarity
+                           gap in the reference is <= max_discrepancy AND the
+                           score of global alignment is >= min_seq_similarity
                            * (length of unmapped region), the unmapped region
                            is incorporated into a single EC spanning the
                            two original ECs via DP filling. See 
@@ -1174,9 +1178,9 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                                  position of intron when computing genome
                                  partitions it is in.
        substitution_matrix: 6 x 6 substitution matrix (numpy object or list
-                            of lists) for scoring Needleman-Wunsch filling
-                            and framing alignments; rows and columns correspond
-                            to ACGTN-, where N is aNy and - is a gap. Default:
+                            of lists) for scoring filling and framing
+                            alignments; rows and columns correspond to ACGTN-,
+                            where N is aNy and - is a gap. Default:
                             +1 for match, -2 for gap, -1 for everything else.
        report_multiplier: if verbose is True, the line number of an alignment,
                           read, or first readlet of a read written to
@@ -1289,8 +1293,9 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
         'time=%0.3f secs' % (input_line_count, output_line_count,
                                 time.time()-start_time)
 
+# "Main"
 if not args.test:
-    temp_dir_path=tempfile.mkdtemp()
+    temp_dir_path = tempfile.mkdtemp()
     if args.verbose:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path
@@ -1322,6 +1327,8 @@ else:
     del sys.argv[1:] # Don't choke on extra command-line parameters
     import random
     import unittest
+    import tempfile
+    import shutil
 
     def random_sequence(seq_size):
         """Gets random sequence of nucleotides.
@@ -1423,7 +1430,7 @@ else:
 
     class TestUnmappedRegionSplits(unittest.TestCase):
         """Tests unmapped_region_splits(); needs no fixture."""
-        def test_random_exact_case_1000x(self):
+        def test_1000_random_exact_cases(self):
             """Fails if proper split of unmapped region is not identified.
 
                Test is run on 1000 random instances.
@@ -1442,5 +1449,221 @@ else:
                                             right_reference_seq
                                         )
                                     )
+    
+    class TestExonsAndIntronsFromRead(unittest.TestCase):
+        """Tests exons_and_introns_from_read()."""
+        def setUp(self):
+            """Creates temporary directory and reference fasta.
+            """
+            reference_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
+                            'GCTACATAGTACATCTAGGCATACTACGTgaCATACGgaCTACGTAA' \
+                            'GTCCAGATTACGATACAAaTACGAAcTCccATAGCAaCATaCTAGac' \
+                            'CAttAaaGACTAGACTAACAGACAaAACTAGCATacGATCATGACaA' \
+                            'ACGAGATCCATATAtTTAGCAaGACTAaACGATACGATACAGTACaA' \
+                            'ATACAGaaATCAGaGCAGAAaATACAGATCAaAGCTAGCAaAAtAtA'
+            self.temp_dir_path = tempfile.mkdtemp()
+            fasta_file, _ = fasta.writeIndexedFasta(
+                                        'chr1', reference_seq, 
+                                        perline=50, 
+                                        directory=self.temp_dir_path
+                                    )
+            self.fasta_object = fasta.fasta(fasta_file)
+
+        def test_DP_framing_1(self):
+            """Fails if splice junction is not accurate.
+
+               While this test is passed, it _didn't have to be_; DP framing
+               could have yielded more than one possible optimal jump, and the
+               jump chosen by the algo may not have been right.
+
+               Takes read to be concatenation of first and third lines of 
+               reference_seq from setUp(); the intron should be identified as
+               the second line of reference_seq.
+            """
+            '''Each line of read_seq below and reference_seq above spans
+            47 bases.'''
+            read_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
+                       'GTCCAGATTACGATACAAaTACGAAcTCccATAGCAaCATaCTAGac'
+            # Fake mapping each line of read to respective line of reference
+            readlets = [('chr1', False, 1, 48, 0),
+                          ('chr1', False, 95, 142, 47)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 1, 48),
+                                ('chr1', False, 95, 142)], exons)
+            self.assertEquals([('chr1', False, 48, 95, 47, 47)], introns)
+            '''Now try truncating readlets so there is an unmapped region of
+            the read. This tests the DP framing code in context.'''
+            readlets = [('chr1', False, 1, 42, 0),
+                          ('chr1', False, 100, 142, 52)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 1, 48),
+                                ('chr1', False, 95, 142)], exons)
+            self.assertEquals([('chr1', False, 48, 95, 47, 47)], introns)
+            # Truncate readlets again to test DP framing.
+            readlets = [('chr1', False, 1, 37, 0),
+                          ('chr1', False, 105, 142, 57)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 1, 48),
+                                ('chr1', False, 95, 142)], exons)
+            self.assertEquals([('chr1', False, 48, 95, 47, 47)], introns)
+
+        def test_reverse_strand_DP_framing_1(self):
+            """Fails if splice junction is not accurate.
+
+               While this test is passed, it _didn't have to be_; DP framing
+               could have yielded more than one possible optimal jump, and the
+               jump chosen by the algo may not have been right.
+
+               Takes read to be REVERSE COMPLEMENT of concatenation of first
+               and third lines of reference_seq from setUp(); the intron should
+               be identified as the second line of reference_seq.
+
+               This test is identical to test_DP_framing_1(), only alignments
+               are to reverse strand and read_seq is reverse-complemented.
+            """
+            '''Each line of read_seq below and reference_seq above spans
+            47 bases.'''
+            read_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
+                       'GTCCAGATTACGATACAAaTACGAAcTCccATAGCAaCATaCTAGac'
+            '''Reverse-complement read_seq above and make reverse_strand True
+            for all faked alignments below.'''
+            read_seq = read_seq[::-1].translate(
+                                        string.maketrans('ATCG', 'TAGC')
+                                      )
+            # Fake mapping each line of read to respective line of reference
+            readlets = [('chr1', True, 1, 48, 0),
+                          ('chr1', True, 95, 142, 47)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', True, 1, 48),
+                                ('chr1', True, 95, 142)], exons)
+            self.assertEquals([('chr1', True, 48, 95, 47, 47)], introns)
+            '''Now try truncating readlets so there is an unmapped region of
+            the read. This tests the DP framing code in context.'''
+            readlets = [('chr1', True, 1, 42, 0),
+                          ('chr1', True, 100, 142, 52)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', True, 1, 48),
+                                ('chr1', True, 95, 142)], exons)
+            self.assertEquals([('chr1', True, 48, 95, 47, 47)], introns)
+            # Truncate readlets again to test DP framing.
+            readlets = [('chr1', True, 1, 37, 0),
+                          ('chr1', True, 105, 142, 57)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', True, 1, 48),
+                                ('chr1', True, 95, 142)], exons)
+            self.assertEquals([('chr1', True, 48, 95, 47, 47)], introns)
+
+        def test_DP_framing_2(self):
+            """Fails if splice junction is not accurate.
+
+               While this test is passed, it _didn't have to be_; DP framing
+               could have yielded more than one possible optimal jump, and the
+               jump chosen by the algo may not have been right.
+
+               Takes read to be concatenation of second and fourth lines of 
+               reference_seq from setUp(); the intron should be identified as
+               the second line of reference_seq.
+            """
+            '''Each line of read_seq below and reference_seq above spans
+            47 bases.'''
+            read_seq = 'GCTACATAGTACATCTAGGCATACTACGTgaCATACGgaCTACGTAA' \
+                       'CAttAaaGACTAGACTAACAGACAaAACTAGCATacGATCATGACaA'
+            # Fake mapping each line of read to respective line of reference
+            readlets = [('chr1', False, 48, 95, 0),
+                          ('chr1', False, 142, 189, 47)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 48, 95),
+                                ('chr1', False, 142, 189)], exons)
+            self.assertEquals([('chr1', False, 95, 142, 47, 47)], introns)
+            '''Now try truncating readlets so there is an unmapped region of
+            the read. This tests the DP framing code in context.'''
+            readlets = [('chr1', False, 48, 90, 0),
+                          ('chr1', False, 147, 189, 52)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 48, 95),
+                                ('chr1', False, 142, 189)], exons)
+            self.assertEquals([('chr1', False, 95, 142, 47, 47)], introns)
+            # Truncate readlets again to test DP framing.
+            readlets = [('chr1', False, 48, 87, 0),
+                          ('chr1', False, 150, 189, 55)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 48, 95),
+                                ('chr1', False, 142, 189)], exons)
+            self.assertEquals([('chr1', False, 95, 142, 47, 47)], introns)
+
+        def test_DP_filling_between_ECs(self):
+            """Fails if unmapped region between two ECs is not filled.
+
+               Takes read to be fifth line of reference_seq, with a few bases
+               in the middle unmapped a priori.
+            """
+            # Second line of read_seq below was unmapped and should get filled
+            read_seq = 'ACGAGATCCATATAtTTAGC' \
+                       'AaGACTA' \
+                       'aACGATACGATACAGTACaA'
+            readlets = [('chr1', False, 189, 209, 0),
+                          ('chr1', False, 216, 236, 27)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 189, 236)], exons)
+            self.assertEquals([], introns)
+
+        def test_DP_filling_before_first_EC_and_after_last_EC(self):
+            """Fails if unmapped region before the first EC of a read is not
+               filled.
+
+               Here, the read has exactly one EC, so it's the first one and the
+               last one on the read. Read is taken to be the sixth line of
+               reference_seq.
+            """
+            # Second line of read_seq below is the only EC identified at first
+            read_seq = 'ATACAGaaAT' \
+                       'CAGaGCAGAAaATACAGATCA' \
+                       'aAGCTAGCAaAAtAtA'
+            readlets = [('chr1', False, 247, 268, 10)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 237, 284)], exons)
+            self.assertEquals([], introns)
+
+        def test_that_strange_mapping_is_thrown_out(self):
+            """Fails if any exons or introns are returned.
+
+               Here, the read_seq is taken to be some random sequence, and
+               EC #2 occurs BEFORE EC #1 on the read. (That is, displacements
+               on read give different ordering of ECs than positions on
+               reference.)
+            """
+            read_seq = random_sequence(60)
+            readlets = [('chr1', False, 200, 220, 10),
+                           ('chr1', False, 160, 180, 35)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([], exons)
+            self.assertEquals([], introns)
+
+        def tearDown(self):
+            shutil.rmtree(self.temp_dir_path)
     
     unittest.main()

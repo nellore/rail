@@ -32,14 +32,17 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-def writeIndexedFasta(name, seq, perline=50):
+def writeIndexedFasta(name, seq, perline=50, directory=None):
     """ Given a sequence name and a sequence, write it to a FASTA file with
         accompanying index file (per samtools faidx).  Return the filenames of
         the two files written.  Does not handle multiple sequences per FASTA
         file """
     import os
-    import tempfile
-    d = tempfile.mkdtemp()
+    if directory is not None:
+        import tempfile
+        d = tempfile.mkdtemp()
+    else:
+        d = directory
     fafn, faidxfn = os.path.join(d, 'seq.fa'), os.path.join(d, 'seq.fa.fai')
     fafh, faidxfh = open(fafn, 'wb'), open(faidxfn, 'wb')
     fafh.write(">%s\n" % name)
