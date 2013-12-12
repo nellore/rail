@@ -16,7 +16,7 @@ def two_plus_two()
     return 2 + 2
 
 -Use double quotes for docstrings.
--The first line of a docstring is a short, indexable description. An optional paragraph or more that follow provide a more detailed description. Next are descriptions of all arguments and the return value. If there is no return value, write No return value.
+-The first line of a function's docstring is a short, indexable description. An optional paragraph or more that follow provide a more detailed description. Next are descriptions of all arguments and the return value. If there is no return value, write No return value.
 
 Example (from align.py):
 def composed_and_sorted_readlets(readlets, min_strand_readlets=1):
@@ -64,3 +64,7 @@ def composed_and_sorted_readlets(readlets, min_strand_readlets=1):
     -If a function has a return value, call the function what it returns (like exons_and_introns_from_read() in align.py).
     -If a function has no return value, call the function what it does (like write_reads() in align.py).
 -CamelCase class names, and use underscores to set off words in function/method and variable names.
+-Unit tests: see align.py to infer conventions.
+    -Class names say which unit is being tested (like TestExonsAndIntronsFromRead.)
+    -Method names say what feature of the unit is being tested; they may be numbered (like test_DP_framing_1())
+    -The first line of a method's docstring explains when the test fails.
