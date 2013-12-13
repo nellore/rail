@@ -5,9 +5,10 @@ Rail-RNA-align
 Follows Rail-RNA-preprocess
 Precedes Rail-RNA-intron / Rail-RNA-normalize_pre
 
-Alignment script for MapReduce pipelines that wraps Bowtie. Obtains exonic 
-chunks and introns by dividing each RNA-seq read into several overlapping 
-segments, or readlets, aligning the readlets, and -- very roughly
+Alignment script for MapReduce pipelines that wraps Bowtie. Obtains a set of
+of exonic chunks by aligning entire reads with Bowtie. Then obtains more exonic 
+chunks as well as introns by dividing each RNA-seq read into several
+overlapping segments, or readlets, aligning the readlets, and -- very roughly
 -- inferring splice junctions between successive readlets that align 
 noncontiguously.
 
@@ -109,7 +110,7 @@ parser.add_argument('--faidx', type=str, required=False,
 parser.add_argument('--max-intron-length', type=int, required=False,
     default=1000000, 
     help='Filters out all potential introns longer than this length')
-parser.add_argument('--min-readlet-size', type=int, required=False, default=5, 
+parser.add_argument('--min-readlet-size', type=int, required=False, default=8, 
     help='Capping readlets (that is, readlets that terminate '
          'at a given end of the read) are never smaller than this value')
 parser.add_argument('--max-readlet-size', type=int, required=False, default=25, 
@@ -160,7 +161,7 @@ parser.add_argument('--max-discrepancy', type=int, required=False,
          'incorporation into a single EC spanning the two original ECs via '
          'DP filling')
 parser.add_argument('--min-seq-similarity', type=float, required=False,
-    default=0.5, 
+    default=0.85, 
     help='If the difference in length between an unmapped region framed by'
          'two ECs and its corresponding gap in the reference is <= the '
          'command-line option --max-discrepancy AND the score of global '
@@ -197,7 +198,7 @@ input_line_count = 0
 output_line_count = 0
 
 def write_reads(output_stream, input_stream=sys.stdin, readletize=False, 
-         min_readlet_size=5, max_readlet_size=25, readlet_interval=5, 
+         min_readlet_size=8, max_readlet_size=25, readlet_interval=5, 
          capping_fraction=.75, verbose=False, report_multiplier=1.2):
     """Writes input reads/readlets in tab-separated format parsable by Bowtie.
 
@@ -275,10 +276,10 @@ def write_reads(output_stream, input_stream=sys.stdin, readletize=False,
                             '%s;%d;%d;%s' % (tokens[0], j, 
                                             seq_size - j - max_readlet_size,
                                             tokens[1]),
-                            '\t%s\t%s' % (tokens[1][j:j + readlet_interval],
-                                            tokens[2][j:j + readlet_interval])
-                            ] for j in range(readlet_interval, seq_size, 
-                                                seq_size - readlet_interval)]
+                            '\t%s\t%s' % (tokens[1][j:j + max_readlet_size],
+                                            tokens[2][j:j + max_readlet_size])
+                            ] for j in range(readlet_interval, 
+                                seq_size - max_readlet_size, readlet_interval)]
             # Add total number of readlets to each string
             readlet_count = len(to_write)
             readlet_count_string = ';' + str(readlet_count)
@@ -487,7 +488,7 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
 
 def exons_and_introns_from_read(fasta_object, read_seq, readlets, 
     min_intron_size=5, min_strand_readlets=1, max_discrepancy=2, 
-    min_seq_similarity=0.5, substitution_matrix=needlemanWunsch.matchCost()):
+    min_seq_similarity=0.85, substitution_matrix=needlemanWunsch.matchCost()):
     """Composes a given read's aligned readlets and returns ECs and introns.
 
        fasta_object: object of class fasta.fasta corresponding to 
@@ -569,6 +570,8 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
             current_read_seq = read_seq
         read_seq_size = len(read_seq)
         last_pos, last_end_pos, last_displacement = composed[strand][0]
+        unmapped_displacement = last_displacement + last_end_pos \
+                - last_pos
         if last_displacement:
             '''If last_displacement isn't 0, check if region to the left should
             be filled.'''
@@ -582,22 +585,32 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                 last_pos -= last_displacement
                 last_displacement = 0
         for pos, end_pos, displacement in composed[strand][1:]:
-            if last_displacement >= displacement:
+            if last_displacement >= displacement or \
+                last_displacement + last_end_pos - last_pos \
+                    >= displacement + end_pos - pos:
                 '''Example cases handled:
-                The 5' end of EC #1 isn't to the left of the 5' end of EC #2
-                along the read:
+                The 5' or 3' end of EC #1 isn't to the left of the 5'  or 3'
+                end of EC #2 along the read:
+
+                        5'                                       3'
                                              EC #1
-                Read      |--------------===================
+                Read      |--------------=================
                                         ===================-----|
                                               EC #2
+
+                                             EC #1
+                Read      |----------=======================
+                                        ===================-----|
+                                              EC #2
+
+
                 Read      |-----=============------=============|
                                     EC #2              EC #1
-                This situation is pathological. Throw out the entire read by
+
+                These situations are pathological. Throw out the entire read by
                 returning empty exon and intron lists.'''
                 return [], []
             reference_distance = pos - last_end_pos
-            unmapped_displacement = last_displacement + last_end_pos \
-                - last_pos
             read_distance = displacement - unmapped_displacement
             discrepancy = reference_distance - read_distance
             call_exon, call_intron = False, False
@@ -622,6 +635,7 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                     before EC #1 on the reference allows. This is likely an 
                     insertion in the read with respect to the reference, and
                     the ECs are still merged.'''
+                    unmapped_displacement = end_pos - pos + displacement
                     last_end_pos = end_pos
                 else:
                     '''pos - last_end_pos >= min_intron_size
@@ -644,10 +658,10 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                     Reference ...==============---------------========...
                                      EC #1         intron       EC #2
                     UMR = unmapped region.
-                    The displacement of EC #2 is to the right of the
-                    displacement of EC #1, and there is an unmapped read region
-                    between them. Extend the unmapped region by one nucleotide
-                    on either side; splice junctions will have to be
+                    The displacement of EC #2's left end is to the right of the
+                    displacement of EC #1's right end, and there is an unmapped
+                    read region between them. Extend the unmapped region by one
+                    nucleotide on either side; splice junctions will have to be
                     determined more precisely. See past if-else.'''
                     last_end_pos -= 1
                     pos += 1
@@ -662,17 +676,17 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                                                 ========================|
                     Reference    ...=============------------------=======...
                                         EC #1          intron       EC #2
-                    The displacement of EC #2 is to the left of the 
-                    displacement of EC #1; at least a pair of readlets, one 
-                    from each EC, overlaps on the read. Call the overlap + 
-                    one nucleotide on either side the unmapped region; 
-                    splice junctions will have to be determined more precisely.
-                    See past if-else.'''
-                    last_end_pos -= -read_distance + 1
-                    pos += -read_distance + 1
-                    unmapped_displacement -= -read_distance + 1
-                    displacement += -read_distance + 1
-                    read_distance += -read_distance + 2
+                    The displacement of EC #2's left end is to the left of the 
+                    displacement of EC #1's right end; at least a pair of
+                    readlets, one from each EC, overlaps on the read. Call the
+                    overlap + one nucleotide on either side the unmapped
+                    region; splice junctions will have to be determined more
+                    precisely. See past if-else.'''
+                    unmapped_displacement, displacement = \
+                        displacement - 1, unmapped_displacement + 1
+                    read_distance = -read_distance + 2
+                    last_end_pos -= read_distance - 1
+                    pos += read_distance - 1
                 # Now decide whether to DP fill or DP frame
                 if abs(discrepancy) <= max_discrepancy:
                     # DP Fill
@@ -688,6 +702,7 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                         last_displacement and last_pos should remain the same
                         on next iteration, but last_end_pos must change; two
                         ECs are merged.'''
+                        unmapped_displacement = end_pos - pos + displacement
                         last_end_pos = end_pos
                     else:
                         '''If the unmapped region should not be filled, ignore
@@ -713,7 +728,6 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                     pos += split - read_distance
                     displacement += split - read_distance
                     last_end_pos += split
-                    unmapped_displacement += split
                     call_exon, call_intron = True, True
                 else: 
                     '''discrepancy < -max_discrepancy; is also likely large
@@ -729,6 +743,7 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                                            EC #1  gap     EC #2
                     UMR = unmapped region.
                     '''
+                    unmapped_displacement = end_pos - pos + displacement
                     last_end_pos = end_pos
             if call_intron:
                 # Call the reference region between the two ECs an intron.
@@ -738,12 +753,12 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                 '''Push ONLY the first EC to the exon list. (The next EC
                 may get merged into another EC on another iteration.)'''
                 exons.append((rname, reverse_strand, last_pos, last_end_pos))
+                unmapped_displacement = end_pos - pos + displacement
                 (last_pos, last_end_pos, last_displacement) = \
                     (pos, end_pos, displacement)
         '''Final exonic chunk must still be called since it won't get merged 
         with any other chunks. Check to see if region to right of chunk needs 
         filling first.'''
-        unmapped_displacement = last_displacement + last_end_pos - last_pos
         unmapped_base_count = read_seq_size - unmapped_displacement
         if unmapped_displacement != read_seq_size:
             if needlemanWunsch.needlemanWunsch(
@@ -765,7 +780,7 @@ class BowtieOutputThread(threading.Thread):
         write_unmapped=True, unmapped_stream=open(os.devnull, 'w'),
         output_stream=sys.stdout, exon_differentials=True,
         exon_intervals=False, verbose=False, bin_size=10000, min_intron_size=5,
-        min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.5,
+        min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
         max_intron_size=100000, intron_partition_overlap=20,
         substitution_matrix=needlemanWunsch.matchCost(), 
         report_multiplier=1.2):
@@ -863,8 +878,19 @@ class BowtieOutputThread(threading.Thread):
                 # Skip header line
                 if line[0] == '@': continue
                 # Variable abbreviations below mirror SAM spec
+                tokens = line.rstrip().split('\t')
                 (qname, flag, rname, pos, mapq, cigar, rnext,
-                    pnext, tlen, seq, qual) = line.rstrip().split('\t')[:11]
+                    pnext, tlen, seq, qual, ) = tokens[:11]
+                '''Find XM:i field, which is 1 if read had several valid
+                alignments, but all were suppressed because bowtie -m 1 was
+                invoked. See Bowtie documentation.'''
+                multimapped = False
+                for field in tokens[::-1]:
+                    if field[:5] == 'XM:i:' and int(field[5:]) == 1 \
+                        and flag == 4:
+                        # If -m ceiling of 1 is saturated and read is unmapped
+                        multimapped = True
+                        break
                 flag = int(flag)
                 pos = int(pos)
                 if self.verbose and next_report_line == i:
@@ -908,7 +934,9 @@ class BowtieOutputThread(threading.Thread):
                                     % (partition_id, reverse_strand_string,
                                         pos, end_pos, sample_label)
                                 output_line_count += 1
-                elif self.write_unmapped:
+                elif self.write_unmapped and not multimapped:
+                    '''Write only reads with no possible alignments to
+                    unmapped_stream.'''
                     print >>self.unmapped_stream, '%s\t%s\t%s' % (qname, 
                         seq, qual)
         else:
@@ -1060,9 +1088,9 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
     temp_dir_path=tempfile.mkdtemp(), archive=None, bin_size=10000, 
     verbose=False, read_filename='reads.tsv', readlet_filename='readlets.tsv',
     unmapped_filename='unmapped.tsv', exon_differentials=True,
-    exon_intervals=False, min_readlet_size=5, max_readlet_size=25, 
+    exon_intervals=False, min_readlet_size=8, max_readlet_size=25, 
     readlet_interval=5, capping_fraction=.75, min_strand_readlets=1, 
-    max_discrepancy=2, min_seq_similarity=0.5, min_intron_size=5,
+    max_discrepancy=2, min_seq_similarity=0.85, min_intron_size=5,
     max_intron_size=100000, intron_partition_overlap=20, 
     substitution_matrix=needlemanWunsch.matchCost(), report_multiplier=1.2):
     """Runs Rail-RNA-align.
@@ -1513,6 +1541,53 @@ else:
                                 ('chr1', False, 95, 142)], exons)
             self.assertEquals([('chr1', False, 48, 95, 47, 47)], introns)
 
+        def test_DP_framing_from_overlapping_ECs(self):
+            """Fails if splice junction is not accurate.
+
+               While this test is passed, it _didn't have to be_; DP framing
+               could have yielded more than one possible optimal jump, and the
+               jump chosen by the algo may not have been right.
+
+               Takes read to be concatenation of first and third lines of 
+               reference_seq from setUp(); the intron should be identified as
+               the second line of reference_seq. Exonic intervals are taken to
+               overlap slightly on the read to see if
+               exon_and_introns_from_read()'s remapping for overlapping ECs
+               works.
+            """
+            '''Each line of read_seq below and reference_seq above spans
+            47 bases.'''
+            read_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
+                       'GTCCAGATTACGATACAAaTACGAAcTCccATAGCAaCATaCTAGac'
+            # Fake mapping each line of read to respective line of reference
+            readlets = [('chr1', False, 1, 52, 0),
+                          ('chr1', False, 91, 142, 43)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 1, 48),
+                                ('chr1', False, 95, 142)], exons)
+            self.assertEquals([('chr1', False, 48, 95, 47, 47)], introns)
+            '''Now try truncating readlets so there is an unmapped region of
+            the read. This tests the DP framing code in context.'''
+            readlets = [('chr1', False, 1, 42, 0),
+                          ('chr1', False, 100, 142, 52)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 1, 48),
+                                ('chr1', False, 95, 142)], exons)
+            self.assertEquals([('chr1', False, 48, 95, 47, 47)], introns)
+            # Truncate readlets again to test DP framing.
+            readlets = [('chr1', False, 1, 37, 0),
+                          ('chr1', False, 105, 142, 57)]
+            exons, introns = exons_and_introns_from_read(
+                                self.fasta_object, read_seq, readlets
+                            )
+            self.assertEquals([('chr1', False, 1, 48),
+                                ('chr1', False, 95, 142)], exons)
+            self.assertEquals([('chr1', False, 48, 95, 47, 47)], introns)
+
         def test_reverse_strand_DP_framing_1(self):
             """Fails if splice junction is not accurate.
 
@@ -1664,6 +1739,198 @@ else:
             self.assertEquals([], introns)
 
         def tearDown(self):
+            # Kill temporary directory
             shutil.rmtree(self.temp_dir_path)
     
+    class TestWriteReads(unittest.TestCase):
+        """Tests write_reads()."""
+        def setUp(self):
+            '''input_reads has 5-, 6-, and 3-token examples, each on a
+            different line. Every read has 100 bases.'''
+            input_reads = \
+                'r1;LB:holder' \
+                    '\tTTACATACCATACAGTGCGCTAGCGGGTGACAGATATAATGCAGATCCAT' \
+                      'ACAGACCAGATGGCAGACATGTGTTGCAGSCTGCAAGTGCAACGCGGTGA' \
+                    '\tFFB<9889340///29==:766234466666340///29==:76623446' \
+                      '744442<<9889<888@?FFFFFFFFFFFFDB<4444340///29==:76' \
+                    '\tGACCAGAGGTGCACCAAATGACAGTGCGCCACAGATGGCGCATGCAGTGG' \
+                      'CCAGAAACGTGCGACCGATGACAGGTGCACAATGCCGCTGACGACGTGAA' \
+                    '\t444744442<<9889<8880///29==:766230///29==:766230//' \
+                      '<9889340///29==:766234466666340///<9889340///29==:\n' \
+                'r2/1;LB:holder' \
+                    '\tGCAGAGTGCCGCAATGACGTGCGCCAAAGCGGTGACAGGGTGACAGTGAA' \
+                      'CCAAGTGACAAGTGAACAGGTGCCAGAGTGACCGAGTGACCAGTGGACCA' \
+                    '\t442<<9889<8880///29==:766230//442<<9889<8880///29=' \
+                      '44442<<9889<8880///29==:76623044442<<9889<8880///2' \
+                '\tr2/2;LB:holder' \
+                    '\tCAGAGTGCCGCAATGACGTGCGCCAAAGCGGACAAAGCACCATGACAAGT' \
+                      'ACACAGGTGACAGTGACAAGACAGAGGTGACACAGAGAAAGtGGGTGTGA' \
+                    '\t<<9889<8880///29==:766230//442<<<<9889<8880///29==' \
+                      '44442<<9889<8880///29==:766230///2944442<<9889<888\n' \
+                'r3;LB:holder' \
+                    '\tATCGATTAAGCTATAACAGATAACATAGACATTGCGCCCATAATAGATAA' \
+                      'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC' \
+                    '\tFFFFFFFFFFFFDB<4444340///29==:766234466666777689<3' \
+                      '44=<<;444744442<<9889<888@?FFFFFFFFFFFFDB<4444340/\n'
+            self.temp_dir_path = tempfile.mkdtemp()
+            self.input_file = os.path.join(self.temp_dir_path,
+                                'sample_input.tsv')
+            # Store reads in temporary file
+            with open(self.input_file, 'w') as reads_stream:
+                reads_stream.write(input_reads)
+            # For storing output of write_reads()
+            self.output_file = os.path.join(self.temp_dir_path,
+                                'sample_output.tsv')
+
+        def test_unreadletized_output(self):
+            """Fails if output of write_reads() is not in the right form."""
+            with open(self.input_file) as input_stream:
+                with open(self.output_file, 'w') as output_stream:
+                    write_reads(output_stream, input_stream=input_stream,
+                                    readletize=False)
+
+            # Verify output
+            with open(self.output_file) as processed_stream:
+                first_read_from_pair = \
+                    processed_stream.readline().rstrip().split('\t')
+                second_read_from_pair = \
+                    processed_stream.readline().rstrip().split('\t')
+                self.assertEquals(
+                    [
+                        'r1;LB:holder;1',
+                        'TTACATACCATACAGTGCGCTAGCGGGTGACAGATATAATGCAGATCCAT'
+                        'ACAGACCAGATGGCAGACATGTGTTGCAGSCTGCAAGTGCAACGCGGTGA',
+                        'FFB<9889340///29==:766234466666340///29==:76623446'
+                        '744442<<9889<888@?FFFFFFFFFFFFDB<4444340///29==:76'
+                    ],
+                    first_read_from_pair
+                )
+                self.assertEquals(
+                    [
+                        'r1;LB:holder;2',
+                        'GACCAGAGGTGCACCAAATGACAGTGCGCCACAGATGGCGCATGCAGTGG'
+                        'CCAGAAACGTGCGACCGATGACAGGTGCACAATGCCGCTGACGACGTGAA',
+                        '444744442<<9889<8880///29==:766230///29==:766230//'
+                        '<9889340///29==:766234466666340///<9889340///29==:'
+                    ],
+                    second_read_from_pair
+                )
+                first_read_from_pair = \
+                    processed_stream.readline().rstrip().split('\t')
+                second_read_from_pair = \
+                    processed_stream.readline().rstrip().split('\t')
+                self.assertEquals(
+                    [
+                        'r2/1;LB:holder;1',
+                        'GCAGAGTGCCGCAATGACGTGCGCCAAAGCGGTGACAGGGTGACAGTGAA'
+                        'CCAAGTGACAAGTGAACAGGTGCCAGAGTGACCGAGTGACCAGTGGACCA',
+                        '442<<9889<8880///29==:766230//442<<9889<8880///29='
+                        '44442<<9889<8880///29==:76623044442<<9889<8880///2'
+                    ],
+                    first_read_from_pair
+                )
+                self.assertEquals(
+                    [
+                        'r2/2;LB:holder;2',
+                        'CAGAGTGCCGCAATGACGTGCGCCAAAGCGGACAAAGCACCATGACAAGT'
+                        'ACACAGGTGACAGTGACAAGACAGAGGTGACACAGAGAAAGtGGGTGTGA',
+                        '<<9889<8880///29==:766230//442<<<<9889<8880///29=='
+                        '44442<<9889<8880///29==:766230///2944442<<9889<888'
+                    ],
+                    second_read_from_pair
+                )
+                self.assertEquals(
+                    [
+                        'r3;LB:holder;0',
+                        'ATCGATTAAGCTATAACAGATAACATAGACATTGCGCCCATAATAGATAA'
+                        'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC',
+                        'FFFFFFFFFFFFDB<4444340///29==:766234466666777689<3'
+                        '44=<<;444744442<<9889<888@?FFFFFFFFFFFFDB<4444340/'
+                    ],
+                    processed_stream.readline().rstrip().split('\t')
+                )
+
+        def test_readletized_output(self):
+            """Fails if output of write_reads() is not in the right form."""
+            with open(self.input_file) as input_stream:
+                '''Read only three-token input line because write_reads()
+                takes only three-token input when readletizing.'''
+                input_stream.readline() # Kill 5-token input
+                input_stream.readline() # Kill 6-token input
+                with open(self.output_file, 'w') as output_stream:
+                    write_reads(output_stream, input_stream=input_stream,
+                                    readletize=True, capping_fraction=0.5,
+                                    min_readlet_size=25, readlet_interval=5,
+                                    max_readlet_size=50)
+
+            collected_readlets = []
+            with open(self.output_file) as processed_stream:
+                for readlet in processed_stream:
+                    collected_readlets.append(readlet.rstrip().split('\t'))
+            '''r1 of input_reads spans 100 bases, and from the arguments passed
+            to write_reads() above, noncapping readlets should span 50. The
+            capping fraction should arrange for one readlet spanning 25 bases
+            on either end of a given read. There should be 13 readlets in
+            total. Spot-check some readlets.'''
+            # Capping readlets
+            self.assertTrue([
+                                    'r3;LB:holder;0;50;'
+                                    'ATCGATTAAGCTATAACAGATAACA'
+                                    'TAGACATTGCGCCCATAATAGATAA'
+                                    'CTGACACCTGACCAGTGCCAGATGA'
+                                    'CCAGTGCCAGATGGACGACAGTAGC;'
+                                    '13',
+                                    'ATCGATTAAGCTATAACAGATAACA'
+                                    'TAGACATTGCGCCCATAATAGATAA',
+                                    'FFFFFFFFFFFFDB<4444340///'
+                                    '29==:766234466666777689<3'
+                                ] in collected_readlets
+                            )
+            self.assertTrue([
+                                    'r3;LB:holder;75;0;'
+                                    'ATCGATTAAGCTATAACAGATAACA'
+                                    'TAGACATTGCGCCCATAATAGATAA'
+                                    'CTGACACCTGACCAGTGCCAGATGA'
+                                    'CCAGTGCCAGATGGACGACAGTAGC;'
+                                    '13',
+                                    'CCAGTGCCAGATGGACGACAGTAGC',
+                                    '@?FFFFFFFFFFFFDB<4444340/'
+                                ] in collected_readlets
+                            )
+            # Noncapping readlets
+            self.assertTrue([
+                                    'r3;LB:holder;5;45;'
+                                    'ATCGATTAAGCTATAACAGATAACA'
+                                    'TAGACATTGCGCCCATAATAGATAA'
+                                    'CTGACACCTGACCAGTGCCAGATGA'
+                                    'CCAGTGCCAGATGGACGACAGTAGC;'
+                                    '13',
+                                    'TTAAGCTATAACAGATAACA'
+                                    'TAGACATTGCGCCCATAATAGATAA'
+                                    'CTGAC',
+                                    'FFFFFFFDB<4444340///'
+                                    '29==:766234466666777689<3'
+                                    '44=<<'
+                                ] in collected_readlets
+                            )
+            self.assertTrue([
+                                    'r3;LB:holder;40;10;'
+                                    'ATCGATTAAGCTATAACAGATAACA'
+                                    'TAGACATTGCGCCCATAATAGATAA'
+                                    'CTGACACCTGACCAGTGCCAGATGA'
+                                    'CCAGTGCCAGATGGACGACAGTAGC;'
+                                    '13',
+                                    'TAATAGATAA'
+                                    'CTGACACCTGACCAGTGCCAGATGA'
+                                    'CCAGTGCCAGATGGA',
+                                    '66777689<3'
+                                    '44=<<;444744442<<9889<888'
+                                    '@?FFFFFFFFFFFFD'
+                                ] in collected_readlets
+                            )
+
+        def tearDown(self):
+            # Kill temporary directory
+            shutil.rmtree(self.temp_dir_path)
+
     unittest.main()
