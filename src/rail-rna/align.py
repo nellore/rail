@@ -177,7 +177,7 @@ parser.add_argument('--archive', metavar="PATH", type=str,
 partition.addArgs(parser)
 bowtie.addArgs(parser)
 
-# Collect the Bowtie arguments
+# Collect Bowtie arguments, supplied in command line after the -- token
 argv = sys.argv
 bowtie_args = ''
 in_args = False
@@ -245,6 +245,8 @@ def write_reads(output_stream, input_stream=sys.stdin, readletize=False,
         while cap_size >= min_readlet_size:
             cap_sizes.append(cap_size)
             cap_size = int(cap_size*capping_fraction)
+            if cap_size == cap_sizes[-1]:
+              cap_size -= 1
         for i, line in enumerate(input_stream):
             tokens = line.rstrip().split('\t')
             '''len(tokens) must = 3; write_reads() is called only by 
@@ -1365,10 +1367,7 @@ else:
 
            Return value: string of random nucleotides.
         """
-        to_return = ""
-        for el in xrange(seq_size):
-            to_return += random.choice('ATCG')
-        return to_return
+        return ''.join([random.choice('ATCG') for _ in xrange(seq_size)])
 
     class TestComposedAndSortedReadlets(unittest.TestCase):
         """Tests composed_and_sorted_readlets(); needs no fixture."""
