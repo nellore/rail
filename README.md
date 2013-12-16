@@ -38,6 +38,64 @@ Repository layout
 * `package`: Scripts for packaging up the tool and reference archives
 * `tools`: Scripts for building some helpful tools
 
+Rail-RNA
+========
+
+Summarizing RNA-seq data
+------------------------
+
+Keeping intermediate and final results as small as possible is a prime goal of
+scalable software.  When intermediate results are large, a disproportionate
+amount of effort is spent transferring and aggregating data mid-computation.
+When final results are large, the user uses too much disk space, memory and
+time to view, analyze and interact with the results.  Rail-RNA implements some
+novel ideas regarding how to summarize large collections of RNA sequencing
+data into concise, queryable data objects with the goal of maximizing
+scalability and usability.
+
+RNA sequencing data users might be concerned with questions such as:
+1. What is the level of expression for each gene in each sample?
+2. What splice junctions are used?
+3. What isoforms are present?
+4. In what abundance is each isoform present?
+5. What does the data tell us about DNA sequence variation in the
+   subject genomes?
+
+These differ in what *aspect* of the input data is being examined. (1) is
+concerned with how many alignments overlap certain genes, whereas (5) is
+concerned with the nucleotide content of the sequencing reads. The questions
+also differ in the degree to which the data is summarized.  For instance, (a)
+is concerned only with summarized gene-level measurements, while (d) is
+concerned with specific isoform-level measurements.
+
+Rail-RNA uses a tiered strategy for handling queries over large collections of
+RNA sequencing datasets while minimizing the data that must be preserved to
+answer queries.  We categorize queries as belonging to tiers 1, 2 or 3
+according to the required input data.  Tier-1 queries are concerned with (a)
+nucleotide content of the sequence reads, and (b) how the reads align to the
+genome (perhaps in a spliced fashion).  To answer a tier-1 query, we must
+preserve information about the input reads and how they align to the genome,
+e.g. in a spliced BAM file as output by TopHat.  Query (e) above is a tier-1
+query.
+
+Tier-2 queries are concerned with (a) depth of coverage within exons, and (b)
+the number of times each observed splicing event occurs, including information
+about how often combinations of splicing events co-occur.  For tier-2 queries,
+we can avoid storing information about individual reads or alignments.
+Rather, the data required to answer tier-2 queries could be summarized with,
+e.g. a small bigBed file summarizing exon coverage, together with a sparse
+tensor (equivalently: a weighted, ordered hypergraph) summarizing frequencies
+and co-occurrences of splicing events.  Queries (b), (c) and (d) are tier-2
+queries, and we expect that many other typical queries are also in tier 2.  We
+expect, for instance, that all of the most relevant analyses performed by
+tools such as Cufflinks and RSEM are in this tier.
+
+Tier-3 queries require less information still; these are concerned only with
+depth of coverage within exons.  This is generally sufficient for analyses
+that are concerned with gene expression levels and differential gene
+expression such as query (a) above.  Analyses performed by tools such as DEseq
+and Myrna are in this tier.
+
 TODO list
 ---------
 
