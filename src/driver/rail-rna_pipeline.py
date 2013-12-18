@@ -64,7 +64,8 @@ class AlignStep(pipeline.Step):
                 --refseq=%%REF_FASTA%% 
                 --faidx=%%REF_FASTA_INDEX%% 
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
-                --bowtie-exe=%%BOWTIE%% 
+                --bowtie-exe=%%BOWTIE%%
+                --sam-output-file=/Users/anellore/mysam.sam
                 --max-readlet-size %d 
                 --readlet-interval %d 
                 --partition-len %d 
