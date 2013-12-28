@@ -65,13 +65,13 @@ class AlignStep(pipeline.Step):
                 --faidx=%%REF_FASTA_INDEX%% 
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --bowtie-exe=%%BOWTIE%%
-                --sam-output-file=/Users/anellore/mysam.sam
+                --sam-output-file=%s/spliced_alignments.sam
                 --max-readlet-size %d 
                 --readlet-interval %d 
                 --partition-len %d 
                 --exon-differentials 
                 --verbose 
-                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
+                -- %s""" % (gconf.out, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
         mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(AlignStep, self).__init__(\
             inps,
@@ -100,8 +100,8 @@ class IntronStep(pipeline.Step):
         super(IntronStep, self).__init__(\
             inps,
             output,  # output URL
-            name="Intron", # name
-            aggr=pipeline.Aggregation(None, 8, 1, 2), # 8 tasks per reducer
+            name="Intron",  # name
+            aggr=pipeline.Aggregation(None, 8, 1, 2),  # 8 tasks per reducer
             reducer=reducerStr,
             multipleOutput=True)
 
@@ -168,7 +168,7 @@ class NormalizePostStep(pipeline.Step):
         reducerStr = """
             python %%BASE%%/src/rail-rna/normalize_post.py 
                 --out=%s/normalize 
-                --manifest=%%MANIFEST%%""" % (gconf.out)
+                --manifest=%%MANIFEST%%""" % gconf.out
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(NormalizePostStep, self).__init__(\
             inps,

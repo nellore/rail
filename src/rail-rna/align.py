@@ -90,12 +90,14 @@ site.addsitedir(os.path.join(base_path, "sample"))
 site.addsitedir(os.path.join(base_path, "alignment"))
 site.addsitedir(os.path.join(base_path, "fasta"))
 site.addsitedir(os.path.join(base_path, "interval"))
+site.addsitedir(os.path.join(base_path, "util"))
 
 import bowtie
 import sample
 import needlemanWunsch
 import fasta
 import partition
+from path import mkdir_quiet
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -1426,6 +1428,7 @@ if not args.test:
             substitution_matrix=needlemanWunsch.matchCost(),
             report_multiplier=args.report_multiplier)
     else:
+        mkdir_quiet(os.path.dirname(args.sam_output_file))
         with open(args.sam_output_file, 'w') as sam_stream:
             go(args.refseq, bowtie_exe=args.bowtie_exe,
                 bowtie_index_base=args.bowtie_idx,
@@ -1457,7 +1460,6 @@ else:
     del sys.argv[1:] # Don't choke on extra command-line parameters
     import random
     import unittest
-    import tempfile
     import shutil
 
     def random_sequence(seq_size):
