@@ -66,13 +66,12 @@ class AlignStep(pipeline.Step):
                 --faidx=%%REF_FASTA_INDEX%% 
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --bowtie-exe=%%BOWTIE%%
-                --sam-output-file=%s/spliced_alignments.sam
                 --max-readlet-size %d 
                 --readlet-interval %d 
                 --partition-length %d 
                 --exon-differentials 
                 --verbose 
-                -- %s""" % (gconf.out, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
+                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
         mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(AlignStep, self).__init__(\
             inps,
