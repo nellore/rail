@@ -10,9 +10,9 @@ that are used to run elastic-mapreduce.
 
   Preprocess
       |
-    Align
-  /             \
-Merge          Intron
+    Align---------------
+  /        \             \
+Merge       Splice-sam    Intron
  |
 Walk-prenorm
  |
@@ -342,7 +342,7 @@ if useInput and inp is None:
 
 pipelineSteps = {
     'preprocess'   : ['preprocess'],
-    'align'        : ['align'],
+    'align'        : ['align', 'splice_sam'],
     'junction'     : ['intron'],
     'coverage'     : ['normalize_pre', 'normalize', 'normalize_post'],
     'differential' : ['walk_fit', 'ebayes', 'hmm_params', 'hmm', 'aggr_path'] }
@@ -350,17 +350,18 @@ pipelineSteps = {
 allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
 
 stepInfo = {\
-    'preprocess'     : ([                                 ], rail_rna_pipeline.PreprocessingStep),
-    'align'          : ([('preprocess',     ''           )], rail_rna_pipeline.AlignStep),
-    'intron'         : ([('align',          '/intron'    )], rail_rna_pipeline.IntronStep),
-    'normalize_pre'  : ([('align',          '/exon_diff' )], rail_rna_pipeline.NormalizePreStep),
-    'normalize'      : ([('normalize_pre',  '/o'         )], rail_rna_pipeline.NormalizeStep),
-    'normalize_post' : ([('normalize',      ''           )], rail_rna_pipeline.NormalizePostStep),
-    'walk_fit'       : ([('normalize_post', ''           )], rail_rna_pipeline.WalkFitStep),
-    'ebayes'         : ([('walk_fit',       ''           )], rail_rna_pipeline.EbayesStep),
-    'hmm_params'     : ([('ebayes',         ''           )], rail_rna_pipeline.HmmParamsStep),
-    'hmm'            : ([('hmm_params',     ''           )], rail_rna_pipeline.HmmStep),
-    'aggr_path'      : ([('hmm',            ''           )], rail_rna_pipeline.AggrPathStep) }
+    'preprocess'     : ([                                  ], rail_rna_pipeline.PreprocessingStep),
+    'align'          : ([('preprocess',     ''            )], rail_rna_pipeline.AlignStep),
+    'splice_sam'     : ([('align',          '/splice_sam' )], rail_rna_pipeline.SpliceSamStep),
+    'intron'         : ([('align',          '/intron'     )], rail_rna_pipeline.IntronStep),
+    'normalize_pre'  : ([('align',          '/exon_diff'  )], rail_rna_pipeline.NormalizePreStep),
+    'normalize'      : ([('normalize_pre',  '/o'          )], rail_rna_pipeline.NormalizeStep),
+    'normalize_post' : ([('normalize',      ''            )], rail_rna_pipeline.NormalizePostStep),
+    'walk_fit'       : ([('normalize_post', ''            )], rail_rna_pipeline.WalkFitStep),
+    'ebayes'         : ([('walk_fit',       ''            )], rail_rna_pipeline.EbayesStep),
+    'hmm_params'     : ([('ebayes',         ''            )], rail_rna_pipeline.HmmParamsStep),
+    'hmm'            : ([('hmm_params',     ''            )], rail_rna_pipeline.HmmStep),
+    'aggr_path'      : ([('hmm',            ''            )], rail_rna_pipeline.AggrPathStep) }
 
 # 'normalize_post' sends pushes normalization-factor .tsv to out/normalization_factors.tsv
 # 'normalize' sends per-sample coverage bigBed to out

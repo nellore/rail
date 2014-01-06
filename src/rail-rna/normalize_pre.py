@@ -66,8 +66,8 @@ def go():
         if toks[0] == 'DUMMY':
             continue
         assert len(toks) == 4, "Bad input line:\n" + ln
-        pt, lab, off, diff = toks[0], toks[1], int(toks[2]), int(toks[3])
-        refid, _, _ = partition.parse(pt, binsz)
+        pt, lab, off, diff = toks[0], toks[1], int(toks[2])-1, int(toks[3])
+        refid, _, _ = partition.parse(pt[:-1], binsz)
         newChunk = pt != last_pt or lab != last_lab
         if newChunk: cnt = 0
         newOff = newChunk or off != last_off

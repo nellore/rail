@@ -26,8 +26,10 @@ def binSize(args):
 def partition(refid, st, en, binSize, fudge=0):
     ''' Assign the interval refid:[st, en) to one or more partitions
         based on partition bin size and the interval's start and end
-        positions. '''
-    binid_st = int((st - fudge) / binSize)
+        positions. The interval is
+        (optionally) extended on both ends by some fudge factor before
+        overlapping.'''
+    binid_st = int((st - fudge ) / binSize)
     binid_en = int((en + fudge - 1) / binSize)
     return [ (";".join([refid, str(i)]), i * binSize, (i+1) * binSize) for i in xrange(binid_st, binid_en+1) ]
 
@@ -56,7 +58,7 @@ def parse(st, binSz):
         raise RuntimeError("Expected two tokens separated by ;, got %d: '%s'" % (len(toks), st))
     refid, i = toks[0], int(toks[1])
     b = i * binSz
-    return refid, b, b + binSz
+    return refid, b+1, b + binSz+1
 
 if __name__ == '__main__':
     import unittest

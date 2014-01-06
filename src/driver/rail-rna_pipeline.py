@@ -12,9 +12,10 @@ base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "util"))
 
 import url
+import version
 
 #
-# Note: All the %%(somthing)%% placeholders below are substituted in a
+# Note: All the %%(something)%% placeholders below are substituted in a
 # mode-dependent manner.  That is, a different string could be substituted
 # depending on whether we're in local, hadoop or emr mode.  This module tries
 # to stay as mode-agnostic as possible.
@@ -65,13 +66,16 @@ class AlignStep(pipeline.Step):
                 --faidx=%%REF_FASTA_INDEX%% 
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --bowtie-exe=%%BOWTIE%%
-                --sam-output-file=/Users/anellore/mysam.sam
+<<<<<<< HEAD
+=======
+                --sam-output-file=%s/spliced_alignments.sam
+>>>>>>> 16a47b2c11275defdad7e2e531674e087ae94707
                 --max-readlet-size %d 
                 --readlet-interval %d 
-                --partition-len %d 
+                --partition-length %d 
                 --exon-differentials 
                 --verbose 
-                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
+                -- %s""" % (gconf.out, tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
         mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(AlignStep, self).__init__(\
             inps,
@@ -79,6 +83,22 @@ class AlignStep(pipeline.Step):
             name="Align",
             mapper=mapperStr,
             multipleOutput=True)
+
+class SpliceSamStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/splice_sam.py
+                --out=%s/splice_sam
+                --refseq=%%REF_FASTA%%
+                --verbose
+            """ % gconf.out
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(SpliceSamStep, self).__init__(\
+            inps,
+            output,
+            name="SpliceSam",
+            aggr=pipeline.Aggregation(1, None, 0, 0),
+            reducer=reducerStr)
 
 class IntronStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
@@ -91,7 +111,7 @@ class IntronStep(pipeline.Step):
                 --per-site
                 --readletLen %d
                 --readletIval %d
-                --partition-len %d
+                --partition-length %d
                 %s
         """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
                tconf.readletLen, tconf.readletIval, tconf.partitionLen,
@@ -100,8 +120,8 @@ class IntronStep(pipeline.Step):
         super(IntronStep, self).__init__(\
             inps,
             output,  # output URL
-            name="Intron", # name
-            aggr=pipeline.Aggregation(None, 8, 1, 2), # 8 tasks per reducer
+            name="Intron",  # name
+            aggr=pipeline.Aggregation(None, 8, 1, 2),  # 8 tasks per reducer
             reducer=reducerStr,
             multipleOutput=True)
 
@@ -168,7 +188,7 @@ class NormalizePostStep(pipeline.Step):
         reducerStr = """
             python %%BASE%%/src/rail-rna/normalize_post.py 
                 --out=%s/normalize 
-                --manifest=%%MANIFEST%%""" % (gconf.out)
+                --manifest=%%MANIFEST%%""" % gconf.out
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(NormalizePostStep, self).__init__(\
             inps,

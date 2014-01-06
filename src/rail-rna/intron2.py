@@ -80,6 +80,72 @@ parser.add_argument(\
     '--stranded', action='store_const', const=True, default=False,
     help='Assume input reads come from the sense strand')
 
+import scipy as sp
+from scipy import spatial
+
+def intron_medoids_in_partition(introns_in_partition):
+    # Find overlapping introns
+    introns_in_partition.sort(
+            key=lambda intron: intron[0]
+        )
+    print >> sys.stderr, introns_in_partition
+    print >> sys.stderr, 'hellos'
+    overlap_end_pos = introns_in_partition[0][1]
+    group_start_indices = []
+    for i, (pos, end_pos) in \
+        enumerate(introns_in_partition):
+        if pos < overlap_end_pos:
+            # Count in group of overlapped introns
+            if end_pos > overlap_end_pos:
+                overlap_end_pos = end_pos
+        else:
+            # Start new group of overlapped introns
+            group_start_indices.append(i)
+            overlap_end_pos = end_pos
+    intron_medoids = []
+    for new_group_start_index in group_start_indices[:-1]:
+        medoid_index = sp.argmin(
+            [sum(distances_to_intron) for distances_to_intron in \
+                sp.spatial.distance.squareform(
+                    sp.spatial.distance.pdist(
+                        introns_in_partition[:new_group_start_index]
+                    )
+                )
+            ]
+        )
+        intron_medoids.append(
+            introns_in_partition[:new_group_start_index][medoid_index]
+        )
+    medoid_index = sp.argmin(
+        [sum(distances_to_intron) for distances_to_intron in \
+            sp.spatial.distance.squareform(
+                sp.spatial.distance.pdist(
+                    introns_in_partition[group_start_indices[-1]:]
+                )
+            )
+        ]
+    )
+    intron_medoids.append(
+        introns_in_partition[group_start_indices[-1]:][medoid_index]
+    )
+    return intron_medoids
+
+def go2(input_stream=sys.stdin, output_stream=sys.stdout):
+    introns_in_partition = []
+    for line in input_stream:
+        (strand_and_partition, sample_label, intron_pos, intron_end_pos, 
+            intron_five_prime_displacement,
+            intron_three_prime_displacement) = line.rstrip().split('\t')
+        if 'last_strand_and_partition' in locals() \
+            and strand_and_partition != last_strand_and_partition:
+            intron_medoids = intron_medoids_in_partition(
+                                introns_in_partition
+                             )
+            print >>sys.stderr, intron_medoids
+            introns_in_partition = []
+        introns_in_partition.append((intron_pos, intron_end_pos))
+        last_strand_and_partition = strand_and_partition
+
 readlet.addArgs(parser)
 partition.addArgs(parser)
 
@@ -162,7 +228,7 @@ def go(ifh, ofh, verbose=False, refseq=None):
             if args.per_span:
                 for intron in introns:
                     _, _, l, rdid = intron
-                    ofh.write("span\t%s\t%s\t%012d\t%d\t%s\t%s\t%s\n" % (rdid, last_refid, st, en+2, motifl, motifr, l))
+                    ofh.write("span\t%s\t%012d\t%d\t%s\t%s\t%s\n" % (last_refid, st, en+2, motifl, motifr, l))
             if args.per_site:
                 d = defaultdict(int)
                 for l in lab: d[l] += 1
@@ -174,8 +240,8 @@ def go(ifh, ofh, verbose=False, refseq=None):
         toks = ln.rstrip().split('\t')
         print >> sys.stderr,toks
         assert len(toks) >= 5
-        pt, st, en, lab, rdid = \
-            toks[0], int(toks[1]), int(toks[2]), toks[3], toks[4]
+        pt, lab, st, en = \
+            toks[0], toks[1], int(toks[2]), int(toks[3])
         assert en > st
         refid, pt_st, pt_en = partition.parse(pt[:-1], binsz)
         strand = pt[-1]
@@ -184,7 +250,7 @@ def go(ifh, ofh, verbose=False, refseq=None):
 
         if last_pt != pt and last_pt != '\t':
             handlePartition()
-            starts, ends, labs, rdids = [], [], [], []
+            starts, ends, labs = [], [], []
             mat = {}
 
         i, j = en - st, st
@@ -193,7 +259,6 @@ def go(ifh, ofh, verbose=False, refseq=None):
         starts.append(st)
         ends.append(en)
         labs.append(lab)
-        rdids.append(rdid)
         last_pt, last_strand, last_refid = pt, strand, refid
         last_pt_st, last_pt_en = pt_st, pt_en
         ninp += 1
@@ -205,6 +270,7 @@ def go(ifh, ofh, verbose=False, refseq=None):
 
 if not args.test:
     go(sys.stdin, sys.stdout, args.verbose, args.refseq)
+    #go2()
 else:
     del sys.argv[1:]
     import unittest

@@ -1,0 +1,14 @@
+Contains files for evaluating the accuracy of different aligners.
+
+Before running, edit the 'chromosomes' and 'chr_lengths' arrays at the 
+beginning of either read_alignments.py (for coverage) or read_junctions.py 
+(for junctions) to match the reference genome used.
+
+To compare the coverage vectors from an aligner, run
+  ./comp_coverage.py actual predicted
+where 'actual' and 'predicted' are either SAM or BED alignment files.
+
+To compare junctions, run
+  ./comp_junctions.py actual predicted
+where 'actual' and 'predicted' are either SAM or BED alignment files 
+or a GTF file containing transcript and exon information.
