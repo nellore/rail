@@ -10,6 +10,7 @@ from collections import defaultdict
 import numpy
 import os
 import site
+import sys
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for subdir in [ 'fasta' ]: site.addsitedir(os.path.join(base_path, subdir))
@@ -69,6 +70,10 @@ class SiteSelector(object):
         assert maxst >= minst and maxen >= minen, "%d >= %d, %d >= %d" % (maxst, minst, maxen, minen)
         stseq = self.fastafh.fetch_sequence(refid, minst+1, maxst+1)
         enseq = self.fastafh.fetch_sequence(refid, minen+1, maxen+1)
+        print >>sys.stderr, 'seqs'
+        print >>sys.stderr, stseq
+        print >>sys.stderr, enseq
+        print >>sys.stderr, '/seqs'
         sites = [ p for p in scanExactSpliceMotifs(stseq, enseq, self.lmotifmap, self.rmotifmap) ]
         # Calculate a mean and standard deviation for the intronic chunk
         # starts and ends

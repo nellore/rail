@@ -97,7 +97,6 @@ import sample
 import needlemanWunsch
 import fasta
 import partition
-from path import mkdir_quiet
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -109,9 +108,6 @@ parser.add_argument('--refseq', type=str, required=False,
 # To be implemented; for now, index is always fasta filename + .fai
 parser.add_argument('--faidx', type=str, required=False, 
     help='Fasta index file')
-parser.add_argument('--max-intron-length', type=int, required=False,
-    default=1000000, 
-    help='Filters out all potential introns longer than this length')
 parser.add_argument('--min-readlet-size', type=int, required=False, default=8, 
     help='Capping readlets (that is, readlets that terminate '
          'at a given end of the read) are never smaller than this value')
@@ -152,7 +148,7 @@ parser.add_argument('--min-intron-size', type=int, required=False,
     default=5,
     help='Filters introns of length smaller than this value')
 parser.add_argument('--max-intron-size', type=int, required=False,
-    default=100000, 
+    default=1000000, 
     help='Filters introns of length greater than this value')
 parser.add_argument('--min-strand-readlets', type=int, required=False,
     default=1, 

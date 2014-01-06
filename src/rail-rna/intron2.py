@@ -238,7 +238,6 @@ def go(ifh, ofh, verbose=False, refseq=None):
     for ln in ifh:
         # Parse next read
         toks = ln.rstrip().split('\t')
-        print >> sys.stderr,toks
         assert len(toks) >= 5
         pt, lab, st, en = \
             toks[0], toks[1], int(toks[2]), int(toks[3])

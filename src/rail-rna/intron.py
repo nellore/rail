@@ -36,12 +36,13 @@ import sys
 import re
 import itertools
 import argparse
-import site
+from collections import defaultdict
 import numpy as np
+import site
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for directory_name in ['fasta', 'interval']:
-    site.addsitedir(os.path.join(base_path, directory_name)
+    site.addsitedir(os.path.join(base_path, directory_name))
 
 import partition
 import fasta
@@ -76,6 +77,15 @@ parser.add_argument(\
     '--per-span', action='store_const', const=True, default=False,
     help='Output one record for every instance where a read '
          'spans a splice site')
+parser.add_argument(\
+    '--output-bed', action='store_const', const=True, default=False,
+    help='Output BED lines denoting splice junctions analogous to '
+         'TopHat\'s junctions.bed')
+
+# Add command-line arguments for dependency
+partition.addArgs(parser)
+
+args = parser.parse_args(sys.argv[1:])
 
 # Initialize lists of donor/acceptor motifs in order of descending priority
 _forward_strand_motifs = [('GT', 'AG'), ('GC', 'AG'), ('AT', 'AC')]
@@ -152,18 +162,19 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                     into the current cluster.'''
                     intron_cluster.append((intron_size, an_end_position))
                     clustered_introns.add((intron_size, an_end_position))
-            if start_position <= min([an_end_position 
-                    for _, an_end_position in intron_cluster]) < end_position:
+            if partition_start <= min([an_end_position 
+                for _, an_end_position in intron_cluster]) \
+                < partition_end:
                 '''Add a cluster iff its leftmost element lies in
                 [start_position, end_position)'''
                 intron_clusters.append(intron_cluster)
             else:
                 filtered_cluster_count += 1
-            assert len(clustered_introns) <= candidate_intron_counts
+            assert len(clustered_introns) <= candidate_intron_count
             if len(clustered_introns) == candidate_intron_count:
                 if verbose:
-                    print >> sys.stderr, '%d possible splice junctions '
-                        'were clustered down to %d; then %d clusters were ' 
+                    print >> sys.stderr, '%d possible splice junction(s) ' \
+                        'clustered down to %d; then %d cluster(s) ' \
                         'filtered out.' % (candidate_intron_count, 
                             total_cluster_count, filtered_cluster_count)
                 # Collect reads supporting cluster
@@ -172,7 +183,7 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                     reads_for_intron_cluster = []
                     for an_intron_size, an_end_position in intron_cluster:
                         a_start_position = an_end_position - an_intron_size
-                        intron_cluster_reads.append((a_start_position, 
+                        reads_for_intron_cluster.append((a_start_position, 
                             an_end_position) \
                             + candidate_introns[(a_start_position,
                                                     an_end_position)])
@@ -244,65 +255,76 @@ def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
             for a cluster.
 
         Return value: List of tuples representing possible final introns in
-            order of ascending rank. Each tuple is of the form
+            order of descending rank. Each tuple is of the form
             (start position, end position, summed z-score,
                 left motif, right motif). Example: [(142451, 143128, 2.8324,
                     'GT', 'AG'), (142449, 143128, 3.1124, 'GC', 'AG')].
     """
-        start_positions, end_positions, _, _, _ = zip(*intron_cluster)
-        reference_length = fasta_object.length(rname)
-        min_start_position = min(start_positions)
-        max_start_position = min(max(start_positions) + 2, reference_length)
-        min_end_position = min(min(end_positions) - 2, 1)
-        max_end_position = max(end_positions)
-        left_sequence = fasta_object.fetch_sequence(rname, min_start_position,
-            max_start_position - 1).upper()
-        right_sequence = fasta_object.fetch_sequence(rname, min_end_position,
-            max_end_position - 1).upper()
-        assert max_end_position >= min_end_position and \
-            max_start_position >= max_end_position
-        # For computing z-scores
-        mean_start_position = np.mean(start_positions)
-        mean_end_position = np.mean(end_positions)
-        # Maxes below avoid future ZeroDivisionError exceptions
-        stdev_start_position = max(np.stdev(start_positions), 1e-6)
-        stdev_end_position = max(np.stdev(end_positions), 1e-6)
-        # Initialize list for storing ranked intron start/end positions
-        ranked_introns = []
-        for motif in motifs:
-            z_scores_and_positions = []
-            '''Use regex lookahead to identify possibly overlapping motifs.
-            Each *_offset record offset from beginning of left_sequence or
-            right_sequence.'''
-            left_motif_offsets = [a_match.start() for a_match in 
-                                    re.finditer(r'(?=(%s))' % motif[0],
-                                                    left_sequence)]
-            right_motif_offsets = [a_match.start() for a_match in 
-                                    re.finditer(r'(?=(%s))' % motif[1],
-                                                    right_sequence)]
-            '''Find all possible combinations of left and right offsets for a
-            given motif (pair).'''
-            motif_pairs = \
-                itertools.product(*[left_motif_offsets, right_motif_offsets])
-            for left_motif_offset, right_motif_offset in motif_pairs:
-                left_motif_start_position = min_start_position \
-                    + left_motif_offset
-                right_motif_end_position = min_end_position \
-                    + right_motif_offset + 2
-                z_score_sum = abs(left_motif_start_position 
-                    - mean_start_position) / float(stdev_start_position) \
-                    + abs(right_motif_end_position - mean_end_position) / \
-                    float(stdev_end_position)
-                z_scores_and_positions.append((left_motif_start_position,
-                                                right_motif_end_position,
-                                                z_score_sum))
-            z_scores_and_positions.sort(lambda _, _, z_score_sum: z_score_sum)
-            ranked_introns += (z_scores_and_positions + motif)
-        if len(ranked_introns) == 0 and verbose:
-            print >>sys.stderr, \
-                'Warning: Cluster with %d candidate introns ' \
-                'had no splice site' % len(intron_cluster)
-        return ranked_introns
+    start_positions, end_positions, _, _, _ = zip(*intron_cluster)
+    reference_length = fasta_object.length(rname)
+    min_start_position = min(start_positions)
+    max_start_position = min(max(start_positions) + 2, reference_length)
+    min_end_position = max(min(end_positions) - 2, 1)
+    max_end_position = max(end_positions)
+    left_sequence = fasta_object.fetch_sequence(rname, min_start_position,
+        max_start_position - 1).upper()
+    right_sequence = fasta_object.fetch_sequence(rname, min_end_position,
+        max_end_position - 1).upper()
+    print >>sys.stderr, left_sequence
+    print >>sys.stderr, right_sequence
+    assert max_end_position >= min_end_position and \
+        max_start_position >= min_start_position
+    # For computing z-scores
+    mean_start_position = np.mean(start_positions)
+    mean_end_position = np.mean(end_positions)
+    # Maxes below avoid future ZeroDivisionError exceptions
+    stdev_start_position = max(np.std(start_positions), 1e-6)
+    stdev_end_position = max(np.std(end_positions), 1e-6)
+    # Initialize list for storing ranked intron start/end positions
+    ranked_introns = []
+    for motif in motifs:
+        positions_and_z_scores = []
+        '''Use regex lookahead to identify possibly overlapping motifs.
+        Each *_offset record offset from beginning of left_sequence or
+        right_sequence.'''
+        left_motif_offsets = [a_match.start() for a_match in 
+                                re.finditer(r'(?=(%s))' % motif[0],
+                                                left_sequence)]
+        right_motif_offsets = [a_match.start() for a_match in 
+                                re.finditer(r'(?=(%s))' % motif[1],
+                                                right_sequence)]
+        print >>sys.stderr, 'offsets'
+        print >>sys.stderr, left_motif_offsets
+        print >>sys.stderr, right_motif_offsets
+        print >>sys.stderr, '/offsets'
+        '''Find all possible combinations of left and right offsets for a
+        given motif (pair).'''
+        motif_pairs = \
+            itertools.product(*[left_motif_offsets, right_motif_offsets])
+        for left_motif_offset, right_motif_offset in motif_pairs:
+            left_motif_start_position = min_start_position \
+                + left_motif_offset
+            right_motif_end_position = min_end_position \
+                + right_motif_offset + 2
+            z_score_sum = abs(left_motif_start_position 
+                - mean_start_position) / float(stdev_start_position) \
+                + abs(right_motif_end_position - mean_end_position) / \
+                float(stdev_end_position)
+            positions_and_z_scores.append((left_motif_start_position,
+                                            right_motif_end_position,
+                                            z_score_sum))
+        # Sort by z-score sum
+        positions_and_z_scores.sort(
+                key=lambda positions_and_z_score: positions_and_z_score[2]
+            )
+        ranked_introns += [positions_and_z_score + motif 
+                            for positions_and_z_score in 
+                            positions_and_z_scores]
+    if len(ranked_introns) == 0 and verbose:
+        print >>sys.stderr, \
+            'Warning: No splice site found for cluster with ' \
+            '%d candidate introns' % len(intron_cluster)
+    return ranked_introns
 
 def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
     bin_size=10000, cluster_radius=5, per_site=False, per_span=True,
@@ -330,9 +352,10 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                 partition.parse(partition_id[:-1], bin_size)
             reverse_strand_string = partition_id[-1]
             reverse_strand = True if reverse_strand_string == '-' else False
-            assert pos > partition_start - intron_partition_overlap and \
+            assert pos >= partition_start - intron_partition_overlap and \
                 pos < partition_end + intron_partition_overlap, \
-                'Intron start %d is not in partition [%d, %d), partition id=' \
+                'Intron start %d is not in partition [%d, %d)' \
+                ', partition id=%s' \
                 % (pos, partition_start, partition_end, partition_id)
             if last_partition_id is not None and \
                 last_partition_id != partition_id:
@@ -345,34 +368,35 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                 last_partition_start, last_partition_end, 
                 cluster_radius=cluster_radius,
                 verbose=verbose)
-            cluster_splice_sites = []
+            cluster_splice_sites = {}
             if last_reverse_strand:
-                for intron_cluster in intron_clusters:
-                    # Pick top-ranked intron
-                    cluster_splice_sites.append(
-                        ranked_splice_sites_from_cluster(
+                for i, intron_cluster in enumerate(intron_clusters):
+                    ranked_splice_sites = ranked_splice_sites_from_cluster(
                             fasta_object, intron_cluster, last_rname,
                             _reverse_strand_motifs, verbose=verbose
-                        )[0]
-                    )
+                        )
+                    if len(ranked_splice_sites) != 0:
+                        # Pick top-ranked intron
+                        cluster_splice_sites[i] = ranked_splice_sites[0]
             else:
-                for intron_cluster in intron_clusters:
-                    cluster_splice_sites.append(
-                        ranked_splice_sites_from_cluster(
+                for i, intron_cluster in enumerate(intron_clusters):
+                    ranked_splice_sites = ranked_splice_sites_from_cluster(
                             fasta_object, intron_cluster, last_rname,
                             _forward_strand_motifs, verbose=verbose
-                        )[0]
-                    )
+                        )
+                    if len(ranked_splice_sites) != 0:
+                        # Pick top-ranked intron
+                        cluster_splice_sites[i] = ranked_splice_sites[0]
             if per_span:
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif) in enumerate(cluster_splice_sites):
+                    right_motif) in cluster_splice_sites.items():
                     for _, _, sample_label, _, _ in intron_clusters[i]:
                         print >>output_stream, 'span\t%s\t%d\t%d\t%s\t%s\t%s' \
                             % (last_rname, start_position, end_position, 
                                 left_motif, right_motif, sample_label)
             if per_site:
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif) in enumerate(cluster_splice_sites): 
+                    right_motif) in cluster_splice_sites.items(): 
                     sample_label_counts = defaultdict(int)
                     for _, _, sample_label, _, _ in intron_clusters[i]:
                         sample_label_counts[sample_label] += 1
@@ -386,10 +410,10 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                 '''The output bed mimics TopHat's junctions.bed. See TopHat
                 documentation for more information.'''
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif) in enumerate(cluster_splice_sites):
-                    '''Identify longest overhangs on either side of splice
+                    right_motif) in cluster_splice_sites.items():
+                    '''Identify longest read overhangs on either side of splice
                     junction.'''
-                    left_overhang, right_overhang = 0
+                    left_overhang, right_overhang = 0, 0
                     for (candidate_start_position, candidate_end_position,
                             _, five_prime_displacement,
                             three_prime_displacement) in intron_clusters[i]:
@@ -422,7 +446,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
             (last_partition_id, last_partition_start, last_partition_end, 
                 last_rname, last_reverse_strand, last_reverse_strand_string) \
             = (partition_id, partition_start, partition_end, rname, 
-                reverse_strand)
+                reverse_strand, reverse_strand_string)
         else: break
 
 # "Main"

@@ -98,7 +98,7 @@ class SpliceSamStep(pipeline.Step):
 
 class IntronStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
-        reducerStr = """
+        '''reducerStr = """
             python %%BASE%%/src/rail-rna/intron2.py
                 --refseq=%%REF_FASTA%%
                 --cluster-radius=%d
@@ -107,11 +107,24 @@ class IntronStep(pipeline.Step):
                 --per-site
                 --readletLen %d
                 --readletIval %d
+                --verbose
                 --partition-length %d
                 %s
         """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
                tconf.readletLen, tconf.readletIval, tconf.partitionLen,
-               '--stranded' if tconf.stranded else '')
+               '--stranded' if tconf.stranded else '')'''
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/intron.py
+                --refseq=%%REF_FASTA%%
+                --cluster-radius=%d
+                --intron-partition-overlap=%d
+                --per-span
+                --per-site
+                --output-bed
+                --verbose
+                --partition-length %d
+        """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
+                tconf.partitionLen)
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(IntronStep, self).__init__(\
             inps,
