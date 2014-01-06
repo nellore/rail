@@ -89,17 +89,8 @@ import argparse
 import numpy as np
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-<<<<<<< HEAD
 for directory_name in ['bowtie', 'sample', 'alignment', 'fasta', 'interval']:
     site.addsitedir(os.path.join(base_path, directory_name))
-=======
-site.addsitedir(os.path.join(base_path, "bowtie"))
-site.addsitedir(os.path.join(base_path, "sample"))
-site.addsitedir(os.path.join(base_path, "alignment"))
-site.addsitedir(os.path.join(base_path, "fasta"))
-site.addsitedir(os.path.join(base_path, "interval"))
-site.addsitedir(os.path.join(base_path, "util"))
->>>>>>> 16a47b2c11275defdad7e2e531674e087ae94707
 
 import bowtie
 import sample
@@ -1410,7 +1401,6 @@ if not args.test:
     if args.verbose:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path
-<<<<<<< HEAD
     go(args.refseq, bowtie_exe=args.bowtie_exe,
         bowtie_index_base=args.bowtie_idx,
         bowtie_args=bowtie_args, temp_dir_path=temp_dir_path,
@@ -1436,62 +1426,6 @@ if not args.test:
         intron_partition_overlap=args.intron_partition_overlap,
         substitution_matrix=needlemanWunsch.matchCost(),
         report_multiplier=args.report_multiplier)
-=======
-    if args.sam_output_file is None:
-        go(args.refseq, bowtie_exe=args.bowtie_exe,
-            bowtie_index_base=args.bowtie_idx,
-            bowtie_args=bowtie_args, temp_dir_path=temp_dir_path,
-            archive=os.path.join(
-                    args.archive, str(os.getpid())
-                ) if args.archive is not None else None, 
-            verbose=args.verbose, 
-            sam_stream=None,
-            bin_size=args.partition_length,
-            read_filename='reads.tsv', 
-            readlet_filename='readlets.tsv',
-            unmapped_filename='unmapped.tsv', 
-            exon_differentials=args.exon_differentials,
-            exon_intervals=args.exon_intervals,
-            min_readlet_size=args.min_readlet_size, 
-            max_readlet_size=args.max_readlet_size,
-            readlet_interval=args.readlet_interval,
-            capping_fraction=args.capping_fraction, 
-            min_strand_readlets=args.min_strand_readlets,
-            max_discrepancy=args.max_discrepancy,
-            min_seq_similarity=args.min_seq_similarity, 
-            max_intron_size=args.max_intron_size,
-            intron_partition_overlap=args.intron_partition_overlap,
-            substitution_matrix=needlemanWunsch.matchCost(),
-            report_multiplier=args.report_multiplier)
-    else:
-        mkdir_quiet(os.path.dirname(args.sam_output_file))
-        with open(args.sam_output_file, 'w') as sam_stream:
-            go(args.refseq, bowtie_exe=args.bowtie_exe,
-                bowtie_index_base=args.bowtie_idx,
-                bowtie_args=bowtie_args, temp_dir_path=temp_dir_path,
-                archive=os.path.join(
-                        args.archive, str(os.getpid())
-                    ) if args.archive is not None else None, 
-                verbose=args.verbose, 
-                sam_stream=sam_stream,
-                bin_size=args.partition_length,
-                read_filename='reads.tsv', 
-                readlet_filename='readlets.tsv',
-                unmapped_filename='unmapped.tsv', 
-                exon_differentials=args.exon_differentials,
-                exon_intervals=args.exon_intervals,
-                min_readlet_size=args.min_readlet_size, 
-                max_readlet_size=args.max_readlet_size,
-                readlet_interval=args.readlet_interval,
-                capping_fraction=args.capping_fraction, 
-                min_strand_readlets=args.min_strand_readlets,
-                max_discrepancy=args.max_discrepancy,
-                min_seq_similarity=args.min_seq_similarity, 
-                max_intron_size=args.max_intron_size,
-                intron_partition_overlap=args.intron_partition_overlap,
-                substitution_matrix=needlemanWunsch.matchCost(),
-                report_multiplier=args.report_multiplier)
->>>>>>> 16a47b2c11275defdad7e2e531674e087ae94707
 else:
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
