@@ -46,6 +46,37 @@ for directory_name in ['fasta', 'interval']:
 import partition
 import fasta
 
+# Print file's docstring if -h is invoked
+parser = argparse.ArgumentParser(description=__doc__, 
+            formatter_class=argparse.RawDescriptionHelpFormatter)
+parser.add_argument('--test', action='store_const', const=True, default=False,
+    help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
+         'OUTPUT EXONS AND INTRONS TO STDOUT')
+parser.add_argument('--verbose', action='store_const', const=True,
+    default=False,
+    help='Print out extra debugging statements')
+parser.add_argument('--refseq', type=str, required=False, 
+    help='The fasta sequence of the reference genome. The fasta index of the '
+         'reference genome is also required to be built via samtools')
+# To be implemented; for now, index is always fasta filename + .fai
+parser.add_argument('--faidx', type=str, required=False, 
+    help='Fasta index file')
+parser.add_argument(\
+    '--cluster-radius', type=int, required=False, default=10,
+    help='The maximum radius of a cluster of candidate introns for which '
+         'splice sites are called')
+parser.add_argument('--intron-partition-overlap', type=int, required=False,
+    default=20, 
+    help='Amount by which partitions overlap their left and right neighbors')
+parser.add_argument(\
+    '--per-site', action='store_const', const=True, default=False,
+    help='Output one record for every splice site, giving information about '
+         'the number of times a read from each label spans the site')
+parser.add_argument(\
+    '--per-span', action='store_const', const=True, default=False,
+    help='Output one record for every instance where a read '
+         'spans a splice site')
+
 # Initialize lists of donor/acceptor motifs in order of descending priority
 _forward_strand_motifs = [('GT', 'AG'), ('GC', 'AG'), ('AT', 'AC')]
 _reverse_strand_motifs = [('CT', 'AC'), ('CT', 'GC'), ('GT', 'AT')]
@@ -404,8 +435,6 @@ if not args.test:
         output_bed=args.output_bed,
         intron_partition_overlap=args.intron_partition_overlap,
         verbose=args.verbose)
-
-        sys.stdin, sys.stdout, args.verbose, args.refseq)
 else:
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
