@@ -29,6 +29,8 @@ Output (written to stdout)
 ----------------------------
 Tab-delimited columns recording splice sites 
 ....
+
+OUTPUT BED LINES ARE 0-INDEXED
 """
 import os
 import sys
@@ -428,9 +430,10 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                     junction_number += 1
                     '''Print line of bed file; where a first column 'junction'
                     is inserted so it can be distinguished from other types of
-                    output lines.'''
-                    left_pos = start_position - left_overhang
-                    right_pos = end_position + right_overhang
+                    output lines. Subtract 1 from every position to
+                    accommodate how bed is 0-based.'''
+                    left_pos = start_position - left_overhang - 1
+                    right_pos = end_position + right_overhang - 1
                     print >>output_stream, \
                         'junction\t%s\t%d\t%d\tJUNC%08d\t%d\t%s\t%d\t%d\t' \
                         '255,0,0\t2\t%d,%d\t0,%d' \
@@ -438,7 +441,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                             len(intron_clusters[i]),
                             last_reverse_strand_string, left_pos, right_pos,
                             left_overhang, right_overhang, 
-                            end_position - left_pos)
+                            end_position - left_pos - 1)
             candidate_introns = {}
             handle_partition = False
         if line:

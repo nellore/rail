@@ -11,8 +11,8 @@ https://genome.ucsc.edu/FAQ/FAQformat.html#format1 for a detailed description.)
 Input lines mimic the lines of TopHat's junctions.bed; each denotes a different
 intron.
 1. chrom (chromosome name)
-2. chromStart (start position of region)
-3. chromEnd (end position of region)
+2. chromStart (start position of region; 0-BASED)
+3. chromEnd (end position of region; 0-BASED)
 4. name (JUNC[number]; will be renumbered in this script)
 5. score (number of reads supporting this intron)
 6. strand (forward is sense strand=+; reverse is sense strand=-)
