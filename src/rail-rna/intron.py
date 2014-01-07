@@ -262,16 +262,14 @@ def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
     """
     start_positions, end_positions, _, _, _ = zip(*intron_cluster)
     reference_length = fasta_object.length(rname)
-    min_start_position = min(start_positions)
+    min_start_position = max(min(start_positions) - 2, 1)
     max_start_position = min(max(start_positions) + 2, reference_length)
-    min_end_position = max(min(end_positions) - 2, 1)
+    min_end_position = max(min(end_positions) - 4, 1)
     max_end_position = max(end_positions)
     left_sequence = fasta_object.fetch_sequence(rname, min_start_position,
         max_start_position - 1).upper()
     right_sequence = fasta_object.fetch_sequence(rname, min_end_position,
         max_end_position - 1).upper()
-    print >>sys.stderr, left_sequence
-    print >>sys.stderr, right_sequence
     assert max_end_position >= min_end_position and \
         max_start_position >= min_start_position
     # For computing z-scores
@@ -293,10 +291,6 @@ def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
         right_motif_offsets = [a_match.start() for a_match in 
                                 re.finditer(r'(?=(%s))' % motif[1],
                                                 right_sequence)]
-        print >>sys.stderr, 'offsets'
-        print >>sys.stderr, left_motif_offsets
-        print >>sys.stderr, right_motif_offsets
-        print >>sys.stderr, '/offsets'
         '''Find all possible combinations of left and right offsets for a
         given motif (pair).'''
         motif_pairs = \
@@ -350,6 +344,8 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
             assert end_pos > pos
             rname, partition_start, partition_end = \
                 partition.parse(partition_id[:-1], bin_size)
+            print >>sys.stderr, fasta_object.fetch_sequence(rname, pos - 2,
+        end_pos + 2).upper()
             reverse_strand_string = partition_id[-1]
             reverse_strand = True if reverse_strand_string == '-' else False
             assert pos >= partition_start - intron_partition_overlap and \
@@ -364,6 +360,10 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
             # If there's no next line, handle the final partition
             handle_partition = True
         if handle_partition:
+            if verbose:
+                print >> sys.stderr, 'For partition %s:[%d, %d)' \
+                    % (last_partition_id, last_partition_start,
+                        last_partition_end)
             intron_clusters = intron_clusters_in_partition(candidate_introns,
                 last_partition_start, last_partition_end, 
                 cluster_radius=cluster_radius,
@@ -437,7 +437,8 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                         % (last_rname, left_pos, right_pos, junction_number,
                             len(intron_clusters[i]),
                             last_reverse_strand_string, left_pos, right_pos,
-                            left_overhang, right_overhang, end_position)
+                            left_overhang, right_overhang, 
+                            end_position - left_pos)
             candidate_introns = {}
             handle_partition = False
         if line:
