@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Rail-RNA-splice_sam
+Rail-RNA-align_post
 Follows Rail-RNA-align
 TERMINUS: no steps follow.
 
@@ -62,9 +62,6 @@ parser.add_argument(\
     default='spliced_alignments.sam',
     help='Output SAM filename. Ignored if --out is not specified (that is, '
          'if --out is stdout)')
-parser.add_argument(\
-    '--verbose', action='store_const', const=True, default=False,
-    help='Prints out extra debugging statements')
 
 filemover.addArgs(parser)
 args = parser.parse_args()
@@ -117,5 +114,5 @@ if args.out is not None:
         mover.put(output_filename, output_url.plus(args.sam_filename))
         os.remove(output_filename)
 
-print >>sys.stderr, 'DONE with splice_sam.py; in = %d; time=%0.3f s' \
+print >>sys.stderr, 'DONE with align_post.py; in = %d; time=%0.3f s' \
                         % (input_line_count, time.time() - start_time)

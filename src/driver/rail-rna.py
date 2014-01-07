@@ -12,9 +12,9 @@ that are used to run elastic-mapreduce.
       |
     Align---------------
   /        \             \
-Merge       Splice-sam    Intron
- |
-Walk-prenorm
+Merge       Align-post    Intron
+ |                          |
+Walk-prenorm              Intron-post
  |
 Normalize
  |
@@ -342,8 +342,8 @@ if useInput and inp is None:
 
 pipelineSteps = {
     'preprocess'   : ['preprocess'],
-    'align'        : ['align', 'splice_sam'],
-    'junction'     : ['intron'],
+    'align'        : ['align', 'align_post'],
+    'junction'     : ['intron', 'intron_post'],
     'coverage'     : ['normalize_pre', 'normalize', 'normalize_post'],
     'differential' : ['walk_fit', 'ebayes', 'hmm_params', 'hmm', 'aggr_path'] }
 
@@ -352,8 +352,9 @@ allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
 stepInfo = {\
     'preprocess'     : ([                                  ], rail_rna_pipeline.PreprocessingStep),
     'align'          : ([('preprocess',     ''            )], rail_rna_pipeline.AlignStep),
-    'splice_sam'     : ([('align',          '/splice_sam' )], rail_rna_pipeline.SpliceSamStep),
+    'align_post'     : ([('align',          '/splice_sam' )], rail_rna_pipeline.AlignPostStep),
     'intron'         : ([('align',          '/intron'     )], rail_rna_pipeline.IntronStep),
+    'intron_post'    : ([('intron',         '/junction'   )], rail_rna_pipeline.IntronPostStep),
     'normalize_pre'  : ([('align',          '/exon_diff'  )], rail_rna_pipeline.NormalizePreStep),
     'normalize'      : ([('normalize_pre',  '/o'          )], rail_rna_pipeline.NormalizeStep),
     'normalize_post' : ([('normalize',      ''            )], rail_rna_pipeline.NormalizePostStep),

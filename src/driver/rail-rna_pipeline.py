@@ -80,20 +80,19 @@ class AlignStep(pipeline.Step):
             mapper=mapperStr,
             multipleOutput=True)
 
-class SpliceSamStep(pipeline.Step):
+class AlignPostStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rail-rna/splice_sam.py
-                --out=%s/splice_sam
+            python %%BASE%%/src/rail-rna/align_post.py
+                --out=%s/spliced_alignments
                 --refseq=%%REF_FASTA%%
-                --verbose
             """ % gconf.out
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
-        super(SpliceSamStep, self).__init__(\
+        super(AlignPostStep, self).__init__(\
             inps,
             output,
-            name="SpliceSam",
-            aggr=pipeline.Aggregation(1, None, 0, 0),
+            name="AlignPost",
+            aggr=pipeline.Aggregation(1, None, 0, 1),
             reducer=reducerStr)
 
 class IntronStep(pipeline.Step):
@@ -133,6 +132,20 @@ class IntronStep(pipeline.Step):
             aggr=pipeline.Aggregation(None, 8, 1, 2),  # 8 tasks per reducer
             reducer=reducerStr,
             multipleOutput=True)
+
+class IntronPostStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/intron_post.py
+                --out=%s/junctions
+            """ % gconf.out
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(IntronPostStep, self).__init__(\
+            inps,
+            output,
+            name="IntronPost",
+            aggr=pipeline.Aggregation(1, None, 0, 1),
+            reducer=reducerStr)
 
 class MergeStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
