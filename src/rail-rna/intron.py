@@ -9,11 +9,19 @@ spliced alignments output by Rail-RNA-align. Each worker operates on a set of
 genome partitions, clustering alignments that overlap and associating clusters
 with donor/acceptor motifs.
 
+If the input reads are NOT stranded, then all relevant splice junction
+(donor/acceptor) motifs must be permitted, including, e.g. both GT-AG and
+CT-AC. If the input reads are stranded, motifs that are inconsistent with the
+strand of the flanking aligned sequences can be ignored. The --stranded option
+handles this.
+
 Input (read from stdin)
 ----------------------------
 Tab-delimited columns:
 1. Reference name (RNAME in SAM format) + ';' + partition number +  
-    '+' or '-' indicating which strand is the sense strand
+    ('+' or '-' indicating which strand is the sense strand if input reads are
+        strand-specific -- that is, --stranded in Rail-RNA-align was invoked;
+        otherwise, there is no terminal '+' or '-')
 2. Sample label
 3. Candidate intron start (inclusive) on forward strand (1-indexed)
 4. Candidate intron end (exclusive) on forward strand (1-indexed)
@@ -30,7 +38,7 @@ Output (written to stdout)
 Tab-delimited columns recording splice sites 
 ....
 
-OUTPUT BED LINES ARE 0-INDEXED
+OUTPUT BED COORDINATES ARE 0-INDEXED
 """
 import os
 import sys
@@ -83,15 +91,28 @@ parser.add_argument(\
     '--output-bed', action='store_const', const=True, default=False,
     help='Output BED lines denoting splice junctions analogous to '
          'TopHat\'s junctions.bed')
+parser.add_argument(\
+    '--stranded', action='store_const', const=True, default=False,
+    help='Assume input reads come from the sense strand')
 
 # Add command-line arguments for dependency
 partition.addArgs(parser)
 
 args = parser.parse_args(sys.argv[1:])
 
-# Initialize lists of donor/acceptor motifs in order of descending priority
-_forward_strand_motifs = [('GT', 'AG'), ('GC', 'AG'), ('AT', 'AC')]
-_reverse_strand_motifs = [('CT', 'AC'), ('CT', 'GC'), ('GT', 'AT')]
+'''Initialize lists of donor/acceptor motifs in order of descending priority;
+the unstranded motif list is used if --stranded is False; otherwise, 
+_forward_strand_motifs are used if the sense strand is the forward strand and
+_reverse_strand_motifs are used if the sense strand is the reverse strand.
+Each tuple in a given list denotes (donor motif, acceptor motif, True iff
+    sense strand is reverse strand).'''
+_unstranded_motifs = [('GT', 'AG', False), ('CT', 'AC', True),
+                        ('GC', 'AG', False), ('CT', 'GC', True),
+                        ('AT', 'AC', False), ('GT', 'AT', True)]
+_forward_strand_motifs = [('GT', 'AG', False), ('GC', 'AG', False),
+                            ('AT', 'AC', False)]
+_reverse_strand_motifs = [('CT', 'AC', True), ('CT', 'GC', True),
+                            ('GT', 'AT', True)]
 
 def intron_clusters_in_partition(candidate_introns, partition_start, 
     partition_end, cluster_radius=5, verbose=False):
@@ -194,7 +215,7 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
     raise RuntimeError('For loop should never be completed.')
 
 def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
-    rname, motifs, verbose=False):
+    rname, motifs, motif_radius=1, verbose=False):
     """ Ranks possible splice sites for a cluster using donor/acceptor motifs.
 
         Consider the following cluster of three candidate introns for which the
@@ -253,21 +274,31 @@ def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
         rname: SAM-format RNAME indicating the chromosome.
         motifs: List of motif tuples (donor motif, acceptor motif) in order of
             descending rank. Example tuple: ('GT', 'AG').
+        motif_radius: distance (in bp) from each of the start and end positions
+            of a cluster within which to search for motifs; that is, the
+            intervals [min(start_positions) - motif_radius,
+                max(start_positions) + motif_radius + 2) and
+            [min(end_positions - 2 - motif_radius),
+                max(end_positions) + motif_radius) are scanned for motifs,
+            where start_positions (end_positions) aggregates the start (end)
+            positions of the candidate introns in a cluster.
         verbose: If True, writes to stderr when no splice sites are identified
             for a cluster.
 
         Return value: List of tuples representing possible final introns in
             order of descending rank. Each tuple is of the form
             (start position, end position, summed z-score,
-                left motif, right motif). Example: [(142451, 143128, 2.8324,
-                    'GT', 'AG'), (142449, 143128, 3.1124, 'GC', 'AG')].
+                left motif, right motif, reverse strand boolean). Example:
+            [(142451, 143128, 2.8324, 'GT', 'AG', False),
+                (142449, 143128, 3.1124, 'CT', 'AC', True)].
     """
     start_positions, end_positions, _, _, _ = zip(*intron_cluster)
     reference_length = fasta_object.length(rname)
-    min_start_position = max(min(start_positions) - 2, 1)
-    max_start_position = min(max(start_positions) + 2, reference_length)
-    min_end_position = max(min(end_positions) - 4, 1)
-    max_end_position = max(end_positions)
+    min_start_position = max(min(start_positions) - motif_radius, 1)
+    max_start_position = min(max(start_positions) + motif_radius + 2,
+                                reference_length)
+    min_end_position = max(min(end_positions) - 2 - motif_radius, 1)
+    max_end_position = min(max(end_positions) + motif_radius, reference_length)
     left_sequence = fasta_object.fetch_sequence(rname, min_start_position,
         max_start_position - 1).upper()
     right_sequence = fasta_object.fetch_sequence(rname, min_end_position,
@@ -324,7 +355,8 @@ def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
 
 def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
     bin_size=10000, cluster_radius=5, per_site=False, per_span=True,
-    output_bed=True, intron_partition_overlap=20, verbose=False):
+    output_bed=True, stranded=False, intron_partition_overlap=20,
+    verbose=False):
     fasta_object = fasta.fasta(reference_fasta)
     input_line_count = 0
     junction_number = 0
@@ -344,11 +376,20 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                                                 int(five_prime_displacement),
                                                 int(three_prime_displacement))
             assert end_pos > pos
-            rname, partition_start, partition_end = \
-                partition.parse(partition_id[:-1], bin_size)
-            print >>sys.stderr, fasta_object.fetch_sequence(rname, pos - 2,
-        end_pos + 2).upper()
-            reverse_strand_string = partition_id[-1]
+            if stranded:
+                '''If input reads are stranded, the partition_id has a terminal
+                '+' or '-' indicating which strand is the sense strand.'''
+                reverse_strand_string = partition_id[-1]
+                rname, partition_start, partition_end = \
+                    partition.parse(partition_id[:-1], bin_size)
+            else:
+                '''Make the reverse_strand_string an empty string and don't
+                worry about it.'''
+                reverse_strand_string = ''
+                rname, partition_start, partition_end = \
+                    partition.parse(partition_id, bin_size)
+            '''reverse_strand below is used only if input reads are
+            strand-specific.'''
             reverse_strand = True if reverse_strand_string == '-' else False
             assert pos >= partition_start - intron_partition_overlap and \
                 pos < partition_end + intron_partition_overlap, \
@@ -371,34 +412,48 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                 cluster_radius=cluster_radius,
                 verbose=verbose)
             cluster_splice_sites = {}
-            if last_reverse_strand:
-                for i, intron_cluster in enumerate(intron_clusters):
-                    ranked_splice_sites = ranked_splice_sites_from_cluster(
-                            fasta_object, intron_cluster, last_rname,
-                            _reverse_strand_motifs, verbose=verbose
-                        )
-                    if len(ranked_splice_sites) != 0:
-                        # Pick top-ranked intron
-                        cluster_splice_sites[i] = ranked_splice_sites[0]
+            if stranded:
+                # The sense strand is known, so narrow motif set used
+                if last_reverse_strand:
+                    for i, intron_cluster in enumerate(intron_clusters):
+                        ranked_splice_sites = ranked_splice_sites_from_cluster(
+                                fasta_object, intron_cluster, last_rname,
+                                _reverse_strand_motifs, verbose=verbose
+                            )
+                        if len(ranked_splice_sites) != 0:
+                            # Pick top-ranked intron
+                            cluster_splice_sites[i] = ranked_splice_sites[0]
+                else:
+                    for i, intron_cluster in enumerate(intron_clusters):
+                        ranked_splice_sites = ranked_splice_sites_from_cluster(
+                                fasta_object, intron_cluster, last_rname,
+                                _forward_strand_motifs, verbose=verbose
+                            )
+                        if len(ranked_splice_sites) != 0:
+                            # Pick top-ranked intron
+                            cluster_splice_sites[i] = ranked_splice_sites[0]
             else:
+                # The sense strand is unknown, so use a general motif set
                 for i, intron_cluster in enumerate(intron_clusters):
                     ranked_splice_sites = ranked_splice_sites_from_cluster(
                             fasta_object, intron_cluster, last_rname,
-                            _forward_strand_motifs, verbose=verbose
+                            _unstranded_motifs, verbose=verbose
                         )
                     if len(ranked_splice_sites) != 0:
                         # Pick top-ranked intron
                         cluster_splice_sites[i] = ranked_splice_sites[0]
             if per_span:
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif) in cluster_splice_sites.items():
+                    right_motif, motif_reverse_strand) \
+                    in cluster_splice_sites.items():
                     for _, _, sample_label, _, _ in intron_clusters[i]:
                         print >>output_stream, 'span\t%s\t%d\t%d\t%s\t%s\t%s' \
                             % (last_rname, start_position, end_position, 
                                 left_motif, right_motif, sample_label)
             if per_site:
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif) in cluster_splice_sites.items(): 
+                    right_motif, motif_reverse_strand) \
+                    in cluster_splice_sites.items(): 
                     sample_label_counts = defaultdict(int)
                     for _, _, sample_label, _, _ in intron_clusters[i]:
                         sample_label_counts[sample_label] += 1
@@ -412,7 +467,10 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                 '''The output bed mimics TopHat's junctions.bed. See TopHat
                 documentation for more information.'''
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif) in cluster_splice_sites.items():
+                    right_motif, motif_reverse_strand) \
+                    in cluster_splice_sites.items():
+                    motif_reverse_strand_string = '-' if motif_reverse_strand \
+                        else '+'
                     '''Identify longest read overhangs on either side of splice
                     junction.'''
                     left_overhang, right_overhang = 0, 0
@@ -439,7 +497,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                         '255,0,0\t2\t%d,%d\t0,%d' \
                         % (last_rname, left_pos, right_pos, junction_number,
                             len(intron_clusters[i]),
-                            last_reverse_strand_string, left_pos, right_pos,
+                            motif_reverse_strand_string, left_pos, right_pos,
                             left_overhang, right_overhang, 
                             end_position - left_pos - 1)
             candidate_introns = {}
@@ -448,9 +506,9 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
             candidate_introns[(pos, end_pos)] = (sample_label,
                 five_prime_displacement, three_prime_displacement)
             (last_partition_id, last_partition_start, last_partition_end, 
-                last_rname, last_reverse_strand, last_reverse_strand_string) \
+                last_rname, last_reverse_strand) \
             = (partition_id, partition_start, partition_end, rname, 
-                reverse_strand, reverse_strand_string)
+                reverse_strand)
         else: break
 
 # "Main"

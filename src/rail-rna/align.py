@@ -44,14 +44,18 @@ Exonic chunks (aka ECs; two formats --- either or both may be emitted):
 
 Format 1 (exon_ival); tab-delimited output tuple columns:
 1. Reference name (RNAME in SAM format) + ';' + bin number +  
-    '+' or '-' indicating which strand is the sense strand
+    ('+' or '-' indicating which strand is the sense strand if input reads are
+        strand-specific -- that is, --stranded is invoked; otherwise, there is
+        no terminal '+' or '-')
 2. Sample label
 3. EC start (inclusive) on forward strand
 4. EC end (exclusive) on forward strand
 
 Format 2 (exon_differential); tab-delimited output tuple columns:
 1. Reference name (RNAME in SAM format) + ';' + bin number +  
-    '+' or '-' indicating which strand is the sense strand
+    ('+' or '-' indicating which strand is the sense strand if input reads are
+        strand-specific -- that is, --stranded is invoked; otherwise, there is
+        no terminal '+' or '-')
 2. Sample label
 3. max(EC start, bin start) (inclusive) on forward strand IFF next column is +1 
    and EC end (exclusive) on forward strand IFF next column is -1.
@@ -61,15 +65,16 @@ Introns
 
 Tab-delimited output tuple columns (intron):
 1. Reference name (RNAME in SAM format) + ';' + bin number +  
-    '+' or '-' indicating which strand is the sense strand
+    ('+' or '-' indicating which strand is the sense strand if input reads are
+        strand-specific -- that is, --stranded is invoked; otherwise, there is
+        no terminal '+' or '-')
 2. Sample label
 3. Intron start (inclusive) on forward strand
 4. Intron end (exclusive) on forward strand
 5. Number of nucleotides between 5' end of intron and 5' end of read from which
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND. That is, if
-the sense strand is the reverse strand, this is the distance between the 5' end
-of the reverse-complemented read and the 5' end of the reverse-complemented 
-intron.
+the sense strand is the reverse strand, this is the distance between the 3' end
+of the read and the 3' end of the intron.
 6. Number of nucleotides between 3' end of intron and 3' end of read from which
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
 
@@ -138,6 +143,10 @@ parser.add_argument('--splice-sam', action='store_const', const=True,
     default=True, 
     help='Print read-by-read SAM output of candidate introns for later '
          'consolidation in splice_sam.py. --max-intron-size is ignored.')
+parser.add_argument(\
+    '--stranded', action='store_const', const=True, default=False,
+    help='Assume input reads come from the sense strand; then partitions in '
+         'output have terminal + and - indicating sense strand')
 parser.add_argument('--test', action='store_const', const=True, default=False,
     help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
          'OUTPUT EXONS AND INTRONS TO STDOUT')
@@ -194,6 +203,8 @@ for i, argument in enumerate(sys.argv[1:]):
 global, properties of args are also arguments of the go() function so different
 command-line arguments can be passed to it for unit tests.'''
 args = parser.parse_args(argv[1:])
+
+_reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 # Initialize global variables for tracking number of input/output lines
 input_line_count = 0
@@ -537,42 +548,45 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                 (rname, reverse_strand)), and its corresponding value is a list
                 of tuples (pos, end_pos), each of which denotes an exonic chunk
                 (EC). rname is the SAM-format RNAME---typically a chromosome.
-                reverse_strand is True iff the EC's sense strand is the
-                reverse strand. The EC spans the interval [pos, end_pos).
+                When input reads are strand-specific, reverse_strand is True
+                iff the sense strand is the reverse strand; otherwise, it
+                merely denotes the strand to which the EC was presumed
+                to align. The EC spans the interval [pos, end_pos).
             -introns is a dictionary; each key is a strand (i.e., a tuple
                 (rname, reverse_strand)), and its corresponding value is a list
                 of tuples (pos, end_pos, five_prime_displacement,
                 three_prime_displacement), each of which denotes an intron.
                 rname contains the SAM-format RNAME --- typically a chromosome.
-                reverse_strand is True iff the intron's sense strand is the
-                reverse strand. The intron spans the interval [pos, end_pos).
-                Assume the sense strand is the forward strand; that is, if the
-                sense strand is the reverse strand, consider the reversed
-                complements of both the readlet and its parent read.
-                five_prime_displacement is the displacement of the 5' end of
-                the intron from the 5' end of the read, while
+                When input reads are strand-specific, reverse_strand is True
+                iff the sense strand is the reverse strand; otherwise, it
+                merely denotes the strand to which the intron's flanking ECs
+                were presumed to align. The intron spans the interval
+                [pos, end_pos). Assume the sense strand is the forward
+                strand; that is, if the sense strand is the reverse strand,
+                consider the reversed complements of both the readlet and its
+                parent read. five_prime_displacement is the displacement of the
+                5' end of the intron from the 5' end of the read, while
                 three_prime_displacement is the displacement of the 3' end of
                 the intron from the 3' end of the read.
     """
     composed = composed_and_sorted_readlets(readlets, min_strand_readlets)
     read_seq = read_seq.upper()
     reversed_complement_read_seq = read_seq[::-1].translate(
-            string.maketrans('ATCG', 'TAGC')
+            _reversed_complement_translation_table
         )
     introns, exons = {}, {}
     for strand in composed:
         introns[strand], exons[strand] = [], []
         rname, reverse_strand = strand
         if reverse_strand:
-            '''Handle reverse strand reads the same way forward strands are
+            '''Handle reverse-strand reads the same way forward strands are
             handled.'''
             current_read_seq = reversed_complement_read_seq
         else:
             current_read_seq = read_seq
         read_seq_size = len(read_seq)
         last_pos, last_end_pos, last_displacement = composed[strand][0]
-        unmapped_displacement = last_displacement + last_end_pos \
-                - last_pos
+        unmapped_displacement = last_displacement + last_end_pos - last_pos
         if last_displacement:
             '''If last_displacement isn't 0, check if region to the left should
             be filled.'''
@@ -790,8 +804,8 @@ class BowtieOutputThread(threading.Thread):
     
     def __init__(self, input_stream, fasta_object, readletized=False,
         unmapped_stream=None, output_stream=sys.stdout,
-        exon_differentials=True, exon_intervals=False, splice_sam=True,
-        verbose=False, bin_size=10000, min_intron_size=5,
+        exon_differentials=True, exon_intervals=False, stranded=False,
+        splice_sam=True, verbose=False, bin_size=10000, min_intron_size=5,
         min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
         max_intron_size=100000, intron_partition_overlap=20,
         substitution_matrix=needlemanWunsch.matchCost(), 
@@ -813,6 +827,9 @@ class BowtieOutputThread(threading.Thread):
                 this is sys.stdout.
             exon_differentials: True iff EC differentials are to be emitted.
             exon_intervals: True iff EC intervals are to be emitted.
+            stranded: True iff input reads are strand-specific; this affects
+                whether an output partition has a terminal '+' or '-'
+                indicating the sense strand.
             splice_sam: True iff SAM with spliced alignments is to be emitted.
                 Ignored if readletized is False.
             verbose: True if alignments should occasionally be written 
@@ -859,6 +876,7 @@ class BowtieOutputThread(threading.Thread):
         self.fasta_object = fasta_object
         self.verbose = verbose
         self.bin_size = bin_size
+        self.stranded = stranded
         self.min_strand_readlets = min_strand_readlets
         self.max_discrepancy = max_discrepancy
         self.min_seq_similarity = min_seq_similarity
@@ -908,7 +926,13 @@ class BowtieOutputThread(threading.Thread):
                     '''Read is mapped; the full alignment is to be called as 
                     an exonic chunk (EC). Kill mate information in qname 
                     so rest of pipeline associates mates.'''
-                    reverse_strand_string = '-' if (flag & 16) != 0 else '+'
+                    if self.stranded:
+                        '''A reverse-strand string is needed if and only if
+                        input reads are strand-specific.'''
+                        reverse_strand_string = '-' if (flag & 16) != 0 \
+                            else '+'
+                    else:
+                        reverse_strand_string = ''
                     seq_size = len(seq)
                     end_pos = pos + seq_size
                     sample_label = sample.parseLab(qname[:-2])
@@ -1024,11 +1048,16 @@ class BowtieOutputThread(threading.Thread):
                     if self.exon_differentials:
                         for exon_strand in exons:
                             exon_rname, exon_reverse_strand = exon_strand
+                            if self.stranded:
+                                '''A reverse-strand string is needed iff input
+                                reads are strand-specific.'''
+                                exon_reverse_strand_string = '-' if \
+                                    exon_reverse_strand else '+'
+                            else:
+                                exon_reverse_strand_string = ''
                             for exon_pos, exon_end_pos in exons[exon_strand]:
                                 partitions = partition.partition(exon_rname,
                                     exon_pos, exon_end_pos, self.bin_size)
-                                exon_reverse_strand_string = '-' if \
-                                    exon_reverse_strand else '+'
                                 for (partition_id, partition_start, 
                                         partition_end) in partitions:
                                     assert exon_pos < partition_end
@@ -1053,11 +1082,16 @@ class BowtieOutputThread(threading.Thread):
                     if self.exon_intervals:
                         for exon_strand in exons:
                             exon_rname, exon_reverse_strand = exon_strand
+                            if self.stranded:
+                                '''A reverse-strand string is needed iff input
+                                reads are strand-specific.'''
+                                exon_reverse_strand_string = '-' if \
+                                    exon_reverse_strand else '+'
+                            else:
+                                exon_reverse_strand_string = ''
                             for exon_pos, exon_end_pos in exons[exon_strand]:
                                 partitions = partition.partition(exon_rname,
                                     exon_pos, exon_end_pos, self.bin_size)
-                                exon_reverse_strand_string = '-' if \
-                                    exon_reverse_strand else '+'
                                 for partition_id, _, _ in partitions:
                                     print >>self.output_stream, \
                                         'exon_ival\t%s%s\t%d\t%d\t%s' \
@@ -1069,12 +1103,17 @@ class BowtieOutputThread(threading.Thread):
                     # Print introns
                     for intron_strand in introns:
                         intron_rname, intron_reverse_strand = intron_strand
+                        if self.stranded:
+                            '''A reverse-strand string is needed iff input
+                            reads are strand-specific.'''
+                            intron_reverse_strand_string = '-' if \
+                                intron_reverse_strand else '+'
+                        else:
+                            intron_reverse_strand_string = ''
                         for (intron_pos, intron_end_pos,
                                 intron_five_prime_displacement, 
                                 intron_three_prime_displacement) in \
                                 introns[intron_strand]:
-                            intron_reverse_strand_string = '-' if \
-                                intron_reverse_strand else '+'
                             if intron_end_pos - intron_pos \
                                 > self.max_intron_size:
                                 if self.verbose: 
@@ -1123,13 +1162,25 @@ class BowtieOutputThread(threading.Thread):
                             '''First column is "splice_sam"; other 11 columns
                             are standard SAM. See SAM format specification
                             for details.'''
-                            print >>self.output_stream, ('%s\t'*11 + '%s') \
-                                % ('splice_sam', qname[:-2],
-                                    '16' if intron_reverse_strand else '0',
-                                    intron_rname, str(strand_introns[0][0] -
-                                        strand_introns[0][2]), mapq, 
-                                    ''.join(cigar_list), rnext, pnext, tlen, 
+                            if intron_reverse_strand:
+                                # Need to reverse-complement sequence
+                                splice_sam_tuple = ('splice_sam', qname,
+                                    '16', intron_rname, 
+                                    str(strand_introns[0][0] -
+                                        strand_introns[0][2]), '255', 
+                                    ''.join(cigar_list), '*', '0', '0', 
+                                    read_seq[::-1].translate(
+                                     _reversed_complement_translation_table
+                                    ), qual_seq[::-1])
+                            else:
+                                splice_sam_tuple = ('splice_sam', qname,
+                                    '0', intron_rname,
+                                    str(strand_introns[0][0] -
+                                        strand_introns[0][2]), '255', 
+                                    ''.join(cigar_list), '*', '0', '0', 
                                     read_seq, qual_seq)
+                            print >>self.output_stream, ('%s\t'*11 + '%s') \
+                                % splice_sam_tuple
                     del readlet_count[(qname, paired_label)]
                     del collected_readlets[(qname, paired_label)]
 
@@ -1138,7 +1189,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
     temp_dir_path=tempfile.mkdtemp(), archive=None, bin_size=10000,
     verbose=False, read_filename='reads.tsv', readlet_filename='readlets.tsv',
     unmapped_filename='unmapped.tsv', exon_differentials=True,
-    exon_intervals=False, splice_sam=True, min_readlet_size=8,
+    exon_intervals=False, splice_sam=True, stranded=False, min_readlet_size=8,
     max_readlet_size=25, readlet_interval=5, capping_fraction=.75,
     min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
     min_intron_size=5, max_intron_size=100000, intron_partition_overlap=20, 
@@ -1180,14 +1231,18 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
 
         Format 1 (exon_ival); tab-delimited output tuple columns:
         1. Reference name (RNAME in SAM format) + ';' + bin number +  
-        '+' or '-' indicating which strand is the sense strand
+        ('+' or '-' indicating which strand is the sense strand if input reads
+        are strand-specific -- that is, --stranded is invoked; otherwise, there
+        is no terminal '+' or '-')
         2. Sample label
         3. EC start (inclusive) on forward strand
         4. EC end (exclusive) on forward strand
 
         Format 2 (exon_differential); tab-delimited output tuple columns:
         1. Reference name (RNAME in SAM format) + ';' + bin number +  
-        '+' or '-' indicating which strand is the sense strand
+        ('+' or '-' indicating which strand is the sense strand if input reads
+        are strand-specific -- that is, --stranded is invoked; otherwise, there
+        is no terminal '+' or '-')
         2. Sample label
         3. max(EC start, bin start) (inclusive) on forward strand IFF next 
         column is +1 and EC end (exclusive) on forward strand IFF next column
@@ -1198,15 +1253,16 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
 
         Tab-delimited output tuple columns:
         1. Reference name (RNAME in SAM format) + ';' + bin number +  
-        '+' or '-' indicating which strand is the sense strand
+        ('+' or '-' indicating which strand is the sense strand if input reads
+        are strand-specific -- that is, --stranded is invoked; otherwise, there
+        is no terminal '+' or '-')
         2. Sample label
         3. Intron start (inclusive) on forward strand
         4. Intron end (exclusive) on forward strand
         5. Number of nucleotides between 5' end of intron and 5' end of read
         from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD
         STRAND. That is, if the sense strand is the reverse strand, this is the
-        distance between the 5' end of the reverse-complemented read and the 5'
-        end of the reverse-complemented intron.
+        distance between the 3' end of the read and the 3' end of the intron.
         6. Number of nucleotides between 3' end of intron and 3' end of read
         from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD
         STRAND.
@@ -1255,6 +1311,9 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
         exon_differentials: True iff EC differentials are to be emitted.
         exon_intervals: True iff EC intervals are to be emitted.
         splice_sam: True iff SAM with spliced alignments is to be emitted.
+        stranded: True iff input reads are strand-specific; this affects
+            whether an output partition has a terminal '+' or '-' indicating
+            the sense strand.
         min_strand_readlets: exons and introns are called on a strand iff 
             the number of readlets that align to the strand is >= this number.
         max_discrepancy: if the difference in length between an unmapped region
@@ -1318,6 +1377,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                 max_discrepancy=max_discrepancy, 
                 min_seq_similarity=min_seq_similarity, 
                 max_intron_size=max_intron_size,
+                stranded=stranded,
                 intron_partition_overlap=intron_partition_overlap,
                 substitution_matrix=substitution_matrix,
                 report_multiplier=report_multiplier
@@ -1364,6 +1424,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
             max_discrepancy=max_discrepancy, 
             min_seq_similarity=min_seq_similarity, 
             max_intron_size=max_intron_size,
+            stranded=stranded,
             intron_partition_overlap=intron_partition_overlap,
             substitution_matrix=substitution_matrix,
             report_multiplier=report_multiplier
@@ -1411,6 +1472,7 @@ if not args.test:
         exon_differentials=args.exon_differentials,
         exon_intervals=args.exon_intervals,
         splice_sam=args.splice_sam,
+        stranded=args.stranded,
         min_readlet_size=args.min_readlet_size, 
         max_readlet_size=args.max_readlet_size,
         readlet_interval=args.readlet_interval,

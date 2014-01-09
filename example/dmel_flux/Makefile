@@ -6,14 +6,17 @@ ifeq (,$(IGENOMES_HOME))
 $(error "Set IGENOMES_HOME")
 endif
 
+ifeq (,$(TOPHAT_HOME))
+$(error "Set TOPHAT_HOME")
+endif
+
 FLUX_DIR=$(RAIL_HOME)/tools/flux_sim
 IGV_DIR=$(RAIL_HOME)/tools/igv
 OUTPUT_DIR=.
-NREADS_PER_SAMP=100000
+NREADS_PER_SAMP=1000000
 NMOLECULES_PER_SAMP=500000
-NSAMP=6
-TOPHAT_DIR=../../tools/tophat2
-TOPHAT_EXE=$(TOPHAT_DIR)/tophat/install-root/bin/tophat2
+NSAMP=1
+TOPHAT_EXE=$(TOPHAT_HOME)/tophat2
 
 all: $(OUTPUT_DIR)/preprocessed_reads $(RAIL_HOME)/tools/igv/IGV/igv.jar
 
