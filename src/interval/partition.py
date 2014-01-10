@@ -29,8 +29,8 @@ def partition(refid, st, en, binSize, fudge=0):
         positions. The interval is
         (optionally) extended on both ends by some fudge factor before
         overlapping.'''
-    binid_st = int((st - fudge ) / binSize)
-    binid_en = int((en + fudge - 1) / binSize)
+    binid_st = int((st - fudge - 1) / binSize)
+    binid_en = int((en + fudge - 2) / binSize)
     return [ (";".join([refid, str(i)]), i * binSize, (i+1) * binSize) for i in xrange(binid_st, binid_en+1) ]
 
 def partitionOverlaps(refid, st, en, binSize, fudge=0):

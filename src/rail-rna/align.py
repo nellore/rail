@@ -116,13 +116,13 @@ parser.add_argument('--faidx', type=str, required=False,
 parser.add_argument('--min-readlet-size', type=int, required=False, default=8, 
     help='Capping readlets (that is, readlets that terminate '
          'at a given end of the read) are never smaller than this value')
-parser.add_argument('--max-readlet-size', type=int, required=False, default=25, 
+parser.add_argument('--max-readlet-size', type=int, required=False, default=76, 
     help='Size of every noncapping readlet')
 parser.add_argument('--readlet-interval', type=int, required=False, default=5, 
     help='Number of bases separating successive noncapping readlets along '
          'the read')
 parser.add_argument('--capping-fraction', type=float, required=False,
-    default=0.75, 
+    default=0.9, 
     help='Successive capping readlets on a given end of a read are tapered '
          'in size exponentially with this fractional base')
 parser.add_argument('--report_multiplier', type=float, required=False,
@@ -149,7 +149,7 @@ parser.add_argument(\
          'output have terminal + and - indicating sense strand')
 parser.add_argument('--test', action='store_const', const=True, default=False,
     help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
-         'OUTPUT EXONS AND INTRONS TO STDOUT')
+         'WRITE EXONS AND INTRONS TO STDOUT')
 parser.add_argument('--intron-partition-overlap', type=int, required=False,
     default=20, 
     help='Amount by which partitions overlap their left and right neighbors')
@@ -942,7 +942,8 @@ class BowtieOutputThread(threading.Thread):
                         for (partition_id, 
                             partition_start, partition_end) in partitions:
                             # Print increment at interval start
-                            assert pos < partition_end
+                            assert pos < partition_end \
+                                + self.intron_partition_overlap
                             print >>self.output_stream, \
                                 'exon_diff\t%s%s\t%s\t%d\t1' \
                                 % (partition_id, reverse_strand_string, 

@@ -70,8 +70,9 @@ class AlignStep(pipeline.Step):
                 --readlet-interval %d 
                 --partition-length %d 
                 --exon-differentials 
-                --verbose 
-                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
+                --verbose %s
+                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, 
+                    '--stranded' if tconf.stranded else '', tconf.bowtieArgs())
         mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(AlignStep, self).__init__(\
             inps,
@@ -122,8 +123,10 @@ class IntronStep(pipeline.Step):
                 --output-bed
                 --verbose
                 --partition-length %d
+                %s
         """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
-                tconf.partitionLen)
+                tconf.partitionLen, 
+                '--stranded' if tconf.stranded else '')
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(IntronStep, self).__init__(\
             inps,

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
 Rail-RNA-intron
+
 Follows Rail-RNA-align
 Precedes Rail-RNA-intron_post
 
@@ -62,7 +63,7 @@ parser = argparse.ArgumentParser(description=__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument('--test', action='store_const', const=True, default=False,
     help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
-         'OUTPUT EXONS AND INTRONS TO STDOUT')
+         'WRITE INTRONS TO STDOUT')
 parser.add_argument('--verbose', action='store_const', const=True,
     default=False,
     help='Print out extra debugging statements')
@@ -104,11 +105,12 @@ args = parser.parse_args(sys.argv[1:])
 the unstranded motif list is used if --stranded is False; otherwise, 
 _forward_strand_motifs are used if the sense strand is the forward strand and
 _reverse_strand_motifs are used if the sense strand is the reverse strand.
-Each tuple in a given list denotes (donor motif, acceptor motif, True iff
-    sense strand is reverse strand).'''
-_unstranded_motifs = [('GT', 'AG', False), ('CT', 'AC', True),
-                        ('GC', 'AG', False), ('CT', 'GC', True),
-                        ('AT', 'AC', False), ('GT', 'AT', True)]
+Each tuple in a given sublist denotes (donor motif, acceptor motif, True iff
+    sense strand is reverse strand). The tuples in a sublist have the same
+priority (rank).'''
+_unstranded_motifs = [[('GT', 'AG', False), ('CT', 'AC', True)],
+                        [('GC', 'AG', False), ('CT', 'GC', True)],
+                        [('AT', 'AC', False), ('GT', 'AT', True)]]
 _forward_strand_motifs = [('GT', 'AG', False), ('GC', 'AG', False),
                             ('AT', 'AC', False)]
 _reverse_strand_motifs = [('CT', 'AC', True), ('CT', 'GC', True),
@@ -215,7 +217,7 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
     raise RuntimeError('For loop should never be completed.')
 
 def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
-    rname, motifs, motif_radius=1, verbose=False):
+    rname, motifs, motif_radius=3, verbose=False):
     """ Ranks possible splice sites for a cluster using donor/acceptor motifs.
 
         Consider the following cluster of three candidate introns for which the
@@ -272,8 +274,12 @@ def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
             corresponds to a read supporting a candidate intron spanning
             [start_position, end_position) in the cluster.
         rname: SAM-format RNAME indicating the chromosome.
-        motifs: List of motif tuples (donor motif, acceptor motif) in order of
-            descending rank. Example tuple: ('GT', 'AG').
+        motifs: List of lists of motif tuples (donor motif, acceptor motif, 
+                reverse strand boolean) in order of descending priority. The
+            reverse strand boolean is False iff the forward strand is the 
+            sense strand for the motif. Each sublist contains motif tuples
+            whose priority (rank) is the same.
+            Example tuple: ('GT', 'AG', False).
         motif_radius: distance (in bp) from each of the start and end positions
             of a cluster within which to search for motifs; that is, the
             intervals [min(start_positions) - motif_radius,
@@ -313,38 +319,39 @@ def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
     stdev_end_position = max(np.std(end_positions), 1e-6)
     # Initialize list for storing ranked intron start/end positions
     ranked_introns = []
-    for motif in motifs:
+    for motif_priority_class in motifs:
         positions_and_z_scores = []
-        '''Use regex lookahead to identify possibly overlapping motifs.
-        Each *_offset record offset from beginning of left_sequence or
-        right_sequence.'''
-        left_motif_offsets = [a_match.start() for a_match in 
-                                re.finditer(r'(?=(%s))' % motif[0],
-                                                left_sequence)]
-        right_motif_offsets = [a_match.start() for a_match in 
-                                re.finditer(r'(?=(%s))' % motif[1],
-                                                right_sequence)]
-        '''Find all possible combinations of left and right offsets for a
-        given motif (pair).'''
-        motif_pairs = \
-            itertools.product(*[left_motif_offsets, right_motif_offsets])
-        for left_motif_offset, right_motif_offset in motif_pairs:
-            left_motif_start_position = min_start_position \
-                + left_motif_offset
-            right_motif_end_position = min_end_position \
-                + right_motif_offset + 2
-            z_score_sum = abs(left_motif_start_position 
-                - mean_start_position) / float(stdev_start_position) \
-                + abs(right_motif_end_position - mean_end_position) / \
-                float(stdev_end_position)
-            positions_and_z_scores.append((left_motif_start_position,
-                                            right_motif_end_position,
-                                            z_score_sum))
-        # Sort by z-score sum
+        for motif in motif_priority_class:
+            '''Use regex lookahead to identify possibly overlapping motifs.
+            Each *_offset record offset from beginning of left_sequence or
+            right_sequence.'''
+            left_motif_offsets = [a_match.start() for a_match in 
+                                    re.finditer(r'(?=(%s))' % motif[0],
+                                                    left_sequence)]
+            right_motif_offsets = [a_match.start() for a_match in 
+                                    re.finditer(r'(?=(%s))' % motif[1],
+                                                    right_sequence)]
+            '''Find all possible combinations of left and right offsets for a
+            given motif (pair).'''
+            motif_pairs = \
+                itertools.product(*[left_motif_offsets, right_motif_offsets])
+            for left_motif_offset, right_motif_offset in motif_pairs:
+                left_motif_start_position = min_start_position \
+                    + left_motif_offset
+                right_motif_end_position = min_end_position \
+                    + right_motif_offset + 2
+                z_score_sum = abs(left_motif_start_position 
+                    - mean_start_position) / float(stdev_start_position) \
+                    + abs(right_motif_end_position - mean_end_position) / \
+                    float(stdev_end_position)
+                positions_and_z_scores.append((left_motif_start_position,
+                                                right_motif_end_position,
+                                                z_score_sum) + motif)
+        # Sort all matches of same priority (rank) by z-score sum
         positions_and_z_scores.sort(
                 key=lambda positions_and_z_score: positions_and_z_score[2]
             )
-        ranked_introns += [positions_and_z_score + motif 
+        ranked_introns += [positions_and_z_score 
                             for positions_and_z_score in 
                             positions_and_z_scores]
     if len(ranked_introns) == 0 and verbose:
