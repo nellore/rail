@@ -113,16 +113,16 @@ parser.add_argument('--refseq', type=str, required=False,
 # To be implemented; for now, index is always fasta filename + .fai
 parser.add_argument('--faidx', type=str, required=False, 
     help='Fasta index file')
-parser.add_argument('--min-readlet-size', type=int, required=False, default=12, 
+parser.add_argument('--min-readlet-size', type=int, required=False, default=8, 
     help='Capping readlets (that is, readlets that terminate '
          'at a given end of the read) are never smaller than this value')
 parser.add_argument('--max-readlet-size', type=int, required=False, default=76, 
     help='Size of every noncapping readlet')
-parser.add_argument('--readlet-interval', type=int, required=False, default=3, 
+parser.add_argument('--readlet-interval', type=int, required=False, default=5, 
     help='Number of bases separating successive noncapping readlets along '
          'the read')
 parser.add_argument('--capping-fraction', type=float, required=False,
-    default=0.75, 
+    default=0.9, 
     help='Successive capping readlets on a given end of a read are tapered '
          'in size exponentially with this fractional base')
 parser.add_argument('--report_multiplier', type=float, required=False,
@@ -377,6 +377,9 @@ def composed_and_sorted_readlets(readlets, min_strand_readlets=1):
             forward (reverse) strand, and the 5' (3') end of the read.
     """
     # Create dictionary separating readlets by strands to which they align
+    print >>sys.stderr, 'thisisuncomposed'
+    print >>sys.stderr, readlets
+    print >>sys.stderr, '/thisisuncomposed'
     uncomposed = {}
     for rname, reverse_strand, pos, end_pos, displacement in readlets:
         assert end_pos > pos
@@ -413,6 +416,9 @@ def composed_and_sorted_readlets(readlets, min_strand_readlets=1):
     
     '''Now composed[strand] is list of candidate exonic chunks
     (pos, end_pos, displacement) ordered by pos, the reference position.'''
+    print >>sys.stderr, 'thisiscomposed'
+    print >>sys.stderr, composed
+    print >>sys.stderr, '/thisiscomposed'
     return composed
 
 def unmapped_region_splits(unmapped_seq, left_reference_seq,
@@ -799,46 +805,6 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
         del introns[strand]
     return exons, introns
 
-def selected_readlet_alignments(readlets):
-    print >>sys.stderr, 'readlets'
-    print >>sys.stderr, readlets
-    print >>sys.stderr, '/readlets'
-    final_readlets = []
-    multireadlets = []
-    for readlet in readlets:
-        if len(readlet) == 1:
-            final_readlets.append(readlet[0])
-        else:
-            multireadlets.append(readlet)
-    if len(final_readlets) == 0:
-        return []
-    if len(multireadlets) == 0:
-        return final_readlets
-    unireadlets = {}
-    for rname, reverse_strand, pos, end_pos, displacement in final_readlets:
-        if (rname, reverse_strand) not in unireadlets:
-            unireadlets[(rname, reverse_strand)] = []
-        unireadlets[(rname, reverse_strand)].append(
-                (pos, end_pos, displacement)
-            )
-    for multireadlet in multireadlets:
-        last_overlap = None
-        alignment = None
-        for rname, reverse_strand, pos, end_pos, displacement in multireadlet:
-            if (rname, reverse_strand) not in unireadlets: continue
-            overlap = max([min(end_pos, compared_end_pos)
-                            - max(pos, compared_pos)
-                            for compared_pos, compared_end_pos, _
-                            in unireadlets[(rname, reverse_strand)]])
-            if last_overlap is None or overlap > last_overlap:
-                alignment = (rname, reverse_strand, pos, end_pos, displacement)
-            last_overlap = overlap
-        if alignment is not None: final_readlets.append(alignment)
-    print >>sys.stderr, 'final readlets'
-    print >>sys.stderr, final_readlets
-    print >>sys.stderr, '/final readlets'
-    return final_readlets
-
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
@@ -938,149 +904,83 @@ class BowtieOutputThread(threading.Thread):
         global output_line_count
         next_report_line = 0
         if not self.readletized:
-            '''Next read must be known to tell if a read mapped to multiple
-            locations, so always work with previous read.'''
-            while True:
-                line = self.input_stream.readline()
-                if not line: return # Bowtie output nothing
+            for i, line in enumerate(self.input_stream):
                 # Skip header line
                 if line[0] == '@': continue
-                last_tokens = line.rstrip().split('\t')
-                (last_qname, last_flag, last_rname, last_pos, last_mapq,
-                    last_cigar, last_rnext, last_pnext,
-                    last_tlen, last_seq, last_qual) = last_tokens[:11]
-                last_flag = int(last_flag)
-                last_pos = int(last_pos)
-                if self.stranded:
-                    '''A reverse-strand string is needed if and only if
-                    input reads are strand-specific.'''
-                    last_reverse_strand_string = '-' \
-                        if (last_flag & 16) != 0 else '+'
-                else:
-                    last_reverse_strand_string = ''
-                last_seq_size = len(last_seq)
-                last_end_pos = last_pos + last_seq_size
-                '''Find XM:i field, which is > 0 if read had several valid
-                alignments, but all were suppressed because bowtie -m X was
-                invoked for X an integer >= 1. See Bowtie documentation.'''
-                last_multimapped = False
-                for field in last_tokens[::-1]:
-                    if field[:-1] == 'XM:i:':
-                        if int(field[-1]) > 0 and (last_flag & 4):
-                            '''If read is multimapped and all alignments were
-                            suppressed.'''
-                            last_multimapped = True
-                        break
-                break
-            # Initialize counter
-            i = 0
-            # While labeled multiread, this list may end up simply a uniread
-            multiread = []
-            while True:
-                line = self.input_stream.readline()
-                if line:
-                    tokens = line.rstrip().split('\t')
-                    (qname, flag, rname, pos, mapq, cigar, rnext,
-                        pnext, tlen, seq, qual) = tokens[:11]
-                    flag = int(flag)
-                    pos = int(pos)
-                    if self.stranded:
-                        '''A reverse-strand string is needed if and only if
-                        input reads are strand-specific.'''
-                        reverse_strand_string = '-' \
-                            if (flag & 16) != 0 else '+'
-                    else:
-                        reverse_strand_string = ''
-                    seq_size = len(seq)
-                    end_pos = pos + seq_size
-                '''Find XM:i field, which is > 0 if read had several valid
-                alignments, but all were suppressed because bowtie -m X was
-                invoked for X an integer >= 1. See Bowtie documentation.'''
+                # Variable abbreviations below mirror SAM spec
+                tokens = line.rstrip().split('\t')
+                (qname, flag, rname, pos, mapq, cigar, rnext,
+                    pnext, tlen, seq, qual) = tokens[:11]
+                flag = int(flag)
+                pos = int(pos)
+                '''Find XM:i field, which is 1 if read had several valid
+                alignments, but all were suppressed because bowtie -m 1 was
+                invoked. See Bowtie documentation.'''
                 multimapped = False
                 for field in tokens[::-1]:
-                    if field[:-1] == 'XM:i:':
-                        if int(field[-1]) > 0 and (flag & 4):
-                            '''If read is multimapped and all alignments were
-                            suppressed.'''
-                            multimapped = True
+                    if field == 'XM:i:1' and flag == 4:
+                        # If -m ceiling of 1 is saturated and read is unmapped
+                        multimapped = True
                         break
                 if self.verbose and next_report_line == i:
                     print >>sys.stderr, \
                         'SAM output record %d: rdname="%s", flag=%d' \
-                        % (i, last_qname, last_flag)
+                        % (i, qname, flag)
                     next_report_line = int((next_report_line + 1)
                         * self.report_multiplier + 1) - 1
-                multiread.append((last_qname, last_flag, last_rname, last_pos,
-                    last_mapq, last_cigar, last_rnext, last_pnext, last_tlen,
-                    last_seq, last_qual))
-                if not line or qname != last_qname:
-                    '''If the next qname doesn't match the last qname or there
-                    are no more lines, all of a multiread's alignments have
-                    been collected.'''
-                    if not (last_flag & 4) and len(multiread) == 1 \
-                        and not last_multimapped:
-                        '''Read maps uniquely; the full alignment is to be
-                        called as an exonic chunk (EC). Kill mate information
-                        in qname so rest of pipeline associates mates.'''
-                        last_sample_label = sample.parseLab(last_qname[:-2])
-                        partitions = partition.partition(last_rname, last_pos, 
-                            last_end_pos, self.bin_size)
-                        if self.exon_differentials:
-                            for (partition_id, 
-                                partition_start, partition_end) in partitions:
-                                # Print increment at interval start
-                                assert last_pos < partition_end \
-                                    + self.intron_partition_overlap
+                if flag != 4:
+                    '''Read is mapped; the full alignment is to be called as 
+                    an exonic chunk (EC). Kill mate information in qname 
+                    so rest of pipeline associates mates.'''
+                    if self.stranded:
+                        '''A reverse-strand string is needed if and only if
+                        input reads are strand-specific.'''
+                        reverse_strand_string = '-' if (flag & 16) != 0 \
+                            else '+'
+                    else:
+                        reverse_strand_string = ''
+                    seq_size = len(seq)
+                    end_pos = pos + seq_size
+                    sample_label = sample.parseLab(qname[:-2])
+                    partitions = partition.partition(rname, pos, 
+                        end_pos, self.bin_size)
+                    if self.exon_differentials:
+                        for (partition_id, 
+                            partition_start, partition_end) in partitions:
+                            # Print increment at interval start
+                            assert pos < partition_end \
+                                + self.intron_partition_overlap
+                            print >>self.output_stream, \
+                                'exon_diff\t%s%s\t%s\t%d\t1' \
+                                % (partition_id, reverse_strand_string, 
+                                    sample_label, max(partition_start, pos))
+                            output_line_count += 1
+                            assert end_pos > partition_start
+                            if end_pos < partition_end:
+                                '''Print decrement at interval end iff exon
+                                ends before partition ends.'''
                                 print >>self.output_stream, \
-                                    'exon_diff\t%s%s\t%s\t%d\t1' \
-                                    % (partition_id,
-                                        last_reverse_strand_string, 
-                                        last_sample_label,
-                                        max(partition_start, last_pos))
+                                    'exon_diff\t%s%s\t%s\t%d\t-1' \
+                                    % (partition_id, reverse_strand_string, 
+                                        sample_label, end_pos)
                                 output_line_count += 1
-                                assert last_end_pos > partition_start
-                                if last_end_pos < partition_end:
-                                    '''Print decrement at interval end iff exon
-                                    ends before partition ends.'''
-                                    print >>self.output_stream, \
-                                        'exon_diff\t%s%s\t%s\t%d\t-1' \
-                                        % (partition_id,
-                                            last_reverse_strand_string, 
-                                            last_sample_label, last_end_pos)
-                                    output_line_count += 1
-                        if self.exon_intervals:
-                            for partition_id, _, _ in partitions:
-                                print >>self.output_stream, \
-                                    'exon_ival\t%s%s\t%d\t%d\t%s' \
-                                    % (partition_id, 
-                                        last_reverse_strand_string, last_pos, 
-                                        last_end_pos, last_sample_label)
-                                output_line_count += 1
-                        if self.splice_sam:
-                            print >>self.output_stream, ('%s\t'*11 + '%s') \
-                                    % ('splice_sam', last_qname[:-2],
-                                        last_flag, last_rname,
-                                        str(last_pos), last_mapq,
-                                        str(last_seq_size) + 'M', last_rnext,
-                                        last_pnext, last_tlen,
-                                        last_seq, last_qual)
-                    elif self.unmapped_stream is not None \
-                        and not (len(multiread) > 1 or last_multimapped):
-                        '''Write only reads with no possible alignments to
-                        unmapped_stream.'''
-                        print >>self.unmapped_stream, '%s\t%s\t%s' \
-                            % (last_qname, last_seq, last_qual)
-                    multiread = []
-                if not line: break
-                last_tokens = tokens
-                (last_qname, last_flag, last_rname, last_pos, last_mapq,
-                    last_cigar, last_rnext, last_pnext, last_tlen, last_seq,
-                    last_qual) = (qname, flag, rname, pos, mapq, cigar,
-                    rnext, pnext, tlen, seq, qual)
-                (last_seq_size, last_reverse_strand_string, last_end_pos,
-                    last_multimapped) = (seq_size, reverse_strand_string,
-                    end_pos, multimapped)
-                i += 1
+                    if self.exon_intervals:
+                        for partition_id, _, _ in partitions:
+                            print >>self.output_stream, \
+                                'exon_ival\t%s%s\t%d\t%d\t%s' \
+                                % (partition_id, reverse_strand_string, pos, 
+                                    end_pos, sample_label)
+                            output_line_count += 1
+                    if self.splice_sam:
+                        print >>self.output_stream, ('%s\t'*11 + '%s') \
+                                % ('splice_sam', qname[:-2], flag, rname,
+                                    str(pos), mapq, str(seq_size) + 'M', rnext,
+                                    pnext, tlen, seq, qual)
+                elif self.unmapped_stream is not None and not multimapped:
+                    '''Write only reads with no possible alignments to
+                    unmapped_stream.'''
+                    print >>self.unmapped_stream, '%s\t%s\t%s' % (qname, 
+                        seq, qual)
         else:
             # Input is readletized, and readlets must be composed
             '''Create dictionary for gathering aligned readlets belonging
@@ -1089,280 +989,207 @@ class BowtieOutputThread(threading.Thread):
             '''Create dictionary for counting readlets, aligned or not,
             belonging to same read.'''
             readlet_count = {}
-            '''Next readlet must be known to tell if a readlet mapped to
-            multiple locations, so always work with previous read.'''
-            while True:
-                line = self.input_stream.readline()
-                if not line: return # Bowtie output nothing
+            for i, line in enumerate(self.input_stream):
                 # Skip header line
                 if line[0] == '@': continue
-                last_tokens = line.rstrip().split('\t')
-                (last_full_qname, last_flag, last_rname, last_pos, last_mapq,
-                    last_cigar, last_rnext, last_pnext,
-                    last_tlen, last_seq, last_qual) = last_tokens[:11]
-                last_flag = int(last_flag)
-                last_pos = int(last_pos)
-                (last_qname, last_paired_label,
-                    last_five_prime_displacement, 
-                    last_three_prime_displacement,
-                    last_read_seq, last_qual_seq,
-                    last_total_readlets) = last_full_qname.split('\x1f')
-                last_reverse_strand = (last_flag & 16) != 0
-                if last_reverse_strand:
-                    '''last_seq is reverse-complemented; displacement of
-                    readlet's 3' end from read's 3' end is displacement of
-                    readlet's 5' end from read's 5' end on complementary
-                    (forward) strand.'''
-                    last_displacement = int(last_three_prime_displacement)
+                # Variable abbreviations below mirror SAM spec
+                (qname, flag, rname, pos, mapq, cigar, rnext,
+                    pnext, tlen, seq, qual) = line.rstrip().split('\t')[:11]
+                flag = int(flag)
+                pos = int(pos)
+                if self.verbose and next_report_line == i:
+                    print >>sys.stderr, \
+                        'SAM output record %d: rdname="%s", flag=%d' \
+                        % (i, qname, flag)
+                    next_report_line = int((next_report_line + 1)
+                        * self.report_multiplier + 1) - 1
+                '''Recall that readlet name is in the following format,
+                where all semicolons are ASCII unit separators (\x1f):
+                original name;0/1/2 (single- or paired-end label);
+                displacement of readlet's 5' end from read's 5' end;
+                displacement of readlet's 3' end from read's 3' end;
+                read sequence;quality sequence;
+                number of readlets in read.'''
+                (qname, paired_label, five_prime_displacement, 
+                    three_prime_displacement, 
+                    read_seq, qual_seq, total_readlets) = qname.split('\x1f')
+                total_readlets = int(total_readlets)
+                if not readlet_count.has_key((qname, paired_label)):
+                    readlet_count[(qname, paired_label)] = 1
                 else:
-                    last_displacement = int(last_five_prime_displacement)
-                break
-            # Initialize counter
-            i = 0
-            '''While it's labeled multireadlet, this list may end up being
-            simply a unireadlet.'''
-            multireadlet = []
-            while True:
-                line = self.input_stream.readline()
-                if line:
-                    tokens = line.rstrip().split('\t')
-                    (full_qname, flag, rname, pos, mapq, cigar, rnext,
-                        pnext, tlen, seq, qual) = tokens[:11]
-                    flag = int(flag)
-                    pos = int(pos)
-                    '''Recall that a readlet name is in the following format,
-                    where all semicolons are ASCII unit separators (\x1f):
-                    original name;0/1/2 (single- or paired-end label);
-                    displacement of readlet's 5' end from read's 5' end;
-                    displacement of readlet's 3' end from read's 3' end;
-                    read sequence;quality sequence;
-                    number of readlets in read.'''
-                    (qname, paired_label, five_prime_displacement, 
-                        three_prime_displacement, read_seq, qual_seq,
-                        total_readlets) = full_qname.split('\x1f')
+                    readlet_count[(qname, paired_label)] += 1
+                if flag != 4:
+                    # Readlet is mapped
+                    '''All output positions will be with respect to 5' end of
+                    forward strand. Note that seq is reverse-complemented
+                    readlet if sense strand is reverse strand, but
+                    read_seq is NEVER reverse-complemented.'''
                     reverse_strand = (flag & 16) != 0
                     if reverse_strand:
-                        '''seq is reverse-complemented; displacement of
-                        readlet's 3' end from read's 3' end is displacement of
+                        '''seq is reverse-complemented; displacement of 
+                        readlet's 3' end from read's 3' end is displacement of 
                         readlet's 5' end from read's 5' end on complementary
                         (forward) strand.'''
                         displacement = int(three_prime_displacement)
                     else:
                         displacement = int(five_prime_displacement)
-                if self.verbose and next_report_line == i:
-                    print >>sys.stderr, \
-                        'SAM output record %d: rdname="%s", flag=%d' \
-                        % (i, last_qname, last_flag)
-                    next_report_line = int((next_report_line + 1)
-                        * self.report_multiplier + 1) - 1
-                multireadlet.append((last_rname, last_reverse_strand, last_pos,
-                                        last_pos + len(last_seq),
-                                        last_displacement))
-                if not line or full_qname != last_full_qname:
-                    '''If the next qname doesn't match the last qname or there
-                    are no more lines, all of a multireadlet's alignments have
-                    been collected.'''
-                    if (last_qname, last_paired_label) not in readlet_count:
-                        readlet_count[(last_qname, last_paired_label)] = 1
-                    else:
-                        readlet_count[(last_qname, last_paired_label)] += 1
-                    if not (last_flag & 4):
-                        '''Readlet maps, but perhaps not uniquely; decide which
-                        alignment is to be called as an exonic chunk (EC) later
-                        using selected_readlet_alignments(). All output
-                        positions will be with respect to 5' end of forward 
-                        strand. Note that last_seq is reverse-complemented
-                        readlet if sense strand is reverse strand, but
-                        last_read_seq is NEVER reverse-complemented.'''
-                        if (last_qname,
-                                last_paired_label) not in collected_readlets:
-                            collected_readlets[
-                                    (last_qname, last_paired_label)
-                                ] = []
-                        collected_readlets[
-                                    (last_qname, last_paired_label)
-                                ].append(multireadlet)
-                    last_total_readlets = int(last_total_readlets)
-                    if readlet_count[(last_qname, last_paired_label)] \
-                            == last_total_readlets and (last_qname,
-                            last_paired_label) in collected_readlets:
-                        exons, introns = exons_and_introns_from_read(
-                            self.fasta_object, last_read_seq, 
-                            selected_readlet_alignments(
-                                collected_readlets[(last_qname,
-                                                        last_paired_label)]
-                            ),
-                            min_strand_readlets=self.min_strand_readlets,
-                            max_discrepancy=self.max_discrepancy,
-                            min_seq_similarity=self.min_seq_similarity,
-                            substitution_matrix=self.substitution_matrix
-                        )
-                        '''Kill mate information in last_qname so rest of
-                        pipeline associates mates.'''
-                        last_sample_label = sample.parseLab(last_qname[:-2])
-                        if self.exon_differentials:
-                            for exon_strand in exons:
-                                exon_rname, exon_reverse_strand = exon_strand
-                                if self.stranded:
-                                    '''A reverse-strand string is needed iff
-                                    input reads are strand-specific.'''
-                                    exon_reverse_strand_string = '-' if \
-                                        exon_reverse_strand else '+'
-                                else:
-                                    exon_reverse_strand_string = ''
-                                for exon_pos, exon_end_pos \
-                                    in exons[exon_strand]:
-                                    partitions = partition.partition(
-                                        exon_rname, exon_pos, exon_end_pos,
-                                        self.bin_size)
-                                    for (partition_id, partition_start, 
-                                            partition_end) in partitions:
-                                        assert exon_pos < partition_end
-                                        # Print increment at interval start
-                                        print >>self.output_stream, \
-                                            'exon_diff\t%s%s\t%s\t%d\t1' \
-                                            % (partition_id, 
-                                                exon_reverse_strand_string,
-                                                last_sample_label, 
-                                                max(partition_start, exon_pos))
-                                        output_line_count += 1
-                                        assert exon_end_pos > partition_start
-                                        if exon_end_pos < partition_end:
-                                            '''Print decrement at interval end 
-                                            iff exon ends before partition
-                                            ends.'''
-                                            print >>self.output_stream, \
-                                                'exon_diff\t%s%s\t%s\t%d\t-1' \
-                                                % (partition_id, 
-                                                    exon_reverse_strand_string,
-                                                    last_sample_label,
-                                                    exon_end_pos)
-                                            output_line_count += 1
-                        if self.exon_intervals:
-                            for exon_strand in exons:
-                                exon_rname, exon_reverse_strand = exon_strand
-                                if self.stranded:
-                                    '''A reverse-strand string is needed iff
-                                    input reads are strand-specific.'''
-                                    exon_reverse_strand_string = '-' if \
-                                        exon_reverse_strand else '+'
-                                else:
-                                    exon_reverse_strand_string = ''
-                                for exon_pos, exon_end_pos \
-                                    in exons[exon_strand]:
-                                    partitions = partition.partition(
-                                        exon_rname, exon_pos, exon_end_pos,
-                                        self.bin_size)
-                                    for partition_id, _, _ in partitions:
-                                        print >>self.output_stream, \
-                                            'exon_ival\t%s%s\t%d\t%d\t%s' \
-                                            % (partition_id, 
-                                                exon_reverse_strand_string,
-                                                exon_pos, exon_end_pos, 
-                                                last_sample_label)
-                                        output_line_count += 1
-                        # Print introns
-                        for intron_strand in introns:
-                            intron_rname, intron_reverse_strand = intron_strand
+                    if not collected_readlets.has_key((qname, paired_label)):
+                        collected_readlets[(qname, paired_label)] = []
+                    collected_readlets[(qname, paired_label)].append(
+                                (rname, reverse_strand, pos, pos + len(seq), 
+                                    displacement, read_seq)
+                            )
+                if readlet_count[(qname, paired_label)] == total_readlets \
+                    and collected_readlets.has_key((qname, paired_label)):
+                    exons, introns = exons_and_introns_from_read(
+                        self.fasta_object, read_seq, [el[0:5] for el in \
+                            collected_readlets[(qname, paired_label)]],
+                        min_strand_readlets=self.min_strand_readlets,
+                        max_discrepancy=self.max_discrepancy,
+                        min_seq_similarity=self.min_seq_similarity,
+                        substitution_matrix=self.substitution_matrix
+                    )
+                    '''Kill mate information in qname so rest of pipeline
+                    associates mates.'''
+                    sample_label = sample.parseLab(qname[:-2])
+                    if self.exon_differentials:
+                        for exon_strand in exons:
+                            exon_rname, exon_reverse_strand = exon_strand
                             if self.stranded:
                                 '''A reverse-strand string is needed iff input
                                 reads are strand-specific.'''
-                                intron_reverse_strand_string = '-' if \
-                                    intron_reverse_strand else '+'
+                                exon_reverse_strand_string = '-' if \
+                                    exon_reverse_strand else '+'
                             else:
-                                intron_reverse_strand_string = ''
-                            for (intron_pos, intron_end_pos,
-                                    intron_five_prime_displacement, 
-                                    intron_three_prime_displacement) \
-                                    in introns[intron_strand]:
-                                if intron_end_pos - intron_pos \
-                                    > self.max_intron_size:
-                                    if self.verbose: 
-                                        print >> sys.stderr, \
-                                            'Intron of size > ' \
-                                            'max-intron-size = %d' \
-                                            ' filtered at %s:%d-%d' \
-                                            % (self.max_intron_size,
-                                                intron_rname, intron_pos,
-                                                intron_end_pos)
-                                        output_line_count += 1
-                                        continue
-                                partitions = partition.partition(intron_rname,
-                                    intron_pos, intron_pos + 1, self.bin_size,
-                                    fudge=self.intron_partition_overlap)
+                                exon_reverse_strand_string = ''
+                            for exon_pos, exon_end_pos in exons[exon_strand]:
+                                partitions = partition.partition(exon_rname,
+                                    exon_pos, exon_end_pos, self.bin_size)
                                 for (partition_id, partition_start, 
                                         partition_end) in partitions:
+                                    assert exon_pos < partition_end
+                                    # Print increment at interval start
                                     print >>self.output_stream, \
-                                        'intron\t%s%s\t%s\t%d\t%d\t%d\t%d' \
-                                        % (partition_id,
-                                            intron_reverse_strand_string,
-                                            last_sample_label, intron_pos,
-                                            intron_end_pos, 
-                                            intron_five_prime_displacement,
-                                            intron_three_prime_displacement)
+                                        'exon_diff\t%s%s\t%s\t%d\t1' \
+                                        % (partition_id, 
+                                            exon_reverse_strand_string,
+                                            sample_label, 
+                                            max(partition_start, exon_pos))
                                     output_line_count += 1
-                        if self.splice_sam:
-                            '''Print SAM with each line encoding candidate
-                            introns from a single read. NO INTRONS ARE
-                            FILTERED.'''
-                            for intron_strand in introns:
-                                (intron_rname,
-                                    intron_reverse_strand) = intron_strand
-                                strand_introns = introns[intron_strand]
-                                cigar_list = []
-                                cigar_list.append('%dM' \
-                                                    % strand_introns[0][2])
-                                last_intron = strand_introns[0]
-                                for intron in strand_introns[1:]:
-                                    cigar_list.append('%dN' \
-                                        % (last_intron[1] - last_intron[0]))
-                                    cigar_list.append('%dM' \
-                                        % (intron[2] - last_intron[2]))
-                                    last_intron = intron
-                                cigar_list.append('%dN' \
-                                    % (strand_introns[-1][1] 
-                                        - strand_introns[-1][0]))
-                                cigar_list.append('%dM' % \
-                                                    strand_introns[-1][3])
-                                '''First column is "splice_sam"; other 11
-                                columns are standard SAM. See SAM format
-                                specification for details.'''
-                                if intron_reverse_strand:
-                                    # Need to reverse-complement sequence
-                                    splice_sam_tuple = ('splice_sam', qname,
-                                        '16', intron_rname, 
-                                        str(strand_introns[0][0] -
-                                            strand_introns[0][2]), '255', 
-                                        ''.join(cigar_list), '*', '0', '0', 
-                                        read_seq[::-1].translate(
-                                         _reversed_complement_translation_table
-                                        ), qual_seq[::-1])
-                                else:
-                                    splice_sam_tuple = ('splice_sam', qname,
-                                        '0', intron_rname,
-                                        str(strand_introns[0][0] -
-                                            strand_introns[0][2]), '255', 
-                                        ''.join(cigar_list), '*', '0', '0', 
-                                        read_seq, qual_seq)
+                                    assert exon_end_pos > partition_start
+                                    if exon_end_pos < partition_end:
+                                        '''Print decrement at interval end iff 
+                                        exon ends before partition ends.'''
+                                        print >>self.output_stream, \
+                                            'exon_diff\t%s%s\t%s\t%d\t-1' \
+                                            % (partition_id, 
+                                                exon_reverse_strand_string,
+                                                sample_label, exon_end_pos)
+                                        output_line_count += 1
+                    if self.exon_intervals:
+                        for exon_strand in exons:
+                            exon_rname, exon_reverse_strand = exon_strand
+                            if self.stranded:
+                                '''A reverse-strand string is needed iff input
+                                reads are strand-specific.'''
+                                exon_reverse_strand_string = '-' if \
+                                    exon_reverse_strand else '+'
+                            else:
+                                exon_reverse_strand_string = ''
+                            for exon_pos, exon_end_pos in exons[exon_strand]:
+                                partitions = partition.partition(exon_rname,
+                                    exon_pos, exon_end_pos, self.bin_size)
+                                for partition_id, _, _ in partitions:
+                                    print >>self.output_stream, \
+                                        'exon_ival\t%s%s\t%d\t%d\t%s' \
+                                        % (partition_id, 
+                                            exon_reverse_strand_string,
+                                            exon_pos, exon_end_pos, 
+                                            sample_label)
+                                    output_line_count += 1
+                    # Print introns
+                    for intron_strand in introns:
+                        intron_rname, intron_reverse_strand = intron_strand
+                        if self.stranded:
+                            '''A reverse-strand string is needed iff input
+                            reads are strand-specific.'''
+                            intron_reverse_strand_string = '-' if \
+                                intron_reverse_strand else '+'
+                        else:
+                            intron_reverse_strand_string = ''
+                        for (intron_pos, intron_end_pos,
+                                intron_five_prime_displacement, 
+                                intron_three_prime_displacement) in \
+                                introns[intron_strand]:
+                            if intron_end_pos - intron_pos \
+                                > self.max_intron_size:
+                                if self.verbose: 
+                                    print >> sys.stderr, 'Intron of size > ' \
+                                        'max-intron-size = %d' \
+                                        ' filtered at %s:%d-%d' \
+                                        % (self.max_intron_size, intron_rname, 
+                                            intron_pos, intron_end_pos)
+                                    output_line_count += 1
+                                    continue
+                            partitions = partition.partition(intron_rname,
+                                intron_pos, intron_pos + 1, self.bin_size,
+                                fudge=self.intron_partition_overlap)
+                            for (partition_id, partition_start, 
+                                    partition_end) in partitions:
                                 print >>self.output_stream, \
-                                    ('%s\t'*11 + '%s') % splice_sam_tuple
-                        del readlet_count[(last_qname, last_paired_label)]
-                        del collected_readlets[(last_qname, last_paired_label)]
-                    multireadlet = []
-                if not line: break
-                last_tokens = tokens
-                (last_full_qname, last_flag, last_rname, last_pos, last_mapq,
-                    last_cigar, last_rnext, last_pnext, last_tlen, last_seq,
-                    last_qual) = (full_qname, flag, rname, pos, mapq, cigar,
-                    rnext, pnext, tlen, seq, qual)
-                (last_qname, last_paired_label, last_five_prime_displacement, 
-                    last_three_prime_displacement, last_read_seq,
-                    last_qual_seq, last_total_readlets) = (qname, paired_label,
-                    five_prime_displacement, three_prime_displacement, 
-                    read_seq, qual_seq, total_readlets)
-                (last_reverse_strand, last_displacement) = (reverse_strand,
-                    displacement)
-                i += 1
+                                    'intron\t%s%s\t%s\t%d\t%d\t%d\t%d' \
+                                    % (partition_id,
+                                        intron_reverse_strand_string,
+                                        sample_label, intron_pos,
+                                        intron_end_pos, 
+                                        intron_five_prime_displacement,
+                                        intron_three_prime_displacement)
+                                output_line_count += 1
+                    if self.splice_sam:
+                        '''Print SAM with each line encoding candidate introns
+                        from a single read. NO INTRONS ARE FILTERED.'''
+                        for intron_strand in introns:
+                            intron_rname, intron_reverse_strand = intron_strand
+                            strand_introns = introns[intron_strand]
+                            cigar_list = []
+                            cigar_list.append('%dM' \
+                                                % strand_introns[0][2])
+                            last_intron = strand_introns[0]
+                            for intron in strand_introns[1:]:
+                                cigar_list.append('%dN' % (last_intron[1]
+                                                            - last_intron[0]))
+                                cigar_list.append('%dM' % (intron[2]
+                                                            - last_intron[2]))
+                                last_intron = intron
+                            cigar_list.append('%dN' \
+                                                % (strand_introns[-1][1]
+                                                     - strand_introns[-1][0]))
+                            cigar_list.append('%dM' % \
+                                                strand_introns[-1][3])
+                            '''First column is "splice_sam"; other 11 columns
+                            are standard SAM. See SAM format specification
+                            for details.'''
+                            if intron_reverse_strand:
+                                # Need to reverse-complement sequence
+                                splice_sam_tuple = ('splice_sam', qname,
+                                    '16', intron_rname, 
+                                    str(strand_introns[0][0] -
+                                        strand_introns[0][2]), '255', 
+                                    ''.join(cigar_list), '*', '0', '0', 
+                                    read_seq[::-1].translate(
+                                     _reversed_complement_translation_table
+                                    ), qual_seq[::-1])
+                            else:
+                                splice_sam_tuple = ('splice_sam', qname,
+                                    '0', intron_rname,
+                                    str(strand_introns[0][0] -
+                                        strand_introns[0][2]), '255', 
+                                    ''.join(cigar_list), '*', '0', '0', 
+                                    read_seq, qual_seq)
+                            print >>self.output_stream, ('%s\t'*11 + '%s') \
+                                % splice_sam_tuple
+                    del readlet_count[(qname, paired_label)]
+                    del collected_readlets[(qname, paired_label)]
 
 def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
     bowtie_exe="bowtie", bowtie_index_base="genome", bowtie_args=None,
