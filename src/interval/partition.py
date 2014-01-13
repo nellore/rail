@@ -31,7 +31,7 @@ def partition(refid, st, en, binSize, fudge=0):
         overlapping.'''
     binid_st = int((st - fudge - 1) / binSize)
     binid_en = int((en + fudge - 2) / binSize)
-    return [ (";".join([refid, str(i)]), i * binSize, (i+1) * binSize) for i in xrange(binid_st, binid_en+1) ]
+    return [ (";".join([refid, str(i)]), (i * binSize + 1), ((i+1) * binSize) + 1) for i in xrange(binid_st, binid_en+1) ]
 
 def partitionOverlaps(refid, st, en, binSize, fudge=0):
     ''' Assign the interval refid:[st, en) to one or more partitions based on

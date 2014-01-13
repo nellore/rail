@@ -116,13 +116,13 @@ parser.add_argument('--faidx', type=str, required=False,
 parser.add_argument('--min-readlet-size', type=int, required=False, default=12, 
     help='Capping readlets (that is, readlets that terminate '
          'at a given end of the read) are never smaller than this value')
-parser.add_argument('--max-readlet-size', type=int, required=False, default=76, 
+parser.add_argument('--max-readlet-size', type=int, required=False, default=25, 
     help='Size of every noncapping readlet')
-parser.add_argument('--readlet-interval', type=int, required=False, default=3, 
+parser.add_argument('--readlet-interval', type=int, required=False, default=5, 
     help='Number of bases separating successive noncapping readlets along '
          'the read')
 parser.add_argument('--capping-fraction', type=float, required=False,
-    default=0.75, 
+    default=0.5, 
     help='Successive capping readlets on a given end of a read are tapered '
          'in size exponentially with this fractional base')
 parser.add_argument('--report_multiplier', type=float, required=False,
@@ -157,7 +157,7 @@ parser.add_argument('--min-intron-size', type=int, required=False,
     default=5,
     help='Filters introns of length smaller than this value')
 parser.add_argument('--max-intron-size', type=int, required=False,
-    default=1000000, 
+    default=750000, 
     help='Filters introns of length greater than this value')
 parser.add_argument('--min-strand-readlets', type=int, required=False,
     default=1, 
@@ -575,6 +575,8 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
             _reversed_complement_translation_table
         )
     introns, exons = {}, {}
+    '''To make continuing outer loop from inner loop below possible.'''
+    continue_strand_loop = False
     for strand in composed:
         introns[strand], exons[strand] = [], []
         rname, reverse_strand = strand
@@ -622,9 +624,12 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                 Read      |-----=============------=============|
                                     EC #2              EC #1
 
-                These situations are pathological. Throw out the entire read by
-                returning empty exon and intron lists.'''
-                return {}, {}
+                These situations are pathological. Throw out the strand by
+                deleting it from the exon and intron lists after continuing.'''
+                continue_strand_loop = True
+                introns[strand] = []
+                exons[strand] = []
+                break
             reference_distance = pos - last_end_pos
             read_distance = displacement - unmapped_displacement
             discrepancy = reference_distance - read_distance
@@ -648,10 +653,10 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                     subsumes the outside possibility that EC #1 overlaps
                     EC #2 by as much the constraint that EC #2 doesn't begin 
                     before EC #1 on the reference allows. This is likely an 
-                    insertion in the read with respect to the reference, and
-                    the ECs are still merged.'''
-                    unmapped_displacement = end_pos - pos + displacement
-                    last_end_pos = end_pos
+                    insertion in the read with respect to the reference.
+                    Keep the ECs distinct. CAN BE MODIFIED LATER TO
+                    ACCOMMODATE CALLING INDELS.'''
+                    call_exon = True
                 else:
                     '''pos - last_end_pos >= min_intron_size
                     Example case handled:
@@ -745,10 +750,11 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                     last_end_pos += split
                     call_exon, call_intron = True, True
                 else: 
-                    '''discrepancy < -max_discrepancy; is also likely large
+                    '''discrepancy < -max_discrepancy; is likely a large
                     insertion with respect to reference, but not too large:
                     EC #2 never begins before EC #1 on the reference.
-                    Again, merge ECs.
+                    Again, call distinct ECs. CAN BE MODIFIED LATER TO
+                    ACCOMMODATE CALLING INDELS.
 
                     Example case handled:
                                       EC #1       UMR          EC #2               
@@ -758,8 +764,7 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                                            EC #1  gap     EC #2
                     UMR = unmapped region.
                     '''
-                    unmapped_displacement = end_pos - pos + displacement
-                    last_end_pos = end_pos
+                    call_exon = True
             if call_intron:
                 # Call the reference region between the two ECs an intron.
                 introns[strand].append((last_end_pos, pos, displacement, 
@@ -771,11 +776,20 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                 unmapped_displacement = end_pos - pos + displacement
                 (last_pos, last_end_pos, last_displacement) = \
                     (pos, end_pos, displacement)
+        if continue_strand_loop:
+            continue_strand_loop = False
+            continue
         '''Final exonic chunk must still be called since it won't get merged 
         with any other chunks. Check to see if region to right of chunk needs 
-        filling first.'''
+        filling first. The method for determining unmapped_base_count may
+        give a negative result. This pathological case is thrown out by
+        skipping to the next strand.'''
         unmapped_base_count = read_seq_size - unmapped_displacement
-        if unmapped_displacement != read_seq_size:
+        if unmapped_base_count < 0:
+            introns[strand] = []
+            exons[strand] = []
+            continue
+        if unmapped_displacement != read_seq_size and unmapped_base_count > 0:
             if needlemanWunsch.needlemanWunsch(
                                 current_read_seq[unmapped_displacement:],
                                 fasta_object.fetch_sequence(rname,
@@ -800,9 +814,6 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
     return exons, introns
 
 def selected_readlet_alignments(readlets):
-    print >>sys.stderr, 'readlets'
-    print >>sys.stderr, readlets
-    print >>sys.stderr, '/readlets'
     final_readlets = []
     multireadlets = []
     for readlet in readlets:
@@ -834,9 +845,41 @@ def selected_readlet_alignments(readlets):
                 alignment = (rname, reverse_strand, pos, end_pos, displacement)
             last_overlap = overlap
         if alignment is not None: final_readlets.append(alignment)
-    print >>sys.stderr, 'final readlets'
-    print >>sys.stderr, final_readlets
-    print >>sys.stderr, '/final readlets'
+    return final_readlets
+
+def selected_readlet_alignments_2(readlets):
+    # Construct coverage distribution
+    coverage = {}
+    for multireadlet in readlets:
+        coverage_unit = 1. / len(multireadlet)
+        for rname, reverse_strand, pos, end_pos, displacement in multireadlet:
+            if (rname, reverse_strand) not in coverage:
+                coverage[(rname, reverse_strand)] = {}
+            for covered_base_pos in xrange(pos, end_pos):
+                if covered_base_pos not in coverage[(rname, reverse_strand)]:
+                    coverage[(rname, reverse_strand)][covered_base_pos] = 0
+                coverage[(rname, reverse_strand)][covered_base_pos] \
+                    += coverage_unit
+    final_readlets = []
+    '''Choose alignment of multireadlet with highest total coverage. If there
+    is a tie among top alignments, discard multireadlet.'''
+    for multireadlet in readlets:
+        assert len(multireadlet) >= 1
+        if len(multireadlet) == 1:
+            final_readlets.append(multireadlet[0])
+            continue
+        alignments = []
+        for rname, reverse_strand, pos, end_pos, displacement in multireadlet:
+            readlet_coverage = 0
+            for covered_base_pos in xrange(pos, end_pos):
+                readlet_coverage += coverage[(rname, reverse_strand)].get(
+                    covered_base_pos, 0)
+            alignments.append((readlet_coverage, (rname, reverse_strand, pos,
+                                                    end_pos, displacement)))
+        alignments.sort(reverse=True)
+        if not (alignments[1][0] == alignments[0][0]):
+            # Add alignment iff there is no tie in highest coverage
+            final_readlets.append(alignments[0][1])
     return final_readlets
 
 class BowtieOutputThread(threading.Thread):

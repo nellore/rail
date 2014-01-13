@@ -377,9 +377,6 @@ def composed_and_sorted_readlets(readlets, min_strand_readlets=1):
             forward (reverse) strand, and the 5' (3') end of the read.
     """
     # Create dictionary separating readlets by strands to which they align
-    print >>sys.stderr, 'thisisuncomposed'
-    print >>sys.stderr, readlets
-    print >>sys.stderr, '/thisisuncomposed'
     uncomposed = {}
     for rname, reverse_strand, pos, end_pos, displacement in readlets:
         assert end_pos > pos
@@ -416,9 +413,6 @@ def composed_and_sorted_readlets(readlets, min_strand_readlets=1):
     
     '''Now composed[strand] is list of candidate exonic chunks
     (pos, end_pos, displacement) ordered by pos, the reference position.'''
-    print >>sys.stderr, 'thisiscomposed'
-    print >>sys.stderr, composed
-    print >>sys.stderr, '/thisiscomposed'
     return composed
 
 def unmapped_region_splits(unmapped_seq, left_reference_seq,
@@ -629,7 +623,7 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                                     EC #2              EC #1
 
                 These situations are pathological. Throw out the entire read by
-                returning empty exon and intron lists.'''
+                skipping the strand.'''
                 return {}, {}
             reference_distance = pos - last_end_pos
             read_distance = displacement - unmapped_displacement
@@ -655,9 +649,9 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
                     EC #2 by as much the constraint that EC #2 doesn't begin 
                     before EC #1 on the reference allows. This is likely an 
                     insertion in the read with respect to the reference, and
-                    the ECs are still merged.'''
-                    unmapped_displacement = end_pos - pos + displacement
-                    last_end_pos = end_pos
+                    the ECs are called separately. CAN BE MODIFIED TO CALL
+                    SMALL INSERTION INSTEAD.'''
+                    call_exon = True
                 else:
                     '''pos - last_end_pos >= min_intron_size
                     Example case handled:

@@ -16,13 +16,13 @@ def addArgs(parser):
     parser.add_argument(\
         '--quality', metavar='STR', type=str, default="phred33", help='Quality string format.')
     parser.add_argument(\
-        '--readlet-length', metavar='INT', type=int, default="25", help='Substring length to extract from read.')
+        '--readlet-length', metavar='INT', type=int, default="22", help='Substring length to extract from read.')
     parser.add_argument(\
-        '--readlet-interval', metavar='INT', type=int, default="7", help='Distance between substrings to extract from read.')
+        '--readlet-interval', metavar='INT', type=int, default="5", help='Distance between substrings to extract from read.')
     parser.add_argument(\
         '--partition-length', metavar='INT', type=int, default=30000, help='Size of genome partitions to use.')
     parser.add_argument(\
-        '--cluster-radius', metavar='INT', type=int, default="2", help='For clustering candidate introns into junctions.')
+        '--cluster-radius', metavar='INT', type=int, default="5", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
         '--intron-partition-overlap', metavar='INT', type=int, default="20", help='# of nucleotides of overlap between intron-finding partitions.')
     parser.add_argument(\
@@ -74,7 +74,7 @@ class Rail_RNAConfig(object):
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
-        self._bowtieArgs = args.bowtie_args or "-v 1 -m 10"
+        self._bowtieArgs = args.bowtie_args or "-v 1 -k 3"
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)
