@@ -122,7 +122,7 @@ parser.add_argument('--readlet-interval', type=int, required=False, default=5,
     help='Number of bases separating successive noncapping readlets along '
          'the read')
 parser.add_argument('--capping-fraction', type=float, required=False,
-    default=0.5, 
+    default=0.85, 
     help='Successive capping readlets on a given end of a read are tapered '
          'in size exponentially with this fractional base')
 parser.add_argument('--report_multiplier', type=float, required=False,
@@ -179,6 +179,12 @@ parser.add_argument('--min-seq-similarity', type=float, required=False,
          'alignment is >= --min-seq-similarity * (length of unmapped region), '
          'the unmapped region is incorporated into a single EC spanning the '
          'two original ECs via DP filling')
+parser.add_argument('--assign-multireadlets-by-coverage', action='store_const',
+    const=True, default=False, 
+    help='Use readlet coverage to determine which alignment of multireadlet '
+         'should be selected. If True, alignment that spans region with '
+         'highest coverage is selected. If False, alignment of multireadlet '
+         'closest to set of unireadlets is chosen instead.')
 parser.add_argument('--archive', metavar='PATH', type=str, 
     default=None,
     help='Save output and Bowtie command to a subdirectory (named using this ' 
@@ -813,18 +819,64 @@ def exons_and_introns_from_read(fasta_object, read_seq, readlets,
         del introns[strand]
     return exons, introns
 
-def selected_readlet_alignments(readlets):
+def selected_readlet_alignments_by_distance(readlets):
+    """ Selects multireadlet alignment closest to set of unireadlet alignments.
+
+        Consider a list "readlets" whose items {R_i} correspond to the aligned
+        readlets from a given read. Each R_i is itself a list of the possible
+        alignments {R_ij} of a readlet. Each R_ij is a tuple
+        (rname, reverse_strand, pos, end_pos, displacement), where rname is
+        the SAM-format rname (typically a chromosome), reverse_strand is True
+        iff the readlet's reversed complement aligns to the reference, and
+        displacement is the number of bases between the 5' (3') end of the
+        readlet, which aligns to the forward (reverse) strand, and the 5' (3')
+        end of the read.
+
+        The algo first separates readlets into two sets: those that align
+        uniquely (unireadlets U_i, a subset of K_i) and those that don't
+        (multireadlets M_i, a subset of K_i). It then chooses the multireadlet
+        alignment closest (in bp) to the set of unireadlet alignments; if more
+        than one alignment of a multireadlet overlaps any of the unireadlets,
+        the alignment whose overlap with any of the unireadlets is greatest is
+        chosen. More specifically, let {M_ij} be the set of alignments of M_i,
+        and slightly abusing notation, let U_i correspond to not just a
+        unireadlet, but also its alignment. Denote the interval spanned by some
+        alignment X as [S_X, E_X). For a given multireadlet M_i, the algorithm
+        selects M_ij by computing
+
+        argmax_j max_k ( min(E_(U_k), E_(M_ij)) - max(S_(U_k), S_(M_ij)) ) .
+
+        If there are no unireadlets, the algorithm returns an empty list of
+        alignments. Preliminary tests suggest this algo is more effective than
+        selected_readlet_alignments_by_coverage().
+
+        readlets: a list whose items {R_i} correspond to the aligned readlets
+            from a given read. Each R_i is itself a list of the possible
+            alignments {R_ij} of a readlet. Each R_ij is a tuple
+            (rname, reverse_strand, pos, end_pos, displacement). See above
+            for a detailed explanation.
+
+        Return value: a list of selected alignment tuples
+            (rname, reverse_strand, pos, end_pos, displacement).
+    """
+    # Final readlets is first populated with unireadlets
     final_readlets = []
     multireadlets = []
     for readlet in readlets:
         if len(readlet) == 1:
+            # Add unireadlet
             final_readlets.append(readlet[0])
         else:
             multireadlets.append(readlet)
     if len(final_readlets) == 0:
+        '''If there are no unireadlets, the algo doesn't work, so throw out
+        read by returning an empty list.'''
         return []
     if len(multireadlets) == 0:
+        '''If there are no multireadlets, no selection has to be performed,
+        so just return alignments immediately.'''
         return final_readlets
+    # Store unireadlets in dictionary for fast lookups
     unireadlets = {}
     for rname, reverse_strand, pos, end_pos, displacement in final_readlets:
         if (rname, reverse_strand) not in unireadlets:
@@ -832,6 +884,7 @@ def selected_readlet_alignments(readlets):
         unireadlets[(rname, reverse_strand)].append(
                 (pos, end_pos, displacement)
             )
+    # Find multireadlet alignment with "closest" unireadlet
     for multireadlet in multireadlets:
         last_overlap = None
         alignment = None
@@ -847,7 +900,38 @@ def selected_readlet_alignments(readlets):
         if alignment is not None: final_readlets.append(alignment)
     return final_readlets
 
-def selected_readlet_alignments_2(readlets):
+def selected_readlet_alignments_by_coverage(readlets):
+    """ Selects multireadlet alignment that spans region with highest coverage.
+    
+        Consider a list "readlets" whose items {R_i} correspond to the aligned
+        readlets from a given read. Each R_i is itself a list of the possible
+        alignments {R_ij} of a readlet. Each R_ij is a tuple
+        (rname, reverse_strand, pos, end_pos, displacement), where rname is
+        the SAM-format rname (typically a chromosome), reverse_strand is True
+        iff the readlet's reversed complement aligns to the reference, and
+        displacement is the number of bases between the 5' (3') end of the
+        readlet, which aligns to the forward (reverse) strand, and the 5' (3')
+        end of the read. Let K_i be the number of alignments {R_ij} of a given
+        readlet R_i
+
+        The algo first constructs a coverage distribution from the {R_i}. Each
+        base position B of the reference spanned by a given R_ij contributes
+        1 / K_i to the coverage at B. The algo then selects the j for which
+        R_ij spans the region with the highest coverage, where a region's
+        coverage is computed by summing the coverages over all its bases.
+
+        Preliminary tests suggest this algo is less effective than
+        selected_readlet_alignments_by_distance().
+
+        readlets: a list whose items {R_i} correspond to the aligned readlets
+            from a given read. Each R_i is itself a list of the possible
+            alignments {R_ij} of a readlet. Each R_ij is a tuple
+            (rname, reverse_strand, pos, end_pos, displacement). See above
+            for a detailed explanation.
+
+        Return value: a list of selected alignment tuples
+            (rname, reverse_strand, pos, end_pos, displacement).
+    """
     # Construct coverage distribution
     coverage = {}
     for multireadlet in readlets:
@@ -856,10 +940,10 @@ def selected_readlet_alignments_2(readlets):
             if (rname, reverse_strand) not in coverage:
                 coverage[(rname, reverse_strand)] = {}
             for covered_base_pos in xrange(pos, end_pos):
-                if covered_base_pos not in coverage[(rname, reverse_strand)]:
-                    coverage[(rname, reverse_strand)][covered_base_pos] = 0
                 coverage[(rname, reverse_strand)][covered_base_pos] \
-                    += coverage_unit
+                    = coverage[(rname, reverse_strand)].get(
+                            covered_base_pos, 0
+                        ) + coverage_unit
     final_readlets = []
     '''Choose alignment of multireadlet with highest total coverage. If there
     is a tie among top alignments, discard multireadlet.'''
@@ -891,6 +975,7 @@ class BowtieOutputThread(threading.Thread):
         splice_sam=True, verbose=False, bin_size=10000, min_intron_size=5,
         min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
         max_intron_size=100000, intron_partition_overlap=20,
+        assign_multireadlets_by_coverage=False,
         substitution_matrix=needlemanWunsch.matchCost(), 
         report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
@@ -942,6 +1027,11 @@ class BowtieOutputThread(threading.Thread):
             intron_partition_overlap: number of bases to subtract from
                 reference start position and add to reference end position of
                 intron when computing genome partitions it is in.
+            assign_multireadlets_by_coverage: True iff multireadlet alignments
+                should be selected based on readlet coverage via
+                selected_readlet_alignments_by_coverage(). False iff
+                multireadlet alignments should be selected based on distance to
+                unireadlets via selected_readlet_alignments_by_distance().
             substitution_matrix: 6 x 6 substitution matrix (numpy object or
                 list of lists) for scoring filling and framing alignments; rows
                 and columns correspond to ACGTN-, where N is aNy and - is a
@@ -968,6 +1058,8 @@ class BowtieOutputThread(threading.Thread):
         self.exon_intervals = exon_intervals
         self.splice_sam = splice_sam
         self.max_intron_size = max_intron_size
+        self.assign_multireadlets_by_coverage \
+            = assign_multireadlets_by_coverage
         self.intron_partition_overlap = intron_partition_overlap
         self.substitution_matrix = substitution_matrix
 
@@ -1229,12 +1321,23 @@ class BowtieOutputThread(threading.Thread):
                     if readlet_count[(last_qname, last_paired_label)] \
                             == last_total_readlets and (last_qname,
                             last_paired_label) in collected_readlets:
+                        '''Choose algorithm for selecting alignments from
+                        multireadlets.'''
+                        if self.assign_multireadlets_by_coverage:
+                            filtered_alignments \
+                                = selected_readlet_alignments_by_coverage(
+                                        collected_readlets[(last_qname,
+                                                            last_paired_label)]
+                                    )
+                        else:
+                            filtered_alignments \
+                                = selected_readlet_alignments_by_distance(
+                                        collected_readlets[(last_qname,
+                                                            last_paired_label)]
+                                    )
                         exons, introns = exons_and_introns_from_read(
-                            self.fasta_object, last_read_seq, 
-                            selected_readlet_alignments(
-                                collected_readlets[(last_qname,
-                                                        last_paired_label)]
-                            ),
+                            self.fasta_object, last_read_seq,
+                            filtered_alignments,
                             min_strand_readlets=self.min_strand_readlets,
                             max_discrepancy=self.max_discrepancy,
                             min_seq_similarity=self.min_seq_similarity,
@@ -1416,6 +1519,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
     max_readlet_size=25, readlet_interval=5, capping_fraction=.75,
     min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
     min_intron_size=5, max_intron_size=100000, intron_partition_overlap=20, 
+    assign_multireadlets_by_coverage=False,
     substitution_matrix=needlemanWunsch.matchCost(), report_multiplier=1.2):
     """ Runs Rail-RNA-align.
 
@@ -1558,6 +1662,11 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
         intron_partition_overlap: number of bases to subtract from reference
             start position and add to reference end position of intron when
             computing genome partitions it is in.
+        assign_multireadlets_by_coverage: True iff multireadlet alignments
+            should be selected based on readlet coverage via
+            selected_readlet_alignments_by_coverage(). False iff multireadlet
+            alignments should be selected based on distance to unireadlets
+            via selected_readlet_alignments_by_distance().
         substitution_matrix: 6 x 6 substitution matrix (numpy object or list of
             lists) for scoring filling and framing alignments; rows and columns
             correspond to ACGTN-, where N is aNy and - is a gap.
@@ -1649,6 +1758,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
             max_intron_size=max_intron_size,
             stranded=stranded,
             intron_partition_overlap=intron_partition_overlap,
+            assign_multireadlets_by_coverage=assign_multireadlets_by_coverage,
             substitution_matrix=substitution_matrix,
             report_multiplier=report_multiplier
         )
@@ -1705,6 +1815,7 @@ if not args.test:
         min_seq_similarity=args.min_seq_similarity, 
         max_intron_size=args.max_intron_size,
         intron_partition_overlap=args.intron_partition_overlap,
+        assign_multireadlets_by_coverage=args.assign_multireadlets_by_coverage,
         substitution_matrix=needlemanWunsch.matchCost(),
         report_multiplier=args.report_multiplier)
 else:
@@ -2301,5 +2412,53 @@ else:
         def tearDown(self):
             # Kill temporary directory
             shutil.rmtree(self.temp_dir_path)
+
+    class TestSelectedReadletAlignmentsByDistance(unittest.TestCase):
+        """ Tests selected_readlet_alignments_by_distance(). """
+
+        def test_that_best_overlapped_alignment_is_chosen(self):
+            """ Fails if proper alignment of multireadlet is not chosen.
+
+                This test in particular checks if an alignment whose overlap
+                with any of the unireadlets is greatest is chosen.
+            """
+            multireadlets = [[('chr1', False, 35, 55, 1), 
+                ('chr1', False, 45, 96, 11)], [('chr1', False, 46, 90, 12)]]
+            final_alignments = selected_readlet_alignments_by_distance(
+                                    multireadlets
+                                )
+            self.assertTrue(
+                sorted(final_alignments) == [('chr1', False, 45, 96, 11),
+                                             ('chr1', False, 46, 90, 12)]
+            )
+
+    class TestSelectedReadletAlignmentsByCoverage(unittest.TestCase):
+        """ Tests selected_readlet_alignments_by_coverage(). """
+
+        def test_that_best_covered_alignment_is_chosen(self):
+            """ Fails if proper alignment of multireadlet is not chosen.
+            """
+            multireadlets = [[('chr1', False, 35, 55, 1), 
+                ('chr1', False, 45, 96, 11)], [('chr1', False, 46, 90, 12)]]
+            final_alignments = selected_readlet_alignments_by_coverage(
+                                    multireadlets
+                                )
+            self.assertTrue(
+                sorted(final_alignments) == [('chr1', False, 45, 96, 11),
+                                             ('chr1', False, 46, 90, 12)]
+            )
+
+        def test_that_no_alignment_is_chosen_in_case_of_tie(self):
+            """Fails if alignments of multireadlet aren't thrown out.
+            """
+            '''Below, the multireadlet at the first position in multireadlets
+            contains alignments that overlap the unireadlet at the second
+            position in multireadlets equally.'''
+            multireadlets = [[('chr1', False, 25, 55, 1), 
+                ('chr1', False, 55, 85, 31)], [('chr1', False, 52, 58, 31)]]
+            final_alignments = selected_readlet_alignments_by_coverage(
+                                    multireadlets
+                                )
+            self.assertTrue(final_alignments == [('chr1', False, 52, 58, 31)])
 
     unittest.main()
