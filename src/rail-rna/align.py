@@ -122,7 +122,7 @@ parser.add_argument('--readlet-interval', type=int, required=False, default=5,
     help='Number of bases separating successive noncapping readlets along '
          'the read')
 parser.add_argument('--capping-fraction', type=float, required=False,
-    default=0., 
+    default=0.85, 
     help='Successive capping readlets on a given end of a read are tapered '
          'in size exponentially with this fractional base')
 parser.add_argument('--report_multiplier', type=float, required=False,

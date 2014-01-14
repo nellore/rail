@@ -20,7 +20,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--readlet-interval', metavar='INT', type=int, default="1", help='Distance between substrings to extract from read.')
     parser.add_argument(\
-        '--capping-fraction', metavar='INT', type=int, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
+        '--capping-fraction', metavar='FRACTION', type=float, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\
         '--partition-length', metavar='INT', type=int, default=30000, help='Size of genome partitions to use.')
     parser.add_argument(\
