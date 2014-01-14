@@ -34,12 +34,37 @@ reverse-complemented intron.
 6. Number of nucleotides between 3' end of candidate intron and 3' end of read 
 from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
 
-Output (written to stdout)
+Hadoop output (written to stdout)
 ----------------------------
-Tab-delimited columns recording splice sites 
-....
+Format 1 (span): tab-delimited columns, one line per read spanning a splice
+site:
+1. SAM-format RNAME + ';' + ('+' or '-' indicating which strand is the sense
+    strand)
+2. Intron start (inclusive) on forward strand (1-indexed)
+3. Intron end (exclusive) on forward strand (1-index)
+4. Left motif (donor motif if sense strand is '+'; acceptor motif otherwise)
+5. Right motif (acceptor motif if sense strand is '+'; donor motif otherwise)
+6. Sample label from which read was derived
 
-OUTPUT BED COORDINATES ARE 0-INDEXED
+Format 2 (site): tab-delimited columns, one line per splice site spanned by
+the reads in a sample
+1. SAM-format RNAME + ';' + ('+' or '-' indicating which strand is the sense
+    strand)
+2. Intron start (inclusive) on forward strand (1-indexed)
+3. Intron end (exclusive) on forward strand (1-index)
+4. Left motif (donor motif if sense strand is '+'; acceptor motif otherwise)
+5. Right motif (acceptor motif if sense strand is '+'; donor motif otherwise)
+6. Sample label with nonzero number of reads spanning splice site
+7. Number of reads in sample spanning splice site
+
+Format 3 (junction):
+12-column (3 required fields + 9 optional fields) BED output mimicking TopHat's
+junctions.bed. From the TopHat manual http://tophat.cbcb.umd.edu/manual.shtml:
+"Each junction consists of two connected BED blocks, where each block is as
+long as the maximal overhang of any read spanning the junction. The score is
+the number of alignments spanning the junction."
+
+OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE 1-INDEXED.
 """
 import os
 import sys
@@ -132,7 +157,7 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
         out every cluster whose leftmost intron is not wholly within
         [partition_start, partition_end).
         
-        candidate_introns: A dictionary. Each key is a tuple
+        candidate_introns: a dictionary. Each key is a tuple
             (start_position, end_position) and its corresponding value is a
             list (of length read_count), each of whose items is a tuple
             (sample_label, five_prime_displacement, three_prime_displacement)
@@ -141,15 +166,15 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
             the candidate from the 5' end of the read, while
             three_prime_displacement is the displacement of the 3' end of
             the candidate from the 3' end of the read
-        partition_start: Start position (inclusive) of partition.
-        partition_end: End position (exclusive) of partition.
-        cluster_radius: Distance from a candidate intron under examination
+        partition_start: start position (inclusive) of partition.
+        partition_end: end position (exclusive) of partition.
+        cluster_radius: distance from a candidate intron under examination
             within which to search for candidate introns in the same cluster.
             See above for a detailed description.
         verbose: True iff counts of possible splice junctions, clusters, and
             filtered clusters should be written to stderr.
 
-        Return value: A list of lists, each of which corresponds to a cluster
+        Return value: a list of lists, each of which corresponds to a cluster
         of candidate introns. Each item in a cluster is a tuple
         (start_position, end_position, sample_label, five_prime_displacement,
             three_prime_displacement), which corresponds to a read
@@ -364,6 +389,107 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
     bin_size=10000, cluster_radius=5, per_site=False, per_span=True,
     output_bed=True, stranded=False, intron_partition_overlap=20,
     verbose=False):
+    """ Runs Rail-RNA-intron.
+
+        Input lines are binned, so they are examined two at a time. When the
+        first column of the input --- the partition --- differs between the
+        two lines, all the candidate introns starting in a given partition
+        have been collected. The algo then clusters candidate introns within
+        a partition (see intron_clusters_in_partition()), ranks each cluster's
+        possible splice sites by searching for nearby donor/acceptor motifs
+        (see ranked_splice_sites_from_cluster()), and writes output in any
+        or all of three formats.
+
+        If the input reads are NOT stranded, then all relevant splice junction
+        (donor/acceptor) motifs must be permitted, including, e.g. both GT-AG
+        and CT-AC. If the input reads are stranded, motifs that are
+        inconsistent with the strand of the flanking aligned sequences can be
+        ignored. The --stranded option handles this.
+
+        Input (read from input_stream)---
+        Tab-delimited columns:
+        1. Reference name (RNAME in SAM format) + ';' + partition number +  
+            ('+' or '-' indicating which strand is the sense strand if input
+                reads are strand-specific -- that is, --stranded in
+                Rail-RNA-align was invoked; otherwise, there is no terminal
+                '+' or '-')
+        2. Sample label
+        3. Candidate intron start (inclusive) on forward strand (1-indexed)
+        4. Candidate intron end (exclusive) on forward strand (1-indexed)
+        5. Number of nucleotides between 5' end of candidate intron and 5' end
+        of read from which it was inferred, ASSUMING THE SENSE STRAND IS THE
+        FORWARD STRAND. That is, if the sense strand is the reverse strand,
+        this is the distance between the 5' end of the reverse-complemented
+        read and the 5' end of the reverse-complemented intron.
+        6. Number of nucleotides between 3' end of candidate intron and 3' end
+        of read from which it was inferred, ASSUMING THE SENSE STRAND IS THE
+        FORWARD STRAND.
+
+        Hadoop output (written to output_stream)---
+        Format 1 (span): tab-delimited columns, one line per read spanning a
+        splice site:
+        1. SAM-format RNAME + ';' + ('+' or '-' indicating which strand is the
+            sense strand)
+        2. Intron start (inclusive) on forward strand (1-indexed)
+        3. Intron end (exclusive) on forward strand (1-index)
+        4. Left motif (donor motif if sense strand is '+'; acceptor motif 
+            otherwise)
+        5. Right motif (acceptor motif if sense strand is '+'; donor motif
+            otherwise)
+        6. Sample label from which read was derived
+
+        Format 2 (site): tab-delimited columns, one line per splice site
+        spanned by the reads in a sample
+        1. SAM-format RNAME + ';' + ('+' or '-' indicating which strand is the
+            sense strand)
+        2. Intron start (inclusive) on forward strand (1-indexed)
+        3. Intron end (exclusive) on forward strand (1-index)
+        4. Left motif (donor motif if sense strand is '+'; acceptor motif
+            otherwise)
+        5. Right motif (acceptor motif if sense strand is '+'; donor motif
+            otherwise)
+        6. Sample label with nonzero number of reads spanning splice site
+        7. Number of reads in sample spanning splice site
+
+        Format 3 (junction):
+        12-column (3 required fields + 9 optional fields) BED output mimicking
+        TopHat's junctions.bed. From the TopHat manual
+        http://tophat.cbcb.umd.edu/manual.shtml:
+        "Each junction consists of two connected BED blocks, where each block
+        is as long as the maximal overhang of any read spanning the junction.
+        The score is the number of alignments spanning the junction."
+
+        OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE
+        1-INDEXED.
+
+        reference_fasta: filename, including path, of the reference fasta.
+        input_stream: where to find input.
+        output_stream: where to emit splice sites.
+        bin_size: genome is partitioned in units of bin_size, and candidate
+            introns from input are in first-column partitions numbered
+            accordingly.
+        cluster_radius: distance from a candidate intron under examination
+            within which to search for candidate introns in the same cluster.
+            See intron_clusters_in_partition()'s docstring for more
+            information.
+        per_site: False iff Format 2 (site) output lines from above should be
+            suppressed.
+        per_span: False iff Format 1 (span) output lines from above should be
+            suppressed.
+        output_bed: False iff Format 3 (junction) output lines from above
+            should be suppressed.
+        stranded: True iff input reads are strand-specific, and lines read
+            from input_stream have first column with terminal '+' or '-'
+            indicating which strand is the sense strand.
+        intron_partition_overlap: number of bases to subtract from
+            reference start position and add to reference end position of
+            candidate intron when determining genome partitions it is in.
+            (That is, input candidate introns are in partitions that overlap
+            by 2*intron_partition_overlap.)
+        verbose: True iff informative messages should be written to stderr.
+
+        No return value.
+"""
     fasta_object = fasta.fasta(reference_fasta)
     input_line_count = 0
     junction_number = 0
@@ -384,8 +510,9 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                                                 int(three_prime_displacement))
             assert end_pos > pos
             if stranded:
-                '''If input reads are stranded, the partition_id has a terminal
-                '+' or '-' indicating which strand is the sense strand.'''
+                '''If input reads are strand-specific, the partition_id has a
+                terminal '+' or '-' indicating which strand is the sense
+                strand.'''
                 reverse_strand_string = partition_id[-1]
                 rname, partition_start, partition_end = \
                     partition.parse(partition_id[:-1], bin_size)
@@ -453,22 +580,28 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                 for i, (start_position, end_position, z_score_sum, left_motif,
                     right_motif, motif_reverse_strand) \
                     in cluster_splice_sites.items():
+                    motif_reverse_strand_string = '-' if motif_reverse_strand \
+                        else '+'
                     for _, _, sample_label, _, _ in intron_clusters[i]:
                         print >>output_stream, 'span\t%s\t%d\t%d\t%s\t%s\t%s' \
-                            % (last_rname, start_position, end_position, 
+                            % (last_rname + ';' + motif_reverse_strand_string,
+                                start_position, end_position, 
                                 left_motif, right_motif, sample_label)
             if per_site:
                 for i, (start_position, end_position, z_score_sum, left_motif,
                     right_motif, motif_reverse_strand) \
-                    in cluster_splice_sites.items(): 
+                    in cluster_splice_sites.items():
+                    motif_reverse_strand_string = '-' if motif_reverse_strand \
+                        else '+'
                     sample_label_counts = defaultdict(int)
                     for _, _, sample_label, _, _ in intron_clusters[i]:
                         sample_label_counts[sample_label] += 1
                     for sample_label in sample_label_counts:
                         print >>output_stream, \
                             'site\t%s\t%d\t%d\t%s\t%s\t%s\t%s' \
-                            % (last_rname, start_position, end_position, 
-                                left_motif, right_motif, sample_label, 
+                            % (last_rname + ';' + motif_reverse_strand_string,
+                                start_position, end_position, left_motif,
+                                right_motif, sample_label, 
                                 sample_label_counts[sample_label])
             if output_bed:
                 '''The output bed mimics TopHat's junctions.bed. See TopHat
@@ -532,4 +665,3 @@ else:
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
     import unittest
-
