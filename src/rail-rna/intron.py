@@ -482,10 +482,8 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
             from input_stream have first column with terminal '+' or '-'
             indicating which strand is the sense strand.
         intron_partition_overlap: number of bases to subtract from
-            reference start position and add to reference end position of
-            candidate intron when determining genome partitions it is in.
-            (That is, input candidate introns are in partitions that overlap
-            by 2*intron_partition_overlap.)
+            reference start position of candidate intron when determining
+            genome partition it is in.
         verbose: True iff informative messages should be written to stderr.
 
         No return value.

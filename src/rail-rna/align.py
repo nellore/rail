@@ -1025,8 +1025,8 @@ class BowtieOutputThread(threading.Thread):
             max_intron_size: an intron of that spans more than this number of
                 bases is suppressed from output.
             intron_partition_overlap: number of bases to subtract from
-                reference start position and add to reference end position of
-                intron when computing genome partitions it is in.
+                reference start position of intron when determining genome
+                partition it is in.
             assign_multireadlets_by_coverage: True iff multireadlet alignments
                 should be selected based on readlet coverage via
                 selected_readlet_alignments_by_coverage(). False iff
@@ -1659,9 +1659,9 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
             out.
         max_intron_size: an intron of that spans more than this number of bases 
             is suppressed from output.
-        intron_partition_overlap: number of bases to subtract from reference
-            start position and add to reference end position of intron when
-            computing genome partitions it is in.
+        intron_partition_overlap: number of bases to subtract from
+            reference start position of intron when determining genome
+            partition it is in.
         assign_multireadlets_by_coverage: True iff multireadlet alignments
             should be selected based on readlet coverage via
             selected_readlet_alignments_by_coverage(). False iff multireadlet
