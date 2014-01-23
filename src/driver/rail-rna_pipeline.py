@@ -87,13 +87,20 @@ class AlignPostStep(pipeline.Step):
             python %%BASE%%/src/rail-rna/align_post.py
                 --out=%s/spliced_alignments
                 --refseq=%%REF_FASTA%%
-            """ % gconf.out
+                --samtools-exe=%%SAMTOOLS%%
+                --bam-basename=%s
+                %s
+                %s
+            """ % (gconf.out, tconf.bam_basename, 
+                    '--output-by-chromosome' if tconf.output_bam_by_chromosome else '',
+                    '--output-sam' if tconf.output_sam else '')
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(AlignPostStep, self).__init__(\
             inps,
             output,
             name="AlignPost",
-            aggr=pipeline.Aggregation(1, None, 0, 1),
+            aggr=(pipeline.Aggregation(None, 1, 1, 2) if (tconf.output_bam_by_chromosome and gconf.out is not None) \
+                    else pipeline.Aggregation(1, None, 1, 2)),
             reducer=reducerStr)
 
 class IntronStep(pipeline.Step):
@@ -141,13 +148,17 @@ class IntronPostStep(pipeline.Step):
         reducerStr = """
             python %%BASE%%/src/rail-rna/intron_post.py
                 --out=%s/junctions
-            """ % gconf.out
+                --bed-basename=%s
+                %s
+            """ % (gconf.out, tconf.bed_basename, 
+                    '--output-by-chromosome' if tconf.output_bed_by_chromosome else '')
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(IntronPostStep, self).__init__(\
             inps,
             output,
             name="IntronPost",
-            aggr=pipeline.Aggregation(1, None, 0, 1),
+            aggr=(pipeline.Aggregation(None, 1, 1, 2) if (tconf.output_bed_by_chromosome and gconf.out is not None) \
+                    else pipeline.Aggregation(1, None, 1, 2)),
             reducer=reducerStr)
 
 class MergeStep(pipeline.Step):
@@ -190,6 +201,53 @@ class NormalizePreStep(pipeline.Step):
             aggr=pipeline.Aggregation(None, 8, 2, 3),
             reducer=reducerStr,
             multipleOutput=True)
+
+class CoveragePreStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/coverage_pre.py 
+                --partition-stats 
+                --partition-len=%d""" % (tconf.partitionLen)
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(CoveragePreStep, self).__init__(\
+            inps,
+            output,  # output URL
+            name="CoveragePre", # name
+            aggr=pipeline.Aggregation(None, 8, 2, 3),
+            reducer=reducerStr,
+            multipleOutput=True)
+
+class CoverageStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/coverage.py 
+                --percentile %f
+                --out=%s/coverage
+                --bigbed-exe=%%BEDTOBIGBED%%
+                --refseq=%%REF_FASTA%% 
+                --faidx=%%REF_FASTA_INDEX%%
+                --verbose""" % (tconf.normPercentile, gconf.out)
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(CoverageStep, self).__init__(\
+            inps,
+            output,  # output URL
+            name="Coverage", # name
+            aggr=pipeline.Aggregation(None, 1, 1, 3),
+            reducer=reducerStr)
+
+class CoveragePostStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/coverage_post.py 
+                --out=%s/normalize 
+                --manifest=%%MANIFEST%%""" % gconf.out
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(CoveragePostStep, self).__init__(\
+            inps,
+            output,  # output URL
+            name="CoveragePost", # name
+            aggr=pipeline.Aggregation(1, None, 0, 0),
+            reducer=reducerStr)
 
 class NormalizeStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):

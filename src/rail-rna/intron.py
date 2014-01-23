@@ -581,7 +581,8 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
                     for _, _, sample_label, _, _ in intron_clusters[i]:
-                        print >>output_stream, 'span\t%s\t%d\t%d\t%s\t%s\t%s' \
+                        print >>output_stream, 'span\t%s\t%012d\t%012d\t' \
+                            '%s\t%s\t%s' \
                             % (last_rname + ';' + motif_reverse_strand_string,
                                 start_position, end_position, 
                                 left_motif, right_motif, sample_label)
@@ -596,7 +597,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                         sample_label_counts[sample_label] += 1
                     for sample_label in sample_label_counts:
                         print >>output_stream, \
-                            'site\t%s\t%d\t%d\t%s\t%s\t%s\t%s' \
+                            'site\t%s\t%012d\t%012d\t%s\t%s\t%s\t%s' \
                             % (last_rname + ';' + motif_reverse_strand_string,
                                 start_position, end_position, left_motif,
                                 right_motif, sample_label, 
@@ -631,8 +632,8 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                     left_pos = start_position - left_overhang - 1
                     right_pos = end_position + right_overhang - 1
                     print >>output_stream, \
-                        'junction\t%s\t%d\t%d\tJUNC%08d\t%d\t%s\t%d\t%d\t' \
-                        '255,0,0\t2\t%d,%d\t0,%d' \
+                        'junction\t%s\t%012d\t%012d\tJUNC%08d\t%d\t%s\t%d\t' \
+                        '%d\t255,0,0\t2\t%d,%d\t0,%d' \
                         % (last_rname, left_pos, right_pos, junction_number,
                             len(intron_clusters[i]),
                             motif_reverse_strand_string, left_pos, right_pos,
@@ -650,16 +651,17 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
         else: break
 
 # "Main"
-if not args.test:
-    go(args.refseq,
-        bin_size=args.partition_length,
-        cluster_radius=args.cluster_radius,
-        per_site=args.per_site,
-        per_span=args.per_span,
-        output_bed=args.output_bed,
-        intron_partition_overlap=args.intron_partition_overlap,
-        verbose=args.verbose)
-else:
-    # Test units
-    del sys.argv[1:] # Don't choke on extra command-line parameters
-    import unittest
+if __name__ == '__main__':
+    if not args.test:
+        go(args.refseq,
+            bin_size=args.partition_length,
+            cluster_radius=args.cluster_radius,
+            per_site=args.per_site,
+            per_span=args.per_span,
+            output_bed=args.output_bed,
+            intron_partition_overlap=args.intron_partition_overlap,
+            verbose=args.verbose)
+    else:
+        # Test units
+        del sys.argv[1:] # Don't choke on extra command-line parameters
+        import unittest

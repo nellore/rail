@@ -313,7 +313,6 @@ if tot > 0:
     reduce_input_dir = stask_dir if need_sort else task_dir
 
     def do_reduce(task, keep=args.keep_all):
-        message('Pid %d processing task "%s"' % (os.getpid(), task))
         sorted_fn = os.path.join(reduce_input_dir, task)
         sorted_fn = os.path.abspath(sorted_fn)
         if not os.path.exists(sorted_fn):
@@ -325,6 +324,7 @@ if tot > 0:
         check_dir(wd, 800)
         pipe = subprocess.Popen(cmd, bufsize=-1, shell=True, cwd=wd)
         el = pipe.wait()
+        message('Pid %d processing task "%s" with command: "%s"' % (os.getpid(), task, cmd))
         if el != 0:
             msg = 'Reduce command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
             fail_q.put((msg, sorted_fn, err_fn, cmd))
@@ -334,7 +334,6 @@ if tot > 0:
             shutil.rmtree(wd)
         return out_fn
 
-    message('Performing reduce')
     reduce_pool = multiprocessing.Pool(num_processes)
     outfns = []
     r = reduce_pool.map_async(do_reduce, task_names, callback=outfns.extend)

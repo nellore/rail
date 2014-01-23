@@ -16,13 +16,14 @@ def lcsCost():
     return M
 
 def matchCost():
-    """ Return a substitution matrix where match=+1, gap=-2, everything else=-1.  The
+    """ Return a substitution matrix where match=+1, gap=-2, everything else=-1.  
+        Exception: N v. N gives -1. The
         6 symbols are 0=A, 1=C, 2=G, 3=T, 4=N, 5=- (gap). """
     M = numpy.matrix([[ 1,-1,-1,-1,-1,-2],
                       [-1, 1,-1,-1,-1,-2],
                       [-1,-1, 1,-1,-1,-2],
                       [-1,-1,-1, 1,-1,-2],
-                      [-1,-1,-1,-1, 1,-2],
+                      [-1,-1,-1,-1,-1,-2],
                       [-2,-2,-2,-2,-2,-2]],dtype=numpy.int32)
     return M
 
@@ -153,6 +154,9 @@ def needlemanWunsch(first_seq, second_seq, substitution_matrix, check=False):
     # Make sure cases are the same
     first_seq = first_seq.upper()
     second_seq = second_seq.upper()
+    # Change all non-ATCGs to Ns
+    first_seq = re.sub(r'[^ATCG]', 'N', first_seq)
+    second_seq = re.sub(r'[^ATCG]', 'N', second_seq)
 
     nrow, ncol = len(first_seq)+1, len(second_seq)+1
     D = numpy.zeros((nrow, ncol), dtype=numpy.int32)

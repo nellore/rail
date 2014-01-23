@@ -18,9 +18,9 @@ def addArgs(parser):
     parser.add_argument(\
         '--readlet-length', metavar='INT', type=int, default="20", help='Substring length to extract from read.')
     parser.add_argument(\
-        '--readlet-interval', metavar='INT', type=int, default="1", help='Distance between substrings to extract from read.')
+        '--readlet-interval', metavar='INT', type=int, default="10", help='Distance between substrings to extract from read.')
     parser.add_argument(\
-        '--capping-fraction', metavar='FRACTION', type=float, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
+        '--capping-fraction', metavar='FRACTION', type=float, default="0.5", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\
         '--partition-length', metavar='INT', type=int, default=30000, help='Size of genome partitions to use.')
     parser.add_argument(\
@@ -28,7 +28,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--intron-partition-overlap', metavar='INT', type=int, default="20", help='# of nucleotides of overlap between intron-finding partitions.')
     parser.add_argument(\
-        '--bowtie-exe', metavar='STR', type=str, help='Bowtie executable to use.  Must exist at this path on all the cluster nodes.')
+        '--bowtie-exe', metavar='STR', type=str, help='Bowtie executable to use. Must exist at this path on all the cluster nodes.')
     parser.add_argument(\
         '--bowtie-args', metavar='STR', type=str, help='Arguments to pass to Bowtie.')
     parser.add_argument(\
@@ -53,6 +53,37 @@ def addArgs(parser):
         '--stranded', action='store_const', const=True, help='RNA-seq data is stranded?')
     parser.add_argument(\
         '--hmm-overlap', metavar='INT', type=int, default=100, help='Number of positions of overlap between adjacent emission strings.')
+    parser.add_argument(\
+        '--output-bam-by-chromosome', action='store_const', const=True, default=True,
+        help='Split SAM/BAM output files up by RNAME (typically chromosome) if '
+             'True; otherwise output single SAM/BAM file consolidating all '
+             'spliced alignments')
+    parser.add_argument(\
+        '--bam-basename', type=str, required=False, 
+        default='spliced_alignments',
+        help='The basename (including path) of all SAM/BAM output. Basename is '
+             'followed by ".bam" or ".sam" if --by-chromosome=False; otherwise, '
+             'basename is followed by ".RNAME.bam" or ".RNAME.sam" for each '
+             'RNAME. Ignored if --out is not specified '
+             '(that is, if --out is stdout)')
+    parser.add_argument(\
+        '--output-bed-by-chromosome', action='store_const', const=True, default=True,
+        help='Split BED output files up by chrom (typically chromosome) if '
+             'True; otherwise output single BED file consolidating all '
+             'spliced alignments')
+    parser.add_argument(\
+        '--bed-basename', type=str, required=False, 
+        default='junctions',
+        help='The basename (including path) of all BED output. Basename is '
+             'followed by ".bed" if --by-chromosome=False; otherwise, basename is '
+             'followed by ".[chrom].bed" for each [chrom]. Ignored if --out is '
+             'not specified (that is, if --out is stdout)')
+    parser.add_argument(\
+        '--samtools-exe', metavar='EXE', type=str, required=False,
+        help='Path to executable for samtools. Must exist at this path on all the cluster nodes.')
+    parser.add_argument(\
+        '--output-sam', action='store_const', const=True, default=False, 
+        help='Output SAM files if True; otherwise output BAM files')
 
 class Rail_RNAConfig(object):
     
@@ -98,6 +129,12 @@ class Rail_RNAConfig(object):
         self.discardMate1 = args.discard_mate1
         self.discardMate2 = args.discard_mate2
         self.stranded = args.stranded
+        self.samtoolsExe = args.samtools_exe
+        self.output_bed_by_chromosome = args.output_bed_by_chromosome
+        self.bed_basename = args.bed_basename
+        self.output_bam_by_chromosome = args.output_bam_by_chromosome
+        self.bam_basename = args.bam_basename
+        self.output_sam = args.output_sam
         self.poolTech = args.pool_tech_replicates
         self.poolBio = args.pool_bio_replicates
         o = self.hmmOlap = args.hmm_overlap

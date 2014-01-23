@@ -3,7 +3,7 @@
 Rail-RNA-align
 
 Follows Rail-RNA-preprocess
-Precedes Rail-RNA-intron / Rail-RNA-normalize_pre
+Precedes Rail-RNA-intron / Rail-RNA-coverage_pre
 
 Alignment script for MapReduce pipelines that wraps Bowtie. Obtains a set of
 of exonic chunks by aligning entire reads with Bowtie. Then obtains more exonic 
@@ -51,7 +51,7 @@ Format 1 (exon_ival); tab-delimited output tuple columns:
 3. EC start (inclusive) on forward strand
 4. EC end (exclusive) on forward strand
 
-Format 2 (exon_differential); tab-delimited output tuple columns:
+Format 2 (exon_diff); tab-delimited output tuple columns:
 1. Reference name (RNAME in SAM format) + ';' + bin number +  
     ('+' or '-' indicating which strand is the sense strand if input reads are
         strand-specific -- that is, --stranded is invoked; otherwise, there is
@@ -79,8 +79,21 @@ of the read and the 3' end of the intron.
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
 
 SAM (splice_sam):
-Standard 11-column SAM output, with each line corresponding to a spliced
-alignment.
+Standard 11-column SAM output except fields are in different order. (Fields are
+    reordered to facilitate partitioning by RNAME and sorting by POS.) Each
+line corresponding to a spliced alignment.
+The order of the fields is as follows.
+1. RNAME
+2. POS
+3. QNAME
+4. FLAG
+5. MAPQ
+6. CIGAR
+7. RNEXT
+8. PNEXT
+9. TLEN
+10. SEQ
+11. QUAL
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -109,7 +122,7 @@ parser = argparse.ArgumentParser(description=__doc__,
 # Add command-line arguments
 parser.add_argument('--refseq', type=str, required=False, 
     help='The fasta sequence of the reference genome. The fasta index of the '
-         'reference genome is also required to be built via samtools.')
+         'reference genome is also required to be built via samtools')
 # To be implemented; for now, index is always fasta filename + .fai
 parser.add_argument('--faidx', type=str, required=False, 
     help='Fasta index file')
@@ -1167,7 +1180,7 @@ class BowtieOutputThread(threading.Thread):
                                 assert last_pos < partition_end \
                                     + self.intron_partition_overlap
                                 print >>self.output_stream, \
-                                    'exon_diff\t%s%s\t%s\t%d\t1' \
+                                    'exon_diff\t%s%s\t%s\t%012d\t1' \
                                     % (partition_id,
                                         last_reverse_strand_string, 
                                         last_sample_label,
@@ -1178,7 +1191,7 @@ class BowtieOutputThread(threading.Thread):
                                     '''Print decrement at interval end iff exon
                                     ends before partition ends.'''
                                     print >>self.output_stream, \
-                                        'exon_diff\t%s%s\t%s\t%d\t-1' \
+                                        'exon_diff\t%s%s\t%s\t%012d\t-1' \
                                         % (partition_id,
                                             last_reverse_strand_string, 
                                             last_sample_label, last_end_pos)
@@ -1186,16 +1199,17 @@ class BowtieOutputThread(threading.Thread):
                         if self.exon_intervals:
                             for partition_id, _, _ in partitions:
                                 print >>self.output_stream, \
-                                    'exon_ival\t%s%s\t%d\t%d\t%s' \
+                                    'exon_ival\t%s%s\t%012d\t%012d\t%s' \
                                     % (partition_id, 
                                         last_reverse_strand_string, last_pos, 
                                         last_end_pos, last_sample_label)
                                 output_line_count += 1
                         if self.splice_sam:
-                            print >>self.output_stream, ('%s\t'*11 + '%s') \
-                                    % ('splice_sam', last_qname[:-2],
-                                        last_flag, last_rname,
-                                        str(last_pos), last_mapq,
+                            print >>self.output_stream, ('%s\t'*2 + '%012d\t'
+                                    + '%s\t'*8 + '%s') \
+                                    % ('splice_sam', last_rname,
+                                        last_pos, last_qname[:-2],
+                                        last_flag, last_mapq,
                                         str(last_seq_size) + 'M', last_rnext,
                                         last_pnext, last_tlen,
                                         last_seq, last_qual)
@@ -1366,7 +1380,7 @@ class BowtieOutputThread(threading.Thread):
                                         assert exon_pos < partition_end
                                         # Print increment at interval start
                                         print >>self.output_stream, \
-                                            'exon_diff\t%s%s\t%s\t%d\t1' \
+                                            'exon_diff\t%s%s\t%s\t%012d\t1' \
                                             % (partition_id, 
                                                 exon_reverse_strand_string,
                                                 last_sample_label, 
@@ -1378,7 +1392,8 @@ class BowtieOutputThread(threading.Thread):
                                             iff exon ends before partition
                                             ends.'''
                                             print >>self.output_stream, \
-                                                'exon_diff\t%s%s\t%s\t%d\t-1' \
+                                                'exon_diff\t%s%s\t%s\t' \
+                                                '%012d\t-1' \
                                                 % (partition_id, 
                                                     exon_reverse_strand_string,
                                                     last_sample_label,
@@ -1401,7 +1416,8 @@ class BowtieOutputThread(threading.Thread):
                                         self.bin_size)
                                     for partition_id, _, _ in partitions:
                                         print >>self.output_stream, \
-                                            'exon_ival\t%s%s\t%d\t%d\t%s' \
+                                            'exon_ival\t%s%s\t%012d\t' \
+                                            '%012d\t%s' \
                                             % (partition_id, 
                                                 exon_reverse_strand_string,
                                                 exon_pos, exon_end_pos, 
@@ -1439,7 +1455,8 @@ class BowtieOutputThread(threading.Thread):
                                 for (partition_id, partition_start, 
                                         partition_end) in partitions:
                                     print >>self.output_stream, \
-                                        'intron\t%s%s\t%s\t%d\t%d\t%d\t%d' \
+                                        'intron\t%s%s\t%s\t%012d\t%012d' \
+                                        '\t%d\t%d' \
                                         % (partition_id,
                                             intron_reverse_strand_string,
                                             last_sample_label, intron_pos,
@@ -1475,23 +1492,24 @@ class BowtieOutputThread(threading.Thread):
                                 specification for details.'''
                                 if intron_reverse_strand:
                                     # Need to reverse-complement sequence
-                                    splice_sam_tuple = ('splice_sam', qname,
-                                        '16', intron_rname, 
-                                        str(strand_introns[0][0] -
-                                            strand_introns[0][2]), '255', 
+                                    splice_sam_tuple = ('splice_sam',
+                                        intron_rname, strand_introns[0][0]
+                                            - strand_introns[0][2],
+                                        last_qname, '16', '255', 
                                         ''.join(cigar_list), '*', '0', '0', 
-                                        read_seq[::-1].translate(
+                                        last_read_seq[::-1].translate(
                                          _reversed_complement_translation_table
-                                        ), qual_seq[::-1])
+                                        ), last_qual_seq[::-1])
                                 else:
-                                    splice_sam_tuple = ('splice_sam', qname,
-                                        '0', intron_rname,
-                                        str(strand_introns[0][0] -
-                                            strand_introns[0][2]), '255', 
+                                    splice_sam_tuple = ('splice_sam',
+                                        intron_rname, strand_introns[0][0]
+                                            - strand_introns[0][2],
+                                        last_qname, '0', '255', 
                                         ''.join(cigar_list), '*', '0', '0', 
-                                        read_seq, qual_seq)
+                                        last_read_seq, last_qual_seq)
                                 print >>self.output_stream, \
-                                    ('%s\t'*11 + '%s') % splice_sam_tuple
+                                    ('%s\t'*2 + '%012d\t' + '%s\t'*8 + '%s') \
+                                    % splice_sam_tuple
                         del readlet_count[(last_qname, last_paired_label)]
                         del collected_readlets[(last_qname, last_paired_label)]
                     multireadlet = []
@@ -1595,9 +1613,21 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
         STRAND.
 
         SAM (splice_sam):
-
-        Standard 11-column SAM output, with each line corresponding to a
-        spliced alignment.
+        Standard 11-column SAM output except fields are in different order.
+        (Fields are reordered to facilitate partitioning by RNAME and sorting
+            by POS.) Each line corresponding to a spliced alignment.
+        The order of the fields is as follows.
+        1. RNAME
+        2. POS
+        3. QNAME
+        4. FLAG
+        5. MAPQ
+        6. CIGAR
+        7. RNEXT
+        8. PNEXT
+        9. TLEN
+        10. SEQ
+        11. QUAL
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
@@ -1781,7 +1811,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
         import shutil
         shutil.rmtree(temp_dir_path)
 
-    print >> sys.stderr, 'DONE with align.py; in/out = %d/%d; ' \
+    print >> sys.stderr, 'DONE with align.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (input_line_count, output_line_count,
                                 time.time() - start_time)
 

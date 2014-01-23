@@ -325,7 +325,7 @@ useGtf = False and 'align' in pipelines
 useFasta = 'align' in pipelines or 'junction' in pipelines
 useRef = useIndex or useGtf or useFasta
 useKenttools = 'coverage' in pipelines or 'differential' in pipelines
-useSamtools = False
+useSamtools = 'align' in pipelines
 useSraToolkit = 'preprocess' in pipelines
 useR = 'differential' in pipelines
 useManifest = 'coverage' in pipelines
@@ -344,7 +344,8 @@ pipelineSteps = {
     'preprocess'   : ['preprocess'],
     'align'        : ['align', 'align_post'],
     'junction'     : ['intron', 'intron_post'],
-    'coverage'     : ['normalize_pre', 'normalize', 'normalize_post'],
+    #'coverage'     : ['normalize_pre', 'normalize'],#, 'normalize_post'],
+    'coverage'     : ['coverage_pre', 'coverage', 'coverage_post'],
     'differential' : ['walk_fit', 'ebayes', 'hmm_params', 'hmm', 'aggr_path'] }
 
 allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
@@ -355,8 +356,11 @@ stepInfo = {\
     'align_post'     : ([('align',          '/splice_sam' )], rail_rna_pipeline.AlignPostStep),
     'intron'         : ([('align',          '/intron'     )], rail_rna_pipeline.IntronStep),
     'intron_post'    : ([('intron',         '/junction'   )], rail_rna_pipeline.IntronPostStep),
+    'coverage_pre'   : ([('align',          '/exon_diff'  )], rail_rna_pipeline.CoveragePreStep),
     'normalize_pre'  : ([('align',          '/exon_diff'  )], rail_rna_pipeline.NormalizePreStep),
     'normalize'      : ([('normalize_pre',  '/o'          )], rail_rna_pipeline.NormalizeStep),
+    'coverage'       : ([('coverage_pre',   '/coverage'   )], rail_rna_pipeline.CoverageStep),
+    'coverage_post'  : ([('coverage',       ''            )], rail_rna_pipeline.CoveragePostStep),
     'normalize_post' : ([('normalize',      ''            )], rail_rna_pipeline.NormalizePostStep),
     'walk_fit'       : ([('normalize_post', ''            )], rail_rna_pipeline.WalkFitStep),
     'ebayes'         : ([('walk_fit',       ''            )], rail_rna_pipeline.EbayesStep),
