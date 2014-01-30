@@ -14,6 +14,7 @@ case files are uploaded as they're completed.
 """
 
 import os
+import sys
 import gzip
 import site
 
@@ -23,15 +24,17 @@ site.addsitedir(os.path.join(base_path, "util"))
 import url
 import filemover
 
+
 class RecordHandler(object):
     """ Takes read records and handles the process of writing them to
         (rotating) files, compressing the files, uploading file, and deleting
         trash. """
-    
-    def __init__(self, outfn, pushDest=None, mover=None, maxnucs=120000000, gzip=False, keep=False):
-        self.outfnPre, self.outfn = outfn, None
-        self.gzip = gzip
-        self.pushDest = pushDest
+
+    def __init__(self, output_filename_prefix, push_destination=None, mover=None, maxnucs=120000000, gzip_output=False,
+                 keep=False):
+        self.output_filename_prefix, self.outfn = output_filename_prefix, None
+        self.gzip_output = gzip_output
+        self.push_destination = push_destination
         self.mover = mover
         self.maxnucs = maxnucs
         self.n, self.nfile, self.nnucs = 0, 0, 0
@@ -40,26 +43,33 @@ class RecordHandler(object):
         self.first = True
         self.keep = keep
     
-    def setPrefix(self, pre):
+    def set_prefix(self, pre):
         self.prefix = pre
     
     def push(self):
         """ Push the file we just finished writing """
-        if self.pushDest is not None:
-            print >> sys.stderr, "  Pushing '%s' to '%s' ..." % (self.outfn, self.pushDest.toUrl())
-            self.mover.put(self.outfn, self.pushDest)
+        if self.push_destination is not None:
+            assert self.outfn is not None
+            dest_url = self.push_destination.toUrl()
+            print >> sys.stderr, "  Pushing '%s' to '%s' ..." % (self.outfn, dest_url)
+            if self.push_destination.isLocal():
+                if not os.path.exists(dest_url):
+                    print >> sys.stderr, "    Making local destination directory: %s" % dest_url
+                    os.mkdir(dest_url)
+            self.mover.put(self.outfn, self.push_destination)
             if not self.keep:
                 os.remove(self.outfn)
     
-    def nextFile(self):
+    def next_file(self):
         self.finish()
         # Make new filename
-        ofn = '.'.join([self.outfnPre, str(self.nfile)])
+        ofn = '.'.join([self.output_filename_prefix, str(self.nfile)])
         self.nfile += 1
-        if self.gzip: ofn += ".gz"
+        if self.gzip_output:
+            ofn += ".gz"
         self.outfn = ofn
         # Open (note: may be gzipped)
-        self.ofh = gzip.open(ofn, 'w') if self.gzip else open(ofn, 'w')
+        self.ofh = gzip.open(ofn, 'w') if self.gzip_output else open(ofn, 'w')
     
     def add(self, seq1, seq2=None, qual1=None, qual2=None):
         """ Add a record, which might necessitate opening a new file, and
@@ -70,11 +80,13 @@ class RecordHandler(object):
         
         if self.first or self.nnucs > self.maxnucs:
             self.n, self.nnucs = 0, 0
-            self.nextFile()
+            self.next_file()
             self.first = False
         
-        if qual1 is None: qual1 = 'I' * len(seq1)
-        if seq2 is not None and qual2 is None: qual2 = 'I' * len(seq2)
+        if qual1 is None:
+            qual1 = 'I' * len(seq1)
+        if seq2 is not None and qual2 is None:
+            qual2 = 'I' * len(seq2)
         pre, ofh = self.prefix, self.ofh
         if seq2 is None:
             ofh.write('\t'.join([';'.join([pre, str(self.n)]), seq1, qual1]))
@@ -93,13 +105,15 @@ class RecordHandler(object):
             self.ofh.close()
             self.push()
 
+
 def hashize(s, n=10):
     ret = hex(hash(s))[-n:]
     while len(ret) < n:
         ret = '0' + ret
     return ret
 
-def preprocess(handler, lab, fh1, fh2=None, inputFormat="fastq", filename=None, includeFilename=False):
+
+def preprocess(handler, lab, fh1, fh2=None, input_format="fastq", filename=None, include_filename=False):
     """ Preprocess an input file, which may be in either FASTA or FASTQ format,
         into a collection of 1 or more tab-delimited output files. """
     is_file = [True, True]
@@ -114,107 +128,73 @@ def preprocess(handler, lab, fh1, fh2=None, inputFormat="fastq", filename=None, 
             fhs[i] = gzip.GzipFile(fhs[i], 'r') if fhs[i].endswith('.gz') else open(fhs[i], 'r')
     fh1, fh2 = fhs
     
-    fullnameHash = hashize(fullname)
+    full_name_hash = hashize(fullname)
     n = 0
     fields = []
-    if includeFilename:
+    if include_filename:
         # TODO: should be careful not to pass on any undesirable chars
         fields.append("FN:" + filename.replace(';', '_'))
-    fields.append("FH:" + fullnameHash)
+    fields.append("FH:" + full_name_hash)
     label = "LB:" + lab.replace(';', '_')
-    handler.setPrefix('|'.join(fields)+";%s"%label)
+    handler.set_prefix('|'.join(fields) + ";%s" % label)
     
-    if inputFormat == "fastq":
+    if input_format == "fastq":
         while True:
             if len(fh1.readline()) == 0:
                 break
             seq = fh1.readline().rstrip()
-            fh1.readline() # skip name line 2
-            qual  = fh1.readline().rstrip()
+            fh1.readline()  # skip name line 2
+            qual = fh1.readline().rstrip()
             if fh2 is not None:
                 assert len(fh2.readline()) > 0
                 seq2 = fh2.readline().rstrip()
-                fh2.readline() # skip name line 2
+                fh2.readline()  # skip name line 2
                 qual2 = fh2.readline().rstrip()
                 handler.add(seq, seq2, qual, qual2)
             else:
                 handler.add(seq, qual1=qual)
             n += 1
     else:
-        assert inputFormat == "fasta"
-        lastLine = fh1.readline()
-        while len(lastLine) > 0:
+        assert input_format == "fasta"
+        last_line = fh1.readline()
+        while len(last_line) > 0:
             seqlines = []
             while True:
-                ln = lastLine = fh1.readline()
-                if len(ln) == 0: break
-                if ln[0] == '>': break
+                ln = last_line = fh1.readline()
+                if len(ln) == 0 or ln[0] == '>':
+                    break
                 seqlines.append(ln.rstrip())
             if fh2 is not None:
-                seqlines2 = [], []
+                seqlines2 = []
                 while True:
-                    ln = lastLine = fh2.readline()
-                    if len(ln) == 0: break
-                    if ln[0] == '>': break
+                    ln = last_line = fh2.readline()
+                    if len(ln) == 0 or ln[0] == '>':
+                        break
                     seqlines2.append(ln.rstrip())
                 handler.add(''.join(seqlines), seq2=''.join(seqlines2))
             else:
                 handler.add(''.join(seqlines))
             n += 1
     
-    if not is_file[0]: fh1.close()
-    if fh2 is not None and not is_file[1]: fh2.close()
+    if not is_file[0]:
+        fh1.close()
+    if fh2 is not None and not is_file[1]:
+        fh2.close()
     
     handler.finish()
 
-def guessFasta(fn):
-    for ext in [ '.fa', '.fasta', '.fna', '.fas' ]:
-        for extext in [ '', '.gz' ]:
+
+def guess_fasta(fn):
+    for ext in ['.fa', '.fasta', '.fna', '.fas']:
+        for extext in ['', '.gz']:
             if fn.endswith(ext + extext):
                 return True
     return False
 
-if __name__ == '__main__':
-    import argparse
-    
-    parser = argparse.ArgumentParser(description=desc)
-    
-    parser.add_argument(\
-        '--input1', metavar='PATHS', type=str, nargs='+', required=False, help='Mate 1 files (or unpaired read files)')
-    parser.add_argument(\
-        '--input2', metavar='PATHS', type=str, nargs='+', required=False, help='Mate 2 files, parallel to those specified with --mate1')
-    parser.add_argument(\
-        '--output', metavar='PATHS', type=str, nargs='+', required=False, help='Write these preprocessed files')
-    parser.add_argument(\
-        '--filename', metavar='STR', type=str, help='Use this in FN: field in output read name')
-    parser.add_argument(\
-        '--nucs-per-file', metavar='INT', type=int, default=120000000, help='Allow a max of this many nucleotides per output file')
-    parser.add_argument(\
-        '--label', metavar='STRS', type=str, nargs='+', required=False, help='Use this in LB: field in output read name')
-    parser.add_argument(\
-        '--gzip-output', action='store_const', const=True, default=False, help='Gzip compress output')
-    parser.add_argument(\
-        '--push', metavar='URL', type=str, required=False, help='Upload output files to this URL')
-    parser.add_argument(\
-        '--ignore-first-token', action='store_const', const=True, default=False, help='Throw away first token of input; useful in Hadoop streaming context')
-    parser.add_argument(\
-        '--include-filename', action='store_const', const=True, default=False, help='Put filename in FN: name field')
-    parser.add_argument(\
-        '--fasta', action='store_const', const=True, default=False, help='Force preprocessor to consider input to be FASTA')
-    parser.add_argument(\
-        '--keep', action='store_const', const=True, default=False, help='Keep input files that were downloaded; default is to delete them once preprocessed')
-    parser.add_argument(\
-        '--test', action='store_const', const=True, default=False, help='Do unit tests')
-    
-    filemover.addArgs(parser)
-    
-    args = parser.parse_args()
-    
+
+def go(args):
     inp1, inp2, out, lab = args.input1, args.input2, args.output, args.label
     if inp1 is None:
-        # TODO: Should we handle these one-by-one instead of sucking them all in here?
-        import string
-        import sys
         inp1, inp2, out, lab = [], [], [], []
         for ln in sys.stdin:
             ln = ln.strip()
@@ -224,18 +204,20 @@ if __name__ == '__main__':
                     # seems to include a file offset as the first, leftmost
                     # token
                     ln = ln[ln.index('\t')+1:]
-                else: continue
-            if len(ln) == 0: continue
-            if ln[0] == '#': continue
-            toks = string.split(ln, '\t')
+                else:
+                    continue
+            if len(ln) == 0 or ln[0] == '#':
+                continue
+            toks = ln.split()
             if len(toks) != 3 and len(toks) != 5:
                 raise RuntimeError("Malformed line; had # tokens != 3 or 5:\n" + ln)
             inp1.append(toks[0])
             lab.append(toks[-1])
             inp2.append(toks[2] if len(toks) == 5 else None)
             out.append(None)
-    
-    if inp2 is None: inp2 = [None] * len(inp1)
+
+    if inp2 is None:
+        inp2 = [None] * len(inp1)
     assert len(inp1) == len(lab)
     assert len(inp1) == len(inp2)
     assert len(inp1) == len(out)
@@ -253,25 +235,68 @@ if __name__ == '__main__':
             else:
                 print >> sys.stderr, "Processing paired URLs '%s', '%s' ..." % (fn1, fn2)
             # Determine whether input is fasta
-            inputFormat = "fastq"
-            if args.fasta or guessFasta(fn1): inputFormat = "fasta"
+            input_format = "fastq"
+            if args.fasta or guess_fasta(fn1):
+                input_format = "fasta"
             # Does input file need to be pulled down?
-            toDelete = []
-            inpUrl1 = url.Url(fn1)
-            if inpUrl1.isNotLocal():
-                mover.get(inpUrl1)
+            to_delete = []
+            input_url_1 = url.Url(fn1)
+            if input_url_1.isNotLocal():
+                mover.get(input_url_1)
                 fn1 = os.path.basename(fn1)
                 assert os.path.exists(fn1)
-                if not args.keep: toDelete.append(fn1)
+                if not args.keep:
+                    to_delete.append(fn1)
                 if fn2 is not None:
-                    inpUrl2 = url.Url(fn2)
-                    assert inpUrl2.isNotLocal()
-                    mover.get(inpUrl2)
+                    input_url_2 = url.Url(fn2)
+                    assert input_url_2.isNotLocal()
+                    mover.get(input_url_2)
                     fn2 = os.path.basename(fn2)
                     assert os.path.exists(fn2)
-                    if not args.keep: toDelete.append(fn2)
+                    if not args.keep:
+                        to_delete.append(fn2)
             # Come up with an output filename
-            if outfn is None: outfn = hashize(fn1)
+            if outfn is None:
+                outfn = hashize(fn1)
             handler = RecordHandler(outfn, push, mover, args.nucs_per_file, args.gzip_output, args.keep)
-            preprocess(handler, lab, fn1, fn2, inputFormat, includeFilename=args.include_filename)
-            for fn in toDelete: os.remove(fn)
+            preprocess(handler, lab, fn1, fn2, input_format, include_filename=args.include_filename)
+            for fn in to_delete:
+                os.remove(fn)
+
+
+if __name__ == '__main__':
+    import argparse
+    
+    parser = argparse.ArgumentParser(description=desc)
+
+    parser.add_argument('--input1', metavar='PATHS', type=str, nargs='+', required=False,
+                        help='Mate 1 files (or unpaired read files)')
+    parser.add_argument('--input2', metavar='PATHS', type=str, nargs='+', required=False,
+                        help='Mate 2 files, parallel to those specified with --mate1')
+    parser.add_argument('--output', metavar='PATHS', type=str, nargs='+', required=False,
+                        help='Write these preprocessed files')
+    parser.add_argument('--filename', metavar='STR', type=str, help='Use this in FN: field in output read name')
+    parser.add_argument('--nucs-per-file', metavar='INT', type=int, default=120000000,
+                        help='Allow a max of this many nucleotides per output file')
+    parser.add_argument('--label', metavar='STRS', type=str, nargs='+', required=False,
+                        help='Use this in LB: field in output read name')
+    parser.add_argument('--gzip-output', action='store_const', const=True, default=False, help='Gzip compress output')
+    parser.add_argument('--push', metavar='URL', type=str, required=False, help='Upload output files to this URL')
+    parser.add_argument('--ignore-first-token', action='store_const', const=True, default=False,
+                        help='Throw away first token of input; useful in Hadoop streaming context')
+    parser.add_argument('--include-filename', action='store_const', const=True, default=False,
+                        help='Put filename in FN: name field')
+    parser.add_argument('--fasta', action='store_const', const=True, default=False,
+                        help='Force preprocessor to consider input to be FASTA')
+    parser.add_argument('--keep', action='store_const', const=True, default=False,
+                        help='Keep input files that were downloaded; default is to delete them once preprocessed')
+    parser.add_argument('--test', action='store_const', const=True, default=False, help='Do unit tests')
+    parser.add_argument('--profile', action='store_const', const=True, default=False, help='Profile code')
+
+    filemover.addArgs(parser)
+    master_args = parser.parse_args()
+    if master_args.profile:
+        import cProfile
+        cProfile.run('go(master_args)')
+    else:
+        go(master_args)
