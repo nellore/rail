@@ -31,9 +31,10 @@ class RecordHandler(object):
         trash. """
 
     def __init__(self, output_filename_prefix, push_destination=None, mover=None, maxnucs=120000000, gzip_output=False,
-                 keep=False):
+                 gzip_level=3, keep=False):
         self.output_filename_prefix, self.outfn = output_filename_prefix, None
         self.gzip_output = gzip_output
+        self.gzip_level = gzip_level
         self.push_destination = push_destination
         self.mover = mover
         self.maxnucs = maxnucs
@@ -69,7 +70,7 @@ class RecordHandler(object):
             ofn += ".gz"
         self.outfn = ofn
         # Open (note: may be gzipped)
-        self.ofh = gzip.open(ofn, 'w') if self.gzip_output else open(ofn, 'w')
+        self.ofh = gzip.open(ofn, 'wb', self.gzip_level) if self.gzip_output else open(ofn, 'w')
     
     def add(self, seq1, seq2=None, qual1=None, qual2=None):
         """ Add a record, which might necessitate opening a new file, and
@@ -258,7 +259,8 @@ def go(args):
             # Come up with an output filename
             if outfn is None:
                 outfn = hashize(fn1)
-            handler = RecordHandler(outfn, push, mover, args.nucs_per_file, args.gzip_output, args.keep)
+            handler = RecordHandler(outfn, push, mover, args.nucs_per_file, args.gzip_output, args.gzip_level,
+                                    args.keep)
             preprocess(handler, lab, fn1, fn2, input_format, include_filename=args.include_filename)
             for fn in to_delete:
                 os.remove(fn)
@@ -281,6 +283,7 @@ if __name__ == '__main__':
     parser.add_argument('--label', metavar='STRS', type=str, nargs='+', required=False,
                         help='Use this in LB: field in output read name')
     parser.add_argument('--gzip-output', action='store_const', const=True, default=False, help='Gzip compress output')
+    parser.add_argument('--gzip-level', metavar='INT', type=int, default=3, help='Level of gzip compression to use')
     parser.add_argument('--push', metavar='URL', type=str, required=False, help='Upload output files to this URL')
     parser.add_argument('--ignore-first-token', action='store_const', const=True, default=False,
                         help='Throw away first token of input; useful in Hadoop streaming context')
