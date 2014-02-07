@@ -51,7 +51,6 @@ class BowtieIndexReference(object):
         side_sz = line_sz * lines_per_side
         side_bwt_sz = side_sz - 8
         num_side_pairs = (bwt_sz + (2*side_bwt_sz) - 1) // (2*side_bwt_sz)
-        num_sides = num_side_pairs * 2
         ebwt_tot_len = num_side_pairs * 2 * side_sz
         fh1.seek(ebwt_tot_len, 1)
 
@@ -105,6 +104,7 @@ class BowtieIndexReference(object):
             running_unambig_preceding += ln
 
         lengths.append(running_length)
+        starting_offsets.append(len(recs))
         tot_unambig_len = running_unambig_preceding
         assert len(recs) == nrecs
 
@@ -143,6 +143,8 @@ class BowtieIndexReference(object):
             if ref_off < off + self.recs[i][1]:
                 # stretch extends through part of the unambiguous stretch
                 buf_off += (ref_off - off)
+            else:
+                buf_off += self.recs[i][1]
             off += self.recs[i][1]
             while ref_off < off and count > 0:
                 buf_elt = buf_off >> 2
@@ -157,3 +159,102 @@ class BowtieIndexReference(object):
             count -= 1
             stretch.append('N')
         return ''.join(stretch)
+
+
+def which(program):
+    import os
+
+    def is_exe(fp):
+        return os.path.isfile(fp) and os.access(fp, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
+
+if __name__ == "__main__":
+
+    import sys
+    import unittest
+    import argparse
+    from tempfile import mkdtemp
+    from shutil import rmtree
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--test', action='store_const', const=True, default=False, help='Do unit tests')
+
+    args = parser.parse_args()
+
+    if args.test:
+        import unittest
+
+        class TestBowtieIndexReference(unittest.TestCase):
+
+            def setUp(self):
+                self.tmpdir = mkdtemp()
+                self.fa_fn_1 = os.path.join(self.tmpdir, 'tmp1.fa')
+                with open(self.fa_fn_1, 'w') as fh:
+                    fh.write('''>short_name1 with some stuff after whitespace
+ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
+ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
+A
+>short_name4
+NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
+TT
+>short_name2 with some stuff after whitespace
+CAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGT
+CAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGT
+>short_name3 with some stuff after whitespace
+CA
+''')
+                assert which('bowtie-build') is not None
+                os.system('bowtie-build %s %s >/dev/null' % (self.fa_fn_1, self.fa_fn_1))
+
+            def tearDown(self):
+                rmtree(self.tmpdir)
+
+            def test1(self):
+                ref = BowtieIndexReference(self.fa_fn_1)
+                self.assertEqual('ACGTACGTAC', ref.get_stretch('short_name1', 0, 10))
+                self.assertEqual('ACGTACGTAC', ref.get_stretch('short_name1', 40, 10))
+                self.assertEqual('ANNNNNNNNN', ref.get_stretch('short_name1', 80, 10))
+
+                self.assertEqual('CAGTCAGTCA', ref.get_stretch('short_name2', 0, 10))
+                self.assertEqual('CAGTCAGTCA', ref.get_stretch('short_name2', 40, 10))
+                self.assertEqual('NNNNNNNNNN', ref.get_stretch('short_name2', 80, 10))
+
+                self.assertEqual('CANNNNNNNN', ref.get_stretch('short_name3', 0, 10))
+
+            def test2(self):
+                ref = BowtieIndexReference(self.fa_fn_1)
+                self.assertEqual('CAGTCAGTCA', ref.get_stretch('short_name2', 0, 10))
+                self.assertEqual('AGTCAGTCAGT', ref.get_stretch('short_name2', 1, 11))
+                self.assertEqual('GTCAGTCAGTCA', ref.get_stretch('short_name2', 2, 12))
+                self.assertEqual('TCAGTCAGTCAGT', ref.get_stretch('short_name2', 3, 13))
+
+                self.assertEqual('TACGTACGTA', ref.get_stretch('short_name1', 71, 10))
+                self.assertEqual('ACGTACGTANN', ref.get_stretch('short_name1', 72, 11))
+                self.assertEqual('CGTACGTANNNN', ref.get_stretch('short_name1', 73, 12))
+
+            def test3(self):
+                ref = BowtieIndexReference(self.fa_fn_1)
+                self.assertEqual('NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN', ref.get_stretch('short_name4', 0, 40))
+                self.assertEqual('NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNA', ref.get_stretch('short_name4', 1, 40))
+                self.assertEqual('AAAA', ref.get_stretch('short_name4', 41, 4))
+                self.assertEqual('NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNTT', ref.get_stretch('short_name4', 240, 42))
+
+        unittest.main(argv=[sys.argv[0]])
