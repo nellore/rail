@@ -3,9 +3,9 @@ import struct
 import mmap
 
 
-class BowtieIndexReference(object):
+class Bowtie2IndexReference(object):
     """
-    Given prefix of a Bowtie index, parses the reference names, parses the
+    Given prefix of a Bowtie 2 index, parses the reference names, parses the
     extents of the unambiguous stretches, and memory-maps the file containing
     the unambiguous-stretch sequences.  get_stretch member function can
     retrieve stretches of characters from the reference, even if the stretch
@@ -15,14 +15,20 @@ class BowtieIndexReference(object):
     def __init__(self, idx_prefix):
 
         # Open file handles
-        if os.path.exists(idx_prefix + '.3.ebwt'):
+        if os.path.exists(idx_prefix + '.3.bt2'):
             # Small index (32-bit offsets)
-            fh1 = open(idx_prefix + '.1.ebwt', 'rb')  # for ref names
-            fh3 = open(idx_prefix + '.3.ebwt', 'rb')  # for stretch extents
-            fh4 = open(idx_prefix + '.4.ebwt', 'rb')  # for unambiguous sequence
+            fh1 = open(idx_prefix + '.1.bt2', 'rb')  # for ref names
+            fh3 = open(idx_prefix + '.3.bt2', 'rb')  # for stretch extents
+            fh4 = open(idx_prefix + '.4.bt2', 'rb')  # for unambiguous sequence
             sz, struct_unsigned = 4, struct.Struct('I')
+        elif os.path.exists(idx_prefix + '.3.bt2l'):
+            # Large index (64-bit offsets)
+            fh1 = open(idx_prefix + '.1.bt2l', 'rb')  # for ref names
+            fh3 = open(idx_prefix + '.3.bt2l', 'rb')  # for stretch extents
+            fh4 = open(idx_prefix + '.4.bt2l', 'rb')  # for unambiguous sequence
+            sz, struct_unsigned = 8, struct.Struct('Q')
         else:
-            raise RuntimeError('No Bowtie index files with prefix "%s"' % idx_prefix)
+            raise RuntimeError('No Bowtie 2 index files with prefix "%s"' % idx_prefix)
 
         #
         # Parse .1.bt2 file
@@ -32,7 +38,7 @@ class BowtieIndexReference(object):
 
         ln = struct_unsigned.unpack(fh1.read(sz))[0]
         line_rate = struct.unpack('<i', fh1.read(4))[0]
-        lines_per_side = struct.unpack('<i', fh1.read(4))[0]
+        _ = struct.unpack('<i', fh1.read(4))[0]
         _ = struct.unpack('<i', fh1.read(4))[0]
         ftab_chars = struct.unpack('<i', fh1.read(4))[0]
         _ = struct.unpack('<i', fh1.read(4))[0]
@@ -48,11 +54,10 @@ class BowtieIndexReference(object):
         # skip ebwt
         bwt_sz = ln // 4 + 1
         line_sz = 1 << line_rate
-        side_sz = line_sz * lines_per_side
-        side_bwt_sz = side_sz - 8
-        num_side_pairs = (bwt_sz + (2*side_bwt_sz) - 1) // (2*side_bwt_sz)
-        num_sides = num_side_pairs * 2
-        ebwt_tot_len = num_side_pairs * 2 * side_sz
+        side_sz = line_sz
+        side_bwt_sz = side_sz - (sz * 4)
+        num_sides = (bwt_sz + side_bwt_sz - 1) // side_bwt_sz
+        ebwt_tot_len = num_sides * side_sz
         fh1.seek(ebwt_tot_len, 1)
 
         # skip zOff
