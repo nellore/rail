@@ -6,13 +6,17 @@ ifeq (,$(IGENOMES_HOME))
 $(error "Set IGENOMES_HOME")
 endif
 
+ifeq (,$(TOPHAT_HOME))
+$(error "Set TOPHAT_HOME")
+endif
+
 FLUX_DIR=$(RAIL_HOME)/tools/flux_sim
 IGV_DIR=$(RAIL_HOME)/tools/igv
 OUTPUT_DIR=.
-NUM_READS=100000
-NUM_MOLECULES=500000
-TOPHAT_DIR=../../tools/tophat2
-TOPHAT_EXE=$(TOPHAT_DIR)/tophat/install-root/bin/tophat2
+NREADS_PER_SAMP=100000
+NMOLECULES_PER_SAMP=500000
+NSAMP=2
+TOPHAT_EXE=$(TOPHAT_HOME)/tophat2
 
 all: $(OUTPUT_DIR)/preprocessed_reads $(RAIL_HOME)/tools/igv/IGV/igv.jar
 
@@ -34,10 +38,10 @@ $(OUTPUT_DIR)/dmel_flux-0.fastq: $(OUTPUT_DIR)/Chromosomes $(OUTPUT_DIR)/genes.f
 		--flux-path=$(FLUX_DIR)/flux-simulator \
 		--gtf-file=$(OUTPUT_DIR)/genes.fixed.gtf \
 		--chromosomes=$(OUTPUT_DIR)/Chromosomes \
-		--num-reads=$(NUM_READS) \
-		--num-molecules=$(NUM_MOLECULES) \
-		--num-samples=6 \
-		--num-processes=6
+		--num-reads=$(NREADS_PER_SAMP) \
+		--num-molecules=$(NMOLECULES_PER_SAMP) \
+		--num-samples=$(NSAMP) \
+		--num-processes=$(NSAMP)
 
 # Make the link to the directory with 1 FASTA file per chromosome
 $(OUTPUT_DIR)/Chromosomes: $(IGENOMES_HOME)/Drosophila_melanogaster
@@ -71,5 +75,5 @@ $(IGENOMES_HOME)/Drosophila_melanogaster:
 
 .PHONY: clean
 clean:
-	rm -f *.bed *.fastq *.lib *.pro *.par *.gtf Chromosomes *.manifest chrom.sizes
+	rm -f *.bed *.fastq *.lib *.pro *.par *.gtf Chromosomes chrom.sizes
 	rm -rf preprocessed_reads intermediate local_out

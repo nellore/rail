@@ -43,6 +43,9 @@ def checkLocalTool(appName, exe, envs, check=True):
             if check and not path.is_exe(envExe):
                 raise RuntimeError('Value in "%s" environment variable does not point to executable: %s' % (var, envExe))
             return envExe
+    pathwhich = path.which(exe)
+    if pathwhich is None:
+        raise RuntimeError('Could not find path for %s' % exe + '.')
     return path.which(exe)
 
 def configureTools(appName, s, check=True):

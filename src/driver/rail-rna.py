@@ -10,11 +10,11 @@ that are used to run elastic-mapreduce.
 
   Preprocess
       |
-    Align
-  /             \
-Merge          Intron
- |
-Walk-prenorm
+    Align---------------
+  /        \             \
+Merge       Align-post    Intron
+ |                          |
+Walk-prenorm              Intron-post
  |
 Normalize
  |
@@ -281,42 +281,42 @@ if mode == 'emr':
 tconf = rail_rna_config.Rail_RNAConfig(args)
 gconf = GenericConfig(args, out)
 
-pipelines = ["preprocess", "align", "coverage", "junction", "differential"]
+pipelines = set(["preprocess", "align", "coverage", "junction", "differential"])
 
 # Might start partway through
 if args.start_with_align:
-    pipelines.remove("preprocess")
+    pipelines = pipelines - set(["preprocess"])
 if args.start_with_junction or args.start_with_coverage:
-    for s in ["preprocess", "align"]: pipelines.remove(s)
+    pipelines = pipelines - set(["preprocess", "align"])
 if args.start_with_differential:
-    for s in ["preprocess", "align", "junction", "coverage"]: pipelines.remove(s)
+    pipelines = pipelines - set(["preprocess", "align", "junction", "coverage"])
 
 # Might end partway through
 if args.stop_after_preprocess:
-    for s in ["align", "junction", "coverage", "differential"]: pipelines.remove(s)
+    pipelines = pipelines - set(["align", "junction", "coverage", "differential"])
 if args.stop_after_align:
-    for s in ["junction", "coverage", "differential"]: pipelines.remove(s)
+    pipelines = pipelines - set(["junction", "coverage", "differential"])
 if args.stop_after_coverage or args.stop_after_junction:
-    pipelines.remove("differential")
+    pipelines = pipelines - set(["junction", "coverage", "differential"])
 
 if args.no_coverage:
-    pipelines.remove("coverage")
+    pipelines = pipelines - set(["coverage"])
 if args.no_junction:
-    pipelines.remove("junction")
+    pipelines = pipelines - set(["junction"])
 if args.no_differential:
-    pipelines.remove("differential")
+    pipelines = pipelines - set(["differential"])
 
 # Might just be running one pipeline
 if args.just_preprocess:
-    pipelines = ["preprocess"]
+    pipelines = set(["preprocess"])
 elif args.just_align:
-    pipelines = ["align"]
+    pipelines = set(["align"])
 elif args.just_junction:
-    pipelines = ["junction"]
+    pipelines = set(["junction"])
 elif args.just_coverage:
-    pipelines = ["coverage"]
+    pipelines = set(["coverage"])
 elif args.just_differential:
-    pipelines = ["differential"]
+    pipelines = set(["differential"])
 assert len(pipelines) > 0
 
 useBowtie = 'align' in pipelines
@@ -325,7 +325,7 @@ useGtf = False and 'align' in pipelines
 useFasta = 'align' in pipelines or 'junction' in pipelines
 useRef = useIndex or useGtf or useFasta
 useKenttools = 'coverage' in pipelines or 'differential' in pipelines
-useSamtools = False
+useSamtools = 'align' in pipelines
 useSraToolkit = 'preprocess' in pipelines
 useR = 'differential' in pipelines
 useManifest = 'coverage' in pipelines
@@ -342,25 +342,31 @@ if useInput and inp is None:
 
 pipelineSteps = {
     'preprocess'   : ['preprocess'],
-    'align'        : ['align'],
-    'junction'     : ['intron'],
-    'coverage'     : ['normalize_pre', 'normalize', 'normalize_post'],
+    'align'        : ['align', 'align_post'],
+    'junction'     : ['intron', 'intron_post'],
+    #'coverage'     : ['normalize_pre', 'normalize'],#, 'normalize_post'],
+    'coverage'     : ['coverage_pre', 'coverage', 'coverage_post'],
     'differential' : ['walk_fit', 'ebayes', 'hmm_params', 'hmm', 'aggr_path'] }
 
 allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
 
 stepInfo = {\
-    'preprocess'     : ([                                 ], rail_rna_pipeline.PreprocessingStep),
-    'align'          : ([('preprocess',     ''           )], rail_rna_pipeline.AlignStep),
-    'intron'         : ([('align',          '/intron'    )], rail_rna_pipeline.IntronStep),
-    'normalize_pre'  : ([('align',          '/exon_diff' )], rail_rna_pipeline.NormalizePreStep),
-    'normalize'      : ([('normalize_pre',  '/o'         )], rail_rna_pipeline.NormalizeStep),
-    'normalize_post' : ([('normalize',      ''           )], rail_rna_pipeline.NormalizePostStep),
-    'walk_fit'       : ([('normalize_post', ''           )], rail_rna_pipeline.WalkFitStep),
-    'ebayes'         : ([('walk_fit',       ''           )], rail_rna_pipeline.EbayesStep),
-    'hmm_params'     : ([('ebayes',         ''           )], rail_rna_pipeline.HmmParamsStep),
-    'hmm'            : ([('hmm_params',     ''           )], rail_rna_pipeline.HmmStep),
-    'aggr_path'      : ([('hmm',            ''           )], rail_rna_pipeline.AggrPathStep) }
+    'preprocess'     : ([                                  ], rail_rna_pipeline.PreprocessingStep),
+    'align'          : ([('preprocess',     ''            )], rail_rna_pipeline.AlignStep),
+    'align_post'     : ([('align',          '/splice_sam' )], rail_rna_pipeline.AlignPostStep),
+    'intron'         : ([('align',          '/intron'     )], rail_rna_pipeline.IntronStep),
+    'intron_post'    : ([('intron',         '/junction'   )], rail_rna_pipeline.IntronPostStep),
+    'coverage_pre'   : ([('align',          '/exon_diff'  )], rail_rna_pipeline.CoveragePreStep),
+    'normalize_pre'  : ([('align',          '/exon_diff'  )], rail_rna_pipeline.NormalizePreStep),
+    'normalize'      : ([('normalize_pre',  '/o'          )], rail_rna_pipeline.NormalizeStep),
+    'coverage'       : ([('coverage_pre',   '/coverage'   )], rail_rna_pipeline.CoverageStep),
+    'coverage_post'  : ([('coverage',       ''            )], rail_rna_pipeline.CoveragePostStep),
+    'normalize_post' : ([('normalize',      ''            )], rail_rna_pipeline.NormalizePostStep),
+    'walk_fit'       : ([('normalize_post', ''            )], rail_rna_pipeline.WalkFitStep),
+    'ebayes'         : ([('walk_fit',       ''            )], rail_rna_pipeline.EbayesStep),
+    'hmm_params'     : ([('ebayes',         ''            )], rail_rna_pipeline.HmmParamsStep),
+    'hmm'            : ([('hmm_params',     ''            )], rail_rna_pipeline.HmmStep),
+    'aggr_path'      : ([('hmm',            ''            )], rail_rna_pipeline.AggrPathStep) }
 
 # 'normalize_post' sends pushes normalization-factor .tsv to out/normalization_factors.tsv
 # 'normalize' sends per-sample coverage bigBed to out

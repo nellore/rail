@@ -12,9 +12,10 @@ base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, "util"))
 
 import url
+import version
 
 #
-# Note: All the %%(somthing)%% placeholders below are substituted in a
+# Note: All the %%(something)%% placeholders below are substituted in a
 # mode-dependent manner.  That is, a different string could be substituted
 # depending on whether we're in local, hadoop or emr mode.  This module tries
 # to stay as mode-agnostic as possible.
@@ -46,19 +47,32 @@ class PreprocessingStep(pipeline.Step):
 
 class AlignStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
+        # For profiling, use the following mapperStr
+        '''mapperStr = """
+            python -m cProfile -o ~/align_output_profile %%BASE%%/src/rail-rna/align.py
+                --refseq=%%REF_FASTA%% 
+                --faidx=%%REF_FASTA_INDEX%% 
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
+                --bowtie-exe=%%BOWTIE%% 
+                --max-readlet-size %d 
+                --readlet-interval %d 
+                --partition-len %d 
+                --exon-differentials 
+                --verbose 
+                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())'''
         mapperStr = """
             python %%BASE%%/src/rail-rna/align.py
                 --refseq=%%REF_FASTA%% 
                 --faidx=%%REF_FASTA_INDEX%% 
-                --bowtieIdx=%%REF_BOWTIE_INDEX%% 
-                --bowtieExe=%%BOWTIE%% 
-                --readletLen %d 
-                --readletIval %d 
-                --partition-len %d 
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
+                --bowtie-exe=%%BOWTIE%%
+                --max-readlet-size %d 
+                --readlet-interval %d 
+                --partition-length %d 
                 --exon-differentials 
-                --verbose 
-                -- 
-                %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())
+                --verbose %s
+                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, 
+                    '--stranded' if tconf.stranded else '', tconf.bowtieArgs())
         mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(AlignStep, self).__init__(\
             inps,
@@ -67,9 +81,31 @@ class AlignStep(pipeline.Step):
             mapper=mapperStr,
             multipleOutput=True)
 
-class IntronStep(pipeline.Step):
+class AlignPostStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
+            python %%BASE%%/src/rail-rna/align_post.py
+                --out=%s/spliced_alignments
+                --refseq=%%REF_FASTA%%
+                --samtools-exe=%%SAMTOOLS%%
+                --bam-basename=%s
+                %s
+                %s
+            """ % (gconf.out, tconf.bam_basename, 
+                    '--output-by-chromosome' if tconf.output_bam_by_chromosome else '',
+                    '--output-sam' if tconf.output_sam else '')
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(AlignPostStep, self).__init__(\
+            inps,
+            output,
+            name="AlignPost",
+            aggr=(pipeline.Aggregation(None, 1, 1, 2) if (tconf.output_bam_by_chromosome and gconf.out is not None) \
+                    else pipeline.Aggregation(1, None, 1, 2)),
+            reducer=reducerStr)
+
+class IntronStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        '''reducerStr = """
             python %%BASE%%/src/rail-rna/intron2.py
                 --refseq=%%REF_FASTA%%
                 --cluster-radius=%d
@@ -78,19 +114,52 @@ class IntronStep(pipeline.Step):
                 --per-site
                 --readletLen %d
                 --readletIval %d
-                --partition-len %d
+                --verbose
+                --partition-length %d
                 %s
         """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
                tconf.readletLen, tconf.readletIval, tconf.partitionLen,
-               '--stranded' if tconf.stranded else '')
+               '--stranded' if tconf.stranded else '')'''
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/intron.py
+                --refseq=%%REF_FASTA%%
+                --cluster-radius=%d
+                --intron-partition-overlap=%d
+                --per-span
+                --per-site
+                --output-bed
+                --verbose
+                --partition-length %d
+                %s
+        """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
+                tconf.partitionLen, 
+                '--stranded' if tconf.stranded else '')
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(IntronStep, self).__init__(\
             inps,
             output,  # output URL
-            name="Intron", # name
-            aggr=pipeline.Aggregation(None, 8, 1, 2), # 8 tasks per reducer
+            name="Intron",  # name
+            aggr=pipeline.Aggregation(None, 8, 1, 2),  # 8 tasks per reducer
             reducer=reducerStr,
             multipleOutput=True)
+
+class IntronPostStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/intron_post.py
+                --out=%s/junctions
+                --bed-basename=%s
+                %s
+            """ % (gconf.out, tconf.bed_basename, 
+                    '--output-by-chromosome' if tconf.output_bed_by_chromosome else '')
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(IntronPostStep, self).__init__(\
+            inps,
+            output,
+            name="IntronPost",
+            aggr=(pipeline.Aggregation(None, 1, 1, 2) if (tconf.output_bed_by_chromosome and gconf.out is not None) \
+                    else pipeline.Aggregation(1, None, 1, 2)),
+            reducer=reducerStr)
 
 class MergeStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
@@ -133,6 +202,53 @@ class NormalizePreStep(pipeline.Step):
             reducer=reducerStr,
             multipleOutput=True)
 
+class CoveragePreStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/coverage_pre.py 
+                --partition-stats 
+                --partition-len=%d""" % (tconf.partitionLen)
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(CoveragePreStep, self).__init__(\
+            inps,
+            output,  # output URL
+            name="CoveragePre", # name
+            aggr=pipeline.Aggregation(None, 8, 2, 3),
+            reducer=reducerStr,
+            multipleOutput=True)
+
+class CoverageStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/coverage.py 
+                --percentile %f
+                --out=%s/coverage
+                --bigbed-exe=%%BEDTOBIGBED%%
+                --refseq=%%REF_FASTA%% 
+                --faidx=%%REF_FASTA_INDEX%%
+                --verbose""" % (tconf.normPercentile, gconf.out)
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(CoverageStep, self).__init__(\
+            inps,
+            output,  # output URL
+            name="Coverage", # name
+            aggr=pipeline.Aggregation(None, 1, 1, 3),
+            reducer=reducerStr)
+
+class CoveragePostStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/coverage_post.py 
+                --out=%s/normalize 
+                --manifest=%%MANIFEST%%""" % gconf.out
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(CoveragePostStep, self).__init__(\
+            inps,
+            output,  # output URL
+            name="CoveragePost", # name
+            aggr=pipeline.Aggregation(1, None, 0, 0),
+            reducer=reducerStr)
+
 class NormalizeStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
@@ -155,7 +271,7 @@ class NormalizePostStep(pipeline.Step):
         reducerStr = """
             python %%BASE%%/src/rail-rna/normalize_post.py 
                 --out=%s/normalize 
-                --manifest=%%MANIFEST%%""" % (gconf.out)
+                --manifest=%%MANIFEST%%""" % gconf.out
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(NormalizePostStep, self).__init__(\
             inps,

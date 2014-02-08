@@ -175,7 +175,15 @@ for ln in sys.stdin:
     toks = ln.rstrip().split('\t')
     assert len(toks) == 4
     samp, refid, pos, cov = toks[0], toks[1], int(toks[2]), int(toks[3])
-    assert samp != last_samp or refid != last_refid or pos > last_pos
+    print >> sys.stderr, 'for diagnostics'
+    print >> sys.stderr, samp
+    print >> sys.stderr, last_samp
+    print >> sys.stderr, refid
+    print >> sys.stderr, last_refid
+    print >> sys.stderr, pos
+    print >> sys.stderr, last_pos
+    print >> sys.stderr, cov
+    assert samp != last_samp or refid != last_refid or pos >= last_pos
     assert refid in reflens, "Reference ID '%s' not amongst those in FASTA index: '%s'" % (refid, str(reflens.keys()))
     
     finishedSamp = samp != last_samp and last_samp != "\t"

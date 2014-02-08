@@ -1,0 +1,70 @@
+STYLE NOTES
+
+Abhi Nellore, 12/12/2013
+
+**My conventions for writing Python**
+-Generally adhere to PEP 8 (http://www.python.org/dev/peps/pep-0008/) for code and PEP 257 (http://www.python.org/dev/peps/pep-0257/) for docstrings.
+-Every line of code has no more than 79 characters.
+-Every line of a docstring has no more than 72 characters. To enforce the docstring rule easily, indent past """ denoting the beginning of the string.
+
+Example:
+def two_plus_two()
+    """Computes 2+2.
+
+       Return value: 4.
+    """
+    return 2 + 2
+
+-Use double quotes for docstrings.
+-The first line of a function's docstring is a short, indexable description. An optional paragraph or more that follow provide a more detailed description. Next are descriptions of all arguments and the return value. If there is no return value, write No return value.
+
+Example (from align.py):
+def composed_and_sorted_readlets(readlets, min_strand_readlets=1):
+    """Composes overlapping readlets and sorts them by reference position.
+
+       This function assumes that for overlapping readlets mapping to, for
+       example, the forward strand and covering the reference like so:
+
+             Reference  5'---------------------3'
+             Readlet 1       =========
+             Readlet 2           ============
+             Readlet 3      ===============    ,
+
+       the displacement of the readlet whose pos is smallest (here, Readlet 3),
+       is the displacement of the interval overlapped --- EVEN IF THE OTHER 
+       READLETS' DISPLACEMENTS SEEM INCONSISTENT WITH THAT DISPLACEMENT given
+       readlet pos's AND end_pos's. See below for definitions of displacement,
+       pos, and end_pos.
+
+       readlets: list of tuples (rname, reverse_strand, pos, end_pos,
+                 displacement), each of which corresponds to a readlet. rname 
+                 is the SAM-format RNAME, typically the chromosome to which the readlet maps. reverse_strand is True iff the readlet's 
+                 reversed complement aligns to the reference. The readlet 
+                 should span the reference interval [pos, end_pos).
+                 displacement is the number of bases between the 5' (3') end of
+                 the readlet, which aligns to the forward (reverse) strand, and
+                 the 5' (3') end of the read.
+       min_strand_readlets: readlets are composed on a strand iff the number of
+                            readlets that align to the strand is >= this
+                            number.
+
+       Return value: dictionary with each key a tuple (rname, reverse_strand)
+                     uniquely identifying a strand and each value a list of
+                     tuples (pos, end_pos, displacement) sorted by pos in 
+                     ascending order; here, each tuple from the list denotes
+                     an exonic interval spanning [pos, end_pos) and
+                     displacement is the number of bases between the 5' (3')
+                     end of the interval, composed of readlets aligning to the
+                     forward (reverse) strand, and the 5' (3') end of the
+                     read.
+    """
+    ...
+-Use # for single-line comments and triple single quotes for multiline comments besides docstrings.
+-In general, be verbose when naming variables and functions.
+    -If a function has a return value, call the function what it returns (like exons_and_introns_from_read() in align.py).
+    -If a function has no return value, call the function what it does (like write_reads() in align.py).
+-CamelCase class names, and use underscores to set off words in function/method and variable names.
+-Unit tests: see align.py to infer conventions.
+    -Class names say which unit is being tested (like TestExonsAndIntronsFromRead.)
+    -Method names say what feature of the unit is being tested; they may be numbered (like test_DP_framing_1())
+    -The first line of a method's docstring explains when the test fails.

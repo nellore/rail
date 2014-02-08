@@ -124,10 +124,10 @@ gzip -dc $INPUT_DIR/* \
 	| $ALIGN_AGGR | $ALIGN \
 		--ntasks=$NTASKS \
 		--genomeLen=$GENOME_LEN \
-		--bowtieExe $BOWTIE_EXE \
-		--bowtieIdx=$BOWTIE_IDX \
-		--readletLen $READLET_LEN \
-		--readletIval $READLET_IVAL \
+		--bowtie-exe $BOWTIE_EXE \
+		--bowtie-idx=$BOWTIE_IDX \
+		--max-readlet-size $READLET_LEN \
+		--readlet-interval $READLET_IVAL \
 		--refseq=$GENOME \
  		--faidx=$FASTA_IDX \
 		--splice-overlap=$SPLICE_OVERLAP \
@@ -135,7 +135,7 @@ gzip -dc $INPUT_DIR/* \
 		--exon-intervals \
 		--verbose \
 		--intron-partition-overlap=30 \
-		-- -v 2 -m 1 -p 10 \
+		--bowtie-args -v 2 -m 1 -p 10 \
 		| tee ${INTERMEDIATE_DIR}/align_out.tsv \
 	| grep '^exon_diff' | cut -f 2- | $NORMALIZE_PRE_AGGR | tee $WALK_IN_TMP | $NORMALIZE_PRE \
 		--ntasks=$NTASKS \

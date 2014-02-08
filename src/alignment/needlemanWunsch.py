@@ -16,13 +16,14 @@ def lcsCost():
     return M
 
 def matchCost():
-    """ Return a substitution matrix where match=+1, gap=-2, everything else=-1.  The
+    """ Return a substitution matrix where match=+1, gap=-2, everything else=-1.  
+        Exception: N v. N gives -1. The
         6 symbols are 0=A, 1=C, 2=G, 3=T, 4=N, 5=- (gap). """
     M = numpy.matrix([[ 1,-1,-1,-1,-1,-2],
                       [-1, 1,-1,-1,-1,-2],
                       [-1,-1, 1,-1,-1,-2],
                       [-1,-1,-1, 1,-1,-2],
-                      [-1,-1,-1,-1, 1,-2],
+                      [-1,-1,-1,-1,-1,-2],
                       [-2,-2,-2,-2,-2,-2]],dtype=numpy.int32)
     return M
 
@@ -129,17 +130,42 @@ def needlemanWunschPython(x, y, s):
                           D[i  , j-1] + s[5,      y[j-1]]) # horizontal
     return D[len(x), len(y)], D
 
-def needlemanWunsch(x, y, s, check=False):
-    """ Calculate global alignment value of sequences x and y using
-        dynamic programming.  Return global alignment value.  Uses swig
-        to call a C implementation. """
-    nrow, ncol = len(x)+1, len(y)+1
+def needlemanWunsch(first_seq, second_seq, substitution_matrix, check=False):
+    """Finds the best global alignment between two sequences.
+
+       This version uses SWIG to call a C implementation of the
+       Needleman-Wunsch algorithm.
+
+       first_seq: first sequence (string).
+       second_seq: second sequence (string).
+       substitution_matrix: 6 x 6 substitution matrix (numpy object or list of
+                            listse); rows and columns correspond to ACGTN-,
+                            where N is aNy and - is a gap. Default: +1 for
+                            match, -2 for gap, -1 for everything else.
+       check: True if check of C result against Python implementation should be
+              performed.
+
+       Return value: tuple (highest_score, score_matrix)
+                      -highest_score is the score of the best global
+                       alignment.
+                      -score_matrix is the score matrix; it's a numpy matrix
+                       that can be used to trace back the global alignment.
+    """
+    # Make sure cases are the same
+    first_seq = first_seq.upper()
+    second_seq = second_seq.upper()
+    # Change all non-ATCGs to Ns
+    first_seq = re.sub(r'[^ATCG]', 'N', first_seq)
+    second_seq = re.sub(r'[^ATCG]', 'N', second_seq)
+
+    nrow, ncol = len(first_seq)+1, len(second_seq)+1
     D = numpy.zeros((nrow, ncol), dtype=numpy.int32)
-    nw.nw(D,s,x,y)
+    nw.nw(D, substitution_matrix, first_seq, second_seq)
     if check:
-        sc, Dd = needlemanWunschPython(x, y, s)
-        for i in xrange(1, len(x)+1):
-            for j in xrange(1, len(y)+1):
+        sc, Dd = needlemanWunschPython(first_seq, second_seq,
+                    substitution_matrix)
+        for i in xrange(1, len(first_seq)+1):
+            for j in xrange(1, len(second_seq)+1):
                 assert D[i, j] == Dd[i, j]
         assert sc == D[nrow-1, ncol-1]
     return D[nrow-1, ncol-1], D

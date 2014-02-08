@@ -6,12 +6,12 @@
 python $RAIL_HOME/src/driver/rail-rna.py \
 	--local \
 	--start-with-align --no-differential \
-	--manifest dmel_flux.manifest \
+        --manifest dmel_flux.manifest \
 	--input preprocessed_reads \
 	--intermediate intermediate \
 	--output local_out \
-	--reference $IGENOMES_HOME/Drosophila_melanogaster/UCSC/dm3 \
-	--igenomes \
-	--num-processes=6 \
+        --reference $IGENOMES_HOME/Drosophila_melanogaster/UCSC/dm3 \
+        --igenomes \
+        --num-processes=2 \
 	--keep-all \
 	$*
