@@ -342,10 +342,11 @@ if useInput and inp is None:
 
 pipelineSteps = {
     'preprocess'   : ['preprocess'],
-    'align'        : ['align', 'align_post'],
+    'align'        : ['align'],
     'junction'     : ['intron', 'intron_post'],
     #'coverage'     : ['normalize_pre', 'normalize'],#, 'normalize_post'],
-    'coverage'     : ['coverage_pre', 'coverage', 'coverage_post'],
+    'coverage' : [],
+    #'coverage'     : ['coverage_pre', 'coverage', 'coverage_post'],
     'differential' : ['walk_fit', 'ebayes', 'hmm_params', 'hmm', 'aggr_path'] }
 
 allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]

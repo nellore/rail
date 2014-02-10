@@ -16,15 +16,15 @@ def addArgs(parser):
     parser.add_argument(\
         '--quality', metavar='STR', type=str, default="phred33", help='Quality string format.')
     parser.add_argument(\
-        '--readlet-length', metavar='INT', type=int, default="20", help='Substring length to extract from read.')
+        '--readlet-length', metavar='INT', type=int, default="25", help='Substring length to extract from read.')
     parser.add_argument(\
-        '--readlet-interval', metavar='INT', type=int, default="10", help='Distance between substrings to extract from read.')
+        '--readlet-interval', metavar='INT', type=int, default="4", help='Distance between substrings to extract from read.')
     parser.add_argument(\
-        '--capping-fraction', metavar='FRACTION', type=float, default="0.5", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
+        '--capping-fraction', metavar='FRACTION', type=float, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\
         '--partition-length', metavar='INT', type=int, default=30000, help='Size of genome partitions to use.')
     parser.add_argument(\
-        '--cluster-radius', metavar='INT', type=int, default="5", help='For clustering candidate introns into junctions.')
+        '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
         '--intron-partition-overlap', metavar='INT', type=int, default="20", help='# of nucleotides of overlap between intron-finding partitions.')
     parser.add_argument(\
@@ -84,6 +84,24 @@ def addArgs(parser):
     parser.add_argument(\
         '--output-sam', action='store_const', const=True, default=False, 
         help='Output SAM files if True; otherwise output BAM files')
+    parser.add_argument('--do-not-search_for_caps',
+        action='store_const',
+        const=True,
+        default=False,
+        help='Ordinarily, reference is search for the segment of a read (a '
+             'cap) that precedes the first EC and the cap that follows the '
+             'last EC. Such caps are subsequently added as ECs themselves. '
+             'Use this command-line parameter to turn the feature off')
+    parser.add_argument('--min-cap-query-size', type=int, required=False,
+        default=8,
+        help='The reference is not searched for a segment of a read that '
+             'precedes the first EC or follows the last EC smaller than this '
+             'size')
+    parser.add_argument('--cap-search-window-size', type=int, required=False,
+        default=1000,
+        help='The size (in bp) of the reference subsequence in which to '
+             'search for a cap --- i.e., a segment of a read that follows '
+             'the last EC or precedes the first EC.')
 
 class Rail_RNAConfig(object):
     
@@ -110,7 +128,7 @@ class Rail_RNAConfig(object):
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
-        self._bowtieArgs = args.bowtie_args or "-v 1 -k 3"
+        self._bowtieArgs = args.bowtie_args or "-v 1 -m 6"
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)
@@ -137,6 +155,13 @@ class Rail_RNAConfig(object):
         self.output_sam = args.output_sam
         self.poolTech = args.pool_tech_replicates
         self.poolBio = args.pool_bio_replicates
+        self.do_not_search_for_caps = args.do_not_search_for_caps
+        if args.min_cap_query_size < 0:
+            raise RuntimeError("Argument for --min-cap-query-size must be in > 0; was %d" % args.min_cap_query_size)
+        self.min_cap_query_size = args.min_cap_query_size
+        if args.cap_search_window_size < 0:
+            raise RuntimeError("Argument for --cap-search-window-size must be in > 0; was %d" % args.cap_search_window_size)
+        self.cap_search_window_size = args.cap_search_window_size
         o = self.hmmOlap = args.hmm_overlap
         if o < 0:
             raise RuntimeError("Argument for --hmm-overlap must be >= 0; was %d" % o)

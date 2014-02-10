@@ -17,12 +17,13 @@ class BowtieIndexReference(object):
         # Open file handles
         if os.path.exists(idx_prefix + '.3.ebwt'):
             # Small index (32-bit offsets)
-            fh1 = open(idx_prefix + '.1.ebwt', 'rb')  # for ref names
-            fh3 = open(idx_prefix + '.3.ebwt', 'rb')  # for stretch extents
-            fh4 = open(idx_prefix + '.4.ebwt', 'rb')  # for unambiguous sequence
+            fh1 = open(idx_prefix + '.1.ebwt', 'rb') # for ref names
+            fh3 = open(idx_prefix + '.3.ebwt', 'rb') # for stretch extents
+            fh4 = open(idx_prefix + '.4.ebwt', 'rb') # for unambiguous sequence
             sz, struct_unsigned = 4, struct.Struct('I')
         else:
-            raise RuntimeError('No Bowtie index files with prefix "%s"' % idx_prefix)
+            raise RuntimeError('No Bowtie index files with prefix "%s"' 
+                % idx_prefix)
 
         #
         # Parse .1.bt2 file
@@ -38,8 +39,10 @@ class BowtieIndexReference(object):
         _ = struct.unpack('<i', fh1.read(4))[0]
 
         nref = struct_unsigned.unpack(fh1.read(sz))[0]
-        # skip ref lengths
-        fh1.seek(nref * sz, 1)
+        # get ref lengths
+        reference_length_list = []
+        for i in xrange(nref):
+            reference_length_list.append(struct.unpack('<i', fh1.read(sz))[0])
 
         nfrag = struct_unsigned.unpack(fh1.read(sz))[0]
         # skip rstarts
@@ -76,6 +79,10 @@ class BowtieIndexReference(object):
             refnames.append(refname.split()[0])
         assert len(refnames) == nref
 
+        # Create dictionary for storing reference lengths
+        self.rname_lengths = {}
+        for i, reference_name in enumerate(refnames):
+            self.rname_lengths[reference_name] = reference_length_list[i]
         #
         # Parse .3.bt2 file
         #

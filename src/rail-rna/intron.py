@@ -33,6 +33,12 @@ between the 5' end of the reverse-complemented read and the 5' end of the
 reverse-complemented intron.
 6. Number of nucleotides between 3' end of candidate intron and 3' end of read 
 from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
+7. Number of nucleotides spanned by EC on the left (that is, towards the 5'
+end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
+STRAND.
+8. Number of nucleotides spanned by EC on the right (that is, towards the 3'
+end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
+STRAND.
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -59,10 +65,15 @@ the reads in a sample
 
 Format 3 (junction):
 12-column (3 required fields + 9 optional fields) BED output mimicking TopHat's
-junctions.bed. From the TopHat manual http://tophat.cbcb.umd.edu/manual.shtml:
-"Each junction consists of two connected BED blocks, where each block is as
-long as the maximal overhang of any read spanning the junction. The score is
-the number of alignments spanning the junction."
+junctions.bed, except anchor significance is also included in the name field.
+(Anchor significance of a junction is defined almost as in the MapSplice paper
+http://nar.oxfordjournals.org/content/38/18/e178.long. Consider the set {R_i}
+of reads that span a junction J. The anchor significance of J is
+max_i min(L(A_i), L(B_i)).) From the TopHat manual
+http://tophat.cbcb.umd.edu/manual.shtml: "Each junction
+consists of two connected BED blocks, where each block is as long as the
+maximal overhang of any read spanning the junction. The score is the number of
+alignments spanning the junction."
 
 OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -71,60 +82,17 @@ import sys
 # Regular expressions are used to identify splice-site motifs
 import re
 import itertools
-import argparse
 from collections import defaultdict
 import numpy as np
 import site
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['fasta', 'interval']:
+for directory_name in ['interval', 'bowtie']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
 import partition
-import fasta
-
-# Print file's docstring if -h is invoked
-parser = argparse.ArgumentParser(description=__doc__, 
-            formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument('--test', action='store_const', const=True, default=False,
-    help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
-         'WRITE INTRONS TO STDOUT')
-parser.add_argument('--verbose', action='store_const', const=True,
-    default=False,
-    help='Print out extra debugging statements')
-parser.add_argument('--refseq', type=str, required=False, 
-    help='The fasta sequence of the reference genome. The fasta index of the '
-         'reference genome is also required to be built via samtools')
-# To be implemented; for now, index is always fasta filename + .fai
-parser.add_argument('--faidx', type=str, required=False, 
-    help='Fasta index file')
-parser.add_argument(\
-    '--cluster-radius', type=int, required=False, default=10,
-    help='The maximum radius of a cluster of candidate introns for which '
-         'splice sites are called')
-parser.add_argument('--intron-partition-overlap', type=int, required=False,
-    default=20, 
-    help='Amount by which partitions overlap their left and right neighbors')
-parser.add_argument(\
-    '--per-site', action='store_const', const=True, default=False,
-    help='Output one record for every splice site, giving information about '
-         'the number of times a read from each label spans the site')
-parser.add_argument(\
-    '--per-span', action='store_const', const=True, default=False,
-    help='Output one record for every instance where a read '
-         'spans a splice site')
-parser.add_argument(\
-    '--output-bed', action='store_const', const=True, default=False,
-    help='Output BED lines denoting splice junctions analogous to '
-         'TopHat\'s junctions.bed')
-parser.add_argument(\
-    '--stranded', action='store_const', const=True, default=False,
-    help='Assume input reads come from the sense strand')
-
-# Add command-line arguments for dependency
-partition.addArgs(parser)
-
-args = parser.parse_args(sys.argv[1:])
+import bowtie
+import bowtie_index
 
 '''Initialize lists of donor/acceptor motifs in order of descending priority;
 the unstranded motif list is used if --stranded is False; otherwise, 
@@ -152,20 +120,23 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
         lineup is initially the list of candidates in order of descending
         read_count. A cluster is formed by associating a given candidate C
         under examination with candidates {C_i} of the same size that lie
-        within cluster_radius bases of C. The {C_i} are then removed from the
-        lineup, and the next candidate is examined. The algorithm also filters
-        out every cluster whose leftmost intron is not wholly within
-        [partition_start, partition_end).
+        within min(intron_size, cluster_radius) bases of C. The {C_i} are then
+        removed from the lineup, and the next candidate is examined. The
+        algorithm also filters out every cluster whose leftmost intron is not
+        wholly within [partition_start, partition_end).
         
         candidate_introns: a dictionary. Each key is a tuple
             (start_position, end_position) and its corresponding value is a
             list (of length read_count), each of whose items is a tuple
-            (sample_label, five_prime_displacement, three_prime_displacement)
-            associated with a read supporting the candidate. Here,
-            five_prime_displacement is the displacement of the 5' end of
-            the candidate from the 5' end of the read, while
+            (sample_label, five_prime_displacement, three_prime_displacement,
+                left_EC_size, right_EC_size) associated with a read supporting
+            the candidate. Here, five_prime_displacement is the displacement of
+            the 5' end of the candidate from the 5' end of the read, while
             three_prime_displacement is the displacement of the 3' end of
-            the candidate from the 3' end of the read
+            the candidate from the 3' end of the read. left_EC_size
+            (right_EC_size) is the number of nucleotides spanned by the EC on
+            the left (right) of the intron. Here, "left" ("right") means 
+            "towards the 5' (3') end of the read."
         partition_start: start position (inclusive) of partition.
         partition_end: end position (exclusive) of partition.
         cluster_radius: distance from a candidate intron under examination
@@ -177,9 +148,9 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
         Return value: a list of lists, each of which corresponds to a cluster
         of candidate introns. Each item in a cluster is a tuple
         (start_position, end_position, sample_label, five_prime_displacement,
-            three_prime_displacement), which corresponds to a read
-        supporting a candidate intron spanning [start_position, end_position)
-        in the cluster.
+            three_prime_displacement, left_EC_size, right_EC_size), which
+        corresponds to a read supporting a candidate intron spanning
+        [start_position, end_position) in the cluster.
     """
     '''Construct list of candidate introns sorted in order of descending
     read_count.'''
@@ -200,11 +171,14 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
     filtered_cluster_count = 0
     for _, intron_size, end_position in candidate_intron_list:
         if (intron_size, end_position) not in clustered_introns:
+            current_cluster_radius = min(intron_size, cluster_radius)
             total_cluster_count += 1
             clustered_introns.add((intron_size, end_position))
             intron_cluster = [(intron_size, end_position)]
-            for an_end_position in xrange(end_position - cluster_radius,
-                                            end_position + cluster_radius + 1):
+            for an_end_position in xrange(end_position 
+                                            - current_cluster_radius,
+                                            end_position
+                                            + current_cluster_radius + 1):
                 if (intron_size, an_end_position) in candidate_intron_set \
                     and (intron_size,
                             an_end_position) not in clustered_introns:
@@ -241,7 +215,7 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                 return reads_for_intron_clusters
     raise RuntimeError('For loop should never be completed.')
 
-def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
+def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
     rname, motifs, motif_radius=3, verbose=False):
     """ Ranks possible splice sites for a cluster using donor/acceptor motifs.
 
@@ -290,12 +264,14 @@ def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
 
         ALL INPUT COORDINATES ARE ASSUMED TO BE 1-INDEXED.
 
-        fasta_object: object of class fasta.fasta corresponding to FASTA
-            reference; used to find splice-site motifs.
+        reference_index: object of class bowtie_index.BowtieIndexReference
+                that permits access to reference; used to find splice-site
+                motifs.
         intron_cluster: a list of lists, each of which corresponds to a cluster
             of candidate introns. Each item in a cluster is a tuple
             (start_position, end_position, sample_label, 
-                five_prime_displacement, three_prime_displacement), which
+                five_prime_displacement, three_prime_displacement,
+                left_EC_size, right_EC_size), which
             corresponds to a read supporting a candidate intron spanning
             [start_position, end_position) in the cluster.
         rname: SAM-format RNAME indicating the chromosome.
@@ -323,17 +299,17 @@ def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
             [(142451, 143128, 2.8324, 'GT', 'AG', False),
                 (142449, 143128, 3.1124, 'CT', 'AC', True)].
     """
-    start_positions, end_positions, _, _, _ = zip(*intron_cluster)
-    reference_length = fasta_object.length(rname)
+    start_positions, end_positions, _, _, _, _, _ = zip(*intron_cluster)
+    reference_length = reference_index.rname_lengths[rname]
     min_start_position = max(min(start_positions) - motif_radius, 1)
     max_start_position = min(max(start_positions) + motif_radius + 2,
                                 reference_length)
     min_end_position = max(min(end_positions) - 2 - motif_radius, 1)
     max_end_position = min(max(end_positions) + motif_radius, reference_length)
-    left_sequence = fasta_object.fetch_sequence(rname, min_start_position,
-        max_start_position - 1).upper()
-    right_sequence = fasta_object.fetch_sequence(rname, min_end_position,
-        max_end_position - 1).upper()
+    left_sequence = reference_index.get_stretch(rname, min_start_position - 1,
+        max_start_position - min_start_position)
+    right_sequence = reference_index.get_stretch(rname, min_end_position - 1,
+        max_end_position - min_end_position)
     assert max_end_position >= min_end_position and \
         max_start_position >= min_start_position
     # For computing z-scores
@@ -385,10 +361,10 @@ def ranked_splice_sites_from_cluster(fasta_object, intron_cluster,
             '%d candidate introns' % len(intron_cluster)
     return ranked_introns
 
-def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
-    bin_size=10000, cluster_radius=5, per_site=False, per_span=True,
-    output_bed=True, stranded=False, intron_partition_overlap=20,
-    verbose=False):
+def go(bowtie_index_base="genome", input_stream=sys.stdin,
+        output_stream=sys.stdout, bin_size=10000, cluster_radius=5,
+        per_site=False, per_span=True, output_bed=True, stranded=False,
+        intron_partition_overlap=20, verbose=False):
     """ Runs Rail-RNA-intron.
 
         Input lines are binned, so they are examined two at a time. When the
@@ -424,6 +400,12 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
         6. Number of nucleotides between 3' end of candidate intron and 3' end
         of read from which it was inferred, ASSUMING THE SENSE STRAND IS THE
         FORWARD STRAND.
+        7. Number of nucleotides spanned by EC on the left (that is, towards
+        the 5' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
+        FORWARD STRAND.
+        8. Number of nucleotides spanned by EC on the right (that is, towards
+        the 3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
+        FORWARD STRAND.
 
         Hadoop output (written to output_stream)---
         Format 1 (span): tab-delimited columns, one line per read spanning a
@@ -453,7 +435,14 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
 
         Format 3 (junction):
         12-column (3 required fields + 9 optional fields) BED output mimicking
-        TopHat's junctions.bed. From the TopHat manual
+        TopHat's junctions.bed, except anchor significance is the name field.
+        (Anchor significance of a junction is defined almost as in the
+        MapSplice paper http://nar.oxfordjournals.org/content/38/18/e178.long.
+        Consider the set {R_i} of reads that span a junction J. For a given
+        read R_i, consider the two anchors A_i and B_i on either side of J, and
+        let L_(A_i) and L_(B_i) be their lengths (in bp). Consider the set
+        {R_i} of reads that span a junction J. The anchor significance of J is
+        max_i min(L(A_i), L(B_i)).) From the TopHat manual
         http://tophat.cbcb.umd.edu/manual.shtml:
         "Each junction consists of two connected BED blocks, where each block
         is as long as the maximal overhang of any read spanning the junction.
@@ -462,7 +451,8 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
         OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE
         1-INDEXED.
 
-        reference_fasta: filename, including path, of the reference fasta.
+        bowtie_index_base: the basename of the Bowtie index files associated
+            with the reference.
         input_stream: where to find input.
         output_stream: where to emit splice sites.
         bin_size: genome is partitioned in units of bin_size, and candidate
@@ -488,7 +478,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
 
         No return value.
 """
-    fasta_object = fasta.fasta(reference_fasta)
+    reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     input_line_count = 0
     junction_number = 0
     handle_partition = False
@@ -499,14 +489,15 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
         if line:
             input_line_count += 1
             tokens = line.rstrip().split('\t')
-            assert len(tokens) == 6
+            assert len(tokens) == 8
             (partition_id, sample_label, pos, end_pos, five_prime_displacement,
-                three_prime_displacement) = tokens
+                three_prime_displacement, left_EC_size, right_EC_size) = tokens
             (pos, end_pos, five_prime_displacement,
-                three_prime_displacement) = (int(pos), int(end_pos),
-                                                int(five_prime_displacement),
-                                                int(three_prime_displacement))
-            assert end_pos > pos
+                three_prime_displacement, left_EC_size, right_EC_size) \
+            = (int(pos), int(end_pos), int(five_prime_displacement),
+                int(three_prime_displacement), int(left_EC_size), 
+                int(right_EC_size))
+            assert end_pos > pos, line
             if stranded:
                 '''If input reads are strand-specific, the partition_id has a
                 terminal '+' or '-' indicating which strand is the sense
@@ -549,7 +540,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                 if last_reverse_strand:
                     for i, intron_cluster in enumerate(intron_clusters):
                         ranked_splice_sites = ranked_splice_sites_from_cluster(
-                                fasta_object, intron_cluster, last_rname,
+                                reference_index, intron_cluster, last_rname,
                                 _reverse_strand_motifs, verbose=verbose
                             )
                         if len(ranked_splice_sites) != 0:
@@ -558,7 +549,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                 else:
                     for i, intron_cluster in enumerate(intron_clusters):
                         ranked_splice_sites = ranked_splice_sites_from_cluster(
-                                fasta_object, intron_cluster, last_rname,
+                                reference_index, intron_cluster, last_rname,
                                 _forward_strand_motifs, verbose=verbose
                             )
                         if len(ranked_splice_sites) != 0:
@@ -568,7 +559,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                 # The sense strand is unknown, so use a general motif set
                 for i, intron_cluster in enumerate(intron_clusters):
                     ranked_splice_sites = ranked_splice_sites_from_cluster(
-                            fasta_object, intron_cluster, last_rname,
+                            reference_index, intron_cluster, last_rname,
                             _unstranded_motifs, verbose=verbose
                         )
                     if len(ranked_splice_sites) != 0:
@@ -580,7 +571,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
-                    for _, _, sample_label, _, _ in intron_clusters[i]:
+                    for _, _, sample_label, _, _, _, _ in intron_clusters[i]:
                         print >>output_stream, 'span\t%s\t%012d\t%012d\t' \
                             '%s\t%s\t%s' \
                             % (last_rname + ';' + motif_reverse_strand_string,
@@ -593,7 +584,7 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
                     sample_label_counts = defaultdict(int)
-                    for _, _, sample_label, _, _ in intron_clusters[i]:
+                    for _, _, sample_label, _, _, _, _ in intron_clusters[i]:
                         sample_label_counts[sample_label] += 1
                     for sample_label in sample_label_counts:
                         print >>output_stream, \
@@ -603,8 +594,15 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                                 right_motif, sample_label, 
                                 sample_label_counts[sample_label])
             if output_bed:
-                '''The output bed mimics TopHat's junctions.bed. See TopHat
-                documentation for more information.'''
+                '''The output bed mimics TopHat's junctions.bed, except
+                anchor significance is in the name field. Anchor
+                significance of a junction is defined almost as in the
+                MapSplice paper
+                http://nar.oxfordjournals.org/content/38/18/e178.long.
+                Consider the set {R_i}
+                of reads that span a junction J. The anchor significance of J
+                is max_i min(L(A_i), L(B_i)). See TopHat documentation for
+                more information.'''
                 for i, (start_position, end_position, z_score_sum, left_motif,
                     right_motif, motif_reverse_strand) \
                     in cluster_splice_sites.items():
@@ -613,9 +611,14 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                     '''Identify longest read overhangs on either side of splice
                     junction.'''
                     left_overhang, right_overhang = 0, 0
+                    read_anchor_significance = None
                     for (candidate_start_position, candidate_end_position,
                             _, five_prime_displacement,
-                            three_prime_displacement) in intron_clusters[i]:
+                            three_prime_displacement, left_EC_size,
+                            right_EC_size) in intron_clusters[i]:
+                        read_anchor_significance = max(min(
+                                    left_EC_size, right_EC_size
+                                ), read_anchor_significance)
                         left_overhang = max(start_position \
                                         - candidate_start_position \
                                         + five_prime_displacement, 
@@ -626,15 +629,16 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
                                                 right_overhang)
                     junction_number += 1
                     '''Print line of bed file; where a first column 'junction'
-                    is inserted so it can be distinguished from other types of
-                    output lines. Subtract 1 from every position to
+                    is inserted so the line can be distinguished from other
+                    types of output lines. Subtract 1 from every position to
                     accommodate how bed is 0-based.'''
                     left_pos = start_position - left_overhang - 1
                     right_pos = end_position + right_overhang - 1
                     print >>output_stream, \
-                        'junction\t%s\t%012d\t%012d\tJUNC%08d\t%d\t%s\t%d\t' \
+                        'junction\t%s\t%012d\t%012d\t%d\t%d\t%s\t%d\t' \
                         '%d\t255,0,0\t2\t%d,%d\t0,%d' \
-                        % (last_rname, left_pos, right_pos, junction_number,
+                        % (last_rname, left_pos, right_pos,
+                            read_anchor_significance,
                             len(intron_clusters[i]),
                             motif_reverse_strand_string, left_pos, right_pos,
                             left_overhang, right_overhang, 
@@ -643,25 +647,66 @@ def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
             handle_partition = False
         if line:
             candidate_introns[(pos, end_pos)] = (sample_label,
-                five_prime_displacement, three_prime_displacement)
+                five_prime_displacement, three_prime_displacement, 
+                left_EC_size, right_EC_size)
             (last_partition_id, last_partition_start, last_partition_end, 
                 last_rname, last_reverse_strand) \
             = (partition_id, partition_start, partition_end, rname, 
                 reverse_strand)
         else: break
 
-# "Main"
 if __name__ == '__main__':
-    if not args.test:
-        go(args.refseq,
-            bin_size=args.partition_length,
-            cluster_radius=args.cluster_radius,
-            per_site=args.per_site,
-            per_span=args.per_span,
-            output_bed=args.output_bed,
-            intron_partition_overlap=args.intron_partition_overlap,
-            verbose=args.verbose)
-    else:
-        # Test units
-        del sys.argv[1:] # Don't choke on extra command-line parameters
-        import unittest
+    import argparse
+    # Print file's docstring if -h is invoked
+    parser = argparse.ArgumentParser(description=__doc__, 
+                formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--test', action='store_const', const=True,
+        default=False,
+        help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
+             'WRITE INTRONS TO STDOUT')
+    parser.add_argument('--verbose', action='store_const', const=True,
+        default=False,
+        help='Print out extra debugging statements')
+    parser.add_argument(\
+        '--cluster-radius', type=int, required=False, default=20,
+        help='The maximum radius of a cluster of candidate introns for which '
+             'splice sites are called')
+    parser.add_argument('--intron-partition-overlap', type=int, required=False,
+        default=20, 
+        help='Amount by which partitions overlap their left and right '
+             'neighbors')
+    parser.add_argument(\
+        '--per-site', action='store_const', const=True, default=False,
+        help='Output one record for every splice site, giving information '
+             'about the number of times a read from each label spans the site')
+    parser.add_argument(\
+        '--per-span', action='store_const', const=True, default=False,
+        help='Output one record for every instance where a read '
+             'spans a splice site')
+    parser.add_argument(\
+        '--output-bed', action='store_const', const=True, default=False,
+        help='Output BED lines denoting splice junctions analogous to '
+             'TopHat\'s junctions.bed')
+    parser.add_argument(\
+        '--stranded', action='store_const', const=True, default=False,
+        help='Assume input reads come from the sense strand')
+
+    # Add command-line arguments for dependencies
+    partition.addArgs(parser)
+    bowtie.addArgs(parser)
+
+    args = parser.parse_args(sys.argv[1:])
+
+if __name__ == '__main__' and not args.test:
+    go(bowtie_index_base=args.bowtie_idx,
+        bin_size=args.partition_length,
+        cluster_radius=args.cluster_radius,
+        per_site=args.per_site,
+        per_span=args.per_span,
+        output_bed=args.output_bed,
+        intron_partition_overlap=args.intron_partition_overlap,
+        verbose=args.verbose)
+elif __name__ == '__main__':
+    # Test units
+    del sys.argv[1:] # Don't choke on extra command-line parameters
+    import unittest

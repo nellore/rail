@@ -39,13 +39,9 @@ class RecordHandler(object):
         self.mover = mover
         self.maxnucs = maxnucs
         self.n, self.nfile, self.nnucs = 0, 0, 0
-        self.prefix = None
         self.ofh = None
         self.first = True
         self.keep = keep
-    
-    def set_prefix(self, pre):
-        self.prefix = pre
     
     def push(self):
         """ Push the file we just finished writing """
@@ -72,11 +68,10 @@ class RecordHandler(object):
         # Open (note: may be gzipped)
         self.ofh = gzip.open(ofn, 'wb', self.gzip_level) if self.gzip_output else open(ofn, 'w')
     
-    def add(self, seq1, seq2=None, qual1=None, qual2=None):
+    def add(self, prefix, seq1, seq2=None, qual1=None, qual2=None):
         """ Add a record, which might necessitate opening a new file, and
             possibly pushing the old one. """
         
-        assert self.prefix is not None
         assert seq1 is not None
         
         if self.first or self.nnucs > self.maxnucs:
@@ -88,11 +83,11 @@ class RecordHandler(object):
             qual1 = 'I' * len(seq1)
         if seq2 is not None and qual2 is None:
             qual2 = 'I' * len(seq2)
-        pre, ofh = self.prefix, self.ofh
+        ofh = self.ofh
         if seq2 is None:
-            ofh.write('\t'.join([';'.join([pre, str(self.n)]), seq1, qual1]))
+            ofh.write('\t'.join([';'.join([prefix, str(self.n)]), seq1, qual1]))
         else:
-            ofh.write('\t'.join([';'.join([pre, str(self.n)]), seq1, qual1, seq2, qual2]))
+            ofh.write('\t'.join([';'.join([prefix, str(self.n)]), seq1, qual1, seq2, qual2]))
         ofh.write('\n')
         
         self.n += 1
@@ -129,15 +124,13 @@ def preprocess(handler, lab, fh1, fh2=None, input_format="fastq", filename=None,
             fhs[i] = gzip.GzipFile(fhs[i], 'r') if fhs[i].endswith('.gz') else open(fhs[i], 'r')
     fh1, fh2 = fhs
     
-    full_name_hash = hashize(fullname)
     n = 0
-    fields = []
     if include_filename:
         # TODO: should be careful not to pass on any undesirable chars
-        fields.append("FN:" + filename.replace(';', '_'))
-    fields.append("FH:" + full_name_hash)
+        filename_read_name = "FN:" + filename.replace(';', '_') + "|"
+    else:
+        filename_read_name = ''
     label = "LB:" + lab.replace(';', '_')
-    handler.set_prefix('|'.join(fields) + ";%s" % label)
     
     if input_format == "fastq":
         while True:
@@ -151,9 +144,11 @@ def preprocess(handler, lab, fh1, fh2=None, input_format="fastq", filename=None,
                 seq2 = fh2.readline().rstrip()
                 fh2.readline()  # skip name line 2
                 qual2 = fh2.readline().rstrip()
-                handler.add(seq, seq2, qual, qual2)
+                read_name_hash = 'ID:' + hashize(fullname + seq + qual + seq2 + qual2)
+                handler.add(''.join([filename_read_name, read_name_hash]) + ";%s" % label, seq, seq2, qual, qual2)
             else:
-                handler.add(seq, qual1=qual)
+                read_name_hash = 'ID:' + hashize(fullname + seq + qual)
+                handler.add(''.join([filename_read_name, read_name_hash]) + ";%s" % label, seq, qual1=qual)
             n += 1
     else:
         assert input_format == "fasta"
@@ -165,6 +160,7 @@ def preprocess(handler, lab, fh1, fh2=None, input_format="fastq", filename=None,
                 if len(ln) == 0 or ln[0] == '>':
                     break
                 seqlines.append(ln.rstrip())
+            seq = ''.join(seqlines)
             if fh2 is not None:
                 seqlines2 = []
                 while True:
@@ -172,9 +168,11 @@ def preprocess(handler, lab, fh1, fh2=None, input_format="fastq", filename=None,
                     if len(ln) == 0 or ln[0] == '>':
                         break
                     seqlines2.append(ln.rstrip())
-                handler.add(''.join(seqlines), seq2=''.join(seqlines2))
+                seq2 = ''.join(seqlines2)
+                read_name_hash = 'ID:' + hashize(fullname + seq + seq2)
+                handler.add(''.join([filename_read_name, read_name_hash]) + ";%s" % label, seq, seq2=seq2)
             else:
-                handler.add(''.join(seqlines))
+                handler.add(''.join([filename_read_name, read_name_hash]) + ";%s" % label, seq)
             n += 1
     
     if not is_file[0]:

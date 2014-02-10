@@ -77,12 +77,6 @@ the sense strand is the reverse strand, this is the distance between the 3' end
 of the read and the 3' end of the intron.
 6. Number of nucleotides between 3' end of intron and 3' end of read from which
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
-7. Number of nucleotides spanned by EC on the left (that is, towards the 5'
-end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
-STRAND.
-8. Number of nucleotides spanned by EC on the right (that is, towards the 3'
-end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
-STRAND.
 
 SAM (splice_sam):
 Standard 11-column SAM output except fields are in different order. (Fields are
@@ -485,34 +479,30 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
             -introns is a dictionary; each key is a strand (i.e., a tuple
                 (rname, reverse_strand)), and its corresponding value is a list
                 of tuples (pos, end_pos, five_prime_displacement,
-                three_prime_displacement, left_EC_size, right_EC_size), each of
-                which denotes an intron. rname contains the SAM-format RNAME
-                --- typically a chromosome. When input reads are
-                strand-specific, reverse_strand is True iff the sense strand is
-                the reverse strand; otherwise, it merely denotes the strand to
-                which the intron's flanking ECs were presumed to align. The
-                intron spans the interval [pos, end_pos). Assume the sense
-                strand is the forward strand; that is, if the sense strand is
-                the reverse strand, consider the reversed complements of both
-                the readlet and its parent read. five_prime_displacement is the
-                displacement of the 5' end of the intron from the 5' end of the
-                read, while three_prime_displacement is the displacement of the
-                3' end of the intron from the 3' end of the read. left_EC_size
-                (right_EC_size) is the number of nucleotides spanned by the EC
-                on the left (right) of the intron. Here, "left" ("right")
-                means "towards the 5' (3') end of the read," again assuming
-                the sense strand is the forward strand.
+                three_prime_displacement), each of which denotes an intron.
+                rname contains the SAM-format RNAME --- typically a chromosome.
+                When input reads are strand-specific, reverse_strand is True
+                iff the sense strand is the reverse strand; otherwise, it
+                merely denotes the strand to which the intron's flanking ECs
+                were presumed to align. The intron spans the interval
+                [pos, end_pos). Assume the sense strand is the forward
+                strand; that is, if the sense strand is the reverse strand,
+                consider the reversed complements of both the readlet and its
+                parent read. five_prime_displacement is the displacement of the
+                5' end of the intron from the 5' end of the read, while
+                three_prime_displacement is the displacement of the 3' end of
+                the intron from the 3' end of the read.
     """
     composed = composed_and_sorted_readlets(readlets, min_strand_readlets)
     read_seq = read_seq.upper()
     reversed_complement_read_seq = read_seq[::-1].translate(
             _reversed_complement_translation_table
         )
-    exons_and_introns = {}
+    introns, exons = {}, {}
     '''To make continuing outer loop from inner loop below possible.'''
     continue_strand_loop = False
     for strand in composed:
-        exons_and_introns[strand] = []
+        introns[strand], exons[strand] = [], []
         rname, reverse_strand = strand
         if reverse_strand:
             '''Handle reverse-strand reads the same way forward strands are
@@ -548,18 +538,11 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                 prefix = re.search(current_read_seq[:last_displacement][::-1],
                                     search_window[::-1])
                 if prefix is not None:
-                    if prefix.start() != 0:
-                        # If the cap is found, tack on an extra EC.
-                        last_pos -= prefix.end()
-                        last_end_pos = last_pos + last_displacement
-                        last_displacement = 0
-                        loop_start_index = 0
-                    else:
-                        '''Merge ECs (this should have been taken care of by
-                        DP filling, but just in case....)'''
-                        last_pos -= last_displacement
-                        last_displacement = 0
-                        loop_start_index = 1
+                    # If the cap is found, tack on an extra EC.
+                    last_pos -= prefix.end()
+                    last_end_pos = last_pos + last_displacement
+                    last_displacement = 0
+                    loop_start_index = 0
         unmapped_displacement = last_displacement + last_end_pos - last_pos
         for pos, end_pos, displacement in composed[strand][loop_start_index:]:
             next_unmapped_displacement = displacement + end_pos - pos
@@ -593,9 +576,10 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                 Read      |-------------------------------------|
 
                 These situations are pathological. Throw out the strand by
-                deleting it from the exon and intron list after continuing.'''
+                deleting it from the exon and intron lists after continuing.'''
                 continue_strand_loop = True
-                exons_and_introns[strand] = []
+                introns[strand] = []
+                exons[strand] = []
                 break
             reference_distance = pos - last_end_pos
             read_distance = displacement - unmapped_displacement
@@ -727,17 +711,14 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                     UMR = unmapped region.
                     '''
                     call_exon = True
-            if call_exon:
-                '''Push ONLY the first EC to the list. (The next EC
-                may get merged into another EC on another iteration.)'''
-                exons_and_introns[strand].append((True, last_pos,
-                                                    last_end_pos))
             if call_intron:
                 # Call the reference region between the two ECs an intron.
-                exons_and_introns[strand].append((False, last_end_pos, pos,
-                                        displacement, 
+                introns[strand].append((last_end_pos, pos, displacement, 
                                         len(read_seq) - displacement))
             if call_exon:
+                '''Push ONLY the first EC to the exon list. (The next EC
+                may get merged into another EC on another iteration.)'''
+                exons[strand].append((last_pos, last_end_pos))
                 unmapped_displacement = end_pos - pos + displacement
                 (last_pos, last_end_pos, last_displacement) = \
                     (pos, end_pos, displacement)
@@ -752,7 +733,8 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
         search for the residual unmapped bases downstream.'''
         unmapped_base_count = read_seq_size - unmapped_displacement
         if unmapped_base_count < 0:
-            exons_and_introns[strand] = []
+            introns[strand] = []
+            exons[strand] = []
             continue
         if unmapped_base_count > 0:
             if needlemanWunsch.needlemanWunsch(
@@ -779,47 +761,29 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                                 search_window
                             )
                 if suffix is not None:
-                    if suffix.start() != 0:
-                        # Call last EC from list composed[strand].
-                        exons_and_introns[strand].append((True, last_pos,
-                                                            last_end_pos))
-                        # Call intron
-                        exons_and_introns[strand].append(
-                                (False, last_end_pos,
-                                    last_end_pos + suffix.start(),
-                                    len(read_seq) - unmapped_base_count, 
-                                    unmapped_base_count)
-                            )
-                        last_pos  = last_end_pos + suffix.start()
-                    # If suffix.start() is 0, the next assignment merges ECs
+                    # If the cap is found, call an intron and tack on an EC.
+                    introns[strand].append(
+                            (last_end_pos,
+                                last_end_pos + suffix.start(),
+                                len(read_seq) - unmapped_base_count, 
+                                unmapped_base_count)
+                        )
+                    # Call last EC from list composed[strand].
+                    exons[strand].append((last_pos, last_end_pos))
+                    last_pos  = last_end_pos + suffix.start()
                     last_end_pos = last_pos + unmapped_base_count
-        exons_and_introns[strand].append((True, last_pos, last_end_pos))
-    # Separate exon and intron lists
-    exons = {}
-    introns = {}
-    for strand, strand_exons_and_introns in exons_and_introns.items():
-        exons_and_introns_count = len(strand_exons_and_introns)
-        if exons_and_introns_count == 0:
-            continue
-        for i, exon_or_intron in enumerate(strand_exons_and_introns):
-            if exon_or_intron[0]:
-                # Call exon
-                if strand not in exons:
-                    exons[strand] = []
-                exons[strand].append(exon_or_intron[1:])
-            else:
-                # Call intron; it should always be sandwiched between two exons
-                assert i != 0 and i != exons_and_introns_count - 1
-                assert strand_exons_and_introns[i-1][0] \
-                        and strand_exons_and_introns[i+1][0]
-                if strand not in introns:
-                    introns[strand] = []
-                introns[strand].append(exon_or_intron[1:] 
-                      + (strand_exons_and_introns[i-1][2] 
-                            - strand_exons_and_introns[i-1][1],
-                         strand_exons_and_introns[i+1][2] 
-                             - strand_exons_and_introns[i+1][1])
-                    )
+        exons[strand].append((last_pos, last_end_pos))
+    # Kill empty exon and intron lists
+    to_delete = []
+    for strand in exons:
+        if exons[strand] == []: to_delete.append(strand)
+    for strand in to_delete:
+        del exons[strand]
+    to_delete = []
+    for strand in introns:
+        if introns[strand] == []: to_delete.append(strand)
+    for strand in to_delete:
+        del introns[strand]
     return exons, introns
 
 def selected_readlet_alignments_by_distance(readlets):
@@ -1438,9 +1402,7 @@ class BowtieOutputThread(threading.Thread):
                                 intron_reverse_strand_string = ''
                             for (intron_pos, intron_end_pos,
                                     intron_five_prime_displacement, 
-                                    intron_three_prime_displacement,
-                                    intron_left_EC_size,
-                                    intron_right_EC_size) \
+                                    intron_three_prime_displacement) \
                                     in introns[intron_strand]:
                                 if intron_end_pos - intron_pos \
                                     > self.max_intron_size:
@@ -1461,15 +1423,13 @@ class BowtieOutputThread(threading.Thread):
                                         partition_end) in partitions:
                                     print >>self.output_stream, \
                                         'intron\t%s%s\t%s\t%012d\t%012d' \
-                                        '\t%d\t%d\t%d\t%d' \
+                                        '\t%d\t%d' \
                                         % (partition_id,
                                             intron_reverse_strand_string,
                                             last_sample_label, intron_pos,
                                             intron_end_pos, 
                                             intron_five_prime_displacement,
-                                            intron_three_prime_displacement,
-                                            intron_left_EC_size,
-                                            intron_right_EC_size)
+                                            intron_three_prime_displacement)
                                     output_line_count += 1
                         if self.splice_sam:
                             '''Print SAM with each line encoding candidate
@@ -1638,12 +1598,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
         6. Number of nucleotides between 3' end of intron and 3' end of read
         from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD
         STRAND.
-        7. Number of nucleotides spanned by EC on the left (that is, towards
-        the 5' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
-        FORWARD STRAND.
-        8. Number of nucleotides spanned by EC on the right (that is, towards
-        the 3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
-        FORWARD STRAND.
 
         SAM (splice_sam):
         Standard 11-column SAM output except fields are in different order.
@@ -2372,16 +2326,13 @@ elif __name__ == '__main__':
             self.assertEquals({}, introns)
 
         def test_DP_filling_before_first_EC_and_after_last_EC(self):
-            """ Fails if unaligned prefix and suffix don't become ECs.
-                
-                Reference is searched for unmapped regions before first EC
-                and after last EC. Here, the read has exactly one EC, so it's
-                the first one and the last one on the read. Read is taken to be
-                the sixth line of reference_seq.
+            """ Fails if unmapped region before EC #1 of a read not filled.
+
+                Here, the read has exactly one EC, so it's the first one and
+                the last one on the read. Read is taken to be the sixth line of
+                reference_seq.
             """
-            '''Second line of read_seq below is the only EC identified at
-            first; first and third lines also appear in reference, and introns
-            separate each line.'''
+            # Second line of read_seq below is the only EC identified at first
             read_seq = 'ATACAGaaAT' \
                        'CAGaGCAGAAaATACAGATCA' \
                        'aAGCTAGCAaAAtAtA'
@@ -2393,33 +2344,7 @@ elif __name__ == '__main__':
             self.assertEquals({('chr1', False) : [(236, 283)]}, exons)
             self.assertEquals({}, introns)
 
-        def test_that_prefix_and_suffix_ECs_are_found_1(self):
-            """ Fails if unaligned prefix and suffix don't become ECs.
-                
-                Reference is searched for unmapped regions before first EC
-                and after last EC. Here, the read has exactly one EC, so it's
-                the first one and the last one on the read. Read is taken to be
-                the first line of reference_seq.
-            """
-            '''Second line of read_seq below is the only EC identified at
-            first; first and third lines also appear in reference, and introns
-            separate each line.'''
-            # ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG
-            read_seq = 'ATGGCATA' \
-                       'GTCAGACCATGCAg' \
-                       'CTACATAC'
-            readlets = [('chr1', False, 15, 29, 8)]
-            exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
-                             )
-            self.assertEquals(exons, {('chr1', False) : [(1, 9),
-                                                         (15, 29),
-                                                         (38, 46)]})
-            self.assertEquals(introns, 
-                                {('chr1', False) : [(9, 15, 8, 22),
-                                                    (29, 38, 22, 8)]})
-
-        def test_that_prefix_and_suffix_ECs_are_found_2(self):
+        def test_that_prefix_and_suffix_ECs_are_found(self):
             """ Fails if unaligned prefix and suffix don't become ECs.
                 
                 Here, the read has exactly one EC, so it's the first one and
@@ -2434,12 +2359,12 @@ elif __name__ == '__main__':
             exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                              )
-            self.assertEquals(exons, {('chr1', False) : [(236, 244),
-                                                         (250, 267),
-                                                         (273, 283)]})
             self.assertEquals(introns, 
                                 {('chr1', False) : [(244, 250, 8, 27),
                                                     (267, 273, 25, 10)]})
+            self.assertEquals(exons, {('chr1', False) : [(236, 244),
+                                                         (250, 267),
+                                                         (273, 283)]})
 
         def test_that_strange_mapping_is_thrown_out(self):
             """ Fails if any exons or introns are returned.

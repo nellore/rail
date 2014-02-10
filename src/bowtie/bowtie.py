@@ -23,6 +23,10 @@ def addArgs(parser):
         default='bowtie',
         help='Path to executable for Bowtie')
     parser.add_argument(\
+        '--bowtie-build-exe', metavar='EXE', type=str, required=False,
+        default='bowtie-build',
+        help='Path to executable for Bowtie-build')
+    parser.add_argument(\
         '--bowtie-idx', metavar='INDEX', type=str, required=False,
         default='',
         help='Path to Bowtie index. Specify its basename.')
@@ -31,7 +35,7 @@ def out(pi):
     for line in iter(pi.readline, ''):
         print line
 
-def cmd(bowtieExe="bowtie", bowtieIdx="genome", readFn=None, bowtieArgs=None, sam=False):
+def cmd(bowtieExe="bowtie", bowtieIdx="genome", readFn=None, bowtieArgs=None, sam=False, outputFilename=''):
     # Check that Bowtie exists and is executable
     if not path.is_exe(bowtieExe) and path.which(bowtieExe) is None:
         print >>sys.stderr, "Bowtie executable '%s' cannot be run" % bowtieExe
@@ -46,14 +50,14 @@ def cmd(bowtieExe="bowtie", bowtieIdx="genome", readFn=None, bowtieArgs=None, sa
         out_arg = " -S "
     argstr = ''
     mycmd = "%s %s --mm %s %s --12 " % (bowtieExe, bowtieArgs, out_arg, bowtieIdx)
-    mycmd += ("-" if readFn is None else readFn)
+    mycmd += (("-" if readFn is None else readFn) + ' ' + outputFilename)
     return mycmd
 
-def proc(bowtieExe="bowtie", bowtieIdx="genome", readFn=None, bowtieArgs=None, sam=False, stdoutPipe=False, outHandler=None, errHandler=None, stdinPipe=True):
+def proc(bowtieExe="bowtie", bowtieIdx="genome", readFn=None, bowtieArgs=None, sam=False, stdoutPipe=False, outHandler=None, errHandler=None, stdinPipe=True, outputFilename=''):
     stdout_pipe = None if (outHandler is None and not stdoutPipe) else subprocess.PIPE
     stderr_pipe = None if errHandler is None else subprocess.PIPE
     stdin_pipe = subprocess.PIPE if stdinPipe else None
-    mycmd = cmd(bowtieExe=bowtieExe, bowtieIdx=bowtieIdx, readFn=readFn, bowtieArgs=bowtieArgs, sam=sam)
+    mycmd = cmd(bowtieExe=bowtieExe, bowtieIdx=bowtieIdx, readFn=readFn, bowtieArgs=bowtieArgs, sam=sam, outputFilename=outputFilename)
     print >> sys.stderr, "Starting command: '%s'" % mycmd
     proc = subprocess.Popen(\
         mycmd, shell=True, stdin=stdin_pipe, stdout=stdout_pipe, stderr=stderr_pipe, bufsize=-1)

@@ -20,7 +20,7 @@ chrom/chromStart/chromEnd.
 1. chrom (chromosome name)
 2. chromStart (start position of region; 0-BASED)
 3. chromEnd (end position of region; 0-BASED)
-4. name (JUNC[number]; will be renumbered in this script)
+4. name (anchor significance)
 5. score (number of reads supporting this intron)
 6. strand (forward is sense strand=+; reverse is sense strand=-)
 7. thickStart (same as chromStart)
@@ -93,7 +93,7 @@ if args.out is not None:
         # Set up temporary destination
         import tempfile
         temp_dir_path = tempfile.mkdtemp()
-input_line_count = 0
+input_line_count = 1
 move_temporary_file = False
 while True:
     line = sys.stdin.readline().rstrip()
@@ -101,9 +101,11 @@ while True:
         last_output_filename = output_filename
         move_temporary_file = True
     else:
-        (chrom, chrom_start, chrom_end, name, score, strand, thick_start,
-            thick_end, item_rgb, block_count, block_sizes, block_starts) \
+        (chrom, chrom_start, chrom_end, anchor_significance, score, strand,
+            thick_start, thick_end, item_rgb, block_count,
+            block_sizes, block_starts) \
             = line.split('\t')
+    anchor_significance = float(anchor_significance)
     if move_temporary_file and not output_url.isLocal():
         mover = filemover.FileMover(args=args)
         # Remove .temp in output filename
@@ -143,10 +145,11 @@ while True:
                             'chrom ' + chrom)
     '''Recall that chrom_start and chrom_end have leading 0's for proper
     sorting; remove them below.'''
-    print >>output_stream, ('%s\t'*3 + 'JUNC%08d\t' + '%s\t'*7 + '%s') \
+    print >>output_stream, ('%s\t'*3 + 'JUNC%08d;anchor_significance=%d\t' +
+        '%s\t'*7 + '%s') \
         % (chrom, str(int(chrom_start)), str(int(chrom_end)), input_line_count,
-            score, strand, thick_start, thick_end, item_rgb, block_count,
-            block_sizes, block_starts)
+            anchor_significance, score, strand, thick_start, thick_end,
+            item_rgb, block_count, block_sizes, block_starts)
     last_chrom = chrom
     input_line_count += 1
 

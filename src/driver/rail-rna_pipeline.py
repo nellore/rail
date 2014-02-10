@@ -62,17 +62,22 @@ class AlignStep(pipeline.Step):
                 -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())'''
         mapperStr = """
             python %%BASE%%/src/rail-rna/align.py
-                --refseq=%%REF_FASTA%% 
-                --faidx=%%REF_FASTA_INDEX%% 
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --bowtie-exe=%%BOWTIE%%
+                --assign-multireadlets-by-coverage
                 --max-readlet-size %d 
                 --readlet-interval %d 
-                --partition-length %d 
+                --partition-length %d
                 --exon-differentials 
-                --verbose %s
+                --verbose %s %s
+                --min-cap-query-size %d
+                --cap-search-window-size %d
                 -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, 
-                    '--stranded' if tconf.stranded else '', tconf.bowtieArgs())
+                    '--stranded' if tconf.stranded else '', 
+                    '--do-not-search-for-caps' if tconf.do_not_search_for_caps else '',
+                    tconf.min_cap_query_size,
+                    tconf.cap_search_window_size,
+                    tconf.bowtieArgs())
         mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(AlignStep, self).__init__(\
             inps,
@@ -122,7 +127,7 @@ class IntronStep(pipeline.Step):
                '--stranded' if tconf.stranded else '')'''
         reducerStr = """
             python %%BASE%%/src/rail-rna/intron.py
-                --refseq=%%REF_FASTA%%
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --cluster-radius=%d
                 --intron-partition-overlap=%d
                 --per-span

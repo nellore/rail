@@ -43,23 +43,23 @@ user-specified length (see partition.py).
 Exonic chunks (aka ECs; two formats --- either or both may be emitted):
 
 Format 1 (exon_ival); tab-delimited output tuple columns:
-1. Reference name (RNAME in SAM format) + ';' + bin number
+1. Reference name (RNAME in SAM format) + ';' + bin number +  
+    ('+' or '-' indicating which strand is the sense strand if input reads are
+        strand-specific -- that is, --stranded is invoked; otherwise, there is
+        no terminal '+' or '-')
 2. Sample label
 3. EC start (inclusive) on forward strand
 4. EC end (exclusive) on forward strand
-5. '+' or '-' indicating which strand is the sense strand if input reads are
-        strand-specific -- that is, --stranded is invoked; otherwise, there is
-        no terminal '+' or '-'
 
 Format 2 (exon_diff); tab-delimited output tuple columns:
-1. Reference name (RNAME in SAM format) + ';' + bin number
+1. Reference name (RNAME in SAM format) + ';' + bin number +  
+    ('+' or '-' indicating which strand is the sense strand if input reads are
+        strand-specific -- that is, --stranded is invoked; otherwise, there is
+        no terminal '+' or '-')
 2. Sample label
 3. max(EC start, bin start) (inclusive) on forward strand IFF next column is +1 
    and EC end (exclusive) on forward strand IFF next column is -1.
-4. '+' or '-' indicating which strand is the sense strand if input reads are
-        strand-specific -- that is, --stranded is invoked; otherwise, there is
-        no terminal '+' or '-'
-5. +1 or -1.
+4. +1 or -1.
 
 Introns
 
@@ -77,12 +77,6 @@ the sense strand is the reverse strand, this is the distance between the 3' end
 of the read and the 3' end of the intron.
 6. Number of nucleotides between 3' end of intron and 3' end of read from which
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
-7. Number of nucleotides spanned by EC on the left (that is, towards the 5'
-end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
-STRAND.
-8. Number of nucleotides spanned by EC on the right (that is, towards the 3'
-end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
-STRAND.
 
 SAM (splice_sam):
 Standard 11-column SAM output except fields are in different order. (Fields are
@@ -109,20 +103,125 @@ import site
 import threading
 import string
 import tempfile
-import atexit
-import subprocess
-import re
+import argparse
 import numpy as np
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['bowtie', 'sample', 'alignment', 'interval']:
+for directory_name in ['bowtie', 'sample', 'alignment', 'fasta', 'interval']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
 import bowtie
-import bowtie_index
 import sample
 import needlemanWunsch
+import fasta
 import partition
+
+# Print file's docstring if -h is invoked
+parser = argparse.ArgumentParser(description=__doc__, 
+            formatter_class=argparse.RawDescriptionHelpFormatter)
+# Add command-line arguments
+parser.add_argument('--refseq', type=str, required=False, 
+    help='The fasta sequence of the reference genome. The fasta index of the '
+         'reference genome is also required to be built via samtools')
+# To be implemented; for now, index is always fasta filename + .fai
+parser.add_argument('--faidx', type=str, required=False, 
+    help='Fasta index file')
+parser.add_argument('--min-readlet-size', type=int, required=False, default=12, 
+    help='Capping readlets (that is, readlets that terminate '
+         'at a given end of the read) are never smaller than this value')
+parser.add_argument('--max-readlet-size', type=int, required=False, default=25, 
+    help='Size of every noncapping readlet')
+parser.add_argument('--readlet-interval', type=int, required=False, default=5, 
+    help='Number of bases separating successive noncapping readlets along '
+         'the read')
+parser.add_argument('--capping-fraction', type=float, required=False,
+    default=0.85, 
+    help='Successive capping readlets on a given end of a read are tapered '
+         'in size exponentially with this fractional base')
+parser.add_argument('--report_multiplier', type=float, required=False,
+    default=1.2,
+    help='When --verbose is also invoked, the only lines of lengthy '
+         'intermediate output written to stderr have line number that '
+         'increases exponentially with this base')
+parser.add_argument('--verbose', action='store_const', const=True,
+    default=False,
+    help='Print out extra debugging statements')
+parser.add_argument('--exon-differentials', action='store_const', const=True,
+    default=True, 
+    help='Print exon differentials (+1s and -1s)')
+parser.add_argument('--exon-intervals', action='store_const', const=True,
+    default=False, 
+    help='Print exon intervals')
+parser.add_argument('--splice-sam', action='store_const', const=True,
+    default=True, 
+    help='Print read-by-read SAM output of candidate introns for later '
+         'consolidation in splice_sam.py. --max-intron-size is ignored.')
+parser.add_argument(\
+    '--stranded', action='store_const', const=True, default=False,
+    help='Assume input reads come from the sense strand; then partitions in '
+         'output have terminal + and - indicating sense strand')
+parser.add_argument('--test', action='store_const', const=True, default=False,
+    help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
+         'WRITE EXONS AND INTRONS TO STDOUT')
+parser.add_argument('--intron-partition-overlap', type=int, required=False,
+    default=20, 
+    help='Amount by which partitions overlap their left and right neighbors')
+parser.add_argument('--min-intron-size', type=int, required=False,
+    default=5,
+    help='Filters introns of length smaller than this value')
+parser.add_argument('--max-intron-size', type=int, required=False,
+    default=750000, 
+    help='Filters introns of length greater than this value')
+parser.add_argument('--min-strand-readlets', type=int, required=False,
+    default=1, 
+    help='Exons and introns are called on a strand (i.e., a tuple ' 
+    '(rname, reverse_strand)) iff the number of readlets that align to the '
+    ' strand is >= this number')
+parser.add_argument('--max-discrepancy', type=int, required=False,
+    default=2, 
+    help='If the difference in length between an unmapped region framed by '
+         'two ECs and its corresponding gap in the reference is <= this '
+         'value, the unmapped region is considered a candidate for '
+         'incorporation into a single EC spanning the two original ECs via '
+         'DP filling')
+parser.add_argument('--min-seq-similarity', type=float, required=False,
+    default=0.85, 
+    help='If the difference in length between an unmapped region framed by '
+         'two ECs and its corresponding gap in the reference is <= the '
+         'command-line option --max-discrepancy AND the score of global '
+         'alignment is >= --min-seq-similarity * (length of unmapped region), '
+         'the unmapped region is incorporated into a single EC spanning the '
+         'two original ECs via DP filling')
+parser.add_argument('--assign-multireadlets-by-coverage', action='store_const',
+    const=True, default=False, 
+    help='Use readlet coverage to determine which alignment of multireadlet '
+         'should be selected. If True, alignment that spans region with '
+         'highest coverage is selected. If False, alignment of multireadlet '
+         'closest to set of unireadlets is chosen instead.')
+parser.add_argument('--archive', metavar='PATH', type=str, 
+    default=None,
+    help='Save output and Bowtie command to a subdirectory (named using this ' 
+         'process\'s PID) of PATH')
+
+# Add command-line arguments for dependencies
+partition.addArgs(parser)
+bowtie.addArgs(parser)
+
+# Collect Bowtie arguments, supplied in command line after the -- token
+argv = sys.argv
+bowtie_args = ''
+in_args = False
+for i, argument in enumerate(sys.argv[1:]):
+    if in_args:
+        bowtie_args += argument + ' '
+    if argument == '--':
+        argv = sys.argv[:i + 1]
+        in_args = True
+
+'''Now collect other arguments. While the variable args declared below is
+global, properties of args are also arguments of the go() function so different
+command-line arguments can be passed to it for unit tests.'''
+args = parser.parse_args(argv[1:])
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -402,9 +501,9 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
         Return value: List of possible S_L (see paragraphs above for
             definition).
     """
-    unmapped_seq_size = len(unmapped_seq)
-    assert unmapped_seq_size == len(left_reference_seq)
-    assert unmapped_seq_size == len(right_reference_seq)
+    k = len(unmapped_seq)
+    assert k == len(left_reference_seq)
+    assert k == len(right_reference_seq)
 
     unmapped_seq = unmapped_seq.upper()
     left_reference_seq = left_reference_seq.upper()
@@ -423,16 +522,14 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
     return np.argwhere(np.amax(total_score_matrix_diagonal) 
                                 == total_score_matrix_diagonal).flatten()
 
-def exons_and_introns_from_read(reference_index, read_seq, readlets, 
+def exons_and_introns_from_read(fasta_object, read_seq, readlets, 
     min_intron_size=5, min_strand_readlets=1, max_discrepancy=2, 
-    min_seq_similarity=0.85, search_for_caps=True, min_cap_query_size=8,
-    cap_search_window_size=1000,
-    substitution_matrix=needlemanWunsch.matchCost()):
+    min_seq_similarity=0.85, substitution_matrix=needlemanWunsch.matchCost()):
     """ Composes a given read's aligned readlets and returns ECs and introns.
 
-        reference_index: object of class bowtie_index.BowtieIndexReference that
-            permits access to reference; used for realignment of unmapped
-            regions between exonic chunks.
+        fasta_object: object of class fasta.fasta corresponding to FASTA
+            reference; used for realignment of unmapped regions between exonic
+            chunks.
         read_seq: sequence of the original read from which the readlets are
             derived.
         readlets: list of tuples (rname, reverse_strand, pos, end_pos,
@@ -460,14 +557,6 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
             region is incorporated into a single EC spanning the two original
             ECs via DP filling. See needlemanWunsch.matchCost() for the
             substitution matrix used.
-        search_for_caps: True iff reference should be searched for the segment
-            of a read (a cap) that precedes the first EC and the segment of a
-            read that follows the last EC. Such segments are subsequently added
-            as an ECs themselves, and introns may be called between them.
-        min_cap_query_size: the reference is not searched for a cap smaller
-            than this size.
-        cap_search_window_size: the size (in bp) of the reference subsequence
-            in which to search for a cap.
         substitution_matrix: 6 x 6 substitution matrix (numpy object or list
             of lists) for scoring filling and framing alignments; rows and
             columns correspond to ACGTN-, where N is aNy and - is a gap.
@@ -485,34 +574,30 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
             -introns is a dictionary; each key is a strand (i.e., a tuple
                 (rname, reverse_strand)), and its corresponding value is a list
                 of tuples (pos, end_pos, five_prime_displacement,
-                three_prime_displacement, left_EC_size, right_EC_size), each of
-                which denotes an intron. rname contains the SAM-format RNAME
-                --- typically a chromosome. When input reads are
-                strand-specific, reverse_strand is True iff the sense strand is
-                the reverse strand; otherwise, it merely denotes the strand to
-                which the intron's flanking ECs were presumed to align. The
-                intron spans the interval [pos, end_pos). Assume the sense
-                strand is the forward strand; that is, if the sense strand is
-                the reverse strand, consider the reversed complements of both
-                the readlet and its parent read. five_prime_displacement is the
-                displacement of the 5' end of the intron from the 5' end of the
-                read, while three_prime_displacement is the displacement of the
-                3' end of the intron from the 3' end of the read. left_EC_size
-                (right_EC_size) is the number of nucleotides spanned by the EC
-                on the left (right) of the intron. Here, "left" ("right")
-                means "towards the 5' (3') end of the read," again assuming
-                the sense strand is the forward strand.
+                three_prime_displacement), each of which denotes an intron.
+                rname contains the SAM-format RNAME --- typically a chromosome.
+                When input reads are strand-specific, reverse_strand is True
+                iff the sense strand is the reverse strand; otherwise, it
+                merely denotes the strand to which the intron's flanking ECs
+                were presumed to align. The intron spans the interval
+                [pos, end_pos). Assume the sense strand is the forward
+                strand; that is, if the sense strand is the reverse strand,
+                consider the reversed complements of both the readlet and its
+                parent read. five_prime_displacement is the displacement of the
+                5' end of the intron from the 5' end of the read, while
+                three_prime_displacement is the displacement of the 3' end of
+                the intron from the 3' end of the read.
     """
     composed = composed_and_sorted_readlets(readlets, min_strand_readlets)
     read_seq = read_seq.upper()
     reversed_complement_read_seq = read_seq[::-1].translate(
             _reversed_complement_translation_table
         )
-    exons_and_introns = {}
+    introns, exons = {}, {}
     '''To make continuing outer loop from inner loop below possible.'''
     continue_strand_loop = False
     for strand in composed:
-        exons_and_introns[strand] = []
+        introns[strand], exons[strand] = [], []
         rname, reverse_strand = strand
         if reverse_strand:
             '''Handle reverse-strand reads the same way forward strands are
@@ -522,51 +607,23 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
             current_read_seq = read_seq
         read_seq_size = len(read_seq)
         last_pos, last_end_pos, last_displacement = composed[strand][0]
-        loop_start_index = 1
+        unmapped_displacement = last_displacement + last_end_pos - last_pos
         if last_displacement:
             '''If last_displacement isn't 0, check if region to the left should
             be filled.'''
             if needlemanWunsch.needlemanWunsch(
                         current_read_seq[:last_displacement],
-                        reference_index.get_stretch(rname,
-                            last_pos - last_displacement - 1,
-                            last_displacement),
+                        fasta_object.fetch_sequence(rname, 
+                            last_pos - last_displacement, last_pos - 1),
                         substitution_matrix
                     )[0] >= min_seq_similarity * last_displacement:
                 # Fill
                 last_pos -= last_displacement
                 last_displacement = 0
-            elif search_for_caps and last_displacement >= min_cap_query_size:
-                '''If region shouldn't be filled and region to the left isn't
-                too small, search for it.'''
-                search_pos = max(0, last_pos - 1 - cap_search_window_size)
-                search_window = reference_index.get_stretch(
-                        rname,
-                        search_pos,
-                        last_pos - 1 - search_pos
-                    )
-                prefix = re.search(current_read_seq[:last_displacement][::-1],
-                                    search_window[::-1])
-                if prefix is not None:
-                    if prefix.start() != 0:
-                        # If the cap is found, tack on an extra EC.
-                        last_pos -= prefix.end()
-                        last_end_pos = last_pos + last_displacement
-                        last_displacement = 0
-                        loop_start_index = 0
-                    else:
-                        '''Merge ECs (this should have been taken care of by
-                        DP filling, but just in case....)'''
-                        last_pos -= last_displacement
-                        last_displacement = 0
-                        loop_start_index = 1
-        unmapped_displacement = last_displacement + last_end_pos - last_pos
-        for pos, end_pos, displacement in composed[strand][loop_start_index:]:
-            next_unmapped_displacement = displacement + end_pos - pos
+        for pos, end_pos, displacement in composed[strand][1:]:
             if last_displacement >= displacement or \
-                unmapped_displacement >= next_unmapped_displacement or \
-                unmapped_displacement > read_seq_size or \
-                next_unmapped_displacement > read_seq_size:
+                last_displacement + last_end_pos - last_pos \
+                    >= displacement + end_pos - pos:
                 '''Example cases handled:
                 The 5' or 3' end of EC #1 isn't to the left of the 5'  or 3'
                 end of EC #2 along the read:
@@ -586,16 +643,11 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                 Read      |-----=============------=============|
                                     EC #2              EC #1
 
-                The 3' end of either EC is computed to be displaced beyond the
-                3' end of the read:
-                                                              EC
-                                                     ===================
-                Read      |-------------------------------------|
-
                 These situations are pathological. Throw out the strand by
-                deleting it from the exon and intron list after continuing.'''
+                deleting it from the exon and intron lists after continuing.'''
                 continue_strand_loop = True
-                exons_and_introns[strand] = []
+                introns[strand] = []
+                exons[strand] = []
                 break
             reference_distance = pos - last_end_pos
             read_distance = displacement - unmapped_displacement
@@ -612,11 +664,16 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                                       (EC #1 and #2 are allowed to
                                         overlap or be separated by up 
                                         to min_intron_size in reference)
-                    Note that this case subsumes the outside possibility that 
-                    EC #1 overlaps EC #2 by as much the constraint that EC #2
-                    doesn't begin before EC #1 on the reference allows. This is
-                    likely an insertion in the read with respect to the
-                    reference. Keep the ECs distinct. CAN BE MODIFIED LATER TO
+                    If there are no bases between the ECs in the read
+                    sequence and almost no bases between the ECs in 
+                    the reference sequence, merge the ECs: last_displacement 
+                    and last_pos should remain the same on next iteration, 
+                    but last_end_pos must change. Note that this case
+                    subsumes the outside possibility that EC #1 overlaps
+                    EC #2 by as much the constraint that EC #2 doesn't begin 
+                    before EC #1 on the reference allows. This is likely an 
+                    insertion in the read with respect to the reference.
+                    Keep the ECs distinct. CAN BE MODIFIED LATER TO
                     ACCOMMODATE CALLING INDELS.'''
                     call_exon = True
                 else:
@@ -676,8 +733,8 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                             current_read_seq[
                                 unmapped_displacement:displacement
                             ],
-                            reference_index.get_stretch(rname,
-                                last_end_pos - 1, pos - last_end_pos), 
+                            fasta_object.fetch_sequence(rname, last_end_pos, 
+                                pos - 1), 
                             substitution_matrix
                         )[0] >= min_seq_similarity * read_distance:
                         '''If the unmapped region should be filled,
@@ -697,11 +754,11 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                         unmapped_region_splits(
                             current_read_seq[unmapped_displacement:
                                 displacement], 
-                            reference_index.get_stretch(rname,
-                                last_end_pos - 1,
-                                read_distance), 
-                            reference_index.get_stretch(rname,
-                                pos - read_distance - 1, read_distance)
+                            fasta_object.fetch_sequence(rname,
+                                last_end_pos,
+                                last_end_pos + read_distance - 1), 
+                            fasta_object.fetch_sequence(rname,
+                                pos - read_distance, pos - 1)
                         )
                     '''Decide which split to use: choose the smallest
                     medoid index.'''
@@ -727,17 +784,14 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                     UMR = unmapped region.
                     '''
                     call_exon = True
-            if call_exon:
-                '''Push ONLY the first EC to the list. (The next EC
-                may get merged into another EC on another iteration.)'''
-                exons_and_introns[strand].append((True, last_pos,
-                                                    last_end_pos))
             if call_intron:
                 # Call the reference region between the two ECs an intron.
-                exons_and_introns[strand].append((False, last_end_pos, pos,
-                                        displacement, 
+                introns[strand].append((last_end_pos, pos, displacement, 
                                         len(read_seq) - displacement))
             if call_exon:
+                '''Push ONLY the first EC to the exon list. (The next EC
+                may get merged into another EC on another iteration.)'''
+                exons[strand].append((last_pos, last_end_pos))
                 unmapped_displacement = end_pos - pos + displacement
                 (last_pos, last_end_pos, last_displacement) = \
                     (pos, end_pos, displacement)
@@ -748,78 +802,34 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
         with any other chunks. Check to see if region to right of chunk needs 
         filling first. The method for determining unmapped_base_count may
         give a negative result. This pathological case is thrown out by
-        skipping to the next strand. If the fill criterion is not met, 
-        search for the residual unmapped bases downstream.'''
+        skipping to the next strand.'''
         unmapped_base_count = read_seq_size - unmapped_displacement
         if unmapped_base_count < 0:
-            exons_and_introns[strand] = []
+            introns[strand] = []
+            exons[strand] = []
             continue
-        if unmapped_base_count > 0:
+        if unmapped_displacement != read_seq_size and unmapped_base_count > 0:
             if needlemanWunsch.needlemanWunsch(
                                 current_read_seq[unmapped_displacement:],
-                                reference_index.get_stretch(rname,
-                                    last_end_pos - 1, 
-                                    unmapped_base_count), 
+                                fasta_object.fetch_sequence(rname,
+                                    last_end_pos, 
+                                    last_end_pos + unmapped_base_count - 1), 
                                 substitution_matrix
                             )[0] >= min_seq_similarity * unmapped_base_count:
                 # Fill
                 last_end_pos += unmapped_base_count
-            elif search_for_caps and unmapped_base_count >= min_cap_query_size:
-                '''If region shouldn't be filled and region to the right isn't
-                too small, search for it.'''
-                search_pos = last_end_pos - 1
-                search_window = reference_index.get_stretch(
-                        rname,
-                        search_pos,
-                        min(cap_search_window_size, 
-                             reference_index.rname_lengths[rname] - search_pos)
-                    )
-                suffix = re.search(
-                                current_read_seq[unmapped_displacement:],
-                                search_window
-                            )
-                if suffix is not None:
-                    if suffix.start() != 0:
-                        # Call last EC from list composed[strand].
-                        exons_and_introns[strand].append((True, last_pos,
-                                                            last_end_pos))
-                        # Call intron
-                        exons_and_introns[strand].append(
-                                (False, last_end_pos,
-                                    last_end_pos + suffix.start(),
-                                    len(read_seq) - unmapped_base_count, 
-                                    unmapped_base_count)
-                            )
-                        last_pos  = last_end_pos + suffix.start()
-                    # If suffix.start() is 0, the next assignment merges ECs
-                    last_end_pos = last_pos + unmapped_base_count
-        exons_and_introns[strand].append((True, last_pos, last_end_pos))
-    # Separate exon and intron lists
-    exons = {}
-    introns = {}
-    for strand, strand_exons_and_introns in exons_and_introns.items():
-        exons_and_introns_count = len(strand_exons_and_introns)
-        if exons_and_introns_count == 0:
-            continue
-        for i, exon_or_intron in enumerate(strand_exons_and_introns):
-            if exon_or_intron[0]:
-                # Call exon
-                if strand not in exons:
-                    exons[strand] = []
-                exons[strand].append(exon_or_intron[1:])
-            else:
-                # Call intron; it should always be sandwiched between two exons
-                assert i != 0 and i != exons_and_introns_count - 1
-                assert strand_exons_and_introns[i-1][0] \
-                        and strand_exons_and_introns[i+1][0]
-                if strand not in introns:
-                    introns[strand] = []
-                introns[strand].append(exon_or_intron[1:] 
-                      + (strand_exons_and_introns[i-1][2] 
-                            - strand_exons_and_introns[i-1][1],
-                         strand_exons_and_introns[i+1][2] 
-                             - strand_exons_and_introns[i+1][1])
-                    )
+        exons[strand].append((last_pos, last_end_pos))
+    # Kill empty exon and intron lists
+    to_delete = []
+    for strand in exons:
+        if exons[strand] == []: to_delete.append(strand)
+    for strand in to_delete:
+        del exons[strand]
+    to_delete = []
+    for strand in introns:
+        if introns[strand] == []: to_delete.append(strand)
+    for strand in to_delete:
+        del introns[strand]
     return exons, introns
 
 def selected_readlet_alignments_by_distance(readlets):
@@ -850,7 +860,8 @@ def selected_readlet_alignments_by_distance(readlets):
         argmax_j max_k ( min(E_(U_k), E_(M_ij)) - max(S_(U_k), S_(M_ij)) ) .
 
         If there are no unireadlets, the algorithm returns an empty list of
-        alignments.
+        alignments. Preliminary tests suggest this algo is more effective than
+        selected_readlet_alignments_by_coverage().
 
         readlets: a list whose items {R_i} correspond to the aligned readlets
             from a given read. Each R_i is itself a list of the possible
@@ -922,6 +933,9 @@ def selected_readlet_alignments_by_coverage(readlets):
         R_ij spans the region with the highest coverage, where a region's
         coverage is computed by summing the coverages over all its bases.
 
+        Preliminary tests suggest this algo is less effective than
+        selected_readlet_alignments_by_distance().
+
         readlets: a list whose items {R_i} correspond to the aligned readlets
             from a given read. Each R_i is itself a list of the possible
             alignments {R_ij} of a readlet. Each R_ij is a tuple
@@ -968,24 +982,22 @@ def selected_readlet_alignments_by_coverage(readlets):
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
-    def __init__(self, input_stream, reference_index, readletized=False,
+    def __init__(self, input_stream, fasta_object, readletized=False,
         unmapped_stream=None, output_stream=sys.stdout,
         exon_differentials=True, exon_intervals=False, stranded=False,
         splice_sam=True, verbose=False, bin_size=10000, min_intron_size=5,
         min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
         max_intron_size=100000, intron_partition_overlap=20,
         assign_multireadlets_by_coverage=False,
-        search_for_caps=True, min_cap_query_size=8,
-        cap_search_window_size=1000,
         substitution_matrix=needlemanWunsch.matchCost(), 
         report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
                 Bowtie process's stdout.
-            reference_index: object of class bowtie_index.BowtieIndexReference
-                that permits access to reference; used for realignment of
-                unmapped regions between exonic chunks.
+            fasta_object: object of class fasta.fasta corresponding to FASTA
+                reference; used for realignment of unmapped regions between
+                exonic chunks.
             readletized: True if input contains readlets; if False, input
                 contains whole reads.
             unmapped_stream: where to write reads Bowtie can't map, possibly
@@ -1033,15 +1045,6 @@ class BowtieOutputThread(threading.Thread):
                 selected_readlet_alignments_by_coverage(). False iff
                 multireadlet alignments should be selected based on distance to
                 unireadlets via selected_readlet_alignments_by_distance().
-            search_for_caps: True iff reference should be searched for the
-                segment of a read (a cap) that precedes the first EC and the
-                segment of a read that follows the last EC. Such segments are
-                subsequently added as an ECs themselves, and introns may be
-                called between them.
-            min_cap_query_size: the reference is not searched for a cap smaller
-                than this size.
-            cap_search_window_size: the size (in bp) of the reference
-                subsequence in which to search for a cap.
             substitution_matrix: 6 x 6 substitution matrix (numpy object or
                 list of lists) for scoring filling and framing alignments; rows
                 and columns correspond to ACGTN-, where N is aNy and - is a
@@ -1056,7 +1059,7 @@ class BowtieOutputThread(threading.Thread):
         self.readletized = readletized
         self.unmapped_stream = unmapped_stream
         self.output_stream = output_stream
-        self.reference_index = reference_index
+        self.fasta_object = fasta_object
         self.verbose = verbose
         self.bin_size = bin_size
         self.stranded = stranded
@@ -1068,9 +1071,6 @@ class BowtieOutputThread(threading.Thread):
         self.exon_intervals = exon_intervals
         self.splice_sam = splice_sam
         self.max_intron_size = max_intron_size
-        self.search_for_caps = search_for_caps
-        self.min_cap_query_size = min_cap_query_size
-        self.cap_search_window_size = cap_search_window_size
         self.assign_multireadlets_by_coverage \
             = assign_multireadlets_by_coverage
         self.intron_partition_overlap = intron_partition_overlap
@@ -1180,26 +1180,26 @@ class BowtieOutputThread(threading.Thread):
                                 assert last_pos < partition_end \
                                     + self.intron_partition_overlap
                                 print >>self.output_stream, \
-                                    'exon_diff\t%s\t%s\t%012d\t%s\t1' \
-                                    % (partition_id, 
+                                    'exon_diff\t%s%s\t%s\t%012d\t1' \
+                                    % (partition_id,
+                                        last_reverse_strand_string, 
                                         last_sample_label,
-                                        max(partition_start, last_pos),
-                                        last_reverse_strand_string)
+                                        max(partition_start, last_pos))
                                 output_line_count += 1
                                 assert last_end_pos > partition_start
                                 if last_end_pos < partition_end:
                                     '''Print decrement at interval end iff exon
                                     ends before partition ends.'''
                                     print >>self.output_stream, \
-                                        'exon_diff\t%s\t%s\t%012d\t%s\t-1' \
-                                        % (partition_id, 
-                                            last_sample_label, last_end_pos,
-                                            last_reverse_strand_string)
+                                        'exon_diff\t%s%s\t%s\t%012d\t-1' \
+                                        % (partition_id,
+                                            last_reverse_strand_string, 
+                                            last_sample_label, last_end_pos)
                                     output_line_count += 1
                         if self.exon_intervals:
                             for partition_id, _, _ in partitions:
                                 print >>self.output_stream, \
-                                    'exon_ival\t%s\t%012d\t%012d\t%s\t%s' \
+                                    'exon_ival\t%s%s\t%012d\t%012d\t%s' \
                                     % (partition_id, 
                                         last_reverse_strand_string, last_pos, 
                                         last_end_pos, last_sample_label)
@@ -1350,15 +1350,12 @@ class BowtieOutputThread(threading.Thread):
                                                             last_paired_label)]
                                     )
                         exons, introns = exons_and_introns_from_read(
-                            self.reference_index, last_read_seq,
+                            self.fasta_object, last_read_seq,
                             filtered_alignments,
                             min_strand_readlets=self.min_strand_readlets,
                             max_discrepancy=self.max_discrepancy,
                             min_seq_similarity=self.min_seq_similarity,
-                            substitution_matrix=self.substitution_matrix,
-                            search_for_caps=self.search_for_caps,
-                            min_cap_query_size=self.min_cap_query_size,
-                            cap_search_window_size=self.cap_search_window_size
+                            substitution_matrix=self.substitution_matrix
                         )
                         '''Kill mate information in last_qname so rest of
                         pipeline associates mates.'''
@@ -1438,9 +1435,7 @@ class BowtieOutputThread(threading.Thread):
                                 intron_reverse_strand_string = ''
                             for (intron_pos, intron_end_pos,
                                     intron_five_prime_displacement, 
-                                    intron_three_prime_displacement,
-                                    intron_left_EC_size,
-                                    intron_right_EC_size) \
+                                    intron_three_prime_displacement) \
                                     in introns[intron_strand]:
                                 if intron_end_pos - intron_pos \
                                     > self.max_intron_size:
@@ -1461,15 +1456,13 @@ class BowtieOutputThread(threading.Thread):
                                         partition_end) in partitions:
                                     print >>self.output_stream, \
                                         'intron\t%s%s\t%s\t%012d\t%012d' \
-                                        '\t%d\t%d\t%d\t%d' \
+                                        '\t%d\t%d' \
                                         % (partition_id,
                                             intron_reverse_strand_string,
                                             last_sample_label, intron_pos,
                                             intron_end_pos, 
                                             intron_five_prime_displacement,
-                                            intron_three_prime_displacement,
-                                            intron_left_EC_size,
-                                            intron_right_EC_size)
+                                            intron_three_prime_displacement)
                                     output_line_count += 1
                         if self.splice_sam:
                             '''Print SAM with each line encoding candidate
@@ -1535,37 +1528,17 @@ class BowtieOutputThread(threading.Thread):
                     displacement)
                 i += 1
 
-def handle_temporary_directory(archive, temp_dir_path):
-    """ Archives or deletes temporary directory.
-
-        archive: directory name, including path, to which temp_dir_path should
-            be renamed when script is complete; or None if temp_dir_path
-            should be trashed.
-        temp_dir_path: path of temporary directory for storing intermediate
-            alignments; archived if archive is not None.
-
-        No return value.
-    """
-    if archive is not None:
-        # Rename temporary directory for archiving
-        os.rename(temp_dir_path, archive)
-    else:
-        # Kill temporary directory
-        import shutil
-        shutil.rmtree(temp_dir_path)
-
-def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
-    bowtie_index_base="genome", bowtie_args=None,
-    temp_dir_path=tempfile.mkdtemp(), bin_size=10000, verbose=False,
-    read_filename='reads.tsv', readlet_filename='readlets.tsv',
+def go(reference_fasta, input_stream=sys.stdin, output_stream=sys.stdout,
+    bowtie_exe="bowtie", bowtie_index_base="genome", bowtie_args=None,
+    temp_dir_path=tempfile.mkdtemp(), archive=None, bin_size=10000,
+    verbose=False, read_filename='reads.tsv', readlet_filename='readlets.tsv',
     unmapped_filename='unmapped.tsv', exon_differentials=True,
     exon_intervals=False, splice_sam=True, stranded=False, min_readlet_size=8,
     max_readlet_size=25, readlet_interval=5, capping_fraction=.75,
     min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
     min_intron_size=5, max_intron_size=100000, intron_partition_overlap=20, 
     assign_multireadlets_by_coverage=False,
-    substitution_matrix=needlemanWunsch.matchCost(), report_multiplier=1.2,
-    search_for_caps=True, min_cap_query_size=8, cap_search_window_size=1000):
+    substitution_matrix=needlemanWunsch.matchCost(), report_multiplier=1.2):
     """ Runs Rail-RNA-align.
 
         Two passes of Bowtie are run. The first attempts to align full reads.
@@ -1638,12 +1611,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
         6. Number of nucleotides between 3' end of intron and 3' end of read
         from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD
         STRAND.
-        7. Number of nucleotides spanned by EC on the left (that is, towards
-        the 5' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
-        FORWARD STRAND.
-        8. Number of nucleotides spanned by EC on the right (that is, towards
-        the 3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
-        FORWARD STRAND.
 
         SAM (splice_sam):
         Standard 11-column SAM output except fields are in different order.
@@ -1664,22 +1631,26 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
+        reference_fasta: filename, including path, of the reference fasta.
         input_stream: where to find input reads.
         output_stream: where to emit exonic chunks and introns.
         bowtie_exe: filename of Bowtie executable; include path if not in
             $PATH.
         bowtie_index_base: the basename of the Bowtie index files associated
-            with the reference.
+            with reference_fasta.
         bowtie_args: string containing precisely extra command-line arguments
             to pass to Bowtie, e.g., "--tryhard --best"; or None.
         temp_dir_path: path of temporary directory for storing intermediate
-            alignments
+            alignments; archived if archive is not None.
+        archive: directory name, including path, to which temp_dir_path should
+            be renamed when script is complete; or None if temp_dir_path
+            should be trashed.
         bin_size: genome is partitioned in units of bin_size for later load
             balancing.
         verbose: True iff more informative messages should be written to
             stderr.
         read_filename: The file, excluding path, for storing reads before
-            alignment with Bowtie.
+            alignment with Bowtie. Archived if archive is not None.
         readlet_filename: The file, excluding path, for storing readlets before
             alignment with Bowtie.
         unmapped_filename: The file, excluding path, for storing reads unmapped
@@ -1726,14 +1697,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
             selected_readlet_alignments_by_coverage(). False iff multireadlet
             alignments should be selected based on distance to unireadlets
             via selected_readlet_alignments_by_distance().
-        search_for_caps: True iff reference should be searched for the segment
-            of a read (a cap) that precedes the first EC and the segment of a
-            read that follows the last EC. Such segments are subsequently added
-            as an ECs themselves, and introns may be called between them.
-        min_cap_query_size: the reference is not searched for a cap smaller
-            than this size.
-        cap_search_window_size: the size (in bp) of the reference subsequence
-            in which to search for a cap.
         substitution_matrix: 6 x 6 substitution matrix (numpy object or list of
             lists) for scoring filling and framing alignments; rows and columns
             correspond to ACGTN-, where N is aNy and - is a gap.
@@ -1759,11 +1722,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
             readFn=read_filename, bowtieArgs=bowtie_args, sam=True,
             stdoutPipe=True, stdinPipe=False
         )
-    reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
+    fasta_object = fasta.fasta(reference_fasta)
     unmapped_filename = os.path.join(temp_dir_path, unmapped_filename)
     with open(unmapped_filename, 'w') as unmapped_stream:
         output_thread = BowtieOutputThread(
-                bowtie_process.stdout, reference_index,
+                bowtie_process.stdout, fasta_object,
                 readletized=False, 
                 unmapped_stream=unmapped_stream, 
                 exon_differentials=exon_differentials, 
@@ -1787,6 +1750,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
         for thread in threads:
             if verbose: print >>sys.stderr, 'Joining thread...'
             thread.join()
+            if verbose: print >>sys.stderr, "    ...joined!"
 
     if verbose: print >>sys.stderr, 'Bowtie\'s first pass is finished.'
 
@@ -1809,7 +1773,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
             )
 
     output_thread = BowtieOutputThread(
-            bowtie_process.stdout, reference_index, 
+            bowtie_process.stdout, fasta_object, 
             readletized=True, unmapped_stream=None,
             exon_differentials=exon_differentials, 
             exon_intervals=exon_intervals,
@@ -1825,9 +1789,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
             stranded=stranded,
             intron_partition_overlap=intron_partition_overlap,
             assign_multireadlets_by_coverage=assign_multireadlets_by_coverage,
-            search_for_caps=search_for_caps,
-            min_cap_query_size=min_cap_query_size,
-            cap_search_window_size=cap_search_window_size,
             substitution_matrix=substitution_matrix,
             report_multiplier=report_multiplier
         )
@@ -1837,158 +1798,35 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
     for thread in threads:
         if verbose: print >>sys.stderr, 'Joining thread...'
         thread.join()
+        if verbose: print >>sys.stderr, '    ...joined!'
 
     if verbose: print >>sys.stderr, 'Bowtie\'s second pass is finished.'
     output_stream.flush()
+
+    if archive is not None:
+        # Rename temporary directory for archiving
+        os.rename(temp_dir_path, archive)
+    else:
+        # Kill temporary directory
+        import shutil
+        shutil.rmtree(temp_dir_path)
 
     print >> sys.stderr, 'DONE with align.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (input_line_count, output_line_count,
                                 time.time() - start_time)
 
-if __name__ == '__main__':
-    import argparse
-    # Print file's docstring if -h is invoked
-    parser = argparse.ArgumentParser(description=__doc__, 
-                formatter_class=argparse.RawDescriptionHelpFormatter)
-    # Add command-line arguments
-    parser.add_argument('--min-readlet-size', type=int, required=False,
-        default=12, 
-        help='Capping readlets (that is, readlets that terminate '
-             'at a given end of the read) are never smaller than this value')
-    parser.add_argument('--max-readlet-size', type=int, required=False,
-        default=25, 
-        help='Size of every noncapping readlet')
-    parser.add_argument('--readlet-interval', type=int, required=False,
-        default=12, 
-        help='Number of bases separating successive noncapping readlets along '
-             'the read')
-    parser.add_argument('--capping-fraction', type=float, required=False,
-        default=0.85, 
-        help='Successive capping readlets on a given end of a read are '
-             'tapered in size exponentially with this fractional base')
-    parser.add_argument('--report_multiplier', type=float, required=False,
-        default=1.2,
-        help='When --verbose is also invoked, the only lines of lengthy '
-             'intermediate output written to stderr have line number that '
-             'increases exponentially with this base')
-    parser.add_argument('--verbose', action='store_const', const=True,
-        default=False,
-        help='Print out extra debugging statements')
-    parser.add_argument('--exon-differentials', action='store_const',
-        const=True,
-        default=True, 
-        help='Print exon differentials (+1s and -1s)')
-    parser.add_argument('--exon-intervals', action='store_const',
-        const=True,
-        default=False, 
-        help='Print exon intervals')
-    parser.add_argument('--splice-sam', action='store_const', const=True,
-        default=True, 
-        help='Print read-by-read SAM output of candidate introns for later '
-             'consolidation in splice_sam.py. --max-intron-size is ignored.')
-    parser.add_argument(\
-        '--stranded', action='store_const', const=True, default=False,
-        help='Assume input reads come from the sense strand; then partitions '
-             'in output have terminal + and - indicating sense strand')
-    parser.add_argument('--test', action='store_const', const=True,
-        default=False,
-        help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
-             'WRITE EXONS AND INTRONS TO STDOUT')
-    parser.add_argument('--intron-partition-overlap', type=int, required=False,
-        default=20, 
-        help='Amount by which partitions overlap their left and right '
-             'neighbors')
-    parser.add_argument('--min-intron-size', type=int, required=False,
-        default=5,
-        help='Filters introns of length smaller than this value')
-    parser.add_argument('--max-intron-size', type=int, required=False,
-        default=600000, 
-        help='Filters introns of length greater than this value')
-    parser.add_argument('--min-strand-readlets', type=int, required=False,
-        default=1, 
-        help='Exons and introns are called on a strand (i.e., a tuple ' 
-        '(rname, reverse_strand)) iff the number of readlets that align to '
-        'the strand is >= this number')
-    parser.add_argument('--max-discrepancy', type=int, required=False,
-        default=2, 
-        help='If the difference in length between an unmapped region framed '
-             'by two ECs and its corresponding gap in the reference is <= '
-             'the value, the unmapped region is considered a candidate for '
-             'incorporation into a single EC spanning the two original ECs '
-             'via DP filling')
-    parser.add_argument('--min-seq-similarity', type=float, required=False,
-        default=0.85, 
-        help='If the difference in length between an unmapped region framed '
-             'by two ECs and its corresponding gap in the reference is <= the '
-             'command-line option --max-discrepancy AND the score of global '
-             'alignment is >= --min-seq-similarity * '
-             '(length of unmapped region), the unmapped region is '
-             'incorporated into a single EC spanning the two original ECs '
-             'via DP filling')
-    parser.add_argument('--assign-multireadlets-by-coverage',
-        action='store_const',
-        const=True,
-        default=False, 
-        help='Use readlet coverage to determine which alignment of '
-             'multireadlet should be selected. If True, alignment that spans '
-             'region with highest coverage is selected. If False, alignment '
-             'of multireadlet closest to set of unireadlets is chosen '
-             'instead.')
-    parser.add_argument('--do-not-search_for_caps',
-        action='store_const',
-        const=True,
-        default=False,
-        help='Ordinarily, reference is search for the segment of a read (a '
-             'cap) that precedes the first EC and the cap that follows the '
-             'last EC. Such caps are subsequently added as ECs themselves. '
-             'Use this command-line parameter to turn the feature off')
-    parser.add_argument('--min-cap-query-size', type=int, required=False,
-        default=8,
-        help='The reference is not searched for a segment of a read that '
-             'precedes the first EC or follows the last EC smaller than this '
-             'size')
-    parser.add_argument('--cap-search-window-size', type=int, required=False,
-        default=1000,
-        help='The size (in bp) of the reference subsequence in which to '
-             'search for a cap --- i.e., a segment of a read that follows '
-             'the last EC or precedes the first EC.')
-    parser.add_argument('--archive', metavar='PATH', type=str, 
-        default=None,
-        help='Save output and Bowtie command to a subdirectory (named using ' 
-             'this process\'s PID) of PATH')
-
-    # Add command-line arguments for dependencies
-    partition.addArgs(parser)
-    bowtie.addArgs(parser)
-
-    # Collect Bowtie arguments, supplied in command line after the -- token
-    argv = sys.argv
-    bowtie_args = ''
-    in_args = False
-    for i, argument in enumerate(sys.argv[1:]):
-        if in_args:
-            bowtie_args += argument + ' '
-        if argument == '--':
-            argv = sys.argv[:i + 1]
-            in_args = True
-
-    '''Now collect other arguments. While the variable args declared below is
-    global, properties of args are also arguments of the go() function so
-    different command-line arguments can be passed to it for unit tests.'''
-    args = parser.parse_args(argv[1:])
-
-if __name__ == '__main__' and not args.test:
+# "Main"
+if not args.test:
     temp_dir_path = tempfile.mkdtemp()
-    archive = os.path.join(args.archive,
-        str(os.getpid())) if args.archive is not None else None
-    # Handle temporary directory if CTRL+C'd
-    atexit.register(handle_temporary_directory, archive, temp_dir_path)
     if args.verbose:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path
-    go(bowtie_exe=args.bowtie_exe,
+    go(args.refseq, bowtie_exe=args.bowtie_exe,
         bowtie_index_base=args.bowtie_idx,
-        bowtie_args=bowtie_args, temp_dir_path=temp_dir_path, 
+        bowtie_args=bowtie_args, temp_dir_path=temp_dir_path,
+        archive=os.path.join(
+                args.archive, str(os.getpid())
+            ) if args.archive is not None else None, 
         verbose=args.verbose, 
         bin_size=args.partition_length,
         read_filename='reads.tsv', 
@@ -2008,12 +1846,9 @@ if __name__ == '__main__' and not args.test:
         max_intron_size=args.max_intron_size,
         intron_partition_overlap=args.intron_partition_overlap,
         assign_multireadlets_by_coverage=args.assign_multireadlets_by_coverage,
-        search_for_caps=(not args.do_not_search_for_caps),
-        min_cap_query_size=args.min_cap_query_size,
-        cap_search_window_size=args.cap_search_window_size,
         substitution_matrix=needlemanWunsch.matchCost(),
         report_multiplier=args.report_multiplier)
-elif __name__ == '__main__':
+else:
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
     import random
@@ -2140,7 +1975,7 @@ elif __name__ == '__main__':
     class TestExonsAndIntronsFromRead(unittest.TestCase):
         """ Tests exons_and_introns_from_read(). """
         def setUp(self):
-            """ Creates temporary directory and Bowtie index. """
+            """ Creates temporary directory and reference fasta. """
             reference_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
                             'GCTACATAGTACATCTAGGCATACTACGTgaCATACGgaCTACGTAA' \
                             'GTCCAGATTACGATACAAaTACGAAcTCccATAGCAaCATaCTAGac' \
@@ -2148,23 +1983,12 @@ elif __name__ == '__main__':
                             'ACGAGATCCATATAtTTAGCAaGACTAaACGATACGATACAGTACaA' \
                             'ATACAGaaATCAGaGCAGAAaATACAGATCAaAGCTAGCAaAAtAtA'
             self.temp_dir_path = tempfile.mkdtemp()
-            fasta_file = os.path.join(self.temp_dir_path, 'test.fa')
-            self.bowtie_build_base = os.path.join(self.temp_dir_path, 'test')
-            fasta_stream = open(fasta_file, 'w')
-            print >>fasta_stream, '>chr1'
-            print >>fasta_stream, \
-                '\n'.join([reference_seq[i:i+50] for i in range(0, 251, 50)])
-            fasta_stream.close()
-            bowtie_build_process = subprocess.call(
-                    [args.bowtie_build_exe,
-                    fasta_file,
-                    self.bowtie_build_base],
-                    stdout=open(os.devnull, 'w'),
-                    stderr=subprocess.STDOUT
-                )
-            self.reference_index = bowtie_index.BowtieIndexReference(
-                                    self.bowtie_build_base
-                                   )
+            fasta_file, _ = fasta.writeIndexedFasta(
+                                        'chr1', reference_seq, 
+                                        perline=50, 
+                                        directory=self.temp_dir_path
+                                    )
+            self.fasta_object = fasta.fasta(fasta_file)
 
         def test_DP_framing_1(self):
             """ Fails if splice junction is not accurate.
@@ -2185,7 +2009,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 1, 48, 0),
                           ('chr1', False, 95, 142, 47)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
@@ -2195,7 +2019,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 1, 42, 0),
                           ('chr1', False, 100, 142, 52)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
@@ -2204,7 +2028,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 1, 37, 0),
                           ('chr1', False, 105, 142, 57)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
@@ -2232,7 +2056,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 1, 52, 0),
                           ('chr1', False, 91, 142, 43)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
@@ -2242,7 +2066,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 1, 42, 0),
                           ('chr1', False, 100, 142, 52)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
@@ -2251,7 +2075,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 1, 37, 0),
                           ('chr1', False, 105, 142, 57)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
@@ -2278,13 +2102,13 @@ elif __name__ == '__main__':
             '''Reverse-complement read_seq above and make reverse_strand True
             for all faked alignments below.'''
             read_seq = read_seq[::-1].translate(
-                                        _reversed_complement_translation_table
+                                        string.maketrans('ATCG', 'TAGC')
                                       )
             # Fake mapping each line of read to respective line of reference
             readlets = [('chr1', True, 1, 48, 0),
                           ('chr1', True, 95, 142, 47)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', True) : [(1, 48), (95, 142)]},
                                 exons)
@@ -2294,7 +2118,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', True, 1, 42, 0),
                           ('chr1', True, 100, 142, 52)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', True) : [(1, 48), (95, 142)]},
                                 exons)
@@ -2303,7 +2127,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', True, 1, 37, 0),
                           ('chr1', True, 105, 142, 57)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', True) : [(1, 48), (95, 142)]},
                                 exons)
@@ -2328,7 +2152,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 48, 95, 0),
                           ('chr1', False, 142, 189, 47)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', False) : [(48, 95), (142, 189)]},
                                 exons)
@@ -2338,7 +2162,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 48, 90, 0),
                           ('chr1', False, 147, 189, 52)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', False) : [(48, 95), (142, 189)]},
                                 exons)
@@ -2347,7 +2171,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 48, 87, 0),
                           ('chr1', False, 150, 189, 55)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', False) : [(48, 95), (142, 189)]},
                                 exons)
@@ -2366,80 +2190,30 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 189, 209, 0),
                           ('chr1', False, 216, 236, 27)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({('chr1', False) : [(189, 236)]}, exons)
             self.assertEquals({}, introns)
 
         def test_DP_filling_before_first_EC_and_after_last_EC(self):
-            """ Fails if unaligned prefix and suffix don't become ECs.
-                
-                Reference is searched for unmapped regions before first EC
-                and after last EC. Here, the read has exactly one EC, so it's
-                the first one and the last one on the read. Read is taken to be
-                the sixth line of reference_seq.
-            """
-            '''Second line of read_seq below is the only EC identified at
-            first; first and third lines also appear in reference, and introns
-            separate each line.'''
-            read_seq = 'ATACAGaaAT' \
-                       'CAGaGCAGAAaATACAGATCA' \
-                       'aAGCTAGCAaAAtAtA'
-            readlets = [('chr1', False, 246, 267, 10)]
-            exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets, 
-                                min_seq_similarity=0
-                            )
-            self.assertEquals({('chr1', False) : [(236, 283)]}, exons)
-            self.assertEquals({}, introns)
+            """ Fails if unmapped region before the first EC of a read is not
+                filled.
 
-        def test_that_prefix_and_suffix_ECs_are_found_1(self):
-            """ Fails if unaligned prefix and suffix don't become ECs.
-                
-                Reference is searched for unmapped regions before first EC
-                and after last EC. Here, the read has exactly one EC, so it's
-                the first one and the last one on the read. Read is taken to be
-                the first line of reference_seq.
-            """
-            '''Second line of read_seq below is the only EC identified at
-            first; first and third lines also appear in reference, and introns
-            separate each line.'''
-            # ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG
-            read_seq = 'ATGGCATA' \
-                       'GTCAGACCATGCAg' \
-                       'CTACATAC'
-            readlets = [('chr1', False, 15, 29, 8)]
-            exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
-                             )
-            self.assertEquals(exons, {('chr1', False) : [(1, 9),
-                                                         (15, 29),
-                                                         (38, 46)]})
-            self.assertEquals(introns, 
-                                {('chr1', False) : [(9, 15, 8, 22),
-                                                    (29, 38, 22, 8)]})
-
-        def test_that_prefix_and_suffix_ECs_are_found_2(self):
-            """ Fails if unaligned prefix and suffix don't become ECs.
-                
                 Here, the read has exactly one EC, so it's the first one and
                 the last one on the read. Read is taken to be the sixth line of
                 reference_seq.
             """
             # Second line of read_seq below is the only EC identified at first
-            read_seq = 'ATACAGaa' \
-                       'GCAGAAaATACAGATCA' \
-                       'GCAaAAtAtA'
-            readlets = [('chr1', False, 250, 267, 8)]
+            read_seq = 'ATACAGaaAT' \
+                       'CAGaGCAGAAaATACAGATCA' \
+                       'aAGCTAGCAaAAtAtA'
+            readlets = [('chr1', False, 247, 268, 10)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
-                             )
-            self.assertEquals(exons, {('chr1', False) : [(236, 244),
-                                                         (250, 267),
-                                                         (273, 283)]})
-            self.assertEquals(introns, 
-                                {('chr1', False) : [(244, 250, 8, 27),
-                                                    (267, 273, 25, 10)]})
+                                self.fasta_object, read_seq, readlets, 
+                                min_seq_similarity=0
+                            )
+            self.assertEquals({('chr1', False) : [(237, 284)]}, exons)
+            self.assertEquals({}, introns)
 
         def test_that_strange_mapping_is_thrown_out(self):
             """ Fails if any exons or introns are returned.
@@ -2453,7 +2227,7 @@ elif __name__ == '__main__':
             readlets = [('chr1', False, 200, 220, 10),
                            ('chr1', False, 160, 180, 35)]
             exons, introns = exons_and_introns_from_read(
-                                self.reference_index, read_seq, readlets
+                                self.fasta_object, read_seq, readlets
                             )
             self.assertEquals({}, exons)
             self.assertEquals({}, introns)
@@ -2705,7 +2479,8 @@ elif __name__ == '__main__':
             )
 
         def test_that_no_alignment_is_chosen_in_case_of_tie(self):
-            """ Fails if alignments of multireadlet aren't thrown out. """
+            """Fails if alignments of multireadlet aren't thrown out.
+            """
             '''Below, the multireadlet at the first position in multireadlets
             contains alignments that overlap the unireadlet at the second
             position in multireadlets equally.'''
