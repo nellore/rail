@@ -67,7 +67,7 @@ def addArgs(parser):
              'RNAME. Ignored if --out is not specified '
              '(that is, if --out is stdout)')
     parser.add_argument(\
-        '--output-bed-by-chromosome', action='store_const', const=True, default=True,
+        '--output-bed-by-chromosome', action='store_const', const=True, default=False,
         help='Split BED output files up by chrom (typically chromosome) if '
              'True; otherwise output single BED file consolidating all '
              'spliced alignments')
