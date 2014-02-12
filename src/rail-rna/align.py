@@ -113,6 +113,8 @@ import atexit
 import subprocess
 import re
 import numpy as np
+# For fast global alignment
+from scipy import weave
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for directory_name in ['bowtie', 'sample', 'alignment', 'interval']:
@@ -121,10 +123,158 @@ for directory_name in ['bowtie', 'sample', 'alignment', 'interval']:
 import bowtie
 import bowtie_index
 import sample
-import needlemanWunsch
 import partition
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
+
+class GlobalAlignment:
+    """ Invokes Weave to obtain alignment score matrix with C. """
+
+    def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-2],
+                                            [-1, 1,-1,-1,-1,-2],
+                                            [-1,-1, 1,-1,-1,-2],
+                                            [-1,-1,-1, 1,-1,-2],
+                                            [-1,-1,-1,-1,-1,-2],
+                                            [-2,-2,-2,-2,-2,-2]]):
+        """ Constructor for GlobalAlignment.
+
+            Places substitution_matrix directly in string containing C code
+            that obtains score matrix for global alignment. Executes C with
+            Weave on trivial case (two sequences, each one character) to 
+            ensure code is precompiled.
+
+            substitution_matrix: 6 x 6 substitution matrix (list of
+                lists); rows and columns correspond to ACGTN-, where N is aNy
+                and - is a gap. Default: +1 for match, -2 for gap, -1 for
+                everything else.
+        """
+        '''Set supporting code including libraries and the function 
+        integer_sequence(), which converts a sequence of nucleotides to
+        an array of indices that correspond to indices of the substitution
+        matrix---also set in the constructor.'''
+        self.support_code = """ 
+                        #include <string.h>
+                        #include <ctype.h>
+
+                        int* integer_sequence(const char* seq, int length) {
+                            int i;
+                            int* int_seq = (int *)malloc(sizeof(int)*length);
+                            for (i = 0; seq[i]; i++) {
+                                switch (seq[i]) {
+                                    case 'A':
+                                    case 'a':
+                                        int_seq[i] = 0;
+                                        break;
+                                    case 'C':
+                                    case 'c':
+                                        int_seq[i] = 1;
+                                        break;
+                                    case 'G':
+                                    case 'g':
+                                        int_seq[i] = 2;
+                                        break;
+                                    case 'T':
+                                    case 't':
+                                        int_seq[i] = 3;
+                                        break;
+                                    case 'N':
+                                        int_seq[i] = 4;
+                                        break;
+                                    case '-':
+                                        int_seq[i] = 5;
+                                        break;
+                                    default:
+                                        int_seq[i] = 4;
+                                }
+                            }
+                            return int_seq;
+                        }
+                        """
+        '''Score matrix code is written in C/C++; see self.support_code above
+        for dependencies. substitution_matrix is embedded in code below.'''
+        self.score_matrix_code = """
+                const char* c_first_seq = first_seq.c_str();
+                const char* c_second_seq = second_seq.c_str();
+                int row_count = first_seq.length() + 1;
+                int column_count = second_seq.length() + 1;
+                npy_intp dims[2] = {row_count, column_count};
+                PyObject* to_return = PyArray_SimpleNew(2, dims, NPY_INT);
+                int* score_matrix = (int *)((PyArrayObject*) to_return)->data;
+                int* substitution_matrix = (int *)malloc(sizeof(int)*6*6);
+                int* int_first_seq = integer_sequence(c_first_seq,
+                                                        row_count - 1);
+                int* int_second_seq = integer_sequence(c_second_seq,
+                                                        column_count - 1);
+            """ + """""".join(
+                            [("""substitution_matrix[%d] = %d;""" % ((i*6 + j), 
+                                substitution_matrix[i][j])) 
+                                for i in xrange(6) for j in xrange(6)]
+                        ) \
+            + """
+                int i, j;
+                score_matrix[0] = 0;
+                for (i = 1; i < row_count; i++) {
+                    score_matrix[i*column_count] = i 
+                        * substitution_matrix[int_first_seq[i-1]*6+5];
+                }
+                for (j = 1; j < column_count; j++) {
+                    score_matrix[j] = j 
+                        * substitution_matrix[5*6+int_second_seq[j-1]];
+                }
+                int diagonal, vertical, horizontal;
+                for (i = 1; i < row_count; i++) {
+                    for (j = 1; j < column_count; j++) {
+                        diagonal = score_matrix[(i-1)*column_count + j-1]
+                            + substitution_matrix[int_first_seq[i-1]*6
+                                                    +int_second_seq[j-1]];
+                        vertical = score_matrix[(i-1)*column_count + j]
+                            + substitution_matrix[int_first_seq[i-1]*6+5];
+                        horizontal = score_matrix[i*column_count + j-1]
+                            + substitution_matrix[5*6+int_second_seq[j-1]];
+                        score_matrix[i*column_count + j] = std::max(
+                                horizontal, std::max(diagonal, vertical)
+                            );
+                    }
+                }
+                free(int_first_seq);
+                free(int_second_seq);
+                free(substitution_matrix);
+                return_val = to_return;
+            """
+        stdout_holder = os.dup(sys.stdout.fileno())
+        try:
+            # Suppress compiler output by redirecting stdout temporarily
+            devnull = open(os.devnull, 'w')
+            os.dup2(devnull.fileno(), sys.stdout.fileno())
+            self.score_matrix('N', 'N')
+        except Exception as e:
+            print >>sys.stderr, 'C code for computing score matrix failed ' \
+                                'to compile. Get Python\'s distutils to use ' \
+                                'gcc, and try again.'
+            raise
+        finally:
+            # Turn the tap back on
+            os.dup2(stdout_holder, sys.stdout.fileno())
+
+    def score_matrix(self, first_seq, second_seq):
+        """ Computes score matrix for global alignment of two DNA sequences.
+
+            The substitution matrix is specified when the GlobalAlignment
+            class is instantiated.
+
+            first_seq: first sequence (string).
+            second_seq: second sequence (string).
+
+            Return value: score_matrix, a numpy array whose dimensions are
+                (len(first_seq) + 1) x (len(second_seq) + 1). It can be used to
+                trace back the best global alignment.
+        """
+        return weave.inline(
+                                self.score_matrix_code,
+                                ['first_seq', 'second_seq'], 
+                                support_code=self.support_code,
+                                verbose=0
+                            )
 
 # Initialize global variables for tracking number of input/output lines
 input_line_count = 0
@@ -336,7 +486,7 @@ def composed_and_sorted_readlets(readlets, min_strand_readlets=1):
     return composed
 
 def unmapped_region_splits(unmapped_seq, left_reference_seq,
-        right_reference_seq, substitution_matrix=needlemanWunsch.matchCost()):
+        right_reference_seq, global_alignment=GlobalAlignment()):
     """ Distributes a read's unmapped region between two framing mapped
         regions.
 
@@ -362,20 +512,20 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
         overlap.
 
         The algo first fills two (K + 1) x (K + 1) score matrices according to
-        rules encoded in substitution_matrix: left_score_matrix scores
-        alignment of unmapped_seq to left_reference_seq, while
-        right_score_matrix scores alignment of REVERSED unmapped_seq to
-        REVERSED right_reference_seq. Let all matrices be 0-indexed, and
-        consider only left_score_matrix. Recall that the lower righthand corner
-        element of the matrix is the score of the best global alignment. More
-        generally, the (S_L, S_L) element of left_score_matrix is the score of
-        the best global alignment of the FIRST S_L bases of unmapped_seq to the
-        FIRST S_L bases of left_reference_seq. Similar logic would apply to
-        right_score_matrix, but first flip right_score_matrix upside-down and
-        leftside-right. Then the (K - S_R, K - S_R) element of
-        right_score_matrix is the score of the best global alignment of the
-        FINAL S_R bases of unmapped_seq to the FINAL S_R bases of
-        right_reference_seq.
+        rules encoded in global_alignment's substitution matrix:
+        left_score_matrix scores alignment of unmapped_seq to
+        left_reference_seq, while right_score_matrix scores alignment of
+        REVERSED unmapped_seq to REVERSED right_reference_seq. Let all matrices
+        be 0-indexed, and consider only left_score_matrix. Recall that the
+        lower righthand corner element of the matrix is the score of the best
+        global alignment. More generally, the (S_L, S_L) element of
+        left_score_matrix is the score of the best global alignment of the
+        FIRST S_L bases of unmapped_seq to the FIRST S_L bases of
+        left_reference_seq. Similar logic would apply to right_score_matrix,
+        but first flip right_score_matrix upside-down and leftside-right. Then
+        the (K - S_R, K - S_R) element of right_score_matrix is the score of
+        the best global alignment of the FINAL S_R bases of unmapped_seq to the
+        FINAL S_R bases of right_reference_seq.
 
         The algo picks out the best "jump" (represented by the pipe bars) from
         left_reference_seq to right_reference_seq for alignment of
@@ -394,10 +544,8 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
         right_reference_seq: right reference sequence (string; see paragraphs
             above). unmapped_seq, left_reference_seq, and right_reference_seq
             all have the same length.
-        substitution_matrix: 6 x 6 substitution matrix (numpy object or list of
-            lists; see paragraphs above); rows and columns correspond to
-            ACGTN-, where N is aNy and - is a gap. Default: +1 for match,
-            -2 for gap, -1 for everything else.
+        global_alignment: instance of GlobalAlignment class used for fast
+                alignment. Encapsulates substitution matrix.
 
         Return value: List of possible S_L (see paragraphs above for
             definition).
@@ -410,14 +558,12 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
     left_reference_seq = left_reference_seq.upper()
     right_reference_seq = right_reference_seq.upper()
 
-    left_score_matrix = needlemanWunsch.needlemanWunsch(
-            unmapped_seq, left_reference_seq, 
-            substitution_matrix
-        )[1]
-    right_score_matrix = needlemanWunsch.needlemanWunsch(
+    left_score_matrix = global_alignment.score_matrix(
+            unmapped_seq, left_reference_seq
+        )
+    right_score_matrix = global_alignment.score_matrix(
             unmapped_seq[::-1], right_reference_seq[::-1], 
-            substitution_matrix
-        )[1][::-1,::-1]
+        )[::-1,::-1]
     total_score_matrix_diagonal = np.diagonal(left_score_matrix) \
                                   + np.diagonal(right_score_matrix)
     return np.argwhere(np.amax(total_score_matrix_diagonal) 
@@ -427,7 +573,7 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
     min_intron_size=5, min_strand_readlets=1, max_discrepancy=2, 
     min_seq_similarity=0.85, search_for_caps=True, min_cap_query_size=8,
     cap_search_window_size=1000,
-    substitution_matrix=needlemanWunsch.matchCost()):
+    global_alignment=GlobalAlignment()):
     """ Composes a given read's aligned readlets and returns ECs and introns.
 
         reference_index: object of class bowtie_index.BowtieIndexReference that
@@ -458,7 +604,7 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
             is <= max_discrepancy AND the score of global alignment is >= 
             min_seq_similarity * (length of unmapped region), the unmapped
             region is incorporated into a single EC spanning the two original
-            ECs via DP filling. See needlemanWunsch.matchCost() for the
+            ECs via DP filling. See the class GlobalAlignment for the
             substitution matrix used.
         search_for_caps: True iff reference should be searched for the segment
             of a read (a cap) that precedes the first EC and the segment of a
@@ -468,10 +614,8 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
             than this size.
         cap_search_window_size: the size (in bp) of the reference subsequence
             in which to search for a cap.
-        substitution_matrix: 6 x 6 substitution matrix (numpy object or list
-            of lists) for scoring filling and framing alignments; rows and
-            columns correspond to ACGTN-, where N is aNy and - is a gap.
-            Default: +1 for match, -2 for gap, -1 for everything else.
+        global_alignment: instance of GlobalAlignment class used for fast
+                realignment of exonic chunks via Weave.
 
         Return value: tuple (exons, introns).
             -exons is a dictionary; each key is a strand (i.e., a tuple
@@ -526,17 +670,17 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
         if last_displacement:
             '''If last_displacement isn't 0, check if region to the left should
             be filled.'''
-            if needlemanWunsch.needlemanWunsch(
+            if global_alignment.score_matrix(
                         current_read_seq[:last_displacement],
                         reference_index.get_stretch(rname,
                             last_pos - last_displacement - 1,
-                            last_displacement),
-                        substitution_matrix
-                    )[0] >= min_seq_similarity * last_displacement:
+                            last_displacement)
+                    )[-1, -1] >= min_seq_similarity * last_displacement:
                 # Fill
                 last_pos -= last_displacement
                 last_displacement = 0
-            elif search_for_caps and last_displacement >= min_cap_query_size:
+            elif search_for_caps and last_displacement >= min_cap_query_size \
+                and cap_search_window_size > 0:
                 '''If region shouldn't be filled and region to the left isn't
                 too small, search for it.'''
                 search_pos = max(0, last_pos - 1 - cap_search_window_size)
@@ -672,14 +816,13 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                 # Now decide whether to DP fill or DP frame
                 if abs(discrepancy) <= max_discrepancy:
                     # DP Fill
-                    if needlemanWunsch.needlemanWunsch(
+                    if global_alignment.score_matrix(
                             current_read_seq[
                                 unmapped_displacement:displacement
                             ],
                             reference_index.get_stretch(rname,
-                                last_end_pos - 1, pos - last_end_pos), 
-                            substitution_matrix
-                        )[0] >= min_seq_similarity * read_distance:
+                                last_end_pos - 1, pos - last_end_pos) 
+                        )[-1, -1] >= min_seq_similarity * read_distance:
                         '''If the unmapped region should be filled,
                         last_displacement and last_pos should remain the same
                         on next iteration, but last_end_pos must change; two
@@ -755,16 +898,18 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
             exons_and_introns[strand] = []
             continue
         if unmapped_base_count > 0:
-            if needlemanWunsch.needlemanWunsch(
+            if global_alignment.score_matrix(
                                 current_read_seq[unmapped_displacement:],
                                 reference_index.get_stretch(rname,
                                     last_end_pos - 1, 
-                                    unmapped_base_count), 
-                                substitution_matrix
-                            )[0] >= min_seq_similarity * unmapped_base_count:
+                                    unmapped_base_count)
+                            )[-1, -1] >= (min_seq_similarity
+                                             * unmapped_base_count):
                 # Fill
                 last_end_pos += unmapped_base_count
-            elif search_for_caps and unmapped_base_count >= min_cap_query_size:
+            elif search_for_caps \
+                and unmapped_base_count >= min_cap_query_size \
+                and cap_search_window_size > 0:
                 '''If region shouldn't be filled and region to the right isn't
                 too small, search for it.'''
                 search_pos = last_end_pos - 1
@@ -977,7 +1122,7 @@ class BowtieOutputThread(threading.Thread):
         assign_multireadlets_by_coverage=False,
         search_for_caps=True, min_cap_query_size=8,
         cap_search_window_size=1000,
-        substitution_matrix=needlemanWunsch.matchCost(), 
+        global_alignment=GlobalAlignment(), 
         report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
@@ -1021,8 +1166,8 @@ class BowtieOutputThread(threading.Thread):
                 alignment is >=
                 min_seq_similarity * (length of unmapped region), the unmapped
                 region is incorporated into a single EC spanning the two
-                original ECs via DP filling. See  needlemanWunsch.matchCost()
-                for the substitution matrix used.
+                original ECs via DP filling. See the GlobalAlignment class for
+                the substitution matrix used.
             max_intron_size: an intron of that spans more than this number of
                 bases is suppressed from output.
             intron_partition_overlap: number of bases to subtract from
@@ -1042,10 +1187,8 @@ class BowtieOutputThread(threading.Thread):
                 than this size.
             cap_search_window_size: the size (in bp) of the reference
                 subsequence in which to search for a cap.
-            substitution_matrix: 6 x 6 substitution matrix (numpy object or
-                list of lists) for scoring filling and framing alignments; rows
-                and columns correspond to ACGTN-, where N is aNy and - is a
-                gap. Default: +1 for match, -2 for gap, -1 for everything else.
+            global_alignment: instance of GlobalAlignment class used for fast
+                realignment of exonic chunks via Weave.
             report_multiplier: if verbose is True, the line number of an
                 alignment written to stderr increases exponentially with base
                 report_multiplier.
@@ -1074,7 +1217,7 @@ class BowtieOutputThread(threading.Thread):
         self.assign_multireadlets_by_coverage \
             = assign_multireadlets_by_coverage
         self.intron_partition_overlap = intron_partition_overlap
-        self.substitution_matrix = substitution_matrix
+        self.global_alignment = global_alignment
 
     def run(self):
         """ Prints exons for reads and exons/introns for readlets.
@@ -1355,7 +1498,7 @@ class BowtieOutputThread(threading.Thread):
                             min_strand_readlets=self.min_strand_readlets,
                             max_discrepancy=self.max_discrepancy,
                             min_seq_similarity=self.min_seq_similarity,
-                            substitution_matrix=self.substitution_matrix,
+                            global_alignment=self.global_alignment,
                             search_for_caps=self.search_for_caps,
                             min_cap_query_size=self.min_cap_query_size,
                             cap_search_window_size=self.cap_search_window_size
@@ -1564,7 +1707,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
     min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
     min_intron_size=5, max_intron_size=100000, intron_partition_overlap=20, 
     assign_multireadlets_by_coverage=False,
-    substitution_matrix=needlemanWunsch.matchCost(), report_multiplier=1.2,
+    global_alignment=GlobalAlignment(), report_multiplier=1.2,
     search_for_caps=True, min_cap_query_size=8, cap_search_window_size=1000):
     """ Runs Rail-RNA-align.
 
@@ -1712,7 +1855,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
             is <= max_discrepancy AND the score of global alignment is >=
             min_seq_similarity * (length of unmapped region), the unmapped
             region is incorporated into a single EC spanning the two original
-            ECs via DP filling. See needlemanWunsch.matchCost() for the
+            ECs via DP filling. See the GlobalAlignment class for the
             substitution matrix used.
         min_intron_size: introns smaller than this number of bases are filtered
             out.
@@ -1734,10 +1877,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
             than this size.
         cap_search_window_size: the size (in bp) of the reference subsequence
             in which to search for a cap.
-        substitution_matrix: 6 x 6 substitution matrix (numpy object or list of
-            lists) for scoring filling and framing alignments; rows and columns
-            correspond to ACGTN-, where N is aNy and - is a gap.
-            Default: +1 for match, -2 for gap, -1 for everything else.
+        global_alignment: instance of GlobalAlignment class used for fast
+                realignment of exonic chunks via Weave.
         report_multiplier: if verbose is True, the line number of an alignment,
             read, or first readlet of a read written to stderr increases
             exponentially with base report_multiplier.
@@ -1778,7 +1919,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
                 max_intron_size=max_intron_size,
                 stranded=stranded,
                 intron_partition_overlap=intron_partition_overlap,
-                substitution_matrix=substitution_matrix,
+                global_alignment=global_alignment,
                 report_multiplier=report_multiplier
             )
         threads.append(output_thread)
@@ -1828,7 +1969,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
             search_for_caps=search_for_caps,
             min_cap_query_size=min_cap_query_size,
             cap_search_window_size=cap_search_window_size,
-            substitution_matrix=substitution_matrix,
+            global_alignment=global_alignment,
             report_multiplier=report_multiplier
         )
     threads.append(output_thread)
@@ -1978,6 +2119,9 @@ if __name__ == '__main__':
     args = parser.parse_args(argv[1:])
 
 if __name__ == '__main__' and not args.test:
+    '''Compile global alignment code; substitution matrix can be set to
+    nondefault here if desired.'''
+    global_alignment = GlobalAlignment()
     temp_dir_path = tempfile.mkdtemp()
     archive = os.path.join(args.archive,
         str(os.getpid())) if args.archive is not None else None
@@ -2011,7 +2155,7 @@ if __name__ == '__main__' and not args.test:
         search_for_caps=(not args.do_not_search_for_caps),
         min_cap_query_size=args.min_cap_query_size,
         cap_search_window_size=args.cap_search_window_size,
-        substitution_matrix=needlemanWunsch.matchCost(),
+        global_alignment=global_alignment,
         report_multiplier=args.report_multiplier)
 elif __name__ == '__main__':
     # Test units
