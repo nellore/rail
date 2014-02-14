@@ -83,6 +83,10 @@ STRAND.
 8. Number of nucleotides spanned by EC on the right (that is, towards the 3'
 end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
 STRAND.
+9. Match rate: the number of bases that match the reference per base of the
+aligned readlets comprising the read from which the intron was inferred.
+10. '-' if reversed complements of readlets from which intron was inferred
+aligned to forward strand; else '+'
 
 SAM (splice_sam):
 Standard 11-column SAM output except fields are in different order. (Fields are
@@ -973,12 +977,14 @@ def selected_readlet_alignments_by_distance(readlets):
         Consider a list "readlets" whose items {R_i} correspond to the aligned
         readlets from a given read. Each R_i is itself a list of the possible
         alignments {R_ij} of a readlet. Each R_ij is a tuple
-        (rname, reverse_strand, pos, end_pos, displacement), where rname is
-        the SAM-format rname (typically a chromosome), reverse_strand is True
-        iff the readlet's reversed complement aligns to the reference, and
-        displacement is the number of bases between the 5' (3') end of the
-        readlet, which aligns to the forward (reverse) strand, and the 5' (3')
-        end of the read.
+        (rname, reverse_strand, pos, end_pos, displacement, mismatch_count),
+        where rname is the SAM-format rname (typically a chromosome),
+        reverse_strand is True iff the readlet's reversed complement aligns to
+        the reference, displacement is the number of bases between the 5' (3')
+        end of the readlet, which aligns to the forward (reverse) strand, and
+        the 5' (3') end of the read, and mismatch_count is the number of
+        mismatched bases in the alignment. Let K_i be the number of alignments
+        {R_ij} of a given readlet R_i.
 
         The algo first separates readlets into two sets: those that align
         uniquely (unireadlets U_i, a subset of K_i) and those that don't
@@ -1000,11 +1006,12 @@ def selected_readlet_alignments_by_distance(readlets):
         readlets: a list whose items {R_i} correspond to the aligned readlets
             from a given read. Each R_i is itself a list of the possible
             alignments {R_ij} of a readlet. Each R_ij is a tuple
-            (rname, reverse_strand, pos, end_pos, displacement). See above
-            for a detailed explanation.
+            (rname, reverse_strand, pos, end_pos, displacement,
+                mismatch_count). See above for a detailed explanation.
 
         Return value: a list of selected alignment tuples
-            (rname, reverse_strand, pos, end_pos, displacement).
+            (rname, reverse_strand, pos, end_pos, displacement,
+                mismatch_count).
     """
     # Final readlets is first populated with unireadlets
     final_readlets = []
@@ -1025,24 +1032,27 @@ def selected_readlet_alignments_by_distance(readlets):
         return final_readlets
     # Store unireadlets in dictionary for fast lookups
     unireadlets = {}
-    for rname, reverse_strand, pos, end_pos, displacement in final_readlets:
+    for (rname, reverse_strand, pos, end_pos,
+            displacement, mismatch_count) in final_readlets:
         if (rname, reverse_strand) not in unireadlets:
             unireadlets[(rname, reverse_strand)] = []
         unireadlets[(rname, reverse_strand)].append(
-                (pos, end_pos, displacement)
+                (pos, end_pos, displacement, mismatch_count)
             )
     # Find multireadlet alignment with "closest" unireadlet
     for multireadlet in multireadlets:
         last_overlap = None
         alignment = None
-        for rname, reverse_strand, pos, end_pos, displacement in multireadlet:
+        for (rname, reverse_strand, pos, end_pos,
+                displacement, mismatch_count) in multireadlet:
             if (rname, reverse_strand) not in unireadlets: continue
             overlap = max([min(end_pos, compared_end_pos)
                             - max(pos, compared_pos)
-                            for compared_pos, compared_end_pos, _
+                            for compared_pos, compared_end_pos, _, _
                             in unireadlets[(rname, reverse_strand)]])
             if last_overlap is None or overlap > last_overlap:
-                alignment = (rname, reverse_strand, pos, end_pos, displacement)
+                alignment = (rname, reverse_strand, pos, end_pos,
+                                displacement, mismatch_count)
             last_overlap = overlap
         if alignment is not None: final_readlets.append(alignment)
     return final_readlets
@@ -1053,13 +1063,14 @@ def selected_readlet_alignments_by_coverage(readlets):
         Consider a list "readlets" whose items {R_i} correspond to the aligned
         readlets from a given read. Each R_i is itself a list of the possible
         alignments {R_ij} of a readlet. Each R_ij is a tuple
-        (rname, reverse_strand, pos, end_pos, displacement), where rname is
-        the SAM-format rname (typically a chromosome), reverse_strand is True
-        iff the readlet's reversed complement aligns to the reference, and
-        displacement is the number of bases between the 5' (3') end of the
-        readlet, which aligns to the forward (reverse) strand, and the 5' (3')
-        end of the read. Let K_i be the number of alignments {R_ij} of a given
-        readlet R_i
+        (rname, reverse_strand, pos, end_pos, displacement, mismatch_count),
+        where rname is the SAM-format rname (typically a chromosome),
+        reverse_strand is True iff the readlet's reversed complement aligns to
+        the reference, displacement is the number of bases between the 5' (3')
+        end of the readlet, which aligns to the forward (reverse) strand, and
+        the 5' (3') end of the read, and mismatch_count is the number of
+        mismatched bases in the alignment. Let K_i be the number of alignments
+        {R_ij} of a given readlet R_i.
 
         The algo first constructs a coverage distribution from the {R_i}. Each
         base position B of the reference spanned by a given R_ij contributes
@@ -1070,17 +1081,19 @@ def selected_readlet_alignments_by_coverage(readlets):
         readlets: a list whose items {R_i} correspond to the aligned readlets
             from a given read. Each R_i is itself a list of the possible
             alignments {R_ij} of a readlet. Each R_ij is a tuple
-            (rname, reverse_strand, pos, end_pos, displacement). See above
-            for a detailed explanation.
+            (rname, reverse_strand, pos, end_pos, displacement,
+                mismatch_count). See above for a detailed explanation.
 
         Return value: a list of selected alignment tuples
-            (rname, reverse_strand, pos, end_pos, displacement).
+            (rname, reverse_strand, pos, end_pos, displacement,
+                mismatch_count).
     """
     # Construct coverage distribution
     coverage = {}
     for multireadlet in readlets:
         coverage_unit = 1. / len(multireadlet)
-        for rname, reverse_strand, pos, end_pos, displacement in multireadlet:
+        for (rname, reverse_strand, pos, end_pos,
+                displacement, mismatch_count) in multireadlet:
             if (rname, reverse_strand) not in coverage:
                 coverage[(rname, reverse_strand)] = {}
             for covered_base_pos in xrange(pos, end_pos):
@@ -1097,13 +1110,15 @@ def selected_readlet_alignments_by_coverage(readlets):
             final_readlets.append(multireadlet[0])
             continue
         alignments = []
-        for rname, reverse_strand, pos, end_pos, displacement in multireadlet:
+        for (rname, reverse_strand, pos, end_pos,
+                displacement, mismatch_count) in multireadlet:
             readlet_coverage = 0
             for covered_base_pos in xrange(pos, end_pos):
                 readlet_coverage += coverage[(rname, reverse_strand)].get(
                     covered_base_pos, 0)
             alignments.append((readlet_coverage, (rname, reverse_strand, pos,
-                                                    end_pos, displacement)))
+                                                    end_pos, displacement, 
+                                                    mismatch_count)))
         alignments.sort(reverse=True)
         if not (alignments[1][0] == alignments[0][0]):
             # Add alignment iff there is no tie in highest coverage
@@ -1256,8 +1271,8 @@ class BowtieOutputThread(threading.Thread):
                 invoked for X an integer >= 1. See Bowtie documentation.'''
                 last_multimapped = False
                 for field in last_tokens[::-1]:
-                    if field[:-1] == 'XM:i:':
-                        if int(field[-1]) > 0 and (last_flag & 4):
+                    if field[:5] == 'XM:i:':
+                        if int(field[5:]) > 0 and (last_flag & 4):
                             '''If read is multimapped and all alignments were
                             suppressed.'''
                             last_multimapped = True
@@ -1289,8 +1304,8 @@ class BowtieOutputThread(threading.Thread):
                 invoked for X an integer >= 1. See Bowtie documentation.'''
                 multimapped = False
                 for field in tokens[::-1]:
-                    if field[:-1] == 'XM:i:':
-                        if int(field[-1]) > 0 and (flag & 4):
+                    if field[:5] == 'XM:i:':
+                        if int(field[5:]) > 0 and (flag & 4):
                             '''If read is multimapped and all alignments were
                             suppressed.'''
                             multimapped = True
@@ -1408,6 +1423,14 @@ class BowtieOutputThread(threading.Thread):
                     last_displacement = int(last_three_prime_displacement)
                 else:
                     last_displacement = int(last_five_prime_displacement)
+                '''Find MD:Z field to obtain number of mismatches in
+                alignment.'''
+                last_mismatch_count = 0
+                for field in last_tokens[::-1]:
+                    if field[:5] == 'MD:Z:':
+                        last_mismatch_count \
+                            = len(re.findall(r'[A-Za-z]', field[5:]))
+                        break
                 break
             # Initialize counter
             i = 0
@@ -1441,6 +1464,14 @@ class BowtieOutputThread(threading.Thread):
                         displacement = int(three_prime_displacement)
                     else:
                         displacement = int(five_prime_displacement)
+                    '''Find MD:Z field to obtain number of mismatches in
+                    alignment.'''
+                    mismatch_count = 0
+                    for field in last_tokens[::-1]:
+                        if field[:5] == 'MD:Z:':
+                            mismatch_count \
+                                = len(re.findall(r'[A-Za-z]', field[5:]))
+                            break
                 if self.verbose and next_report_line == i:
                     print >>sys.stderr, \
                         'SAM output record %d: rdname="%s", flag=%d' \
@@ -1449,7 +1480,8 @@ class BowtieOutputThread(threading.Thread):
                         * self.report_multiplier + 1) - 1
                 multireadlet.append((last_rname, last_reverse_strand, last_pos,
                                         last_pos + len(last_seq),
-                                        last_displacement))
+                                        last_displacement,
+                                        last_mismatch_count))
                 if not line or full_qname != last_full_qname:
                     '''If the next qname doesn't match the last qname or there
                     are no more lines, all of a multireadlet's alignments have
@@ -1461,11 +1493,12 @@ class BowtieOutputThread(threading.Thread):
                     if not (last_flag & 4):
                         '''Readlet maps, but perhaps not uniquely; decide which
                         alignment is to be called as an exonic chunk (EC) later
-                        using selected_readlet_alignments(). All output
-                        positions will be with respect to 5' end of forward 
-                        strand. Note that last_seq is reverse-complemented
-                        readlet if sense strand is reverse strand, but
-                        last_read_seq is NEVER reverse-complemented.'''
+                        using a selected_readlet_alignments function. All
+                        output positions will be with respect to 5' end of
+                        forward strand. Note that last_seq is
+                        reverse-complemented readlet if sense strand is reverse
+                        strand, but last_read_seq is NEVER
+                        reverse-complemented.'''
                         if (last_qname,
                                 last_paired_label) not in collected_readlets:
                             collected_readlets[
@@ -1476,8 +1509,8 @@ class BowtieOutputThread(threading.Thread):
                                 ].append(multireadlet)
                     last_total_readlets = int(last_total_readlets)
                     if readlet_count[(last_qname, last_paired_label)] \
-                            == last_total_readlets and (last_qname,
-                            last_paired_label) in collected_readlets:
+                        == last_total_readlets and (last_qname,
+                        last_paired_label) in collected_readlets:
                         '''Choose algorithm for selecting alignments from
                         multireadlets.'''
                         if self.assign_multireadlets_by_coverage:
@@ -1492,9 +1525,19 @@ class BowtieOutputThread(threading.Thread):
                                         collected_readlets[(last_qname,
                                                             last_paired_label)]
                                     )
+                        '''Compute mean number of matched bases per aligned
+                        base of the readlets from the read.'''
+                        aligned_base_count = sum([alignment[3] - alignment[2]
+                            for alignment in filtered_alignments])
+                        mismatched_base_count = sum([alignment[-1]
+                            for alignment in filtered_alignments])
+                        match_rate = (aligned_base_count 
+                                         - float(mismatched_base_count)) \
+                                        / aligned_base_count
                         exons, introns = exons_and_introns_from_read(
                             self.reference_index, last_read_seq,
-                            filtered_alignments,
+                            [alignment[:-1] 
+                                for alignment in filtered_alignments],
                             min_strand_readlets=self.min_strand_readlets,
                             max_discrepancy=self.max_discrepancy,
                             min_seq_similarity=self.min_seq_similarity,
@@ -1572,13 +1615,8 @@ class BowtieOutputThread(threading.Thread):
                         # Print introns
                         for intron_strand in introns:
                             intron_rname, intron_reverse_strand = intron_strand
-                            if self.stranded:
-                                '''A reverse-strand string is needed iff input
-                                reads are strand-specific.'''
-                                intron_reverse_strand_string = '-' if \
+                            intron_reverse_strand_string = '-' if \
                                     intron_reverse_strand else '+'
-                            else:
-                                intron_reverse_strand_string = ''
                             for (intron_pos, intron_end_pos,
                                     intron_five_prime_displacement, 
                                     intron_three_prime_displacement,
@@ -1604,15 +1642,18 @@ class BowtieOutputThread(threading.Thread):
                                         partition_end) in partitions:
                                     print >>self.output_stream, \
                                         'intron\t%s%s\t%s\t%012d\t%012d' \
-                                        '\t%d\t%d\t%d\t%d' \
+                                        '\t%d\t%d\t%d\t%d\t%.12f\t%s' \
                                         % (partition_id,
-                                            intron_reverse_strand_string,
+                                            intron_reverse_strand_string if 
+                                            self.stranded else '',
                                             last_sample_label, intron_pos,
                                             intron_end_pos, 
                                             intron_five_prime_displacement,
                                             intron_three_prime_displacement,
                                             intron_left_EC_size,
-                                            intron_right_EC_size)
+                                            intron_right_EC_size,
+                                            match_rate, 
+                                            intron_reverse_strand_string)
                                     output_line_count += 1
                         if self.splice_sam:
                             '''Print SAM with each line encoding candidate
@@ -1671,9 +1712,10 @@ class BowtieOutputThread(threading.Thread):
                     rnext, pnext, tlen, seq, qual)
                 (last_qname, last_paired_label, last_five_prime_displacement, 
                     last_three_prime_displacement, last_read_seq,
-                    last_qual_seq, last_total_readlets) = (qname, paired_label,
+                    last_qual_seq, last_total_readlets,
+                    last_mismatch_count) = (qname, paired_label,
                     five_prime_displacement, three_prime_displacement, 
-                    read_seq, qual_seq, total_readlets)
+                    read_seq, qual_seq, total_readlets, mismatch_count)
                 (last_reverse_strand, last_displacement) = (reverse_strand,
                     displacement)
                 i += 1
@@ -1787,6 +1829,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
         8. Number of nucleotides spanned by EC on the right (that is, towards
         the 3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
         FORWARD STRAND.
+        9. Match rate: the number of bases that match the reference per base of
+        the aligned readlets comprising the read from which the intron was
+        inferred.
+        10. '-' if reversed complements of readlets from which intron was
+        inferred aligned to forward strand; else '+'
 
         SAM (splice_sam):
         Standard 11-column SAM output except fields are in different order.
@@ -2333,7 +2380,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
-            self.assertEquals({('chr1', False) : [(48, 95, 47, 47)]}, introns)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]}, 
+                                introns)
             '''Now try truncating readlets so there is an unmapped region of
             the read. This tests the DP framing code in context.'''
             readlets = [('chr1', False, 1, 42, 0),
@@ -2343,7 +2391,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
-            self.assertEquals({('chr1', False) : [(48, 95, 47, 47)]}, introns)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]},
+                                introns)
             # Truncate readlets again to test DP framing.
             readlets = [('chr1', False, 1, 37, 0),
                           ('chr1', False, 105, 142, 57)]
@@ -2352,7 +2401,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
-            self.assertEquals({('chr1', False) : [(48, 95, 47, 47)]}, introns)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]},
+                                introns)
 
         def test_DP_framing_from_overlapping_ECs(self):
             """ Fails if splice junction is not accurate.
@@ -2380,7 +2430,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
-            self.assertEquals({('chr1', False) : [(48, 95, 47, 47)]}, introns)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]},
+                                introns)
             '''Now try truncating readlets so there is an unmapped region of
             the read. This tests the DP framing code in context.'''
             readlets = [('chr1', False, 1, 42, 0),
@@ -2390,7 +2441,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
-            self.assertEquals({('chr1', False) : [(48, 95, 47, 47)]}, introns)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]},
+                                introns)
             # Truncate readlets again to test DP framing.
             readlets = [('chr1', False, 1, 37, 0),
                           ('chr1', False, 105, 142, 57)]
@@ -2399,7 +2451,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
                                 exons)
-            self.assertEquals({('chr1', False) : [(48, 95, 47, 47)]}, introns)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]},
+                                introns)
 
         def test_reverse_strand_DP_framing_1(self):
             """ Fails if splice junction is not accurate.
@@ -2432,7 +2485,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', True) : [(1, 48), (95, 142)]},
                                 exons)
-            self.assertEquals({('chr1', True) : [(48, 95, 47, 47)]}, introns)
+            self.assertEquals({('chr1', True) : [(48, 95, 47, 47, 47, 47)]},
+                                introns)
             '''Now try truncating readlets so there is an unmapped region of
             the read. This tests the DP framing code in context.'''
             readlets = [('chr1', True, 1, 42, 0),
@@ -2442,7 +2496,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', True) : [(1, 48), (95, 142)]},
                                 exons)
-            self.assertEquals({('chr1', True) : [(48, 95, 47, 47)]}, introns)
+            self.assertEquals({('chr1', True) : [(48, 95, 47, 47, 47, 47)]},
+                                introns)
             # Truncate readlets again to test DP framing.
             readlets = [('chr1', True, 1, 37, 0),
                           ('chr1', True, 105, 142, 57)]
@@ -2451,7 +2506,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', True) : [(1, 48), (95, 142)]},
                                 exons)
-            self.assertEquals({('chr1', True) : [(48, 95, 47, 47)]}, introns)
+            self.assertEquals({('chr1', True) : [(48, 95, 47, 47, 47, 47)]},
+                                introns)
 
         def test_DP_framing_2(self):
             """ Fails if splice junction is not accurate.
@@ -2476,7 +2532,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', False) : [(48, 95), (142, 189)]},
                                 exons)
-            self.assertEquals({('chr1', False) : [(95, 142, 47, 47)]}, introns)
+            self.assertEquals({('chr1', False) : [(95, 142, 47, 47, 47, 47)]},
+                                introns)
             '''Now try truncating readlets so there is an unmapped region of
             the read. This tests the DP framing code in context.'''
             readlets = [('chr1', False, 48, 90, 0),
@@ -2486,7 +2543,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', False) : [(48, 95), (142, 189)]},
                                 exons)
-            self.assertEquals({('chr1', False) : [(95, 142, 47, 47)]}, introns)
+            self.assertEquals({('chr1', False) : [(95, 142, 47, 47, 47, 47)]},
+                                introns)
             # Truncate readlets again to test DP framing.
             readlets = [('chr1', False, 48, 87, 0),
                           ('chr1', False, 150, 189, 55)]
@@ -2495,7 +2553,8 @@ elif __name__ == '__main__':
                             )
             self.assertEquals({('chr1', False) : [(48, 95), (142, 189)]},
                                 exons)
-            self.assertEquals({('chr1', False) : [(95, 142, 47, 47)]}, introns)
+            self.assertEquals({('chr1', False) : [(95, 142, 47, 47, 47, 47)]},
+                                introns)
 
         def test_DP_filling_between_ECs(self):
             """ Fails if unmapped region between two ECs is not filled.
@@ -2560,8 +2619,8 @@ elif __name__ == '__main__':
                                                          (15, 29),
                                                          (38, 46)]})
             self.assertEquals(introns, 
-                                {('chr1', False) : [(9, 15, 8, 22),
-                                                    (29, 38, 22, 8)]})
+                                {('chr1', False) : [(9, 15, 8, 22, 8, 14),
+                                                    (29, 38, 22, 8, 14, 8)]})
 
         def test_that_prefix_and_suffix_ECs_are_found_2(self):
             """ Fails if unaligned prefix and suffix don't become ECs.
@@ -2582,8 +2641,9 @@ elif __name__ == '__main__':
                                                          (250, 267),
                                                          (273, 283)]})
             self.assertEquals(introns, 
-                                {('chr1', False) : [(244, 250, 8, 27),
-                                                    (267, 273, 25, 10)]})
+                                {('chr1', False) : [(244, 250, 8, 27, 8, 17),
+                                                    (267, 273, 25, 10,
+                                                        17, 10)]})
 
         def test_that_strange_mapping_is_thrown_out(self):
             """ Fails if any exons or introns are returned.
@@ -2822,14 +2882,15 @@ elif __name__ == '__main__':
                 This test in particular checks if an alignment whose overlap
                 with any of the unireadlets is greatest is chosen.
             """
-            multireadlets = [[('chr1', False, 35, 55, 1), 
-                ('chr1', False, 45, 96, 11)], [('chr1', False, 46, 90, 12)]]
+            multireadlets = [[('chr1', False, 35, 55, 1, 0), 
+                              ('chr1', False, 45, 96, 11, 0)],
+                             [('chr1', False, 46, 90, 12, 0)]]
             final_alignments = selected_readlet_alignments_by_distance(
                                     multireadlets
                                 )
             self.assertTrue(
-                sorted(final_alignments) == [('chr1', False, 45, 96, 11),
-                                             ('chr1', False, 46, 90, 12)]
+                sorted(final_alignments) == [('chr1', False, 45, 96, 11, 0),
+                                             ('chr1', False, 46, 90, 12, 0)]
             )
 
     class TestSelectedReadletAlignmentsByCoverage(unittest.TestCase):
@@ -2838,14 +2899,15 @@ elif __name__ == '__main__':
         def test_that_best_covered_alignment_is_chosen(self):
             """ Fails if proper alignment of multireadlet is not chosen.
             """
-            multireadlets = [[('chr1', False, 35, 55, 1), 
-                ('chr1', False, 45, 96, 11)], [('chr1', False, 46, 90, 12)]]
+            multireadlets = [[('chr1', False, 35, 55, 1, 0), 
+                              ('chr1', False, 45, 96, 11, 0)],
+                             [('chr1', False, 46, 90, 12, 0)]]
             final_alignments = selected_readlet_alignments_by_coverage(
                                     multireadlets
                                 )
             self.assertTrue(
-                sorted(final_alignments) == [('chr1', False, 45, 96, 11),
-                                             ('chr1', False, 46, 90, 12)]
+                sorted(final_alignments) == [('chr1', False, 45, 96, 11, 0),
+                                             ('chr1', False, 46, 90, 12, 0)]
             )
 
         def test_that_no_alignment_is_chosen_in_case_of_tie(self):
@@ -2853,11 +2915,13 @@ elif __name__ == '__main__':
             '''Below, the multireadlet at the first position in multireadlets
             contains alignments that overlap the unireadlet at the second
             position in multireadlets equally.'''
-            multireadlets = [[('chr1', False, 25, 55, 1), 
-                ('chr1', False, 55, 85, 31)], [('chr1', False, 52, 58, 31)]]
+            multireadlets = [[('chr1', False, 25, 55, 1, 0), 
+                              ('chr1', False, 55, 85, 31, 0)],
+                             [('chr1', False, 52, 58, 31, 0)]]
             final_alignments = selected_readlet_alignments_by_coverage(
                                     multireadlets
                                 )
-            self.assertTrue(final_alignments == [('chr1', False, 52, 58, 31)])
+            self.assertTrue(final_alignments == 
+                            [('chr1', False, 52, 58, 31, 0)])
 
     unittest.main()

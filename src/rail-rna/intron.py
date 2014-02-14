@@ -39,6 +39,10 @@ STRAND.
 8. Number of nucleotides spanned by EC on the right (that is, towards the 3'
 end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
 STRAND.
+9. Match rate: the number of bases that match the reference per base of the
+aligned readlets comprising the read from which the intron was inferred.
+10. '-' if reversed complements of readlets from which intron was inferred
+aligned to forward strand; else '+'
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -65,15 +69,25 @@ the reads in a sample
 
 Format 3 (junction):
 12-column (3 required fields + 9 optional fields) BED output mimicking TopHat's
-junctions.bed, except anchor significance is also included in the name field.
-(Anchor significance of a junction is defined almost as in the MapSplice paper
+junctions.bed, except anchor significance, maximum match rate, and unique
+displacement count are also included in the name field. From the TopHat manual
+http://tophat.cbcb.umd.edu/manual.shtml: "Each junction consists of two
+connected BED blocks, where each block is as long as the maximal overhang of
+any read spanning the junction. The score is the number
+of alignments spanning the junction." Anchor significance of a junction is
+NOT defined as in the MapSplice paper
 http://nar.oxfordjournals.org/content/38/18/e178.long. Consider the set {R_i}
-of reads that span a junction J. The anchor significance of J is
-max_i min(L(A_i), L(B_i)).) From the TopHat manual
-http://tophat.cbcb.umd.edu/manual.shtml: "Each junction
-consists of two connected BED blocks, where each block is as long as the
-maximal overhang of any read spanning the junction. The score is the number of
-alignments spanning the junction."
+of reads that span a junction J. For a given read R_i, consider the two anchors
+A_i and B_i on either side of J, and let L_(A_i) and L_(B_i) be their lengths
+(in bp). The anchor significance of J is max_i min(L(A_i), L(B_i)).) Maximum
+match rate is the highest match rate from among the reads spanning a junction,
+where match rate is defined in the description of field 9 from the input above.
+Unique displacement count is the number of unique displacements of J from the
+5' end of the original read in the set {R_i}. The 5' end of the read is
+determined from the strand to which contituent readlets align: if the readlets'
+reversed complements align to the forward strand, the 5' end of the original
+read sequence is the right end; if the unaltered readlet sequences align to
+the forward strand, the 5' end of the original read sequence is the left end.
 
 OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -129,14 +143,18 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
             (start_position, end_position) and its corresponding value is a
             list (of length read_count), each of whose items is a tuple
             (sample_label, five_prime_displacement, three_prime_displacement,
-                left_EC_size, right_EC_size) associated with a read supporting
-            the candidate. Here, five_prime_displacement is the displacement of
-            the 5' end of the candidate from the 5' end of the read, while
-            three_prime_displacement is the displacement of the 3' end of
-            the candidate from the 3' end of the read. left_EC_size
-            (right_EC_size) is the number of nucleotides spanned by the EC on
-            the left (right) of the intron. Here, "left" ("right") means 
-            "towards the 5' (3') end of the read."
+                left_EC_size, right_EC_size, match_rate, reverse_strand)
+            associated with a read supporting the candidate. Here,
+            five_prime_displacement is the displacement of the 5' end of the
+            candidate from the 5' end of the read, while
+            three_prime_displacement is the displacement of the 3' end of the
+            candidate from the 3' end of the read. left_EC_size (right_EC_size)
+            is the number of nucleotides spanned by the EC on the left (right)
+            of the intron. Here, "left" ("right") means "towards the 5' (3')
+            end of the read." match_rate is the number of bases that match the
+            reference per base of the aligned readlets comprising the read from
+            which the intron was inferred. reverse_strand is is True iff the
+            readlets' reversed complements aligned to the forward strand.
         partition_start: start position (inclusive) of partition.
         partition_end: end position (exclusive) of partition.
         cluster_radius: distance from a candidate intron under examination
@@ -148,8 +166,9 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
         Return value: a list of lists, each of which corresponds to a cluster
         of candidate introns. Each item in a cluster is a tuple
         (start_position, end_position, sample_label, five_prime_displacement,
-            three_prime_displacement, left_EC_size, right_EC_size), which
-        corresponds to a read supporting a candidate intron spanning
+            three_prime_displacement, left_EC_size, right_EC_size,
+            match_rate, reverse_strand),
+        which corresponds to a read supporting a candidate intron spanning
         [start_position, end_position) in the cluster.
     """
     '''Construct list of candidate introns sorted in order of descending
@@ -188,7 +207,7 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                     clustered_introns.add((intron_size, an_end_position))
             if partition_start <= min([an_end_position 
                 for _, an_end_position in intron_cluster]) \
-                < partition_end:
+                <= partition_end:
                 '''Add a cluster iff its leftmost element lies in
                 [start_position, end_position)'''
                 intron_clusters.append(intron_cluster)
@@ -271,7 +290,7 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
             of candidate introns. Each item in a cluster is a tuple
             (start_position, end_position, sample_label, 
                 five_prime_displacement, three_prime_displacement,
-                left_EC_size, right_EC_size), which
+                left_EC_size, right_EC_size, match_rate, reverse_strand), which
             corresponds to a read supporting a candidate intron spanning
             [start_position, end_position) in the cluster.
         rname: SAM-format RNAME indicating the chromosome.
@@ -299,7 +318,7 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
             [(142451, 143128, 2.8324, 'GT', 'AG', False),
                 (142449, 143128, 3.1124, 'CT', 'AC', True)].
     """
-    start_positions, end_positions, _, _, _, _, _ = zip(*intron_cluster)
+    start_positions, end_positions, _, _, _, _, _, _, _ = zip(*intron_cluster)
     reference_length = reference_index.rname_lengths[rname]
     min_start_position = max(min(start_positions) - motif_radius, 1)
     max_start_position = min(max(start_positions) + motif_radius + 2,
@@ -406,6 +425,11 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         8. Number of nucleotides spanned by EC on the right (that is, towards
         the 3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
         FORWARD STRAND.
+        9. Match rate: the number of bases that match the reference per base of
+        the aligned readlets comprising the read from which the intron was
+        inferred.
+        10. '-' if reversed complements of readlets from which intron was
+        inferred aligned to forward strand; else '+'
 
         Hadoop output (written to output_stream)---
         Format 1 (span): tab-delimited columns, one line per read spanning a
@@ -435,18 +459,27 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
 
         Format 3 (junction):
         12-column (3 required fields + 9 optional fields) BED output mimicking
-        TopHat's junctions.bed, except anchor significance is the name field.
-        (Anchor significance of a junction is defined almost as in the
-        MapSplice paper http://nar.oxfordjournals.org/content/38/18/e178.long.
-        Consider the set {R_i} of reads that span a junction J. For a given
-        read R_i, consider the two anchors A_i and B_i on either side of J, and
-        let L_(A_i) and L_(B_i) be their lengths (in bp). Consider the set
-        {R_i} of reads that span a junction J. The anchor significance of J is
-        max_i min(L(A_i), L(B_i)).) From the TopHat manual
-        http://tophat.cbcb.umd.edu/manual.shtml:
-        "Each junction consists of two connected BED blocks, where each block
-        is as long as the maximal overhang of any read spanning the junction.
-        The score is the number of alignments spanning the junction."
+        TopHat's junctions.bed, except anchor significance, maximum match rate,
+        and unique displacement count are also included in the name field. From
+        the TopHat manual http://tophat.cbcb.umd.edu/manual.shtml: "Each
+        junction consists of two connected BED blocks, where each block is as
+        long as the maximal overhang of any read spanning the junction. The
+        score is the number of alignments spanning the junction." Anchor
+        significance of a junction is NOT defined as in the MapSplice paper
+        http://nar.oxfordjournals.org/content/38/18/e178.long. Consider the set
+        {R_i} of reads that span a junction J. For a given read R_i, consider
+        the two anchors A_i and B_i on either side of J, and let L_(A_i) and
+        L_(B_i) be their lengths (in bp). The anchor significance of J is
+        max_i min(L(A_i), L(B_i)).) Maximum match rate is the highest match
+        rate from among the reads spanning a junction, where match rate is
+        defined in the description of field 9 from the input above. Unique
+        displacement count is the number of unique displacements of J from the
+        5' end of the original read in the set {R_i}. The 5' end of the read is
+        determined from the strand to which contituent readlets align: if the
+        readlets' reversed complements align to the forward strand, the 5' end
+        of the original read sequence is the right end; if the unaltered
+        readlet sequences align to the forward strand, the 5' end of the
+        original read sequence is the left end.
 
         OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE
         1-INDEXED.
@@ -489,31 +522,27 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         if line:
             input_line_count += 1
             tokens = line.rstrip().split('\t')
-            assert len(tokens) == 8
+            assert len(tokens) == 10
             (partition_id, sample_label, pos, end_pos, five_prime_displacement,
-                three_prime_displacement, left_EC_size, right_EC_size) = tokens
+                three_prime_displacement, left_EC_size, right_EC_size, 
+                match_rate, reverse_strand) = tokens
             (pos, end_pos, five_prime_displacement,
-                three_prime_displacement, left_EC_size, right_EC_size) \
+                three_prime_displacement, left_EC_size, right_EC_size,
+                match_rate, reverse_strand) \
             = (int(pos), int(end_pos), int(five_prime_displacement),
                 int(three_prime_displacement), int(left_EC_size), 
-                int(right_EC_size))
+                int(right_EC_size), float(match_rate), True if 
+                reverse_strand == '-' else False)
             assert end_pos > pos, line
             if stranded:
                 '''If input reads are strand-specific, the partition_id has a
                 terminal '+' or '-' indicating which strand is the sense
-                strand.'''
-                reverse_strand_string = partition_id[-1]
+                strand. Remove it.'''
                 rname, partition_start, partition_end = \
                     partition.parse(partition_id[:-1], bin_size)
             else:
-                '''Make the reverse_strand_string an empty string and don't
-                worry about it.'''
-                reverse_strand_string = ''
                 rname, partition_start, partition_end = \
                     partition.parse(partition_id, bin_size)
-            '''reverse_strand below is used only if input reads are
-            strand-specific.'''
-            reverse_strand = True if reverse_strand_string == '-' else False
             assert pos >= partition_start - intron_partition_overlap and \
                 pos < partition_end + intron_partition_overlap, \
                 'Intron start %d is not in partition [%d, %d)' \
@@ -571,7 +600,8 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
-                    for _, _, sample_label, _, _, _, _ in intron_clusters[i]:
+                    for _, _, sample_label, _, _, _, _, _, _ \
+                        in intron_clusters[i]:
                         print >>output_stream, 'span\t%s\t%012d\t%012d\t' \
                             '%s\t%s\t%s' \
                             % (last_rname + ';' + motif_reverse_strand_string,
@@ -584,7 +614,8 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
                     sample_label_counts = defaultdict(int)
-                    for _, _, sample_label, _, _, _, _ in intron_clusters[i]:
+                    for _, _, sample_label, _, _, _, _, _, _\
+                        in intron_clusters[i]:
                         sample_label_counts[sample_label] += 1
                     for sample_label in sample_label_counts:
                         print >>output_stream, \
@@ -595,14 +626,25 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 sample_label_counts[sample_label])
             if output_bed:
                 '''The output bed mimics TopHat's junctions.bed, except
-                anchor significance is in the name field. Anchor
-                significance of a junction is defined almost as in the
-                MapSplice paper
+                anchor significance, maximum match rate, and unique
+                displacement count are in the name field. Anchor significance
+                of a junction is NOT defined as in the MapSplice paper
                 http://nar.oxfordjournals.org/content/38/18/e178.long.
-                Consider the set {R_i}
-                of reads that span a junction J. The anchor significance of J
-                is max_i min(L(A_i), L(B_i)). See TopHat documentation for
-                more information.'''
+                Consider the set {R_i} of reads spanning a junction J.
+                For a given read R_i, consider the two anchors A_i and B_i on
+                either side of J, and let L_(A_i) and L_(B_i) be their lengths
+                (in bp). The anchor significance of J is
+                max_i min(L(A_i), L(B_i)).) Maximum match rate is the highest
+                match rate from among the reads spanning a junction. Unique
+                displacement count is the number of unique displacements of J
+                from the 5' end of the original read in the set {R_i}. The 5'
+                end of the read is determined from the strand to which
+                contituent readlets align: if the readlets' reversed
+                complements align to the forward strand, the 5' end of the
+                original read sequence is the right end; if the unaltered
+                readlet sequences align to the forward strand, the 5' end of
+                the original read sequence is the left end. See TopHat
+                documentation for more information on junctions.bed.'''
                 for i, (start_position, end_position, z_score_sum, left_motif,
                     right_motif, motif_reverse_strand) \
                     in cluster_splice_sites.items():
@@ -612,21 +654,37 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                     junction.'''
                     left_overhang, right_overhang = 0, 0
                     read_anchor_significance = None
+                    # For counting number of unique displacements
+                    displacement_set = set()
+                    maximum_match_rate = 0
                     for (candidate_start_position, candidate_end_position,
-                            _, five_prime_displacement,
-                            three_prime_displacement, left_EC_size,
-                            right_EC_size) in intron_clusters[i]:
+                            _, candidate_five_prime_displacement,
+                            candidate_three_prime_displacement,
+                            candidate_left_EC_size,
+                            candidate_right_EC_size, candidate_match_rate,
+                            candidate_reverse_strand) in intron_clusters[i]:
+                        if candidate_reverse_strand:
+                            displacement_set.add(
+                                    candidate_three_prime_displacement
+                                )
+                        else:
+                            displacement_set.add(
+                                    candidate_five_prime_displacement
+                                )
+                        if candidate_match_rate > maximum_match_rate:
+                            maximum_match_rate = candidate_match_rate
                         read_anchor_significance = max(min(
-                                    left_EC_size, right_EC_size
+                                    candidate_left_EC_size,
+                                    candidate_right_EC_size
                                 ), read_anchor_significance)
-                        left_overhang = max(start_position \
-                                        - candidate_start_position \
-                                        + five_prime_displacement, 
-                                                left_overhang)
-                        right_overhang = max(candidate_end_position \
-                                             - end_position \
-                                             + three_prime_displacement,
-                                                right_overhang)
+                        left_overhang = max(start_position
+                                        - candidate_start_position
+                                        + candidate_five_prime_displacement, 
+                                        left_overhang)
+                        right_overhang = max(candidate_end_position
+                            - end_position
+                            + candidate_three_prime_displacement,
+                            right_overhang)
                     junction_number += 1
                     '''Print line of bed file; where a first column 'junction'
                     is inserted so the line can be distinguished from other
@@ -635,10 +693,15 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                     left_pos = start_position - left_overhang - 1
                     right_pos = end_position + right_overhang - 1
                     print >>output_stream, \
-                        'junction\t%s\t%012d\t%012d\t%d\t%d\t%s\t%d\t' \
+                        'junction\t%s\t%012d\t%012d\t' \
+                        'read_anchor_significance=%d;' \
+                        'maximum_match_rate=%.12f;' \
+                        'unique_displacement_count=%d\t%d\t%s\t%d\t' \
                         '%d\t255,0,0\t2\t%d,%d\t0,%d' \
                         % (last_rname, left_pos, right_pos,
                             read_anchor_significance,
+                            maximum_match_rate,
+                            len(displacement_set),
                             len(intron_clusters[i]),
                             motif_reverse_strand_string, left_pos, right_pos,
                             left_overhang, right_overhang, 
@@ -648,7 +711,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         if line:
             candidate_introns[(pos, end_pos)] = (sample_label,
                 five_prime_displacement, three_prime_displacement, 
-                left_EC_size, right_EC_size)
+                left_EC_size, right_EC_size, match_rate, reverse_strand)
             (last_partition_id, last_partition_start, last_partition_end, 
                 last_rname, last_reverse_strand) \
             = (partition_id, partition_start, partition_end, rname, 
@@ -710,3 +773,122 @@ elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
     import unittest
+    import shutil
+    import tempfile
+    import subprocess
+
+    class TestIntronClustersInPartition(unittest.TestCase):
+        """ Tests intron_clusters_in_partition(). """
+
+        def test_that_overlapping_introns_of_equal_size_cluster(self):
+            """ Fails if all introns are not placed in the same cluster
+            """
+            candidate_introns = {
+                    (5, 25)  : ('sample', 25, 75, 25, 75, .9, True),
+                    (4, 24)  : ('sample', 25, 75, 25, 75, .95, True),
+                    (10, 30) : ('sample2', 23, 77, 23, 77, .92, False)
+                }
+            clusters = intron_clusters_in_partition(candidate_introns,
+                1, 40, cluster_radius=10, verbose=False)
+            self.assertEquals(len(clusters), 1)
+            self.assertEquals(
+                    sorted(clusters[0]), 
+                    [(4, 24, 'sample', 25, 75, 25, 75, .95, True),
+                     (5, 25, 'sample', 25, 75, 25, 75, .9, True),
+                     (10, 30, 'sample2', 23, 77, 23, 77, .92, False)]
+                )
+
+        def test_that_overlapping_introns_of_different_size_separate(self):
+            """ Fails if introns do not separate properly into two clusters.
+            """
+            candidate_introns = {
+                    (5, 25)  : ('sample', 25, 75, 25, 75, .9, True),
+                    (4, 24)  : ('sample', 25, 75, 25, 75, .95, True),
+                    (10, 40) : ('sample2', 23, 77, 23, 77, .92, False)
+                }
+            '''The third intron above has a different size than the first two,
+            so it should be placed in its own cluster.'''
+            clusters = sorted(intron_clusters_in_partition(candidate_introns,
+                1, 40, cluster_radius=10, verbose=False), key=len)
+            self.assertEquals(len(clusters), 2)
+            self.assertEquals(
+                    sorted(clusters[0]),
+                    [(10, 40, 'sample2', 23, 77, 23, 77, .92, False)]
+                )
+            self.assertEquals(
+                    sorted(clusters[1]),
+                    [(4, 24, 'sample', 25, 75, 25, 75, .95, True), 
+                     (5, 25, 'sample', 25, 75, 25, 75, .9, True)]
+                )
+
+        def test_that_cluster_is_filtered(self):
+            """ Fails if cluster is not filtered out. 
+
+                A cluster is filtered out if its leftmost member does not lie
+                entirely in the partition. It would hopefully be caught
+                by the next partition given the partition overlap.
+            """
+            candidate_introns = {
+                    (5, 25)  : ('sample', 25, 75, 25, 75, .9, True),
+                    (4, 24)  : ('sample', 25, 75, 25, 75, .95, True),
+                    (10, 40) : ('sample2', 23, 77, 23, 77, .92, False)
+                }
+            '''Note that the partition end is set to 30 below, so the last
+            candidate intron above should be filtered out.'''
+            clusters = intron_clusters_in_partition(candidate_introns,
+                1, 30, cluster_radius=10, verbose=False)
+            self.assertEquals(len(clusters), 1)
+            self.assertEquals(
+                    sorted(clusters[0]),
+                    [(4, 24, 'sample', 25, 75, 25, 75, .95, True), 
+                     (5, 25, 'sample', 25, 75, 25, 75, .9, True)]
+                )
+
+    class TestRankedSpliceSitesFromCluster(unittest.TestCase):
+        """ Tests ranked_splice_sites_from_cluster(). """
+
+        def setUp(self):
+            """ Creates temporary directory and Bowtie index. """
+            reference_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
+                            'GTTACATAGTACATCTAGGCATACTACGTgaCATACGgaCTACGTAG' \
+                            'GTCCAGATTACGATACAAaTACGAAcTCccATAGCAaCATaCTAGac' \
+                            'CAttAaaGACTAGACTAACAGACAaAACTAGCATacGATCATGACaA' \
+                            'ACGAGATCCATATAtTTAGCAaGACTAaACGATACGATACAGTACaA' \
+                            'ATACAGaaATCAGaGCAGAAaATACAGATCAaAGCTAGCAaAAtAtA'
+            self.temp_dir_path = tempfile.mkdtemp()
+            fasta_file = os.path.join(self.temp_dir_path, 'test.fa')
+            self.bowtie_build_base = os.path.join(self.temp_dir_path, 'test')
+            fasta_stream = open(fasta_file, 'w')
+            print >>fasta_stream, '>chr1'
+            print >>fasta_stream, \
+                '\n'.join([reference_seq[i:i+50] for i in range(0, 251, 50)])
+            fasta_stream.close()
+            bowtie_build_process = subprocess.call(
+                    [args.bowtie_build_exe,
+                    fasta_file,
+                    self.bowtie_build_base],
+                    stdout=open(os.devnull, 'w'),
+                    stderr=subprocess.STDOUT
+                )
+            self.reference_index = bowtie_index.BowtieIndexReference(
+                                    self.bowtie_build_base
+                                   )
+
+        def test_that_second_line_of_reference_is_called_as_an_intron(self):
+            """ Fails if reference_seq's second line isn't called as an intron.
+            """
+            cluster = [(45, 97, 'sample', 25, 75, 25, 75, .99, True),
+                       (47, 99, 'sample', 25, 75, 25, 75, .99, True),
+                       (44, 96, 'sample', 25, 75, 25, 75, .87, True)]
+            splice_sites = ranked_splice_sites_from_cluster(
+                    self.reference_index, cluster,
+                    'chr1', _unstranded_motifs, motif_radius=3, verbose=False
+                )
+            self.assertEquals((48, 95), splice_sites[0][:2])
+            self.assertEquals(('GT', 'AG'), splice_sites[0][3:5])
+
+        def tearDown(self):
+            # Kill temporary directory
+            shutil.rmtree(self.temp_dir_path)
+
+    unittest.main()

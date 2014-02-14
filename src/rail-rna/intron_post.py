@@ -20,7 +20,8 @@ chrom/chromStart/chromEnd.
 1. chrom (chromosome name)
 2. chromStart (start position of region; 0-BASED)
 3. chromEnd (end position of region; 0-BASED)
-4. name (anchor significance)
+4. name (includes anchor significance, maximum match rate, 
+    and unique displacement count)
 5. score (number of reads supporting this intron)
 6. strand (forward is sense strand=+; reverse is sense strand=-)
 7. thickStart (same as chromStart)
@@ -101,11 +102,10 @@ while True:
         last_output_filename = output_filename
         move_temporary_file = True
     else:
-        (chrom, chrom_start, chrom_end, anchor_significance, score, strand,
+        (chrom, chrom_start, chrom_end, name, score, strand,
             thick_start, thick_end, item_rgb, block_count,
             block_sizes, block_starts) \
             = line.split('\t')
-    anchor_significance = float(anchor_significance)
     if move_temporary_file and not output_url.isLocal():
         mover = filemover.FileMover(args=args)
         # Remove .temp in output filename
@@ -140,15 +140,17 @@ while True:
             output_stream = sys.stdout
         # Write BED header
         print >>output_stream, 'track name=%sjunctions ' \
-                       'description="Rail-RNA v%s junctions on %s"' \
-                       % (chrom + '_', version.version_number,
-                            'chrom ' + chrom)
+                       'description="Rail-RNA v%s junctions%s"' \
+                       % ((chrom + '_') if args.output_by_chromosome else '',
+                            version.version_number,
+                            (' on chrom ' + chrom)
+                            if args.output_by_chromosome else '')
     '''Recall that chrom_start and chrom_end have leading 0's for proper
     sorting; remove them below.'''
-    print >>output_stream, ('%s\t'*3 + 'JUNC%08d;anchor_significance=%d\t' +
+    print >>output_stream, ('%s\t'*3 + 'JUNC%08d;%s\t' +
         '%s\t'*7 + '%s') \
         % (chrom, str(int(chrom_start)), str(int(chrom_end)), input_line_count,
-            anchor_significance, score, strand, thick_start, thick_end,
+            name, score, strand, thick_start, thick_end,
             item_rgb, block_count, block_sizes, block_starts)
     last_chrom = chrom
     input_line_count += 1
