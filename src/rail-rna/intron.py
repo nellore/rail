@@ -74,14 +74,17 @@ displacement count are also included in the name field. From the TopHat manual
 http://tophat.cbcb.umd.edu/manual.shtml: "Each junction consists of two
 connected BED blocks, where each block is as long as the maximal overhang of
 any read spanning the junction. The score is the number
-of alignments spanning the junction." Anchor significance of a junction is
-NOT defined as in the MapSplice paper
+of alignments spanning the junction." (Each line of the BED file actually
+specifies the TWO splice junctions J = (J_A, J_B) that frame an intron, and the
+statistics given in the name field pertain to the junction for that intron only
+rather than the junction across all alternative splicings.) Anchor significance
+of a splice J is NOT defined as in the MapSplice paper
 http://nar.oxfordjournals.org/content/38/18/e178.long. Consider the set {R_i}
-of reads that span a junction J. For a given read R_i, consider the two anchors
+of reads that span the splice J. For a given read R_i, consider the two anchors
 A_i and B_i on either side of J, and let L_(A_i) and L_(B_i) be their lengths
 (in bp). The anchor significance of J is max_i min(L(A_i), L(B_i)).) Maximum
-match rate is the highest match rate from among the reads spanning a junction,
-where match rate is defined in the description of field 9 from the input above.
+match rate is the highest match rate from among the reads spanning J, where 
+match rate is defined in the description of field 9 from the input above.
 Unique displacement count is the number of unique displacements of J from the
 5' end of the original read in the set {R_i}. The 5' end of the read is
 determined from the strand to which contituent readlets align: if the readlets'
@@ -461,25 +464,29 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         12-column (3 required fields + 9 optional fields) BED output mimicking
         TopHat's junctions.bed, except anchor significance, maximum match rate,
         and unique displacement count are also included in the name field. From
-        the TopHat manual http://tophat.cbcb.umd.edu/manual.shtml: "Each
+        the TopHat manualh ttp://tophat.cbcb.umd.edu/manual.shtml: "Each
         junction consists of two connected BED blocks, where each block is as
         long as the maximal overhang of any read spanning the junction. The
-        score is the number of alignments spanning the junction." Anchor
-        significance of a junction is NOT defined as in the MapSplice paper
+        score is the number of alignments spanning the junction." (Each line of
+        the BED file actually specifies the TWO splice junctions J = (J_A, J_B)
+        that frame an intron, and the statistics given in the name field
+        pertain to the junction for that intron only rather than the junction
+        across all alternative splicings.) Anchor significance of a splice J is
+        NOT defined as in the MapSplice paper
         http://nar.oxfordjournals.org/content/38/18/e178.long. Consider the set
-        {R_i} of reads that span a junction J. For a given read R_i, consider
+        {R_i} of reads that span the splice J. For a given read R_i, consider
         the two anchors A_i and B_i on either side of J, and let L_(A_i) and
         L_(B_i) be their lengths (in bp). The anchor significance of J is
         max_i min(L(A_i), L(B_i)).) Maximum match rate is the highest match
-        rate from among the reads spanning a junction, where match rate is
-        defined in the description of field 9 from the input above. Unique
-        displacement count is the number of unique displacements of J from the
-        5' end of the original read in the set {R_i}. The 5' end of the read is
-        determined from the strand to which contituent readlets align: if the
-        readlets' reversed complements align to the forward strand, the 5' end
-        of the original read sequence is the right end; if the unaltered
-        readlet sequences align to the forward strand, the 5' end of the
-        original read sequence is the left end.
+        rate from among the reads spanning J, where match rate is defined in
+        the description of field 9 from the input above. Unique displacement
+        count is the number of unique displacements of J from the 5' end of the
+        original read in the set {R_i}. The 5' end of the read is determined
+        from the strand to which contituent readlets align: if the readlets'
+        reversed complements align to the forward strand, the 5' end of the
+        original read sequence is the right end; if the unaltered readlet
+        sequences align to the forward strand, the 5' end of the original read
+        sequence is the left end.
 
         OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE
         1-INDEXED.
@@ -628,9 +635,9 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                 '''The output bed mimics TopHat's junctions.bed, except
                 anchor significance, maximum match rate, and unique
                 displacement count are in the name field. Anchor significance
-                of a junction is NOT defined as in the MapSplice paper
-                http://nar.oxfordjournals.org/content/38/18/e178.long.
-                Consider the set {R_i} of reads spanning a junction J.
+                of a splice J = (J_A, J_B) is NOT defined as in the MapSplice
+                paper http://nar.oxfordjournals.org/content/38/18/e178.long.
+                Consider the set {R_i} of reads spanning a junction for J.
                 For a given read R_i, consider the two anchors A_i and B_i on
                 either side of J, and let L_(A_i) and L_(B_i) be their lengths
                 (in bp). The anchor significance of J is
