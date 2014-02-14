@@ -157,9 +157,6 @@ class GlobalAlignment:
         an array of indices that correspond to indices of the substitution
         matrix---also set in the constructor.'''
         self.support_code = """ 
-                        #include <string.h>
-                        #include <ctype.h>
-
                         int* integer_sequence(const char* seq, int length) {
                             int i;
                             int* int_seq = (int *)malloc(sizeof(int)*length);
