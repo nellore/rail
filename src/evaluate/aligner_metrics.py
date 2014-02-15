@@ -72,9 +72,10 @@ if __name__ == '__main__':
     # Print file's docstring if -h is invoked
     parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--true-junctions-bed', type=str, required=True, 
+    parser.add_argument('-t', '--true-junctions-bed', type=str, required=True, 
         help='Full path of BED file containing true junctions')
-    parser.add_argument('--retrieved-junctions-bed', type=str, required=True, 
+    parser.add_argument('-r', '--retrieved-junctions-bed', type=str,
+        required=True, 
         help='Full path of BED file containing junctions retrieved by aligner')
     args = parser.parse_args(sys.argv[1:])
     with open(args.true_junctions_bed) as true_junctions_bed_stream:

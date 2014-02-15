@@ -660,7 +660,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                     '''Identify longest read overhangs on either side of splice
                     junction.'''
                     left_overhang, right_overhang = 0, 0
-                    read_anchor_significance = None
+                    anchor_significance = None
                     # For counting number of unique displacements
                     displacement_set = set()
                     maximum_match_rate = 0
@@ -680,10 +680,10 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 )
                         if candidate_match_rate > maximum_match_rate:
                             maximum_match_rate = candidate_match_rate
-                        read_anchor_significance = max(min(
+                        anchor_signficance = max(min(
                                     candidate_left_EC_size,
                                     candidate_right_EC_size
-                                ), read_anchor_significance)
+                                ), anchor_signficance)
                         left_overhang = max(start_position
                                         - candidate_start_position
                                         + candidate_five_prime_displacement, 
@@ -701,12 +701,12 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                     right_pos = end_position + right_overhang - 1
                     print >>output_stream, \
                         'junction\t%s\t%012d\t%012d\t' \
-                        'read_anchor_significance=%d;' \
+                        'anchor_significance=%d;' \
                         'maximum_match_rate=%.12f;' \
                         'unique_displacement_count=%d\t%d\t%s\t%d\t' \
                         '%d\t255,0,0\t2\t%d,%d\t0,%d' \
                         % (last_rname, left_pos, right_pos,
-                            read_anchor_significance,
+                            anchor_signficance,
                             maximum_match_rate,
                             len(displacement_set),
                             len(intron_clusters[i]),
