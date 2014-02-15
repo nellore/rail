@@ -353,5 +353,6 @@ if __name__ == '__main__':
                 best_recall = point_and_threshold[0]
                 best_precision = point_and_threshold[1]
                 best_point_and_threshold = point_and_threshold
-        print '%s\t%s\t%.12f\t%.12f' % (stat, str(best_point_and_threshold[-1]),
-                                            best_precision, best_recall)
+        print '%s\t%s\t%.12f\t%.12f' % (stat, 
+                                        str(best_point_and_threshold[-1]),
+                                        best_precision, best_recall)
