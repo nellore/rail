@@ -683,7 +683,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         anchor_signficance = max(min(
                                     candidate_left_EC_size,
                                     candidate_right_EC_size
-                                ), anchor_signficance)
+                                ), anchor_significance)
                         left_overhang = max(start_position
                                         - candidate_start_position
                                         + candidate_five_prime_displacement, 
