@@ -680,7 +680,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 )
                         if candidate_match_rate > maximum_match_rate:
                             maximum_match_rate = candidate_match_rate
-                        anchor_signficance = max(min(
+                        anchor_significance = max(min(
                                     candidate_left_EC_size,
                                     candidate_right_EC_size
                                 ), anchor_significance)
@@ -706,7 +706,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         'unique_displacement_count=%d\t%d\t%s\t%d\t' \
                         '%d\t255,0,0\t2\t%d,%d\t0,%d' \
                         % (last_rname, left_pos, right_pos,
-                            anchor_signficance,
+                            anchor_significance,
                             maximum_match_rate,
                             len(displacement_set),
                             len(intron_clusters[i]),
