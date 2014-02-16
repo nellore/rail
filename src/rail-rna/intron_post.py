@@ -21,7 +21,7 @@ chrom/chromStart/chromEnd.
 2. chromStart (start position of region; 0-BASED)
 3. chromEnd (end position of region; 0-BASED)
 4. name (includes anchor significance, maximum match rate, 
-    and unique displacement count)
+    unique displacement count, and motif probability)
 5. score (number of reads supporting this intron)
 6. strand (forward is sense strand=+; reverse is sense strand=-)
 7. thickStart (same as chromStart)
