@@ -247,7 +247,7 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
     raise RuntimeError('For loop should never be completed.')
 
 def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
-    rname, motifs, motif_radius=1, verbose=False):
+    rname, motifs, motif_radius=1, PPT_search_window_size=50, verbose=False):
     """ Ranks possible splice sites for a cluster using donor/acceptor motifs.
 
         Consider the following cluster of three candidate introns for which the
@@ -376,9 +376,46 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
                     - mean_start_position) / float(stdev_start_position) \
                     + abs(right_motif_end_position - mean_end_position) / \
                     float(stdev_end_position)
+                if motif[2]:
+                    '''If reverse strand, 3' end of intron is on left, and
+                    in the reference, the bases corresponding to the PPT are
+                    A and G.'''
+                    PPT_search_window = reference_index.get_stretch(rname,
+                                                left_motif_start_position,
+                                                min(right_motif_end_position
+                                                - left_motif_start_position,
+                                                     PPT_search_window_size)
+                                            )
+                    PPT_bases = 'AG'
+                else:
+                    '''If the intron sequence is on the forward strand, the 3'
+                    end of the intron is on the right, and in the reference,
+                    the bases corresponding to the PPT are C and T.'''
+                    PPT_search_window = reference_index.get_stretch(rname,
+                                            max(left_motif_start_position,
+                                                    right_motif_end_position
+                                                    - PPT_search_window_size),
+                                            PPT_search_window_size
+                                        )
+                    PPT_bases = 'TC'
+                PPT_length = 0
+                max_PPT_length = 0
+                pyrimidine_count = 0
+                for base in PPT_search_window:
+                    if base in PPT_bases:
+                        PPT_length += 1
+                        pyrimidine_count += 1
+                    else:
+                        max_PPT_length = max(PPT_length, max_PPT_length)
+                        PPT_length = 0
+                pyrimidine_fraction = float(pyrimidine_count) \
+                                        / PPT_search_window_size
+                max_PPT_length = max(PPT_length, max_PPT_length)
                 positions_and_z_scores.append((left_motif_start_position,
                                                 right_motif_end_position,
-                                                z_score_sum) + motif)
+                                                z_score_sum) + motif + 
+                                                (max_PPT_length,
+                                                    pyrimidine_fraction))
         # Sort all matches of same priority (rank) by z-score sum
         positions_and_z_scores.sort(
                 key=lambda positions_and_z_score: positions_and_z_score[2]
@@ -632,7 +669,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         motif_counts[i] = len(ranked_splice_sites)
             if per_span:
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif, motif_reverse_strand) \
+                    right_motif, motif_reverse_strand, _, _) \
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
@@ -645,7 +682,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 left_motif, right_motif, sample_label)
             if per_site:
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif, motif_reverse_strand) \
+                    right_motif, motif_reverse_strand, _, _) \
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
@@ -689,7 +726,8 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                 defined as 1 / (N_L * N_R).See TopHat documentation for more
                 information on junctions.bed.'''
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif, motif_reverse_strand) \
+                            right_motif, motif_reverse_strand, PPT_length, 
+                            pyrimidine_fraction) \
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
@@ -740,7 +778,9 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         'anchor_significance=%d;' \
                         'maximum_match_rate=%.12f;' \
                         'unique_displacement_count=%d;' \
-                        'motif_probability=%.12f' \
+                        'motif_probability=%.12f;' \
+                        'PPT_length=%d;' \
+                        'pyrimidine_fraction=%.12f' \
                         '\t%d\t%s\t%d\t' \
                         '%d\t255,0,0\t2\t%d,%d\t0,%d' \
                         % (last_rname, left_pos, right_pos,
@@ -748,6 +788,8 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             maximum_match_rate,
                             len(displacement_set),
                             (1. / motif_counts[i]),
+                            PPT_length,
+                            pyrimidine_fraction,
                             len(intron_clusters[i]),
                             motif_reverse_strand_string, left_pos, right_pos,
                             left_overhang, right_overhang, 
