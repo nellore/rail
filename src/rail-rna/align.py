@@ -1074,6 +1074,10 @@ def selected_readlet_alignments_by_coverage(readlets):
         1 / K_i to the coverage at B. The algo then selects the j for which
         R_ij spans the region with the highest coverage, where a region's
         coverage is computed by summing the coverages over all its bases.
+        If there is more than one such j, the corresponding R_ij are
+        recorded in a new, typically smaller subset of possible multireadlet
+        alignments. selected_readlet_alignments_by_distance() is then applied
+        to the narrowed set of alignments for all readlets to resolve ties.
 
         readlets: a list whose items {R_i} correspond to the aligned readlets
             from a given read. Each R_i is itself a list of the possible
@@ -1098,13 +1102,13 @@ def selected_readlet_alignments_by_coverage(readlets):
                     = coverage[(rname, reverse_strand)].get(
                             covered_base_pos, 0
                         ) + coverage_unit
-    final_readlets = []
+    filtered_readlets = []
     '''Choose alignment of multireadlet with highest total coverage. If there
-    is a tie among top alignments, discard multireadlet.'''
+    is a tie among top alignments, .'''
     for multireadlet in readlets:
         assert len(multireadlet) >= 1
         if len(multireadlet) == 1:
-            final_readlets.append(multireadlet[0])
+            filtered_readlets.append([multireadlet[0]])
             continue
         alignments = []
         for (rname, reverse_strand, pos, end_pos,
@@ -1116,11 +1120,16 @@ def selected_readlet_alignments_by_coverage(readlets):
             alignments.append((readlet_coverage, (rname, reverse_strand, pos,
                                                     end_pos, displacement, 
                                                     mismatch_count)))
+        # Find highest-coverage alignments
         alignments.sort(reverse=True)
-        if not (alignments[1][0] == alignments[0][0]):
-            # Add alignment iff there is no tie in highest coverage
-            final_readlets.append(alignments[0][1])
-    return final_readlets
+        highest_coverage_alignments = [alignments[0][1]]
+        for alignment in alignments[1:]:
+            if alignment[0] == alignments[0][0]:
+                highest_coverage_alignments.append(alignment[1])
+            else:
+                break
+        filtered_readlets.append(highest_coverage_alignments)
+    return selected_readlet_alignments_by_distance(filtered_readlets)
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
@@ -1131,7 +1140,7 @@ class BowtieOutputThread(threading.Thread):
         splice_sam=True, verbose=False, bin_size=10000, min_intron_size=5,
         min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
         max_intron_size=100000, intron_partition_overlap=20,
-        assign_multireadlets_by_coverage=False,
+        assign_multireadlets_by_distance=False,
         search_for_caps=True, min_cap_query_size=8,
         cap_search_window_size=1000,
         global_alignment=GlobalAlignment(), 
@@ -1185,9 +1194,9 @@ class BowtieOutputThread(threading.Thread):
             intron_partition_overlap: number of bases to subtract from
                 reference start position of intron when determining genome
                 partition it is in.
-            assign_multireadlets_by_coverage: True iff multireadlet alignments
-                should be selected based on readlet coverage via
-                selected_readlet_alignments_by_coverage(). False iff
+            assign_multireadlets_by_distance: False iff multireadlet alignments
+                should be selected primarily based on readlet coverage via
+                selected_readlet_alignments_by_coverage(). True iff
                 multireadlet alignments should be selected based on distance to
                 unireadlets via selected_readlet_alignments_by_distance().
             search_for_caps: True iff reference should be searched for the
@@ -1226,8 +1235,8 @@ class BowtieOutputThread(threading.Thread):
         self.search_for_caps = search_for_caps
         self.min_cap_query_size = min_cap_query_size
         self.cap_search_window_size = cap_search_window_size
-        self.assign_multireadlets_by_coverage \
-            = assign_multireadlets_by_coverage
+        self.assign_multireadlets_by_distance \
+            = assign_multireadlets_by_distance
         self.intron_partition_overlap = intron_partition_overlap
         self.global_alignment = global_alignment
 
@@ -1510,15 +1519,15 @@ class BowtieOutputThread(threading.Thread):
                         last_paired_label) in collected_readlets:
                         '''Choose algorithm for selecting alignments from
                         multireadlets.'''
-                        if self.assign_multireadlets_by_coverage:
+                        if self.assign_multireadlets_by_distance:
                             filtered_alignments \
-                                = selected_readlet_alignments_by_coverage(
+                                = selected_readlet_alignments_by_distance(
                                         collected_readlets[(last_qname,
                                                             last_paired_label)]
                                     )
                         else:
                             filtered_alignments \
-                                = selected_readlet_alignments_by_distance(
+                                = selected_readlet_alignments_by_coverage(
                                         collected_readlets[(last_qname,
                                                             last_paired_label)]
                                     )
@@ -1747,7 +1756,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
     max_readlet_size=25, readlet_interval=5, capping_fraction=.75,
     min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
     min_intron_size=5, max_intron_size=100000, intron_partition_overlap=20, 
-    assign_multireadlets_by_coverage=False,
+    assign_multireadlets_by_distance=False,
     global_alignment=GlobalAlignment(), report_multiplier=1.2,
     search_for_caps=True, min_cap_query_size=8, cap_search_window_size=1000):
     """ Runs Rail-RNA-align.
@@ -1910,9 +1919,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
         intron_partition_overlap: number of bases to subtract from
             reference start position of intron when determining genome
             partition it is in.
-        assign_multireadlets_by_coverage: True iff multireadlet alignments
+        assign_multireadlets_by_distance: False iff multireadlet alignments
             should be selected based on readlet coverage via
-            selected_readlet_alignments_by_coverage(). False iff multireadlet
+            selected_readlet_alignments_by_coverage(). True iff multireadlet
             alignments should be selected based on distance to unireadlets
             via selected_readlet_alignments_by_distance().
         search_for_caps: True iff reference should be searched for the segment
@@ -2011,7 +2020,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
             max_intron_size=max_intron_size,
             stranded=stranded,
             intron_partition_overlap=intron_partition_overlap,
-            assign_multireadlets_by_coverage=assign_multireadlets_by_coverage,
+            assign_multireadlets_by_distance=assign_multireadlets_by_distance,
             search_for_caps=search_for_caps,
             min_cap_query_size=min_cap_query_size,
             cap_search_window_size=cap_search_window_size,
@@ -2112,15 +2121,14 @@ if __name__ == '__main__':
              '(length of unmapped region), the unmapped region is '
              'incorporated into a single EC spanning the two original ECs '
              'via DP filling')
-    parser.add_argument('--assign-multireadlets-by-coverage',
+    parser.add_argument('--assign-multireadlets-by-distance',
         action='store_const',
         const=True,
         default=False, 
-        help='Use readlet coverage to determine which alignment of '
-             'multireadlet should be selected. If True, alignment that spans '
-             'region with highest coverage is selected. If False, alignment '
-             'of multireadlet closest to set of unireadlets is chosen '
-             'instead.')
+        help='Don\'t use readlet coverage to determine which alignment of '
+             'multireadlet should be selected. Instead, choose alignment of '
+             'multireadlet closest to set of unireadlets. If False, alignment '
+             'that spans region with highest coverage is selected.')
     parser.add_argument('--do-not-search_for_caps',
         action='store_const',
         const=True,
@@ -2197,7 +2205,7 @@ if __name__ == '__main__' and not args.test:
         min_seq_similarity=args.min_seq_similarity, 
         max_intron_size=args.max_intron_size,
         intron_partition_overlap=args.intron_partition_overlap,
-        assign_multireadlets_by_coverage=args.assign_multireadlets_by_coverage,
+        assign_multireadlets_by_distance=args.assign_multireadlets_by_distance,
         search_for_caps=(not args.do_not_search_for_caps),
         min_cap_query_size=args.min_cap_query_size,
         cap_search_window_size=args.cap_search_window_size,

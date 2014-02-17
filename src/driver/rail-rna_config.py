@@ -98,7 +98,7 @@ def addArgs(parser):
              'precedes the first EC or follows the last EC smaller than this '
              'size')
     parser.add_argument('--cap-search-window-size', type=int, required=False,
-        default=1000,
+        default=0,
         help='The size (in bp) of the reference subsequence in which to '
              'search for a cap --- i.e., a segment of a read that follows '
              'the last EC or precedes the first EC.')
@@ -128,7 +128,7 @@ class Rail_RNAConfig(object):
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
-        self._bowtieArgs = args.bowtie_args or "-v 1 -k 40 -m 40"
+        self._bowtieArgs = args.bowtie_args or "-v 1 -a -m 40"
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)

@@ -64,7 +64,6 @@ class AlignStep(pipeline.Step):
             python %%BASE%%/src/rail-rna/align.py
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --bowtie-exe=%%BOWTIE%%
-                --assign-multireadlets-by-coverage
                 --max-readlet-size %d 
                 --readlet-interval %d 
                 --partition-length %d
