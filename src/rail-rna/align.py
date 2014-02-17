@@ -1528,9 +1528,11 @@ class BowtieOutputThread(threading.Thread):
                             for alignment in filtered_alignments])
                         mismatched_base_count = sum([alignment[-1]
                             for alignment in filtered_alignments])
-                        match_rate = (aligned_base_count 
-                                         - float(mismatched_base_count)) \
-                                        / aligned_base_count
+                        try:
+                            match_rate = (aligned_base_count 
+                                             - float(mismatched_base_count)) \
+                                            / aligned_base_count
+                        except ZeroDivisionError: match_rate = 0
                         exons, introns = exons_and_introns_from_read(
                             self.reference_index, last_read_seq,
                             [alignment[:-1] 
