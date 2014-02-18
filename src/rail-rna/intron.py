@@ -147,9 +147,7 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
         read_count. A cluster is formed by associating a given candidate C
         under examination with candidates {C_i} of the same size that lie
         within min(intron_size, cluster_radius) bases of C. The {C_i} are then
-        removed from the lineup, and the next candidate is examined. The
-        algorithm also filters out every cluster whose leftmost intron is not
-        wholly within [partition_start, partition_end).
+        removed from the lineup, and the next candidate is examined.
         
         candidate_introns: a dictionary. Each key is a tuple
             (start_position, end_position) and its corresponding value is a
@@ -172,8 +170,8 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
         cluster_radius: distance from a candidate intron under examination
             within which to search for candidate introns in the same cluster.
             See above for a detailed description.
-        verbose: True iff counts of possible splice junctions, clusters, and
-            filtered clusters should be written to stderr.
+        verbose: True iff counts of possible splice junctions and clusters 
+            should be written to stderr.
 
         Return value: a list of lists, each of which corresponds to a cluster
         of candidate introns. Each item in a cluster is a tuple
@@ -199,7 +197,6 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
     clustered_introns = set()
     intron_clusters = []
     total_cluster_count = 0
-    filtered_cluster_count = 0
     for _, intron_size, end_position in candidate_intron_list:
         if (intron_size, end_position) not in clustered_introns:
             current_cluster_radius = min(intron_size, cluster_radius)
@@ -217,21 +214,13 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                     into the current cluster.'''
                     intron_cluster.append((intron_size, an_end_position))
                     clustered_introns.add((intron_size, an_end_position))
-            if partition_start <= min([an_end_position 
-                for _, an_end_position in intron_cluster]) \
-                <= partition_end:
-                '''Add a cluster iff its leftmost element lies in
-                [start_position, end_position)'''
-                intron_clusters.append(intron_cluster)
-            else:
-                filtered_cluster_count += 1
+            intron_clusters.append(intron_cluster)
             assert len(clustered_introns) <= candidate_intron_count
             if len(clustered_introns) == candidate_intron_count:
                 if verbose:
                     print >> sys.stderr, '%d possible splice junction(s) ' \
-                        'clustered down to %d; then %d cluster(s) ' \
-                        'filtered out.' % (candidate_intron_count, 
-                            total_cluster_count, filtered_cluster_count)
+                        'clustered down to %d.' % (candidate_intron_count, 
+                            total_cluster_count)
                 # Collect reads supporting cluster
                 reads_for_intron_clusters = []
                 for intron_cluster in intron_clusters:
@@ -910,29 +899,6 @@ elif __name__ == '__main__':
                 )
             self.assertEquals(
                     sorted(clusters[1]),
-                    [(4, 24, 'sample', 25, 75, 25, 75, .95, True), 
-                     (5, 25, 'sample', 25, 75, 25, 75, .9, True)]
-                )
-
-        def test_that_cluster_is_filtered(self):
-            """ Fails if cluster is not filtered out. 
-
-                A cluster is filtered out if its leftmost member does not lie
-                entirely in the partition. It would hopefully be caught
-                by the next partition given the partition overlap.
-            """
-            candidate_introns = {
-                    (5, 25)  : ('sample', 25, 75, 25, 75, .9, True),
-                    (4, 24)  : ('sample', 25, 75, 25, 75, .95, True),
-                    (10, 40) : ('sample2', 23, 77, 23, 77, .92, False)
-                }
-            '''Note that the partition end is set to 30 below, so the last
-            candidate intron above should be filtered out.'''
-            clusters = intron_clusters_in_partition(candidate_introns,
-                1, 30, cluster_radius=10, verbose=False)
-            self.assertEquals(len(clusters), 1)
-            self.assertEquals(
-                    sorted(clusters[0]),
                     [(4, 24, 'sample', 25, 75, 25, 75, .95, True), 
                      (5, 25, 'sample', 25, 75, 25, 75, .9, True)]
                 )
