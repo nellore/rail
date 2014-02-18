@@ -24,7 +24,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--partition-length', metavar='INT', type=int, default=30000, help='Size of genome partitions to use.')
     parser.add_argument(\
-        '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
+        '--cluster-radius', metavar='INT', type=int, default="0", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
         '--intron-partition-overlap', metavar='INT', type=int, default="20", help='# of nucleotides of overlap between intron-finding partitions.')
     parser.add_argument(\
@@ -88,7 +88,7 @@ def addArgs(parser):
         action='store_const',
         const=True,
         default=False,
-        help='Ordinarily, reference is search for the segment of a read (a '
+        help='Ordinarily, reference is searched for the segment of a read (a '
              'cap) that precedes the first EC and the cap that follows the '
              'last EC. Such caps are subsequently added as ECs themselves. '
              'Use this command-line parameter to turn the feature off')

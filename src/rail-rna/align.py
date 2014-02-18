@@ -2133,7 +2133,7 @@ if __name__ == '__main__':
         action='store_const',
         const=True,
         default=False,
-        help='Ordinarily, reference is search for the segment of a read (a '
+        help='Ordinarily, reference is searched for the segment of a read (a '
              'cap) that precedes the first EC and the cap that follows the '
              'last EC. Such caps are subsequently added as ECs themselves. '
              'Use this command-line parameter to turn the feature off')
