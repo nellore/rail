@@ -98,7 +98,7 @@ def addArgs(parser):
              'precedes the first EC or follows the last EC smaller than this '
              'size')
     parser.add_argument('--cap-search-window-size', type=int, required=False,
-        default=0,
+        default=1000,
         help='The size (in bp) of the reference subsequence in which to '
              'search for a cap --- i.e., a segment of a read that follows '
              'the last EC or precedes the first EC.')
