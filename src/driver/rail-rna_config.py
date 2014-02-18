@@ -22,11 +22,11 @@ def addArgs(parser):
     parser.add_argument(\
         '--capping-fraction', metavar='FRACTION', type=float, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\
-        '--partition-length', metavar='INT', type=int, default=30000, help='Size of genome partitions to use.')
+        '--partition-length', metavar='INT', type=int, default=10000000, help='Size of genome partitions to use.')
     parser.add_argument(\
-        '--cluster-radius', metavar='INT', type=int, default="0", help='For clustering candidate introns into junctions.')
+        '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
-        '--intron-partition-overlap', metavar='INT', type=int, default="20", help='# of nucleotides of overlap between intron-finding partitions.')
+        '--intron-partition-overlap', metavar='INT', type=int, default="50", help='# of nucleotides of overlap between intron-finding partitions.')
     parser.add_argument(\
         '--bowtie-exe', metavar='STR', type=str, help='Bowtie executable to use. Must exist at this path on all the cluster nodes.')
     parser.add_argument(\
@@ -128,7 +128,7 @@ class Rail_RNAConfig(object):
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
-        self._bowtieArgs = args.bowtie_args or "-v 1 -a -m 40"
+        self._bowtieArgs = args.bowtie_args or "-v 0 -a -m 40"
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)
