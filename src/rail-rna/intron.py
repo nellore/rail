@@ -235,6 +235,20 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                 return reads_for_intron_clusters
     raise RuntimeError('For loop should never be completed.')
 
+def discrete_fourier_transform(signal, frequency):
+    signal_size = len(signal)
+    return sum(
+                [signal[pos]*np.exp(-2j*np.pi*pos*frequency/signal_size)
+                    for pos in xrange(signal_size)]
+            )
+
+def signal_from_sequence(sequence, signal_base):
+    signal = [0]*len(sequence)
+    for i, base in enumerate(sequence):
+        if signal_base == base:
+            signal[i] = 1
+    return signal
+
 def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
     rname, motifs, motif_radius=1, PPT_search_window_size=50, verbose=False):
     """ Ranks possible splice sites for a cluster using donor/acceptor motifs.
@@ -387,6 +401,32 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
                                             PPT_search_window_size
                                         )
                     PPT_bases = 'TC'
+                '''Compute periodicity strength as in 
+                http://www.sciencedirect.com/science/article/pii/
+                S0022519307001543' Changchuan Yin, Stephen S.-T. Yau.
+                Prediction of protein coding regions by the 3-base periodicity
+                analysis of a DNA sequence'''
+                intron_sequence = reference_index.get_stretch(
+                                            rname,
+                                            left_motif_start_position,
+                                            min(right_motif_end_position
+                                                - left_motif_start_position,
+                                                5000)
+                                            )
+                intron_sequence_size = len(intron_sequence)
+                periodicity_strength = 0
+                for base in 'A', 'T', 'C', 'G':
+                    periodicity_strength += \
+                        np.abs(
+                                discrete_fourier_transform(
+                                        signal_from_sequence(
+                                               intron_sequence, base
+                                            ),
+                                        float(intron_sequence_size) / 3 
+                                    )
+                                )**2
+                periodicity_strength = float(periodicity_strength) / \
+                                            intron_sequence_size
                 PPT_length = 0
                 max_PPT_length = 0
                 pyrimidine_count = 0
@@ -404,7 +444,8 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
                                                 right_motif_end_position,
                                                 z_score_sum) + motif + 
                                                 (max_PPT_length,
-                                                    pyrimidine_fraction))
+                                                    pyrimidine_fraction,
+                                                    periodicity_strength))
         # Sort all matches of same priority (rank) by z-score sum
         positions_and_z_scores.sort(
                 key=lambda positions_and_z_score: positions_and_z_score[2]
@@ -658,7 +699,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         motif_counts[i] = len(ranked_splice_sites)
             if per_span:
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif, motif_reverse_strand, _, _) \
+                    right_motif, motif_reverse_strand, _, _, _) \
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
@@ -671,7 +712,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 left_motif, right_motif, sample_label)
             if per_site:
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif, motif_reverse_strand, _, _) \
+                    right_motif, motif_reverse_strand, _, _, _) \
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
@@ -716,7 +757,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                 information on junctions.bed.'''
                 for i, (start_position, end_position, z_score_sum, left_motif,
                             right_motif, motif_reverse_strand, PPT_length, 
-                            pyrimidine_fraction) \
+                            pyrimidine_fraction, periodicity_strength) \
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
@@ -769,7 +810,8 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         'unique_displacement_count=%d;' \
                         'motif_probability=%.12f;' \
                         'PPT_length=%d;' \
-                        'pyrimidine_fraction=%.12f' \
+                        'pyrimidine_fraction=%.12f;' \
+                        'periodicity_strength=%.12f' \
                         '\t%d\t%s\t%d\t' \
                         '%d\t255,0,0\t2\t%d,%d\t0,%d' \
                         % (last_rname, left_pos, right_pos,
@@ -779,6 +821,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             (1. / motif_counts[i]),
                             PPT_length,
                             pyrimidine_fraction,
+                            -periodicity_strength,
                             len(intron_clusters[i]),
                             motif_reverse_strand_string, left_pos, right_pos,
                             left_overhang, right_overhang, 
