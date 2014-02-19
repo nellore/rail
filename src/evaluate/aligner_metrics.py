@@ -41,7 +41,7 @@ def junctions_from_bed_stream(bed_stream):
     junctions = {}
     for line in bed_stream:
         tokens = line.rstrip().split('\t')
-        if len(tokens) != 12:
+        if len(tokens) < 12:
             continue
         chrom = tokens[0]
         chrom_start = int(tokens[1])
