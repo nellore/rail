@@ -56,12 +56,10 @@ def introns_from_bed_stream(bed_stream):
             int(block_sizes[-1])
         except ValueError:
             block_sizes = block_sizes[:-1]
-            print block_sizes
         try:
             int(block_starts[-1])
         except ValueError:
             block_starts = block_starts[:-1]
-            print block_starts
         block_count = len(block_sizes)
         if block_count < 2:
             # No introns
