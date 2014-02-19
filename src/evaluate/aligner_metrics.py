@@ -48,8 +48,8 @@ def junctions_from_bed_stream(bed_stream):
         chrom_end = int(tokens[2])
         if chrom not in junctions:
             junctions[chrom] = set()
-        block_sizes = tokens[-2].split(',')
-        block_starts = tokens[-1].split(',')
+        block_sizes = tokens[10].split(',')
+        block_starts = tokens[11].split(',')
         # Handle trailing commas
         try:
             int(block_sizes[-1])

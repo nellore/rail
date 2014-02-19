@@ -118,8 +118,8 @@ def introns_from_bed_stream(bed_stream, read_stats=False):
         if chrom not in introns:
             # Use set so there are no duplicate introns when reading Flux data
             introns[chrom] = ([] if read_stats else set())
-        block_sizes = tokens[-2].split(',')
-        block_starts = tokens[-1].split(',')
+        block_sizes = tokens[10].split(',')
+        block_starts = tokens[11].split(',')
         # Handle trailing commas
         try:
             int(block_sizes[-1])
