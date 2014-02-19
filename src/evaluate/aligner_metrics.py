@@ -50,6 +50,15 @@ def junctions_from_bed_stream(bed_stream):
             junctions[chrom] = set()
         block_sizes = tokens[-2].split(',')
         block_starts = tokens[-1].split(',')
+        # Handle trailing commas
+        try:
+            int(block_sizes[-1])
+        except ValueError:
+            block_sizes = block_sizes[:-1]
+        try:
+            int(block_starts[-1])
+        except ValueError:
+            block_starts = block_starts[:-1]
         block_count = len(block_sizes)
         if block_count < 2:
             # No introns
