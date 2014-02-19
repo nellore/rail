@@ -411,7 +411,7 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
                                             left_motif_start_position,
                                             min(right_motif_end_position
                                                 - left_motif_start_position,
-                                                5000)
+                                                1000)
                                             )
                 intron_sequence_size = len(intron_sequence)
                 periodicity_strength = 0
