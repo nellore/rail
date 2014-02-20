@@ -111,6 +111,7 @@ import sys
 import os
 import site
 import threading
+import copy
 import string
 import tempfile
 import atexit
@@ -997,6 +998,8 @@ def selected_readlet_alignments_by_distance(readlets):
 
         argmax_j max_k ( min(E_(U_k), E_(M_ij)) - max(S_(U_k), S_(M_ij)) ) .
 
+        After multireadlet alignments are chosen, the function returns only
+        those alignments from the strand that has accrued the most alignments.
         If there are no unireadlets, the algorithm returns an empty list of
         alignments.
 
@@ -1011,31 +1014,25 @@ def selected_readlet_alignments_by_distance(readlets):
                 mismatch_count).
     """
     # Final readlets is first populated with unireadlets
-    final_readlets = []
+    unireadlets = {}
     multireadlets = []
     for readlet in readlets:
         if len(readlet) == 1:
-            # Add unireadlet
-            final_readlets.append(readlet[0])
+            # Add unireadlet, where the key is (rname, reverse_strand)
+            if (readlet[0][0], readlet[0][1]) not in unireadlets:
+                unireadlets[(readlet[0][0], readlet[0][1])] = []
+            unireadlets[(readlet[0][0], readlet[0][1])].append(readlet[0])
         else:
             multireadlets.append(readlet)
-    if len(final_readlets) == 0:
+    if len(unireadlets.keys()) == 0:
         '''If there are no unireadlets, the algo doesn't work, so throw out
         read by returning an empty list.'''
         return []
     if len(multireadlets) == 0:
         '''If there are no multireadlets, no selection has to be performed,
         so just return alignments immediately.'''
-        return final_readlets
-    # Store unireadlets in dictionary for fast lookups
-    unireadlets = {}
-    for (rname, reverse_strand, pos, end_pos,
-            displacement, mismatch_count) in final_readlets:
-        if (rname, reverse_strand) not in unireadlets:
-            unireadlets[(rname, reverse_strand)] = []
-        unireadlets[(rname, reverse_strand)].append(
-                (pos, end_pos, displacement, mismatch_count)
-            )
+        return sorted(unireadlets.values(), key=len, reverse=True)[0]
+    final_readlets = copy.deepcopy(unireadlets)
     # Find multireadlet alignment with "closest" unireadlet
     for multireadlet in multireadlets:
         last_overlap = None
@@ -1045,14 +1042,15 @@ def selected_readlet_alignments_by_distance(readlets):
             if (rname, reverse_strand) not in unireadlets: continue
             overlap = max([min(end_pos, compared_end_pos)
                             - max(pos, compared_pos)
-                            for compared_pos, compared_end_pos, _, _
+                            for _, _, compared_pos, compared_end_pos, _, _
                             in unireadlets[(rname, reverse_strand)]])
             if last_overlap is None or overlap > last_overlap:
                 alignment = (rname, reverse_strand, pos, end_pos,
                                 displacement, mismatch_count)
             last_overlap = overlap
-        if alignment is not None: final_readlets.append(alignment)
-    return final_readlets
+        if alignment is not None:
+            final_readlets[(alignment[0], alignment[1])].append(alignment)
+    return sorted(final_readlets.values(), key=len, reverse=True)[0]
 
 def selected_readlet_alignments_by_coverage(readlets):
     """ Selects multireadlet alignment that spans region with highest coverage.
@@ -1078,6 +1076,8 @@ def selected_readlet_alignments_by_coverage(readlets):
         recorded in a new, typically smaller subset of possible multireadlet
         alignments. selected_readlet_alignments_by_distance() is then applied
         to the narrowed set of alignments for all readlets to resolve ties.
+        After multireadlet alignments are chosen, the function returns only
+        those alignments from the strand that has accrued the most alignments.
 
         readlets: a list whose items {R_i} correspond to the aligned readlets
             from a given read. Each R_i is itself a list of the possible
