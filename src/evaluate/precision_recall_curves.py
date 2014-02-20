@@ -146,11 +146,12 @@ def introns_from_bed_stream(bed_stream, read_stats=False):
         # Final block characterizes junction on right side of intron
         junctions.append(chrom_start + int(block_starts[-1]))
         # Now associate junctions to call introns
-        for i in xrange(len(junctions) - 1):
+        for i in xrange(len(junctions)/2):
             if read_stats:
-                introns[chrom].append((junctions[i], junctions[i+1], stats))
+                introns[chrom].append((junctions[2*i], junctions[2*i+1],
+                                            stats))
             else:
-                introns[chrom].add((junctions[i], junctions[i+1]))
+                introns[chrom].add((junctions[2*i], junctions[2*i+1]))
     if read_stats:
         for chrom in introns:
             introns[chrom].sort()

@@ -76,8 +76,8 @@ def introns_from_bed_stream(bed_stream):
             junctions.append(intron_start + int(block_sizes[i]))
         # Final block characterizes junction on right side of intron
         junctions.append(chrom_start + int(block_starts[-1]))
-        for i in xrange(len(junctions) - 1):
-            introns[chrom].add((junctions[i], junctions[i+1]))
+        for i in xrange(len(junctions)/2):
+            introns[chrom].add((junctions[2*i], junctions[2*i+1]))
     return introns
 
 if __name__ == '__main__':
