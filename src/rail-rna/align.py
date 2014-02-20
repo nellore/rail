@@ -2098,7 +2098,7 @@ if __name__ == '__main__':
         default=5,
         help='Filters introns of length smaller than this value')
     parser.add_argument('--max-intron-size', type=int, required=False,
-        default=600000, 
+        default=200000, 
         help='Filters introns of length greater than this value')
     parser.add_argument('--min-strand-readlets', type=int, required=False,
         default=1, 
