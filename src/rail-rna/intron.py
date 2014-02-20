@@ -375,6 +375,10 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
                     + left_motif_offset
                 right_motif_end_position = min_end_position \
                     + right_motif_offset + 2
+                if right_motif_end_position \
+                    < left_motif_start_position + 4:
+                    # Filter out overlapping donor/acceptor motifs
+                    continue
                 z_score_sum = abs(left_motif_start_position 
                     - mean_start_position) / float(stdev_start_position) \
                     + abs(right_motif_end_position - mean_end_position) / \
