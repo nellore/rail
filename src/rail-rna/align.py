@@ -1013,7 +1013,6 @@ def selected_readlet_alignments_by_distance(readlets):
             (rname, reverse_strand, pos, end_pos, displacement,
                 mismatch_count).
     """
-    # Final readlets is first populated with unireadlets
     unireadlets = {}
     multireadlets = []
     for readlet in readlets:
@@ -2098,7 +2097,7 @@ if __name__ == '__main__':
         default=5,
         help='Filters introns of length smaller than this value')
     parser.add_argument('--max-intron-size', type=int, required=False,
-        default=200000, 
+        default=600000, 
         help='Filters introns of length greater than this value')
     parser.add_argument('--min-strand-readlets', type=int, required=False,
         default=1, 

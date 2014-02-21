@@ -128,7 +128,7 @@ class Rail_RNAConfig(object):
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
-        self._bowtieArgs = args.bowtie_args or "-v 0 -a -m 40"
+        self._bowtieArgs = args.bowtie_args or "-v 0 -a -m 3"
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)
