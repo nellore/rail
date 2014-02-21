@@ -1034,7 +1034,7 @@ def selected_readlet_alignments_by_distance(readlets):
     final_readlets = copy.deepcopy(unireadlets)
     # Find multireadlet alignment with "closest" unireadlet
     for multireadlet in multireadlets:
-        last_overlap = None
+        max_overlap = None
         alignment = None
         for (rname, reverse_strand, pos, end_pos,
                 displacement, mismatch_count) in multireadlet:
@@ -1043,10 +1043,10 @@ def selected_readlet_alignments_by_distance(readlets):
                             - max(pos, compared_pos)
                             for _, _, compared_pos, compared_end_pos, _, _
                             in unireadlets[(rname, reverse_strand)]])
-            if last_overlap is None or overlap > last_overlap:
+            if overlap > max_overlap:
                 alignment = (rname, reverse_strand, pos, end_pos,
                                 displacement, mismatch_count)
-            last_overlap = overlap
+                max_overlap = overlap
         if alignment is not None:
             final_readlets[(alignment[0], alignment[1])].append(alignment)
     return sorted(final_readlets.values(), key=len, reverse=True)[0]
@@ -1128,7 +1128,9 @@ def selected_readlet_alignments_by_coverage(readlets):
             else:
                 break
         filtered_readlets.append(highest_coverage_alignments)
-    return selected_readlet_alignments_by_distance(filtered_readlets)
+    return selected_readlet_alignments_by_distance(
+                    filtered_readlets
+                )
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
@@ -2911,23 +2913,10 @@ elif __name__ == '__main__':
             final_alignments = selected_readlet_alignments_by_coverage(
                                     multireadlets
                                 )
-            self.assertTrue(
-                sorted(final_alignments) == [('chr1', False, 45, 96, 11, 0),
-                                             ('chr1', False, 46, 90, 12, 0)]
-            )
-
-        def test_that_no_alignment_is_chosen_in_case_of_tie(self):
-            """ Fails if alignments of multireadlet aren't thrown out. """
-            '''Below, the multireadlet at the first position in multireadlets
-            contains alignments that overlap the unireadlet at the second
-            position in multireadlets equally.'''
-            multireadlets = [[('chr1', False, 25, 55, 1, 0), 
-                              ('chr1', False, 55, 85, 31, 0)],
-                             [('chr1', False, 52, 58, 31, 0)]]
-            final_alignments = selected_readlet_alignments_by_coverage(
-                                    multireadlets
-                                )
-            self.assertTrue(final_alignments == 
-                            [('chr1', False, 52, 58, 31, 0)])
+            self.assertEquals(
+                    sorted(final_alignments), 
+                    [('chr1', False, 45, 96, 11, 0),
+                     ('chr1', False, 46, 90, 12, 0)]
+                )
 
     unittest.main()
