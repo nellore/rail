@@ -117,8 +117,6 @@ import tempfile
 import atexit
 import subprocess
 import re
-# For computing minimum spanning trees when choosing multireadlet alignments
-import networkx as nx
 import numpy as np
 # For fast global alignment
 from scipy import weave
@@ -1015,96 +1013,6 @@ def selected_readlet_alignments_by_distance(readlets):
             (rname, reverse_strand, pos, end_pos, displacement,
                 mismatch_count).
     """
-    graphs = {}
-    readlets_on_graphs = {}
-    alignment_number = 0
-    # Add nodes
-    delete_strands = True
-    for i, readlet in enumerate(readlets):
-        strands = set()
-        for rname, reverse_strand, pos, end_pos, displacement, mismatch_count \
-            in readlet:
-            if (rname, reverse_strand) not in graphs:
-                graphs[(rname, reverse_strand)] = nx.Graph()
-            graphs[(rname, reverse_strand)].add_node(
-                    alignment_number, readlet=i, pos=pos, end_pos=end_pos,
-                    displacement=displacement, mismatch_count=mismatch_count
-                )
-            if (rname, reverse_strand) not in strands:
-                '''If the readlet hasn't been counted yet on the strand graph,
-                add it.'''
-                readlets_on_graphs[(rname, reverse_strand)] \
-                    = readlets_on_graphs.get((rname, reverse_strand), 0) + 1
-            alignment_number += 1
-            if alignment_number > 1:
-                delete_strands = False
-    if delete_strands:
-        '''Delete strands with only one readlet; no MST exists for
-        corresponding graph.'''
-        strands_to_delete = set()
-        final_readlets = []
-        for strand, readlet_count in readlets_on_graphs.items():
-            if readlet_count == 1:
-                strands_to_delete.add(strand)
-                if graphs[strand].number_of_nodes() == 1:
-                    node_data = graphs[strand].nodes(data=True)[0][1]
-                    final_readlets.append(
-                            strand + (node_data['pos'], node_data['end_pos'],
-                            node_data['displacement'],
-                            node_data['mismatch_count'])
-                        )
-        for strand in strands_to_delete:
-            del readlets_on_graphs[strand]
-            del graphs[strand]
-        if not len(readlets_on_graphs):
-            '''If there's no graph with at least two readlets, just return the
-            first of final_readlets.'''
-            return []
-    # Find strand graph with most readlets
-    strand_to_return = max(readlets_on_graphs.items(),
-                            key=lambda strand: strand[1])[0]
-    graph = graphs[strand_to_return]
-    # Add edges
-    for first_node in graph.nodes_iter(data=True):
-        for second_node in graph.nodes_iter(data=True):
-            if first_node[1]['readlet'] == second_node[1]['readlet'] \
-                or first_node == second_node:
-                continue
-            graph.add_edge(
-                    first_node[0],
-                    second_node[0],
-                    weight=(max(first_node[1]['pos'],
-                                    second_node[1]['pos'])
-                            - min(first_node[1]['end_pos'], 
-                                    second_node[1]['end_pos']))
-                )
-    if not graph.number_of_edges():
-        # If graph has no edges, return only unique alignments
-        final_readlets = []
-        for node in graph.nodes_iter(data=True):
-            if len(readlet) == 1:
-                final_readlets.append(readlet[0])
-        return final_readlets
-    # Compute minimum spanning tree
-    MST = nx.minimum_spanning_tree(graph)
-    readlet_degrees = {}
-    for node in MST.nodes_iter(data=True):
-        if node[1]['readlet'] not in readlet_degrees:
-            readlet_degrees[node[1]['readlet']] = []
-        degree = MST.degree(node[0])
-        readlet_degrees[node[1]['readlet']].append(
-                (-degree,
-                    float(MST.degree(node[0], weight='weight')) / degree,
-                    node[1]['pos'], node[1]['end_pos'],
-                    node[1]['displacement'], node[1]['mismatch_count'])
-            )
-    final_readlets = []
-    for readlet in readlet_degrees.values():    
-        final_readlets.append(
-                strand_to_return
-                + sorted(readlet, key=lambda alignment: alignment[:2])[0][2:]
-            )
-    return final_readlets
     unireadlets = {}
     multireadlets = []
     for readlet in readlets:
@@ -1160,15 +1068,12 @@ def selected_readlet_alignments_by_coverage(readlets):
 
         The algo first constructs a coverage distribution from the {R_i}. Each
         base position B of the reference spanned by a given R_ij contributes
-        1 / K_i to the coverage at B. The algo then selects the j for which
-        R_ij spans the region with the highest coverage, where a region's
-        coverage is computed by summing the coverages over all its bases.
-        If there is more than one such j, the corresponding R_ij are
-        recorded in a new, typically smaller subset of possible multireadlet
-        alignments. selected_readlet_alignments_by_distance() is then applied
-        to the narrowed set of alignments for all readlets to resolve ties.
-        After multireadlet alignments are chosen, the function returns only
-        those alignments from the strand that has accrued the most alignments.
+        1 / K_i to the coverage at B. Alignments considered are then narrowed
+        to only those on the strand(s) with the highest total coverage. The
+        algo then selects the j for which R_ij spans the region with the
+        highest coverage, where a region's coverage is computed by summing the
+        coverages over all its bases. If there is more than one such j, the
+        corresponding R_ij are discarded.
 
         readlets: a list whose items {R_i} correspond to the aligned readlets
             from a given read. Each R_i is itself a list of the possible
@@ -1180,8 +1085,12 @@ def selected_readlet_alignments_by_coverage(readlets):
             (rname, reverse_strand, pos, end_pos, displacement,
                 mismatch_count).
     """
+    if len(readlets) == 0:
+        # Return an empty list if passed an empty list
+        return []
     # Construct coverage distribution
     coverage = {}
+    total_coverages = {}
     for multireadlet in readlets:
         coverage_unit = 1. / len(multireadlet)
         for (rname, reverse_strand, pos, end_pos,
@@ -1193,36 +1102,49 @@ def selected_readlet_alignments_by_coverage(readlets):
                     = coverage[(rname, reverse_strand)].get(
                             covered_base_pos, 0
                         ) + coverage_unit
-    filtered_readlets = []
+                total_coverages[(rname, reverse_strand)] \
+                    = total_coverages.get((rname, reverse_strand), 0) \
+                      + coverage_unit
+    # Choose strands with highest coverage
+    chosen_strands = set()
+    sorted_coverages = sorted(total_coverages.items(), reverse=True,
+                                key=lambda strand_coverage: strand_coverage[1])
+    for strand, strand_coverage in sorted_coverages:
+        if strand_coverage != sorted_coverages[0][1]: break
+        chosen_strands.add(strand)
+    filtered_alignments = []
     '''Choose alignment of multireadlet with highest total coverage. If there
-    is a tie among top alignments, .'''
+    is a tie among top alignments, do not return an alignment.'''
     for multireadlet in readlets:
         assert len(multireadlet) >= 1
         if len(multireadlet) == 1:
-            filtered_readlets.append([multireadlet[0]])
+            if (multireadlet[0][0], multireadlet[0][1]) in chosen_strands:
+                filtered_alignments.append(multireadlet[0])
             continue
         alignments = []
         for (rname, reverse_strand, pos, end_pos,
                 displacement, mismatch_count) in multireadlet:
-            readlet_coverage = 0
+            if (rname, reverse_strand) not in chosen_strands: continue
+            alignment_coverage = 0
             for covered_base_pos in xrange(pos, end_pos):
-                readlet_coverage += coverage[(rname, reverse_strand)].get(
+                alignment_coverage += coverage[(rname, reverse_strand)].get(
                     covered_base_pos, 0)
-            alignments.append((readlet_coverage, (rname, reverse_strand, pos,
+            alignments.append((alignment_coverage, (rname, reverse_strand, pos,
                                                     end_pos, displacement, 
                                                     mismatch_count)))
-        # Find highest-coverage alignments
+        if not len(alignments):
+            # No alignments survived filtering for strands with top coverage
+            continue
+        if len(alignments) == 1:
+            '''Only one alignment survived filtering for strands with top
+            coverage, so add it.'''
+            filtered_alignments.append(alignments[0][1])
+            continue
         alignments.sort(reverse=True)
-        highest_coverage_alignments = [alignments[0][1]]
-        for alignment in alignments[1:]:
-            if alignment[0] == alignments[0][0]:
-                highest_coverage_alignments.append(alignment[1])
-            else:
-                break
-        filtered_readlets.append(highest_coverage_alignments)
-    return selected_readlet_alignments_by_distance(
-                    filtered_readlets
-                )
+        if alignments[0][0] != alignments[1][0]:
+            # Add alignment iff there is no tie
+            filtered_alignments.append(alignments[0][1])
+    return filtered_alignments
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """

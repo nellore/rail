@@ -44,6 +44,8 @@ aligned readlets comprising the read from which the intron was inferred.
 10. '-' if reversed complements of readlets from which intron was inferred
 aligned to forward strand; else '+'
 
+Input is partitioned by column 1 and sorted by ascending columns 1/2.
+
 Hadoop output (written to stdout)
 ----------------------------
 Format 1 (span): tab-delimited columns, one line per read spanning a splice
@@ -69,16 +71,16 @@ the reads in a sample
 
 Format 3 (junction):
 12-column (3 required fields + 9 optional fields) BED output mimicking TopHat's
-junctions.bed, except anchor significance, maximum match rate, unique
-displacement count, and motif probability are also included in the name field.
-From the TopHat manual at http://tophat.cbcb.umd.edu/manual.shtml: "Each
-junction consists of two connected BED blocks, where each block is as long as
-the maximal overhang of any read spanning the junction. The score is the number
-of alignments spanning the junction." (Each line of the BED file actually
-specifies the TWO splice junctions J = (J_A, J_B) that frame an intron, and the
-statistics given in the name field pertain to the junction for that intron only
-rather than the junction across all alternative splicings.) Anchor significance
-of a splice J is NOT defined as in the MapSplice paper
+junctions.bed, except anchor significance, maximum match rate, and unique
+displacement count are also included in the name field. From the TopHat manual
+at http://tophat.cbcb.umd.edu/manual.shtml: "Each junction consists of two
+connected BED blocks, where each block is as long as the maximal overhang of
+any read spanning the junction. The score is the number of alignments spanning
+the junction." (Each line of the BED file actually specifies the TWO splice
+junctions J = (J_A, J_B) that frame an intron, and the statistics given in the
+name field pertain to the junction for that intron only rather than the
+junction across all alternative splicings.) Anchor significance of a splice J
+is NOT defined as in the MapSplice paper
 http://nar.oxfordjournals.org/content/38/18/e178.long. Consider the set {R_i}
 of reads that span the splice J. For a given read R_i, consider the two anchors
 A_i and B_i on either side of J, and let L_(A_i) and L_(B_i) be their lengths
@@ -90,16 +92,7 @@ Unique displacement count is the number of unique displacements of J from the
 determined from the strand to which contituent readlets align: if the readlets'
 reversed complements align to the forward strand, the 5' end of the original
 read sequence is the right end; if the unaltered readlet sequences align to the
-forward strand, the 5' end of the original read sequence is the left end. Motif
-probability is defined as follows. Consider searching for donor and acceptor
-motifs (like "GT" and "AG") within motif_radius bp of each of the minimum and 
-maximum of each of the start and end positions of an intron cluster; that is,
-the intervals [min(start_positions) - motif_radius, max(start_positions) +
-    motif_radius + 2) and [min(end_positions - 2 - motif_radius),
-    max(end_positions) + motif_radius) are scanned for motifs, where 
-start_positions (end_positions) aggregates the start (end) positions of the
-candidate introns in a cluster. Count the number N_L of donor motifs and the
-number N_R of acceptor motifs. Motif probability is defined as 1 / (N_L * N_R).
+forward strand, the 5' end of the original read sequence is the left end.
 
 OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -235,22 +228,8 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                 return reads_for_intron_clusters
     raise RuntimeError('For loop should never be completed.')
 
-def discrete_fourier_transform(signal, frequency):
-    signal_size = len(signal)
-    return sum(
-                [signal[pos]*np.exp(-2j*np.pi*pos*frequency/signal_size)
-                    for pos in xrange(signal_size)]
-            )
-
-def signal_from_sequence(sequence, signal_base):
-    signal = [0]*len(sequence)
-    for i, base in enumerate(sequence):
-        if signal_base == base:
-            signal[i] = 1
-    return signal
-
 def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
-    rname, motifs, motif_radius=1, PPT_search_window_size=50, verbose=False):
+    rname, motifs, motif_radius=1, verbose=False):
     """ Ranks possible splice sites for a cluster using donor/acceptor motifs.
 
         Consider the following cluster of three candidate introns for which the
@@ -383,73 +362,9 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
                     - mean_start_position) / float(stdev_start_position) \
                     + abs(right_motif_end_position - mean_end_position) / \
                     float(stdev_end_position)
-                if motif[2]:
-                    '''If reverse strand, 3' end of intron is on left, and
-                    in the reference, the bases corresponding to the PPT are
-                    A and G.'''
-                    PPT_search_window = reference_index.get_stretch(rname,
-                                                left_motif_start_position,
-                                                min(right_motif_end_position
-                                                - left_motif_start_position,
-                                                     PPT_search_window_size)
-                                            )
-                    PPT_bases = 'AG'
-                else:
-                    '''If the intron sequence is on the forward strand, the 3'
-                    end of the intron is on the right, and in the reference,
-                    the bases corresponding to the PPT are C and T.'''
-                    PPT_search_window = reference_index.get_stretch(rname,
-                                            max(left_motif_start_position,
-                                                    right_motif_end_position
-                                                    - PPT_search_window_size),
-                                            PPT_search_window_size
-                                        )
-                    PPT_bases = 'TC'
-                '''Compute periodicity strength as in 
-                http://www.sciencedirect.com/science/article/pii/
-                S0022519307001543' Changchuan Yin, Stephen S.-T. Yau.
-                Prediction of protein coding regions by the 3-base periodicity
-                analysis of a DNA sequence'''
-                intron_sequence = reference_index.get_stretch(
-                                            rname,
-                                            left_motif_start_position,
-                                            min(right_motif_end_position
-                                                - left_motif_start_position,
-                                                1000)
-                                            )
-                intron_sequence_size = len(intron_sequence)
-                periodicity_strength = 0
-                for base in 'A', 'T', 'C', 'G':
-                    periodicity_strength += \
-                        np.abs(
-                                discrete_fourier_transform(
-                                        signal_from_sequence(
-                                               intron_sequence, base
-                                            ),
-                                        float(intron_sequence_size) / 3 
-                                    )
-                                )**2
-                periodicity_strength = float(periodicity_strength) / \
-                                            intron_sequence_size
-                PPT_length = 0
-                max_PPT_length = 0
-                pyrimidine_count = 0
-                for base in PPT_search_window:
-                    if base in PPT_bases:
-                        PPT_length += 1
-                        pyrimidine_count += 1
-                    else:
-                        max_PPT_length = max(PPT_length, max_PPT_length)
-                        PPT_length = 0
-                pyrimidine_fraction = float(pyrimidine_count) \
-                                        / PPT_search_window_size
-                max_PPT_length = max(PPT_length, max_PPT_length)
                 positions_and_z_scores.append((left_motif_start_position,
                                                 right_motif_end_position,
-                                                z_score_sum) + motif + 
-                                                (max_PPT_length,
-                                                    pyrimidine_fraction,
-                                                    periodicity_strength))
+                                                z_score_sum) + motif)
         # Sort all matches of same priority (rank) by z-score sum
         positions_and_z_scores.sort(
                 key=lambda positions_and_z_score: positions_and_z_score[2]
@@ -543,41 +458,30 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         Format 3 (junction):
         12-column (3 required fields + 9 optional fields) BED output mimicking
         TopHat's junctions.bed, except anchor significance, maximum match rate,
-        unique displacement count, and motif probability are also included in
-        the name field. From the TopHat manual at 
-        http://tophat.cbcb.umd.edu/manual.shtml: "Each junction consists of two
-        connected BED blocks, where each block is as long as the maximal
-        overhang of any read spanning the junction. The score is the number of
-        alignments spanning the junction." (Each line of the BED file actually
-        specifies the TWO splice junctions J = (J_A, J_B) that frame an intron,
-        and the statistics given in the name field pertain to the junction for
-        that intron only rather than the junction across all alternative
-        splicings.) Anchor significance of a splice J is NOT defined as in the
-        MapSplice paper http://nar.oxfordjournals.org/content/38/18/e178.long.
-        Consider the set {R_i} of reads that span the splice J. For a given
-        read R_i, consider the two anchors A_i and B_i on either side of J, and
-        let L_(A_i) and L_(B_i) be their lengths (in bp). The anchor
-        significance of J is max_i min(L(A_i), L(B_i)).) Maximum match rate is
-        the highest match rate from among the reads spanning J, where match
-        rate is defined in the description of field 9 from the input above.
-        Unique displacement count is the number of unique displacements of J
-        from the 5' end of the original read in the set {R_i}. The 5' end of
-        the read is determined from the strand to which contituent readlets
-        align: if the readlets' reversed complements align to the forward
-        strand, the 5' end of the original read sequence is the right end; if
-        the unaltered readlet sequences align to the forward strand, the 5' end
-        of the original read sequence is the left end. Motif probability is 
-        defined as follows. Consider searching for donor and acceptor motifs
-        (like "GT" and "AG") within motif_radius bp of each of the minimum and 
-        maximum of each of the start and end positions of an intron cluster;
-        that is, the intervals [min(start_positions) - motif_radius,
-        max(start_positions) + motif_radius + 2) and
-        [min(end_positions - 2 - motif_radius),
-            max(end_positions) + motif_radius) are scanned for motifs, where
-        start_positions (end_positions) aggregates the start (end) positions of
-        the candidate introns in a cluster. Count the number N_L of donor
-        motifs and the number N_R of acceptor motifs. Motif probability is
-        defined as 1 / (N_L * N_R).
+        and unique displacement count are also included in the name field.
+        From the TopHat manual at http://tophat.cbcb.umd.edu/manual.shtml:
+        "Each junction consists of two connected BED blocks, where each block
+        is as long as the maximal overhang of any read spanning the junction.
+        The score is the number of alignments spanning the junction." (Each
+        line of the BED file actually specifies the TWO splice junctions
+        J = (J_A, J_B) that frame an intron, and the statistics given in the
+        name field pertain to the junction for that intron only rather than the
+        junction across all alternative splicings.) Anchor significance of a
+        splice J is NOT defined as in the MapSplice paper
+        http://nar.oxfordjournals.org/content/38/18/e178.long. Consider the set
+        {R_i} of reads that span the splice J. For a given read R_i, consider
+        the two anchors A_i and B_i on either side of J, and let L_(A_i) and
+        L_(B_i) be their lengths (in bp). The anchor significance of J is
+        max_i min(L(A_i), L(B_i)).) Maximum match rate is the highest match
+        rate from among the reads spanning J, where match rate is defined in
+        the description of field 9 from the input above. Unique displacement
+        count is the number of unique displacements of J from the 5' end of the
+        original read in the set {R_i}. The 5' end of the read is determined
+        from the strand to which contituent readlets align: if the readlets'
+        reversed complements align to the forward strand, the 5' end of the
+        original read sequence is the right end; if the unaltered readlet
+        sequences align to the forward strand, the 5' end of the original read
+        sequence is the left end.
 
         OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE
         1-INDEXED.
@@ -664,7 +568,6 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                 cluster_radius=cluster_radius,
                 verbose=verbose)
             cluster_splice_sites = {}
-            motif_counts = {}
             if stranded:
                 # The sense strand is known, so narrow motif set used
                 if last_reverse_strand:
@@ -677,7 +580,6 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         if len(ranked_splice_sites) != 0:
                             # Pick top-ranked intron
                             cluster_splice_sites[i] = ranked_splice_sites[0]
-                            motif_counts[i] = len(ranked_splice_sites)
                 else:
                     for i, intron_cluster in enumerate(intron_clusters):
                         ranked_splice_sites = ranked_splice_sites_from_cluster(
@@ -688,7 +590,6 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         if len(ranked_splice_sites) != 0:
                             # Pick top-ranked intron
                             cluster_splice_sites[i] = ranked_splice_sites[0]
-                            motif_counts[i] = len(ranked_splice_sites)
             else:
                 # The sense strand is unknown, so use a general motif set
                 for i, intron_cluster in enumerate(intron_clusters):
@@ -700,10 +601,9 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                     if len(ranked_splice_sites) != 0:
                         # Pick top-ranked intron
                         cluster_splice_sites[i] = ranked_splice_sites[0]
-                        motif_counts[i] = len(ranked_splice_sites)
             if per_span:
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif, motif_reverse_strand, _, _, _) \
+                    right_motif, motif_reverse_strand) \
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
@@ -716,7 +616,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 left_motif, right_motif, sample_label)
             if per_site:
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif, motif_reverse_strand, _, _, _) \
+                    right_motif, motif_reverse_strand) \
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
@@ -733,11 +633,10 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 sample_label_counts[sample_label])
             if output_bed:
                 '''The output bed mimics TopHat's junctions.bed, except
-                anchor significance, maximum match rate, unique displacement
-                count, and motif probability are in the name field. Anchor
-                significance of a splice J = (J_A, J_B) is NOT defined as in
-                the MapSplice paper
-                http://nar.oxfordjournals.org/content/38/18/e178.long.
+                anchor significance, maximum match rate, and unique
+                displacement count are in the name field. Anchor significance
+                of a splice J = (J_A, J_B) is NOT defined as in the MapSplice
+                paper http://nar.oxfordjournals.org/content/38/18/e178.long.
                 Consider the set {R_i} of reads spanning a junction for J.
                 For a given read R_i, consider the two anchors A_i and B_i on
                 either side of J, and let L_(A_i) and L_(B_i) be their lengths
@@ -751,17 +650,9 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                 complements align to the forward strand, the 5' end of the
                 original read sequence is the right end; if the unaltered
                 readlet sequences align to the forward strand, the 5' end of
-                the original read sequence is the left end. Motif probability is 
-                defined as follows. Consider searching for donor and acceptor
-                motifs (like "GT" and "AG") within motif_radius bp of each of
-                the minimum and  maximum of each of the start and end positions
-                of an intron cluster. Count the number N_L of donor motifs and
-                the number N_R of acceptor motifs. Motif probability is
-                defined as 1 / (N_L * N_R).See TopHat documentation for more
-                information on junctions.bed.'''
+                the original read sequence is the left end.'''
                 for i, (start_position, end_position, z_score_sum, left_motif,
-                            right_motif, motif_reverse_strand, PPT_length, 
-                            pyrimidine_fraction, periodicity_strength) \
+                            right_motif, motif_reverse_strand) \
                     in cluster_splice_sites.items():
                     motif_reverse_strand_string = '-' if motif_reverse_strand \
                         else '+'
@@ -812,20 +703,12 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         'anchor_significance=%d;' \
                         'maximum_match_rate=%.12f;' \
                         'unique_displacement_count=%d;' \
-                        'motif_probability=%.12f;' \
-                        'PPT_length=%d;' \
-                        'pyrimidine_fraction=%.12f;' \
-                        'periodicity_strength=%.12f' \
                         '\t%d\t%s\t%d\t' \
                         '%d\t255,0,0\t2\t%d,%d\t0,%d' \
                         % (last_rname, left_pos, right_pos,
                             anchor_significance,
                             maximum_match_rate,
                             len(displacement_set),
-                            (1. / motif_counts[i]),
-                            PPT_length,
-                            pyrimidine_fraction,
-                            -periodicity_strength,
                             len(intron_clusters[i]),
                             motif_reverse_strand_string, left_pos, right_pos,
                             left_overhang, right_overhang, 
