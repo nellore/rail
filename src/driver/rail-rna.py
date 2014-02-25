@@ -345,7 +345,8 @@ pipelineSteps = {
     'align'        : ['align'],
     'junction'     : ['intron', 'intron_post'],
     #'coverage'     : ['normalize_pre', 'normalize'],#, 'normalize_post'],
-    'coverage'     : ['collapse', 'coverage_pre', 'coverage', 'coverage_post'],
+    'coverage'     : [],
+    #'coverage'     : ['collapse', 'coverage_pre', 'coverage', 'coverage_post'],
     'differential' : ['walk_fit', 'ebayes', 'hmm_params', 'hmm', 'aggr_path'] }
 
 allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
