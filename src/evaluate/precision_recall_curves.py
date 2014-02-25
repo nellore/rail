@@ -39,6 +39,7 @@ in tab-delimited format:
 import sys
 import matplotlib.pyplot as plt
 import string
+import operator
 
 def introns_from_bed_stream(bed_stream, read_stats=False):
     """ Converts BED to dictionary that maps RNAMES to sorted lists of introns.
@@ -168,12 +169,13 @@ def introns_from_bed_stream(bed_stream, read_stats=False):
             introns[chrom] = sorted(list(introns[chrom]))
         return introns
 
-def filtered_introns(introns, stat_coefficients, threshold):
-    """ Removes introns for which superposition of stats is below a threshold.
+def filtered_introns(introns, stat_coefficients, threshold, above=False):
+    """ Removes introns where superposition of stats is above/below threshold.
 
         For a given intron, let S = sum_i a_i s_i, where a_i is the coefficient
-        of statistic s_i as specified in stat_coefficients. If S falls below
-        threshold, the intron is filtered out.
+        of statistic s_i as specified in stat_coefficients. By default, if S
+        <= threshold, the intron is filtered out. When above=True, if
+        S >= threshold, the intron is filtered out.
 
         introns: a dictionary. Each key is an RNAME, typically a
             chromosome, and its corresponding value is a list of
@@ -188,17 +190,21 @@ def filtered_introns(introns, stat_coefficients, threshold):
         threshold: the value of S below which an intron is filtered out.
 
         Return value: a dictionary just like the input "introns," except every
-            intron has statistic S >= threshold, and no statistics are
+            intron has statistic S >= (or <=) threshold, and no statistics are
             tacked onto output tuples. So each intron is just a tuple
             (pos, end_pos).
     """
     filtered_introns = {}
+    if above:
+        compare_operator = operator.le
+    else:
+        compare_operator = operator.ge
     for chrom, chrom_introns in introns.items():
         if chrom not in filtered_introns:
             filtered_introns[chrom] = []
         for intron in chrom_introns:
-            if sum([stat_coefficients[stat] * intron[2][stat]
-                    for stat in stat_coefficients]) >= threshold:
+            if compare_operator(sum([stat_coefficients[stat] * intron[2][stat]
+                                 for stat in stat_coefficients]), threshold):
                 filtered_introns[chrom].append(intron[:-1])
     return filtered_introns
 
@@ -250,12 +256,12 @@ def information_retrieval_metrics(true_introns, retrieved_introns):
         total_true_introns += len(true_introns[chrom])
     false_positive_count = total_retrieved_introns - true_positive_count
     false_negative_count = total_true_introns - true_positive_count
-    if false_negative_count == 0:
+    if total_true_introns == 0:
         recall = 1
     else:
         recall = float(true_positive_count) / total_true_introns
-    if false_positive_count == 0:
-        precision = 1
+    if total_retrieved_introns == 0:
+        precision = 0
     else:
         precision = float(true_positive_count) / total_retrieved_introns
     return (recall, precision, true_positive_count, false_positive_count,
@@ -282,6 +288,12 @@ if __name__ == '__main__':
         help='Filename for output plot. Extension specifies format. pdf and '
              'png are two good choices. See matplotlib documentation for '
              'more.')
+    parser.add_argument('-f', '--filter-above', type=str, required=False,
+        default='',
+        help='Comma-separated list of parameter names for which precision and ' 
+             'recall of introns should be plotted for values less than or '
+             'equal to thresholds rather than the default, greater than or '
+             'equal to. Substitute underscores for spaces in names.')
     args = parser.parse_args(sys.argv[1:])
     with open(args.true_introns_bed) as true_introns_bed_stream:
         print >>sys.stderr, 'Reading true introns BED....'
@@ -301,7 +313,13 @@ if __name__ == '__main__':
     max_recall = 0
     min_precision = 1
     max_precision = 0
+    filter_above_parameters = [parameter.strip() 
+                                for parameter in args.filter_above.split(',')]
     for stat, discrete_and_range in retrieved_intron_stats.items():
+        if stat in filter_above_parameters:
+            above = True
+        else:
+            above = False
         discrete = discrete_and_range[0]
         stat_min, stat_max = discrete_and_range[1:]
         if discrete:
@@ -319,8 +337,9 @@ if __name__ == '__main__':
                                                 filtered_introns(
                                                         retrieved_introns, 
                                                         stat_coefficients, 
-                                                        threshold
-                                                    )       
+                                                        threshold,
+                                                        above=above
+                                                    ) 
                                             ) + (threshold,)
                                         for threshold in thresholds]
         recalls = [point_and_threshold[0] for point_and_threshold in

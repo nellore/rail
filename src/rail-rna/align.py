@@ -43,23 +43,24 @@ user-specified length (see partition.py).
 Exonic chunks (aka ECs; two formats --- either or both may be emitted):
 
 Format 1 (exon_ival); tab-delimited output tuple columns:
-1. Reference name (RNAME in SAM format) + ';' + bin number
+1. Reference name (RNAME in SAM format) + ';' + bin number + ('+' or '-'
+    indicating which strand is the sense strand if input reads are
+    strand-specific -- that is, --stranded is invoked; otherwise, there is no
+    terminal '+' or '-')
 2. Sample label
 3. EC start (inclusive) on forward strand
 4. EC end (exclusive) on forward strand
-5. '+' or '-' indicating which strand is the sense strand if input reads are
-        strand-specific -- that is, --stranded is invoked; otherwise, there is
-        no terminal '+' or '-'
 
-Format 2 (exon_diff); tab-delimited output tuple columns:
-1. Reference name (RNAME in SAM format) + ';' + bin number
-2. Sample label
-3. max(EC start, bin start) (inclusive) on forward strand IFF next column is +1 
-   and EC end (exclusive) on forward strand IFF next column is -1.
-4. '+' or '-' indicating which strand is the sense strand if input reads are
-        strand-specific -- that is, --stranded is invoked; otherwise, there is
-        no terminal '+' or '-'
-5. +1 or -1.
+Format 2 (exon_diff); tab-delimited input tuple columns:
+1. Reference name (RNAME in SAM format) + ';' + 
+    max(EC start, bin start) (inclusive) on forward strand IFF diff is
+    positive and EC end (exclusive) on forward strand IFF diff is negative +
+    ('+' or '-' indicating which strand is the sense strand if input reads are
+    strand-specific -- that is, --stranded is invoked; otherwise, there is
+    no terminal '+' or '-')
+2. Bin number
+3. Sample label
+4. +1 or -1.
 
 Introns
 
@@ -1358,27 +1359,31 @@ class BowtieOutputThread(threading.Thread):
                                 # Print increment at interval start
                                 assert last_pos < partition_end \
                                     + self.intron_partition_overlap
+                                diff_rname, diff_bin = partition_id.split(';')
                                 print >>self.output_stream, \
-                                    'exon_diff\t%s\t%s\t%012d\t%s\t1' \
-                                    % (partition_id, 
-                                        last_sample_label,
+                                    'exon_diff\t%s;%d;%s%s\t%s\t1' \
+                                    % (diff_rname,
                                         max(partition_start, last_pos),
-                                        last_reverse_strand_string)
+                                        last_sample_label,
+                                        last_reverse_strand_string,
+                                        diff_bin)
                                 output_line_count += 1
                                 assert last_end_pos > partition_start
                                 if last_end_pos < partition_end:
                                     '''Print decrement at interval end iff exon
                                     ends before partition ends.'''
                                     print >>self.output_stream, \
-                                        'exon_diff\t%s\t%s\t%012d\t%s\t-1' \
-                                        % (partition_id, 
-                                            last_sample_label, last_end_pos,
-                                            last_reverse_strand_string)
+                                        'exon_diff\t%s;%d;%s%s\t%s\t-1' \
+                                        % (diff_rname,
+                                            last_end_pos,
+                                            last_sample_label,
+                                            last_reverse_strand_string,
+                                            diff_bin)
                                     output_line_count += 1
                         if self.exon_intervals:
                             for partition_id, _, _ in partitions:
                                 print >>self.output_stream, \
-                                    'exon_ival\t%s\t%012d\t%012d\t%s\t%s' \
+                                    'exon_ival\t%s%s\t%012d\t%012d\t%s' \
                                     % (partition_id, 
                                         last_reverse_strand_string, last_pos, 
                                         last_end_pos, last_sample_label)
@@ -1591,12 +1596,15 @@ class BowtieOutputThread(threading.Thread):
                                             partition_end) in partitions:
                                         assert exon_pos < partition_end
                                         # Print increment at interval start
+                                        diff_rname, diff_bin \
+                                            = partition_id.split(';')
                                         print >>self.output_stream, \
-                                            'exon_diff\t%s%s\t%s\t%012d\t1' \
-                                            % (partition_id, 
+                                            'exon_diff\t%s;%d;%s%s\t%s\t1' \
+                                            % (diff_rname,
+                                                max(partition_start, exon_pos),
+                                                last_sample_label,
                                                 exon_reverse_strand_string,
-                                                last_sample_label, 
-                                                max(partition_start, exon_pos))
+                                                diff_bin)
                                         output_line_count += 1
                                         assert exon_end_pos > partition_start
                                         if exon_end_pos < partition_end:
@@ -1604,12 +1612,13 @@ class BowtieOutputThread(threading.Thread):
                                             iff exon ends before partition
                                             ends.'''
                                             print >>self.output_stream, \
-                                                'exon_diff\t%s%s\t%s\t' \
-                                                '%012d\t-1' \
-                                                % (partition_id, 
-                                                    exon_reverse_strand_string,
+                                                'exon_diff\t%s;%d;%s%s\t' \
+                                                '%s\t-1' \
+                                                % (diff_rname, 
+                                                    exon_end_pos,
                                                     last_sample_label,
-                                                    exon_end_pos)
+                                                    exon_reverse_strand_string,
+                                                    diff_bin)
                                             output_line_count += 1
                         if self.exon_intervals:
                             for exon_strand in exons:
@@ -1810,23 +1819,23 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
         Exonic chunks (aka ECs; two formats --- either or both may be emitted):
 
         Format 1 (exon_ival); tab-delimited output tuple columns:
-        1. Reference name (RNAME in SAM format) + ';' + bin number +  
-        ('+' or '-' indicating which strand is the sense strand if input reads
-        are strand-specific -- that is, --stranded is invoked; otherwise, there
-        is no terminal '+' or '-')
+        1. Reference name (RNAME in SAM format) + ';' + bin number + ('+' or
+            '-' indicating which strand is the sense strand if input reads are
+            strand-specific -- that is, --stranded is invoked; otherwise, there is no
+            terminal '+' or '-')
         2. Sample label
         3. EC start (inclusive) on forward strand
         4. EC end (exclusive) on forward strand
 
-        Format 2 (exon_differential); tab-delimited output tuple columns:
-        1. Reference name (RNAME in SAM format) + ';' + bin number +  
-        ('+' or '-' indicating which strand is the sense strand if input reads
-        are strand-specific -- that is, --stranded is invoked; otherwise, there
-        is no terminal '+' or '-')
-        2. Sample label
-        3. max(EC start, bin start) (inclusive) on forward strand IFF next 
-        column is +1 and EC end (exclusive) on forward strand IFF next column
-        is -1.
+        Format 2 (exon_diff); tab-delimited input tuple columns:
+        1. Reference name (RNAME in SAM format) + ';' + 
+            max(EC start, bin start) (inclusive) on forward strand IFF diff is
+            positive and EC end (exclusive) on forward strand IFF diff is
+            negative + ('+' or '-' indicating which strand is the sense strand
+            if input reads are strand-specific -- that is, --stranded is
+            invoked; otherwise, there is no terminal '+' or '-')
+        2. Bin number
+        3. Sample label
         4. +1 or -1.
 
         Introns

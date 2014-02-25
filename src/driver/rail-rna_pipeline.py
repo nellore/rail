@@ -206,6 +206,21 @@ class NormalizePreStep(pipeline.Step):
             reducer=reducerStr,
             multipleOutput=True)
 
+class CollapseStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/collapse.py 
+                %s
+            """ % ('--stranded' if tconf.stranded else '')
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(CollapseStep, self).__init__(\
+            inps,
+            output,  # output URL
+            name="Collapse", # name
+            aggr=pipeline.Aggregation(None, 8, 1, 1),
+            reducer=reducerStr,
+            multipleOutput=True)
+
 class CoveragePreStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """

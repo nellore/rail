@@ -22,7 +22,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--capping-fraction', metavar='FRACTION', type=float, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\
-        '--partition-length', metavar='INT', type=int, default=50000, help='Size of genome partitions to use.')
+        '--partition-length', metavar='INT', type=int, default=30000, help='Size of genome partitions to use.')
     parser.add_argument(\
         '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
     parser.add_argument(\

@@ -1,6 +1,6 @@
 """
 Rail-RNA-coverage_pre
-Follows Rail-RNA-align
+Follows Rail-RNA-collapse
 Precedes Rail-RNA-coverage
 
 Reduce step in MapReduce pipelines that takes count differentials (exon_diff)
@@ -10,17 +10,17 @@ information.
 Input (read from stdin)
 ----------------------------
 Tab-delimited input tuple columns:
-1. Reference name (RNAME in SAM format) + ';' + bin number
+1. Reference name (RNAME in SAM format) + ';' + bin number + ('+' or '-'
+    indicating which strand is the sense strand if input reads are
+    strand-specific -- that is, --stranded is invoked; otherwise, there is no
+    terminal '+' or '-')
 2. Sample label
-3. max(EC start, bin start) (inclusive) on forward strand IFF next column is +1 
-   and EC end (exclusive) on forward strand IFF next column is -1.
-4. '+' or '-' indicating which strand is the sense strand if input reads are
-        strand-specific -- that is, --stranded is invoked; otherwise, there is
-        no terminal '+' or '-'. If input reads aren't strand-specific, this
-        field is 'N'.
-5. +1 or -1.
-Input is binned first by partition (field 1) and then by sample label
-(field 2), and finally sorted by position (field 3).
+3. max(EC start, bin start) (inclusive) on forward strand IFF diff is
+    positive and EC end (exclusive) on forward strand IFF diff is negative.
+4. A diff -- that is, by how much coverage increases or decreases at the 
+    given genomic position: +n or -n for some natural number n.
+Input is partitioned first by genome partition (field 1) and then by sample
+label (field 2), and finally sorted by position (field 3).
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -81,9 +81,12 @@ while True:
     if line:
         input_line_count += 1
         tokens = line.rstrip().split('\t')
-        assert len(tokens) == 5, 'Bad input line:\n' + line
+        assert len(tokens) == 4, 'Bad input line:\n' + line
         partition_id, sample_label, pos, differential = (tokens[0],
-            tokens[1], int(tokens[2]), int(tokens[4]))
+            tokens[1], int(tokens[2]), int(tokens[3]))
+        if args.stranded:
+            # Remove terminal +/-
+            partition_id = partition_id[:-1]
         rname, _, _ = partition.parse(partition_id, args.partition_length)
         if partition_id != last_partition_id \
             or sample_label != last_sample_label:
