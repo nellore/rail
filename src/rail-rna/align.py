@@ -2943,4 +2943,18 @@ elif __name__ == '__main__':
                      ('chr1', False, 46, 90, 12, 0)]
                 )
 
+        def test_that_no_alignment_is_chosen_in_case_of_tie(self):
+            """ Fails if alignments of multireadlet aren't thrown out. """
+            '''Below, the multireadlet at the first position in multireadlets
+            contains alignments that overlap the unireadlet at the second
+            position in multireadlets equally.'''
+            multireadlets = [[('chr1', False, 25, 55, 1, 0), 
+                              ('chr1', False, 55, 85, 31, 0)],
+                             [('chr1', False, 52, 58, 31, 0)]]
+            final_alignments = selected_readlet_alignments_by_coverage(
+                                    multireadlets
+                                )
+            self.assertTrue(final_alignments == 
+                            [('chr1', False, 52, 58, 31, 0)])
+
     unittest.main()
