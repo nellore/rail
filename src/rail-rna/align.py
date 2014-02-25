@@ -1248,6 +1248,7 @@ class BowtieOutputThread(threading.Thread):
         self.exon_intervals = exon_intervals
         self.splice_sam = splice_sam
         self.max_intron_size = max_intron_size
+        self.min_intron_size = min_intron_size
         self.search_for_caps = search_for_caps
         self.min_cap_query_size = min_cap_query_size
         self.cap_search_window_size = cap_search_window_size
@@ -1658,14 +1659,24 @@ class BowtieOutputThread(threading.Thread):
                                 if intron_end_pos - intron_pos \
                                     > self.max_intron_size:
                                     if self.verbose: 
-                                        print >> sys.stderr, \
+                                        print >>sys.stderr, \
                                             'Intron of size > ' \
                                             'max-intron-size = %d' \
                                             ' filtered at %s:%d-%d' \
                                             % (self.max_intron_size,
                                                 intron_rname, intron_pos,
                                                 intron_end_pos)
-                                        output_line_count += 1
+                                        continue
+                                if intron_end_pos - intron_pos \
+                                    < self.min_intron_size:
+                                    if self.verbose:
+                                        print >>sys.stderr, \
+                                            'Intron of size < ' \
+                                            'min-intron-size = %d' \
+                                            ' filtered at %s:%d-%d' \
+                                            % (self.min_intron_size,
+                                                intron_rname, intron_pos,
+                                                intron_end_pos)
                                         continue
                                 partitions = partition.partition(intron_rname,
                                     intron_pos, intron_pos + 1, self.bin_size,
@@ -2119,10 +2130,10 @@ if __name__ == '__main__':
         help='Amount by which partitions overlap their left and right '
              'neighbors')
     parser.add_argument('--min-intron-size', type=int, required=False,
-        default=5,
+        default=50,
         help='Filters introns of length smaller than this value')
     parser.add_argument('--max-intron-size', type=int, required=False,
-        default=600000, 
+        default=400000, 
         help='Filters introns of length greater than this value')
     parser.add_argument('--min-strand-readlets', type=int, required=False,
         default=1, 

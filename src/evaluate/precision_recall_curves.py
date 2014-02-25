@@ -151,6 +151,17 @@ def introns_from_bed_stream(bed_stream, read_stats=False):
             if read_stats:
                 introns[chrom].append((junctions[2*i], junctions[2*i+1],
                                             stats))
+                stats['intron size'] = junctions[2*i+1] - junctions[2*i]
+                if 'intron size' not in stat_ranges:
+                    stat_ranges['intron size'] = [stats['intron size'],
+                                                    stats['intron size']]
+                else:
+                    stat_ranges['intron size'][0] \
+                        = min(stat_ranges['intron size'][0],
+                                stats['intron size'])
+                    stat_ranges['intron size'][1] \
+                        = max(stat_ranges['intron size'][1],
+                                stats['intron size'])
             else:
                 introns[chrom].add((junctions[2*i], junctions[2*i+1]))
     if read_stats:
@@ -158,11 +169,13 @@ def introns_from_bed_stream(bed_stream, read_stats=False):
             introns[chrom].sort()
         to_return = {}
         for stat in stat_ranges:
-            if stat == 'coverage': continue
+            if stat == 'coverage' or stat == 'intron size': continue
             to_return[stat] = tuple([stat_discrete[stat]]) \
                                 + tuple(stat_ranges[stat])
         to_return['coverage'] = tuple([True]) \
                                   + tuple(stat_ranges['coverage'])
+        to_return['intron size'] = tuple([True]) \
+                                  + tuple(stat_ranges['intron size'])
         return introns, to_return
     else:
         for chrom in introns:
@@ -282,7 +295,13 @@ if __name__ == '__main__':
         default=50,
         help='Number of points to compute per curve; the larger this number, '
              'the better the interpolations. If the curve is discrete, all '
-             'possible values are plotted, so this number is ignored.')
+             'possible values are plotted (except for intron sizes), so this '
+             'number is ignored.')
+    parser.add_argument('-i', '--intron-plot-interval', type=int,
+        required=False,
+        default=1000,
+        help='Interval between successive intron sizes plotted. Ignored if '
+             'plot-intron-size is False.')
     parser.add_argument('-o', '--output-filename', type=str, required=False,
         default='precision_recall_curve.pdf',
         help='Filename for output plot. Extension specifies format. pdf and '
@@ -294,6 +313,9 @@ if __name__ == '__main__':
              'recall of introns should be plotted for values less than or '
              'equal to thresholds rather than the default, greater than or '
              'equal to. Substitute underscores for spaces in names.')
+    parser.add_argument('-s', '--plot-intron-size', action='store_const',
+        const=True, default=False,
+        help='Include intron size thresholds in plots')
     args = parser.parse_args(sys.argv[1:])
     with open(args.true_introns_bed) as true_introns_bed_stream:
         print >>sys.stderr, 'Reading true introns BED....'
@@ -316,6 +338,8 @@ if __name__ == '__main__':
     filter_above_parameters = [parameter.strip() 
                                 for parameter in args.filter_above.split(',')]
     for stat, discrete_and_range in retrieved_intron_stats.items():
+        # Handle intron size separately
+        if stat == 'intron size': continue
         if stat in filter_above_parameters:
             above = True
         else:
@@ -355,8 +379,70 @@ if __name__ == '__main__':
                 plt.scatter(recalls, precisions, c=current_color, s=75)
             )
         plt.plot(recalls, precisions, c=current_color)
+    if args.plot_intron_size:
+        min_intron_size, max_intron_size \
+            = retrieved_intron_stats['intron size'][1:]
+        thresholds = range(min_intron_size - 1, max_intron_size + 2,
+                                args.intron_plot_interval)
+        stat_coefficients = {}
+        for stat_name in retrieved_intron_stats.keys():
+            stat_coefficients[stat_name] = 0
+        stat_coefficients['intron size'] = 1
+        points_and_thresholds['minimum intron size'] \
+                                            = [information_retrieval_metrics(
+                                                true_introns, 
+                                                filtered_introns(
+                                                        retrieved_introns, 
+                                                        stat_coefficients, 
+                                                        threshold,
+                                                        above=False
+                                                    ) 
+                                            ) + (threshold,)
+                                        for threshold in thresholds]
+        recalls = [point_and_threshold[0] for point_and_threshold in
+                        points_and_thresholds['minimum intron size']]
+        precisions = [point_and_threshold[1] for point_and_threshold in
+                        points_and_thresholds['minimum intron size']]
+        min_recall = min(min_recall, min(recalls))
+        max_recall = max(max_recall, max(recalls))
+        min_precision = min(min_precision, min(precisions))
+        max_precision = max(max_precision, max(precisions))
+        current_color=next(colors)
+        plot_series.append(
+                plt.scatter(recalls, precisions, c=current_color, s=75)
+            )
+        plt.plot(recalls, precisions, c=current_color)
+        points_and_thresholds['maximum intron size'] \
+                                            = [information_retrieval_metrics(
+                                                true_introns, 
+                                                filtered_introns(
+                                                        retrieved_introns, 
+                                                        stat_coefficients, 
+                                                        threshold,
+                                                        above=True
+                                                    ) 
+                                            ) + (threshold,)
+                                        for threshold in thresholds]
+        recalls = [point_and_threshold[0] for point_and_threshold in
+                        points_and_thresholds['maximum intron size']]
+        precisions = [point_and_threshold[1] for point_and_threshold in
+                        points_and_thresholds['maximum intron size']]
+        min_recall = min(min_recall, min(recalls))
+        max_recall = max(max_recall, max(recalls))
+        min_precision = min(min_precision, min(precisions))
+        max_precision = max(max_precision, max(precisions))
+        current_color=next(colors)
+        plot_series.append(
+                plt.scatter(recalls, precisions, c=current_color, s=75)
+            )
+        plt.plot(recalls, precisions, c=current_color)
+    legend_stats = retrieved_intron_stats.keys()
+    if args.plot_intron_size:
+        legend_stats.remove('intron size')
+        legend_stats.append('minimum intron size')
+        legend_stats.append('maximum intron size')
     plt.legend(plot_series, 
-                retrieved_intron_stats.keys(),
+                legend_stats,
                 scatterpoints=1,
                 loc='lower right',
                 fontsize=16)

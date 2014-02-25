@@ -27,6 +27,12 @@ def addArgs(parser):
         '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
         '--intron-partition-overlap', metavar='INT', type=int, default="50", help='# of nucleotides of overlap between intron-finding partitions.')
+    parser.add_argument('--min-intron-size', type=int, required=False,
+        default=5,
+        help='Filters introns of length smaller than this value')
+    parser.add_argument('--max-intron-size', type=int, required=False,
+        default=500000, 
+        help='Filters introns of length greater than this value')
     parser.add_argument(\
         '--bowtie-exe', metavar='STR', type=str, help='Bowtie executable to use. Must exist at this path on all the cluster nodes.')
     parser.add_argument(\
@@ -144,6 +150,14 @@ class Rail_RNAConfig(object):
         p = self.numPermutations = args.permutations or 5
         if p < 0:
             raise RuntimeError("Argument for --permutations must be >= 0; was %d" % p)
+        self.min_intron_size = args.min_intron_size
+        self.max_intron_size = args.max_intron_size
+        if self.max_intron_size < args.min_intron_size:
+            raise RuntimeError("Argument for --max_intron_size (%d) must be less than argument for --min_intron_size (%d)" % (self.max_intron_size, self.min_intron_size))
+        if self.max_intron_size < 0:
+            raise RuntimeError("Argument for --max_intron_size must be >=0; was %d" % self.max_intron_size)
+        if self.min_intron_size < 0:
+            raise RuntimeError("Argument for --min_intron_size must be >=0; was %d" % self.min_intron_size)
         self.discardMate1 = args.discard_mate1
         self.discardMate2 = args.discard_mate2
         self.stranded = args.stranded
