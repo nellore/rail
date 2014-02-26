@@ -185,10 +185,10 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
     """
     '''Construct list of candidate introns sorted in order of descending
     read_count.'''
-    candidate_intron_list = [(len(sample_labels), 
+    candidate_intron_list = [(len(reads), 
                                 end_position - start_position, end_position)
                                 for (start_position, end_position),
-                                sample_labels in candidate_introns.items()]
+                                reads in candidate_introns.items()]
     candidate_intron_list.sort()
     # Construct set of candidate introns for fast searching
     candidate_intron_set = set()
@@ -229,10 +229,10 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                     reads_for_intron_cluster = []
                     for an_intron_size, an_end_position in intron_cluster:
                         a_start_position = an_end_position - an_intron_size
-                        reads_for_intron_cluster.append((a_start_position, 
-                            an_end_position) \
-                            + candidate_introns[(a_start_position,
-                                                    an_end_position)])
+                        for read in candidate_introns[(a_start_position,
+                                                        an_end_position)]:
+                            reads_for_intron_cluster.append((a_start_position, 
+                                an_end_position) + read)
                     reads_for_intron_clusters.append(reads_for_intron_cluster)
                 return reads_for_intron_clusters
     raise RuntimeError('For loop should never be completed.')
@@ -390,7 +390,8 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
 def go(bowtie_index_base="genome", input_stream=sys.stdin,
         output_stream=sys.stdout, bin_size=10000, cluster_radius=5,
         per_site=False, per_span=True, output_bed=True, stranded=False,
-        intron_partition_overlap=20, motif_radius=1, verbose=False):
+        intron_partition_overlap=20, motif_radius=1, 
+        min_anchor_significance=9, verbose=False):
     """ Runs Rail-RNA-intron.
 
         Input lines are binned, so they are examined two at a time. When the
@@ -531,6 +532,8 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
             genome partition it is in.
         motif_radius: distance (in bp) from each of the start and end
             positions of a cluster within which to search for motifs.
+        min_anchor_significance: if the anchor significance of a called intron
+            falls below this value, the intron is suppressed from all output.
         verbose: True iff informative messages should be written to stderr.
 
         No return value.
@@ -553,7 +556,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
             (pos, end_pos, five_prime_displacement,
                 three_prime_displacement, left_EC_size, right_EC_size,
                 match_rate, reverse_strand) \
-            = (int(pos), int(end_pos), int(five_prime_displacement),
+                = (int(pos), int(end_pos), int(five_prime_displacement),
                 int(three_prime_displacement), int(left_EC_size), 
                 int(right_EC_size), float(match_rate), True if 
                 reverse_strand == '-' else False)
@@ -625,109 +628,83 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         # Pick top-ranked intron
                         cluster_splice_sites[i] = ranked_splice_sites[0]
                         motif_counts[i] = len(ranked_splice_sites)
-            if per_span:
-                for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif, motif_reverse_strand) \
-                    in cluster_splice_sites.items():
-                    motif_reverse_strand_string = '-' if motif_reverse_strand \
-                        else '+'
-                    for _, _, sample_label, _, _, _, _, _, _ \
-                        in intron_clusters[i]:
-                        print >>output_stream, 'span\t%s\t%012d\t%012d\t' \
-                            '%s\t%s\t%s' \
-                            % (last_rname + ';' + motif_reverse_strand_string,
-                                start_position, end_position, 
-                                left_motif, right_motif, sample_label)
-            if per_site:
-                for i, (start_position, end_position, z_score_sum, left_motif,
-                    right_motif, motif_reverse_strand) \
-                    in cluster_splice_sites.items():
-                    motif_reverse_strand_string = '-' if motif_reverse_strand \
-                        else '+'
-                    sample_label_counts = defaultdict(int)
-                    for _, _, sample_label, _, _, _, _, _, _\
-                        in intron_clusters[i]:
-                        sample_label_counts[sample_label] += 1
-                    for sample_label in sample_label_counts:
-                        print >>output_stream, \
-                            'site\t%s\t%012d\t%012d\t%s\t%s\t%s\t%s' \
-                            % (last_rname + ';' + motif_reverse_strand_string,
-                                start_position, end_position, left_motif,
-                                right_motif, sample_label, 
-                                sample_label_counts[sample_label])
-            if output_bed:
-                '''The output bed mimics TopHat's junctions.bed, except
-                anchor significance, maximum match rate, unique displacement
-                count, and motif count are in the name field. Anchor
-                significance of a splice J = (J_A, J_B) is NOT defined as in
-                the MapSplice paper
-                http://nar.oxfordjournals.org/content/38/18/e178.long.
-                Consider the set {R_i} of reads spanning a junction for J.
-                For a given read R_i, consider the two anchors A_i and B_i on
-                either side of J, and let L_(A_i) and L_(B_i) be their lengths
-                (in bp). The anchor significance of J is
-                max_i min(L(A_i), L(B_i)).) Maximum match rate is the highest
-                match rate from among the reads spanning a junction. Unique
-                displacement count is the number of unique displacements of J
-                from the 5' end of the original read in the set {R_i}. The 5'
-                end of the read is determined from the strand to which
-                contituent readlets align: if the readlets' reversed
-                complements align to the forward strand, the 5' end of the
-                original read sequence is the right end; if the unaltered
-                readlet sequences align to the forward strand, the 5' end of
-                the original read sequence is the left end. Motif count is 
-                defined as follows. Consider searching for donor and acceptor
-                motifs (like "GT" and "AG") within motif_radius bp of each of
-                the minimum and maximum of each of the start and end positions
-                of an intron cluster. Count the number N_L of donor motifs and
-                the number N_R of acceptor motifs. Motif count is
-                defined as (N_L * N_R). See TopHat documentation for more
-                information on junctions.bed.'''
-                for i, (start_position, end_position, z_score_sum, left_motif,
-                            right_motif, motif_reverse_strand) \
-                    in cluster_splice_sites.items():
-                    motif_reverse_strand_string = '-' if motif_reverse_strand \
-                        else '+'
-                    '''Identify longest read overhangs on either side of splice
-                    junction.'''
-                    left_overhang, right_overhang = 0, 0
-                    anchor_significance = None
-                    # For counting number of unique displacements
-                    displacement_set = set()
-                    maximum_match_rate = 0
-                    for (candidate_start_position, candidate_end_position,
-                            _, candidate_five_prime_displacement,
-                            candidate_three_prime_displacement,
-                            candidate_left_EC_size,
-                            candidate_right_EC_size, candidate_match_rate,
-                            candidate_reverse_strand) in intron_clusters[i]:
-                        if candidate_reverse_strand:
-                            displacement_set.add(
-                                    candidate_three_prime_displacement
-                                )
-                        else:
-                            displacement_set.add(
-                                    candidate_five_prime_displacement
-                                )
-                        if candidate_match_rate > maximum_match_rate:
-                            maximum_match_rate = candidate_match_rate
-                        anchor_significance = max(min(
-                                    candidate_left_EC_size,
-                                    candidate_right_EC_size
-                                ), anchor_significance)
-                        left_overhang = max(start_position
-                                        - candidate_start_position
-                                        + candidate_five_prime_displacement, 
-                                        left_overhang)
-                        right_overhang = max(candidate_end_position
-                            - end_position
-                            + candidate_three_prime_displacement,
-                            right_overhang)
-                    junction_number += 1
+            for i, (start_position, end_position, z_score_sum, left_motif,
+                        right_motif, motif_reverse_strand) \
+                in cluster_splice_sites.items():
+                motif_reverse_strand_string = '-' if motif_reverse_strand \
+                    else '+'
+                '''Identify longest read overhangs on either side of splice
+                junction.'''
+                left_overhang, right_overhang = 0, 0
+                anchor_significance = None
+                # For counting number of unique displacements
+                displacement_set = set()
+                maximum_match_rate = 0
+                for (candidate_start_position, candidate_end_position,
+                        _, candidate_five_prime_displacement,
+                        candidate_three_prime_displacement,
+                        candidate_left_EC_size,
+                        candidate_right_EC_size, candidate_match_rate,
+                        candidate_reverse_strand) in intron_clusters[i]:
+                    anchor_significance = max(min(
+                                candidate_left_EC_size,
+                                candidate_right_EC_size
+                            ), anchor_significance)
+                    if not output_bed: continue
+                    if candidate_reverse_strand:
+                        displacement_set.add(
+                                candidate_three_prime_displacement
+                            )
+                    else:
+                        displacement_set.add(
+                                candidate_five_prime_displacement
+                            )
+                    if candidate_match_rate > maximum_match_rate:
+                        maximum_match_rate = candidate_match_rate
+                    left_overhang = max(start_position
+                                    - candidate_start_position
+                                    + candidate_five_prime_displacement, 
+                                    left_overhang)
+                    right_overhang = max(candidate_end_position
+                        - end_position
+                        + candidate_three_prime_displacement,
+                        right_overhang)
+                junction_number += 1
+                if anchor_significance < min_anchor_significance:
+                    # Output nothing if anchor significance isn't high enough
+                    continue
+                if output_bed:
                     '''Print line of bed file; where a first column 'junction'
                     is inserted so the line can be distinguished from other
                     types of output lines. Subtract 1 from every position to
-                    accommodate how bed is 0-based.'''
+                    accommodate how bed is 0-based. The output bed mimics 
+                    TopHat's junctions.bed, except anchor significance, maximum
+                    match rate, unique displacement count, and motif count are
+                    in the name field. Anchor significance of a splice 
+                    J = (J_A, J_B) is NOT defined as in the MapSplice paper
+                    http://nar.oxfordjournals.org/content/38/18/e178.long.
+                    Consider the set {R_i} of reads spanning a junction for J.
+                    For a given read R_i, consider the two anchors A_i and B_i
+                    on either side of J, and let L_(A_i) and L_(B_i) be their
+                    lengths (in bp). The anchor significance of J is
+                    max_i min(L(A_i), L(B_i)).) Maximum match rate is the
+                    highest match rate from among the reads spanning a
+                    junction. Unique displacement count is the number of unique
+                    displacements of J from the 5' end of the original read in
+                    the set {R_i}. The 5'end of the read is determined from the
+                    strand to which contituent readlets align: if the readlets'
+                    reversed complements align to the forward strand, the 5'
+                    end of the original read sequence is the right end; if the
+                    unaltered readlet sequences align to the forward strand,
+                    the 5' end of the original read sequence is the left end.
+                    Motif count is defined as follows. Consider searching for
+                    donor and acceptor motifs (like "GT" and "AG") within
+                    motif_radius bp of each of the minimum and maximum of each
+                    of the start and end positions of an intron cluster. Count
+                    the number N_L of donor motifs and the number N_R of
+                    acceptor motifs. Motif count is defined as (N_L * N_R). See
+                    TopHat documentation for more information on
+                    junctions.bed.'''
                     left_pos = start_position - left_overhang - 1
                     right_pos = end_position + right_overhang - 1
                     print >>output_stream, \
@@ -747,12 +724,35 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             motif_reverse_strand_string, left_pos, right_pos,
                             left_overhang, right_overhang, 
                             end_position - left_pos - 1)
+                if per_site:
+                    sample_label_counts = defaultdict(int)
+                    for _, _, sample_label, _, _, _, _, _, _\
+                        in intron_clusters[i]:
+                        sample_label_counts[sample_label] += 1
+                    for sample_label in sample_label_counts:
+                        print >>output_stream, \
+                            'site\t%s\t%012d\t%012d\t%s\t%s\t%s\t%s' \
+                            % (last_rname + ';' + motif_reverse_strand_string,
+                                start_position, end_position, left_motif,
+                                right_motif, sample_label, 
+                                sample_label_counts[sample_label])
+                if per_span:
+                    for _, _, sample_label, _, _, _, _, _, _ \
+                            in intron_clusters[i]:
+                            print >>output_stream, 'span\t%s\t%012d\t%012d\t' \
+                                '%s\t%s\t%s' \
+                                % (last_rname + ';' 
+                                    + motif_reverse_strand_string,
+                                    start_position, end_position, 
+                                    left_motif, right_motif, sample_label)
             candidate_introns = {}
             handle_partition = False
         if line:
-            candidate_introns[(pos, end_pos)] = (sample_label,
+            if (pos, end_pos) not in candidate_introns:
+                candidate_introns[(pos, end_pos)] = []
+            candidate_introns[(pos, end_pos)].append((sample_label,
                 five_prime_displacement, three_prime_displacement, 
-                left_EC_size, right_EC_size, match_rate, reverse_strand)
+                left_EC_size, right_EC_size, match_rate, reverse_strand))
             (last_partition_id, last_partition_start, last_partition_end, 
                 last_rname, last_reverse_strand) \
             = (partition_id, partition_start, partition_end, rname, 
@@ -783,14 +783,19 @@ if __name__ == '__main__':
         default=20, 
         help='Amount by which partitions overlap their left and right '
              'neighbors')
+    parser.add_argument('--min-anchor-significance', type=int,
+        required=False,
+        default=9, 
+        help='Suppress introns whose anchor significance falls below this '
+             'value from all output')
     parser.add_argument(\
         '--per-site', action='store_const', const=True, default=False,
         help='Output one record for every splice site, giving information '
              'about the number of times a read from each label spans the site')
     parser.add_argument(\
         '--per-span', action='store_const', const=True, default=False,
-        help='Output one record for every instance where a read '
-             'spans a splice site')
+        help='Output one record for every instance where a read spans a '
+             'splice site')
     parser.add_argument(\
         '--output-bed', action='store_const', const=True, default=False,
         help='Output BED lines denoting splice junctions analogous to '
@@ -814,6 +819,7 @@ if __name__ == '__main__' and not args.test:
         output_bed=args.output_bed,
         intron_partition_overlap=args.intron_partition_overlap,
         motif_radius=args.motif_radius,
+        min_anchor_significance=args.min_anchor_significance,
         verbose=args.verbose)
 elif __name__ == '__main__':
     # Test units

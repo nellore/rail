@@ -113,21 +113,6 @@ class AlignPostStep(pipeline.Step):
 
 class IntronStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
-        '''reducerStr = """
-            python %%BASE%%/src/rail-rna/intron2.py
-                --refseq=%%REF_FASTA%%
-                --cluster-radius=%d
-                --intron-partition-overlap=%d
-                --per-span
-                --per-site
-                --readletLen %d
-                --readletIval %d
-                --verbose
-                --partition-length %d
-                %s
-        """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
-               tconf.readletLen, tconf.readletIval, tconf.partitionLen,
-               '--stranded' if tconf.stranded else '')'''
         reducerStr = """
             python %%BASE%%/src/rail-rna/intron.py
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
@@ -138,9 +123,10 @@ class IntronStep(pipeline.Step):
                 --output-bed
                 --verbose
                 --partition-length %d
+                --min-anchor-significance %d
                 %s
         """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
-                tconf.partitionLen, 
+                tconf.partitionLen, tconf.min_anchor_significance,
                 '--stranded' if tconf.stranded else '')
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(IntronStep, self).__init__(\

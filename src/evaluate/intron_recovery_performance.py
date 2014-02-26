@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 """
-aligner_metrics.py
+intron_recovery_performance.py
 
 Outputs precision, recall, and related performance measurements of a spliced
-aligner given a BED file T with true junctions (typically from a simulator like
-Flux) and a BED file Y with junctions retrieved by the aligner.
+aligner given a BED file T with true introns (typically from a simulator like
+Flux) and a BED file Y with introns retrieved by the aligner.
 
 A line in an input BED file characterizes an intron by decking it with blocks.
 A single intron defines two junctions, one on either side of it. A true
-positive is a junction recovered by the aligner, a false positive is a junction
-that appears in Y but not in T, and a false negative is a junction that appears
+positive is an intron recovered by the aligner, a false positive is an intron
+that appears in Y but not in T, and a false negative is an intron that appears
 in T but not in Y.
 
 Output (written to stdout)
@@ -17,8 +17,8 @@ Output (written to stdout)
 Two columns delimited by tabs, where the first column characterizes the numbers
 in the second column. The first column is given below.
 
-true junction count
-retrieved junction count
+true intron count
+retrieved intron count
 true positive count
 false positive count
 false negative count
@@ -28,17 +28,18 @@ recall
 
 import sys
 
-def junctions_from_bed_stream(bed_stream):
-    """ Converts BED to dictionary that maps RNAMES to sets of junction POSes.
+def introns_from_bed_stream(bed_stream):
+    """ Converts BED to dictionary that maps RNAMES to sets of introns.
 
         bed_stream: input stream containing lines of a BED file characterizing
             splice junctions.
 
         Return value: a dictionary. Each key is an RNAME, typically a
-            chromosome, and its corresponding value is a set of junction
-            positions on the RNAME.
+            chromosome, and its corresponding value is a set of tuples, each
+            denoting an intron on RNAME. Each tuple is of the form
+            (start position, end position).
     """
-    junctions = {}
+    introns = {}
     for line in bed_stream:
         tokens = line.rstrip().split('\t')
         if len(tokens) < 12:
@@ -46,8 +47,8 @@ def junctions_from_bed_stream(bed_stream):
         chrom = tokens[0]
         chrom_start = int(tokens[1])
         chrom_end = int(tokens[2])
-        if chrom not in junctions:
-            junctions[chrom] = set()
+        if chrom not in introns:
+            introns[chrom] = set()
         block_sizes = tokens[10].split(',')
         block_starts = tokens[11].split(',')
         # Handle trailing commas
@@ -64,50 +65,53 @@ def junctions_from_bed_stream(bed_stream):
             # No introns
             continue
         assert block_count == len(block_starts)
+        junctions = []
         # First block characterizes junction on left side of intron
-        junctions[chrom].add(chrom_start + int(block_starts[0]) 
+        junctions.append(chrom_start + int(block_starts[0]) 
                                 + int(block_sizes[0]))
         for i in xrange(1, block_count - 1):
             # Any intervening blocks characterize two junctions
             intron_start = chrom_start + int(block_starts[i])
-            junctions[chrom].add(intron_start)
-            junctions[chrom].add(intron_start + int(block_sizes[i]))
+            junctions.append(intron_start)
+            junctions.append(intron_start + int(block_sizes[i]))
         # Final block characterizes junction on right side of intron
-        junctions[chrom].add(chrom_start + int(block_starts[-1]))
-    return junctions
+        junctions.append(chrom_start + int(block_starts[-1]))
+        for i in xrange(len(junctions)/2):
+            introns[chrom].add((junctions[2*i], junctions[2*i+1]))
+    return introns
 
 if __name__ == '__main__':
     import argparse
     # Print file's docstring if -h is invoked
     parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-t', '--true-junctions-bed', type=str, required=True, 
-        help='Full path of BED file containing true junctions')
-    parser.add_argument('-r', '--retrieved-junctions-bed', type=str,
+    parser.add_argument('-t', '--true-introns-bed', type=str, required=True, 
+        help='Full path of BED file containing true introns')
+    parser.add_argument('-r', '--retrieved-introns-bed', type=str,
         required=True, 
-        help='Full path of BED file containing junctions retrieved by aligner')
+        help='Full path of BED file containing introns retrieved by aligner')
     args = parser.parse_args(sys.argv[1:])
-    with open(args.true_junctions_bed) as true_junctions_bed_stream:
-        true_junctions = junctions_from_bed_stream(true_junctions_bed_stream)
-    with open(args.retrieved_junctions_bed) as retrieved_junctions_bed_stream:
-        retrieved_junctions \
-            = junctions_from_bed_stream(retrieved_junctions_bed_stream)
-    (false_positive_count, false_negative_count, true_junction_count, 
-        retrieved_junction_count) = [0]*4
+    with open(args.true_introns_bed) as true_introns_bed_stream:
+        true_introns = introns_from_bed_stream(true_introns_bed_stream)
+    with open(args.retrieved_introns_bed) as retrieved_introns_bed_stream:
+        retrieved_introns \
+            = introns_from_bed_stream(retrieved_introns_bed_stream)
+    (false_positive_count, false_negative_count, true_intron_count, 
+        retrieved_intron_count) = [0]*4
     # Use set differences to compute false negative and false positive counts
-    for chrom in true_junctions:
-        true_junction_count += len(true_junctions[chrom])
+    for chrom in true_introns:
+        true_intron_count += len(true_introns[chrom])
         false_negative_count += \
-            len(true_junctions[chrom] - retrieved_junctions.get(chrom, set()))
-    for chrom in retrieved_junctions:
-        retrieved_junction_count += len(retrieved_junctions[chrom])
+            len(true_introns[chrom] - retrieved_introns.get(chrom, set()))
+    for chrom in retrieved_introns:
+        retrieved_intron_count += len(retrieved_introns[chrom])
         false_positive_count += \
-            len(retrieved_junctions[chrom] - true_junctions.get(chrom, set()))
-    true_positive_count = retrieved_junction_count - false_positive_count
-    precision = float(true_positive_count) / retrieved_junction_count
-    recall = float(true_positive_count) / true_junction_count
-    print 'true junction count\t%d' % true_junction_count
-    print 'retrieved junction count\t%d' % retrieved_junction_count
+            len(retrieved_introns[chrom] - true_introns.get(chrom, set()))
+    true_positive_count = retrieved_intron_count - false_positive_count
+    precision = float(true_positive_count) / retrieved_intron_count
+    recall = float(true_positive_count) / true_intron_count
+    print 'true intron count\t%d' % true_intron_count
+    print 'retrieved intron count\t%d' % retrieved_intron_count
     print 'true positive count\t%d' % true_positive_count
     print 'false positive count\t%d' % false_positive_count
     print 'false negative count\t%d' % false_negative_count

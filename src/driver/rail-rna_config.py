@@ -18,13 +18,13 @@ def addArgs(parser):
     parser.add_argument(\
         '--readlet-length', metavar='INT', type=int, default="25", help='Substring length to extract from read.')
     parser.add_argument(\
-        '--readlet-interval', metavar='INT', type=int, default="4", help='Distance between substrings to extract from read.')
+        '--readlet-interval', metavar='INT', type=int, default="6", help='Distance between substrings to extract from read.')
     parser.add_argument(\
         '--capping-fraction', metavar='FRACTION', type=float, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\
         '--partition-length', metavar='INT', type=int, default=30000, help='Size of genome partitions to use.')
     parser.add_argument(\
-        '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
+        '--cluster-radius', metavar='INT', type=int, default="5", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
         '--intron-partition-overlap', metavar='INT', type=int, default="50", help='# of nucleotides of overlap between intron-finding partitions.')
     parser.add_argument('--min-intron-size', type=int, required=False,
@@ -33,6 +33,11 @@ def addArgs(parser):
     parser.add_argument('--max-intron-size', type=int, required=False,
         default=500000, 
         help='Filters introns of length greater than this value')
+    parser.add_argument('--min-anchor-significance', type=int,
+        required=False,
+        default=9, 
+        help='Suppress introns whose anchor significance falls below this '
+             'value from all output')
     parser.add_argument(\
         '--bowtie-exe', metavar='STR', type=str, help='Bowtie executable to use. Must exist at this path on all the cluster nodes.')
     parser.add_argument(\
@@ -99,7 +104,7 @@ def addArgs(parser):
              'last EC. Such caps are subsequently added as ECs themselves. '
              'Use this command-line parameter to turn the feature off')
     parser.add_argument('--min-cap-query-size', type=int, required=False,
-        default=8,
+        default=1,
         help='The reference is not searched for a segment of a read that '
              'precedes the first EC or follows the last EC smaller than this '
              'size')
@@ -158,6 +163,9 @@ class Rail_RNAConfig(object):
             raise RuntimeError("Argument for --max_intron_size must be >=0; was %d" % self.max_intron_size)
         if self.min_intron_size < 0:
             raise RuntimeError("Argument for --min_intron_size must be >=0; was %d" % self.min_intron_size)
+        self.min_anchor_significance = args.min_anchor_significance
+        if self.min_anchor_significance < 0:
+            raise RuntimeError("Argument for --min_anchor_significance must be >=0; was %d" % self.min_anchor_significance)
         self.discardMate1 = args.discard_mate1
         self.discardMate2 = args.discard_mate2
         self.stranded = args.stranded
