@@ -69,13 +69,14 @@ class AlignStep(pipeline.Step):
                 --partition-length %d
                 --max-intron-size %d
                 --min-intron-size %d
+                --capping-fraction %f
                 --exon-differentials 
                 --verbose %s %s
                 --min-cap-query-size %d
                 --cap-search-window-size %d
                 -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen,
                     tconf.max_intron_size,
-                    tconf.min_intron_size,
+                    tconf.min_intron_size, tconf.capping_fraction,
                     '--stranded' if tconf.stranded else '', 
                     '--do-not-search-for-caps' if tconf.do_not_search_for_caps else '',
                     tconf.min_cap_query_size,

@@ -1052,7 +1052,7 @@ def selected_readlet_alignments_by_distance(readlets):
             final_readlets[(alignment[0], alignment[1])].append(alignment)
     return sorted(final_readlets.values(), key=len, reverse=True)[0]
 
-def selected_readlet_alignments_by_coverage(readlets):
+def selected_readlet_alignments_by_coverage(readlets, reference_index):
     """ Selects multireadlet alignment that spans region with highest coverage.
     
         Consider a list "readlets" whose items {R_i} correspond to the aligned
@@ -1070,10 +1070,10 @@ def selected_readlet_alignments_by_coverage(readlets):
         The algo first constructs a coverage distribution from the {R_i}. Each
         base position B of the reference spanned by a given R_ij contributes
         1 / K_i to the coverage at B. Alignments considered are then narrowed
-        to only those on the strand(s) with the highest total coverage. The
-        algo then selects the j for which R_ij spans the region with the
-        highest coverage, where a region's coverage is computed by summing the
-        coverages over all its bases. If there is more than one such j, the
+        to only those on the strand(s) with the highest total coverage per
+        base. The algo then selects the j for which R_ij spans the region with
+        the highest coverage, where a region's coverage is computed by summing
+        the coverages over all its bases. If there is more than one such j, the
         corresponding R_ij are discarded.
 
         readlets: a list whose items {R_i} correspond to the aligned readlets
@@ -1081,6 +1081,9 @@ def selected_readlet_alignments_by_coverage(readlets):
             alignments {R_ij} of a readlet. Each R_ij is a tuple
             (rname, reverse_strand, pos, end_pos, displacement,
                 mismatch_count). See above for a detailed explanation.
+        reference_index: object of class bowtie_index.BowtieIndexReference
+            that permits access to reference; used for determining chromosome
+            sizes.
 
         Return value: a list of selected alignment tuples
             (rname, reverse_strand, pos, end_pos, displacement,
@@ -1091,7 +1094,7 @@ def selected_readlet_alignments_by_coverage(readlets):
         return []
     # Construct coverage distribution
     coverage = {}
-    total_coverages = {}
+    coverages_per_base = {}
     for multireadlet in readlets:
         coverage_unit = 1. / len(multireadlet)
         for (rname, reverse_strand, pos, end_pos,
@@ -1103,15 +1106,18 @@ def selected_readlet_alignments_by_coverage(readlets):
                     = coverage[(rname, reverse_strand)].get(
                             covered_base_pos, 0
                         ) + coverage_unit
-                total_coverages[(rname, reverse_strand)] \
-                    = total_coverages.get((rname, reverse_strand), 0) \
+                coverages_per_base[(rname, reverse_strand)] \
+                    = coverages_per_base.get((rname, reverse_strand), 0) \
                       + coverage_unit
-    # Choose strands with highest coverage
+    # Choose strands with highest coverage per base
+    for rname, reverse_strand in coverages_per_base:
+        coverages_per_base[(rname, reverse_strand)] /= \
+            reference_index.rname_lengths[rname]
     chosen_strands = set()
-    sorted_coverages = sorted(total_coverages.items(), reverse=True,
-                                key=lambda strand_coverage: strand_coverage[1])
-    for strand, strand_coverage in sorted_coverages:
-        if strand_coverage != sorted_coverages[0][1]: break
+    sorted_coverages_per_base = sorted(coverages_per_base.items(), 
+        reverse=True, key=lambda strand_coverage: strand_coverage[1])
+    for strand, strand_coverage in sorted_coverages_per_base:
+        if strand_coverage != sorted_coverages_per_base[0][1]: break
         chosen_strands.add(strand)
     filtered_alignments = []
     '''Choose alignment of multireadlet with highest total coverage. If there
@@ -1120,7 +1126,7 @@ def selected_readlet_alignments_by_coverage(readlets):
         assert len(multireadlet) >= 1
         if len(multireadlet) == 1:
             if (multireadlet[0][0], multireadlet[0][1]) in chosen_strands:
-                filtered_alignments.append(multireadlet[0])
+                filtered_alignments.append([multireadlet[0]])
             continue
         alignments = []
         for (rname, reverse_strand, pos, end_pos,
@@ -1139,13 +1145,14 @@ def selected_readlet_alignments_by_coverage(readlets):
         if len(alignments) == 1:
             '''Only one alignment survived filtering for strands with top
             coverage, so add it.'''
-            filtered_alignments.append(alignments[0][1])
+            filtered_alignments.append([alignments[0][1]])
             continue
-        alignments.sort(reverse=True)
-        if alignments[0][0] != alignments[1][0]:
-            # Add alignment iff there is no tie
-            filtered_alignments.append(alignments[0][1])
-    return filtered_alignments
+        max_coverage = max(alignments, key=lambda alignment: alignment[0])[0]
+        filtered_alignments.append([alignment[1] for alignment in alignments
+                                        if alignment[0] == max_coverage])
+    return selected_readlet_alignments_by_distance(
+                    filtered_alignments
+                )
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
@@ -1550,7 +1557,8 @@ class BowtieOutputThread(threading.Thread):
                             filtered_alignments \
                                 = selected_readlet_alignments_by_coverage(
                                         collected_readlets[(last_qname,
-                                                            last_paired_label)]
+                                            last_paired_label)],
+                                        self.reference_index
                                     )
                         '''Compute mean number of matched bases per aligned
                         base of the readlets from the read.'''
