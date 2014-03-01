@@ -1052,7 +1052,8 @@ def selected_readlet_alignments_by_distance(readlets):
             final_readlets[(alignment[0], alignment[1])].append(alignment)
     return sorted(final_readlets.values(), key=len, reverse=True)[0]
 
-def selected_readlet_alignments_by_coverage(readlets, reference_index):
+def selected_readlet_alignments_by_coverage(readlets, reference_index,
+        block_size=10000):
     """ Selects multireadlet alignment that spans region with highest coverage.
     
         Consider a list "readlets" whose items {R_i} correspond to the aligned
@@ -1120,23 +1121,35 @@ def selected_readlet_alignments_by_coverage(readlets, reference_index):
         if strand_coverage != sorted_coverages_per_base[0][1]: break
         chosen_strands.add(strand)
     filtered_alignments = []
+    block_coverage = {}
+    for multireadlet in readlets:
+        coverage_unit = 1. / len(multireadlet)
+        for (rname, reverse_strand, pos, end_pos, displacement,
+                mismatch_count) in multireadlet:
+            if (rname, reverse_strand) not in chosen_strands: continue
+            block = pos / block_size
+            block_coverage[block] = block_coverage.get(block,
+                                                        0) + coverage_unit
     '''Choose alignment of multireadlet with highest total coverage. If there
-    is a tie among top alignments, do not return an alignment.'''
+    is a tie among top alignments, choose the alignment with the highest
+    total block coverage. If there's still a tie, don't choose an
+    alignment.'''
     for multireadlet in readlets:
         assert len(multireadlet) >= 1
         if len(multireadlet) == 1:
-            if (multireadlet[0][0], multireadlet[0][1]) in chosen_strands:
-                filtered_alignments.append([multireadlet[0]])
+            #if (multireadlet[0][0], multireadlet[0][1]) in chosen_strands:
+            filtered_alignments.append([multireadlet[0]])
             continue
         alignments = []
         for (rname, reverse_strand, pos, end_pos,
                 displacement, mismatch_count) in multireadlet:
-            if (rname, reverse_strand) not in chosen_strands: continue
+            #if (rname, reverse_strand) not in chosen_strands: continue
             alignment_coverage = 0
             for covered_base_pos in xrange(pos, end_pos):
                 alignment_coverage += coverage[(rname, reverse_strand)].get(
                     covered_base_pos, 0)
-            alignments.append((alignment_coverage, (rname, reverse_strand, pos,
+            alignments.append((0, 
+                               block_coverage[pos / block_size], (rname, reverse_strand, pos,
                                                     end_pos, displacement, 
                                                     mismatch_count)))
         if not len(alignments):
@@ -1145,14 +1158,15 @@ def selected_readlet_alignments_by_coverage(readlets, reference_index):
         if len(alignments) == 1:
             '''Only one alignment survived filtering for strands with top
             coverage, so add it.'''
-            filtered_alignments.append([alignments[0][1]])
+            filtered_alignments.append([alignments[0][2]])
             continue
-        max_coverage = max(alignments, key=lambda alignment: alignment[0])[0]
-        filtered_alignments.append([alignment[1] for alignment in alignments
-                                        if alignment[0] == max_coverage])
-    return selected_readlet_alignments_by_distance(
-                    filtered_alignments
-                )
+        alignments.sort(key=lambda alignment: alignment[:2], reverse=True)
+        chosen_alignments = []
+        for alignment in alignments:
+            if alignment[0] == alignments[0][0] and alignment[1] == alignments[0][1]:
+                chosen_alignments.append(alignment[2])
+        filtered_alignments.append(chosen_alignments)
+    return [el[0] for el in filtered_alignments if len(el) == 1]
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
