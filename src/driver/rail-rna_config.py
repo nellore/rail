@@ -18,7 +18,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--readlet-length', metavar='INT', type=int, default="25", help='Substring length to extract from read.')
     parser.add_argument(\
-        '--readlet-interval', metavar='INT', type=int, default="6", help='Distance between substrings to extract from read.')
+        '--readlet-interval', metavar='INT', type=int, default="4", help='Distance between substrings to extract from read.')
     parser.add_argument(\
         '--capping-fraction', metavar='FRACTION', type=float, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\
@@ -35,7 +35,7 @@ def addArgs(parser):
         help='Filters introns of length greater than this value')
     parser.add_argument('--min-anchor-significance', type=int,
         required=False,
-        default=9, 
+        default=8, 
         help='Suppress introns whose anchor significance falls below this '
              'value from all output')
     parser.add_argument(\
