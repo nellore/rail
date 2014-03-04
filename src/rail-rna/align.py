@@ -1195,13 +1195,13 @@ def correlation_clustering_cost(alignment_clusters):
                 ((combo[0][4] < combo[1][4]) != 
                     (combo[0][2] < combo[1][2])):
                 cost += 1
-    return -cost
+    return cost
 
 def selected_readlet_alignments_by_correlation_clustering(readlets, seed=0):
     random.seed(seed)
     cost = None
     final_clustered_alignments = None
-    for i in xrange(10):
+    for i in xrange(50):
         clustered_alignments = correlation_clusters(
                                     [alignment + (i,) for i, multireadlet
                                         in enumerate(readlets)
@@ -1213,7 +1213,7 @@ def selected_readlet_alignments_by_correlation_clustering(readlets, seed=0):
             cost = current_cost
     clustered_alignments = final_clustered_alignments
     print >>sys.stderr, clustered_alignments
-    multireadlet_counts = [len(set(cluster)) for cluster 
+    multireadlet_counts = [len(set([alignment[-1] for alignment in cluster])) for cluster 
                             in clustered_alignments]
     print >>sys.stderr, multireadlet_counts
     max_multireadlet_count = max(multireadlet_counts)
@@ -1245,8 +1245,9 @@ def selected_readlet_alignments_by_correlation_clustering(readlets, seed=0):
             filtered_alignments.append([alignment[:-1]])
         last_alignment = alignment
     print >>sys.stderr, 'tie'
+    print >>sys.stderr, filtered_alignments
     print >>sys.stderr, selected_readlet_alignments_by_distance(filtered_alignments)
-    return selected_readlet_alignments_by_distance(filtered_alignments)
+    return selected_readlet_alignments_by_coverage(filtered_alignments)
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
@@ -1649,10 +1650,9 @@ class BowtieOutputThread(threading.Thread):
                                     )
                         else:
                             filtered_alignments \
-                                = selected_readlet_alignments_by_coverage(
+                                = selected_readlet_alignments_by_correlation_clustering(
                                         collected_readlets[(last_qname,
-                                            last_paired_label)],
-                                        self.reference_index
+                                            last_paired_label)]
                                     )
                         '''Compute mean number of matched bases per aligned
                         base of the readlets from the read.'''
