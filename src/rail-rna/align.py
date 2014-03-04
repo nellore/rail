@@ -119,6 +119,8 @@ import atexit
 import subprocess
 import re
 import numpy as np
+import random
+import itertools
 # For fast global alignment
 from scipy import weave
 
@@ -1052,7 +1054,7 @@ def selected_readlet_alignments_by_distance(readlets):
             final_readlets[(alignment[0], alignment[1])].append(alignment)
     return sorted(final_readlets.values(), key=len, reverse=True)[0]
 
-def selected_readlet_alignments_by_coverage(readlets, reference_index):
+def selected_readlet_alignments_by_coverage(readlets):
     """ Selects multireadlet alignment that spans region with highest coverage.
     
         Consider a list "readlets" whose items {R_i} correspond to the aligned
@@ -1081,9 +1083,6 @@ def selected_readlet_alignments_by_coverage(readlets, reference_index):
             alignments {R_ij} of a readlet. Each R_ij is a tuple
             (rname, reverse_strand, pos, end_pos, displacement,
             mismatch_count). See above for a detailed explanation.
-        reference_index: object of class bowtie_index.BowtieIndexReference
-            that permits access to reference; used for determining chromosome
-            sizes.
 
         Return value: a list of selected alignment tuples
             (rname, reverse_strand, pos, end_pos, displacement,
@@ -1122,6 +1121,101 @@ def selected_readlet_alignments_by_coverage(readlets, reference_index):
     print >>sys.stderr, 'highest-coverage bin'
     print >>sys.stderr, highest_coverage_bin
     return highest_coverage_bin
+
+def correlation_clusters(alignments):
+    if len(alignments) == 0: return []
+    if len(alignments) == 1: return [alignments]
+    pivot = random.randint(0, len(alignments) - 1)
+    pivot_alignment = alignments[pivot]
+    unclustered_alignments = []
+    alignment_cluster = [pivot_alignment]
+    for i, alignment in enumerate(alignments):
+        if i == pivot: continue
+        if alignment[-1] == pivot_alignment[-1] or \
+            alignment[:2] != pivot_alignment[:2] or \
+            (alignment[4] == pivot_alignment[4] and
+                alignment[2] != pivot_alignment[2]) or \
+            ((alignment[4] < pivot_alignment[4]) != \
+                (alignment[2] < pivot_alignment[2])):
+            unclustered_alignments.append(alignment)
+        else:
+            alignment_cluster.append(alignment)
+    return [alignment_cluster] + correlation_clusters(
+                                        unclustered_alignments
+                                    )
+
+def correlation_clustering_cost(alignment_clusters):
+    cost = 0
+    for cluster in alignment_clusters:
+        for combo in itertools.combinations(cluster, 2):
+            if not (combo[0][-1] == combo[1][-1] or \
+                    combo[0][:2] != combo[1][:2] or \
+                    (combo[0][4]== combo[1][4] and
+                        combo[0][2] != combo[1][2]) or \
+                    ((combo[0][4] < combo[1][4]) != 
+                        (combo[0][2] < combo[1][2]))):
+                cost += 1
+    for cluster_combo in itertools.combinations(alignment_clusters, 2):
+        for combo in itertools.product(*cluster_combo):
+            if combo[0][-1] == combo[1][-1] or \
+                combo[0][:2] != combo[1][:2] or \
+                (combo[0][4]== combo[1][4] and
+                    combo[0][2] != combo[1][2]) or \
+                ((combo[0][4] < combo[1][4]) != 
+                    (combo[0][2] < combo[1][2])):
+                cost += 1
+    return -cost
+
+def selected_readlet_alignments_by_correlation_clustering(readlets, seed=0):
+    random.seed(seed)
+    cost = None
+    final_clustered_alignments = None
+    for i in xrange(10):
+        clustered_alignments = correlation_clusters(
+                                    [alignment + (i,) for i, multireadlet
+                                        in enumerate(readlets)
+                                        for alignment in multireadlet]
+                                )
+        current_cost = correlation_clustering_cost(clustered_alignments)
+        if current_cost > cost:
+            final_clustered_alignments = copy.deepcopy(clustered_alignments)
+            cost = current_cost
+    clustered_alignments = final_clustered_alignments
+    print >>sys.stderr, clustered_alignments
+    multireadlet_counts = [len(set(cluster)) for cluster 
+                            in clustered_alignments]
+    print >>sys.stderr, multireadlet_counts
+    max_multireadlet_count = max(multireadlet_counts)
+    best_cluster_indices = [i for i, multireadlet_count
+                            in enumerate(multireadlet_counts)
+                            if multireadlet_count == max_multireadlet_count]
+    best_cluster_index_count = len(best_cluster_indices)
+    print >>sys.stderr, best_cluster_indices
+    if best_cluster_index_count == 1:
+        best_cluster_index = best_cluster_indices[0]
+        best_cluster = clustered_alignments[best_cluster_index]
+    else:
+        best_cluster_index = best_cluster_indices[
+                                    random.randint(0, 
+                                        best_cluster_index_count - 1)
+                                ]
+        best_cluster = clustered_alignments[best_cluster_index]
+    if len(best_cluster) == multireadlet_counts[best_cluster_index]:
+        print >>sys.stderr, 'win'
+        print >>sys.stderr, [alignment[:-1] for alignment in best_cluster]
+        return [alignment[:-1] for alignment in best_cluster]
+    best_cluster.sort(key=lambda alignment: alignment[-1])
+    last_alignment = best_cluster[0]
+    filtered_alignments = [[last_alignment[:-1]]]
+    for alignment in best_cluster[1:]:
+        if alignment[-1] == last_alignment[-1]:
+            filtered_alignments[-1].append(alignment[:-1])
+        else:
+            filtered_alignments.append([alignment[:-1]])
+        last_alignment = alignment
+    print >>sys.stderr, 'tie'
+    print >>sys.stderr, selected_readlet_alignments_by_distance(filtered_alignments)
+    return selected_readlet_alignments_by_distance(filtered_alignments)
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
@@ -1524,10 +1618,10 @@ class BowtieOutputThread(threading.Thread):
                                     )
                         else:
                             filtered_alignments \
-                                = selected_readlet_alignments_by_coverage(
+                                = selected_readlet_alignments_by_correlation_clustering(
                                         collected_readlets[(last_qname,
                                             last_paired_label)],
-                                        self.reference_index
+                                        seed=(read_seq + qual_seq)
                                     )
                         '''Compute mean number of matched bases per aligned
                         base of the readlets from the read.'''
