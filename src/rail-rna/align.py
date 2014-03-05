@@ -1054,7 +1054,7 @@ def selected_readlet_alignments_by_distance(readlets):
             final_readlets[(alignment[0], alignment[1])].append(alignment)
     return sorted(final_readlets.values(), key=len, reverse=True)[0]
 
-def selected_readlet_alignments_by_coverage(readlets, reference_index):
+def selected_readlet_alignments_by_coverage(readlets, reference_index, seed=0):
     """ Selects multireadlet alignment that spans region with highest coverage.
     
         Consider a list "readlets" whose items {R_i} correspond to the aligned
@@ -1088,6 +1088,7 @@ def selected_readlet_alignments_by_coverage(readlets, reference_index):
             (rname, reverse_strand, pos, end_pos, displacement,
                 mismatch_count).
     """
+    random.seed(seed)
     if len(readlets) == 0:
         # Return an empty list if passed an empty list
         return []
@@ -1118,6 +1119,7 @@ def selected_readlet_alignments_by_coverage(readlets, reference_index):
     for strand, strand_coverage in sorted_coverages_per_base:
         if strand_coverage != sorted_coverages_per_base[0][1]: break
         chosen_strands.add(strand)
+    chosen_strands = random.sample(chosen_strands, 1)
     filtered_alignments = []
     '''Choose alignment of multireadlet with highest total coverage. If there
     is a tie among top alignments, do not return an alignment.'''
@@ -1173,6 +1175,43 @@ def correlation_clusters(alignments):
                                         unclustered_alignments
                                     )
 
+def correlation_clusters_2(alignments):
+    if len(alignments) == 0: return []
+    if len(alignments) == 1: return [alignments]
+    best_unclustered_alignments = []
+    best_alignment_clusters = []
+    min_cluster_size = None
+    for pivot in xrange(len(alignments)):
+        pivot_alignment = alignments[pivot]
+        unclustered_alignments = []
+        alignment_cluster = [pivot_alignment]
+        for i, alignment in enumerate(alignments):
+            if i == pivot: continue
+            if alignment[-1] == pivot_alignment[-1] or \
+                alignment[:2] != pivot_alignment[:2] or \
+                (alignment[4] == pivot_alignment[4] and
+                   alignment[2] != pivot_alignment[2]) or \
+                ((alignment[4] < pivot_alignment[4]) != \
+                    (alignment[2] < pivot_alignment[2])):
+                unclustered_alignments.append(alignment)
+            else:
+                alignment_cluster.append(alignment)
+        multireadlet_count = len(set([alignment[-1] for alignment in alignment_cluster]))
+        #multireadlet_count = len(alignment_cluster)
+        if len(best_alignment_clusters) == 0 or multireadlet_count >= min_cluster_size:
+            if multireadlet_count > min_cluster_size:
+                best_unclustered_alignments = [unclustered_alignments]
+                best_alignment_clusters = [alignment_cluster]
+                min_cluster_size = multireadlet_count
+                continue
+            best_unclustered_alignments.append(unclustered_alignments)
+            best_alignment_clusters.append(alignment_cluster)
+            min_cluster_size = multireadlet_count
+    chosen_cluster = random.randint(0, len(best_unclustered_alignments) - 1)
+    return [best_alignment_clusters[chosen_cluster]] + correlation_clusters_2(
+                                        best_unclustered_alignments[chosen_cluster]
+                                    )
+
 def correlation_clustering_cost(alignment_clusters):
     cost = 0
     for cluster in alignment_clusters:
@@ -1195,22 +1234,165 @@ def correlation_clustering_cost(alignment_clusters):
                 cost += 1
     return cost
 
-def selected_readlet_alignments_by_correlation_clustering(readlets, seed=0):
+def selected_readlet_alignments_by_coverage_2(readlets):
+    """ Selects multireadlet alignment that spans region with highest coverage.
+    
+        Consider a list "readlets" whose items {R_i} correspond to the aligned
+        readlets from a given read. Each R_i is itself a list of the possible
+        alignments {R_ij} of a readlet. Each R_ij is a tuple
+        (rname, reverse_strand, pos, end_pos, displacement, mismatch_count),
+        where rname is the SAM-format rname (typically a chromosome),
+        reverse_strand is True iff the readlet's reversed complement aligns to
+        the reference, displacement is the number of bases between the 5' (3')
+        end of the readlet, which aligns to the forward (reverse) strand, and
+        the 5' (3') end of the read, and mismatch_count is the number of
+        mismatched bases in the alignment. Let K_i be the number of alignments
+        {R_ij} of a given readlet R_i.
+
+        The algo first constructs a coverage distribution from the {R_i}. Each
+        base position B of the reference spanned by a given R_ij contributes
+        1 / K_i to the coverage at B. Alignments considered are then narrowed
+        to only those on the strand(s) with the highest total coverage per
+        base. The algo then selects the j for which R_ij spans the region with
+        the highest coverage, where a region's coverage is computed by summing
+        the coverages over all its bases. If there is more than one such j, the
+        corresponding R_ij are discarded.
+
+        readlets: a list whose items {R_i} correspond to the aligned readlets
+            from a given read. Each R_i is itself a list of the possible
+            alignments {R_ij} of a readlet. Each R_ij is a tuple
+            (rname, reverse_strand, pos, end_pos, displacement,
+            mismatch_count). See above for a detailed explanation.
+        reference_index: object of class bowtie_index.BowtieIndexReference
+            that permits access to reference; used for determining chromosome
+            sizes.
+
+        Return value: a list of selected alignment tuples
+            (rname, reverse_strand, pos, end_pos, displacement,
+                mismatch_count).
+    """
+    ordered_alignments = sorted([alignment + (i, 1. / len(multireadlet))
+                                    for i, multireadlet in enumerate(readlets)
+                                    for alignment in multireadlet])
+    print >>sys.stderr, 'ordered alignments'
+    print >>sys.stderr, ordered_alignments
+    highest_coverage_bin, bin = [], []
+    highest_coverage, coverage = 0, 0
+    covered_multireadlets = set()
+    last_strand = None
+    ordered_alignments += [tuple([None]*8)]
+    for (rname, reverse_strand, pos, end_pos, displacement, mismatch_count,
+            multireadlet_number, coverage_unit) in ordered_alignments:
+        if last_strand is not None and (pos is None or \
+            not ((rname, reverse_strand) == last_strand
+            and multireadlet_number not in covered_multireadlets and
+            ((pos == last_pos) if displacement == last_displacement else
+                (pos > last_pos)))):
+            if coverage > highest_coverage:
+                highest_coverage_bin = copy.deepcopy(bin)
+                highest_coverage = coverage
+            bin = []
+            coverage = 0
+            covered_multireadlets = set()
+        if pos is None: break
+        bin.append((rname, reverse_strand, pos, end_pos, displacement,
+                        mismatch_count))
+        coverage += coverage_unit
+        covered_multireadlets.add(multireadlet_number)
+        (last_strand, last_pos, last_displacement) = ((rname, reverse_strand),
+                                                        pos, displacement)
+    print >>sys.stderr, 'highest-coverage bin'
+    print >>sys.stderr, highest_coverage_bin
+    return highest_coverage_bin
+
+def selected_readlet_alignments_by_densest_subgraph(readlets, seed=0):
     random.seed(seed)
+    # Construct graph
+    alignments = [alignment + (1. / len(multireadlet), i) for i, multireadlet
+                                        in enumerate(readlets)
+                                        for alignment in multireadlet]
+    print >>sys.stderr, 'alignments'
+    print >>sys.stderr, alignments
+    alignment_count = len(alignments)
+    adjacency_matrix = np.zeros((alignment_count, alignment_count))
+    for i in xrange(alignment_count):
+        for j in xrange(i + 1, alignment_count):
+            if not (alignments[i][-1] == alignments[j][-1] or \
+                alignments[i][:2] != alignments[j][:2] or \
+                (alignments[i][4] == alignments[j][4] and
+                   alignments[i][2] != alignments[j][2]) or \
+                ((alignments[i][4] < alignments[j][4]) != \
+                    (alignments[i][2] < alignments[j][2]))):
+                adjacency_matrix[i, j] = adjacency_matrix[j, i] = \
+                    1
+            else:
+                adjacency_matrix[i, j] = adjacency_matrix[j, i] = \
+                    -1
+    # Implement Charikar's linear-time 2-approximation algo
+    vertices = set(range(alignment_count))
+    remove_order = []
+    mean_degrees = []
+    while vertices:
+        degrees = {}
+        for i in vertices:
+            degrees[i] = sum(
+                    [edge for j, edge in enumerate(adjacency_matrix[i])
+                        if j in vertices]
+                )
+        mean_degrees.append(float(sum(degrees.values())) / len(degrees))
+        index_to_remove = min(degrees, key=degrees.get)
+        remove_order.append(index_to_remove)
+        vertices.remove(index_to_remove)
+    max_mean_degree = max(mean_degrees)
+    # Choose densest subgraph at random
+    max_index = random.sample([i for i, mean_degree in enumerate(mean_degrees)
+                                if mean_degree == max_mean_degree], 1)[0]
+    removed_vertices = set(remove_order[:max_index])
+    kept_alignments = [alignment for i, alignment in enumerate(alignments)
+                        if i not in removed_vertices]
+    if len(kept_alignments) == len(set([alignment[-1] for alignment
+                                            in kept_alignments])):
+        print >>sys.stderr, 'win'
+        print >>sys.stderr, [alignment[:-2] for alignment in kept_alignments]
+        return [alignment[:-2] for alignment in kept_alignments]
+    kept_alignments.sort(key=lambda alignment: alignment[-1])
+    last_alignment = kept_alignments[0]
+    filtered_alignments = [[last_alignment[:-2]]]
+    for alignment in kept_alignments[1:]:
+        if alignment[-1] == last_alignment[-1]:
+            filtered_alignments[-1].append(alignment[:-2])
+        else:
+            filtered_alignments.append([alignment[:-2]])
+        last_alignment = alignment
+    print >>sys.stderr, 'tie'
+    print >>sys.stderr, filtered_alignments
+    print >>sys.stderr, [el[0] for el in filtered_alignments if len(el) == 1]
+    return [el[0] for el in filtered_alignments if len(el) == 1]
+
+def selected_readlet_alignments_by_clustering(readlets, seed=0):
+    random.seed(seed)
+    #cost = None
+    #final_clustered_alignments = None
+    #for i in xrange(20):
     clustered_alignments = correlation_clusters(
                                     [alignment + (i,) for i, multireadlet
                                         in enumerate(readlets)
                                         for alignment in multireadlet]
                                 )
+    #    current_cost = correlation_clustering_cost(clustered_alignments)
+    #    if current_cost > cost:
+    #        final_clustered_alignments = copy.deepcopy(clustered_alignments)
+    #        cost = current_cost
+    #clustered_alignments = final_clustered_alignments
     multireadlet_counts = [len(set([alignment[-1] for alignment in cluster]))
                             for cluster in clustered_alignments]
-    print >>sys.stderr, multireadlet_counts
+    #print >>sys.stderr, multireadlet_counts
     max_multireadlet_count = max(multireadlet_counts)
     best_cluster_indices = [i for i, multireadlet_count
                             in enumerate(multireadlet_counts)
                             if multireadlet_count == max_multireadlet_count]
     best_cluster_index_count = len(best_cluster_indices)
-    print >>sys.stderr, best_cluster_indices
+    #print >>sys.stderr, best_cluster_indices
     if best_cluster_index_count == 1:
         best_cluster_index = best_cluster_indices[0]
         best_cluster = clustered_alignments[best_cluster_index]
@@ -1221,8 +1403,8 @@ def selected_readlet_alignments_by_correlation_clustering(readlets, seed=0):
                                 ]
         best_cluster = clustered_alignments[best_cluster_index]
     if len(best_cluster) == multireadlet_counts[best_cluster_index]:
-        print >>sys.stderr, 'win'
-        print >>sys.stderr, [alignment[:-1] for alignment in best_cluster]
+        #print >>sys.stderr, 'win'
+        #print >>sys.stderr, [alignment[:-1] for alignment in best_cluster]
         return [alignment[:-1] for alignment in best_cluster]
     best_cluster.sort(key=lambda alignment: alignment[-1])
     last_alignment = best_cluster[0]
@@ -1233,9 +1415,9 @@ def selected_readlet_alignments_by_correlation_clustering(readlets, seed=0):
         else:
             filtered_alignments.append([alignment[:-1]])
         last_alignment = alignment
-    print >>sys.stderr, 'tie'
-    print >>sys.stderr, filtered_alignments
-    print >>sys.stderr, [el[0] for el in filtered_alignments if len(el) == 1]
+    #print >>sys.stderr, 'tie'
+    #print >>sys.stderr, filtered_alignments
+    #print >>sys.stderr, [el[0] for el in filtered_alignments if len(el) == 1]
     return [el[0] for el in filtered_alignments if len(el) == 1]
 
 class BowtieOutputThread(threading.Thread):
@@ -1639,10 +1821,10 @@ class BowtieOutputThread(threading.Thread):
                                     )
                         else:
                             filtered_alignments \
-                                = selected_readlet_alignments_by_correlation_clustering(
+                                = selected_readlet_alignments_by_clustering(
                                         collected_readlets[(last_qname,
                                             last_paired_label)],
-                                        seed=(last_read_seq + last_qual_seq)
+                                        seed=(qual_seq + read_seq)
                                     )
                             '''filtered_alignments \
                                 = selected_readlet_alignments_by_distance(
