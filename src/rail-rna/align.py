@@ -255,7 +255,7 @@ class GlobalAlignment:
         except Exception as e:
             print >>sys.stderr, 'C code for computing score matrix failed ' \
                                 'to compile. Get Python\'s distutils to use ' \
-                                'gcc, and try again.'
+                                'g++, and try again.'
             raise
         finally:
             # Turn the tap back on
@@ -1308,9 +1308,11 @@ def selected_readlet_alignments_by_coverage_2(readlets):
 def selected_readlet_alignments_by_densest_subgraph(readlets, seed=0):
     random.seed(seed)
     # Construct graph
-    alignments = [alignment + (1. / len(multireadlet), i) for i, multireadlet
+    alignments = [alignment + (1./len(multireadlet), i) for i, multireadlet
                                         in enumerate(readlets)
                                         for alignment in multireadlet]
+    alignments.sort()
+    multireadlet_groups = [alignment[-1] for alignment in alignments]
     print >>sys.stderr, 'alignments'
     print >>sys.stderr, alignments
     alignment_count = len(alignments)
@@ -1322,27 +1324,35 @@ def selected_readlet_alignments_by_densest_subgraph(readlets, seed=0):
                 (alignments[i][4] == alignments[j][4] and
                    alignments[i][2] != alignments[j][2]) or \
                 ((alignments[i][4] < alignments[j][4]) != \
-                    (alignments[i][2] < alignments[j][2]))):
-                adjacency_matrix[i, j] = adjacency_matrix[j, i] = \
-                    1
-            else:
-                adjacency_matrix[i, j] = adjacency_matrix[j, i] = \
-                    -1
+                    (alignments[i][2] < alignments[j][2])) or \
+                (alignments[i][-1] in multireadlet_groups[i+1:j] or
+                    alignments[j][-1] in multireadlet_groups[i+1:j])):
+                adjacency_matrix[i][j] = 1
+                adjacency_matrix[j][i] = 1
     # Implement Charikar's linear-time 2-approximation algo
-    vertices = set(range(alignment_count))
+    vertices = set([(i, alignment[-1]) 
+                        for i, alignment in enumerate(alignments)])
     remove_order = []
     mean_degrees = []
-    while vertices:
+    readlet_count = len(readlets)
+    while vertices:#len(vertices) != readlet_count:
         degrees = {}
-        for i in vertices:
-            degrees[i] = sum(
+        for vertex in vertices:
+            #if len([vertex_2[1] for vertex_2
+            #            in vertices if vertex[1] == vertex_2[1]]) <= 1:
+            #    continue
+            degrees[vertex] = sum(
                     [edge for j, edge in enumerate(adjacency_matrix[i])
                         if j in vertices]
                 )
         mean_degrees.append(float(sum(degrees.values())) / len(degrees))
+        #if len(degrees) == 0: break
         index_to_remove = min(degrees, key=degrees.get)
         remove_order.append(index_to_remove)
         vertices.remove(index_to_remove)
+    #print >>sys.stderr, 'alignments kept'
+    #print >>sys.stderr, [alignments[i] for i,x in vertices]
+    #return [alignments[i][:-2] for i,x in vertices]
     max_mean_degree = max(mean_degrees)
     # Choose densest subgraph at random
     max_index = random.sample([i for i, mean_degree in enumerate(mean_degrees)
@@ -1353,7 +1363,7 @@ def selected_readlet_alignments_by_densest_subgraph(readlets, seed=0):
     if len(kept_alignments) == len(set([alignment[-1] for alignment
                                             in kept_alignments])):
         print >>sys.stderr, 'win'
-        print >>sys.stderr, [alignment[:-2] for alignment in kept_alignments]
+        print >>sys.stderr, [alignment for alignment in kept_alignments]
         return [alignment[:-2] for alignment in kept_alignments]
     kept_alignments.sort(key=lambda alignment: alignment[-1])
     last_alignment = kept_alignments[0]
@@ -1369,16 +1379,91 @@ def selected_readlet_alignments_by_densest_subgraph(readlets, seed=0):
     print >>sys.stderr, [el[0] for el in filtered_alignments if len(el) == 1]
     return [el[0] for el in filtered_alignments if len(el) == 1]
 
+def correlation_clusters_3(alignments, adjacency_matrix):
+    if len(alignments) == 0: return []
+    if len(alignments) == 1: return [alignments]
+    pivot = random.sample(alignments, 1)[0]
+    unclustered_alignments = []
+    alignment_cluster = [pivot]
+    for i in alignments:
+        if i == pivot: continue
+        if not adjacency_matrix[i, pivot]:
+            unclustered_alignments.append(i)
+        else:
+            alignment_cluster.append(i)
+    return [alignment_cluster] + correlation_clusters_3(
+                                        unclustered_alignments,
+                                        adjacency_matrix
+                                    )
+
+def correlation_clusters_4(alignments, adjacency_matrix):
+    if len(alignments) == 0: return []
+    if len(alignments) == 1: return [alignments]
+    best_unclustered_alignments = []
+    best_alignment_clusters = []
+    min_cluster_size = None
+    for pivot in alignments:
+        unclustered_alignments = []
+        alignment_cluster = [pivot]
+        for i in alignments:
+            if i == pivot: continue
+            if not adjacency_matrix[i, pivot]:
+                unclustered_alignments.append(i)
+            else:
+                alignment_cluster.append(i)
+        multireadlet_count = len(alignment_cluster)
+        if len(best_alignment_clusters) == 0 or multireadlet_count >= min_cluster_size:
+            if multireadlet_count > min_cluster_size:
+                best_unclustered_alignments = [unclustered_alignments]
+                best_alignment_clusters = [alignment_cluster]
+                min_cluster_size = multireadlet_count
+                continue
+            best_unclustered_alignments.append(unclustered_alignments)
+            best_alignment_clusters.append(alignment_cluster)
+            min_cluster_size = multireadlet_count
+    chosen_cluster = random.randint(0, len(best_unclustered_alignments) - 1)
+    return [best_alignment_clusters[chosen_cluster]] + correlation_clusters_3(
+                                        best_unclustered_alignments[chosen_cluster],
+                                        adjacency_matrix
+                                    )
+
 def selected_readlet_alignments_by_clustering(readlets, seed=0):
     random.seed(seed)
     #cost = None
     #final_clustered_alignments = None
     #for i in xrange(20):
-    clustered_alignments = correlation_clusters(
-                                    [alignment + (i,) for i, multireadlet
+    # Construct graph
+    alignments = [alignment + (i,) for i, multireadlet
                                         in enumerate(readlets)
                                         for alignment in multireadlet]
-                                )
+    alignments.sort()
+    multireadlet_groups = [alignment[-1] for alignment in alignments]
+    #print >>sys.stderr, 'alignments'
+    #print >>sys.stderr, alignments
+    alignment_count = len(alignments)
+    adjacency_matrix = np.zeros((alignment_count, alignment_count))
+    for i in xrange(alignment_count):
+        for j in xrange(i + 1, alignment_count):
+            if not (alignments[i][-1] == alignments[j][-1] or \
+                alignments[i][:2] != alignments[j][:2] or \
+                (alignments[i][4] == alignments[j][4] and
+                   alignments[i][2] != alignments[j][2]) or \
+                ((alignments[i][4] < alignments[j][4]) != \
+                    (alignments[i][2] < alignments[j][2])) or \
+                (alignments[i][-1] in multireadlet_groups[i+1:j] or
+                    alignments[j][-1] in multireadlet_groups[i+1:j])):
+                adjacency_matrix[i][j] = 1
+                adjacency_matrix[j][i] = 1
+    clustered_alignments = correlation_clusters_3(
+            range(alignment_count),
+            adjacency_matrix
+        )
+    clustered_alignments = [[alignments[num] for num in group] for group in clustered_alignments]
+    #clustered_alignments = correlation_clusters(
+    #                                [alignment + (i,) for i, multireadlet
+    #                                    in enumerate(readlets)
+    #                                    for alignment in multireadlet]
+    #                            )
     #    current_cost = correlation_clustering_cost(clustered_alignments)
     #    if current_cost > cost:
     #        final_clustered_alignments = copy.deepcopy(clustered_alignments)
@@ -1397,6 +1482,7 @@ def selected_readlet_alignments_by_clustering(readlets, seed=0):
         best_cluster_index = best_cluster_indices[0]
         best_cluster = clustered_alignments[best_cluster_index]
     else:
+        return []
         best_cluster_index = best_cluster_indices[
                                     random.randint(0, 
                                         best_cluster_index_count - 1)
