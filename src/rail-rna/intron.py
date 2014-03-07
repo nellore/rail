@@ -626,7 +626,6 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                 print >>sys.stderr, \
                     '%d candidate intron(s) clustered down to %d.' \
                     % (len(candidate_introns), len(intron_clusters))
-            print >>sys.stderr, intron_clusters
             cluster_splice_sites = {}
             motif_counts = {}
             if stranded:
