@@ -139,6 +139,7 @@ _reverse_strand_motifs = [('CT', 'AC', True), ('CT', 'GC', True),
                             ('GT', 'AT', True)]
 
 def intron_clusters_in_partition_2(candidate_introns, seed=None):
+    # Recursion depth can be exceeded; iterative version below
     if seed is not None: random.seed(seed)
     pivot_intron = random.sample(candidate_introns.keys(), 1)[0]
     pivot_intron_size = pivot_intron[1] - pivot_intron[0]
@@ -165,6 +166,31 @@ def intron_clusters_in_partition_2(candidate_introns, seed=None):
     return [intron_cluster] + intron_clusters_in_partition_2(
                                     unclustered_candidates
                                 )
+
+def intron_clusters_in_partition_3(candidate_introns, seed=None):
+    if seed is not None: random.seed(seed)
+    intron_clusters = []
+    while candidate_introns:
+        pivot_intron = random.sample(candidate_introns.keys(), 1)[0]
+        pivot_intron_size = pivot_intron[1] - pivot_intron[0]
+        intron_cluster = []
+        unclustered_candidates = {}
+        candidate_introns_to_remove = []
+        for candidate_intron in candidate_introns:
+            if candidate_intron[1] - candidate_intron[0] == pivot_intron_size \
+                and min(candidate_intron[1], pivot_intron[1]) \
+                    - max(candidate_intron[0], pivot_intron[0]) > 0:
+                '''If the candidate intron and the pivot intron have the same
+                size and overlap, put them in the same cluster.'''
+                intron_cluster += [candidate_intron + read_data for read_data
+                                    in candidate_introns[candidate_intron]]
+                candidate_introns_to_remove.append(candidate_intron)
+        for candidate_intron in candidate_introns_to_remove:
+            del candidate_introns[candidate_intron]
+        intron_clusters.append(intron_cluster)
+    print >>sys.stderr, intron_clusters
+    return intron_clusters
+
 
 def intron_clusters_in_partition(candidate_introns, partition_start, 
     partition_end, cluster_radius=5, verbose=False):
@@ -621,11 +647,12 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
             #    last_partition_start, last_partition_end, 
             #    cluster_radius=cluster_radius,
             #    verbose=verbose)
-            intron_clusters = intron_clusters_in_partition_2(candidate_introns)
+            candidate_intron_count = len(candidate_introns)
+            intron_clusters = intron_clusters_in_partition_3(candidate_introns)
             if verbose:
                 print >>sys.stderr, \
                     '%d candidate intron(s) clustered down to %d.' \
-                    % (len(candidate_introns), len(intron_clusters))
+                    % (candidate_intron_count, len(intron_clusters))
             cluster_splice_sites = {}
             motif_counts = {}
             if stranded:
