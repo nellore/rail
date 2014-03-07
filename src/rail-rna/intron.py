@@ -113,6 +113,7 @@ import itertools
 from collections import defaultdict
 import numpy as np
 import site
+import random
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for directory_name in ['interval', 'bowtie']:
@@ -136,6 +137,34 @@ _forward_strand_motifs = [('GT', 'AG', False), ('GC', 'AG', False),
                             ('AT', 'AC', False)]
 _reverse_strand_motifs = [('CT', 'AC', True), ('CT', 'GC', True),
                             ('GT', 'AT', True)]
+
+def intron_clusters_in_partition_2(candidate_introns, seed=None):
+    if seed is not None: random.seed(seed)
+    pivot_intron = random.sample(candidate_introns.keys(), 1)[0]
+    pivot_intron_size = pivot_intron[1] - pivot_intron[0]
+    intron_cluster = []
+    unclustered_candidates = {}
+    for candidate_intron in candidate_introns:
+        if candidate_intron[1] - candidate_intron[0] == pivot_intron_size and \
+            min(candidate_intron[1], pivot_intron[1]) \
+                - max(candidate_intron[0], pivot_intron[0]) > 0:
+            '''If the candidate intron and the pivot intron have the same size
+            and overlap, put them in the same cluster.'''
+            intron_cluster += [candidate_intron + read_data for read_data
+                                in candidate_introns[candidate_intron]]
+        else:
+            unclustered_candidates[candidate_intron] = \
+                candidate_introns[candidate_intron]
+    if len(unclustered_candidates) == 1:
+        final_intron = unclustered_candidates.keys()[0]
+        final_intron_cluster = [final_intron + read_data for read_data
+                                    in unclustered_candidates[final_intron]]
+        return [intron_cluster, final_intron_cluster]
+    if len(unclustered_candidates) == 0:
+        return [intron_cluster]
+    return [intron_cluster] + intron_clusters_in_partition_2(
+                                    unclustered_candidates
+                                )
 
 def intron_clusters_in_partition(candidate_introns, partition_start, 
     partition_end, cluster_radius=5, verbose=False):
@@ -391,7 +420,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         output_stream=sys.stdout, bin_size=10000, cluster_radius=5,
         per_site=False, per_span=True, output_bed=True, stranded=False,
         intron_partition_overlap=20, motif_radius=1, 
-        min_anchor_significance=9, verbose=False):
+        min_anchor_significance=9, seed=0, verbose=False):
     """ Runs Rail-RNA-intron.
 
         Input lines are binned, so they are examined two at a time. When the
@@ -544,6 +573,8 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
     handle_partition = False
     last_partition_id = None
     candidate_introns = {}
+    # Make results reproducible
+    random.seed(seed)
     while True:
         line = input_stream.readline()
         if line:
@@ -586,10 +617,16 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                 print >> sys.stderr, 'For partition %s:[%d, %d)' \
                     % (last_partition_id, last_partition_start,
                         last_partition_end)
-            intron_clusters = intron_clusters_in_partition(candidate_introns,
-                last_partition_start, last_partition_end, 
-                cluster_radius=cluster_radius,
-                verbose=verbose)
+            #intron_clusters = intron_clusters_in_partition(candidate_introns,
+            #    last_partition_start, last_partition_end, 
+            #    cluster_radius=cluster_radius,
+            #    verbose=verbose)
+            intron_clusters = intron_clusters_in_partition_2(candidate_introns)
+            if verbose:
+                print >>sys.stderr, \
+                    '%d candidate intron(s) clustered down to %d.' \
+                    % (len(candidate_introns), len(intron_clusters))
+            print >>sys.stderr, intron_clusters
             cluster_splice_sites = {}
             motif_counts = {}
             if stranded:

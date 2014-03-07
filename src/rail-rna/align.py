@@ -2495,10 +2495,10 @@ if __name__ == '__main__':
         help='Amount by which partitions overlap their left and right '
              'neighbors')
     parser.add_argument('--min-intron-size', type=int, required=False,
-        default=50,
+        default=5,
         help='Filters introns of length smaller than this value')
     parser.add_argument('--max-intron-size', type=int, required=False,
-        default=400000, 
+        default=500000, 
         help='Filters introns of length greater than this value')
     parser.add_argument('--min-strand-readlets', type=int, required=False,
         default=1, 
@@ -2513,7 +2513,7 @@ if __name__ == '__main__':
              'incorporation into a single EC spanning the two original ECs '
              'via DP filling')
     parser.add_argument('--min-seq-similarity', type=float, required=False,
-        default=0.85, 
+        default=1., 
         help='If the difference in length between an unmapped region framed '
              'by two ECs and its corresponding gap in the reference is <= the '
              'command-line option --max-discrepancy AND the score of global '
