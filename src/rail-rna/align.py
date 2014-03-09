@@ -138,12 +138,12 @@ _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 class GlobalAlignment:
     """ Invokes Weave to obtain alignment score matrix with C. """
 
-    def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-2],
-                                            [-1, 1,-1,-1,-1,-2],
-                                            [-1,-1, 1,-1,-1,-2],
-                                            [-1,-1,-1, 1,-1,-2],
-                                            [-1,-1,-1,-1,-1,-2],
-                                            [-2,-2,-2,-2,-2,-2]]):
+    def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-5],
+                                            [-1, 1,-1,-1,-1,-5],
+                                            [-1,-1, 1,-1,-1,-5],
+                                            [-1,-1,-1, 1,-1,-5],
+                                            [-1,-1,-1,-1,-1,-5],
+                                            [-5,-5,-5,-5,-5,-5]]):
         """ Constructor for GlobalAlignment.
 
             Places substitution_matrix directly in string containing C code
@@ -577,7 +577,7 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
 def exons_and_introns_from_read(reference_index, read_seq, readlets, 
     min_intron_size=5, min_strand_readlets=1, max_discrepancy=2, 
     min_seq_similarity=0.85, search_for_caps=True, min_cap_query_size=8,
-    cap_search_window_size=1000,
+    cap_search_window_size=1000, seed=0,
     global_alignment=GlobalAlignment()):
     """ Composes a given read's aligned readlets and returns ECs and introns.
 
@@ -619,6 +619,8 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
             than this size.
         cap_search_window_size: the size (in bp) of the reference subsequence
             in which to search for a cap.
+        seed: seed for random number generator; used to break ties in median 
+            index when performing DP filling.
         global_alignment: instance of GlobalAlignment class used for fast
                 realignment of exonic chunks via Weave.
 
@@ -652,6 +654,7 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                 means "towards the 5' (3') end of the read," again assuming
                 the sense strand is the forward strand.
     """
+    random.seed(seed)
     composed = composed_and_sorted_readlets(readlets, min_strand_readlets)
     read_seq = read_seq.upper()
     reversed_complement_read_seq = read_seq[::-1].translate(
@@ -851,10 +854,17 @@ def exons_and_introns_from_read(reference_index, read_seq, readlets,
                             reference_index.get_stretch(rname,
                                 pos - read_distance - 1, read_distance)
                         )
-                    '''Decide which split to use: choose the smallest
-                    medoid index.'''
-                    nonintegral_median = np.median(splits)
-                    split = splits[np.argmin(abs(splits - nonintegral_median))]
+                    '''Decide which split to use: choose the median index. If 
+                    there is a tie in median indices, break it at random.'''
+                    split_count = len(splits)
+                    split_end = split_count / 2
+                    if split_count % 2:
+                        split = splits[split_end]
+                    else:
+                        # If split count is even, break tie
+                        split = random.sample(
+                                        splits[(split_end - 1):split_end], 1
+                                    )[0]
                     pos += split - read_distance
                     displacement += split - read_distance
                     last_end_pos += split
@@ -1910,7 +1920,7 @@ class BowtieOutputThread(threading.Thread):
                                 = selected_readlet_alignments_by_clustering(
                                         collected_readlets[(last_qname,
                                             last_paired_label)],
-                                        seed=(qual_seq + read_seq)
+                                        seed=(last_qual_seq + last_read_seq)
                                     )
                             '''filtered_alignments \
                                 = selected_readlet_alignments_by_distance(
@@ -1938,7 +1948,8 @@ class BowtieOutputThread(threading.Thread):
                             global_alignment=self.global_alignment,
                             search_for_caps=self.search_for_caps,
                             min_cap_query_size=self.min_cap_query_size,
-                            cap_search_window_size=self.cap_search_window_size
+                            cap_search_window_size=self.cap_search_window_size,
+                            seed=(last_read_seq + last_qual_seq)
                         )
                         '''Kill mate information in last_qname so rest of
                         pipeline associates mates.'''
@@ -2031,7 +2042,7 @@ class BowtieOutputThread(threading.Thread):
                                             % (self.max_intron_size,
                                                 intron_rname, intron_pos,
                                                 intron_end_pos)
-                                        continue
+                                    continue
                                 if intron_end_pos - intron_pos \
                                     < self.min_intron_size:
                                     if self.verbose:
@@ -2042,7 +2053,7 @@ class BowtieOutputThread(threading.Thread):
                                             % (self.min_intron_size,
                                                 intron_rname, intron_pos,
                                                 intron_end_pos)
-                                        continue
+                                    continue
                                 partitions = partition.partition(intron_rname,
                                     intron_pos, intron_pos + 1, self.bin_size,
                                     fudge=self.intron_partition_overlap)

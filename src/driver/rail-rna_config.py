@@ -26,6 +26,10 @@ def addArgs(parser):
     parser.add_argument(\
         '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
+        '--motif-radius', type=int, required=False, default=4,
+        help='Distance (in bp) from each of the start and end positions '
+             'of a cluster within which to search for motifs')
+    parser.add_argument(\
         '--intron-partition-overlap', metavar='INT', type=int, default="50", help='# of nucleotides of overlap between intron-finding partitions.')
     parser.add_argument('--min-intron-size', type=int, required=False,
         default=5,
@@ -133,6 +137,9 @@ class Rail_RNAConfig(object):
         r = self.clusterRadius = args.cluster_radius
         if r < 0:
             raise RuntimeError("Argument for --cluster-radius must be >= 0; was %d" % r)
+        mr = self.motifRadius = args.motif_radius
+        if mr < 0:
+            raise RuntimeError("Argument for --motif-radius must be >= 0; was %d" % mr)
         i = self.intronPartitionOlap = args.intron_partition_overlap
         if i < 0:
             raise RuntimeError("Argument for --intron-partition-overlap must be >= 0; was %d" % i)

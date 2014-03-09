@@ -188,7 +188,6 @@ def intron_clusters_in_partition_3(candidate_introns, seed=None):
         for candidate_intron in candidate_introns_to_remove:
             del candidate_introns[candidate_intron]
         intron_clusters.append(intron_cluster)
-    print >>sys.stderr, intron_clusters
     return intron_clusters
 
 
@@ -414,6 +413,7 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
             motif_pairs = \
                 itertools.product(*[left_motif_offsets, right_motif_offsets])
             for left_motif_offset, right_motif_offset in motif_pairs:
+                if left_motif_offset != right_motif_offset: continue
                 left_motif_start_position = min_start_position \
                     + left_motif_offset
                 right_motif_end_position = min_end_position \
@@ -433,9 +433,7 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
         positions_and_z_scores.sort(
                 key=lambda positions_and_z_score: positions_and_z_score[2]
             )
-        ranked_introns += [positions_and_z_score 
-                            for positions_and_z_score in 
-                            positions_and_z_scores]
+        ranked_introns += positions_and_z_scores
     if len(ranked_introns) == 0 and verbose:
         print >>sys.stderr, \
             'Warning: No splice site found for cluster with ' \
@@ -665,8 +663,12 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 motif_radius=motif_radius, verbose=verbose
                             )
                         if len(ranked_splice_sites) != 0:
-                            # Pick top-ranked intron
-                            cluster_splice_sites[i] = ranked_splice_sites[0]
+                            # Break any ties in top-ranked intron at random
+                            cluster_splice_sites[i] \
+                                = random.sample([splice_site for splice_site in
+                                                    ranked_splice_sites if
+                                                    ranked_splice_sites[0][2:]
+                                                    == splice_site[2:]], 1)[0]
                             motif_counts[i] = len(ranked_splice_sites)
                 else:
                     for i, intron_cluster in enumerate(intron_clusters):
@@ -676,8 +678,12 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 motif_radius=motif_radius, verbose=verbose
                             )
                         if len(ranked_splice_sites) != 0:
-                            # Pick top-ranked intron
-                            cluster_splice_sites[i] = ranked_splice_sites[0]
+                            # Break any ties in top-ranked intron at random
+                            cluster_splice_sites[i] \
+                                = random.sample([splice_site for splice_site in
+                                                    ranked_splice_sites if
+                                                    ranked_splice_sites[0][2:]
+                                                    == splice_site[2:]], 1)[0]
                             motif_counts[i] = len(ranked_splice_sites)
             else:
                 # The sense strand is unknown, so use a general motif set
@@ -689,7 +695,11 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         )
                     if len(ranked_splice_sites) != 0:
                         # Pick top-ranked intron
-                        cluster_splice_sites[i] = ranked_splice_sites[0]
+                        cluster_splice_sites[i] \
+                                = random.sample([splice_site for splice_site in
+                                                    ranked_splice_sites if
+                                                    ranked_splice_sites[0][2:]
+                                                    == splice_site[2:]], 1)[0]
                         motif_counts[i] = len(ranked_splice_sites)
             for i, (start_position, end_position, z_score_sum, left_motif,
                         right_motif, motif_reverse_strand) \
@@ -839,7 +849,7 @@ if __name__ == '__main__':
         help='The maximum radius of a cluster of candidate introns for which '
              'splice sites are called')
     parser.add_argument(\
-        '--motif-radius', type=int, required=False, default=1,
+        '--motif-radius', type=int, required=False, default=4,
         help='Distance (in bp) from each of the start and end positions '
              'of a cluster within which to search for motifs')
     parser.add_argument('--intron-partition-overlap', type=int, required=False,

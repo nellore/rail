@@ -125,9 +125,11 @@ class IntronStep(pipeline.Step):
                 --verbose
                 --partition-length %d
                 --min-anchor-significance %d
+                --motif-radius=%d
                 %s
         """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
                 tconf.partitionLen, tconf.min_anchor_significance,
+                tconf.motifRadius,
                 '--stranded' if tconf.stranded else '')
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(IntronStep, self).__init__(\
