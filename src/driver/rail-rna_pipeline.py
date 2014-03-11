@@ -119,17 +119,12 @@ class IntronStep(pipeline.Step):
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --cluster-radius=%d
                 --intron-partition-overlap=%d
-                --per-span
-                --per-site
-                --output-bed
                 --verbose
                 --partition-length %d
-                --min-anchor-significance %d
                 --motif-radius=%d
                 %s
         """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
-                tconf.partitionLen, tconf.min_anchor_significance,
-                tconf.motifRadius,
+                tconf.partitionLen, tconf.motifRadius,
                 '--stranded' if tconf.stranded else '')
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(IntronStep, self).__init__(\
@@ -144,18 +139,15 @@ class IntronPostStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
             python %%BASE%%/src/rail-rna/intron_post.py
-                --out=%s/junctions
-                --bed-basename=%s
-                %s
-            """ % (gconf.out, tconf.bed_basename, 
-                    '--output-by-chromosome' if tconf.output_bed_by_chromosome else '')
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
+                --out=%s/index
+            """ % gconf.intermediate
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(IntronPostStep, self).__init__(\
             inps,
             output,
             name="IntronPost",
-            aggr=(pipeline.Aggregation(None, 1, 1, 2) if (tconf.output_bed_by_chromosome and gconf.out is not None) \
-                    else pipeline.Aggregation(1, None, 1, 2)),
+            aggr=pipeline.Aggregation(1, None, 1, 5),
             reducer=reducerStr)
 
 class MergeStep(pipeline.Step):

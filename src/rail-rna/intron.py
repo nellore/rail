@@ -5,7 +5,7 @@ Rail-RNA-intron
 Follows Rail-RNA-align
 Precedes Rail-RNA-intron_post
 
-Reduce step in MapReduce pipelines that infers intron/exon boundaries from 
+Reduce step in MapReduce pipelines that infers intron start/end positions from 
 spliced alignments output by Rail-RNA-align. Each worker operates on a set of
 genome partitions, clustering alignments that overlap and associating clusters
 with donor/acceptor motifs.
@@ -23,87 +23,22 @@ Tab-delimited columns:
     ('+' or '-' indicating which strand is the sense strand if input reads are
         strand-specific -- that is, --stranded in Rail-RNA-align was invoked;
         otherwise, there is no terminal '+' or '-')
-2. Sample label
-3. Candidate intron start (inclusive) on forward strand (1-indexed)
-4. Candidate intron end (exclusive) on forward strand (1-indexed)
-5. Number of nucleotides between 5' end of candidate intron and 5' end of read
-from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
-That is, if the sense strand is the reverse strand, this is the distance
-between the 5' end of the reverse-complemented read and the 5' end of the
-reverse-complemented intron.
-6. Number of nucleotides between 3' end of candidate intron and 3' end of read 
-from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
-7. Number of nucleotides spanned by EC on the left (that is, towards the 5'
-end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
-STRAND.
-8. Number of nucleotides spanned by EC on the right (that is, towards the 3'
-end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
-STRAND.
-9. Match rate: the number of bases that match the reference per base of the
-aligned readlets comprising the read from which the intron was inferred.
-10. '-' if reversed complements of readlets from which intron was inferred
-aligned to forward strand; else '+'
+2. Candidate intron start (inclusive) on forward strand (1-indexed)
+3. Candidate intron end (exclusive) on forward strand (1-indexed)
 
-Input is partitioned by column 1 and sorted by ascending columns 1/2.
+Input is partitioned by column 1.
 
 Hadoop output (written to stdout)
 ----------------------------
-Format 1 (span): tab-delimited columns, one line per read spanning a splice
-site:
-1. SAM-format RNAME + ';' + ('+' or '-' indicating which strand is the sense
-    strand)
-2. Intron start (inclusive) on forward strand (1-indexed)
-3. Intron end (exclusive) on forward strand (1-index)
-4. Left motif (donor motif if sense strand is '+'; acceptor motif otherwise)
-5. Right motif (acceptor motif if sense strand is '+'; donor motif otherwise)
-6. Sample label from which read was derived
+Tab-delimited columns:
+1. The character 'i', which will place the row after 'a' (maximum read length
+    rows) in lexicographic sort order.
+2. Reference name (RNAME in SAM format) +
+    '+' or '-' indicating which strand is the sense strand
+3. Intron start position (inclusive)
+4. Intron end position (exclusive)
 
-Format 2 (site): tab-delimited columns, one line per splice site spanned by
-the reads in a sample
-1. SAM-format RNAME + ';' + ('+' or '-' indicating which strand is the sense
-    strand)
-2. Intron start (inclusive) on forward strand (1-indexed)
-3. Intron end (exclusive) on forward strand (1-index)
-4. Left motif (donor motif if sense strand is '+'; acceptor motif otherwise)
-5. Right motif (acceptor motif if sense strand is '+'; donor motif otherwise)
-6. Sample label with nonzero number of reads spanning splice site
-7. Number of reads in sample spanning splice site
-
-Format 3 (junction):
-12-column (3 required fields + 9 optional fields) BED output mimicking TopHat's
-junctions.bed, except anchor significance, maximum match rate, unique
-displacement count, and motif count are also included in the name field.
-From the TopHat manual at http://tophat.cbcb.umd.edu/manual.shtml: "Each
-junction consists of two connected BED blocks, where each block is as long as
-the maximal overhang of any read spanning the junction. The score is the number
-of alignments spanning the junction." (Each line of the BED file actually
-specifies the TWO splice junctions J = (J_A, J_B) that frame an intron, and the
-statistics given in the name field pertain to the junction for that intron only
-rather than the junction across all alternative splicings.) Anchor significance
-of a splice J is NOT defined as in the MapSplice paper
-http://nar.oxfordjournals.org/content/38/18/e178.long. Consider the set {R_i}
-of reads that span the splice J. For a given read R_i, consider the two anchors
-A_i and B_i on either side of J, and let L_(A_i) and L_(B_i) be their lengths
-(in bp). The anchor significance of J is max_i min(L(A_i), L(B_i)).) Maximum
-match rate is the highest match rate from among the reads spanning J, where
-match rate is defined in the description of field 9 from the input above.
-Unique displacement count is the number of unique displacements of J from the
-5' end of the original read in the set {R_i}. The 5' end of the read is
-determined from the strand to which contituent readlets align: if the readlets'
-reversed complements align to the forward strand, the 5' end of the original
-read sequence is the right end; if the unaltered readlet sequences align to the
-forward strand, the 5' end of the original read sequence is the left end. Motif
-probability is defined as follows. Consider searching for donor and acceptor
-motifs (like "GT" and "AG") within motif_radius bp of each of the minimum and 
-maximum of each of the start and end positions of an intron cluster; that is,
-the intervals [min(start_positions) - motif_radius, max(start_positions) +
-    motif_radius + 2) and [min(end_positions - 2 - motif_radius),
-    max(end_positions) + motif_radius) are scanned for motifs, where 
-start_positions (end_positions) aggregates the start (end) positions of the
-candidate introns in a cluster. Count the number N_L of donor motifs and the
-number N_R of acceptor motifs. Motif count is defined as (N_L * N_R).
-
-OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE 1-INDEXED.
+OUTPUT COORDINATES ARE 1-INDEXED.
 """
 import os
 import sys
@@ -114,6 +49,7 @@ from collections import defaultdict
 import numpy as np
 import site
 import random
+import time
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for directory_name in ['interval', 'bowtie']:
@@ -138,59 +74,6 @@ _forward_strand_motifs = [('GT', 'AG', False), ('GC', 'AG', False),
 _reverse_strand_motifs = [('CT', 'AC', True), ('CT', 'GC', True),
                             ('GT', 'AT', True)]
 
-def intron_clusters_in_partition_2(candidate_introns, seed=None):
-    # Recursion depth can be exceeded; iterative version below
-    if seed is not None: random.seed(seed)
-    pivot_intron = random.sample(candidate_introns.keys(), 1)[0]
-    pivot_intron_size = pivot_intron[1] - pivot_intron[0]
-    intron_cluster = []
-    unclustered_candidates = {}
-    for candidate_intron in candidate_introns:
-        if candidate_intron[1] - candidate_intron[0] == pivot_intron_size and \
-            min(candidate_intron[1], pivot_intron[1]) \
-                - max(candidate_intron[0], pivot_intron[0]) > 0:
-            '''If the candidate intron and the pivot intron have the same size
-            and overlap, put them in the same cluster.'''
-            intron_cluster += [candidate_intron + read_data for read_data
-                                in candidate_introns[candidate_intron]]
-        else:
-            unclustered_candidates[candidate_intron] = \
-                candidate_introns[candidate_intron]
-    if len(unclustered_candidates) == 1:
-        final_intron = unclustered_candidates.keys()[0]
-        final_intron_cluster = [final_intron + read_data for read_data
-                                    in unclustered_candidates[final_intron]]
-        return [intron_cluster, final_intron_cluster]
-    if len(unclustered_candidates) == 0:
-        return [intron_cluster]
-    return [intron_cluster] + intron_clusters_in_partition_2(
-                                    unclustered_candidates
-                                )
-
-def intron_clusters_in_partition_3(candidate_introns, seed=None):
-    if seed is not None: random.seed(seed)
-    intron_clusters = []
-    while candidate_introns:
-        pivot_intron = random.sample(candidate_introns.keys(), 1)[0]
-        pivot_intron_size = pivot_intron[1] - pivot_intron[0]
-        intron_cluster = []
-        unclustered_candidates = {}
-        candidate_introns_to_remove = []
-        for candidate_intron in candidate_introns:
-            if candidate_intron[1] - candidate_intron[0] == pivot_intron_size \
-                and min(candidate_intron[1], pivot_intron[1]) \
-                    - max(candidate_intron[0], pivot_intron[0]) > 0:
-                '''If the candidate intron and the pivot intron have the same
-                size and overlap, put them in the same cluster.'''
-                intron_cluster += [candidate_intron + read_data for read_data
-                                    in candidate_introns[candidate_intron]]
-                candidate_introns_to_remove.append(candidate_intron)
-        for candidate_intron in candidate_introns_to_remove:
-            del candidate_introns[candidate_intron]
-        intron_clusters.append(intron_cluster)
-    return intron_clusters
-
-
 def intron_clusters_in_partition(candidate_introns, partition_start, 
     partition_end, cluster_radius=5, verbose=False):
     """ Clusters candidate introns from a strand in a genomic partition.
@@ -206,21 +89,9 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
         removed from the lineup, and the next candidate is examined.
         
         candidate_introns: a dictionary. Each key is a tuple
-            (start_position, end_position) and its corresponding value is a
-            list (of length read_count), each of whose items is a tuple
-            (sample_label, five_prime_displacement, three_prime_displacement,
-                left_EC_size, right_EC_size, match_rate, reverse_strand)
-            associated with a read supporting the candidate. Here,
-            five_prime_displacement is the displacement of the 5' end of the
-            candidate from the 5' end of the read, while
-            three_prime_displacement is the displacement of the 3' end of the
-            candidate from the 3' end of the read. left_EC_size (right_EC_size)
-            is the number of nucleotides spanned by the EC on the left (right)
-            of the intron. Here, "left" ("right") means "towards the 5' (3')
-            end of the read." match_rate is the number of bases that match the
-            reference per base of the aligned readlets comprising the read from
-            which the intron was inferred. reverse_strand is is True iff the
-            readlets' reversed complements aligned to the forward strand.
+            (start_position, end_position) and its corresponding value is
+            supporting_read_count, the number of reads (across samples)
+            supporting the candidate intron.
         partition_start: start position (inclusive) of partition.
         partition_end: end position (exclusive) of partition.
         cluster_radius: distance from a candidate intron under examination
@@ -230,19 +101,17 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
             should be written to stderr.
 
         Return value: a list of lists, each of which corresponds to a cluster
-        of candidate introns. Each item in a cluster is a tuple
-        (start_position, end_position, sample_label, five_prime_displacement,
-            three_prime_displacement, left_EC_size, right_EC_size,
-            match_rate, reverse_strand),
-        which corresponds to a read supporting a candidate intron spanning
-        [start_position, end_position) in the cluster.
+            of candidate introns. Each item in a cluster is a tuple
+            (start_position, end_position) corresponding to an intron call
+            from a single read.
     """
     '''Construct list of candidate introns sorted in order of descending
     read_count.'''
-    candidate_intron_list = [(len(reads), 
+    candidate_intron_list = [(supporting_read_count, 
                                 end_position - start_position, end_position)
-                                for (start_position, end_position),
-                                reads in candidate_introns.items()]
+                                for ((start_position, end_position),
+                                supporting_read_count)
+                                in candidate_introns.items()]
     candidate_intron_list.sort()
     # Construct set of candidate introns for fast searching
     candidate_intron_set = set()
@@ -258,7 +127,7 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
             current_cluster_radius = min(intron_size, cluster_radius)
             total_cluster_count += 1
             clustered_introns.add((intron_size, end_position))
-            intron_cluster = [(intron_size, end_position)]
+            intron_cluster = [(end_position - intron_size, end_position)]
             for an_end_position in xrange(end_position 
                                             - current_cluster_radius,
                                             end_position
@@ -268,7 +137,8 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                             an_end_position) not in clustered_introns:
                     '''If a nearby candidate hasn't been clustered, absorb it
                     into the current cluster.'''
-                    intron_cluster.append((intron_size, an_end_position))
+                    intron_cluster.append((an_end_position - intron_size,
+                                                an_end_position))
                     clustered_introns.add((intron_size, an_end_position))
             intron_clusters.append(intron_cluster)
             assert len(clustered_introns) <= candidate_intron_count
@@ -277,18 +147,10 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                     print >> sys.stderr, '%d possible splice junction(s) ' \
                         'clustered down to %d.' % (candidate_intron_count, 
                             total_cluster_count)
-                # Collect reads supporting cluster
-                reads_for_intron_clusters = []
-                for intron_cluster in intron_clusters:
-                    reads_for_intron_cluster = []
-                    for an_intron_size, an_end_position in intron_cluster:
-                        a_start_position = an_end_position - an_intron_size
-                        for read in candidate_introns[(a_start_position,
-                                                        an_end_position)]:
-                            reads_for_intron_cluster.append((a_start_position, 
-                                an_end_position) + read)
-                    reads_for_intron_clusters.append(reads_for_intron_cluster)
-                return reads_for_intron_clusters
+                return [list(itertools.chain(
+                                *[[candidate]*candidate_introns[candidate] for
+                                    candidate in an_intron_cluster]
+                            )) for an_intron_cluster in intron_clusters]
     raise RuntimeError('For loop should never be completed.')
 
 def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
@@ -328,31 +190,29 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
             RNA. 2013 Jan-Feb;4(1):61-76. doi: 10.1002/wrna.1141.
 
             -http://onlinelibrary.wiley.com/doi/10.1002/wrna.1141/full)
-        If more than one possible motif (pair) of the same rank is found, the
-        tie is broken as follows. The means and standard deviations of the
-        start and end positions of the candidate introns are computed. Then the
-        z-score of the start motif position is added to the z-score of the end
-        end motif position, and the motif pairs are ranked in order of
-        ascending z-score. If no motifs are found, the return value of this
-        function is an empty list. So above, ranked first would be a GT..AG,
-        which is spanned by I3, and second would be a GC..AG, spanned by
+        The only motifs considered appear at the ends of an intron of exactly
+        the (unique) length of the introns in a given cluster. If more than one
+        possible motif (pair) of the same rank is found, the tie is broken as
+        follows. The means and standard deviations of the start and end
+        positions of the candidate introns are computed. Then the z-score of
+        the start motif position is added to the z-score of the end motif
+        position, and the motif pairs are ranked in order of ascending z-score.
+        If no motifs are found, the return value of this function is an empty
+        list. So above, ranked first would be a GT..AG, which is spanned by I3,
+        and second would be a GC..AG, spanned by
         [I1's start position, I3's end position].
 
         ALL INPUT COORDINATES ARE ASSUMED TO BE 1-INDEXED.
 
         reference_index: object of class bowtie_index.BowtieIndexReference
-                that permits access to reference; used to find splice-site
-                motifs.
+            that permits access to reference; used to find splice-site motifs.
         intron_cluster: a list of lists, each of which corresponds to a cluster
             of candidate introns. Each item in a cluster is a tuple
-            (start_position, end_position, sample_label, 
-                five_prime_displacement, three_prime_displacement,
-                left_EC_size, right_EC_size, match_rate, reverse_strand), which
-            corresponds to a read supporting a candidate intron spanning
-            [start_position, end_position) in the cluster.
+            (start_position, end_position) corresponding to an intron call
+            from a single read.
         rname: SAM-format RNAME indicating the chromosome.
         motifs: List of lists of motif tuples (donor motif, acceptor motif, 
-                reverse strand boolean) in order of descending priority. The
+            reverse strand boolean) in order of descending priority. The
             reverse strand boolean is False iff the forward strand is the 
             sense strand for the motif. Each sublist contains motif tuples
             whose priority (rank) is the same.
@@ -375,7 +235,7 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
             [(142451, 143128, 2.8324, 'GT', 'AG', False),
                 (142449, 143128, 3.1124, 'CT', 'AC', True)].
     """
-    start_positions, end_positions, _, _, _, _, _, _, _ = zip(*intron_cluster)
+    start_positions, end_positions = zip(*intron_cluster)
     reference_length = reference_index.rname_lengths[rname]
     min_start_position = max(min(start_positions) - motif_radius, 1)
     max_start_position = min(max(start_positions) + motif_radius + 2,
@@ -413,7 +273,10 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
             motif_pairs = \
                 itertools.product(*[left_motif_offsets, right_motif_offsets])
             for left_motif_offset, right_motif_offset in motif_pairs:
-                if left_motif_offset != right_motif_offset: continue
+                if left_motif_offset != right_motif_offset: 
+                    '''Eliminate motifs that do not yield introns of the 
+                    proper length.'''
+                    continue
                 left_motif_start_position = min_start_position \
                     + left_motif_offset
                 right_motif_end_position = min_end_position \
@@ -442,8 +305,7 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
 
 def go(bowtie_index_base="genome", input_stream=sys.stdin,
         output_stream=sys.stdout, bin_size=10000, cluster_radius=5,
-        per_site=False, per_span=True, output_bed=True, stranded=False,
-        intron_partition_overlap=20, motif_radius=1, 
+        stranded=False, intron_partition_overlap=20, motif_radius=1, 
         min_anchor_significance=9, seed=0, verbose=False):
     """ Runs Rail-RNA-intron.
 
@@ -462,103 +324,29 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         inconsistent with the strand of the flanking aligned sequences can be
         ignored. The --stranded option handles this.
 
-        Input (read from input_stream)---
+        Input (read from stdin)
+        ----------------------------
         Tab-delimited columns:
         1. Reference name (RNAME in SAM format) + ';' + partition number +  
             ('+' or '-' indicating which strand is the sense strand if input
-                reads are strand-specific -- that is, --stranded in
-                Rail-RNA-align was invoked; otherwise, there is no terminal
-                '+' or '-')
-        2. Sample label
-        3. Candidate intron start (inclusive) on forward strand (1-indexed)
-        4. Candidate intron end (exclusive) on forward strand (1-indexed)
-        5. Number of nucleotides between 5' end of candidate intron and 5' end
-        of read from which it was inferred, ASSUMING THE SENSE STRAND IS THE
-        FORWARD STRAND. That is, if the sense strand is the reverse strand,
-        this is the distance between the 5' end of the reverse-complemented
-        read and the 5' end of the reverse-complemented intron.
-        6. Number of nucleotides between 3' end of candidate intron and 3' end
-        of read from which it was inferred, ASSUMING THE SENSE STRAND IS THE
-        FORWARD STRAND.
-        7. Number of nucleotides spanned by EC on the left (that is, towards
-        the 5' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
-        FORWARD STRAND.
-        8. Number of nucleotides spanned by EC on the right (that is, towards
-        the 3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
-        FORWARD STRAND.
-        9. Match rate: the number of bases that match the reference per base of
-        the aligned readlets comprising the read from which the intron was
-        inferred.
-        10. '-' if reversed complements of readlets from which intron was
-        inferred aligned to forward strand; else '+'
+            reads are strand-specific -- that is, --stranded in Rail-RNA-align
+            was invoked; otherwise, there is no terminal '+' or '-')
+        2. Candidate intron start (inclusive) on forward strand (1-indexed)
+        3. Candidate intron end (exclusive) on forward strand (1-indexed)
 
-        Hadoop output (written to output_stream)---
-        Format 1 (span): tab-delimited columns, one line per read spanning a
-        splice site:
-        1. SAM-format RNAME + ';' + ('+' or '-' indicating which strand is the
-            sense strand)
-        2. Intron start (inclusive) on forward strand (1-indexed)
-        3. Intron end (exclusive) on forward strand (1-index)
-        4. Left motif (donor motif if sense strand is '+'; acceptor motif 
-            otherwise)
-        5. Right motif (acceptor motif if sense strand is '+'; donor motif
-            otherwise)
-        6. Sample label from which read was derived
+        Input is partitioned by column 1.
 
-        Format 2 (site): tab-delimited columns, one line per splice site
-        spanned by the reads in a sample
-        1. SAM-format RNAME + ';' + ('+' or '-' indicating which strand is the
-            sense strand)
-        2. Intron start (inclusive) on forward strand (1-indexed)
-        3. Intron end (exclusive) on forward strand (1-index)
-        4. Left motif (donor motif if sense strand is '+'; acceptor motif
-            otherwise)
-        5. Right motif (acceptor motif if sense strand is '+'; donor motif
-            otherwise)
-        6. Sample label with nonzero number of reads spanning splice site
-        7. Number of reads in sample spanning splice site
+        Hadoop output (written to stdout)
+        ----------------------------
+        Tab-delimited columns:
+        1. The character 'i', which will place the row after 'a' (maximum read
+            length rows) in lexicographic sort order.
+        2. Reference name (RNAME in SAM format)
+        3. '+' or '-' indicating which strand is the sense strand
+        4. Intron start position (inclusive)
+        5. Intron end position (exclusive)
 
-        Format 3 (junction):
-        12-column (3 required fields + 9 optional fields) BED output mimicking
-        TopHat's junctions.bed, except anchor significance, maximum match rate,
-        unique displacement count, and motif count are also included in
-        the name field. From the TopHat manual at 
-        http://tophat.cbcb.umd.edu/manual.shtml: "Each junction consists of two
-        connected BED blocks, where each block is as long as the maximal
-        overhang of any read spanning the junction. The score is the number of
-        alignments spanning the junction." (Each line of the BED file actually
-        specifies the TWO splice junctions J = (J_A, J_B) that frame an intron,
-        and the statistics given in the name field pertain to the junction for
-        that intron only rather than the junction across all alternative
-        splicings.) Anchor significance of a splice J is NOT defined as in the
-        MapSplice paper http://nar.oxfordjournals.org/content/38/18/e178.long.
-        Consider the set {R_i} of reads that span the splice J. For a given
-        read R_i, consider the two anchors A_i and B_i on either side of J, and
-        let L_(A_i) and L_(B_i) be their lengths (in bp). The anchor
-        significance of J is max_i min(L(A_i), L(B_i)).) Maximum match rate is
-        the highest match rate from among the reads spanning J, where match
-        rate is defined in the description of field 9 from the input above.
-        Unique displacement count is the number of unique displacements of J
-        from the 5' end of the original read in the set {R_i}. The 5' end of
-        the read is determined from the strand to which contituent readlets
-        align: if the readlets' reversed complements align to the forward
-        strand, the 5' end of the original read sequence is the right end; if
-        the unaltered readlet sequences align to the forward strand, the 5' end
-        of the original read sequence is the left end. Motif count is 
-        defined as follows. Consider searching for donor and acceptor motifs
-        (like "GT" and "AG") within motif_radius bp of each of the minimum and 
-        maximum of each of the start and end positions of an intron cluster;
-        that is, the intervals [min(start_positions) - motif_radius,
-        max(start_positions) + motif_radius + 2) and
-        [min(end_positions - 2 - motif_radius),
-            max(end_positions) + motif_radius) are scanned for motifs, where
-        start_positions (end_positions) aggregates the start (end) positions of
-        the candidate introns in a cluster. Count the number N_L of donor
-        motifs and the number N_R of acceptor motifs. Motif count is
-        defined as 1 / (N_L * N_R).
-
-        OUTPUT BED COORDINATES ARE 0-INDEXED; HADOOP OUTPUT COORDINATES ARE
-        1-INDEXED.
+        OUTPUT COORDINATES ARE 1-INDEXED.
 
         bowtie_index_base: the basename of the Bowtie index files associated
             with the reference.
@@ -571,12 +359,6 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
             within which to search for candidate introns in the same cluster.
             See intron_clusters_in_partition()'s docstring for more
             information.
-        per_site: False iff Format 2 (site) output lines from above should be
-            suppressed.
-        per_span: False iff Format 1 (span) output lines from above should be
-            suppressed.
-        output_bed: False iff Format 3 (junction) output lines from above
-            should be suppressed.
         stranded: True iff input reads are strand-specific, and lines read
             from input_stream have first column with terminal '+' or '-'
             indicating which strand is the sense strand.
@@ -585,14 +367,13 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
             genome partition it is in.
         motif_radius: distance (in bp) from each of the start and end
             positions of a cluster within which to search for motifs.
-        min_anchor_significance: if the anchor significance of a called intron
-            falls below this value, the intron is suppressed from all output.
         verbose: True iff informative messages should be written to stderr.
 
         No return value.
     """
+    start_time = time.time()
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
-    input_line_count = 0
+    input_line_count, output_line_count = 0, 0
     junction_number = 0
     handle_partition = False
     last_partition_id = None
@@ -604,24 +385,17 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         if line:
             input_line_count += 1
             tokens = line.rstrip().split('\t')
-            assert len(tokens) == 10
-            (partition_id, sample_label, pos, end_pos, five_prime_displacement,
-                three_prime_displacement, left_EC_size, right_EC_size, 
-                match_rate, reverse_strand) = tokens
-            (pos, end_pos, five_prime_displacement,
-                three_prime_displacement, left_EC_size, right_EC_size,
-                match_rate, reverse_strand) \
-                = (int(pos), int(end_pos), int(five_prime_displacement),
-                int(three_prime_displacement), int(left_EC_size), 
-                int(right_EC_size), float(match_rate), True if 
-                reverse_strand == '-' else False)
+            assert len(tokens) == 3
+            partition_id, pos, end_pos = tokens
+            pos, end_pos = int(pos), int(end_pos)
             assert end_pos > pos, line
             if stranded:
                 '''If input reads are strand-specific, the partition_id has a
                 terminal '+' or '-' indicating which strand is the sense
-                strand. Remove it.'''
+                strand. Make it the reverse_strand'''
                 rname, partition_start, partition_end = \
                     partition.parse(partition_id[:-1], bin_size)
+                reverse_strand = (True if partition_id[-1] == '-' else False)
             else:
                 rname, partition_start, partition_end = \
                     partition.parse(partition_id, bin_size)
@@ -641,22 +415,15 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                 print >> sys.stderr, 'For partition %s:[%d, %d)' \
                     % (last_partition_id, last_partition_start,
                         last_partition_end)
-            #intron_clusters = intron_clusters_in_partition(candidate_introns,
-            #    last_partition_start, last_partition_end, 
-            #    cluster_radius=cluster_radius,
-            #    verbose=verbose)
-            candidate_intron_count = len(candidate_introns)
-            intron_clusters = intron_clusters_in_partition_3(candidate_introns)
-            if verbose:
-                print >>sys.stderr, \
-                    '%d candidate intron(s) clustered down to %d.' \
-                    % (candidate_intron_count, len(intron_clusters))
+            intron_clusters = intron_clusters_in_partition(candidate_introns,
+                last_partition_start, last_partition_end, 
+                cluster_radius=cluster_radius,
+                verbose=verbose)
             cluster_splice_sites = {}
-            motif_counts = {}
             if stranded:
                 # The sense strand is known, so narrow motif set used
                 if last_reverse_strand:
-                    for i, intron_cluster in enumerate(intron_clusters):
+                    for intron_cluster in intron_clusters:
                         ranked_splice_sites = ranked_splice_sites_from_cluster(
                                 reference_index, intron_cluster, last_rname,
                                 _reverse_strand_motifs,
@@ -664,12 +431,19 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             )
                         if len(ranked_splice_sites) != 0:
                             # Break any ties in top-ranked intron at random
-                            cluster_splice_sites[i] \
-                                = random.sample([splice_site for splice_site in
+                            cluster_splice_site = \
+                                random.sample([splice_site for splice_site in
                                                     ranked_splice_sites if
                                                     ranked_splice_sites[0][2:]
                                                     == splice_site[2:]], 1)[0]
-                            motif_counts[i] = len(ranked_splice_sites)
+                            intron_strand = ('-' if cluster_splice_site[-1]
+                                                else '+')
+                            print >>output_stream, \
+                                'intron\ti\t%s%s\t%012d\t%012d' \
+                                % (last_rname, intron_strand, 
+                                    cluster_splice_site[0],
+                                    cluster_splice_site[1])
+                            output_line_count += 1
                 else:
                     for i, intron_cluster in enumerate(intron_clusters):
                         ranked_splice_sites = ranked_splice_sites_from_cluster(
@@ -679,12 +453,19 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             )
                         if len(ranked_splice_sites) != 0:
                             # Break any ties in top-ranked intron at random
-                            cluster_splice_sites[i] \
-                                = random.sample([splice_site for splice_site in
+                            cluster_splice_site = \
+                                random.sample([splice_site for splice_site in
                                                     ranked_splice_sites if
                                                     ranked_splice_sites[0][2:]
                                                     == splice_site[2:]], 1)[0]
-                            motif_counts[i] = len(ranked_splice_sites)
+                            intron_strand = ('-' if cluster_splice_site[-1]
+                                                else '+')
+                            print >>output_stream, \
+                                'intron\ti\t%s%s\t%012d\t%012d' \
+                                % (last_rname, intron_strand, 
+                                    cluster_splice_site[0],
+                                    cluster_splice_site[1])
+                            output_line_count += 1
             else:
                 # The sense strand is unknown, so use a general motif set
                 for i, intron_cluster in enumerate(intron_clusters):
@@ -693,144 +474,35 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             _unstranded_motifs,
                             motif_radius=motif_radius, verbose=verbose
                         )
-                    if len(ranked_splice_sites) != 0:
-                        # Pick top-ranked intron
-                        cluster_splice_sites[i] \
-                                = random.sample([splice_site for splice_site in
-                                                    ranked_splice_sites if
-                                                    ranked_splice_sites[0][2:]
-                                                    == splice_site[2:]], 1)[0]
-                        motif_counts[i] = len(ranked_splice_sites)
-            for i, (start_position, end_position, z_score_sum, left_motif,
-                        right_motif, motif_reverse_strand) \
-                in cluster_splice_sites.items():
-                motif_reverse_strand_string = '-' if motif_reverse_strand \
-                    else '+'
-                '''Identify longest read overhangs on either side of splice
-                junction.'''
-                left_overhang, right_overhang = 0, 0
-                anchor_significance = None
-                # For counting number of unique displacements
-                displacement_set = set()
-                maximum_match_rate = 0
-                for (candidate_start_position, candidate_end_position,
-                        _, candidate_five_prime_displacement,
-                        candidate_three_prime_displacement,
-                        candidate_left_EC_size,
-                        candidate_right_EC_size, candidate_match_rate,
-                        candidate_reverse_strand) in intron_clusters[i]:
-                    anchor_significance = max(min(
-                                candidate_left_EC_size,
-                                candidate_right_EC_size
-                            ), anchor_significance)
-                    if not output_bed: continue
-                    if candidate_reverse_strand:
-                        displacement_set.add(
-                                candidate_three_prime_displacement
-                            )
-                    else:
-                        displacement_set.add(
-                                candidate_five_prime_displacement
-                            )
-                    if candidate_match_rate > maximum_match_rate:
-                        maximum_match_rate = candidate_match_rate
-                    left_overhang = max(start_position
-                                    - candidate_start_position
-                                    + candidate_five_prime_displacement, 
-                                    left_overhang)
-                    right_overhang = max(candidate_end_position
-                        - end_position
-                        + candidate_three_prime_displacement,
-                        right_overhang)
-                junction_number += 1
-                if anchor_significance < min_anchor_significance:
-                    # Output nothing if anchor significance isn't high enough
-                    continue
-                if output_bed:
-                    '''Print line of bed file; where a first column 'junction'
-                    is inserted so the line can be distinguished from other
-                    types of output lines. Subtract 1 from every position to
-                    accommodate how bed is 0-based. The output bed mimics 
-                    TopHat's junctions.bed, except anchor significance, maximum
-                    match rate, unique displacement count, and motif count are
-                    in the name field. Anchor significance of a splice 
-                    J = (J_A, J_B) is NOT defined as in the MapSplice paper
-                    http://nar.oxfordjournals.org/content/38/18/e178.long.
-                    Consider the set {R_i} of reads spanning a junction for J.
-                    For a given read R_i, consider the two anchors A_i and B_i
-                    on either side of J, and let L_(A_i) and L_(B_i) be their
-                    lengths (in bp). The anchor significance of J is
-                    max_i min(L(A_i), L(B_i)).) Maximum match rate is the
-                    highest match rate from among the reads spanning a
-                    junction. Unique displacement count is the number of unique
-                    displacements of J from the 5' end of the original read in
-                    the set {R_i}. The 5'end of the read is determined from the
-                    strand to which contituent readlets align: if the readlets'
-                    reversed complements align to the forward strand, the 5'
-                    end of the original read sequence is the right end; if the
-                    unaltered readlet sequences align to the forward strand,
-                    the 5' end of the original read sequence is the left end.
-                    Motif count is defined as follows. Consider searching for
-                    donor and acceptor motifs (like "GT" and "AG") within
-                    motif_radius bp of each of the minimum and maximum of each
-                    of the start and end positions of an intron cluster. Count
-                    the number N_L of donor motifs and the number N_R of
-                    acceptor motifs. Motif count is defined as (N_L * N_R). See
-                    TopHat documentation for more information on
-                    junctions.bed.'''
-                    left_pos = start_position - left_overhang - 1
-                    right_pos = end_position + right_overhang - 1
+                if len(ranked_splice_sites) != 0:
+                    # Break any ties in top-ranked intron at random
+                    cluster_splice_site = \
+                        random.sample([splice_site for splice_site in
+                                            ranked_splice_sites if
+                                            ranked_splice_sites[0][2:]
+                                             == splice_site[2:]], 1)[0]
+                    intron_strand = ('-' if cluster_splice_site[-1] else '+')
                     print >>output_stream, \
-                        'junction\t%s\t%012d\t%012d\t' \
-                        'anchor_significance=%d;' \
-                        'maximum_match_rate=%.12f;' \
-                        'unique_displacement_count=%d;' \
-                        'motif_count=%d' \
-                        '\t%d\t%s\t%d\t' \
-                        '%d\t255,0,0\t2\t%d,%d\t0,%d' \
-                        % (last_rname, left_pos, right_pos,
-                            anchor_significance,
-                            maximum_match_rate,
-                            len(displacement_set),
-                            motif_counts[i],
-                            len(intron_clusters[i]),
-                            motif_reverse_strand_string, left_pos, right_pos,
-                            left_overhang, right_overhang, 
-                            end_position - left_pos - 1)
-                if per_site:
-                    sample_label_counts = defaultdict(int)
-                    for _, _, sample_label, _, _, _, _, _, _\
-                        in intron_clusters[i]:
-                        sample_label_counts[sample_label] += 1
-                    for sample_label in sample_label_counts:
-                        print >>output_stream, \
-                            'site\t%s\t%012d\t%012d\t%s\t%s\t%s\t%s' \
-                            % (last_rname + ';' + motif_reverse_strand_string,
-                                start_position, end_position, left_motif,
-                                right_motif, sample_label, 
-                                sample_label_counts[sample_label])
-                if per_span:
-                    for _, _, sample_label, _, _, _, _, _, _ \
-                            in intron_clusters[i]:
-                            print >>output_stream, 'span\t%s\t%012d\t%012d\t' \
-                                '%s\t%s\t%s' \
-                                % (last_rname + ';' 
-                                    + motif_reverse_strand_string,
-                                    start_position, end_position, 
-                                    left_motif, right_motif, sample_label)
+                                'intron\ti\t%s%s\t%012d\t%012d' \
+                                % (last_rname, intron_strand, 
+                                    cluster_splice_site[0],
+                                    cluster_splice_site[1])
+                    output_line_count += 1
             candidate_introns = {}
             handle_partition = False
         if line:
-            if (pos, end_pos) not in candidate_introns:
-                candidate_introns[(pos, end_pos)] = []
-            candidate_introns[(pos, end_pos)].append((sample_label,
-                five_prime_displacement, three_prime_displacement, 
-                left_EC_size, right_EC_size, match_rate, reverse_strand))
+            candidate_introns[(pos, end_pos)] = \
+                candidate_introns.get((pos, end_pos), 0) + 1
             (last_partition_id, last_partition_start, last_partition_end, 
-                last_rname, last_reverse_strand) \
-            = (partition_id, partition_start, partition_end, rname, 
-                reverse_strand)
+                last_rname) \
+            = (partition_id, partition_start, partition_end, rname)
+            if stranded:
+                last_reverse_strand = reverse_strand
         else: break
+
+    print >> sys.stderr, 'DONE with intron.py; in/out=%d/%d; ' \
+        'time=%0.3f s' % (input_line_count, output_line_count,
+                                time.time() - start_time)
 
 if __name__ == '__main__':
     import argparse
@@ -856,23 +528,6 @@ if __name__ == '__main__':
         default=20, 
         help='Amount by which partitions overlap their left and right '
              'neighbors')
-    parser.add_argument('--min-anchor-significance', type=int,
-        required=False,
-        default=9, 
-        help='Suppress introns whose anchor significance falls below this '
-             'value from all output')
-    parser.add_argument(\
-        '--per-site', action='store_const', const=True, default=False,
-        help='Output one record for every splice site, giving information '
-             'about the number of times a read from each label spans the site')
-    parser.add_argument(\
-        '--per-span', action='store_const', const=True, default=False,
-        help='Output one record for every instance where a read spans a '
-             'splice site')
-    parser.add_argument(\
-        '--output-bed', action='store_const', const=True, default=False,
-        help='Output BED lines denoting splice junctions analogous to '
-             'TopHat\'s junctions.bed')
     parser.add_argument(\
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand')
@@ -887,12 +542,8 @@ if __name__ == '__main__' and not args.test:
     go(bowtie_index_base=args.bowtie_idx,
         bin_size=args.partition_length,
         cluster_radius=args.cluster_radius,
-        per_site=args.per_site,
-        per_span=args.per_span,
-        output_bed=args.output_bed,
         intron_partition_overlap=args.intron_partition_overlap,
         motif_radius=args.motif_radius,
-        min_anchor_significance=args.min_anchor_significance,
         verbose=args.verbose)
 elif __name__ == '__main__':
     # Test units
@@ -909,27 +560,27 @@ elif __name__ == '__main__':
             """ Fails if all introns are not placed in the same cluster
             """
             candidate_introns = {
-                    (5, 25)  : ('sample', 25, 75, 25, 75, .9, True),
-                    (4, 24)  : ('sample', 25, 75, 25, 75, .95, True),
-                    (10, 30) : ('sample2', 23, 77, 23, 77, .92, False)
+                    (5, 25)  : 1,
+                    (4, 24)  : 1,
+                    (10, 30) : 1
                 }
             clusters = intron_clusters_in_partition(candidate_introns,
                 1, 40, cluster_radius=10, verbose=False)
             self.assertEquals(len(clusters), 1)
             self.assertEquals(
                     sorted(clusters[0]), 
-                    [(4, 24, 'sample', 25, 75, 25, 75, .95, True),
-                     (5, 25, 'sample', 25, 75, 25, 75, .9, True),
-                     (10, 30, 'sample2', 23, 77, 23, 77, .92, False)]
+                    [(4, 24),
+                     (5, 25),
+                     (10, 30)]
                 )
 
         def test_that_overlapping_introns_of_different_size_separate(self):
             """ Fails if introns do not separate properly into two clusters.
             """
             candidate_introns = {
-                    (5, 25)  : ('sample', 25, 75, 25, 75, .9, True),
-                    (4, 24)  : ('sample', 25, 75, 25, 75, .95, True),
-                    (10, 40) : ('sample2', 23, 77, 23, 77, .92, False)
+                    (5, 25)  : 1,
+                    (4, 24)  : 1,
+                    (10, 40) : 1
                 }
             '''The third intron above has a different size than the first two,
             so it should be placed in its own cluster.'''
@@ -938,12 +589,12 @@ elif __name__ == '__main__':
             self.assertEquals(len(clusters), 2)
             self.assertEquals(
                     sorted(clusters[0]),
-                    [(10, 40, 'sample2', 23, 77, 23, 77, .92, False)]
+                    [(10, 40)]
                 )
             self.assertEquals(
                     sorted(clusters[1]),
-                    [(4, 24, 'sample', 25, 75, 25, 75, .95, True), 
-                     (5, 25, 'sample', 25, 75, 25, 75, .9, True)]
+                    [(4, 24), 
+                     (5, 25)]
                 )
 
     class TestRankedSpliceSitesFromCluster(unittest.TestCase):
@@ -979,9 +630,9 @@ elif __name__ == '__main__':
         def test_that_second_line_of_reference_is_called_as_an_intron(self):
             """ Fails if reference_seq's second line isn't called as an intron.
             """
-            cluster = [(45, 97, 'sample', 25, 75, 25, 75, .99, True),
-                       (47, 99, 'sample', 25, 75, 25, 75, .99, True),
-                       (44, 96, 'sample', 25, 75, 25, 75, .87, True)]
+            cluster = [(49, 96),
+                       (48, 95),
+                       (47, 94)]
             splice_sites = ranked_splice_sites_from_cluster(
                     self.reference_index, cluster,
                     'chr1', _unstranded_motifs, motif_radius=1, verbose=False

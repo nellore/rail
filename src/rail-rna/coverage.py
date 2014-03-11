@@ -167,17 +167,15 @@ while True:
             if args.bigbed_basename != '' else '') + last_sample_label + '.bb'
         if output_url.isLocal():
             # Write directly to local destination
-            bigbed_filename = os.path.join(args.out, bigbed_filename)
+            bigbed_file_path = os.path.join(args.out, bigbed_filename)
         else:
             # Write to temporary directory, and later upload to URL
-            bigbed_filename = os.path.join(temp_dir_path, bigbed_filename)
+            bigbed_file_path = os.path.join(temp_dir_path, bigbed_filename)
         bedtobigbed_command = ' '.join([args.bigbed_exe, bed_filename,
-            sizes_filename, bigbed_filename])
+            sizes_filename, bigbed_file_path])
         bedtobigbed_process = subprocess.Popen(bedtobigbed_command, shell=True,
             bufsize=-1, stdout=(sys.stderr if args.verbose else os.devnull))
         bigbed_return = bedtobigbed_process.wait()
-        bedtobigbed_command = ' '.join([args.bigbed_exe, bed_filename,
-            sizes_filename, bigbed_filename])
         if bigbed_return:
             raise RuntimeError('bedToBigBed command ' + bedtobigbed_command
                 + (' returned with exitlevel %d' % bigbed_return))
@@ -187,8 +185,8 @@ while True:
         if not output_url.isLocal():
             # bigBed must be uploaded to URL and deleted
             mover = filemover.FileMover(args=args)
-            mover.put(bigbed_filename, output_url.plus(bigbed_filename))
-            os.remove(bigbed_filename)
+            mover.put(bigbed_file_path, output_url.plus(bigbed_filename))
+            os.remove(bigbed_file_path)
         bed_stream = open(bed_filename, 'w')
     elif sample_label == last_sample_label:
         if last_rname == rname:

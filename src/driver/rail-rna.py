@@ -279,7 +279,7 @@ if mode == 'emr':
 
 # Parameters governing the algorithm
 tconf = rail_rna_config.Rail_RNAConfig(args)
-gconf = GenericConfig(args, out)
+gconf = GenericConfig(args, out, intermediate)
 
 pipelines = set(["preprocess", "align", "coverage", "junction", "differential"])
 
@@ -354,9 +354,9 @@ allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
 stepInfo = {\
     'preprocess'     : ([                                  ], rail_rna_pipeline.PreprocessingStep),
     'align'          : ([('preprocess',     ''            )], rail_rna_pipeline.AlignStep),
-    'align_post'     : ([('align',          '/splice_sam' )], rail_rna_pipeline.AlignPostStep),
     'intron'         : ([('align',          '/intron'     )], rail_rna_pipeline.IntronStep),
-    'intron_post'    : ([('intron',         '/junction'   )], rail_rna_pipeline.IntronPostStep),
+    'intron_post'    : ([('align',          '/max_len'    ),
+                         ('intron',         '/intron'     )], rail_rna_pipeline.IntronPostStep),
     'coverage_pre'   : ([('collapse',       '/collapsed'  )], rail_rna_pipeline.CoveragePreStep),
     'normalize_pre'  : ([('align',          '/exon_diff'  )], rail_rna_pipeline.NormalizePreStep),
     'normalize'      : ([('normalize_pre',  '/o'          )], rail_rna_pipeline.NormalizeStep),

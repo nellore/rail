@@ -130,8 +130,7 @@ fi
             lines.append('python %BASE%/src/local/reduce.py \\')
             lines.append('    --name "%s" \\' % self.name)
             if first:
-                for inp in self.inputs:
-                    lines.append('    --input "%s" \\' % inp.toUrl())
+                lines.append('    --input "%s" \\' % ','.join([inp.toUrl() for inp in self.inputs]))
             else:
                 lines.append('    --input "%s" \\' % glue)
             if self.output is not None:
@@ -153,7 +152,7 @@ if [ $? != 0 ] ; then
     exit 1
 fi
 ''' % (self.name))
-        
+
         return '\n'.join(lines)
     
     def toHadoopCmd(self):

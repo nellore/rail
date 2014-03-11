@@ -24,7 +24,7 @@ parser = argparse.ArgumentParser(
     description='Simple wrapper that mimics some of Hadoop\'s behavior during the Map step of a MapReduce computation.')
 
 parser.add_argument('--name', metavar='PATH', type=str, required=True, help='Name of this step')
-parser.add_argument('--input', metavar='PATH', type=str, required=True, help='Files with input data', nargs='+')
+parser.add_argument('--input', metavar='PATH', type=str, required=True, help='Files with input data')
 parser.add_argument('--output', metavar='PATH', type=str, required=True, help='Files with output data')
 parser.add_argument('--num-tasks', metavar='INT', type=int, required=True, help='Divide input into this many tasks.')
 parser.add_argument('--bin-fields', metavar='INT', type=int, help='# fields to bin by.')
@@ -79,7 +79,7 @@ def mydie(msg, lev):
 if args.messages:
     msgfhs.append(open(args.messages, 'w'))
 
-inps = args.input
+inps = args.input.split(',')
 for inp in inps:
     if not os.path.exists(inp):
         raise RuntimeError("--input doesn't exist: \"%s\"" % inp)
@@ -93,7 +93,7 @@ message('Step "%s" REDUCER' % args.name)
 message('==========================')
 message('Time: %s' % time.strftime('%H:%M:%S %d-%b-%Y'))
 message('Inputs:')
-for inp in args.input:
+for inp in inps:
     message('  "%s"' % inp)
 message('Output: "%s"' % output)
 message('Intermediate: "%s"' % intermediate)
@@ -140,7 +140,7 @@ check_dir(intermediate, 200)
 err_dir = os.path.join(intermediate, 'reduce.err')
 check_dir(err_dir, 300)
 
-# Where mapper programs are actually run
+# Where reducer programs are actually run
 working_dir = os.path.join(intermediate, 'reduce.wds')
 check_dir(working_dir, 400)
 

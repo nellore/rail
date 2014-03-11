@@ -57,8 +57,11 @@ def addConfigArgs(parser):
         '--set-version', metavar='VER', type=str, help='Force Rail to use a particular version.')
 
 class GenericConfig(object):
-    def __init__(self, args, out):
+    def __init__(self, args, out, intermediate):
         self.preprocCompress = args.preprocess_compress
         self.out = out.toUpperUrl()
         if out.isLocal():
             self.out = os.path.abspath(self.out)
+        self.intermediate = intermediate.toUpperUrl()
+        if intermediate.isLocal():
+            self.intermediate = os.path.abspath(self.intermediate)

@@ -3,13 +3,14 @@
 Rail-RNA-align
 
 Follows Rail-RNA-preprocess
-Precedes Rail-RNA-intron / Rail-RNA-collapse
+Precedes Rail-RNA-intron / Rail-RNA-coverage_pre
 
-Alignment script for MapReduce pipelines that wraps Bowtie. Obtains exonic 
-chunks from end-to-end alignments. Then obtains candidate introns by dividing
-each RNA-seq read into several overlapping segments, or readlets, aligning the
-readlets, and -- very roughly -- inferring splice junctions between successive
-readlets that align noncontiguously.
+Alignment script for MapReduce pipelines that wraps Bowtie. Obtains a set of
+of exonic chunks by aligning entire reads with Bowtie. Then obtains more exonic 
+chunks as well as introns by dividing each RNA-seq read into several
+overlapping segments, or readlets, aligning the readlets, and -- very roughly
+-- inferring splice junctions between successive readlets that align 
+noncontiguously.
 
 Input (read from stdin)
 ----------------------------
@@ -39,7 +40,7 @@ Hadoop output (written to stdout)
 A given RNAME sequence is partitioned into intervals ("bins") of some 
 user-specified length (see partition.py).
 
-Exonic chunks (aka ECs; three formats, any or all of which may be emitted:
+Exonic chunks (aka ECs; two formats --- either or both may be emitted):
 
 Format 1 (exon_ival); tab-delimited output tuple columns:
 1. Reference name (RNAME in SAM format) + ';' + bin number + ('+' or '-'
@@ -50,7 +51,7 @@ Format 1 (exon_ival); tab-delimited output tuple columns:
 3. EC start (inclusive) on forward strand
 4. EC end (exclusive) on forward strand
 
-Format 2 (exon_diff); tab-delimited output tuple columns:
+Format 2 (exon_diff); tab-delimited input tuple columns:
 1. Reference name (RNAME in SAM format) + ';' + 
     max(EC start, bin start) (inclusive) on forward strand IFF diff is
     positive and EC end (exclusive) on forward strand IFF diff is negative +
@@ -61,54 +62,49 @@ Format 2 (exon_diff); tab-delimited output tuple columns:
 3. Sample label
 4. +1 or -1.
 
-Note that only unique alignments are currently output as ivals and/or diffs.
-
-Format 3 (end_to_end_sam); tab-delimited output tuple columns:
-Standard 11-column SAM output except fields are in different order, and the
-first field corresponds to sample label. (Fields are reordered to facilitate
-partitioning by sample name/RNAME and sorting by POS.) Each line corresponds to
-a spliced alignment.
-The order of the fields is as follows.
-1. Sample label
-2. RNAME
-3. POS
-4. QNAME
-5. FLAG
-6. MAPQ
-7. CIGAR
-8. RNEXT
-9. PNEXT
-10. TLEN
-11. SEQ
-12. QUAL
-... + optional fields
-
 Introns
 
 Tab-delimited output tuple columns (intron):
 1. Reference name (RNAME in SAM format) + ';' + bin number +  
     ('+' or '-' indicating which strand is the sense strand if input reads are
-    strand-specific -- that is, --stranded is invoked; otherwise, there is no
-    terminal '+' or '-')
-2. Intron start (inclusive) on forward strand
-3. Intron end (exclusive) on forward strand
+        strand-specific -- that is, --stranded is invoked; otherwise, there is
+        no terminal '+' or '-')
+2. Sample label
+3. Intron start (inclusive) on forward strand
+4. Intron end (exclusive) on forward strand
+5. Number of nucleotides between 5' end of intron and 5' end of read from which
+it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND. That is, if
+the sense strand is the reverse strand, this is the distance between the 3' end
+of the read and the 3' end of the intron.
+6. Number of nucleotides between 3' end of intron and 3' end of read from which
+it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
+7. Number of nucleotides spanned by EC on the left (that is, towards the 5'
+end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
+STRAND.
+8. Number of nucleotides spanned by EC on the right (that is, towards the 3'
+end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
+STRAND.
+9. Match rate: the number of bases that match the reference per base of the
+aligned readlets comprising the read from which the intron was inferred.
+10. '-' if reversed complements of readlets from which intron was inferred
+aligned to forward strand; else '+'
 
-Reads with no end-to-end alignments
-
-Tab-delimited output tuple columns (unmapped):
-1. QNAME
-2. SEQ
-3. QUAL
-
-Maximum read lengths found
-
-Tab-delimited output tuple columns (max_len):
-1. The character 'a', which places it before 'i' in 
-    lexicograhic sort order for reading in Rail-RNA-intron_post
-2. Maximum read length found
-3. The character '0'.
-4. The character '0'.
-
+SAM (splice_sam):
+Standard 11-column SAM output except fields are in different order. (Fields are
+    reordered to facilitate partitioning by RNAME and sorting by POS.) Each
+line corresponding to a spliced alignment.
+The order of the fields is as follows.
+1. RNAME
+2. POS
+3. QNAME
+4. FLAG
+5. MAPQ
+6. CIGAR
+7. RNEXT
+8. PNEXT
+9. TLEN
+10. SEQ
+11. QUAL
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -116,6 +112,7 @@ import sys
 import os
 import site
 import threading
+import copy
 import string
 import tempfile
 import atexit
@@ -128,7 +125,7 @@ import itertools
 from scipy import weave
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['bowtie', 'sample', 'interval']:
+for directory_name in ['bowtie', 'sample', 'alignment', 'interval']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
 import bowtie
@@ -285,8 +282,8 @@ class GlobalAlignment:
                             )
 
 # Initialize global variables for tracking number of input/output lines
-_input_line_count = 0
-_output_line_count = 0
+input_line_count = 0
+output_line_count = 0
 
 def write_reads(output_stream, input_stream=sys.stdin, readletize=False, 
          min_readlet_size=8, max_readlet_size=25, readlet_interval=5, 
@@ -391,7 +388,7 @@ def write_reads(output_stream, input_stream=sys.stdin, readletize=False,
                 print >>output_stream, readlet
     else:
         # Don't readletize
-        global _input_line_count
+        global input_line_count
         for i, line in enumerate(input_stream):
             tokens = line.rstrip().split('\t')
             if len(tokens) not in (3, 5, 6):
@@ -415,10 +412,10 @@ def write_reads(output_stream, input_stream=sys.stdin, readletize=False,
                 print >>sys.stderr, 'Read(s) %d: %s' % (i, to_write)
                 next_report_line = int((next_report_line + 1)
                     * report_multiplier + 1) - 1
-            _input_line_count += 1
+            input_line_count += 1
     output_stream.flush()
 
-def composed_and_sorted_readlets(readlets):
+def composed_and_sorted_readlets(readlets, min_strand_readlets=1):
     """ Composes overlapping readlets and sorts them by reference position.
 
         This function assumes that for overlapping readlets mapping to, for
@@ -443,6 +440,8 @@ def composed_and_sorted_readlets(readlets):
             interval [pos, end_pos). displacement is the number of bases
             between the 5' (3') end of the readlet, which aligns to the forward
             (reverse) strand, and the 5' (3') end of the read.
+        min_strand_readlets: readlets are composed on a strand iff the number
+            of readlets that align to the strand is >= this number.
 
         Return value: dictionary with each key a tuple (rname, reverse_strand)
             uniquely identifying a strand and each value a list of tuples
@@ -462,6 +461,11 @@ def composed_and_sorted_readlets(readlets):
                                                     displacement))
     to_delete = []
     for strand in uncomposed:
+        if len(uncomposed[strand]) < min_strand_readlets:
+            '''If a strand has one or two stray readlets, they may be
+            bad alignments, so kill them.'''
+            to_delete.append(strand)
+            continue
         # Sort by start positions on reference
         uncomposed[strand].sort()
     for strand in to_delete: del uncomposed[strand]
@@ -481,6 +485,7 @@ def composed_and_sorted_readlets(readlets):
             else:
                 # Start a new interval
                 composed[strand].append((pos, end_pos, displacement))
+    
     '''Now composed[strand] is list of candidate exonic chunks
     (pos, end_pos, displacement) ordered by pos, the reference position.'''
     return composed
@@ -569,11 +574,12 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
     return np.argwhere(np.amax(total_score_matrix_diagonal) 
                                 == total_score_matrix_diagonal).flatten()
 
-def introns_from_read(reference_index, read_seq, readlets,
-    search_for_caps=True, max_discrepancy=2, min_seq_similarity=0.85,
-    min_cap_query_size=8, cap_search_window_size=1000, seed=0,
+def exons_and_introns_from_read(reference_index, read_seq, readlets, 
+    min_intron_size=5, min_strand_readlets=1, max_discrepancy=2, 
+    min_seq_similarity=0.85, search_for_caps=True, min_cap_query_size=8,
+    cap_search_window_size=1000, seed=0,
     global_alignment=GlobalAlignment()):
-    """ Composes a given read's aligned readlets and returns introns.
+    """ Composes a given read's aligned readlets and returns ECs and introns.
 
         reference_index: object of class bowtie_index.BowtieIndexReference that
             permits access to reference; used for realignment of unmapped
@@ -588,10 +594,11 @@ def introns_from_read(reference_index, read_seq, readlets,
             [pos, end_pos). displacement is the number of bases between the
             5' (3') end of the readlet, which aligns to the forward (reverse)
             strand, and the 5' (3') end of the read.
-        search_for_caps: True iff reference should be searched for the segment
-            of a read (a cap) that precedes the first EC and the segment of a
-            read that follows the last EC. Such segments are subsequently added
-            as an ECs themselves, and introns may be called between them.
+        min_intron_size: introns smaller than this number of bases are filtered
+            out.
+        min_strand_readlets: exons and introns are called on a strand (i.e., a 
+            tuple (rname, reverse_strand)) iff the number of readlets that
+            align to the strand is >= this number.
         max_discrepancy: if the difference in length between an unmapped region
             framed by two ECs and its corresponding gap in the reference is
             <= this value, the unmapped region is considered a candidate for
@@ -604,6 +611,10 @@ def introns_from_read(reference_index, read_seq, readlets,
             region is incorporated into a single EC spanning the two original
             ECs via DP filling. See the class GlobalAlignment for the
             substitution matrix used.
+        search_for_caps: True iff reference should be searched for the segment
+            of a read (a cap) that precedes the first EC and the segment of a
+            read that follows the last EC. Such segments are subsequently added
+            as an ECs themselves, and introns may be called between them.
         min_cap_query_size: the reference is not searched for a cap smaller
             than this size.
         cap_search_window_size: the size (in bp) of the reference subsequence
@@ -613,26 +624,47 @@ def introns_from_read(reference_index, read_seq, readlets,
         global_alignment: instance of GlobalAlignment class used for fast
                 realignment of exonic chunks via Weave.
 
-        Return value: A dictionary where each key is a strand (i.e., a tuple
-            (rname, reverse_strand)), and its corresponding value is a list
-            of tuples (pos, end_pos)), each of which denotes an intron. rname
-            contains the SAM-format RNAME --- typically a chromosome. When
-            input reads are strand-specific, reverse_strand is True iff the
-            sense strand is the reverse strand; otherwise, it merely denotes
-            the strand to which the intron's flanking ECs were presumed to
-            align. The intron spans the interval [pos, end_pos).
+        Return value: tuple (exons, introns).
+            -exons is a dictionary; each key is a strand (i.e., a tuple
+                (rname, reverse_strand)), and its corresponding value is a list
+                of tuples (pos, end_pos), each of which denotes an exonic chunk
+                (EC). rname is the SAM-format RNAME---typically a chromosome.
+                When input reads are strand-specific, reverse_strand is True
+                iff the sense strand is the reverse strand; otherwise, it
+                merely denotes the strand to which the EC was presumed
+                to align. The EC spans the interval [pos, end_pos).
+            -introns is a dictionary; each key is a strand (i.e., a tuple
+                (rname, reverse_strand)), and its corresponding value is a list
+                of tuples (pos, end_pos, five_prime_displacement,
+                three_prime_displacement, left_EC_size, right_EC_size), each of
+                which denotes an intron. rname contains the SAM-format RNAME
+                --- typically a chromosome. When input reads are
+                strand-specific, reverse_strand is True iff the sense strand is
+                the reverse strand; otherwise, it merely denotes the strand to
+                which the intron's flanking ECs were presumed to align. The
+                intron spans the interval [pos, end_pos). Assume the sense
+                strand is the forward strand; that is, if the sense strand is
+                the reverse strand, consider the reversed complements of both
+                the readlet and its parent read. five_prime_displacement is the
+                displacement of the 5' end of the intron from the 5' end of the
+                read, while three_prime_displacement is the displacement of the
+                3' end of the intron from the 3' end of the read. left_EC_size
+                (right_EC_size) is the number of nucleotides spanned by the EC
+                on the left (right) of the intron. Here, "left" ("right")
+                means "towards the 5' (3') end of the read," again assuming
+                the sense strand is the forward strand.
     """
     random.seed(seed)
-    composed = composed_and_sorted_readlets(readlets)
+    composed = composed_and_sorted_readlets(readlets, min_strand_readlets)
     read_seq = read_seq.upper()
     reversed_complement_read_seq = read_seq[::-1].translate(
             _reversed_complement_translation_table
         )
-    introns = {}
+    exons_and_introns = {}
     '''To make continuing outer loop from inner loop below possible.'''
     continue_strand_loop = False
     for strand in composed:
-        introns[strand] = []
+        exons_and_introns[strand] = []
         rname, reverse_strand = strand
         if reverse_strand:
             '''Handle reverse-strand reads the same way forward strands are
@@ -715,23 +747,24 @@ def introns_from_read(reference_index, read_seq, readlets,
                 These situations are pathological. Throw out the strand by
                 deleting it from the exon and intron list after continuing.'''
                 continue_strand_loop = True
-                introns[strand] = []
+                exons_and_introns[strand] = []
                 break
             reference_distance = pos - last_end_pos
             read_distance = displacement - unmapped_displacement
             discrepancy = reference_distance - read_distance
             call_exon, call_intron = False, False
             if not read_distance:
-                if pos - last_end_pos < 0:
+                if pos - last_end_pos < min_intron_size:
                     '''Example case handled:
                                         EC #1                   EC #2
                     Read       |=====================|=====================|
                                                  
-                    Reference ...=====================
-                                                    =======================...    
+                    Reference ...====================|====================...    
                                       EC #1                   EC #2
-                                      (EC #1 and #2 may overlap.)
-                    This case covers the outside possibility that 
+                                      (EC #1 and #2 are allowed to
+                                        overlap or be separated by up 
+                                        to min_intron_size in reference)
+                    Note that this case subsumes the outside possibility that 
                     EC #1 overlaps EC #2 by as much the constraint that EC #2
                     doesn't begin before EC #1 on the reference allows. This is
                     likely an insertion in the read with respect to the
@@ -739,7 +772,7 @@ def introns_from_read(reference_index, read_seq, readlets,
                     ACCOMMODATE CALLING INDELS.'''
                     call_exon = True
                 else:
-                    '''pos - last_end_pos >= 0
+                    '''pos - last_end_pos >= min_intron_size
                     Example case handled:
                                        EC #1                   EC #2
                     Read       |=====================|=====================|
@@ -852,9 +885,16 @@ def introns_from_read(reference_index, read_seq, readlets,
                     UMR = unmapped region.
                     '''
                     call_exon = True
+            if call_exon:
+                '''Push ONLY the first EC to the list. (The next EC
+                may get merged into another EC on another iteration.)'''
+                exons_and_introns[strand].append((True, last_pos,
+                                                    last_end_pos))
             if call_intron:
                 # Call the reference region between the two ECs an intron.
-                introns[strand].append((last_end_pos, pos))
+                exons_and_introns[strand].append((False, last_end_pos, pos,
+                                        displacement, 
+                                        len(read_seq) - displacement))
             if call_exon:
                 unmapped_displacement = end_pos - pos + displacement
                 (last_pos, last_end_pos, last_displacement) = \
@@ -862,14 +902,15 @@ def introns_from_read(reference_index, read_seq, readlets,
         if continue_strand_loop:
             continue_strand_loop = False
             continue
-        '''Check to see if region to right of final EC needs filling. The
-        method for determining unmapped_base_count may give a negative result.
-        This pathological case is thrown out by skipping to the next strand.
-        If the fill criterion is not met, search for the residual unmapped
-        bases downstream.'''
+        '''Final exonic chunk must still be called since it won't get merged 
+        with any other chunks. Check to see if region to right of chunk needs 
+        filling first. The method for determining unmapped_base_count may
+        give a negative result. This pathological case is thrown out by
+        skipping to the next strand. If the fill criterion is not met, 
+        search for the residual unmapped bases downstream.'''
         unmapped_base_count = read_seq_size - unmapped_displacement
         if unmapped_base_count < 0:
-            introns[strand] = []
+            exons_and_introns[strand] = []
             continue
         if unmapped_base_count > 0:
             if global_alignment.score_matrix(
@@ -899,99 +940,395 @@ def introns_from_read(reference_index, read_seq, readlets,
                             )
                 if suffix is not None:
                     if suffix.start() != 0:
+                        # Call last EC from list composed[strand].
+                        exons_and_introns[strand].append((True, last_pos,
+                                                            last_end_pos))
                         # Call intron
-                        introns[strand].append(
-                                (last_end_pos, last_end_pos + suffix.start())
+                        exons_and_introns[strand].append(
+                                (False, last_end_pos,
+                                    last_end_pos + suffix.start(),
+                                    len(read_seq) - unmapped_base_count, 
+                                    unmapped_base_count)
                             )
                         last_pos  = last_end_pos + suffix.start()
                     # If suffix.start() is 0, the next assignment merges ECs
                     last_end_pos = last_pos + unmapped_base_count
-    strands_to_remove = []
-    for strand in introns:
-        if introns[strand] == []:
-            strands_to_remove.append(strand)
-    for strand in strands_to_remove:
-        del introns[strand]
-    return introns
+        exons_and_introns[strand].append((True, last_pos, last_end_pos))
+    # Separate exon and intron lists
+    exons = {}
+    introns = {}
+    for strand, strand_exons_and_introns in exons_and_introns.items():
+        exons_and_introns_count = len(strand_exons_and_introns)
+        if exons_and_introns_count == 0:
+            continue
+        for i, exon_or_intron in enumerate(strand_exons_and_introns):
+            if exon_or_intron[0]:
+                # Call exon
+                if strand not in exons:
+                    exons[strand] = []
+                exons[strand].append(exon_or_intron[1:])
+            else:
+                # Call intron; it should always be sandwiched between two exons
+                assert i != 0 and i != exons_and_introns_count - 1
+                assert strand_exons_and_introns[i-1][0] \
+                        and strand_exons_and_introns[i+1][0]
+                if strand not in introns:
+                    introns[strand] = []
+                introns[strand].append(exon_or_intron[1:] 
+                      + (strand_exons_and_introns[i-1][2] 
+                            - strand_exons_and_introns[i-1][1],
+                         strand_exons_and_introns[i+1][2] 
+                             - strand_exons_and_introns[i+1][1])
+                    )
+    return exons, introns
 
-def selected_readlet_alignments_by_clustering(readlets, seed=0):
-    """ Selects multireadlet alignment via a correlation clustering algorithm.
-    
+def selected_readlet_alignments_by_distance(readlets):
+    """ Selects multireadlet alignment closest to set of unireadlet alignments.
+
         Consider a list "readlets" whose items {R_i} correspond to the aligned
         readlets from a given read. Each R_i is itself a list of the possible
         alignments {R_ij} of a readlet. Each R_ij is a tuple
-        (rname, reverse_strand, pos, end_pos, displacement), where rname is the
-        SAM-format rname (typically a chromosome), reverse_strand is True iff
-        the readlet's reversed complement aligns to the reference, and 
-        displacement is the number of bases between the 5' (3')end of the
-        readlet, which aligns to the forward (reverse) strand, and the 5' (3')
-        end of the read. Let K_i be the number of alignments {R_ij} of a given
-        readlet R_i.
+        (rname, reverse_strand, pos, end_pos, displacement, mismatch_count),
+        where rname is the SAM-format rname (typically a chromosome),
+        reverse_strand is True iff the readlet's reversed complement aligns to
+        the reference, displacement is the number of bases between the 5' (3')
+        end of the readlet, which aligns to the forward (reverse) strand, and
+        the 5' (3') end of the read, and mismatch_count is the number of
+        mismatched bases in the alignment. Let K_i be the number of alignments
+        {R_ij} of a given readlet R_i.
 
-        The algorithm first constructs a complete signed graph where each node
-        represents a different R_ij. A '+' edge is placed between each pair
-        of nodes (R_ij, R_kl) iff R_ij and R_kl are alignments to the same
-        strand, i != k (that is, if the alignments don't correspond to the same
-        multireadlet), and R_ij and R_kl are "order-distance-consistent." Order
-        -distance consistency demands the following:
-            1) If the displacement of R_kl is greater than the displacement of
-            R_ij along the read, R_kl must occur at a position greater than
-            R_ij along the reference, and vice versa.
-            2) If the displacements of R_kl and R_ij are the same, the
-            positions of R_kl and R_ij along the reference must also be the
-            same.
-            3) There are no R_ip or R_kp for any p between the start positions
-            of R_ij and R_kl along the reference.
-        Otherwise, there is a '-' edge between R_ij and R_kl. The stipulation
-        3) guarantees that an alignment never has more than one '+' edge
-        between it and any set of alignments corresponding to the same
-        multireadlet. For multireadlets R_i and R_k, order-distance consistency
-        associates the closest pair (R_ij, R_kl) (in reference space) for which
-        the orders of R_ij and R_kl in both read and reference space agree;
-        if no such pair exists, no association is made.
+        The algo first separates readlets into two sets: those that align
+        uniquely (unireadlets U_i, a subset of K_i) and those that don't
+        (multireadlets M_i, a subset of K_i). It then chooses the multireadlet
+        alignment closest (in bp) to the set of unireadlet alignments; if more
+        than one alignment of a multireadlet overlaps any of the unireadlets,
+        the alignment whose overlap with any of the unireadlets is greatest is
+        chosen. More specifically, let {M_ij} be the set of alignments of M_i,
+        and slightly abusing notation, let U_i correspond to not just a
+        unireadlet, but also its alignment. Denote the interval spanned by some
+        alignment X as [S_X, E_X). For a given multireadlet M_i, the algorithm
+        selects M_ij by computing
 
-        After the graph is constructed, correlation clustering is performed
-        using QuickClust, a simple 3-approximation algorithm. (See Ailon,
-        Nir, and Charikar. "Aggregating inconsistent information: ranking and
-        clustering." STOC 2005: Proceedings of the thirty-seventh annual
-        ACM symposium on Theory of Computing. pp. 684-693.) At each iteration,
-        a pivot node is chosen from unclustered nodes at random. The nodes to
-        which this pivot is connected by a '+' edge are placed in the same
-        cluster as the pivot, while the remaining nodes are considered
-        unclustered. Because a given pivot is associated with no more than one
-        alignment from the same multireadlet, each cluster contains at most one
-        alignment from the same multireadlet. Alignments from the largest
-        cluster are returned. If more than one cluster is largest, no
-        alignments are returned; this scenario is analogous to having full
-        reads map to multiple locations in the genome.
+        argmax_j max_k ( min(E_(U_k), E_(M_ij)) - max(S_(U_k), S_(M_ij)) ) .
+
+        After multireadlet alignments are chosen, the function returns only
+        those alignments from the strand that has accrued the most alignments.
+        If there are no unireadlets, the algorithm returns an empty list of
+        alignments.
 
         readlets: a list whose items {R_i} correspond to the aligned readlets
             from a given read. Each R_i is itself a list of the possible
             alignments {R_ij} of a readlet. Each R_ij is a tuple
-            (rname, reverse_strand, pos, end_pos, displacement).
-            See above for a detailed explanation.
-        seed: seed for randomized algorithm QuickClust to ensure that results
-            for a given read are reproducible.
+            (rname, reverse_strand, pos, end_pos, displacement,
+                mismatch_count). See above for a detailed explanation.
 
         Return value: a list of selected alignment tuples
-            (rname, reverse_strand, pos, end_pos, displacement).
+            (rname, reverse_strand, pos, end_pos, displacement,
+                mismatch_count).
+    """
+    unireadlets = {}
+    multireadlets = []
+    for readlet in readlets:
+        if len(readlet) == 1:
+            # Add unireadlet, where the key is (rname, reverse_strand)
+            if (readlet[0][0], readlet[0][1]) not in unireadlets:
+                unireadlets[(readlet[0][0], readlet[0][1])] = []
+            unireadlets[(readlet[0][0], readlet[0][1])].append(readlet[0])
+        else:
+            multireadlets.append(readlet)
+    if len(unireadlets.keys()) == 0:
+        '''If there are no unireadlets, the algo doesn't work, so throw out
+        read by returning an empty list.'''
+        return []
+    if len(multireadlets) == 0:
+        '''If there are no multireadlets, no selection has to be performed,
+        so just return alignments immediately.'''
+        return sorted(unireadlets.values(), key=len, reverse=True)[0]
+    final_readlets = copy.deepcopy(unireadlets)
+    # Find multireadlet alignment with "closest" unireadlet
+    for multireadlet in multireadlets:
+        max_overlap = None
+        alignment = None
+        for (rname, reverse_strand, pos, end_pos,
+                displacement, mismatch_count) in multireadlet:
+            if (rname, reverse_strand) not in unireadlets: continue
+            overlap = max([min(end_pos, compared_end_pos)
+                            - max(pos, compared_pos)
+                            for _, _, compared_pos, compared_end_pos, _, _
+                            in unireadlets[(rname, reverse_strand)]])
+            if overlap > max_overlap:
+                alignment = (rname, reverse_strand, pos, end_pos,
+                                displacement, mismatch_count)
+                max_overlap = overlap
+        if alignment is not None:
+            final_readlets[(alignment[0], alignment[1])].append(alignment)
+    return sorted(final_readlets.values(), key=len, reverse=True)[0]
+
+def selected_readlet_alignments_by_coverage(readlets, reference_index, seed=0):
+    """ Selects multireadlet alignment that spans region with highest coverage.
+    
+        Consider a list "readlets" whose items {R_i} correspond to the aligned
+        readlets from a given read. Each R_i is itself a list of the possible
+        alignments {R_ij} of a readlet. Each R_ij is a tuple
+        (rname, reverse_strand, pos, end_pos, displacement, mismatch_count),
+        where rname is the SAM-format rname (typically a chromosome),
+        reverse_strand is True iff the readlet's reversed complement aligns to
+        the reference, displacement is the number of bases between the 5' (3')
+        end of the readlet, which aligns to the forward (reverse) strand, and
+        the 5' (3') end of the read, and mismatch_count is the number of
+        mismatched bases in the alignment. Let K_i be the number of alignments
+        {R_ij} of a given readlet R_i.
+
+        The algo first constructs a coverage distribution from the {R_i}. Each
+        base position B of the reference spanned by a given R_ij contributes
+        1 / K_i to the coverage at B. Alignments considered are then narrowed
+        to only those on the strand(s) with the highest total coverage per
+        base. The algo then selects the j for which R_ij spans the region with
+        the highest coverage, where a region's coverage is computed by summing
+        the coverages over all its bases. If there is more than one such j, the
+        corresponding R_ij are discarded.
+
+        readlets: a list whose items {R_i} correspond to the aligned readlets
+            from a given read. Each R_i is itself a list of the possible
+            alignments {R_ij} of a readlet. Each R_ij is a tuple
+            (rname, reverse_strand, pos, end_pos, displacement,
+            mismatch_count). See above for a detailed explanation.
+
+        Return value: a list of selected alignment tuples
+            (rname, reverse_strand, pos, end_pos, displacement,
+                mismatch_count).
     """
     random.seed(seed)
-    alignments = [alignment + (i,) for i, multireadlet
+    if len(readlets) == 0:
+        # Return an empty list if passed an empty list
+        return []
+    # Construct coverage distribution
+    coverage = {}
+    coverages_per_base = {}
+    for multireadlet in readlets:
+        coverage_unit = 1. / len(multireadlet)
+        for (rname, reverse_strand, pos, end_pos,
+                displacement, mismatch_count) in multireadlet:
+            if (rname, reverse_strand) not in coverage:
+                coverage[(rname, reverse_strand)] = {}
+            for covered_base_pos in xrange(pos, end_pos):
+                coverage[(rname, reverse_strand)][covered_base_pos] \
+                    = coverage[(rname, reverse_strand)].get(
+                            covered_base_pos, 0
+                        ) + coverage_unit
+                coverages_per_base[(rname, reverse_strand)] \
+                    = coverages_per_base.get((rname, reverse_strand), 0) \
+                      + coverage_unit
+    # Choose strands with highest coverage per base
+    for rname, reverse_strand in coverages_per_base:
+        coverages_per_base[(rname, reverse_strand)] /= \
+            reference_index.rname_lengths[rname]
+    chosen_strands = set()
+    sorted_coverages_per_base = sorted(coverages_per_base.items(), 
+        reverse=True, key=lambda strand_coverage: strand_coverage[1])
+    for strand, strand_coverage in sorted_coverages_per_base:
+        if strand_coverage != sorted_coverages_per_base[0][1]: break
+        chosen_strands.add(strand)
+    chosen_strands = random.sample(chosen_strands, 1)
+    filtered_alignments = []
+    '''Choose alignment of multireadlet with highest total coverage. If there
+    is a tie among top alignments, do not return an alignment.'''
+    for multireadlet in readlets:
+        assert len(multireadlet) >= 1
+        if len(multireadlet) == 1:
+            if (multireadlet[0][0], multireadlet[0][1]) in chosen_strands:
+                filtered_alignments.append([multireadlet[0]])
+            continue
+        alignments = []
+        for (rname, reverse_strand, pos, end_pos,
+                displacement, mismatch_count) in multireadlet:
+            if (rname, reverse_strand) not in chosen_strands: continue
+            alignment_coverage = 0
+            for covered_base_pos in xrange(pos, end_pos):
+                alignment_coverage += coverage[(rname, reverse_strand)].get(
+                    covered_base_pos, 0)
+            alignments.append((alignment_coverage, (rname, reverse_strand, pos,
+                                                    end_pos, displacement, 
+                                                    mismatch_count)))
+        if not len(alignments):
+            # No alignments survived filtering for strands with top coverage
+            continue
+        if len(alignments) == 1:
+            '''Only one alignment survived filtering for strands with top
+            coverage, so add it.'''
+            filtered_alignments.append([alignments[0][1]])
+            continue
+        max_coverage = max(alignments, key=lambda alignment: alignment[0])[0]
+        filtered_alignments.append([alignment[1] for alignment in alignments
+                                        if alignment[0] == max_coverage])
+    return [el[0] for el in filtered_alignments if len(el) == 1]
+
+def correlation_clusters(alignments):
+    if len(alignments) == 0: return []
+    if len(alignments) == 1: return [alignments]
+    pivot = random.randint(0, len(alignments) - 1)
+    pivot_alignment = alignments[pivot]
+    unclustered_alignments = []
+    alignment_cluster = [pivot_alignment]
+    for i, alignment in enumerate(alignments):
+        if i == pivot: continue
+        if alignment[-1] == pivot_alignment[-1] or \
+            alignment[:2] != pivot_alignment[:2] or \
+            (alignment[4] == pivot_alignment[4] and
+                alignment[2] != pivot_alignment[2]) or \
+            ((alignment[4] < pivot_alignment[4]) != \
+                (alignment[2] < pivot_alignment[2])):
+            unclustered_alignments.append(alignment)
+        else:
+            alignment_cluster.append(alignment)
+    return [alignment_cluster] + correlation_clusters(
+                                        unclustered_alignments
+                                    )
+
+def correlation_clusters_2(alignments):
+    if len(alignments) == 0: return []
+    if len(alignments) == 1: return [alignments]
+    best_unclustered_alignments = []
+    best_alignment_clusters = []
+    min_cluster_size = None
+    for pivot in xrange(len(alignments)):
+        pivot_alignment = alignments[pivot]
+        unclustered_alignments = []
+        alignment_cluster = [pivot_alignment]
+        for i, alignment in enumerate(alignments):
+            if i == pivot: continue
+            if alignment[-1] == pivot_alignment[-1] or \
+                alignment[:2] != pivot_alignment[:2] or \
+                (alignment[4] == pivot_alignment[4] and
+                   alignment[2] != pivot_alignment[2]) or \
+                ((alignment[4] < pivot_alignment[4]) != \
+                    (alignment[2] < pivot_alignment[2])):
+                unclustered_alignments.append(alignment)
+            else:
+                alignment_cluster.append(alignment)
+        multireadlet_count = len(set([alignment[-1] for alignment in alignment_cluster]))
+        #multireadlet_count = len(alignment_cluster)
+        if len(best_alignment_clusters) == 0 or multireadlet_count >= min_cluster_size:
+            if multireadlet_count > min_cluster_size:
+                best_unclustered_alignments = [unclustered_alignments]
+                best_alignment_clusters = [alignment_cluster]
+                min_cluster_size = multireadlet_count
+                continue
+            best_unclustered_alignments.append(unclustered_alignments)
+            best_alignment_clusters.append(alignment_cluster)
+            min_cluster_size = multireadlet_count
+    chosen_cluster = random.randint(0, len(best_unclustered_alignments) - 1)
+    return [best_alignment_clusters[chosen_cluster]] + correlation_clusters_2(
+                                        best_unclustered_alignments[chosen_cluster]
+                                    )
+
+def correlation_clustering_cost(alignment_clusters):
+    cost = 0
+    for cluster in alignment_clusters:
+        for combo in itertools.combinations(cluster, 2):
+            if not (combo[0][-1] == combo[1][-1] or \
+                    combo[0][:2] != combo[1][:2] or \
+                    (combo[0][4]== combo[1][4] and
+                        combo[0][2] != combo[1][2]) or \
+                    ((combo[0][4] < combo[1][4]) != 
+                        (combo[0][2] < combo[1][2]))):
+                cost += 1
+    for cluster_combo in itertools.combinations(alignment_clusters, 2):
+        for combo in itertools.product(*cluster_combo):
+            if combo[0][-1] == combo[1][-1] or \
+                combo[0][:2] != combo[1][:2] or \
+                (combo[0][4]== combo[1][4] and
+                    combo[0][2] != combo[1][2]) or \
+                ((combo[0][4] < combo[1][4]) != 
+                    (combo[0][2] < combo[1][2])):
+                cost += 1
+    return cost
+
+def selected_readlet_alignments_by_coverage_2(readlets):
+    """ Selects multireadlet alignment that spans region with highest coverage.
+    
+        Consider a list "readlets" whose items {R_i} correspond to the aligned
+        readlets from a given read. Each R_i is itself a list of the possible
+        alignments {R_ij} of a readlet. Each R_ij is a tuple
+        (rname, reverse_strand, pos, end_pos, displacement, mismatch_count),
+        where rname is the SAM-format rname (typically a chromosome),
+        reverse_strand is True iff the readlet's reversed complement aligns to
+        the reference, displacement is the number of bases between the 5' (3')
+        end of the readlet, which aligns to the forward (reverse) strand, and
+        the 5' (3') end of the read, and mismatch_count is the number of
+        mismatched bases in the alignment. Let K_i be the number of alignments
+        {R_ij} of a given readlet R_i.
+
+        The algo first constructs a coverage distribution from the {R_i}. Each
+        base position B of the reference spanned by a given R_ij contributes
+        1 / K_i to the coverage at B. Alignments considered are then narrowed
+        to only those on the strand(s) with the highest total coverage per
+        base. The algo then selects the j for which R_ij spans the region with
+        the highest coverage, where a region's coverage is computed by summing
+        the coverages over all its bases. If there is more than one such j, the
+        corresponding R_ij are discarded.
+
+        readlets: a list whose items {R_i} correspond to the aligned readlets
+            from a given read. Each R_i is itself a list of the possible
+            alignments {R_ij} of a readlet. Each R_ij is a tuple
+            (rname, reverse_strand, pos, end_pos, displacement,
+            mismatch_count). See above for a detailed explanation.
+        reference_index: object of class bowtie_index.BowtieIndexReference
+            that permits access to reference; used for determining chromosome
+            sizes.
+
+        Return value: a list of selected alignment tuples
+            (rname, reverse_strand, pos, end_pos, displacement,
+                mismatch_count).
+    """
+    ordered_alignments = sorted([alignment + (i, 1. / len(multireadlet))
+                                    for i, multireadlet in enumerate(readlets)
+                                    for alignment in multireadlet])
+    print >>sys.stderr, 'ordered alignments'
+    print >>sys.stderr, ordered_alignments
+    highest_coverage_bin, bin = [], []
+    highest_coverage, coverage = 0, 0
+    covered_multireadlets = set()
+    last_strand = None
+    ordered_alignments += [tuple([None]*8)]
+    for (rname, reverse_strand, pos, end_pos, displacement, mismatch_count,
+            multireadlet_number, coverage_unit) in ordered_alignments:
+        if last_strand is not None and (pos is None or \
+            not ((rname, reverse_strand) == last_strand
+            and multireadlet_number not in covered_multireadlets and
+            ((pos == last_pos) if displacement == last_displacement else
+                (pos > last_pos)))):
+            if coverage > highest_coverage:
+                highest_coverage_bin = copy.deepcopy(bin)
+                highest_coverage = coverage
+            bin = []
+            coverage = 0
+            covered_multireadlets = set()
+        if pos is None: break
+        bin.append((rname, reverse_strand, pos, end_pos, displacement,
+                        mismatch_count))
+        coverage += coverage_unit
+        covered_multireadlets.add(multireadlet_number)
+        (last_strand, last_pos, last_displacement) = ((rname, reverse_strand),
+                                                        pos, displacement)
+    print >>sys.stderr, 'highest-coverage bin'
+    print >>sys.stderr, highest_coverage_bin
+    return highest_coverage_bin
+
+def selected_readlet_alignments_by_densest_subgraph(readlets, seed=0):
+    random.seed(seed)
+    # Construct graph
+    alignments = [alignment + (1./len(multireadlet), i) for i, multireadlet
                                         in enumerate(readlets)
                                         for alignment in multireadlet]
-    '''Sort alignments so closest multireadlet from given group can be found
-    easily.'''
     alignments.sort()
     multireadlet_groups = [alignment[-1] for alignment in alignments]
-    unclustered_alignments = range(len(alignments))
-    clustered_alignments = []
-    while unclustered_alignments:
-        pivot = i = random.sample(unclustered_alignments, 1)[0]
-        new_unclustered_alignments = []
-        alignment_cluster = [pivot]
-        for j in unclustered_alignments:
-            if j == pivot: continue
+    print >>sys.stderr, 'alignments'
+    print >>sys.stderr, alignments
+    alignment_count = len(alignments)
+    adjacency_matrix = np.zeros((alignment_count, alignment_count))
+    for i in xrange(alignment_count):
+        for j in xrange(i + 1, alignment_count):
             if not (alignments[i][-1] == alignments[j][-1] or \
                 alignments[i][:2] != alignments[j][:2] or \
                 (alignments[i][4] == alignments[j][4] and
@@ -1000,20 +1337,184 @@ def selected_readlet_alignments_by_clustering(readlets, seed=0):
                     (alignments[i][2] < alignments[j][2])) or \
                 (alignments[i][-1] in multireadlet_groups[i+1:j] or
                     alignments[j][-1] in multireadlet_groups[i+1:j])):
-                alignment_cluster.append(j)
+                adjacency_matrix[i][j] = 1
+                adjacency_matrix[j][i] = 1
+    # Implement Charikar's linear-time 2-approximation algo
+    vertices = set([(i, alignment[-1]) 
+                        for i, alignment in enumerate(alignments)])
+    remove_order = []
+    mean_degrees = []
+    readlet_count = len(readlets)
+    while vertices:#len(vertices) != readlet_count:
+        degrees = {}
+        for vertex in vertices:
+            #if len([vertex_2[1] for vertex_2
+            #            in vertices if vertex[1] == vertex_2[1]]) <= 1:
+            #    continue
+            degrees[vertex] = sum(
+                    [edge for j, edge in enumerate(adjacency_matrix[i])
+                        if j in vertices]
+                )
+        mean_degrees.append(float(sum(degrees.values())) / len(degrees))
+        #if len(degrees) == 0: break
+        index_to_remove = min(degrees, key=degrees.get)
+        remove_order.append(index_to_remove)
+        vertices.remove(index_to_remove)
+    #print >>sys.stderr, 'alignments kept'
+    #print >>sys.stderr, [alignments[i] for i,x in vertices]
+    #return [alignments[i][:-2] for i,x in vertices]
+    max_mean_degree = max(mean_degrees)
+    # Choose densest subgraph at random
+    max_index = random.sample([i for i, mean_degree in enumerate(mean_degrees)
+                                if mean_degree == max_mean_degree], 1)[0]
+    removed_vertices = set(remove_order[:max_index])
+    kept_alignments = [alignment for i, alignment in enumerate(alignments)
+                        if i not in removed_vertices]
+    if len(kept_alignments) == len(set([alignment[-1] for alignment
+                                            in kept_alignments])):
+        print >>sys.stderr, 'win'
+        print >>sys.stderr, [alignment for alignment in kept_alignments]
+        return [alignment[:-2] for alignment in kept_alignments]
+    kept_alignments.sort(key=lambda alignment: alignment[-1])
+    last_alignment = kept_alignments[0]
+    filtered_alignments = [[last_alignment[:-2]]]
+    for alignment in kept_alignments[1:]:
+        if alignment[-1] == last_alignment[-1]:
+            filtered_alignments[-1].append(alignment[:-2])
+        else:
+            filtered_alignments.append([alignment[:-2]])
+        last_alignment = alignment
+    print >>sys.stderr, 'tie'
+    print >>sys.stderr, filtered_alignments
+    print >>sys.stderr, [el[0] for el in filtered_alignments if len(el) == 1]
+    return [el[0] for el in filtered_alignments if len(el) == 1]
+
+def correlation_clusters_3(alignments, adjacency_matrix):
+    if len(alignments) == 0: return []
+    if len(alignments) == 1: return [alignments]
+    pivot = random.sample(alignments, 1)[0]
+    unclustered_alignments = []
+    alignment_cluster = [pivot]
+    for i in alignments:
+        if i == pivot: continue
+        if not adjacency_matrix[i, pivot]:
+            unclustered_alignments.append(i)
+        else:
+            alignment_cluster.append(i)
+    return [alignment_cluster] + correlation_clusters_3(
+                                        unclustered_alignments,
+                                        adjacency_matrix
+                                    )
+
+def correlation_clusters_4(alignments, adjacency_matrix):
+    if len(alignments) == 0: return []
+    if len(alignments) == 1: return [alignments]
+    best_unclustered_alignments = []
+    best_alignment_clusters = []
+    min_cluster_size = None
+    for pivot in alignments:
+        unclustered_alignments = []
+        alignment_cluster = [pivot]
+        for i in alignments:
+            if i == pivot: continue
+            if not adjacency_matrix[i, pivot]:
+                unclustered_alignments.append(i)
             else:
-                new_unclustered_alignments.append(j)
-        clustered_alignments.append(
-                [alignments[j][:-1] for j in alignment_cluster]
-            )
-        unclustered_alignments = new_unclustered_alignments
-    largest_cluster_size = max(map(len, clustered_alignments))
-    largest_clusters = [cluster for cluster in clustered_alignments
-                            if len(cluster) == largest_cluster_size]
-    if len(largest_clusters) == 1:
-        return largest_clusters[0]
+                alignment_cluster.append(i)
+        multireadlet_count = len(alignment_cluster)
+        if len(best_alignment_clusters) == 0 or multireadlet_count >= min_cluster_size:
+            if multireadlet_count > min_cluster_size:
+                best_unclustered_alignments = [unclustered_alignments]
+                best_alignment_clusters = [alignment_cluster]
+                min_cluster_size = multireadlet_count
+                continue
+            best_unclustered_alignments.append(unclustered_alignments)
+            best_alignment_clusters.append(alignment_cluster)
+            min_cluster_size = multireadlet_count
+    chosen_cluster = random.randint(0, len(best_unclustered_alignments) - 1)
+    return [best_alignment_clusters[chosen_cluster]] + correlation_clusters_3(
+                                        best_unclustered_alignments[chosen_cluster],
+                                        adjacency_matrix
+                                    )
+
+def selected_readlet_alignments_by_clustering(readlets, seed=0):
+    random.seed(seed)
+    #cost = None
+    #final_clustered_alignments = None
+    #for i in xrange(20):
+    # Construct graph
+    alignments = [alignment + (i,) for i, multireadlet
+                                        in enumerate(readlets)
+                                        for alignment in multireadlet]
+    alignments.sort()
+    multireadlet_groups = [alignment[-1] for alignment in alignments]
+    #print >>sys.stderr, 'alignments'
+    #print >>sys.stderr, alignments
+    alignment_count = len(alignments)
+    adjacency_matrix = np.zeros((alignment_count, alignment_count))
+    for i in xrange(alignment_count):
+        for j in xrange(i + 1, alignment_count):
+            if not (alignments[i][-1] == alignments[j][-1] or \
+                alignments[i][:2] != alignments[j][:2] or \
+                (alignments[i][4] == alignments[j][4] and
+                   alignments[i][2] != alignments[j][2]) or \
+                ((alignments[i][4] < alignments[j][4]) != \
+                    (alignments[i][2] < alignments[j][2])) or \
+                (alignments[i][-1] in multireadlet_groups[i+1:j] or
+                    alignments[j][-1] in multireadlet_groups[i+1:j])):
+                adjacency_matrix[i][j] = 1
+                adjacency_matrix[j][i] = 1
+    clustered_alignments = correlation_clusters_3(
+            range(alignment_count),
+            adjacency_matrix
+        )
+    clustered_alignments = [[alignments[num] for num in group] for group in clustered_alignments]
+    #clustered_alignments = correlation_clusters(
+    #                                [alignment + (i,) for i, multireadlet
+    #                                    in enumerate(readlets)
+    #                                    for alignment in multireadlet]
+    #                            )
+    #    current_cost = correlation_clustering_cost(clustered_alignments)
+    #    if current_cost > cost:
+    #        final_clustered_alignments = copy.deepcopy(clustered_alignments)
+    #        cost = current_cost
+    #clustered_alignments = final_clustered_alignments
+    multireadlet_counts = [len(set([alignment[-1] for alignment in cluster]))
+                            for cluster in clustered_alignments]
+    #print >>sys.stderr, multireadlet_counts
+    max_multireadlet_count = max(multireadlet_counts)
+    best_cluster_indices = [i for i, multireadlet_count
+                            in enumerate(multireadlet_counts)
+                            if multireadlet_count == max_multireadlet_count]
+    best_cluster_index_count = len(best_cluster_indices)
+    #print >>sys.stderr, best_cluster_indices
+    if best_cluster_index_count == 1:
+        best_cluster_index = best_cluster_indices[0]
+        best_cluster = clustered_alignments[best_cluster_index]
     else:
         return []
+        best_cluster_index = best_cluster_indices[
+                                    random.randint(0, 
+                                        best_cluster_index_count - 1)
+                                ]
+        best_cluster = clustered_alignments[best_cluster_index]
+    if len(best_cluster) == multireadlet_counts[best_cluster_index]:
+        #print >>sys.stderr, 'win'
+        #print >>sys.stderr, [alignment[:-1] for alignment in best_cluster]
+        return [alignment[:-1] for alignment in best_cluster]
+    best_cluster.sort(key=lambda alignment: alignment[-1])
+    last_alignment = best_cluster[0]
+    filtered_alignments = [[last_alignment[:-1]]]
+    for alignment in best_cluster[1:]:
+        if alignment[-1] == last_alignment[-1]:
+            filtered_alignments[-1].append(alignment[:-1])
+        else:
+            filtered_alignments.append([alignment[:-1]])
+        last_alignment = alignment
+    #print >>sys.stderr, 'tie'
+    #print >>sys.stderr, filtered_alignments
+    #print >>sys.stderr, [el[0] for el in filtered_alignments if len(el) == 1]
+    return [el[0] for el in filtered_alignments if len(el) == 1]
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
@@ -1021,11 +1522,14 @@ class BowtieOutputThread(threading.Thread):
     def __init__(self, input_stream, reference_index, readletized=False,
         unmapped_stream=None, output_stream=sys.stdout,
         exon_differentials=True, exon_intervals=False, stranded=False,
-        end_to_end_sam=True, verbose=False, bin_size=10000, min_intron_size=5,
-        max_intron_size=100000, max_discrepancy=2, min_seq_similarity=0.85,
-        intron_partition_overlap=20, search_for_caps=True,
-        min_cap_query_size=8, cap_search_window_size=1000,
-        global_alignment=GlobalAlignment(), report_multiplier=1.2):
+        splice_sam=True, verbose=False, bin_size=10000, min_intron_size=5,
+        min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
+        max_intron_size=100000, intron_partition_overlap=20,
+        assign_multireadlets_by_distance=False,
+        search_for_caps=True, min_cap_query_size=8,
+        cap_search_window_size=1000,
+        global_alignment=GlobalAlignment(), 
+        report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -1046,16 +1550,17 @@ class BowtieOutputThread(threading.Thread):
             stranded: True iff input reads are strand-specific; this affects
                 whether an output partition has a terminal '+' or '-'
                 indicating the sense strand.
-            end_to_end_sam: True iff SAM with end_to_end alignments should
-                be output. See docstring for more information.
+            splice_sam: True iff SAM with spliced alignments is to be emitted.
+                Ignored if readletized is False.
             verbose: True if alignments should occasionally be written 
                 to stderr.
             bin_size: genome is partitioned in units of bin_size for later load
                 balancing.
             min_intron_size: introns smaller than this number of bases are 
                 filtered out.
-            max_intron_size: introns larger than this number of bases are
-                filtered out.
+            min_strand_readlets: exons and introns are called on a strand iff 
+                the number of readlets that align to the strand is >= this
+                number.
             max_discrepancy: if the difference in length between an unmapped 
                 region framed by two ECs and its corresponding gap in the
                 reference is <= this value, the unmapped region is considered a
@@ -1069,9 +1574,16 @@ class BowtieOutputThread(threading.Thread):
                 region is incorporated into a single EC spanning the two
                 original ECs via DP filling. See the GlobalAlignment class for
                 the substitution matrix used.
+            max_intron_size: an intron of that spans more than this number of
+                bases is suppressed from output.
             intron_partition_overlap: number of bases to subtract from
                 reference start position of intron when determining genome
                 partition it is in.
+            assign_multireadlets_by_distance: False iff multireadlet alignments
+                should be selected primarily based on readlet coverage via
+                selected_readlet_alignments_by_coverage(). True iff
+                multireadlet alignments should be selected based on distance to
+                unireadlets via selected_readlet_alignments_by_distance().
             search_for_caps: True iff reference should be searched for the
                 segment of a read (a cap) that precedes the first EC and the
                 segment of a read that follows the last EC. Such segments are
@@ -1097,17 +1609,20 @@ class BowtieOutputThread(threading.Thread):
         self.verbose = verbose
         self.bin_size = bin_size
         self.stranded = stranded
+        self.min_strand_readlets = min_strand_readlets
         self.max_discrepancy = max_discrepancy
         self.min_seq_similarity = min_seq_similarity
         self.report_multiplier = report_multiplier
         self.exon_differentials = exon_differentials
         self.exon_intervals = exon_intervals
-        self.end_to_end_sam = end_to_end_sam
+        self.splice_sam = splice_sam
         self.max_intron_size = max_intron_size
         self.min_intron_size = min_intron_size
         self.search_for_caps = search_for_caps
         self.min_cap_query_size = min_cap_query_size
         self.cap_search_window_size = cap_search_window_size
+        self.assign_multireadlets_by_distance \
+            = assign_multireadlets_by_distance
         self.intron_partition_overlap = intron_partition_overlap
         self.global_alignment = global_alignment
 
@@ -1118,10 +1633,9 @@ class BowtieOutputThread(threading.Thread):
 
             No return value.
         """
-        global _output_line_count
+        global output_line_count
         next_report_line = 0
         if not self.readletized:
-            max_read_size = 0
             '''Next read must be known to tell if a read mapped to multiple
             locations, so always work with previous read.'''
             while True:
@@ -1166,7 +1680,6 @@ class BowtieOutputThread(threading.Thread):
                     tokens = line.rstrip().split('\t')
                     (qname, flag, rname, pos, mapq, cigar, rnext,
                         pnext, tlen, seq, qual) = tokens[:11]
-                    max_read_size = max(max_read_size, len(seq))
                     flag = int(flag)
                     pos = int(pos)
                     if self.stranded:
@@ -1178,62 +1691,41 @@ class BowtieOutputThread(threading.Thread):
                         reverse_strand_string = ''
                     seq_size = len(seq)
                     end_pos = pos + seq_size
-                    '''Find XM:i field, which is > 0 if read had several valid
-                    alignments, but all were suppressed because bowtie -m X was
-                    invoked for X an integer >= 1. See Bowtie documentation.'''
-                    multimapped = False
-                    for field in tokens[::-1]:
-                        if field[:5] == 'XM:i:':
-                            if int(field[5:]) > 0 and (flag & 4):
-                                '''If read is multimapped and all alignments
-                                were suppressed.'''
-                                multimapped = True
-                            break
+                '''Find XM:i field, which is > 0 if read had several valid
+                alignments, but all were suppressed because bowtie -m X was
+                invoked for X an integer >= 1. See Bowtie documentation.'''
+                multimapped = False
+                for field in tokens[::-1]:
+                    if field[:5] == 'XM:i:':
+                        if int(field[5:]) > 0 and (flag & 4):
+                            '''If read is multimapped and all alignments were
+                            suppressed.'''
+                            multimapped = True
+                        break
                 if self.verbose and next_report_line == i:
                     print >>sys.stderr, \
                         'SAM output record %d: rdname="%s", flag=%d' \
                         % (i, last_qname, last_flag)
                     next_report_line = int((next_report_line + 1)
                         * self.report_multiplier + 1) - 1
-                last_sample_label = sample.parseLab(last_qname[:-2])
-                multiread.append(last_tokens)
+                multiread.append((last_qname, last_flag, last_rname, last_pos,
+                    last_mapq, last_cigar, last_rnext, last_pnext, last_tlen,
+                    last_seq, last_qual))
                 if not line or qname != last_qname:
                     '''If the next qname doesn't match the last qname or there
                     are no more lines, all of a multiread's alignments have
                     been collected.'''
-                    if (last_flag & 4) \
-                        and not (len(multiread) > 1 or last_multimapped):
-                        if self.unmapped_stream is not None:
-                            '''Write only reads with no possible alignments to
-                            unmapped_stream.'''
-                            print >>self.unmapped_stream, '%s\t%s\t%s' \
-                                % (last_qname, last_seq, last_qual)
-                            '''Also write unmapped reads for realignment in 
-                            another map step.'''
-                            print >>self.output_stream, '%s\t%s\t%s\t%s' \
-                                % ('unmapped', last_qname, last_seq, last_qual)
-                    elif self.end_to_end_sam:
-                        '''End-to-end SAM is output for every line with at
-                        least one possible alignment.'''
-                        for alignment_tokens in multiread:
-                            print >>self.output_stream, (
-                                ('%s\t%s\t%s\t%012d\t%s\t%s\t'
-                                    % ('end_to_end_sam', last_sample_label, 
-                                    alignment_tokens[2],
-                                    int(alignment_tokens[3]),
-                                    alignment_tokens[0][:-2],
-                                    alignment_tokens[1])) 
-                                + '\t'.join(alignment_tokens[4:]))
                     if not (last_flag & 4) and len(multiread) == 1 \
                         and not last_multimapped:
                         '''Read maps uniquely; the full alignment is to be
                         called as an exonic chunk (EC). Kill mate information
                         in qname so rest of pipeline associates mates.'''
+                        last_sample_label = sample.parseLab(last_qname[:-2])
                         partitions = partition.partition(last_rname, last_pos, 
                             last_end_pos, self.bin_size)
                         if self.exon_differentials:
                             for (partition_id, 
-                                partition_start, partition_end)in partitions:
+                                partition_start, partition_end) in partitions:
                                 # Print increment at interval start
                                 assert last_pos < partition_end \
                                     + self.intron_partition_overlap
@@ -1245,7 +1737,7 @@ class BowtieOutputThread(threading.Thread):
                                         last_sample_label,
                                         last_reverse_strand_string,
                                         diff_bin)
-                                _output_line_count += 1
+                                output_line_count += 1
                                 assert last_end_pos > partition_start
                                 if last_end_pos < partition_end:
                                     '''Print decrement at interval end iff exon
@@ -1257,7 +1749,7 @@ class BowtieOutputThread(threading.Thread):
                                             last_sample_label,
                                             last_reverse_strand_string,
                                             diff_bin)
-                                    _output_line_count += 1
+                                    output_line_count += 1
                         if self.exon_intervals:
                             for partition_id, _, _ in partitions:
                                 print >>self.output_stream, \
@@ -1265,13 +1757,24 @@ class BowtieOutputThread(threading.Thread):
                                     % (partition_id, 
                                         last_reverse_strand_string, last_pos, 
                                         last_end_pos, last_sample_label)
-                                _output_line_count += 1
+                                output_line_count += 1
+                        if self.splice_sam:
+                            print >>self.output_stream, ('%s\t'*2 + '%012d\t'
+                                    + '%s\t'*8 + '%s') \
+                                    % ('splice_sam', last_rname,
+                                        last_pos, last_qname[:-2],
+                                        last_flag, last_mapq,
+                                        str(last_seq_size) + 'M', last_rnext,
+                                        last_pnext, last_tlen,
+                                        last_seq, last_qual)
+                    elif self.unmapped_stream is not None \
+                        and not (len(multiread) > 1 or last_multimapped):
+                        '''Write only reads with no possible alignments to
+                        unmapped_stream.'''
+                        print >>self.unmapped_stream, '%s\t%s\t%s' \
+                            % (last_qname, last_seq, last_qual)
                     multiread = []
-                if not line: 
-                    # Write max read size
-                    print >>self.output_stream, 'max_len\ta\t%d\t0\t0' \
-                        % max_read_size
-                    break
+                if not line: break
                 last_tokens = tokens
                 (last_qname, last_flag, last_rname, last_pos, last_mapq,
                     last_cigar, last_rnext, last_pnext, last_tlen, last_seq,
@@ -1316,6 +1819,14 @@ class BowtieOutputThread(threading.Thread):
                     last_displacement = int(last_three_prime_displacement)
                 else:
                     last_displacement = int(last_five_prime_displacement)
+                '''Find MD:Z field to obtain number of mismatches in
+                alignment.'''
+                last_mismatch_count = 0
+                for field in last_tokens[::-1]:
+                    if field[:5] == 'MD:Z:':
+                        last_mismatch_count \
+                            = len(re.findall(r'[A-Za-z]', field[5:]))
+                        break
                 break
             # Initialize counter
             i = 0
@@ -1349,6 +1860,14 @@ class BowtieOutputThread(threading.Thread):
                         displacement = int(three_prime_displacement)
                     else:
                         displacement = int(five_prime_displacement)
+                    '''Find MD:Z field to obtain number of mismatches in
+                    alignment.'''
+                    mismatch_count = 0
+                    for field in last_tokens[::-1]:
+                        if field[:5] == 'MD:Z:':
+                            mismatch_count \
+                                = len(re.findall(r'[A-Za-z]', field[5:]))
+                            break
                 if self.verbose and next_report_line == i:
                     print >>sys.stderr, \
                         'SAM output record %d: rdname="%s", flag=%d' \
@@ -1357,7 +1876,8 @@ class BowtieOutputThread(threading.Thread):
                         * self.report_multiplier + 1) - 1
                 multireadlet.append((last_rname, last_reverse_strand, last_pos,
                                         last_pos + len(last_seq),
-                                        last_displacement))
+                                        last_displacement,
+                                        last_mismatch_count))
                 if not line or full_qname != last_full_qname:
                     '''If the next qname doesn't match the last qname or there
                     are no more lines, all of a multireadlet's alignments have
@@ -1387,17 +1907,42 @@ class BowtieOutputThread(threading.Thread):
                     if readlet_count[(last_qname, last_paired_label)] \
                         == last_total_readlets and (last_qname,
                         last_paired_label) in collected_readlets:
-                        '''Set seed for each read so results for read are
-                        reproducible.'''
-                        filtered_alignments \
+                        '''Choose algorithm for selecting alignments from
+                        multireadlets.'''
+                        if self.assign_multireadlets_by_distance:
+                            filtered_alignments \
+                                = selected_readlet_alignments_by_distance(
+                                        collected_readlets[(last_qname,
+                                                            last_paired_label)]
+                                    )
+                        else:
+                            filtered_alignments \
                                 = selected_readlet_alignments_by_clustering(
                                         collected_readlets[(last_qname,
                                             last_paired_label)],
                                         seed=(last_qual_seq + last_read_seq)
                                     )
-                        introns = introns_from_read(
+                            '''filtered_alignments \
+                                = selected_readlet_alignments_by_distance(
+                                        collected_readlets[(last_qname,
+                                            last_paired_label)]
+                                    )'''
+                        '''Compute mean number of matched bases per aligned
+                        base of the readlets from the read.'''
+                        aligned_base_count = sum([alignment[3] - alignment[2]
+                            for alignment in filtered_alignments])
+                        mismatched_base_count = sum([alignment[-1]
+                            for alignment in filtered_alignments])
+                        try:
+                            match_rate = (aligned_base_count 
+                                             - float(mismatched_base_count)) \
+                                            / aligned_base_count
+                        except ZeroDivisionError: match_rate = 0
+                        exons, introns = exons_and_introns_from_read(
                             self.reference_index, last_read_seq,
-                            filtered_alignments,
+                            [alignment[:-1] 
+                                for alignment in filtered_alignments],
+                            min_strand_readlets=self.min_strand_readlets,
                             max_discrepancy=self.max_discrepancy,
                             min_seq_similarity=self.min_seq_similarity,
                             global_alignment=self.global_alignment,
@@ -1408,12 +1953,84 @@ class BowtieOutputThread(threading.Thread):
                         )
                         '''Kill mate information in last_qname so rest of
                         pipeline associates mates.'''
+                        last_sample_label = sample.parseLab(last_qname[:-2])
+                        if self.exon_differentials:
+                            for exon_strand in exons:
+                                exon_rname, exon_reverse_strand = exon_strand
+                                if self.stranded:
+                                    '''A reverse-strand string is needed iff
+                                    input reads are strand-specific.'''
+                                    exon_reverse_strand_string = '-' if \
+                                        exon_reverse_strand else '+'
+                                else:
+                                    exon_reverse_strand_string = ''
+                                for exon_pos, exon_end_pos \
+                                    in exons[exon_strand]:
+                                    partitions = partition.partition(
+                                        exon_rname, exon_pos, exon_end_pos,
+                                        self.bin_size)
+                                    for (partition_id, partition_start, 
+                                            partition_end) in partitions:
+                                        assert exon_pos < partition_end
+                                        # Print increment at interval start
+                                        diff_rname, diff_bin \
+                                            = partition_id.split(';')
+                                        print >>self.output_stream, \
+                                            'exon_diff\t%s;%d;%s%s\t%s\t1' \
+                                            % (diff_rname,
+                                                max(partition_start, exon_pos),
+                                                last_sample_label,
+                                                exon_reverse_strand_string,
+                                                diff_bin)
+                                        output_line_count += 1
+                                        assert exon_end_pos > partition_start
+                                        if exon_end_pos < partition_end:
+                                            '''Print decrement at interval end 
+                                            iff exon ends before partition
+                                            ends.'''
+                                            print >>self.output_stream, \
+                                                'exon_diff\t%s;%d;%s%s\t' \
+                                                '%s\t-1' \
+                                                % (diff_rname, 
+                                                    exon_end_pos,
+                                                    last_sample_label,
+                                                    exon_reverse_strand_string,
+                                                    diff_bin)
+                                            output_line_count += 1
+                        if self.exon_intervals:
+                            for exon_strand in exons:
+                                exon_rname, exon_reverse_strand = exon_strand
+                                if self.stranded:
+                                    '''A reverse-strand string is needed iff
+                                    input reads are strand-specific.'''
+                                    exon_reverse_strand_string = '-' if \
+                                        exon_reverse_strand else '+'
+                                else:
+                                    exon_reverse_strand_string = ''
+                                for exon_pos, exon_end_pos \
+                                    in exons[exon_strand]:
+                                    partitions = partition.partition(
+                                        exon_rname, exon_pos, exon_end_pos,
+                                        self.bin_size)
+                                    for partition_id, _, _ in partitions:
+                                        print >>self.output_stream, \
+                                            'exon_ival\t%s%s\t%012d\t' \
+                                            '%012d\t%s' \
+                                            % (partition_id, 
+                                                exon_reverse_strand_string,
+                                                exon_pos, exon_end_pos, 
+                                                last_sample_label)
+                                        output_line_count += 1
                         # Print introns
                         for intron_strand in introns:
                             intron_rname, intron_reverse_strand = intron_strand
                             intron_reverse_strand_string = '-' if \
                                     intron_reverse_strand else '+'
-                            for (intron_pos, intron_end_pos) \
+                            for (intron_pos, intron_end_pos,
+                                    intron_five_prime_displacement, 
+                                    intron_three_prime_displacement,
+                                    intron_left_EC_size,
+                                    intron_right_EC_size) \
                                     in introns[intron_strand]:
                                 if intron_end_pos - intron_pos \
                                     > self.max_intron_size:
@@ -1443,13 +2060,66 @@ class BowtieOutputThread(threading.Thread):
                                 for (partition_id, partition_start, 
                                         partition_end) in partitions:
                                     print >>self.output_stream, \
-                                        'intron\t%s%s\t%012d\t%012d' \
+                                        'intron\t%s%s\t%s\t%012d\t%012d' \
+                                        '\t%d\t%d\t%d\t%d\t%.12f\t%s' \
                                         % (partition_id,
                                             intron_reverse_strand_string if 
                                             self.stranded else '',
-                                            intron_pos,
-                                            intron_end_pos)
-                                    _output_line_count += 1
+                                            last_sample_label, intron_pos,
+                                            intron_end_pos, 
+                                            intron_five_prime_displacement,
+                                            intron_three_prime_displacement,
+                                            intron_left_EC_size,
+                                            intron_right_EC_size,
+                                            match_rate, 
+                                            intron_reverse_strand_string)
+                                    output_line_count += 1
+                        if self.splice_sam:
+                            '''Print SAM with each line encoding candidate
+                            introns from a single read. NO INTRONS ARE
+                            FILTERED.'''
+                            for intron_strand in introns:
+                                (intron_rname,
+                                    intron_reverse_strand) = intron_strand
+                                strand_introns = introns[intron_strand]
+                                cigar_list = []
+                                cigar_list.append('%dM' \
+                                                    % strand_introns[0][2])
+                                last_intron = strand_introns[0]
+                                for intron in strand_introns[1:]:
+                                    cigar_list.append('%dN' \
+                                        % (last_intron[1] - last_intron[0]))
+                                    cigar_list.append('%dM' \
+                                        % (intron[2] - last_intron[2]))
+                                    last_intron = intron
+                                cigar_list.append('%dN' \
+                                    % (strand_introns[-1][1] 
+                                        - strand_introns[-1][0]))
+                                cigar_list.append('%dM' % \
+                                                    strand_introns[-1][3])
+                                '''First column is "splice_sam"; other 11
+                                columns are standard SAM. See SAM format
+                                specification for details.'''
+                                if intron_reverse_strand:
+                                    # Need to reverse-complement sequence
+                                    splice_sam_tuple = ('splice_sam',
+                                        intron_rname, strand_introns[0][0]
+                                            - strand_introns[0][2],
+                                        last_qname, '16', '255', 
+                                        ''.join(cigar_list), '*', '0', '0', 
+                                        last_read_seq[::-1].translate(
+                                         _reversed_complement_translation_table
+                                        ), last_qual_seq[::-1])
+                                else:
+                                    splice_sam_tuple = ('splice_sam',
+                                        intron_rname, strand_introns[0][0]
+                                            - strand_introns[0][2],
+                                        last_qname, '0', '255', 
+                                        ''.join(cigar_list), '*', '0', '0', 
+                                        last_read_seq, last_qual_seq)
+                                print >>self.output_stream, \
+                                    ('%s\t'*2 + '%012d\t' + '%s\t'*8 + '%s') \
+                                    % splice_sam_tuple
                         del readlet_count[(last_qname, last_paired_label)]
                         del collected_readlets[(last_qname, last_paired_label)]
                     multireadlet = []
@@ -1461,9 +2131,10 @@ class BowtieOutputThread(threading.Thread):
                     rnext, pnext, tlen, seq, qual)
                 (last_qname, last_paired_label, last_five_prime_displacement, 
                     last_three_prime_displacement, last_read_seq,
-                    last_qual_seq, last_total_readlets) = (qname, paired_label,
+                    last_qual_seq, last_total_readlets,
+                    last_mismatch_count) = (qname, paired_label,
                     five_prime_displacement, three_prime_displacement, 
-                    read_seq, qual_seq, total_readlets)
+                    read_seq, qual_seq, total_readlets, mismatch_count)
                 (last_reverse_strand, last_displacement) = (reverse_strand,
                     displacement)
                 i += 1
@@ -1487,15 +2158,16 @@ def handle_temporary_directory(archive, temp_dir_path):
         import shutil
         shutil.rmtree(temp_dir_path)
 
-def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
-    bowtie_index_base='genome', bowtie_args=None,
+def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe="bowtie",
+    bowtie_index_base="genome", bowtie_args=None,
     temp_dir_path=tempfile.mkdtemp(), bin_size=10000, verbose=False,
     read_filename='reads.tsv', readlet_filename='readlets.tsv',
     unmapped_filename='unmapped.tsv', exon_differentials=True,
-    exon_intervals=False, end_to_end_sam=True, stranded=False,
-    min_readlet_size=8, max_readlet_size=25, readlet_interval=5,
-    capping_fraction=.75, max_discrepancy=2, min_seq_similarity=0.85,
-    min_intron_size=5, max_intron_size=100000, intron_partition_overlap=20,
+    exon_intervals=False, splice_sam=True, stranded=False, min_readlet_size=8,
+    max_readlet_size=25, readlet_interval=5, capping_fraction=.75,
+    min_strand_readlets=1, max_discrepancy=2, min_seq_similarity=0.85,
+    min_intron_size=5, max_intron_size=100000, intron_partition_overlap=20, 
+    assign_multireadlets_by_distance=False,
     global_alignment=GlobalAlignment(), report_multiplier=1.2,
     search_for_caps=True, min_cap_query_size=8, cap_search_window_size=1000):
     """ Runs Rail-RNA-align.
@@ -1527,24 +2199,22 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         5. Nucleotide sequence for mate 2
         6. Quality sequence for mate 2
 
-        Hadoop output (written to stdout)
-        ----------------------------
+        Output (written to output_stream)---
         A given RNAME sequence is partitioned into intervals ("bins") of some 
-        user-specified length (see partition.py).
+        user-specified length (see partition.py) for later load balancing.
 
-        Exonic chunks (aka ECs; three formats, any or all of which may be
-        emitted:
+        Exonic chunks (aka ECs; two formats --- either or both may be emitted):
 
         Format 1 (exon_ival); tab-delimited output tuple columns:
         1. Reference name (RNAME in SAM format) + ';' + bin number + ('+' or
             '-' indicating which strand is the sense strand if input reads are
-            strand-specific -- that is, --stranded is invoked; otherwise, there
-            is no terminal '+' or '-')
+            strand-specific -- that is, --stranded is invoked; otherwise, there is no
+            terminal '+' or '-')
         2. Sample label
         3. EC start (inclusive) on forward strand
         4. EC end (exclusive) on forward strand
 
-        Format 2 (exon_diff); tab-delimited output tuple columns:
+        Format 2 (exon_diff); tab-delimited input tuple columns:
         1. Reference name (RNAME in SAM format) + ';' + 
             max(EC start, bin start) (inclusive) on forward strand IFF diff is
             positive and EC end (exclusive) on forward strand IFF diff is
@@ -1555,45 +2225,51 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         3. Sample label
         4. +1 or -1.
 
-        Note that only unique alignments are currently output as ivals and/or
-        diffs.
-
-        Format 3 (end_to_end_sam); tab-delimited output tuple columns:
-        Standard 11-column SAM output except fields are in different order, and
-        the first field corresponds to sample label. (Fields are reordered to
-        facilitate partitioning by sample name/RNAME and sorting by POS.) Each
-        line corresponds to a spliced alignment.
-        The order of the fields is as follows.
-        1. Sample label
-        2. RNAME
-        3. POS
-        4. QNAME
-        5. FLAG
-        6. MAPQ
-        7. CIGAR
-        8. RNEXT
-        9. PNEXT
-        10. TLEN
-        11. SEQ
-        12. QUAL
-        ... + optional fields
-
         Introns
 
-        Tab-delimited output tuple columns (intron):
+        Tab-delimited output tuple columns:
         1. Reference name (RNAME in SAM format) + ';' + bin number +  
-            ('+' or '-' indicating which strand is the sense strand if input
-            reads are strand-specific -- that is, --stranded is invoked;
-            otherwise, there is no terminal '+' or '-')
-        2. Intron start (inclusive) on forward strand
-        3. Intron end (exclusive) on forward strand
+        ('+' or '-' indicating which strand is the sense strand if input reads
+        are strand-specific -- that is, --stranded is invoked; otherwise, there
+        is no terminal '+' or '-')
+        2. Sample label
+        3. Intron start (inclusive) on forward strand
+        4. Intron end (exclusive) on forward strand
+        5. Number of nucleotides between 5' end of intron and 5' end of read
+        from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD
+        STRAND. That is, if the sense strand is the reverse strand, this is the
+        distance between the 3' end of the read and the 3' end of the intron.
+        6. Number of nucleotides between 3' end of intron and 3' end of read
+        from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD
+        STRAND.
+        7. Number of nucleotides spanned by EC on the left (that is, towards
+        the 5' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
+        FORWARD STRAND.
+        8. Number of nucleotides spanned by EC on the right (that is, towards
+        the 3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
+        FORWARD STRAND.
+        9. Match rate: the number of bases that match the reference per base of
+        the aligned readlets comprising the read from which the intron was
+        inferred.
+        10. '-' if reversed complements of readlets from which intron was
+        inferred aligned to forward strand; else '+'
 
-        Reads with no end-to-end alignments
-
-        Tab-delimited output tuple columns (unmapped):
-        1. QNAME
-        2. SEQ
-        3. QUAL
+        SAM (splice_sam):
+        Standard 11-column SAM output except fields are in different order.
+        (Fields are reordered to facilitate partitioning by RNAME and sorting
+            by POS.) Each line corresponding to a spliced alignment.
+        The order of the fields is as follows.
+        1. RNAME
+        2. POS
+        3. QNAME
+        4. FLAG
+        5. MAPQ
+        6. CIGAR
+        7. RNEXT
+        8. PNEXT
+        9. TLEN
+        10. SEQ
+        11. QUAL
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
@@ -1629,11 +2305,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             capping_fraction. Ignored if readletize=False.
         exon_differentials: True iff EC differentials are to be emitted.
         exon_intervals: True iff EC intervals are to be emitted.
-        end_to_end_sam: True iff SAM with end_to_end alignments should be
-            output. See docstring for more information.
+        splice_sam: True iff SAM with spliced alignments is to be emitted.
         stranded: True iff input reads are strand-specific; this affects
             whether an output partition has a terminal '+' or '-' indicating
             the sense strand.
+        min_strand_readlets: exons and introns are called on a strand iff 
+            the number of readlets that align to the strand is >= this number.
         max_discrepancy: if the difference in length between an unmapped region
             framed by two ECs and its corresponding gap in the reference is <=
             this value, the unmapped region is considered a candidate for
@@ -1653,6 +2330,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         intron_partition_overlap: number of bases to subtract from
             reference start position of intron when determining genome
             partition it is in.
+        assign_multireadlets_by_distance: False iff multireadlet alignments
+            should be selected based on readlet coverage via
+            selected_readlet_alignments_by_coverage(). True iff multireadlet
+            alignments should be selected based on distance to unireadlets
+            via selected_readlet_alignments_by_distance().
         search_for_caps: True iff reference should be searched for the segment
             of a read (a cap) that precedes the first EC and the segment of a
             read that follows the last EC. Such segments are subsequently added
@@ -1696,8 +2378,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
                 bin_size=bin_size,
                 verbose=verbose, 
                 output_stream=output_stream,
-                end_to_end_sam=end_to_end_sam,
+                min_intron_size=args.min_intron_size,
+                min_strand_readlets=min_strand_readlets, 
+                max_discrepancy=max_discrepancy, 
+                min_seq_similarity=min_seq_similarity, 
+                max_intron_size=max_intron_size,
                 stranded=stranded,
+                intron_partition_overlap=intron_partition_overlap,
                 global_alignment=global_alignment,
                 report_multiplier=report_multiplier
             )
@@ -1733,15 +2420,18 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             readletized=True, unmapped_stream=None,
             exon_differentials=exon_differentials, 
             exon_intervals=exon_intervals,
+            splice_sam=splice_sam, 
             bin_size=bin_size,
             verbose=verbose, 
             output_stream=output_stream,
-            min_intron_size=min_intron_size,
+            min_intron_size=args.min_intron_size,
+            min_strand_readlets=min_strand_readlets, 
             max_discrepancy=max_discrepancy, 
             min_seq_similarity=min_seq_similarity, 
             max_intron_size=max_intron_size,
             stranded=stranded,
             intron_partition_overlap=intron_partition_overlap,
+            assign_multireadlets_by_distance=assign_multireadlets_by_distance,
             search_for_caps=search_for_caps,
             min_cap_query_size=min_cap_query_size,
             cap_search_window_size=cap_search_window_size,
@@ -1759,7 +2449,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     output_stream.flush()
 
     print >> sys.stderr, 'DONE with align.py; in/out=%d/%d; ' \
-        'time=%0.3f s' % (_input_line_count, _output_line_count,
+        'time=%0.3f s' % (input_line_count, output_line_count,
                                 time.time() - start_time)
 
 if __name__ == '__main__':
@@ -1799,10 +2489,10 @@ if __name__ == '__main__':
         const=True,
         default=False, 
         help='Print exon intervals')
-    parser.add_argument('--end-to-end-sam', action='store_const', const=True,
+    parser.add_argument('--splice-sam', action='store_const', const=True,
         default=True, 
-        help='Print read-by-read SAM output of end-to-end alignments for '
-             'later consolidation after realignment.')
+        help='Print read-by-read SAM output of candidate introns for later '
+             'consolidation in splice_sam.py. --max-intron-size is ignored.')
     parser.add_argument(\
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
@@ -1821,6 +2511,11 @@ if __name__ == '__main__':
     parser.add_argument('--max-intron-size', type=int, required=False,
         default=500000, 
         help='Filters introns of length greater than this value')
+    parser.add_argument('--min-strand-readlets', type=int, required=False,
+        default=1, 
+        help='Exons and introns are called on a strand (i.e., a tuple ' 
+        '(rname, reverse_strand)) iff the number of readlets that align to '
+        'the strand is >= this number')
     parser.add_argument('--max-discrepancy', type=int, required=False,
         default=2, 
         help='If the difference in length between an unmapped region framed '
@@ -1837,6 +2532,14 @@ if __name__ == '__main__':
              '(length of unmapped region), the unmapped region is '
              'incorporated into a single EC spanning the two original ECs '
              'via DP filling')
+    parser.add_argument('--assign-multireadlets-by-distance',
+        action='store_const',
+        const=True,
+        default=False, 
+        help='Don\'t use readlet coverage to determine which alignment of '
+             'multireadlet should be selected. Instead, choose alignment of '
+             'multireadlet closest to set of unireadlets. If False, alignment '
+             'that spans region with highest coverage is selected.')
     parser.add_argument('--do-not-search_for_caps',
         action='store_const',
         const=True,
@@ -1902,16 +2605,18 @@ if __name__ == '__main__' and not args.test:
         unmapped_filename='unmapped.tsv', 
         exon_differentials=args.exon_differentials,
         exon_intervals=args.exon_intervals,
-        end_to_end_sam=args.end_to_end_sam,
+        splice_sam=args.splice_sam,
         stranded=args.stranded,
         min_readlet_size=args.min_readlet_size, 
         max_readlet_size=args.max_readlet_size,
         readlet_interval=args.readlet_interval,
-        capping_fraction=args.capping_fraction,
+        capping_fraction=args.capping_fraction, 
+        min_strand_readlets=args.min_strand_readlets,
         max_discrepancy=args.max_discrepancy,
         min_seq_similarity=args.min_seq_similarity, 
         max_intron_size=args.max_intron_size,
         intron_partition_overlap=args.intron_partition_overlap,
+        assign_multireadlets_by_distance=args.assign_multireadlets_by_distance,
         search_for_caps=(not args.do_not_search_for_caps),
         min_cap_query_size=args.min_cap_query_size,
         cap_search_window_size=args.cap_search_window_size,
@@ -1935,6 +2640,18 @@ elif __name__ == '__main__':
 
     class TestComposedAndSortedReadlets(unittest.TestCase):
         """ Tests composed_and_sorted_readlets(); needs no fixture. """
+        def test_stray_readlet_filtering(self):
+            """ Fails if all readlets are not filtered. """
+            self.assertEqual(
+                    composed_and_sorted_readlets([
+                            ('chr1', True, 3, 20, 5), 
+                            ('chr2', False, 2, 10, 4),
+                            ('chr2', False, 3, 12, 5)
+                        ],
+                        min_strand_readlets=3
+                    ),
+                    {}
+                )
         def test_overlapping_readlets_1(self):
             """ Fails if readlets are not consolidated as expected. """
             self.assertEqual(
@@ -1942,10 +2659,10 @@ elif __name__ == '__main__':
                             ('chr1', True, 3, 20, 5), 
                             ('chr2', False, 2, 10, 4),
                             ('chr2', False, 3, 12, 5)
-                        ]
+                        ],
+                        min_strand_readlets=2
                     ),
                     {
-                        ('chr1', True): [(3, 20, 5)],
                         ('chr2', False): [(2, 12, 4)]
                     }
                 )
@@ -1959,11 +2676,10 @@ elif __name__ == '__main__':
                             ('chr2', False, 3, 12, 5),
                             ('chr2', False, 20, 23, 10),
                             ('chr2', False, 21, 24, 11)
-                        ]
+                        ],
+                        min_strand_readlets=2
                     ),
                     {
-                        ('chr1', True): [(3, 20, 5)],
-                        ('chr2', True): [(2, 10, 4)],
                         ('chr2', False): [(2, 12, 4), (20, 24, 10)]
                     }
                 )
@@ -1977,7 +2693,8 @@ elif __name__ == '__main__':
                             ('chr2', True, 2, 10, 4),
                             ('chr2', False, 2, 10, 4),
                             ('chr2', False, 21, 24, 11)
-                        ]
+                        ],
+                        min_strand_readlets=1
                     ),
                     {
                         ('chr2', False): [(2, 12, 4), (20, 24, 10)],
@@ -1997,13 +2714,13 @@ elif __name__ == '__main__':
                             ('chr3', False, 121, 145, 10),
                             ('chr4', False, 3, 6, 9),
                             ('chr2', False, 20, 23, 10),
-                        ]
+
+                        ],
+                        min_strand_readlets=2
                     ),
                     {
                         ('chr1', True): [(3, 7, 8)],
-                        ('chr2', False): [(20, 23, 10)],
-                        ('chr3', False): [(1, 59, 6), (121, 145, 10)],
-                        ('chr4', False): [(3, 6, 9)]
+                        ('chr3', False): [(1, 59, 6), (121, 145, 10)]
                     }
                 )
 
@@ -2029,8 +2746,8 @@ elif __name__ == '__main__':
                                         )
                                     )
     
-    class TestIntronsFromRead(unittest.TestCase):
-        """ Tests introns_from_read(). """
+    class TestExonsAndIntronsFromRead(unittest.TestCase):
+        """ Tests exons_and_introns_from_read(). """
         def setUp(self):
             """ Creates temporary directory and Bowtie index. """
             reference_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
@@ -2076,27 +2793,33 @@ elif __name__ == '__main__':
             # Fake mapping each line of read to respective line of reference
             readlets = [('chr1', False, 1, 48, 0),
                           ('chr1', False, 95, 142, 47)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', False) : [(48, 95)]}, 
+            self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
+                                exons)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]}, 
                                 introns)
             '''Now try truncating readlets so there is an unmapped region of
             the read. This tests the DP framing code in context.'''
             readlets = [('chr1', False, 1, 42, 0),
                           ('chr1', False, 100, 142, 52)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', False) : [(48, 95)]},
+            self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
+                                exons)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]},
                                 introns)
             # Truncate readlets again to test DP framing.
             readlets = [('chr1', False, 1, 37, 0),
                           ('chr1', False, 105, 142, 57)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', False) : [(48, 95)]},
+            self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
+                                exons)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]},
                                 introns)
 
         def test_DP_framing_from_overlapping_ECs(self):
@@ -2120,27 +2843,33 @@ elif __name__ == '__main__':
             # Fake mapping each line of read to respective line of reference
             readlets = [('chr1', False, 1, 52, 0),
                           ('chr1', False, 91, 142, 43)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', False) : [(48, 95)]},
+            self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
+                                exons)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]},
                                 introns)
             '''Now try truncating readlets so there is an unmapped region of
             the read. This tests the DP framing code in context.'''
             readlets = [('chr1', False, 1, 42, 0),
                           ('chr1', False, 100, 142, 52)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', False) : [(48, 95)]},
+            self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
+                                exons)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]},
                                 introns)
             # Truncate readlets again to test DP framing.
             readlets = [('chr1', False, 1, 37, 0),
                           ('chr1', False, 105, 142, 57)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', False) : [(48, 95)]},
+            self.assertEquals({('chr1', False) : [(1, 48), (95, 142)]},
+                                exons)
+            self.assertEquals({('chr1', False) : [(48, 95, 47, 47, 47, 47)]},
                                 introns)
 
         def test_reverse_strand_DP_framing_1(self):
@@ -2169,27 +2898,33 @@ elif __name__ == '__main__':
             # Fake mapping each line of read to respective line of reference
             readlets = [('chr1', True, 1, 48, 0),
                           ('chr1', True, 95, 142, 47)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', True) : [(48, 95)]},
+            self.assertEquals({('chr1', True) : [(1, 48), (95, 142)]},
+                                exons)
+            self.assertEquals({('chr1', True) : [(48, 95, 47, 47, 47, 47)]},
                                 introns)
             '''Now try truncating readlets so there is an unmapped region of
             the read. This tests the DP framing code in context.'''
             readlets = [('chr1', True, 1, 42, 0),
                           ('chr1', True, 100, 142, 52)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', True) : [(48, 95)]},
+            self.assertEquals({('chr1', True) : [(1, 48), (95, 142)]},
+                                exons)
+            self.assertEquals({('chr1', True) : [(48, 95, 47, 47, 47, 47)]},
                                 introns)
             # Truncate readlets again to test DP framing.
             readlets = [('chr1', True, 1, 37, 0),
                           ('chr1', True, 105, 142, 57)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', True) : [(48, 95)]},
+            self.assertEquals({('chr1', True) : [(1, 48), (95, 142)]},
+                                exons)
+            self.assertEquals({('chr1', True) : [(48, 95, 47, 47, 47, 47)]},
                                 introns)
 
         def test_DP_framing_2(self):
@@ -2210,27 +2945,33 @@ elif __name__ == '__main__':
             # Fake mapping each line of read to respective line of reference
             readlets = [('chr1', False, 48, 95, 0),
                           ('chr1', False, 142, 189, 47)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', False) : [(95, 142)]},
+            self.assertEquals({('chr1', False) : [(48, 95), (142, 189)]},
+                                exons)
+            self.assertEquals({('chr1', False) : [(95, 142, 47, 47, 47, 47)]},
                                 introns)
             '''Now try truncating readlets so there is an unmapped region of
             the read. This tests the DP framing code in context.'''
             readlets = [('chr1', False, 48, 90, 0),
                           ('chr1', False, 147, 189, 52)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', False) : [(95, 142)]},
+            self.assertEquals({('chr1', False) : [(48, 95), (142, 189)]},
+                                exons)
+            self.assertEquals({('chr1', False) : [(95, 142, 47, 47, 47, 47)]},
                                 introns)
             # Truncate readlets again to test DP framing.
             readlets = [('chr1', False, 48, 87, 0),
                           ('chr1', False, 150, 189, 55)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
-            self.assertEquals({('chr1', False) : [(95, 142)]},
+            self.assertEquals({('chr1', False) : [(48, 95), (142, 189)]},
+                                exons)
+            self.assertEquals({('chr1', False) : [(95, 142, 47, 47, 47, 47)]},
                                 introns)
 
         def test_DP_filling_between_ECs(self):
@@ -2245,9 +2986,10 @@ elif __name__ == '__main__':
                        'aACGATACGATACAGTACaA'
             readlets = [('chr1', False, 189, 209, 0),
                           ('chr1', False, 216, 236, 27)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
+            self.assertEquals({('chr1', False) : [(189, 236)]}, exons)
             self.assertEquals({}, introns)
 
         def test_DP_filling_before_first_EC_and_after_last_EC(self):
@@ -2265,10 +3007,11 @@ elif __name__ == '__main__':
                        'CAGaGCAGAAaATACAGATCA' \
                        'aAGCTAGCAaAAtAtA'
             readlets = [('chr1', False, 246, 267, 10)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets, 
                                 min_seq_similarity=0
                             )
+            self.assertEquals({('chr1', False) : [(236, 283)]}, exons)
             self.assertEquals({}, introns)
 
         def test_that_prefix_and_suffix_ECs_are_found_1(self):
@@ -2287,12 +3030,15 @@ elif __name__ == '__main__':
                        'GTCAGACCATGCAg' \
                        'CTACATAC'
             readlets = [('chr1', False, 15, 29, 8)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                              )
+            self.assertEquals(exons, {('chr1', False) : [(1, 9),
+                                                         (15, 29),
+                                                         (38, 46)]})
             self.assertEquals(introns, 
-                                {('chr1', False) : [(9, 15),
-                                                    (29, 38)]})
+                                {('chr1', False) : [(9, 15, 8, 22, 8, 14),
+                                                    (29, 38, 22, 8, 14, 8)]})
 
         def test_that_prefix_and_suffix_ECs_are_found_2(self):
             """ Fails if unaligned prefix and suffix don't become ECs.
@@ -2306,12 +3052,16 @@ elif __name__ == '__main__':
                        'GCAGAAaATACAGATCA' \
                        'GCAaAAtAtA'
             readlets = [('chr1', False, 250, 267, 8)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                              )
+            self.assertEquals(exons, {('chr1', False) : [(236, 244),
+                                                         (250, 267),
+                                                         (273, 283)]})
             self.assertEquals(introns, 
-                                {('chr1', False) : [(244, 250),
-                                                    (267, 273)]})
+                                {('chr1', False) : [(244, 250, 8, 27, 8, 17),
+                                                    (267, 273, 25, 10,
+                                                        17, 10)]})
 
         def test_that_strange_mapping_is_thrown_out(self):
             """ Fails if any exons or introns are returned.
@@ -2324,9 +3074,10 @@ elif __name__ == '__main__':
             read_seq = random_sequence(60)
             readlets = [('chr1', False, 200, 220, 10),
                            ('chr1', False, 160, 180, 35)]
-            introns = introns_from_read(
+            exons, introns = exons_and_introns_from_read(
                                 self.reference_index, read_seq, readlets
                             )
+            self.assertEquals({}, exons)
             self.assertEquals({}, introns)
 
         def tearDown(self):
@@ -2539,5 +3290,58 @@ elif __name__ == '__main__':
         def tearDown(self):
             # Kill temporary directory
             shutil.rmtree(self.temp_dir_path)
-   
+
+    class TestSelectedReadletAlignmentsByDistance(unittest.TestCase):
+        """ Tests selected_readlet_alignments_by_distance(). """
+
+        def test_that_best_overlapped_alignment_is_chosen(self):
+            """ Fails if proper alignment of multireadlet is not chosen.
+
+                This test in particular checks if an alignment whose overlap
+                with any of the unireadlets is greatest is chosen.
+            """
+            multireadlets = [[('chr1', False, 35, 55, 1, 0), 
+                              ('chr1', False, 45, 96, 11, 0)],
+                             [('chr1', False, 46, 90, 12, 0)]]
+            final_alignments = selected_readlet_alignments_by_distance(
+                                    multireadlets
+                                )
+            self.assertEquals(
+                sorted(final_alignments),
+                [('chr1', False, 45, 96, 11, 0),
+                 ('chr1', False, 46, 90, 12, 0)]
+            )
+
+    class TestSelectedReadletAlignmentsByCoverage(unittest.TestCase):
+        """ Tests selected_readlet_alignments_by_coverage(). """
+
+        def test_that_best_covered_alignment_is_chosen(self):
+            """ Fails if proper alignment of multireadlet is not chosen.
+            """
+            multireadlets = [[('chr1', False, 35, 55, 1, 0), 
+                              ('chr1', False, 45, 96, 11, 0)],
+                             [('chr1', False, 46, 90, 12, 0)]]
+            final_alignments = selected_readlet_alignments_by_coverage(
+                                    multireadlets
+                                )
+            self.assertEquals(
+                    sorted(final_alignments), 
+                    [('chr1', False, 45, 96, 11, 0),
+                     ('chr1', False, 46, 90, 12, 0)]
+                )
+
+        def test_that_no_alignment_is_chosen_in_case_of_tie(self):
+            """ Fails if alignments of multireadlet aren't thrown out. """
+            '''Below, the multireadlet at the first position in multireadlets
+            contains alignments that overlap the unireadlet at the second
+            position in multireadlets equally.'''
+            multireadlets = [[('chr1', False, 25, 55, 1, 0), 
+                              ('chr1', False, 55, 85, 31, 0)],
+                             [('chr1', False, 52, 58, 31, 0)]]
+            final_alignments = selected_readlet_alignments_by_coverage(
+                                    multireadlets
+                                )
+            self.assertTrue(final_alignments == 
+                            [('chr1', False, 52, 58, 31, 0)])
+
     unittest.main()
