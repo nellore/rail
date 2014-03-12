@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-align.py
+bowtie.py
 
 Alignment module 
 """
@@ -50,7 +50,10 @@ def cmd(bowtieExe="bowtie", bowtieIdx="genome", readFn=None, bowtieArgs=None, sa
         out_arg = " -S "
     argstr = ''
     mycmd = "%s %s --mm %s %s --12 " % (bowtieExe, bowtieArgs, out_arg, bowtieIdx)
-    mycmd += (("-" if readFn is None else readFn) + ' ' + outputFilename)
+    if readFn is None:
+        mycmd += '-'
+    else:
+        mycmd += readFn + ' ' + outputFilename
     return mycmd
 
 def proc(bowtieExe="bowtie", bowtieIdx="genome", readFn=None, bowtieArgs=None, sam=False, stdoutPipe=False, outHandler=None, errHandler=None, stdinPipe=True, outputFilename=''):

@@ -26,7 +26,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
-        '--motif-radius', type=int, required=False, default=1,
+        '--motif-radius', type=int, required=False, default=5,
         help='Distance (in bp) from each of the start and end positions '
              'of a cluster within which to search for motifs')
     parser.add_argument(\
@@ -45,7 +45,9 @@ def addArgs(parser):
     parser.add_argument(\
         '--bowtie-exe', metavar='STR', type=str, help='Bowtie executable to use. Must exist at this path on all the cluster nodes.')
     parser.add_argument(\
-        '--bowtie-args', metavar='STR', type=str, help='Arguments to pass to Bowtie.')
+        '--bowtie-align-args', metavar='STR', type=str, help='Arguments to pass to Bowtie on first alignment.')
+    parser.add_argument(\
+        '--bowtie-realign-args', metavar='STR', type=str, help='Arguments to pass to Bowtie on realignment.')
     parser.add_argument(\
         '--downsample-reads', metavar='FRACTION', type=float, default=1.0, help='Fraction of reads to randomly downsample to.')
     parser.add_argument(\
@@ -108,7 +110,7 @@ def addArgs(parser):
              'last EC. Such caps are subsequently added as ECs themselves. '
              'Use this command-line parameter to turn the feature off')
     parser.add_argument('--min-cap-query-size', type=int, required=False,
-        default=1,
+        default=9,
         help='The reference is not searched for a segment of a read that '
              'precedes the first EC or follows the last EC smaller than this '
              'size')
@@ -146,7 +148,8 @@ class Rail_RNAConfig(object):
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
-        self._bowtieArgs = args.bowtie_args or "-v 0 -a -m 80"
+        self._bowtieAlignArgs = args.bowtie_align_args or "-v 0 -a -m 80"
+        self._bowtieRealignArgs = args.bowtie_realign_args or "-v 3 -a -m 80"
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)
@@ -195,5 +198,8 @@ class Rail_RNAConfig(object):
         if o < 0:
             raise RuntimeError("Argument for --hmm-overlap must be >= 0; was %d" % o)
     
-    def bowtieArgs(self):
-        return ' '.join([self._bowtieArgs, "-t", "--sam-nohead", "--startverbose"])
+    def bowtieAlignArgs(self):
+        return ' '.join([self._bowtieAlignArgs, "-t", "--sam-nohead", "--startverbose"])
+
+    def bowtieRealignArgs(self):
+        return ' '.join([self._bowtieRealignArgs, "-t", "--sam-nohead", "--startverbose"])

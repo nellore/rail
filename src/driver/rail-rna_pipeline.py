@@ -81,7 +81,7 @@ class AlignStep(pipeline.Step):
                     '--do-not-search-for-caps' if tconf.do_not_search_for_caps else '',
                     tconf.min_cap_query_size,
                     tconf.cap_search_window_size,
-                    tconf.bowtieArgs())
+                    tconf.bowtieAlignArgs())
         mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(AlignStep, self).__init__(\
             inps,
@@ -159,6 +159,26 @@ class MergeStep(pipeline.Step):
             name="Merge", # name
             aggr=pipeline.Aggregation(None, 8, 1, 2),
             reducer=reducerStr,
+            multipleOutput=True)
+
+class RealignStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        mapperStr = """
+            python %%BASE%%/src/rail-rna/realign.py
+                --bowtie-idx=%s/index/intron
+                --bowtie-exe=%%BOWTIE%%
+                --partition-length %d
+                --exon-differentials 
+                --verbose %s
+                -- %s""" % (gconf.intermediate, tconf.partitionLen,
+                    '--stranded' if tconf.stranded else '',
+                    tconf.bowtieRealignArgs())
+        mapperStr = re.sub('\s+', ' ', mapperStr.strip())
+        super(RealignStep, self).__init__(\
+            inps,
+            output,
+            name="Realign",
+            mapper=mapperStr,
             multipleOutput=True)
 
 class WalkPrenormStep(pipeline.Step):

@@ -3,7 +3,7 @@
 Rail-RNA-align
 
 Follows Rail-RNA-preprocess
-Precedes Rail-RNA-intron / Rail-RNA-collapse
+Precedes Rail-RNA-intron / Rail-RNA-collapse / Rail-RNA-bam
 
 Alignment script for MapReduce pipelines that wraps Bowtie. Obtains exonic 
 chunks from end-to-end alignments. Then obtains candidate introns by dividing
@@ -32,14 +32,13 @@ formats:
   4. Name for mate 2
   5. Nucleotide sequence for mate 2
   6. Quality sequence for mate 2
-----------------------------
 
 Hadoop output (written to stdout)
 ----------------------------
 A given RNAME sequence is partitioned into intervals ("bins") of some 
 user-specified length (see partition.py).
 
-Exonic chunks (aka ECs; three formats, any or all of which may be emitted:
+Exonic chunks (aka ECs; three formats, any or all of which may be emitted):
 
 Format 1 (exon_ival); tab-delimited output tuple columns:
 1. Reference name (RNAME in SAM format) + ';' + bin number + ('+' or '-'
@@ -1227,8 +1226,7 @@ class BowtieOutputThread(threading.Thread):
                     if not (last_flag & 4) and len(multiread) == 1 \
                         and not last_multimapped:
                         '''Read maps uniquely; the full alignment is to be
-                        called as an exonic chunk (EC). Kill mate information
-                        in qname so rest of pipeline associates mates.'''
+                        called as an exonic chunk (EC).'''
                         partitions = partition.partition(last_rname, last_pos, 
                             last_end_pos, self.bin_size)
                         if self.exon_differentials:

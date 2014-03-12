@@ -39,9 +39,9 @@ Bowtie index files for realignment only to regions framing introns of kept
 unmapped reads from Rail-RNA-align.
 
 A given reference name in the index is in the following format:    
-    original RNAME + '+' or '-' indicating which str and is the sense
+    original RNAME + '+' or '-' indicating which strand is the sense
     strand + ';' + start position of sequence + ';' + comma-separated
-    list of subsequences framing introns + ';' + comma-separated
+    list of subsequence sizes framing introns + ';' + comma-separated
     list of intron sizes.
 """
 import os
@@ -140,11 +140,9 @@ with open(fasta_file, 'w') as fasta_stream:
                 reverse_strand_string = rname[-1]
                 rname = rname[:-1]
                 pos, end_pos = int(pos), int(end_pos)
-                reverse_strand = (False if reverse_strand_string == '+' 
-                                    else True)
                 if last_rname is None or not (
                         last_rname == rname 
-                        and last_reverse_strand == reverse_strand
+                        and last_reverse_strand_string == reverse_strand_string
                         and pos - last_end_pos < extend_size
                     ):
                     if last_rname is not None: write_sequence = True
@@ -179,8 +177,6 @@ with open(fasta_file, 'w') as fasta_stream:
         else: write_sequence = True
         if write_sequence:
             reference_length = reference_index.rname_lengths[last_rname]
-            if len(last_intron_combos) > 1:
-                print >>sys.stderr, last_intron_combos
             '''Some intron combos may still contain introns separated by a
             distance > extend_size. Correct this here.''' 
             new_intron_combos = set()
@@ -228,10 +224,10 @@ with open(fasta_file, 'w') as fasta_stream:
                     )
                 '''A given reference name in the index will be in the following
                 format:
-                original RNAME + '+' or '-' indicating which str and is the
+                original RNAME + '+' or '-' indicating which strand is the
                 sense strand + ';' + start position of sequence + ';' +
-                comma-separated list of subsequences framing introns + ';' +
-                comma-separated list of intron sizes.'''
+                comma-separated list of subsequence sizes framing introns + ';'
+                + comma-separated list of intron sizes.'''
                 print >>fasta_stream, ('>' + last_rname 
                     + last_reverse_strand_string + ';' + str(left_start) + ';'
                     + ','.join([str(len(subseq)) for subseq in subseqs]) + ';'
@@ -253,7 +249,6 @@ with open(fasta_file, 'w') as fasta_stream:
             # Line corresponds to an intron
             last_rname, last_reverse_strand_string, last_pos, last_end_pos \
                 = rname, reverse_strand_string, pos, end_pos
-            last_reverse_strand = reverse_strand
             last_intron_combos = intron_combos
             last_line = line
 # Build index

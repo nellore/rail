@@ -343,7 +343,7 @@ if useInput and inp is None:
 pipelineSteps = {
     'preprocess'   : ['preprocess'],
     'align'        : ['align'],
-    'junction'     : ['intron', 'intron_post'],
+    'junction'     : ['intron', 'intron_post', 'realign'],
     #'coverage'     : ['normalize_pre', 'normalize'],#, 'normalize_post'],
     'coverage'     : [],
     #'coverage'     : ['collapse', 'coverage_pre', 'coverage', 'coverage_post'],
@@ -357,6 +357,7 @@ stepInfo = {\
     'intron'         : ([('align',          '/intron'     )], rail_rna_pipeline.IntronStep),
     'intron_post'    : ([('align',          '/max_len'    ),
                          ('intron',         '/intron'     )], rail_rna_pipeline.IntronPostStep),
+    'realign'        : ([('align',          '/unmapped'   )], rail_rna_pipeline.RealignStep),
     'coverage_pre'   : ([('collapse',       '/collapsed'  )], rail_rna_pipeline.CoveragePreStep),
     'normalize_pre'  : ([('align',          '/exon_diff'  )], rail_rna_pipeline.NormalizePreStep),
     'normalize'      : ([('normalize_pre',  '/o'          )], rail_rna_pipeline.NormalizeStep),
