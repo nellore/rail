@@ -721,7 +721,7 @@ def introns_from_read(reference_index, read_seq, readlets,
             discrepancy = reference_distance - read_distance
             call_exon, call_intron = False, False
             if not read_distance:
-                if pos - last_end_pos < 0:
+                if pos - last_end_pos <= 0:
                     '''Example case handled:
                                         EC #1                   EC #2
                     Read       |=====================|=====================|
@@ -738,7 +738,7 @@ def introns_from_read(reference_index, read_seq, readlets,
                     ACCOMMODATE CALLING INDELS.'''
                     call_exon = True
                 else:
-                    '''pos - last_end_pos >= 0
+                    '''pos - last_end_pos > 0
                     Example case handled:
                                        EC #1                   EC #2
                     Read       |=====================|=====================|
@@ -746,8 +746,8 @@ def introns_from_read(reference_index, read_seq, readlets,
                     Reference ...====================--====================...    
                                      EC #1         intron         EC #2
                     If there are no bases between the ECs in the read sequence 
-                    and the size of the candidate intron is >= min_intron_size,
-                    call EC #1 and intron.'''
+                    and the size of the candidate intron is > 0, call EC #1 and
+                    intron.'''
                     call_exon, call_intron = True, True
             else:
                 if read_distance > 0:
