@@ -445,7 +445,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                     cluster_splice_site[1])
                             output_line_count += 1
                 else:
-                    for i, intron_cluster in enumerate(intron_clusters):
+                    for intron_cluster in intron_clusters:
                         ranked_splice_sites = ranked_splice_sites_from_cluster(
                                 reference_index, intron_cluster, last_rname,
                                 _forward_strand_motifs,
@@ -468,26 +468,26 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             output_line_count += 1
             else:
                 # The sense strand is unknown, so use a general motif set
-                for i, intron_cluster in enumerate(intron_clusters):
+                for intron_cluster in intron_clusters:
                     ranked_splice_sites = ranked_splice_sites_from_cluster(
                             reference_index, intron_cluster, last_rname,
                             _unstranded_motifs,
                             motif_radius=motif_radius, verbose=verbose
                         )
-                if len(ranked_splice_sites) != 0:
-                    # Break any ties in top-ranked intron at random
-                    cluster_splice_site = \
-                        random.sample([splice_site for splice_site in
-                                            ranked_splice_sites if
-                                            ranked_splice_sites[0][2:]
-                                             == splice_site[2:]], 1)[0]
-                    intron_strand = ('-' if cluster_splice_site[-1] else '+')
-                    print >>output_stream, \
-                                'intron\ti\t%s%s\t%012d\t%012d' \
-                                % (last_rname, intron_strand, 
-                                    cluster_splice_site[0],
-                                    cluster_splice_site[1])
-                    output_line_count += 1
+                    if len(ranked_splice_sites) != 0:
+                        # Break any ties in top-ranked intron at random
+                        cluster_splice_site = \
+                            random.sample([splice_site for splice_site in
+                                                ranked_splice_sites if
+                                                ranked_splice_sites[0][2:]
+                                                 == splice_site[2:]], 1)[0]
+                        intron_strand = ('-' if cluster_splice_site[-1] else '+')
+                        print >>output_stream, \
+                                    'intron\ti\t%s%s\t%012d\t%012d' \
+                                    % (last_rname, intron_strand, 
+                                        cluster_splice_site[0],
+                                        cluster_splice_site[1])
+                        output_line_count += 1
             candidate_introns = {}
             handle_partition = False
         if line:
