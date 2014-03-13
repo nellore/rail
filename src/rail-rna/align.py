@@ -108,7 +108,6 @@ Tab-delimited output tuple columns (max_len):
 3. The character '0'.
 4. The character '0'.
 
-
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
 import sys
@@ -1593,6 +1592,15 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         2. SEQ
         3. QUAL
 
+        Maximum read lengths found
+
+        Tab-delimited output tuple columns (max_len):
+        1. The character 'a', which places it before 'i' in 
+            lexicograhic sort order for reading in Rail-RNA-intron_post
+        2. Maximum read length found
+        3. The character '0'.
+        4. The character '0'.
+
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
         input_stream: where to find input reads.
@@ -1819,13 +1827,6 @@ if __name__ == '__main__':
     parser.add_argument('--max-intron-size', type=int, required=False,
         default=500000, 
         help='Filters introns of length greater than this value')
-    parser.add_argument('--max-discrepancy', type=int, required=False,
-        default=2, 
-        help='If the difference in length between an unmapped region framed '
-             'by two ECs and its corresponding gap in the reference is <= '
-             'the value, the unmapped region is considered a candidate for '
-             'incorporation into a single EC spanning the two original ECs '
-             'via DP filling')
     parser.add_argument('--min-seq-similarity', type=float, required=False,
         default=1., 
         help='If the difference in length between an unmapped region framed '
@@ -1906,7 +1907,6 @@ if __name__ == '__main__' and not args.test:
         max_readlet_size=args.max_readlet_size,
         readlet_interval=args.readlet_interval,
         capping_fraction=args.capping_fraction,
-        max_discrepancy=args.max_discrepancy,
         min_seq_similarity=args.min_seq_similarity, 
         max_intron_size=args.max_intron_size,
         intron_partition_overlap=args.intron_partition_overlap,
