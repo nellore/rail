@@ -1211,6 +1211,7 @@ class BowtieOutputThread(threading.Thread):
                             another map step.'''
                             print >>self.output_stream, '%s\t%s\t%s\t%s' \
                                 % ('unmapped', last_qname, last_seq, last_qual)
+                            _output_line_count += 1
                     elif self.end_to_end_sam:
                         '''End-to-end SAM is output for every line with at
                         least one possible alignment.'''
@@ -1224,6 +1225,7 @@ class BowtieOutputThread(threading.Thread):
                                     alignment_tokens[1])) 
                                 + '\t'.join(alignment_tokens[4:])
                                 + ('\tNH:i:%d' % len(multiread)))
+                            _output_line_count += 1
                     if not (last_flag & 4) and len(multiread) == 1 \
                         and not last_multimapped:
                         '''Read maps uniquely; the full alignment is to be
@@ -1270,6 +1272,7 @@ class BowtieOutputThread(threading.Thread):
                     # Write max read size
                     print >>self.output_stream, 'max_len\ta\t%d\t0\t0' \
                         % max_read_size
+                    _output_line_count += 1
                     break
                 last_tokens = tokens
                 (last_qname, last_flag, last_rname, last_pos, last_mapq,
