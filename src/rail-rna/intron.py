@@ -102,8 +102,8 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
 
         Return value: a list of lists, each of which corresponds to a cluster
             of candidate introns. Each item in a cluster is a tuple
-            (start_position, end_position) corresponding to an intron call
-            from a single read.
+            (start_position, end_position, supporting_read_count) corresponding
+            to an intron call agreed on by a set of reads.
     """
     '''Construct list of candidate introns sorted in order of descending
     read_count.'''
@@ -147,10 +147,9 @@ def intron_clusters_in_partition(candidate_introns, partition_start,
                     print >> sys.stderr, '%d possible splice junction(s) ' \
                         'clustered down to %d.' % (candidate_intron_count, 
                             total_cluster_count)
-                return [list(itertools.chain(
-                                *[[candidate]*candidate_introns[candidate] for
-                                    candidate in an_intron_cluster]
-                            )) for an_intron_cluster in intron_clusters]
+                return [[an_intron + (candidate_introns[an_intron],) 
+                            for an_intron in an_intron_cluster] 
+                            for an_intron_cluster in intron_clusters]
     raise RuntimeError('For loop should never be completed.')
 
 def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
@@ -208,8 +207,8 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
             that permits access to reference; used to find splice-site motifs.
         intron_cluster: a list of lists, each of which corresponds to a cluster
             of candidate introns. Each item in a cluster is a tuple
-            (start_position, end_position) corresponding to an intron call
-            from a single read.
+            (start_position, end_position, supporting_read_count) corresponding
+            to an intron call supported by several reads.
         rname: SAM-format RNAME indicating the chromosome.
         motifs: List of lists of motif tuples (donor motif, acceptor motif, 
             reverse strand boolean) in order of descending priority. The
@@ -235,7 +234,10 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
             [(142451, 143128, 2.8324, 'GT', 'AG', False),
                 (142449, 143128, 3.1124, 'CT', 'AC', True)].
     """
-    start_positions, end_positions = zip(*intron_cluster)
+    start_positions, end_positions, weights \
+        = zip(*intron_cluster)
+    denominator = sum(weights)
+    weights = [float(count) / denominator for count in weights]
     reference_length = reference_index.rname_lengths[rname]
     min_start_position = max(min(start_positions) - motif_radius, 1)
     max_start_position = min(max(start_positions) + motif_radius + 2,
@@ -249,11 +251,21 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
     assert max_end_position >= min_end_position and \
         max_start_position >= min_start_position
     # For computing z-scores
-    mean_start_position = np.mean(start_positions)
-    mean_end_position = np.mean(end_positions)
+    mean_start_position = np.average(start_positions, weights=weights)
+    mean_end_position = np.average(end_positions, weights=weights)
     # Maxes below avoid future ZeroDivisionError exceptions
-    stdev_start_position = max(np.std(start_positions), 1e-6)
-    stdev_end_position = max(np.std(end_positions), 1e-6)
+    stdev_start_position = max(np.sqrt(
+                                np.average(
+                                    (np.array(start_positions)
+                                        -mean_start_position)**2, 
+                                    weights=weights)
+                                ), 1e-6)
+    stdev_end_position = max(np.sqrt(
+                                np.average(
+                                    (np.array(end_positions)
+                                        -mean_end_position)**2, 
+                                    weights=weights)
+                                ), 1e-6)
     # Initialize list for storing ranked intron start/end positions
     ranked_introns = []
     for motif_priority_class in motifs:
@@ -374,7 +386,6 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
     start_time = time.time()
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     input_line_count, output_line_count = 0, 0
-    junction_number = 0
     handle_partition = False
     last_partition_id = None
     candidate_introns = {}
@@ -481,7 +492,8 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                                 ranked_splice_sites if
                                                 ranked_splice_sites[0][2:]
                                                  == splice_site[2:]], 1)[0]
-                        intron_strand = ('-' if cluster_splice_site[-1] else '+')
+                        intron_strand = ('-' if cluster_splice_site[-1] 
+                                            else '+')
                         print >>output_stream, \
                                     'intron\ti\t%s%s\t%012d\t%012d' \
                                     % (last_rname, intron_strand, 

@@ -26,7 +26,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
-        '--motif-radius', type=int, required=False, default=5,
+        '--motif-radius', type=int, required=False, default=4,
         help='Distance (in bp) from each of the start and end positions '
              'of a cluster within which to search for motifs')
     parser.add_argument(\
@@ -110,7 +110,7 @@ def addArgs(parser):
              'last EC. Such caps are subsequently added as ECs themselves. '
              'Use this command-line parameter to turn the feature off')
     parser.add_argument('--min-cap-query-size', type=int, required=False,
-        default=9,
+        default=8,
         help='The reference is not searched for a segment of a read that '
              'precedes the first EC or follows the last EC smaller than this '
              'size')
@@ -149,7 +149,7 @@ class Rail_RNAConfig(object):
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
         self._bowtieAlignArgs = args.bowtie_align_args or "-v 0 -a -m 80"
-        self._bowtieRealignArgs = args.bowtie_realign_args or "-v 0 -a -m 3"
+        self._bowtieRealignArgs = args.bowtie_realign_args or "-v 0 -a -m 80"
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)
