@@ -156,7 +156,6 @@ def multiread_with_introns(multiread, stranded=False):
             continue
         rname = tokens[-4][:-1]
         offset = int(multiread[i][3]) - 1
-        pos = int(tokens[-3]) + offset
         seq_size = len(multiread[i][10])
         exon_sizes = [int(exon_size) for exon_size in tokens[-2].split(',')]
         intron_sizes = [int(intron_size) for intron_size
@@ -171,12 +170,16 @@ def multiread_with_introns(multiread, stranded=False):
         for j, partial_size in enumerate(partial_sizes):
             if partial_size > offset:
                 start_index = j
+                new_offset = (offset - partial_sizes[j-1]
+                                if j != 0 else offset)
                 break
         end_offset = seq_size + offset
         for j, partial_size in enumerate(partial_sizes):
             if partial_size >= end_offset:
                 end_index = j
                 break
+        pos = int(tokens[-3]) + new_offset + \
+                sum(cigar_sizes[:start_index*2])
         if start_index is None or end_index is None:
             RuntimeError('Invalid SAM line; sum of exon sizes doesn\'t agree '
                          'with size of reference sequence.')
