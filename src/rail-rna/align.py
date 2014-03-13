@@ -63,11 +63,10 @@ Format 2 (exon_diff); tab-delimited output tuple columns:
 Note that only unique alignments are currently output as ivals and/or diffs.
 
 Format 3 (end_to_end_sam); tab-delimited output tuple columns:
-Standard 11-column SAM output except fields are in different order, and the
-first field corresponds to sample label. (Fields are reordered to facilitate
-partitioning by sample name/RNAME and sorting by POS.) Each line corresponds to
-a spliced alignment.
-The order of the fields is as follows.
+Standard SAM output except fields are in different order, and the first field
+corresponds to sample label. (Fields are reordered to facilitate partitioning
+by sample name/RNAME and sorting by POS.) Each line corresponds to a
+spliced alignment. The order of the fields is as follows.
 1. Sample label
 2. RNAME
 3. POS
@@ -1223,7 +1222,8 @@ class BowtieOutputThread(threading.Thread):
                                     int(alignment_tokens[3]),
                                     alignment_tokens[0][:-2],
                                     alignment_tokens[1])) 
-                                + '\t'.join(alignment_tokens[4:]))
+                                + '\t'.join(alignment_tokens[4:])
+                                + ('\tNH:i:%d' % len(multiread)))
                     if not (last_flag & 4) and len(multiread) == 1 \
                         and not last_multimapped:
                         '''Read maps uniquely; the full alignment is to be
@@ -1488,15 +1488,16 @@ def handle_temporary_directory(archive, temp_dir_path):
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     bowtie_index_base='genome', bowtie_args=None,
-    temp_dir_path=tempfile.mkdtemp(), bin_size=10000, verbose=False,
-    read_filename='reads.tsv', readlet_filename='readlets.tsv',
-    unmapped_filename='unmapped.tsv', exon_differentials=True,
-    exon_intervals=False, end_to_end_sam=True, stranded=False,
-    min_readlet_size=8, max_readlet_size=25, readlet_interval=5,
-    capping_fraction=.75, max_discrepancy=2, min_seq_similarity=0.85,
-    min_intron_size=5, max_intron_size=100000, intron_partition_overlap=20,
-    global_alignment=GlobalAlignment(), report_multiplier=1.2,
-    search_for_caps=True, min_cap_query_size=8, cap_search_window_size=1000):
+    bowtie_junction_args="-v 0 -a -m 80", temp_dir_path=tempfile.mkdtemp(),
+    bin_size=10000, verbose=False, read_filename='reads.tsv',
+    readlet_filename='readlets.tsv', unmapped_filename='unmapped.tsv',
+    exon_differentials=True, exon_intervals=False, end_to_end_sam=True,
+    stranded=False, min_readlet_size=8, max_readlet_size=25,
+    readlet_interval=5, capping_fraction=.75, max_discrepancy=2,
+    min_seq_similarity=0.85, min_intron_size=5, max_intron_size=100000,
+    intron_partition_overlap=20, global_alignment=GlobalAlignment(),
+    report_multiplier=1.2, search_for_caps=True, min_cap_query_size=8,
+    cap_search_window_size=1000):
     """ Runs Rail-RNA-align.
 
         Two passes of Bowtie are run. The first attempts to align full reads.
@@ -1612,7 +1613,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         bowtie_index_base: the basename of the Bowtie index files associated
             with the reference.
         bowtie_args: string containing precisely extra command-line arguments
-            to pass to Bowtie, e.g., "--tryhard --best"; or None.
+            to pass to first-pass Bowtie, e.g., "--tryhard --best"; or None.
+        bowtie_junction_args: string containing extra command-line arguments
+            to pass to second-pass Bowtie.
         temp_dir_path: path of temporary directory for storing intermediate
             alignments
         bin_size: genome is partitioned in units of bin_size for later load
@@ -1732,8 +1735,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         # Second-pass Bowtie
         bowtie_process, bowtie_command, threads = bowtie.proc(
                 bowtieExe=bowtie_exe, bowtieIdx=bowtie_index_base,
-                readFn=readlet_filename, bowtieArgs=bowtie_args, sam=True,
-                stdoutPipe=True, stdinPipe=False
+                readFn=readlet_filename, bowtieArgs=bowtie_junction_args,
+                sam=True, stdoutPipe=True, stdinPipe=False
             )
 
     output_thread = BowtieOutputThread(

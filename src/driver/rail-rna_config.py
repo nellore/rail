@@ -45,9 +45,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--bowtie-exe', metavar='STR', type=str, help='Bowtie executable to use. Must exist at this path on all the cluster nodes.')
     parser.add_argument(\
-        '--bowtie-align-args', metavar='STR', type=str, help='Arguments to pass to Bowtie on first alignment.')
-    parser.add_argument(\
-        '--bowtie-realign-args', metavar='STR', type=str, help='Arguments to pass to Bowtie on realignment.')
+        '--bowtie-args', metavar='STR', type=str, help='Arguments to pass to Bowtie for obtaining final SAM/BAM output.')
     parser.add_argument(\
         '--downsample-reads', metavar='FRACTION', type=float, default=1.0, help='Fraction of reads to randomly downsample to.')
     parser.add_argument(\
@@ -71,23 +69,19 @@ def addArgs(parser):
     parser.add_argument(\
         '--hmm-overlap', metavar='INT', type=int, default=100, help='Number of positions of overlap between adjacent emission strings.')
     parser.add_argument(\
-        '--output-bam-by-chromosome', action='store_const', const=True, default=True,
+        '--output-bam-by-chromosome', action='store_const', const=True, default=False,
         help='Split SAM/BAM output files up by RNAME (typically chromosome) if '
              'True; otherwise output single SAM/BAM file consolidating all '
              'spliced alignments')
     parser.add_argument(\
         '--bam-basename', type=str, required=False, 
-        default='spliced_alignments',
-        help='The basename (including path) of all SAM/BAM output. Basename is '
-             'followed by ".bam" or ".sam" if --by-chromosome=False; otherwise, '
-             'basename is followed by ".RNAME.bam" or ".RNAME.sam" for each '
-             'RNAME. Ignored if --out is not specified '
-             '(that is, if --out is stdout)')
-    parser.add_argument(\
-        '--output-bed-by-chromosome', action='store_const', const=True, default=False,
-        help='Split BED output files up by chrom (typically chromosome) if '
-             'True; otherwise output single BED file consolidating all '
-             'spliced alignments')
+        default='alignments',
+        help='The basename (excluding path) of all SAM/BAM output. Basename is '
+             'followed by ".[sample label].bam" or ".[sample label].sam" if '
+             '--by-chromosome=False; otherwise, basename is followed by '
+             '".[sample label].RNAME.bam" or ".[sample label].RNAME.sam" for each '
+             'RNAME. Ignored if --out is not specified (that is, if --out is '
+             'stdout)')
     parser.add_argument(\
         '--bed-basename', type=str, required=False, 
         default='junctions',
@@ -148,8 +142,7 @@ class Rail_RNAConfig(object):
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
-        self._bowtieAlignArgs = args.bowtie_align_args or "-v 0 -a -m 80"
-        self._bowtieRealignArgs = args.bowtie_realign_args or "-v 0 -a -m 80"
+        self._bowtieArgs = args.bowtie_args or ""
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)
@@ -180,7 +173,6 @@ class Rail_RNAConfig(object):
         self.discardMate2 = args.discard_mate2
         self.stranded = args.stranded
         self.samtoolsExe = args.samtools_exe
-        self.output_bed_by_chromosome = args.output_bed_by_chromosome
         self.bed_basename = args.bed_basename
         self.output_bam_by_chromosome = args.output_bam_by_chromosome
         self.bam_basename = args.bam_basename
@@ -198,8 +190,5 @@ class Rail_RNAConfig(object):
         if o < 0:
             raise RuntimeError("Argument for --hmm-overlap must be >= 0; was %d" % o)
     
-    def bowtieAlignArgs(self):
-        return ' '.join([self._bowtieAlignArgs, "-t", "--sam-nohead", "--startverbose"])
-
-    def bowtieRealignArgs(self):
-        return ' '.join([self._bowtieRealignArgs, "-t", "--sam-nohead", "--startverbose"])
+    def bowtieArgs(self):
+        return ' '.join([self._bowtieArgs, "-t", "--sam-nohead", "--startverbose"])

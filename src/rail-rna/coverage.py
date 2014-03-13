@@ -40,9 +40,11 @@ import argparse
 import subprocess
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['util', 'fasta']:
+for directory_name in ['util', 'fasta', 'bowtie']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
+import bowtie
+import bowtie_index
 import url
 import path
 import filemover
@@ -63,13 +65,6 @@ parser.add_argument(\
 parser.add_argument(\
     '--bigbed-exe', type=str, required=False, default='bedToBigBed',
     help='Location of the Kent Tools bedToBigBed executable')
-parser.add_argument('--refseq', type=str, required=False, 
-    help='The fasta sequence of the reference genome. The fasta index of the '
-         'reference genome is also required to be built via samtools')
-# To be implemented; for now, index is always fasta filename + .fai
-parser.add_argument('--faidx', type=str, required=False, 
-    help='Fasta index file; used to obtain chromosome sizes for writing '
-         'bigBed')
 parser.add_argument('--bigbed-basename', type=str, required=False, default='',
     help='The basename (excluding path) of all bigBed output. Basename is'
          'followed by ".[sample label].bb"; if basename is an empty string, '
@@ -79,6 +74,7 @@ parser.add_argument(\
     help='Print out extra debugging statements')
 
 filemover.addArgs(parser)
+bowtie.addArgs(parser)
 args = parser.parse_args()
 
 def percentile(histogram, percentile=0.75):
@@ -110,14 +106,15 @@ temp_dir_path = tempfile.mkdtemp()
 bed_filename = os.path.join(temp_dir_path, 'temp.bed')
 output_filename, output_url = None, None
 
-'''Make RNAME lengths available from reference FASTA so bigBed files can be
-written; fasta_object.faidx[RNAME][0] is the length of RNAME.''' 
-fasta_object = fasta.fasta(args.refseq)
+'''Make RNAME lengths available from reference FASTA so SAM header can be
+formed; reference_index.rname_lengths[RNAME] is the length of RNAME.''' 
+reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
 # Create file with chromosome sizes for bedToBigBed
 sizes_filename = os.path.join(temp_dir_path, 'chrom.sizes')
 with open(sizes_filename, 'w') as sizes_stream:
-    for rname in fasta_object.faidx:
-        print >>sizes_stream, '%s %d' % (rname, fasta_object.faidx[rname][0])
+    for rname in reference_index.rname_lengths:
+        print >>sizes_stream, '%s %d' % (rname, 
+            reference_index.rname_lengths[rname])
 
 input_line_count, output_line_count = 0, 0
 last_sample_label, last_rname, last_pos, last_coverage = [None]*4
@@ -140,16 +137,16 @@ while True:
         assert len(tokens) == 4, 'Bad input line:\n' + line
         sample_label, rname, pos, coverage = (tokens[0], tokens[1],
                                                 int(tokens[2]), int(tokens[3]))
-        assert rname in fasta_object.faidx, 'RNAME "%s" not in FASTA index.' \
-            % rname
+        assert rname in reference_index.rname_lengths, \
+            'RNAME "%s" not in Bowtie index.' % rname
     if not line or (sample_label != last_sample_label 
         and last_sample_label is not None):
         # All of a sample's coverage entries have been read
         if last_coverage != 0 \
-            and last_pos < fasta_object.faidx[last_rname][0]:
+            and last_pos < reference_index.rname_lengths[last_rname]:
             # Output final coverage entry for sample
             coverage_start_pos, coverage_end_pos = (last_pos - 1,
-                fasta_object.faidx[last_rname][0])
+                reference_index.rname_lengths[last_rname])
             print >>bed_stream, '%s\t%d\t%d\t%d' % (last_rname,
                 coverage_start_pos, coverage_end_pos, last_coverage)
             coverage_histogram[last_coverage] = \
@@ -204,10 +201,10 @@ while True:
                 # So next output interval extends back to previous pos
                 pos = last_pos
         elif last_coverage != 0 \
-            and last_pos < fasta_object.faidx[last_rname][0]:
+            and last_pos < reference_index.rname_lengths[last_rname]:
             # Output final coverage entry for RNAME
             coverage_start_pos, coverage_end_pos = (last_pos - 1,
-                fasta_object.faidx[last_rname][0])
+                reference_index.rname_lengths[last_rname])
             print >>bed_stream, '%s\t%d\t%d\t%d' % (last_rname,
                 coverage_start_pos, coverage_end_pos, last_coverage)
             coverage_histogram[last_coverage] = \

@@ -48,18 +48,6 @@ class PreprocessingStep(pipeline.Step):
 class AlignStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         # For profiling, use the following mapperStr
-        '''mapperStr = """
-            python -m cProfile -o ~/align_output_profile %%BASE%%/src/rail-rna/align.py
-                --refseq=%%REF_FASTA%% 
-                --faidx=%%REF_FASTA_INDEX%% 
-                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
-                --bowtie-exe=%%BOWTIE%% 
-                --max-readlet-size %d 
-                --readlet-interval %d 
-                --partition-len %d 
-                --exon-differentials 
-                --verbose 
-                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen, tconf.bowtieArgs())'''
         mapperStr = """
             python %%BASE%%/src/rail-rna/align.py
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
@@ -74,14 +62,14 @@ class AlignStep(pipeline.Step):
                 --verbose %s %s
                 --min-cap-query-size %d
                 --cap-search-window-size %d
-                -- %s""" % (tconf.readletLen, tconf.readletIval, tconf.partitionLen,
+                -- %s """ % (tconf.readletLen, tconf.readletIval, tconf.partitionLen,
                     tconf.max_intron_size,
                     tconf.min_intron_size, tconf.capping_fraction,
                     '--stranded' if tconf.stranded else '', 
                     '--do-not-search-for-caps' if tconf.do_not_search_for_caps else '',
                     tconf.min_cap_query_size,
                     tconf.cap_search_window_size,
-                    tconf.bowtieAlignArgs())
+                    tconf.bowtieArgs())
         mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(AlignStep, self).__init__(\
             inps,
@@ -90,12 +78,12 @@ class AlignStep(pipeline.Step):
             mapper=mapperStr,
             multipleOutput=True)
 
-class AlignPostStep(pipeline.Step):
+class BamStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rail-rna/align_post.py
-                --out=%s/spliced_alignments
-                --refseq=%%REF_FASTA%%
+            python %%BASE%%/src/rail-rna/bam.py
+                --out=%s/alignments
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --samtools-exe=%%SAMTOOLS%%
                 --bam-basename=%s
                 %s
@@ -104,13 +92,13 @@ class AlignPostStep(pipeline.Step):
                     '--output-by-chromosome' if tconf.output_bam_by_chromosome else '',
                     '--output-sam' if tconf.output_sam else '')
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
-        super(AlignPostStep, self).__init__(\
+        super(BamStep, self).__init__(\
             inps,
             output,
-            name="AlignPost",
-            aggr=(pipeline.Aggregation(None, 1, 1, 2) if (tconf.output_bam_by_chromosome and gconf.out is not None) \
+            name="Bam",
+            aggr=(pipeline.Aggregation(None, 1, (2 if tconf.output_bam_by_chromosome else 1), 3) if gconf.out is not None \
                     else pipeline.Aggregation(1, None, 1, 2)),
-            reducer=reducerStr)
+            reducer=reducerStr) 
 
 class IntronStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
@@ -134,6 +122,34 @@ class IntronStep(pipeline.Step):
             aggr=pipeline.Aggregation(None, 8, 1, 2),  # 8 tasks per reducer
             reducer=reducerStr,
             multipleOutput=True)
+
+class BedPreStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/bed_pre.py %s
+        """ % ('')
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(BedPreStep, self).__init__(\
+            inps,
+            output,  # output URL
+            name="BedPre",  # name
+            aggr=pipeline.Aggregation(None, 8, 1, 2),  # 8 tasks per reducer
+            reducer=reducerStr,
+            multipleOutput=True)
+
+class BedStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducerStr = """
+            python %%BASE%%/src/rail-rna/bed.py 
+                --out=%s/junctions 
+                --bed-basename=%s""" % (gconf.out, tconf.bed_basename)
+        reducerStr = re.sub('\s+', ' ', reducerStr.strip())
+        super(BedStep, self).__init__(\
+            inps,
+            output,  # output URL
+            name="Bed", # name
+            aggr=pipeline.Aggregation(None, 1, 1, 4),
+            reducer=reducerStr)
 
 class IntronPostStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
@@ -172,7 +188,7 @@ class RealignStep(pipeline.Step):
                 --verbose %s
                 -- %s""" % (gconf.intermediate, tconf.partitionLen,
                     '--stranded' if tconf.stranded else '',
-                    tconf.bowtieRealignArgs())
+                    tconf.bowtieArgs())
         mapperStr = re.sub('\s+', ' ', mapperStr.strip())
         super(RealignStep, self).__init__(\
             inps,
@@ -244,12 +260,11 @@ class CoveragePreStep(pipeline.Step):
 class CoverageStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducerStr = """
-            python %%BASE%%/src/rail-rna/coverage.py 
+            python %%BASE%%/src/rail-rna/coverage.py
+                --bowtie-idx=%%REF_BOWTIE_INDEX%%
                 --percentile %f
                 --out=%s/coverage
                 --bigbed-exe=%%BEDTOBIGBED%%
-                --refseq=%%REF_FASTA%% 
-                --faidx=%%REF_FASTA_INDEX%%
                 --verbose""" % (tconf.normPercentile, gconf.out)
         reducerStr = re.sub('\s+', ' ', reducerStr.strip())
         super(CoverageStep, self).__init__(\

@@ -54,7 +54,8 @@ read overlapping at least one intron in the reference. The CIGAR string
 represents intronic bases with N's and exonic bases with M's.
 The order of the fields is as follows.
 1. Sample label
-2. RNAME
+2. RNAME ('~~~~~' if unmapped to almost guarantee it appears last in
+            lexicographic order)
 3. POS
 4. QNAME
 5. FLAG
@@ -129,7 +130,9 @@ def multiread_with_introns(multiread, stranded=False):
         the intron Bowtie index contained overlapping bases. In this case, the
         alignments are collapsed into a single alignment. If an alignment is
         found to overlap introns, the XS:A:('+' or '-') field is appended to
-        indicate which strand is the sense strand, as required by Cufflinks.
+        indicate which strand is the sense strand. An NH:i:(integer) field is
+        also added to each alignment to indicate the number of alignments.
+        These extra fields are used by Cufflinks.
 
         multiread: a list of lists, each of whose elements are the tokens
             from a line of SAM representing an alignment.
@@ -138,7 +141,7 @@ def multiread_with_introns(multiread, stranded=False):
             alignment.
 
         Return value: alignments modified according to the rules given above;
-            a set of tuples, each of whose elements are the tokens from a line
+            a list of tuples, each of whose elements are the tokens from a line
             of SAM representing an alignment.
     """
     corrected_multiread = set()
@@ -179,6 +182,10 @@ def multiread_with_introns(multiread, stranded=False):
                          'with size of reference sequence.')
         if start_index == end_index:
             cigar = str(seq_size) + 'M'
+            corrected_multiread.add(
+                    (multiread[i][0], multiread[i][1], rname, str(pos),
+                        multiread[i][4], cigar) + tuple(multiread[i][6:])
+                )
         else:
             assert start_index < end_index
             cigar_sizes[start_index*2] = partial_sizes[start_index] - offset
@@ -190,9 +197,12 @@ def multiread_with_introns(multiread, stranded=False):
             corrected_multiread.add(
                     (multiread[i][0], multiread[i][1], rname, str(pos),
                         multiread[i][4], cigar) + tuple(multiread[i][6:]) 
-                    + ('XS:A:' + reverse_strand_string,)
+                    + (('XS:A:' + reverse_strand_string),)
                 )
-    return corrected_multiread
+    NH_field = 'NH:i:' + str(len(corrected_multiread))
+    multiread_to_return = [alignment + (NH_field,) for alignment in
+                            corrected_multiread]
+    return multiread_to_return
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
@@ -271,13 +281,15 @@ class BowtieOutputThread(threading.Thread):
             if not line or qname != last_qname:
                 if (last_flag & 4):
                     # Write only the SAM output if the read was unmapped
-                    '''print >>self.output_stream, 'splice_sam\t' \
+                    print >>self.output_stream, 'splice_sam\t' \
                          + '\t'.join(
                                 [sample.parseLab(last_tokens[0][:-2]),
-                                    last_tokens[2], last_tokens[3],
+                                    last_tokens[2] if last_tokens[2] != '*'
+                                    else '~~~~~', '%012d' % 
+                                    int(last_tokens[3]),
                                     last_tokens[0][:-2],
                                     last_tokens[1]] + last_tokens[4:]
-                            )'''
+                            )
                 else:
                     '''Correct positions to match original reference's, correct
                     CIGARs, and eliminate duplicates.'''
@@ -287,14 +299,12 @@ class BowtieOutputThread(threading.Thread):
                     sample_label = sample.parseLab(multiread[0][0][:-2])
                     for alignment in corrected_multiread:
                         print >>self.output_stream, 'splice_sam\t' \
-                            + '\t'.join(alignment)
-                        '''print >>self.output_stream, 'splice_sam\t' \
                             + '\t'.join(
                                 (sample_label,
-                                    alignment[2], alignment[3],
+                                    alignment[2], '%012d' % int(alignment[3]),
                                     alignment[0][:-2],
                                     alignment[1]) + alignment[4:]
-                            )'''
+                            )
                         _output_line_count += 1
                     if len(corrected_multiread) == 1:
                         '''Output exonic chunks and introns only if the 
@@ -313,7 +323,7 @@ class BowtieOutputThread(threading.Thread):
                             '''There's some chance the alignment was
                             entirely in a region called as exonic; output
                             introns only if they're present.'''
-                            reverse_strand_string = alignment[-1][-1]
+                            reverse_strand_string = alignment[-2][-1]
                             assert reverse_strand_string == '+' or \
                                 reverse_strand_string == '-'
                             # Gather intron stats to be output
@@ -353,7 +363,7 @@ class BowtieOutputThread(threading.Thread):
                         # Output exonic chunks
                         exons = [(pos + sum(base_counts[:i]),
                                     pos + sum(base_counts[:i+1])) for i
-                                    in xrange(len(cigar), 2)]
+                                    in xrange(0, len(base_counts), 2)]
                         if self.stranded:
                             '''A reverse-strand string is needed iff input
                             reads are strand-specific.'''

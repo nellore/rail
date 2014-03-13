@@ -198,8 +198,6 @@ with open(fasta_file, 'w') as fasta_stream:
             for intron_combo in new_intron_combos:
                 subseqs = []
                 intron_combo_list = sorted(list(intron_combo))
-                if len(intron_combo_list) > 1:
-                    print >>sys.stderr, intron_combo_list
                 left_start = max(intron_combo_list[0][0] - extend_size, 1)
                 # Add sequence before first intron
                 subseqs.append(
@@ -216,16 +214,12 @@ with open(fasta_file, 'w') as fasta_stream:
                             )
                         )
                 # Add final sequence
-                right_size = min(extend_size, reference_length - 
-                                                intron_combo_list[-1][1] + 1)
                 subseqs.append(
                         reference_index.get_stretch(last_rname,
                             intron_combo_list[-1][1] - 1,
                             min(extend_size, reference_length - 
                                                 intron_combo_list[-1][1] + 1))
                     )
-                if len(intron_combo_list) > 1:
-                    print >>sys.stderr, subseqs
                 '''A given reference name in the index will be in the following
                 format:
                 original RNAME + '+' or '-' indicating which strand is the
