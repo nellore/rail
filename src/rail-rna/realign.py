@@ -72,21 +72,21 @@ XS:A:'+' or '-' depending on which strand is the sense strand
 Introns
 
 Tab-delimited output tuple columns (intron):
-1. Reference name (RNAME in SAM format) + ';' + bin number +  
-    ('+' or '-' indicating which strand is the sense strand)
-2. Sample label
-3. Intron start (inclusive) on forward strand
-4. Intron end (exclusive) on forward strand
-5. Number of nucleotides between 5' end of intron and 5' end of read from which
+1. Reference name (RNAME in SAM format) 
+    + ';'  + ('+' or '-' indicating which strand is the sense strand)
+    + ';' + Sample label
+    + ';' + Intron start (inclusive) on forward strand
+    + ';' + Intron end (exclusive) on forward strand
+3. Number of nucleotides between 5' end of intron and 5' end of read from which
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND. That is, if
 the sense strand is the reverse strand, this is the distance between the 3' end
 of the read and the 3' end of the intron.
-6. Number of nucleotides between 3' end of intron and 3' end of read from which
+4. Number of nucleotides between 3' end of intron and 3' end of read from which
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
-7. Number of nucleotides spanned by EC on the left (that is, towards the 5'
+5. Number of nucleotides spanned by EC on the left (that is, towards the 5'
 end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
 STRAND.
-8. Number of nucleotides spanned by EC on the right (that is, towards the 3'
+6. Number of nucleotides spanned by EC on the right (that is, towards the 3'
 end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
 STRAND.
 
@@ -339,27 +339,19 @@ class BowtieOutputThread(threading.Thread):
                                     left_anchor_size, right_anchor_size,
                                     left_displacement, right_displacement) \
                                 in introns:
-                                partitions = partition.partition(rname,
-                                    pos, pos + 1, self.bin_size, fudge=0)
-                                # No fudge, so partition length should be 1
-                                assert len(partitions) == 1
-                                (partition_id, partition_start,
-                                    partition_end) = partitions[0]
-                                for (partition_id, partition_start, 
-                                        partition_end) in partitions:
-                                    print >>self.output_stream, \
-                                        'intron\t%s%s\t%s\t%012d\t%012d\t' \
-                                        '%d\t%d\t%d\t%d' % (partition_id,
-                                                reverse_strand_string,
-                                                sample_label,
-                                                intron_pos,
-                                                intron_end_pos,
-                                                left_displacement,
-                                                right_displacement,
-                                                left_anchor_size,
-                                                right_anchor_size
-                                            )
-                                    _output_line_count += 1
+                                print >>self.output_stream, \
+                                    'intron\t%s%s;%s;%012d;%012d\t' \
+                                    '%d\t%d\t%d\t%d' % (rname,
+                                            reverse_strand_string,
+                                            sample_label,
+                                            intron_pos,
+                                            intron_end_pos,
+                                            left_displacement,
+                                            right_displacement,
+                                            left_anchor_size,
+                                            right_anchor_size
+                                        )
+                                _output_line_count += 1
                         # Output exonic chunks
                         exons = [(pos + sum(base_counts[:i]),
                                     pos + sum(base_counts[:i+1])) for i
@@ -374,7 +366,7 @@ class BowtieOutputThread(threading.Thread):
                         if self.exon_intervals:
                             for exon_pos, exon_end_pos in exons:
                                 partitions = partition.partition(
-                                        exon_rname, exon_pos, exon_end_pos,
+                                        rname, exon_pos, exon_end_pos,
                                         self.bin_size)
                                 for partition_id, _, _ in partitions:
                                     print >>self.output_stream, \
@@ -673,7 +665,12 @@ if __name__ == '__main__' and not args.test:
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
-    import random
     import unittest
-    import shutil
+
+    class TestMultireadWithIntrons(unittest.TestCase):
+        """ Tests composed_and_sorted_readlets(); needs no fixture. """
+        def test_cigar_when_read_overlaps_multiple_introns(self):
+            """ Fails if CIGAR is not corrected properly. """
+
+
     unittest.main()

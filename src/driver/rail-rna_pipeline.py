@@ -133,7 +133,7 @@ class BedPreStep(pipeline.Step):
             inps,
             output,  # output URL
             name="BedPre",  # name
-            aggr=pipeline.Aggregation(None, 8, 1, 2),  # 8 tasks per reducer
+            aggr=pipeline.Aggregation(None, 8, 1, 1),  # 8 tasks per reducer
             reducer=reducerStr,
             multipleOutput=True)
 

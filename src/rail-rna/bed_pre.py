@@ -11,25 +11,25 @@ consolidation in Rail-RNA-bed.
 Input (read from stdin)
 ----------------------------
 Tab-delimited input tuple columns:
-1. Reference name (RNAME in SAM format) + ';' + bin number +  
-    ('+' or '-' indicating which strand is the sense strand)
-2. Sample label
-3. Intron start (inclusive) on forward strand
-4. Intron end (exclusive) on forward strand
-5. Number of nucleotides between 5' end of intron and 5' end of read from which
+1. Reference name (RNAME in SAM format) 
+    + ';'  + ('+' or '-' indicating which strand is the sense strand)
+    + ';' + Sample label
+    + ';' + Intron start (inclusive) on forward strand
+    + ';' + Intron end (exclusive) on forward strand
+3. Number of nucleotides between 5' end of intron and 5' end of read from which
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND. That is, if
 the sense strand is the reverse strand, this is the distance between the 3' end
 of the read and the 3' end of the intron.
-6. Number of nucleotides between 3' end of intron and 3' end of read from which
+4. Number of nucleotides between 3' end of intron and 3' end of read from which
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
-7. Number of nucleotides spanned by EC on the left (that is, towards the 5'
+5. Number of nucleotides spanned by EC on the left (that is, towards the 5'
 end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
 STRAND.
-8. Number of nucleotides spanned by EC on the right (that is, towards the 3'
+6. Number of nucleotides spanned by EC on the right (that is, towards the 3'
 end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
 STRAND.
 
-Input is partitioned by columns 1/2 and sorted by columns 3/4.
+Input is partitioned by column 1.
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -79,12 +79,13 @@ while True:
     if line:
         input_line_count += 1
         tokens = line.split('\t')
-        (rname, sample_label, pos, end_pos, left_overhang, right_overhang,
-            left_anchor, right_anchor) = (tokens[0], tokens[1], int(tokens[2]),
-            int(tokens[3]), int(tokens[4]), int(tokens[5]), int(tokens[6]),
-            int(tokens[7]))
-        rname, reverse_strand_string = rname.split(';')
-        reverse_strand_string = reverse_strand_string[-1]
+        rname, sample_label, pos, end_pos = tokens[0].split(';')
+        pos, end_pos = int(pos), int(end_pos)
+        left_overhang, right_overhang, left_anchor, right_anchor = \
+            (int(tokens[1]), int(tokens[2]), int(tokens[3]),
+                int(tokens[4]))
+        reverse_strand_string = rname[-1]
+        rname = rname[:-1]
         if last_rname is not None and not (rname == last_rname 
             and sample_label == last_sample_label and pos == last_pos
             and end_pos == last_end_pos
