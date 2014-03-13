@@ -990,14 +990,16 @@ def selected_readlet_alignments_by_clustering(readlets, seed=0):
         alignment_cluster = [pivot]
         for j in unclustered_alignments:
             if j == pivot: continue
+            intervening_multireadlets = (multireadlet_groups[i+1:j] if i < j 
+                                            else multireadlet_groups[j+1:i])
             if not (alignments[i][-1] == alignments[j][-1] or \
                 alignments[i][:2] != alignments[j][:2] or \
                 (alignments[i][4] == alignments[j][4] and
                    alignments[i][2] != alignments[j][2]) or \
                 ((alignments[i][4] < alignments[j][4]) != \
                     (alignments[i][2] < alignments[j][2])) or \
-                (alignments[i][-1] in multireadlet_groups[i+1:j] or
-                    alignments[j][-1] in multireadlet_groups[i+1:j])):
+                (alignments[i][-1] in intervening_multireadlets or
+                    alignments[j][-1] in intervening_multireadlets)):
                 alignment_cluster.append(j)
             else:
                 new_unclustered_alignments.append(j)
