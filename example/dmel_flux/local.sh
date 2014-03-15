@@ -3,10 +3,12 @@
 [ -z "$RAIL_HOME" ] && echo "Set RAIL_HOME" && exit 1
 [ -z "$IGENOMES_HOME" ] && echo "Set IGENOMES_HOME" && exit 1
 
+python absoluteize.py < dmel_flux.manifest > dmel_flux.abs.manifest
+
 python $RAIL_HOME/src/driver/rail-rna.py \
 	--local \
-	--start-with-align --no-differential \
-        --manifest dmel_flux.manifest \
+	--no-differential \
+        --manifest dmel_flux.abs.manifest \
 	--input preprocessed_reads \
 	--intermediate intermediate \
 	--output local_out \
