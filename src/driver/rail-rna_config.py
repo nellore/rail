@@ -26,7 +26,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
-        '--motif-radius', type=int, required=False, default=4,
+        '--motif-radius', type=int, required=False, default=20,
         help='Distance (in bp) from each of the start and end positions '
              'of a cluster within which to search for motifs')
     parser.add_argument(\
