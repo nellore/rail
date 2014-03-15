@@ -226,7 +226,7 @@ def go(args):
             push = url.Url(push)
             if push.toUrl()[-1] != '/':
                 push = url.Url(push.toUrl() + '/')
-            assert push.toUrl()[-1] == '/'
+            assert push.toUrl()[-1] == '/', push.toUrl()
         mover = filemover.FileMover(args=args)
         for fn1, fn2, outfn, lab in zip(inp1, inp2, out, lab):
             if fn2 is None:

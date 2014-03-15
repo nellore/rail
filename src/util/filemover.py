@@ -8,6 +8,8 @@ filesystems.
 import os
 import sys
 import subprocess
+from path import mkdir_quiet
+
 
 def addArgs(parser):
     """ Set up arguments related to moving files around """
@@ -43,6 +45,7 @@ class FileMover(object):
         elif url.isWgettable():
             raise RuntimeError("I don't know how to upload to http/ftp URLs")
         elif url.isLocal():
+            mkdir_quiet(url.toUrl())
             cmdl = ['cp', fn, url.toUrl()]
         else:
             cmdl = ['hadoop', 'fs', '-put']

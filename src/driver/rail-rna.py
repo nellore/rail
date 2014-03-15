@@ -332,7 +332,7 @@ allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
 
 stepInfo = {\
     'preprocess'     : ([                                       ], rail_rna_pipeline.PreprocessingStep),
-    'align'          : ([('preprocess',     ''                 )], rail_rna_pipeline.AlignStep),
+    'align'          : ([('preprocess',     '/push'            )], rail_rna_pipeline.AlignStep),
     'intron'         : ([('align',          '/intron'          )], rail_rna_pipeline.IntronStep),
     'intron_post'    : ([('align',          '/max_len'         ),
                          ('intron',         '/intron'          )], rail_rna_pipeline.IntronPostStep),

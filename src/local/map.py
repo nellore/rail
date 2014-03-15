@@ -221,15 +221,15 @@ taskn = len(inps)
 
 def do_mapper(tup):
     """ Run a single mapper task """
-    inp, taski = tup
+    name, inp, taski = tup
     if not failQ.empty():
         return None
-    message('Pid %d processing input "%s" [%d of %d]' % (os.getpid(), inp, taski, taskn))
+    message('Pid %d processing input "%s" [%d of %d]' % (os.getpid(), name, taski, taskn))
     ofn = "map-%05d" % taski
     mkdir_quiet(output, 700)
     mkdir_quiet(errDir, 800)
-    out_full_fn = os.path.join(output, ofn)
-    err_full_fn = os.path.join(errDir, ofn)
+    out_full_fn = os.path.abspath(os.path.join(output, ofn))
+    err_full_fn = os.path.abspath(os.path.join(errDir, ofn))
     mycmd = cmd + " >%s 2>%s" % (out_full_fn, err_full_fn)
     wd = os.path.join(workingDir, str(taski))
     mkdir_quiet(wd, 900)  # make the working directory
@@ -269,11 +269,24 @@ def do_mapper(tup):
 num_processes = min(num_processes, len(inps))
 message('Starting %d processes with command: "%s"' % (num_processes, cmd))
 
-tasks = []
-taski, taskn = 1, len(inps)
-for inp in map(os.path.abspath, inps):
-    tasks.append((inp, taski))
-    taski += 1
+tasks, taski = [], 1
+if args.line_by_line:
+    for inp in inps:
+        with open(inp) as fh:
+            while True:
+                ln = fh.readline().rstrip()
+                if len(ln) == 0:
+                    break
+                if ln[0] == '#':
+                    continue
+                name = "%s:%d" % (inp, fh.tell())
+                tasks.append((name, '\t'.join([name, ln]), taski))
+                taski += 1
+else:
+    for inp in map(os.path.abspath, inps):
+        tasks.append((inp, inp, taski))
+        taski += 1
+taskn = taski - 1
 
 pool = multiprocessing.Pool(num_processes)
 outfns = []

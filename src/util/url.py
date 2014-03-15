@@ -5,6 +5,8 @@ For parsing, handling and manipulating URLs which might be on local
 filesystem, in HDFS, or in either of the S3 filesystems (native or block).
 """
 
+import os
+
 class Url(object):
     def __init__(self, s):
         if ':' in s:
@@ -28,7 +30,7 @@ class Url(object):
         else:
             self.type = "local"
             self.rest = s
-    
+
     def plus(self, s):
         # Return a new URL consisting of the given subdirectory or file s
         # appended onto this URL with a slash in between
@@ -37,34 +39,36 @@ class Url(object):
             return Url(st + s)
         else:
             return Url('/'.join([st, s]))
-    
+
     def isS3(self):
         return self.type[:2] == 's3'
-    
+
     def isWgettable(self):
         return self.type in ['ftp', 'http']
-    
+
     def isLocal(self):
         return self.type == 'local'
-    
+
     def isNotLocal(self):
         return self.type != 'local'
-    
+
     def toUrl(self):
         if self.type == 'local':
-            return self.rest
+            absp = os.path.abspath(self.rest)
+            return (absp + '/') if self.rest[-1] == '/' else absp
         else:
             return self.type + ':' + self.rest
-    
+
     def toUpperUrl(self):
         """ Useful for hiding protocol names from Elastic MapReduce so it
             doesn't mistake a URL passed as a mapper argument as an input
             URL. """
         if self.type == 'local':
-            return self.rest
+            absp = os.path.abspath(self.rest)
+            return (absp + '/') if self.rest[-1] == '/' else absp
         else:
             return self.type.upper() + ':' + self.rest
-    
+
     def toNonNativeUrl(self):
         if self.type[:2] == 's3':
             return 's3:' + self.rest
