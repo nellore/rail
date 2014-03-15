@@ -1,13 +1,11 @@
-URL_DIR=http://tophat.cbcb.umd.edu/downloads
-VER=2.0.9
-NORM_NM=tophat
+URL_DIR=http://protocols.netlab.uky.edu/~zeng
+VER=v2.1.6
+NORM_NM=MapSplice
 NM=$(NORM_NM)-$(VER)
-PKG=$(NM).tar.gz
+PKG=$(NM).zip
 URL=$(URL_DIR)/$(PKG)
-SAMTOOLS_DIR=../samtools
 
-VERSION: $(NORM_NM)/install-root/bin/tophat
-	$< --version 2>&1 | tee $@
+#VERSION:
 
 $(NORM_NM)/install-root/bin/tophat: $(NORM_NM)/Makefile
 	make -C $(NORM_NM)
@@ -20,7 +18,7 @@ $(NORM_NM)/Makefile: $(NORM_NM) $(SAMTOOLS_DIR)/samtools/libbam.a
 	cd $(NORM_NM) && ./configure --prefix=`pwd`/install-root --with-bam=`pwd`/libbam
 
 $(NORM_NM): $(PKG)
-	tar zxvf $<
+	unzip $<
 	mv $(NM) $@
 
 $(PKG):
