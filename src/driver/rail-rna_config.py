@@ -18,7 +18,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--readlet-length', metavar='INT', type=int, default="25", help='Substring length to extract from read.')
     parser.add_argument(\
-        '--readlet-interval', metavar='INT', type=int, default="6", help='Distance between substrings to extract from read.')
+        '--readlet-interval', metavar='INT', type=int, default="3", help='Distance between substrings to extract from read.')
     parser.add_argument(\
         '--capping-fraction', metavar='FRACTION', type=float, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\

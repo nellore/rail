@@ -156,7 +156,7 @@ while True:
             '''If --out is a local file, just write directly to that file.
             Otherwise, write to a temporary file that will later be uploaded to
             the destination.'''
-            if rname == '\uFFFF':
+            if rname == '*':
                 out_rname = 'unmapped'
             else:
                 out_rname = rname
