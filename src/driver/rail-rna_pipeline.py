@@ -128,7 +128,8 @@ class IntronStep(pipeline.Step):
 class BedPreStep(pipeline.Step):
     def __init__(self, inps, output, _, _2):
         reducer_str = """
-            python %%BASE%%/src/rail-rna/bed_pre.py %s
+            python %%BASE%%/src/rail-rna/bed_pre.py
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% %s
         """ % ''
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(BedPreStep, self).__init__(
@@ -144,6 +145,7 @@ class BedStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducer_str = """
             python %%BASE%%/src/rail-rna/bed.py 
+                --bowtie-idx=%%REF_BOWTIE_INDEX%%
                 --out=%s/junctions 
                 --bed-basename=%s""" % (gconf.out, tconf.bed_basename)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
@@ -187,6 +189,7 @@ class RealignStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         mapper_str = """
             python %%BASE%%/src/rail-rna/realign.py
+                --original-idx=%%REF_BOWTIE_INDEX%% 
                 --bowtie-idx=%s/index/intron
                 --bowtie-exe=%%BOWTIE%%
                 --partition-length %d
@@ -241,7 +244,7 @@ class CollapseStep(pipeline.Step):
         reducer_str = """
             python %%BASE%%/src/rail-rna/collapse.py 
                 %s
-            """ % ('--stranded' if tconf.stranded else '')
+            """ % ('',)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(CollapseStep, self).__init__(
             inps,
@@ -255,9 +258,9 @@ class CollapseStep(pipeline.Step):
 class CoveragePreStep(pipeline.Step):
     def __init__(self, inps, output, tconf, _):
         reducer_str = """
-            python %%BASE%%/src/rail-rna/coverage_pre.py 
-                --partition-stats 
-                --partition-len=%d""" % tconf.partitionLen
+            python %%BASE%%/src/rail-rna/coverage_pre.py
+                --bowtie-idx=%%REF_BOWTIE_INDEX%%
+                --partition-stats %s""" % ('',)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(CoveragePreStep, self).__init__(
             inps,

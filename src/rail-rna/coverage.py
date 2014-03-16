@@ -16,12 +16,12 @@ Input (read from stdin)
 ----------------------------
 Tab-delimited input tuple columns:
 1. Sample label
-2. Reference name (RNAME in SAM format)
+2. Number string representing reference name (RNAME in SAM format; see 
+    BowtieIndexReference class in bowtie_index for conversion information)
 3. Position
 4. Coverage (that is, the number of called ECs in the sample
     overlapping the position)
-Input is binned first by sample label, then sorted by RNAME and secondarily
-sorted by genome position.
+Input is partitioned first by sample label, then sorted by fields 2-3.
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -137,8 +137,9 @@ while True:
         assert len(tokens) == 4, 'Bad input line:\n' + line
         sample_label, rname, pos, coverage = (tokens[0], tokens[1],
                                                 int(tokens[2]), int(tokens[3]))
-        assert rname in reference_index.rname_lengths, \
-            'RNAME "%s" not in Bowtie index.' % rname
+        assert rname in reference_index.string_to_rname, \
+            'RNAME number string "%s" not in Bowtie index.' % rname
+        rname = reference_index.string_to_rname[rname]
     if not line or (sample_label != last_sample_label 
         and last_sample_label is not None):
         # All of a sample's coverage entries have been read

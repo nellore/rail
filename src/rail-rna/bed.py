@@ -13,7 +13,8 @@ Tab-delimited input tuple columns are in sample label + 12-column BED format.
 description.)
 
 1. Sample label
-2. chrom (chromosome name)
+2. Number string representing chrom (chromosome name); see BowtieIndexReference
+    class in bowtie_index for conversion information
 3. chromStart (start position of region; 0-BASED)
 4. chromEnd (end position of region; 0-BASED)
 5. name (includes maximin anchor size and unique displacement count)
@@ -47,7 +48,10 @@ import site
 import argparse
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-site.addsitedir(os.path.join(base_path, 'util'))
+for directory_name in ['bowtie', 'util']:
+    site.addsitedir(os.path.join(base_path, directory_name))
+import bowtie
+import bowtie_index
 
 # Define string version_number
 import version
@@ -67,12 +71,14 @@ parser.add_argument(\
     help='The basename (excluding path) of all BED output. Basename is '
          'followed by ".bed"')
 
+bowtie.addArgs(parser)
 filemover.addArgs(parser)
 args = parser.parse_args()
 
 import time
 start_time = time.time()
 
+reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
 output_filename, output_stream, output_url, last_sample_label = [None]*4
 if args.out is not None:
     output_url = url.Url(args.out)
@@ -93,10 +99,12 @@ while True:
         last_output_filename = output_filename
         move_temporary_file = True
     else:
-        (sample_label, chrom, chrom_start, chrom_end, name, score, strand,
+        (sample_label, chrom,
+            chrom_start, chrom_end, name, score, strand,
             thick_start, thick_end, item_rgb, block_count,
             block_sizes, block_starts) \
             = line.split('\t')
+        chrom = reference_index.string_to_rname[chrom]
     if move_temporary_file and not output_url.isLocal():
         mover = filemover.FileMover(args=args)
         # Remove .temp in output filename

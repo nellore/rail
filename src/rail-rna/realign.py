@@ -27,8 +27,7 @@ user-specified length (see partition.py).
 Exonic chunks (aka ECs; two formats, any or both of which may be emitted):
 
 Format 1 (exon_ival); tab-delimited output tuple columns:
-1. Reference name (RNAME in SAM format) + ';' + bin number + ('+' or '-'
-    indicating which strand is the sense strand)
+1. Reference name (RNAME in SAM format) + ';' + bin number
 2. Sample label
 3. EC start (inclusive) on forward strand
 4. EC end (exclusive) on forward strand
@@ -36,8 +35,7 @@ Format 1 (exon_ival); tab-delimited output tuple columns:
 Format 2 (exon_diff); tab-delimited output tuple columns:
 1. Reference name (RNAME in SAM format) + ';' + 
     max(EC start, bin start) (inclusive) on forward strand IFF diff is
-    positive and EC end (exclusive) on forward strand IFF diff is negative +
-    ('+' or '-' indicating which strand is the sense strand)
+    positive and EC end (exclusive) on forward strand IFF diff is negative
 2. Bin number
 3. Sample label
 4. +1 or -1.
@@ -54,8 +52,8 @@ read overlapping at least one intron in the reference. The CIGAR string
 represents intronic bases with N's and exonic bases with M's.
 The order of the fields is as follows.
 1. Sample label
-2. RNAME ('~~~~~' if unmapped to almost guarantee it appears last in
-            lexicographic order)
+2. Number string representing RNAME; see BowtieIndexReference class in
+    bowtie_index for conversion information
 3. POS
 4. QNAME
 5. FLAG
@@ -107,6 +105,7 @@ for directory_name in ['bowtie', 'sample', 'interval']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
 import bowtie
+import bowtie_index
 import sample
 import partition
 
@@ -210,13 +209,15 @@ def multiread_with_introns(multiread, stranded=False):
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
-    def __init__(self, input_stream, output_stream=sys.stdout,
+    def __init__(self, input_stream, reference_index, output_stream=sys.stdout,
         exon_differentials=True, exon_intervals=False, stranded=False,
         verbose=False, bin_size=10000, report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
                 Bowtie process's stdout.
+            reference_index: object of class BowtieIndexReference; for
+                outputing RNAME number strings to facilitate later sorting
             output_stream: where to emit exon and intron tuples; typically,
                 this is sys.stdout.
             exon_differentials: True iff EC differentials are to be emitted.
@@ -235,6 +236,7 @@ class BowtieOutputThread(threading.Thread):
         super(BowtieOutputThread, self).__init__()
         self.daemon = True
         self.input_stream = input_stream
+        self.reference_index = reference_index
         self.output_stream = output_stream
         self.verbose = verbose
         self.bin_size = bin_size
@@ -287,8 +289,9 @@ class BowtieOutputThread(threading.Thread):
                     print >>self.output_stream, 'splice_sam\t' \
                          + '\t'.join(
                                 [sample.parseLab(last_tokens[0][:-2]),
-                                    last_tokens[2] if last_tokens[2] != '*'
-                                    else '~~~~~', '%012d' % 
+                                    self.reference_index.rname_to_string[
+                                            last_tokens[2]
+                                        ], '%012d' % 
                                     int(last_tokens[3]),
                                     last_tokens[0][:-2],
                                     last_tokens[1]] + last_tokens[4:]
@@ -304,7 +307,9 @@ class BowtieOutputThread(threading.Thread):
                         print >>self.output_stream, 'splice_sam\t' \
                             + '\t'.join(
                                 (sample_label,
-                                    alignment[2], '%012d' % int(alignment[3]),
+                                    self.reference_index.rname_to_string[
+                                            alignment[2]
+                                        ], '%012d' % int(alignment[3]),
                                     alignment[0][:-2],
                                     alignment[1]) + alignment[4:]
                             )
@@ -359,13 +364,6 @@ class BowtieOutputThread(threading.Thread):
                         exons = [(pos + sum(base_counts[:i]),
                                     pos + sum(base_counts[:i+1])) for i
                                     in xrange(0, len(base_counts), 2)]
-                        if self.stranded:
-                            '''A reverse-strand string is needed iff input
-                            reads are strand-specific.'''
-                            exon_reverse_strand_string = '-' if \
-                                (last_flag & 16) != 0 else '+'
-                        else:
-                            exon_reverse_strand_string = ''
                         if self.exon_intervals:
                             for exon_pos, exon_end_pos in exons:
                                 partitions = partition.partition(
@@ -373,10 +371,9 @@ class BowtieOutputThread(threading.Thread):
                                         self.bin_size)
                                 for partition_id, _, _ in partitions:
                                     print >>self.output_stream, \
-                                        'exon_ival\t%s%s\t%012d\t' \
+                                        'exon_ival\t%s\t%012d\t' \
                                         '%012d\t%s' \
-                                        % (partition_id, 
-                                            exon_reverse_strand_string,
+                                        % (partition_id,
                                             exon_pos, exon_end_pos, 
                                             sample_label)
                                     _output_line_count += 1
@@ -392,11 +389,10 @@ class BowtieOutputThread(threading.Thread):
                                     diff_rname, diff_bin \
                                         = partition_id.split(';')
                                     print >>self.output_stream, \
-                                        'exon_diff\t%s;%d;%s%s\t%s\t1' \
+                                        'exon_diff\t%s;%d;%s\t%s\t1' \
                                         % (diff_rname,
                                             max(partition_start, exon_pos),
                                             sample_label,
-                                            exon_reverse_strand_string,
                                             diff_bin)
                                     _output_line_count += 1
                                     assert exon_end_pos > partition_start
@@ -405,12 +401,11 @@ class BowtieOutputThread(threading.Thread):
                                         iff exon ends before partition
                                         ends.'''
                                         print >>self.output_stream, \
-                                            'exon_diff\t%s;%d;%s%s\t' \
+                                            'exon_diff\t%s;%d;%s\t' \
                                             '%s\t-1' \
                                             % (diff_rname, 
                                                 exon_end_pos,
                                                 sample_label,
-                                                exon_reverse_strand_string,
                                                 diff_bin)
                                         _output_line_count += 1
                 multiread = []
@@ -438,10 +433,10 @@ def handle_temporary_directory(archive, temp_dir_path):
         shutil.rmtree(temp_dir_path)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
-    bowtie_index_base='intron', bowtie_args=None,
-    temp_dir_path=tempfile.mkdtemp(), bin_size=10000, verbose=False,
-    exon_differentials=True, exon_intervals=False, stranded=False,
-    report_multiplier=1.2):
+    reference_index_base='genome', bowtie_index_base='intron',
+    bowtie_args=None, temp_dir_path=tempfile.mkdtemp(), bin_size=10000,
+    verbose=False, exon_differentials=True, exon_intervals=False,
+    stranded=False, report_multiplier=1.2):
     """ Runs Rail-RNA-realign.
 
         Uses Bowtie index including only sequences framing introns to align
@@ -467,8 +462,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         emitted):
 
         Format 1 (exon_ival); tab-delimited output tuple columns:
-        1. Reference name (RNAME in SAM format) + ';' + bin number + ('+' or
-            '-' indicating which strand is the sense strand)
+        1. Reference name (RNAME in SAM format) + ';' + bin number
         2. Sample label
         3. EC start (inclusive) on forward strand
         4. EC end (exclusive) on forward strand
@@ -477,7 +471,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         1. Reference name (RNAME in SAM format) + ';' + 
             max(EC start, bin start) (inclusive) on forward strand IFF diff is
             positive and EC end (exclusive) on forward strand IFF diff is
-            negative + ('+' or '-' indicating which strand is the sense strand)
+            negative
         2. Bin number
         3. Sample label
         4. +1 or -1.
@@ -496,7 +490,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         exonic bases with M's.
         The order of the fields is as follows.
         1. Sample label
-        2. RNAME
+        2. Number string representing RNAME; see BowtieIndexReference class in
+            bowtie_index for conversion information
         3. POS
         4. QNAME
         5. FLAG
@@ -538,6 +533,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         output_stream: where to emit exonic chunks and introns.
         bowtie_exe: filename of Bowtie executable; include path if not in
             $PATH.
+        reference_index_base: where to find original reference; for
+            outputing RNAME number strings to facilitate later sorting
         bowtie_index_base: the basename of the Bowtie index files associated
             with only the introns.
         bowtie_args: string containing precisely extra command-line arguments
@@ -562,6 +559,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     """
     import time
     start_time = time.time()
+    reference_index = bowtie_index.BowtieIndexReference(reference_index_base)
     bowtie_process, bowtie_command, threads = bowtie.proc(
             bowtieExe=bowtie_exe, bowtieIdx=bowtie_index_base,
             readFn=None, bowtieArgs=bowtie_args, sam=True,
@@ -569,6 +567,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         )
     output_thread = BowtieOutputThread(
                         bowtie_process.stdout,
+                        reference_index=reference_index,
                         exon_differentials=exon_differentials, 
                         exon_intervals=exon_intervals, 
                         bin_size=bin_size,
@@ -621,6 +620,11 @@ if __name__ == '__main__':
         default=False,
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
              'WRITE EXONS AND INTRONS TO STDOUT')
+    parser.add_argument(\
+        '--original-idx', metavar='INDEX', type=str, required=False,
+        default='genome',
+        help='Path to Bowtie index of original reference. Specify its '
+             'basename.')
     parser.add_argument('--archive', metavar='PATH', type=str, 
         default=None,
         help='Save output and Bowtie command to a subdirectory (named using ' 
@@ -656,6 +660,7 @@ if __name__ == '__main__' and not args.test:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path
     go(bowtie_exe=args.bowtie_exe,
+        reference_index_base=args.original_idx,
         bowtie_index_base=args.bowtie_idx,
         bowtie_args=bowtie_args,
         temp_dir_path=temp_dir_path, 

@@ -243,17 +243,12 @@ for _ in xrange(len(inps)):
         bin_count[k] += v
         tot += v
 
-num_tasks = args.num_tasks
-if len(bin_count) < num_tasks:
-    message('Warning: data had fewer bins (%d) than requested # of reduce tasks (%d)' % (len(bin_count), num_tasks))
-    num_tasks = len(bin_count)
-
 if tot > 0:
-    message('Allocating %d input records to %d tasks' % (tot, num_tasks))
+    message('Allocating %d input records to %d tasks' % (tot, args.num_tasks))
 
     # Allocate bins to tasks, always adding to task with least tuples so far
-    task_names = ["task-%05d" % i for i in xrange(num_tasks)]
-    taskq = [(0, task_names[i], []) for i in xrange(num_tasks)]
+    task_names = ["task-%05d" % i for i in xrange(args.num_tasks)]
+    taskq = [(0, task_names[i], []) for i in xrange(args.num_tasks)]
     key2task = {}
     for k, v in bin_count.iteritems():
         sz, nm, klist = heapq.heappop(taskq)
@@ -293,7 +288,7 @@ if tot > 0:
     ########################################
 
     message('Sorting tasks')
-    need_sort = num_tasks > 1 or args.sort_fields > args.bin_fields
+    need_sort = args.num_tasks > 1 or args.sort_fields > args.bin_fields
     if need_sort:
         def do_sort(task, external=True, keep=args.keep_all):
             assert external  # only know how to use external sort for now

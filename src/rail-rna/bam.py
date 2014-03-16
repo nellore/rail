@@ -17,8 +17,8 @@ by sample name/RNAME and sorting by POS.) Each line corresponds to an
 end-to-end alignment or an alignment overlapping at least one intron in the 
 reference. The order of the fields is as follows.
 1. Sample label
-2. RNAME ('~~~~~' if unmapped to almost guarantee it appears last in
-            lexicographic order)
+2. Number string representing RNAME; see BowtieIndexReference class in
+    bowtie_index for conversion information
 3. POS
 4. QNAME
 5. FLAG
@@ -105,8 +105,9 @@ start_time = time.time()
 '''Make RNAME lengths available from reference FASTA so SAM header can be
 formed; reference_index.rname_lengths[RNAME] is the length of RNAME.''' 
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
-# Sort RNAMEs in lexicographic order so SAM file is properly sorted
-sorted_rnames = sorted(reference_index.rname_lengths.keys())
+# Get RNAMEs in order of descending length
+sorted_rnames = [reference_index.string_to_rname['%012d' % i]
+                    for i in xrange(len(reference_index.string_to_rname) - 1)]
 
 (output_filename, output_stream, output_url,
     last_rname, last_sample_label) = [None]*5
@@ -130,6 +131,7 @@ while True:
     else:
         tokens = line.rstrip().split('\t')
         sample_label, rname, pos, qname, flag = tokens[:5]
+        rname = reference_index.string_to_rname[rname]
     if move_temporary_file and not output_url.isLocal():
         mover = filemover.FileMover(args=args)
         # Remove .temp in output filename

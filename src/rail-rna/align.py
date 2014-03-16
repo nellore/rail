@@ -41,10 +41,7 @@ user-specified length (see partition.py).
 Exonic chunks (aka ECs; three formats, any or all of which may be emitted):
 
 Format 1 (exon_ival); tab-delimited output tuple columns:
-1. Reference name (RNAME in SAM format) + ';' + bin number + ('+' or '-'
-    indicating which strand is the sense strand if input reads are
-    strand-specific -- that is, --stranded is invoked; otherwise, there is no
-    terminal '+' or '-')
+1. Reference name (RNAME in SAM format) + ';' + bin number
 2. Sample label
 3. EC start (inclusive) on forward strand
 4. EC end (exclusive) on forward strand
@@ -52,10 +49,7 @@ Format 1 (exon_ival); tab-delimited output tuple columns:
 Format 2 (exon_diff); tab-delimited output tuple columns:
 1. Reference name (RNAME in SAM format) + ';' + 
     max(EC start, bin start) (inclusive) on forward strand IFF diff is
-    positive and EC end (exclusive) on forward strand IFF diff is negative +
-    ('+' or '-' indicating which strand is the sense strand if input reads are
-    strand-specific -- that is, --stranded is invoked; otherwise, there is
-    no terminal '+' or '-')
+    positive and EC end (exclusive) on forward strand IFF diff is negative
 2. Bin number
 3. Sample label
 4. +1 or -1.
@@ -68,7 +62,8 @@ corresponds to sample label. (Fields are reordered to facilitate partitioning
 by sample name/RNAME and sorting by POS.) Each line corresponds to a
 spliced alignment. The order of the fields is as follows.
 1. Sample label
-2. RNAME
+2. Number string representing RNAME; see BowtieIndexReference class in
+    bowtie_index for conversion information
 3. POS
 4. QNAME
 5. FLAG
@@ -1134,13 +1129,6 @@ class BowtieOutputThread(threading.Thread):
                     last_tlen, last_seq, last_qual) = last_tokens[:11]
                 last_flag = int(last_flag)
                 last_pos = int(last_pos)
-                if self.stranded:
-                    '''A reverse-strand string is needed if and only if
-                    input reads are strand-specific.'''
-                    last_reverse_strand_string = '-' \
-                        if (last_flag & 16) != 0 else '+'
-                else:
-                    last_reverse_strand_string = ''
                 last_seq_size = len(last_seq)
                 last_end_pos = last_pos + last_seq_size
                 '''Find XM:i field, which is > 0 if read had several valid
@@ -1219,7 +1207,9 @@ class BowtieOutputThread(threading.Thread):
                             print >>self.output_stream, (
                                 ('%s\t%s\t%s\t%012d\t%s\t%s\t'
                                     % ('end_to_end_sam', last_sample_label, 
-                                    alignment_tokens[2],
+                                    self.reference_index.rname_to_string[
+                                            alignment_tokens[2]
+                                        ],
                                     int(alignment_tokens[3]),
                                     alignment_tokens[0][:-2],
                                     alignment_tokens[1])) 
@@ -1240,11 +1230,10 @@ class BowtieOutputThread(threading.Thread):
                                     + self.intron_partition_overlap
                                 diff_rname, diff_bin = partition_id.split(';')
                                 print >>self.output_stream, \
-                                    'exon_diff\t%s;%d;%s%s\t%s\t1' \
+                                    'exon_diff\t%s;%d;%s\t%s\t1' \
                                     % (diff_rname,
                                         max(partition_start, last_pos),
                                         last_sample_label,
-                                        last_reverse_strand_string,
                                         diff_bin)
                                 _output_line_count += 1
                                 assert last_end_pos > partition_start
@@ -1252,19 +1241,17 @@ class BowtieOutputThread(threading.Thread):
                                     '''Print decrement at interval end iff exon
                                     ends before partition ends.'''
                                     print >>self.output_stream, \
-                                        'exon_diff\t%s;%d;%s%s\t%s\t-1' \
+                                        'exon_diff\t%s;%d;%s\t%s\t-1' \
                                         % (diff_rname,
                                             last_end_pos,
                                             last_sample_label,
-                                            last_reverse_strand_string,
                                             diff_bin)
                                     _output_line_count += 1
                         if self.exon_intervals:
                             for partition_id, _, _ in partitions:
                                 print >>self.output_stream, \
-                                    'exon_ival\t%s%s\t%012d\t%012d\t%s' \
-                                    % (partition_id, 
-                                        last_reverse_strand_string, last_pos, 
+                                    'exon_ival\t%s\t%012d\t%012d\t%s' \
+                                    % (partition_id, last_pos, 
                                         last_end_pos, last_sample_label)
                                 _output_line_count += 1
                     multiread = []
@@ -1279,8 +1266,7 @@ class BowtieOutputThread(threading.Thread):
                     last_cigar, last_rnext, last_pnext, last_tlen, last_seq,
                     last_qual) = (qname, flag, rname, pos, mapq, cigar,
                     rnext, pnext, tlen, seq, qual)
-                (last_seq_size, last_reverse_strand_string, last_end_pos,
-                    last_multimapped) = (seq_size, reverse_strand_string,
+                (last_seq_size, last_end_pos, last_multimapped) = (seq_size,
                     end_pos, multimapped)
                 i += 1
         else:
@@ -1539,10 +1525,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         emitted:
 
         Format 1 (exon_ival); tab-delimited output tuple columns:
-        1. Reference name (RNAME in SAM format) + ';' + bin number + ('+' or
-            '-' indicating which strand is the sense strand if input reads are
-            strand-specific -- that is, --stranded is invoked; otherwise, there
-            is no terminal '+' or '-')
+        1. Reference name (RNAME in SAM format) + ';' + bin number
         2. Sample label
         3. EC start (inclusive) on forward strand
         4. EC end (exclusive) on forward strand
@@ -1551,9 +1534,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         1. Reference name (RNAME in SAM format) + ';' + 
             max(EC start, bin start) (inclusive) on forward strand IFF diff is
             positive and EC end (exclusive) on forward strand IFF diff is
-            negative + ('+' or '-' indicating which strand is the sense strand
-            if input reads are strand-specific -- that is, --stranded is
-            invoked; otherwise, there is no terminal '+' or '-')
+            negative
         2. Bin number
         3. Sample label
         4. +1 or -1.
@@ -1568,7 +1549,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         line corresponds to a spliced alignment.
         The order of the fields is as follows.
         1. Sample label
-        2. RNAME
+        2. Number string representing RNAME; see BowtieIndexReference class in
+            bowtie_index for conversion information
         3. POS
         4. QNAME
         5. FLAG

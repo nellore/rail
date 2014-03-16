@@ -131,6 +131,20 @@ class BowtieIndexReference(object):
         self.refnames = refnames
         self.ref_id_to_offset = {self.refnames[i]: i for i in xrange(len(self.refnames))}
 
+        # To facilitate sorting reference names in order of descending length
+        sorted_rnames = sorted(self.rname_lengths.items(), 
+                key=lambda rname_and_length: rname_and_length[1], reverse=True)
+        self.rname_to_string = {}
+        self.string_to_rname = {}
+        for i, (rname, _) in enumerate(sorted_rnames):
+            rname_string = ('%012d' % i)
+            self.rname_to_string[rname] = rname_string
+            self.string_to_rname[rname_string] = rname
+        # Handle unmapped reads
+        unmapped_string = ('%012d' % len(sorted_rnames))
+        self.rname_to_string['*'] = unmapped_string
+        self.string_to_rname[unmapped_string] = '*'
+
     def get_stretch(self, ref_id, ref_off, count):
         assert ref_id in self.ref_id_to_offset
         ref_idx = self.ref_id_to_offset[ref_id]

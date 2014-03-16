@@ -38,7 +38,8 @@ Tab-delimited input tuple columns are in sample label + 12-column BED format.
 description.)
 
 1. Sample label
-2. chrom (chromosome name)
+2. Number string representing chrom (chromosome name); see BowtieIndexReference
+    class in bowtie_index for conversion information
 3. chromStart (start position of region; 0-BASED)
 4. chromEnd (end position of region; 0-BASED)
 5. name (includes maximin anchor size and unique displacement count)
@@ -58,16 +59,24 @@ OUTPUT COORDINATES ARE 0-INDEXED.
 import os
 import sys
 import argparse
+import site
+
+base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+site.addsitedir(os.path.join(base_path, 'bowtie'))
+import bowtie
+import bowtie_index
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
-
+# So Bowtie index can be specified
+bowtie.addArgs(parser)
 args = parser.parse_args()
 
 import time
 start_time = time.time()
 
+reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
 maximin_anchor_size, unique_displacements, coverage = None, set(), 0
 max_left_overhang, max_right_overhang = None, None
 write_line = False
@@ -85,7 +94,7 @@ while True:
             (int(tokens[1]), int(tokens[2]), int(tokens[3]),
                 int(tokens[4]))
         reverse_strand_string = rname[-1]
-        rname = rname[:-1]
+        rname = reference_index.rname_to_string[rname[:-1]]
         if last_rname is not None and not (rname == last_rname 
             and sample_label == last_sample_label and pos == last_pos
             and end_pos == last_end_pos
