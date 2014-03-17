@@ -238,7 +238,7 @@ if mode == 'emr':
     # ActionOnFailure
     waitFail = args.alive
     if waitFail:
-        emrArgs.append("--alive")
+        emrArgs.append("--alive --with-termination-protection")
     
     # Local dir, where ref genome and scripts are installed
     emrLocalDir = args.emr_local_dir or "/mnt"

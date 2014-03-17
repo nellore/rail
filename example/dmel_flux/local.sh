@@ -14,6 +14,8 @@ python $RAIL_HOME/src/driver/rail-rna.py \
 	--output local_out \
         --reference $IGENOMES_HOME/Drosophila_melanogaster/UCSC/dm3 \
         --igenomes \
+        --readlet-interval 3 \
         --num-processes 25 \
-	--keep-all \
+	--cap-search-window-size 0 \
+        --keep-all \
 	$*
