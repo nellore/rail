@@ -75,16 +75,16 @@ Tab-delimited output tuple columns (intron):
     + ';' + Sample label
     + ';' + Intron start (inclusive) on forward strand
     + ';' + Intron end (exclusive) on forward strand
-3. Number of nucleotides between 5' end of intron and 5' end of read from which
+2. Number of nucleotides between 5' end of intron and 5' end of read from which
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND. That is, if
 the sense strand is the reverse strand, this is the distance between the 3' end
 of the read and the 3' end of the intron.
-4. Number of nucleotides between 3' end of intron and 3' end of read from which
+3. Number of nucleotides between 3' end of intron and 3' end of read from which
 it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
-5. Number of nucleotides spanned by EC on the left (that is, towards the 5'
+4. Number of nucleotides spanned by EC on the left (that is, towards the 5'
 end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
 STRAND.
-6. Number of nucleotides spanned by EC on the right (that is, towards the 3'
+5. Number of nucleotides spanned by EC on the right (that is, towards the 3'
 end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
 STRAND.
 
@@ -340,7 +340,7 @@ class BowtieOutputThread(threading.Thread):
                                             base_counts[i-1],
                                             base_counts[i+1],
                                             sum(base_counts[:i:2]),
-                                            sum(base_counts[i::2]))
+                                            sum(base_counts[i+1::2]))
                                             for i in xrange(1,
                                                 len(base_counts), 2)]
                             for (intron_pos, intron_end_pos,
@@ -508,24 +508,25 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         Introns
 
         Tab-delimited output tuple columns (intron):
-        1. Reference name (RNAME in SAM format) + ';' + bin number +  
-            ('+' or '-' indicating which strand is the sense strand)
-        2. Sample label
-        3. Intron start (inclusive) on forward strand
-        4. Intron end (exclusive) on forward strand
-        5. Number of nucleotides between 5' end of intron and 5' end of read
-        from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD
-        STRAND. That is, if the sense strand is the reverse strand, this is the
-        distance between the 3' end of the read and the 3' end of the intron.
-        6. Number of nucleotides between 3' end of intron and 3' end of read
-        from which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD
-        STRAND.
-        7. Number of nucleotides spanned by EC on the left (that is, towards
-        the 5' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
-        FORWARD STRAND.
-        8. Number of nucleotides spanned by EC on the right (that is, towards
-        the 3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE
-        FORWARD STRAND.
+        1. Reference name (RNAME in SAM format) 
+            + ';'  + ('+' or '-' indicating which strand is the sense strand)
+            + ';' + Sample label
+            + ';' + Intron start (inclusive) on forward strand
+            + ';' + Intron end (exclusive) on forward strand
+        2. Number of nucleotides between 5' end of intron and 5' end of read
+            from which it was inferred, ASSUMING THE SENSE STRAND IS THE
+            FORWARD STRAND. That is, if the sense strand is the reverse strand,
+            this is the distance between the 3' end of the read and the 3' end
+            of the intron.
+        3. Number of nucleotides between 3' end of intron and 3' end of read
+            from which it was inferred, ASSUMING THE SENSE STRAND IS THE
+            FORWARD STRAND.
+        4. Number of nucleotides spanned by EC on the left (that is, towards
+            the 5' end of the read) of the intron, ASSUMING THE SENSE STRAND IS
+            THE FORWARD STRAND.
+        5. Number of nucleotides spanned by EC on the right (that is, towards
+            the 3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS
+            THE FORWARD STRAND.
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
