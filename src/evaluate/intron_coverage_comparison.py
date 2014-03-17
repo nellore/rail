@@ -125,7 +125,7 @@ if __name__ == '__main__':
                 )
     for chrom in true_introns:
         for true_intron in true_introns[chrom]:
-            sys.stdout.write('%d\t%d\t%d' % (true_intron + 
+            sys.stdout.write('%s\t%d\t%d\t%d' % ((chrom,) + true_intron + 
                                 (true_introns[chrom][true_intron],)))
             for retrieved_intron_set in retrieved_introns:
                 if chrom not in retrieved_intron_set \

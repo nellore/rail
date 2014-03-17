@@ -18,7 +18,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--readlet-length', metavar='INT', type=int, default="25", help='Substring length to extract from read.')
     parser.add_argument(\
-        '--readlet-interval', metavar='INT', type=int, default="3", help='Distance between substrings to extract from read.')
+        '--readlet-interval', metavar='INT', type=int, default="4", help='Distance between substrings to extract from read.')
     parser.add_argument(\
         '--capping-fraction', metavar='FRACTION', type=float, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\
@@ -26,7 +26,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
     parser.add_argument(\
-        '--motif-radius', type=int, required=False, default=20,
+        '--motif-radius', type=int, required=False, default=50,
         help='Distance (in bp) from each of the start and end positions '
              'of a cluster within which to search for motifs')
     parser.add_argument(\
