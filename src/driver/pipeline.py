@@ -95,7 +95,6 @@ class Step(object):
     def toLocalCmd(self, localConf):
         lines = []
         glue = None
-        
         if self.mapper is not None:
             final = self.reducer is None
             lines.append('python %BASE%/src/local/map.py \\')

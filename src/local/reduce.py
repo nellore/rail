@@ -3,7 +3,7 @@
 """
 reduce.py
 
-Simple wrapper that mimics some of Hadoop's behavior during the Map step of a
+Simple wrapper that mimics some of Hadoop's behavior during the Reduce step of a
 MapReduce computation.
 """
 
@@ -262,6 +262,7 @@ if tot > 0:
 
     # Write out all the tasks to files within 'taskDir'
     ofhs = {}
+
     for inp in inps:
         with openex(inp) as fh:
             for ln in fh:
@@ -304,7 +305,7 @@ if tot > 0:
                 os.remove(sort_err_fn)
 
         sortPool = multiprocessing.Pool(num_processes)
-        r = sortPool.map_async(do_sort, task_names)
+        r = sortPool.map_async(do_sort, ofhs.keys())
         while not r.ready():
             r.wait(1)
         check_fail_queue()
@@ -336,7 +337,7 @@ if tot > 0:
 
     reduce_pool = multiprocessing.Pool(num_processes)
     outfns = []
-    r = reduce_pool.map_async(do_reduce, task_names, callback=outfns.extend)
+    r = reduce_pool.map_async(do_reduce, ofhs.keys(), callback=outfns.extend)
     while not r.ready():
         r.wait(1)
     check_fail_queue()
@@ -367,7 +368,7 @@ if tot > 0:
 
         split_pool = multiprocessing.Pool(num_processes)
         k2fns = []
-        r = split_pool.map_async(do_split, task_names, callback=k2fns.extend)
+        r = split_pool.map_async(do_split, ofhs.keys(), callback=k2fns.extend)
         while not r.ready():
             r.wait(1)
         check_fail_queue()
