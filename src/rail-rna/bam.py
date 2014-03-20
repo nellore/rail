@@ -109,8 +109,8 @@ reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
 sorted_rnames = [reference_index.string_to_rname['%012d' % i]
                     for i in xrange(len(reference_index.string_to_rname) - 1)]
 
-(output_filename, output_stream, output_url,
-    last_rname, last_sample_label) = [None]*5
+(output_path, output_filename, output_stream, output_url,
+    last_rname, last_sample_label) = [None]*6
 if args.out is not None:
     output_url = url.Url(args.out)
     if output_url.isLocal():
@@ -118,6 +118,7 @@ if args.out is not None:
         try: os.makedirs(output_url.toUrl())
         except: pass
     else:
+        mover = filemover.FileMover(args=args)
         # Set up temporary destination
         import tempfile
         temp_dir_path = tempfile.mkdtemp()
@@ -127,17 +128,18 @@ while True:
     line = sys.stdin.readline()
     if not line:
         last_output_filename = output_filename
+        last_output_path = output_path
         move_temporary_file = True
     else:
         tokens = line.rstrip().split('\t')
         sample_label, rname, pos, qname, flag = tokens[:5]
         rname = reference_index.string_to_rname[rname]
-    if move_temporary_file and not output_url.isLocal():
-        mover = filemover.FileMover(args=args)
+    if move_temporary_file and last_sample_label is not None \
+        and not output_url.isLocal():
         # Remove .temp in output filename
-        mover.put(last_output_filename, 
-            output_url.plus(last_output_filename[:-5]))
-        os.remove(last_output_filename)
+        mover.put(last_output_path, 
+            output_url.plus(last_output_filename))
+        os.remove(last_output_path)
         move_temporary_file = False
     if not line: break
     if ((sample_label != last_sample_label or 
@@ -161,21 +163,19 @@ while True:
             else:
                 out_rname = rname
             last_output_filename = output_filename
+            last_output_path = output_path
+            output_filename = args.bam_basename + '.' + sample_label \
+                    + (('.' + out_rname) if args.output_by_chromosome else ''
+                        ) + ('.sam' if args.output_sam else '.bam')
             if output_url.isLocal():
-                output_filename = os.path.join(args.out,
-                    args.bam_basename + '.' + sample_label
-                    + (('.' + out_rname) if args.output_by_chromosome else '')
-                    + ('.sam' if args.output_sam else '.bam'))
+                output_path = os.path.join(args.out, output_filename)
             else:
-                output_filename = os.path.join(temp_dir_path,
-                    args.bam_basename + '.' + sample_label
-                    + (('.' + out_rname) if args.output_by_chromosome else '')
-                    + ('.sam' if args.output_sam else '.bam')
-                    + '.temp')
-                # Move last output filename
-                move_temporary_file = True
-            output_stream = open(output_filename, 'w') if args.output_sam \
-                else open(output_filename, 'wb')
+                output_path = os.path.join(temp_dir_path, output_filename)
+                if last_output_filename is not None:
+                    # Move last output filename iff there is one
+                    move_temporary_file = True
+            output_stream = open(output_path, 'w') if args.output_sam \
+                else open(output_path, 'wb')
         else:
             # Default --out is stdout
             output_stream = sys.stdout

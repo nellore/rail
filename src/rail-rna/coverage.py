@@ -128,7 +128,7 @@ if output_url.isLocal():
     try: os.makedirs(output_url.toUrl())
     except: pass
 bed_stream = open(bed_filename, 'w')
-
+mover = filemover.FileMover(args=args)
 while True:
     line = sys.stdin.readline()
     if line:
@@ -140,8 +140,8 @@ while True:
         assert rname in reference_index.string_to_rname, \
             'RNAME number string "%s" not in Bowtie index.' % rname
         rname = reference_index.string_to_rname[rname]
-    if not line or (sample_label != last_sample_label 
-        and last_sample_label is not None):
+    if (not line or sample_label != last_sample_label) \
+        and last_sample_label is not None:
         # All of a sample's coverage entries have been read
         if last_coverage != 0 \
             and last_pos < reference_index.rname_lengths[last_rname]:
@@ -182,11 +182,10 @@ while True:
                 + ' succeeded.' )
         if not output_url.isLocal():
             # bigBed must be uploaded to URL and deleted
-            mover = filemover.FileMover(args=args)
             mover.put(bigbed_file_path, output_url.plus(bigbed_filename))
             os.remove(bigbed_file_path)
         bed_stream = open(bed_filename, 'w')
-    elif sample_label == last_sample_label:
+    elif last_sample_label is not None and sample_label == last_sample_label:
         if last_rname == rname:
             if last_coverage != 0:
                 '''Add to histogram only if coverage > 0 to minimize

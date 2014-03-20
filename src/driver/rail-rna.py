@@ -220,7 +220,7 @@ if mode == 'emr':
         raise RuntimeError("Could not parse --hadoop-version '%s'" % hadoopVersion)
     elif len(vers) >= 3 and vers[:3] == [1, 0, 3]:
         emrArgs.append("--hadoop-version=1.0.3")
-        emrArgs.append("--ami-version 2.4")
+        emrArgs.append("--ami-version 2.4.2")
     elif len(vers) >= 3 and vers[:3] == [0, 20, 205]:
         emrArgs.append("--hadoop-version=0.20.205")
         emrArgs.append("--ami-version 2.0")
@@ -371,7 +371,13 @@ def buildFlow(allSteps, stepInfo, inp, out, inter, manifest):
             else:
                 indirs.append(inp)
         outdir = inter.plus(cur)
-        steps.append(cl(indirs, outdir, tconf, gconf))
+        if cl is not rail_rna_pipeline.RealignStep:
+            steps.append(cl(indirs, outdir, tconf, gconf))
+        else:
+            '''Must cache intron index: see 
+            http://docs.aws.amazon.com/ElasticMapReduce/latest/
+            DeveloperGuide/emr-plan-input-distributed-cache.html'''
+            steps.append(cl(indirs, outdir, tconf, gconf, cache=inter.plus('index/intron_index.tar.gz#intron_index')))
     return steps
 
 if intermediate is None:
@@ -393,7 +399,7 @@ if mode == 'local':
     toolConf = ToolConfigLocal(appName, True)
     refConf, fileConf = None, None
     if useRef:
-        refConf = RefConfigLocal(reference.toUrl(), args.igenomes, True)
+        refConf = RefConfigLocal(reference.toUrl(), intermediate.toUrl(), args.igenomes, True)
     if useManifest:
         fileConf = FileConfigLocal(manifest, True)
     localConf = LocalConfig(args)

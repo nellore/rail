@@ -92,6 +92,8 @@ ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
 import sys
 import os
+# So intron index is accessible
+sys.path.append(os.path.dirname(__file__))
 import site
 import threading
 import string

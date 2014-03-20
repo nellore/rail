@@ -106,7 +106,7 @@ for sample_label in sample_labels:
         print >>output_stream, '%s\t%d' % (sample_label,
             normalization_factors[sample_label])
     else:
-        print >>output_stream, '%s\tN/A\n' % sample_label
+        print >>output_stream, '%s\tN/A' % sample_label
 
 if args.out is not None:
     output_stream.close()

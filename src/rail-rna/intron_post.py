@@ -49,6 +49,7 @@ import sys
 import site
 import subprocess
 import argparse
+import tarfile
 import atexit
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -65,7 +66,7 @@ parser = argparse.ArgumentParser(description=__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument(\
     '--out', metavar='URL', type=str, required=False,
-    default='.',
+    default='./',
     help='Bowtie index files are written to this URL. DEFAULT IS CURRENT '
          ' WORKING DIRECTORY.')
 parser.add_argument('--fudge', type=int, required=False, default=1, 
@@ -120,7 +121,7 @@ else:
     index_basename = os.path.join(temp_dir_path, 'index/intron')
 last_line, last_line_type, max_read_size, last_rname = [None]*4
 write_sequence = False
-fasta_file = os.path.join(output_url.toUrl(), 'temp.fa')
+fasta_file = os.path.join(temp_dir_path, 'temp.fa')
 with open(fasta_file, 'w') as fasta_stream:
     while True:
         line = sys.stdin.readline().rstrip()
@@ -263,12 +264,17 @@ sys.stderr.flush()
 if bowtie_build_process.returncode:
     RuntimeError('Bowtie index construction failed.')
 if not output_url.isLocal():
-    # Upload index files and clean up
+    # Compress index files
+    intron_index_filename = 'intron_index.tar.gz'
+    intron_index_path = os.path.join(temp_dir_path, intron_index_filename)
+    index_path = os.path.join(temp_dir_path, 'index')
+    tar = tarfile.open(intron_index_path, 'w:gz')
+    for index_file in os.listdir(index_path):
+        tar.add(os.path.join(index_path, index_file))
+    tar.close()
+    # Upload compressed index
     mover = filemover.FileMover(args=args)
-    for index_file in os.listdir(os.path.join(temp_dir_path, 'index')):
-        index_file_path = os.path.join(temp_dir_path, 'index', index_file)
-        mover.put(index_file_path, output_url.plus(index_file))
-        os.remove(index_file_path)
+    mover.put(intron_index_path, output_url.plus(intron_index_filename))
 
 print >>sys.stderr, 'DONE with intron_post.py; in = %d; time=%0.3f s' \
                         % (_input_line_count, time.time() - start_time)

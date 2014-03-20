@@ -79,7 +79,8 @@ class Step(object):
         mapper=None,
         reducer=None,
         lineByLine=False,
-        multipleOutput=False):
+        multipleOutput=False,
+        cache=None):
         
         self.name = name
         self.inputs = inps
@@ -89,6 +90,7 @@ class Step(object):
         self.reducer = reducer
         self.lineByLine = lineByLine
         self.multipleOutput = multipleOutput
+        self.cache = cache
         self.inputFormat = None
         self.outputFormat = None
     
@@ -185,6 +187,9 @@ fi
             endArgs.append('"-mapper", "%s",' % self.mapper)
         else:
             endArgs.append('"-mapper", "cat",')
+
+        if self.cache is not None:
+            begArgs.append('"-archives", "%s",' % self.cache.toUrl())
         
         if self.reducer is not None:
             endArgs.append('"-reducer", "%s",' % self.reducer)

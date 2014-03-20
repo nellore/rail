@@ -91,13 +91,13 @@ while True:
             output_coverage = True
         if pos != last_pos:
             output_coverage = True
-    if not line or (output_coverage and last_pos is not None):
+    if (not line or output_coverage) and last_pos is not None:
         print 'coverage\t%s\t%s\t%012d\t%d' \
             % (last_sample_label, last_rname, last_pos, coverage_count)
         output_line_count += 1
         output_coverage = False
-    if not line or (partition_id != last_partition_id 
-        and last_partition_id is not None):
+    if (not line or partition_id != last_partition_id) \
+        and last_partition_id is not None:
         if args.partition_stats:
             time_difference = time.time() - bin_start_time
             print 'partition_stats\t%d\t%s' % (bin_diff_count, 

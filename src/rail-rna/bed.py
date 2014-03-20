@@ -79,7 +79,8 @@ import time
 start_time = time.time()
 
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
-output_filename, output_stream, output_url, last_sample_label = [None]*4
+(output_filename, last_output_filename, output_path, output_stream, output_url,
+    last_sample_label) = [None]*6
 if args.out is not None:
     output_url = url.Url(args.out)
     if output_url.isLocal():
@@ -87,6 +88,7 @@ if args.out is not None:
         try: os.makedirs(output_url.toUrl())
         except: pass
     else:
+        mover = filemover.FileMover(args=args)
         # Set up temporary destination
         import tempfile
         temp_dir_path = tempfile.mkdtemp()
@@ -97,6 +99,7 @@ while True:
     line = sys.stdin.readline().rstrip()
     if not line:
         last_output_filename = output_filename
+        last_output_path = output_path
         move_temporary_file = True
     else:
         (sample_label, chrom,
@@ -105,12 +108,11 @@ while True:
             block_sizes, block_starts) \
             = line.split('\t')
         chrom = reference_index.string_to_rname[chrom]
-    if move_temporary_file and not output_url.isLocal():
-        mover = filemover.FileMover(args=args)
-        # Remove .temp in output filename
-        mover.put(last_output_filename,
-            output_url.plus(last_output_filename[:-5]))
-        os.remove(last_output_filename)
+    if move_temporary_file and last_sample_label is not None \
+        and not output_url.isLocal():
+        mover.put(last_output_path,
+            output_url.plus(last_output_filename))
+        os.remove(last_output_path)
         move_temporary_file = False
     if not line: break
     if (sample_label != last_sample_label and args.out is not None) \
@@ -122,15 +124,16 @@ while True:
             Otherwise, write to a temporary file that will later be uploaded to
             the destination.'''
             last_output_filename = output_filename
+            last_output_path = output_path
+            output_filename = args.bed_basename  + '.' + sample_label + '.bed'
             if output_url.isLocal():
-                output_filename = os.path.join(args.out,
-                    args.bed_basename  + '.' + sample_label + '.bed')
+                output_path = os.path.join(args.out, output_filename)
             else:
-                output_filename = os.path.join(temp_dir_path, args.bed_basename
-                    + '.' + sample_label + '.bed')
-                # Move last output filename
-                move_temporary_file = True
-            output_stream = open(output_filename, 'w')
+                output_path = os.path.join(temp_dir_path, output_filename)
+                if last_output_filename is not None:
+                    # Move last output filename iff there is one
+                    move_temporary_file = True
+            output_stream = open(output_path, 'w')
         else:
             # Default --out is stdout
             output_stream = sys.stdout

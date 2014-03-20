@@ -6,7 +6,7 @@
 #
 
 VER=`cat VERSION`
-ARNAME=rail-${VER}.tar.gz
+ARNAME=rail-rna-${VER}.tar.gz
 cd src && make clean && cd ..
 
 make -C hadoop

@@ -129,7 +129,9 @@ class BowtieIndexReference(object):
         self.lengths = lengths
         self.starting_offsets = starting_offsets
         self.refnames = refnames
-        self.ref_id_to_offset = {self.refnames[i]: i for i in xrange(len(self.refnames))}
+        self.ref_id_to_offset = {}
+        for i in xrange(len(self.refnames)):
+            self.ref_id_to_offset[self.refnames[i]] = i
 
         # To facilitate sorting reference names in order of descending length
         sorted_rnames = sorted(self.rname_lengths.items(), 

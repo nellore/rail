@@ -43,8 +43,6 @@ def addArgs(parser):
         help='Suppress introns whose anchor significance falls below this '
              'value from all output')
     parser.add_argument(\
-        '--bowtie-exe', metavar='STR', type=str, help='Bowtie executable to use. Must exist at this path on all the cluster nodes.')
-    parser.add_argument(\
         '--bowtie-args', metavar='STR', type=str, help='Arguments to pass to Bowtie for obtaining final SAM/BAM output.')
     parser.add_argument(\
         '--downsample-reads', metavar='FRACTION', type=float, default=1.0, help='Fraction of reads to randomly downsample to.')
@@ -120,7 +118,6 @@ class Rail_RNAConfig(object):
         q = self.quality = args.quality
         if q != "phred64" and q != "phred33" and q != "solexa64":
             raise RuntimeError("Unknown argument for --quality: '%s'" % q)
-        self.bowtieExe = args.bowtie_exe
         l = self.readletLen = args.readlet_length
         if l < 4:
             raise RuntimeError("Argument for --readlet-length must be >= 4; was %d" % l)

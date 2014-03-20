@@ -161,7 +161,8 @@ class IntronPostStep(pipeline.Step):
     def __init__(self, inps, output, _, gconf):
         reducer_str = """
             python %%BASE%%/src/rail-rna/intron_post.py
-                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
+                --bowtie-build-exe=%%BOWTIE-BUILD%%
+                --bowtie-idx=%%REF_BOWTIE_INDEX%%
                 --out=%s/index
             """ % gconf.intermediate
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
@@ -186,16 +187,16 @@ class MergeStep(pipeline.Step):
 
 
 class RealignStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, gconf):
+    def __init__(self, inps, output, tconf, gconf, cache=None):
         mapper_str = """
             python %%BASE%%/src/rail-rna/realign.py
                 --original-idx=%%REF_BOWTIE_INDEX%% 
-                --bowtie-idx=%s/index/intron
+                --bowtie-idx=%%REF_INTRON_INDEX%%
                 --bowtie-exe=%%BOWTIE%%
                 --partition-length %d
                 --exon-differentials 
                 --verbose %s
-                -- %s""" % (gconf.intermediate, tconf.partitionLen,
+                -- %s""" % (tconf.partitionLen,
                             '--stranded' if tconf.stranded else '',
                             tconf.bowtieArgs())
         mapper_str = re.sub('\s+', ' ', mapper_str.strip())
@@ -204,7 +205,9 @@ class RealignStep(pipeline.Step):
             output,
             name="Realign",
             mapper=mapper_str,
-            multipleOutput=True)
+            multipleOutput=True,
+            cache=cache
+            )
 
 
 class WalkPrenormStep(pipeline.Step):

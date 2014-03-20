@@ -101,7 +101,7 @@ while True:
             and reverse_strand_string == last_reverse_strand_string):
             write_line = True
     if not line: write_line = True
-    if write_line:
+    if write_line and last_rname is not None:
         start_position = last_pos - max_left_overhang - 1
         end_position = last_end_pos + max_right_overhang - 1
         print ('bed\t%s\t%s\t%012d\t%012d\tmaximin_anchor_size=%d;' 

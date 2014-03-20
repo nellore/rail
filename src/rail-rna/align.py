@@ -620,10 +620,88 @@ def introns_from_read(reference_index, read_seq, readlets,
     reversed_complement_read_seq = read_seq[::-1].translate(
             _reversed_complement_translation_table
         )
+    read_seq_size = len(read_seq)
+    composed_and_capped = {}
+    # Add caps
+    for strand in composed:
+        rname, reverse_strand = strand
+        if reverse_strand:
+            '''Handle reverse-strand reads the same way forward strands are
+            handled.'''
+            current_read_seq = reversed_complement_read_seq
+        else:
+            current_read_seq = read_seq
+        new_prefix, new_suffix = [], []
+        prefix_pos, prefix_end_pos, prefix_displacement = composed[strand][0]
+        suffix_pos, suffix_end_pos, suffix_displacement = composed[strand][-1]
+        if prefix_displacement:
+            if global_alignment.score_matrix(
+                        current_read_seq[:prefix_displacement],
+                        reference_index.get_stretch(rname,
+                            prefix_pos - prefix_displacement - 1,
+                            prefix_displacement)
+                    )[-1, -1] >= min_seq_similarity * prefix_displacement:
+                new_prefix = [(prefix_pos - prefix_displacement,
+                                    prefix_pos, 0)]
+            elif search_for_caps \
+                and prefix_displacement >= min_cap_query_size \
+                and cap_search_window_size > 0:
+                '''If region shouldn't be filled and region to the left isn't
+                too small, search for prefix.'''
+                search_pos = max(0, prefix_pos - 1 - cap_search_window_size)
+                search_window = reference_index.get_stretch(
+                        rname,
+                        search_pos,
+                        prefix_pos - 1 - search_pos
+                    )
+                prefix = re.search(current_read_seq[:min_cap_query_size][::-1],
+                                    search_window[::-1])
+                if prefix is not None:
+                    new_prefix_pos = prefix_pos - prefix.end()
+                    new_prefix = [(new_prefix_pos,
+                                        new_prefix_pos + min_cap_query_size,
+                                        0)]
+        unmapped_displacement = (suffix_end_pos - suffix_pos
+                                    + suffix_displacement)
+        unmapped_base_count = read_seq_size - unmapped_displacement
+        if unmapped_base_count > 0:
+            if global_alignment.score_matrix(
+                                current_read_seq[unmapped_displacement:],
+                                reference_index.get_stretch(rname,
+                                    suffix_end_pos - 1, 
+                                    unmapped_base_count)
+                            )[-1, -1] >= (min_seq_similarity
+                                             * unmapped_base_count):
+                new_suffix = [(suffix_end_pos,
+                                suffix_end_pos + unmapped_base_count,
+                                unmapped_displacement)]
+            elif search_for_caps \
+                and unmapped_base_count >= min_cap_query_size \
+                and cap_search_window_size > 0:
+                '''If region shouldn't be filled and region to the right isn't
+                too small, search for suffix.'''
+                search_pos = suffix_end_pos - 1
+                search_window = reference_index.get_stretch(
+                        rname,
+                        search_pos,
+                        min(cap_search_window_size, 
+                             reference_index.rname_lengths[rname] - search_pos)
+                    )
+                suffix = re.search(
+                                current_read_seq[-min_cap_query_size:],
+                                search_window
+                            )
+                if suffix is not None:
+                    new_suffix_pos = suffix_end_pos + suffix.start()
+                    new_suffix = [(new_suffix_pos,
+                                    new_suffix_pos + min_cap_query_size,
+                                    read_seq_size - min_cap_query_size)]
+        composed_and_capped[strand] = (new_prefix + composed[strand]
+                                        + new_suffix)
     introns = {}
     '''To make continuing outer loop from inner loop below possible.'''
     continue_strand_loop = False
-    for strand in composed:
+    for strand in composed_and_capped:
         introns[strand] = []
         rname, reverse_strand = strand
         if reverse_strand:
@@ -632,48 +710,10 @@ def introns_from_read(reference_index, read_seq, readlets,
             current_read_seq = reversed_complement_read_seq
         else:
             current_read_seq = read_seq
-        read_seq_size = len(read_seq)
-        last_pos, last_end_pos, last_displacement = composed[strand][0]
-        loop_start_index = 1
-        if last_displacement:
-            '''If last_displacement isn't 0, check if region to the left should
-            be filled.'''
-            if global_alignment.score_matrix(
-                        current_read_seq[:last_displacement],
-                        reference_index.get_stretch(rname,
-                            last_pos - last_displacement - 1,
-                            last_displacement)
-                    )[-1, -1] >= min_seq_similarity * last_displacement:
-                # Fill
-                last_pos -= last_displacement
-                last_displacement = 0
-            elif search_for_caps and last_displacement >= min_cap_query_size \
-                and cap_search_window_size > 0:
-                '''If region shouldn't be filled and region to the left isn't
-                too small, search for it.'''
-                search_pos = max(0, last_pos - 1 - cap_search_window_size)
-                search_window = reference_index.get_stretch(
-                        rname,
-                        search_pos,
-                        last_pos - 1 - search_pos
-                    )
-                prefix = re.search(current_read_seq[:last_displacement][::-1],
-                                    search_window[::-1])
-                if prefix is not None:
-                    if prefix.start() != 0:
-                        # If the cap is found, tack on an extra EC.
-                        last_pos -= prefix.end()
-                        last_end_pos = last_pos + last_displacement
-                        last_displacement = 0
-                        loop_start_index = 0
-                    else:
-                        '''Merge ECs (this should have been taken care of by
-                        DP filling, but just in case....)'''
-                        last_pos -= last_displacement
-                        last_displacement = 0
-                        loop_start_index = 1
+        last_pos, last_end_pos, last_displacement \
+            = composed_and_capped[strand][0]
         unmapped_displacement = last_displacement + last_end_pos - last_pos
-        for pos, end_pos, displacement in composed[strand][loop_start_index:]:
+        for pos, end_pos, displacement in composed_and_capped[strand][1:]:
             next_unmapped_displacement = displacement + end_pos - pos
             if last_displacement >= displacement or \
                 unmapped_displacement >= next_unmapped_displacement or \
@@ -714,7 +754,19 @@ def introns_from_read(reference_index, read_seq, readlets,
             discrepancy = reference_distance - read_distance
             call_exon, call_intron = False, False
             if not read_distance:
-                if pos - last_end_pos <= 0:
+                if pos - last_end_pos == 0:
+                    '''Example case handled:
+                                        EC #1                   EC #2
+                    Read       |=====================|=====================|
+                                                 
+                    Reference ...====================|====================...    
+                                      EC #1                   EC #2
+                                      (EC #1 and #2 are unseparated on
+                                        read and reference)
+                    The ECs should be merged.'''
+                    unmapped_displacement = end_pos - pos + displacement
+                    last_end_pos = end_pos
+                elif pos - last_end_pos < 0:
                     '''Example case handled:
                                         EC #1                   EC #2
                     Read       |=====================|=====================|
@@ -854,50 +906,6 @@ def introns_from_read(reference_index, read_seq, readlets,
         if continue_strand_loop:
             continue_strand_loop = False
             continue
-        '''Check to see if region to right of final EC needs filling. The
-        method for determining unmapped_base_count may give a negative result.
-        This pathological case is thrown out by skipping to the next strand.
-        If the fill criterion is not met, search for the residual unmapped
-        bases downstream.'''
-        unmapped_base_count = read_seq_size - unmapped_displacement
-        if unmapped_base_count < 0:
-            introns[strand] = []
-            continue
-        if unmapped_base_count > 0:
-            if global_alignment.score_matrix(
-                                current_read_seq[unmapped_displacement:],
-                                reference_index.get_stretch(rname,
-                                    last_end_pos - 1, 
-                                    unmapped_base_count)
-                            )[-1, -1] >= (min_seq_similarity
-                                             * unmapped_base_count):
-                # Fill
-                last_end_pos += unmapped_base_count
-            elif search_for_caps \
-                and unmapped_base_count >= min_cap_query_size \
-                and cap_search_window_size > 0:
-                '''If region shouldn't be filled and region to the right isn't
-                too small, search for it.'''
-                search_pos = last_end_pos - 1
-                search_window = reference_index.get_stretch(
-                        rname,
-                        search_pos,
-                        min(cap_search_window_size, 
-                             reference_index.rname_lengths[rname] - search_pos)
-                    )
-                suffix = re.search(
-                                current_read_seq[unmapped_displacement:],
-                                search_window
-                            )
-                if suffix is not None:
-                    if suffix.start() != 0:
-                        # Call intron
-                        introns[strand].append(
-                                (last_end_pos, last_end_pos + suffix.start())
-                            )
-                        last_pos  = last_end_pos + suffix.start()
-                    # If suffix.start() is 0, the next assignment merges ECs
-                    last_end_pos = last_pos + unmapped_base_count
     strands_to_remove = []
     for strand in introns:
         if introns[strand] == []:
@@ -1477,16 +1485,16 @@ def handle_temporary_directory(archive, temp_dir_path):
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     bowtie_index_base='genome', bowtie_args=None,
-    bowtie_junction_args="-v 0 -a -m 80", temp_dir_path=tempfile.mkdtemp(),
-    bin_size=10000, verbose=False, read_filename='reads.tsv',
-    readlet_filename='readlets.tsv', unmapped_filename='unmapped.tsv',
-    exon_differentials=True, exon_intervals=False, end_to_end_sam=True,
-    stranded=False, min_readlet_size=8, max_readlet_size=25,
-    readlet_interval=5, capping_fraction=.75, max_discrepancy=2,
-    min_seq_similarity=0.85, min_intron_size=5, max_intron_size=100000,
-    intron_partition_overlap=20, global_alignment=GlobalAlignment(),
-    report_multiplier=1.2, search_for_caps=True, min_cap_query_size=8,
-    cap_search_window_size=1000):
+    bowtie_junction_args="-t --sam-nohead --startverbose -v 0 -a -m 80",
+    temp_dir_path=tempfile.mkdtemp(), bin_size=10000, verbose=False,
+    read_filename='reads.tsv', readlet_filename='readlets.tsv',
+    unmapped_filename='unmapped.tsv', exon_differentials=True,
+    exon_intervals=False, end_to_end_sam=True, stranded=False,
+    min_readlet_size=8, max_readlet_size=25, readlet_interval=5,
+    capping_fraction=.75, max_discrepancy=2, min_seq_similarity=0.85,
+    min_intron_size=5, max_intron_size=100000, intron_partition_overlap=20,
+    global_alignment=GlobalAlignment(), report_multiplier=1.2,
+    search_for_caps=True, min_cap_query_size=8, cap_search_window_size=1000):
     """ Runs Rail-RNA-align.
 
         Two passes of Bowtie are run. The first attempts to align full reads.

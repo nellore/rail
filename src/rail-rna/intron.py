@@ -421,7 +421,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         else:
             # If there's no next line, handle the final partition
             handle_partition = True
-        if handle_partition:
+        if handle_partition and len(candidate_introns):
             if verbose:
                 print >> sys.stderr, 'For partition %s:[%d, %d)' \
                     % (last_partition_id, last_partition_start,

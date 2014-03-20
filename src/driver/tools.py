@@ -19,21 +19,22 @@ site.addsitedir(os.path.join(base_path, "util"))
 
 import path
 
-toolDescs = { 'bowtie'      : ['BOWTIE'],
-              'sra-toolkit' : ['SRA_TOOLKIT'],
-              'R'           : ['R'],
-              'bedToBigBed' : ['BEDTOBIGBED', 'KENTTOOLS'],
-              'samtools'    : ['SAMTOOLS'] }
+toolDescs = { 'bowtie'       : ['BOWTIE'],
+              'bowtie-build' : ['BOWTIE_BUILD'],
+              'sra-toolkit'  : ['SRA_TOOLKIT'],
+              'R'            : ['R'],
+              'bedToBigBed'  : ['BEDTOBIGBED', 'KENTTOOLS'],
+              'samtools'     : ['SAMTOOLS'] }
 
 # The following tools are installed in EMR mode with apt-get, and therefore
 # can be found in the PATH on the EMR machines.  All other tools get placed in
 # the EMR local dir by the bootstrap actions.
-emrPathTools = set(['bowtie', 'samtools', 'sra-toolkit', 'R'])
+emrPathTools = set(['bowtie', 'bowtie-build', 'samtools', 'sra-toolkit', 'R'])
 
 def checkLocalTool(appName, exe, envs, check=True):
     """ Check for the existence of an executable in the local environment.
         First check if the user specified a location in an environment
-        variable.  If so, try to use that.  Otherwise, look in the PATH. """
+        variable. If so, try to use that. Otherwise, look in the PATH. """
     assert appName is not None
     assert exe is not None
     for env in envs:
