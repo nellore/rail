@@ -1,6 +1,9 @@
 import os
 import struct
 import mmap
+from operator import itemgetter
+from collections import defaultdict
+from bisect import bisect_right
 
 
 class BowtieIndexReference(object):
@@ -17,13 +20,12 @@ class BowtieIndexReference(object):
         # Open file handles
         if os.path.exists(idx_prefix + '.3.ebwt'):
             # Small index (32-bit offsets)
-            fh1 = open(idx_prefix + '.1.ebwt', 'rb') # for ref names
-            fh3 = open(idx_prefix + '.3.ebwt', 'rb') # for stretch extents
-            fh4 = open(idx_prefix + '.4.ebwt', 'rb') # for unambiguous sequence
+            fh1 = open(idx_prefix + '.1.ebwt', 'rb')  # for ref names
+            fh3 = open(idx_prefix + '.3.ebwt', 'rb')  # for stretch extents
+            fh4 = open(idx_prefix + '.4.ebwt', 'rb')  # for unambiguous sequence
             sz, struct_unsigned = 4, struct.Struct('I')
         else:
-            raise RuntimeError('No Bowtie index files with prefix "%s"' 
-                % idx_prefix)
+            raise RuntimeError('No Bowtie index files with prefix "%s"' % idx_prefix)
 
         #
         # Parse .1.bt2 file
@@ -79,10 +81,6 @@ class BowtieIndexReference(object):
             refnames.append(refname.split()[0])
         assert len(refnames) == nref
 
-        # Create dictionary for storing reference lengths
-        self.rname_lengths = {}
-        for i, reference_name in enumerate(refnames):
-            self.rname_lengths[reference_name] = reference_length_list[i]
         #
         # Parse .3.bt2 file
         #
@@ -91,51 +89,46 @@ class BowtieIndexReference(object):
 
         nrecs = struct_unsigned.unpack(fh3.read(sz))[0]
 
-        running_unambig_preceding, running_length = 0, 0
-        recs = []
-        starting_offsets = []
-        unambig_preceding, lengths = [], []
+        running_unambig, running_length = 0, 0
+        self.recs = defaultdict(list)
+        self.offset_in_ref = defaultdict(list)
+        self.unambig_preceding = defaultdict(list)
+        lengths = {}
 
+        ref_id, ref_namenrecs_added = 0, None
         for i in xrange(nrecs):
             off = struct_unsigned.unpack(fh3.read(sz))[0]
             ln = struct_unsigned.unpack(fh3.read(sz))[0]
-            first = ord(fh3.read(1)) != 0
-            recs.append((off, ln, first))
-            if first:
-                starting_offsets.append(len(recs)-1)
-                unambig_preceding.append(running_unambig_preceding)
+            first_of_chromosome = ord(fh3.read(1)) != 0
+            if first_of_chromosome:
+                ref_name = refnames[ref_id]
+                ref_id += 1
                 if i > 0:
-                    lengths.append(running_length)
+                    lengths[ref_name] = running_length
                 running_length = 0
+            assert ref_name is not None
+            self.recs[ref_name].append((off, ln, first_of_chromosome))
+            self.offset_in_ref[ref_name].append(running_length)
+            self.unambig_preceding[ref_name].append(running_unambig)
             running_length += (off + ln)
-            running_unambig_preceding += ln
+            running_unambig += ln
 
-        lengths.append(running_length)
-        starting_offsets.append(len(recs))
-        tot_unambig_len = running_unambig_preceding
-        assert len(recs) == nrecs
+        lengths[ref_name] = running_length
+        assert nrecs == sum(map(len, self.recs.itervalues()))
 
         #
         # Memory-map the .4.bt2 file
         #
-        ln_bytes = (tot_unambig_len + 3) // 4
+        ln_bytes = (running_unambig + 3) // 4
         self.fh4mm = mmap.mmap(fh4.fileno(), ln_bytes, flags=mmap.MAP_SHARED, prot=mmap.PROT_READ)
 
-        # These are per-unambiguous-stretch
-        self.recs = recs
-
         # These are per-reference
-        self.unambig_preceding = unambig_preceding
         self.lengths = lengths
-        self.starting_offsets = starting_offsets
         self.refnames = refnames
-        self.ref_id_to_offset = {}
-        for i in xrange(len(self.refnames)):
-            self.ref_id_to_offset[self.refnames[i]] = i
 
         # To facilitate sorting reference names in order of descending length
-        sorted_rnames = sorted(self.rname_lengths.items(), 
-                key=lambda rname_and_length: rname_and_length[1], reverse=True)
+        sorted_rnames = sorted(self.lengths.items(),
+                               key=lambda x: itemgetter(1)(x), reverse=True)
         self.rname_to_string = {}
         self.string_to_rname = {}
         for i, (rname, _) in enumerate(sorted_rnames):
@@ -148,27 +141,36 @@ class BowtieIndexReference(object):
         self.string_to_rname[unmapped_string] = '*'
 
     def get_stretch(self, ref_id, ref_off, count):
-        assert ref_id in self.ref_id_to_offset
-        ref_idx = self.ref_id_to_offset[ref_id]
-        rec_i, rec_f = self.starting_offsets[ref_idx], self.starting_offsets[ref_idx + 1]
-        cur, off = 0, 0
-        buf_off = self.unambig_preceding[ref_idx]
+        """
+        Return a stretch of characters from the reference, retrieved
+        from the Bowtie index.
+
+        @param ref_id: name of ref seq, up to & excluding whitespace
+        @param ref_off: offset into reference, 0-based
+        @param count: # of characters
+        @return: string extracted from reference
+        """
+        assert ref_id in self.recs
         stretch = []
+        starting_rec = bisect_right(self.offset_in_ref[ref_id], ref_off) - 1
+        assert starting_rec >= 0
+        off = self.offset_in_ref[ref_id][starting_rec]
+        buf_off = self.unambig_preceding[ref_id][starting_rec]
         # Naive to scan these records linearly; obvious speedup is binary search
-        for i in xrange(rec_i, rec_f):
-            off += self.recs[i][0]
+        for rec in self.recs[ref_id][starting_rec:]:
+            off += rec[0]
             while ref_off < off and count > 0:
                 stretch.append('N')
                 count -= 1
                 ref_off += 1
             if count == 0:
                 break
-            if ref_off < off + self.recs[i][1]:
+            if ref_off < off + rec[1]:
                 # stretch extends through part of the unambiguous stretch
                 buf_off += (ref_off - off)
             else:
-                buf_off += self.recs[i][1]
-            off += self.recs[i][1]
+                buf_off += rec[1]
+            off += rec[1]
             while ref_off < off and count > 0:
                 buf_elt = buf_off >> 2
                 shift_amt = (buf_off & 3) << 1
@@ -178,6 +180,8 @@ class BowtieIndexReference(object):
                 ref_off += 1
             if count == 0:
                 break
+        # If the requested stretch went past the last unambiguous
+        # character in the chromosome, pad with Ns
         while count > 0:
             count -= 1
             stretch.append('N')
