@@ -140,6 +140,9 @@ class BowtieIndexReference(object):
         self.rname_to_string['*'] = unmapped_string
         self.string_to_rname[unmapped_string] = '*'
 
+        # For compatibility
+        self.rname_lengths = self.lengths
+
     def get_stretch(self, ref_id, ref_off, count):
         """
         Return a stretch of characters from the reference, retrieved
@@ -283,5 +286,13 @@ CA
                 self.assertEqual('NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNA', ref.get_stretch('short_name4', 1, 40))
                 self.assertEqual('AAAA', ref.get_stretch('short_name4', 41, 4))
                 self.assertEqual('NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNTT', ref.get_stretch('short_name4', 240, 42))
+
+            def test4(self):
+                ref = BowtieIndexReference(self.fa_fn_1)
+                # Test that all refname lengths are accurate
+                self.assertEqual(ref.rname_lengths['short_name1'], 81)
+                self.assertEqual(ref.rname_lengths['short_name4'], 282)
+                self.assertEqual(ref.rname_lengths['short_name2'], 80)
+                self.assertEqual(ref.rname_lengths['short_name3'], 2)
 
         unittest.main(argv=[sys.argv[0]])
