@@ -93,7 +93,7 @@ class BowtieIndexReference(object):
         self.recs = defaultdict(list)
         self.offset_in_ref = defaultdict(list)
         self.unambig_preceding = defaultdict(list)
-        lengths = {}
+        length = {}
 
         ref_id, ref_namenrecs_added = 0, None
         for i in xrange(nrecs):
@@ -101,10 +101,10 @@ class BowtieIndexReference(object):
             ln = struct_unsigned.unpack(fh3.read(sz))[0]
             first_of_chromosome = ord(fh3.read(1)) != 0
             if first_of_chromosome:
+                if i > 0:
+                    length[ref_name] = running_length
                 ref_name = refnames[ref_id]
                 ref_id += 1
-                if i > 0:
-                    lengths[ref_name] = running_length
                 running_length = 0
             assert ref_name is not None
             self.recs[ref_name].append((off, ln, first_of_chromosome))
@@ -113,7 +113,7 @@ class BowtieIndexReference(object):
             running_length += (off + ln)
             running_unambig += ln
 
-        lengths[ref_name] = running_length
+        length[ref_name] = running_length
         assert nrecs == sum(map(len, self.recs.itervalues()))
 
         #
@@ -123,11 +123,11 @@ class BowtieIndexReference(object):
         self.fh4mm = mmap.mmap(fh4.fileno(), ln_bytes, flags=mmap.MAP_SHARED, prot=mmap.PROT_READ)
 
         # These are per-reference
-        self.lengths = lengths
+        self.length = length
         self.refnames = refnames
 
         # To facilitate sorting reference names in order of descending length
-        sorted_rnames = sorted(self.lengths.items(),
+        sorted_rnames = sorted(self.length.items(),
                                key=lambda x: itemgetter(1)(x), reverse=True)
         self.rname_to_string = {}
         self.string_to_rname = {}
@@ -141,7 +141,7 @@ class BowtieIndexReference(object):
         self.string_to_rname[unmapped_string] = '*'
 
         # For compatibility
-        self.rname_lengths = self.lengths
+        self.rname_lengths = self.length
 
     def get_stretch(self, ref_id, ref_off, count):
         """
@@ -290,9 +290,9 @@ CA
             def test4(self):
                 ref = BowtieIndexReference(self.fa_fn_1)
                 # Test that all refname lengths are accurate
-                self.assertEqual(ref.rname_lengths['short_name1'], 81)
-                self.assertEqual(ref.rname_lengths['short_name4'], 282)
-                self.assertEqual(ref.rname_lengths['short_name2'], 80)
-                self.assertEqual(ref.rname_lengths['short_name3'], 2)
+                self.assertEqual(ref.length['short_name1'], 81)
+                self.assertEqual(ref.length['short_name4'], 282)
+                self.assertEqual(ref.length['short_name2'], 80)
+                self.assertEqual(ref.length['short_name3'], 2)
 
         unittest.main(argv=[sys.argv[0]])
