@@ -189,7 +189,7 @@ fi
             endArgs.append('"-mapper", "cat",')
 
         if self.cache is not None:
-            begArgs.append('"-archive", "%s",' % self.cache.toNativeUrl())
+            begArgs.append('"-archives", "%s",' % self.cache.toNativeUrl())
         
         if self.reducer is not None:
             endArgs.append('"-reducer", "%s",' % self.reducer)

@@ -96,7 +96,7 @@ class BamStep(pipeline.Step):
             inps,
             output,
             name="Bam",
-            aggr=(pipeline.Aggregation(None, 1, (2 if tconf.output_bam_by_chromosome else 1), 3)
+            aggr=(pipeline.Aggregation(1, None, (2 if tconf.output_bam_by_chromosome else 1), 3)
                   if gconf.out is not None else pipeline.Aggregation(1, None, 1, 2)),
             reducer=reducer_str)
 
@@ -153,7 +153,7 @@ class BedStep(pipeline.Step):
             inps,
             output,  # output URL
             name="Bed",  # namef
-            aggr=pipeline.Aggregation(None, 1, 1, 4),
+            aggr=pipeline.Aggregation(1, None, 1, 4),
             reducer=reducer_str)
 
 
@@ -164,7 +164,7 @@ class IntronPostStep(pipeline.Step):
                 --bowtie-build-exe=%%BOWTIE-BUILD%%
                 --bowtie-idx=%%REF_BOWTIE_INDEX%%
                 --out=%s/index
-            """ % gconf.intermediate
+            """ % gconf.out
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(IntronPostStep, self).__init__(
             inps,

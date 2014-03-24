@@ -68,7 +68,7 @@ class RecordHandler(object):
         # Open (note: may be gzipped)
         self.ofh = gzip.open(ofn, 'wb', self.gzip_level) if self.gzip_output else open(ofn, 'w')
     
-    def add(self, prefix, seq1, seq2=None, qual1=None, qual2=None):
+    def add(self, prefix1, seq1, prefix2=None, seq2=None, qual1=None, qual2=None):
         """ Add a record, which might necessitate opening a new file, and
             possibly pushing the old one. """
         
@@ -85,9 +85,9 @@ class RecordHandler(object):
             qual2 = 'I' * len(seq2)
         ofh = self.ofh
         if seq2 is None:
-            ofh.write('\t'.join([';'.join([prefix, str(self.n)]), seq1, qual1]))
+            ofh.write('\t'.join([';'.join([prefix1, str(self.n)]), seq1, qual1]))
         else:
-            ofh.write('\t'.join([';'.join([prefix, str(self.n)]), seq1, qual1, seq2, qual2]))
+            ofh.write('\t'.join([';'.join([prefix1, str(self.n)]), seq1, qual1, ';'.join([prefix2, str(self.n)]), seq2, qual2]))
         ofh.write('\n')
         
         self.n += 1
@@ -125,11 +125,8 @@ def preprocess(handler, lab, fh1, fh2=None, input_format="fastq", filename=None,
     fh1, fh2 = fhs
     
     n = 0
-    if include_filename:
-        # TODO: should be careful not to pass on any undesirable chars
-        filename_read_name = "FN:" + filename.replace(';', '_') + "|"
-    else:
-        filename_read_name = ''
+    # TODO: should be careful not to pass on any undesirable chars
+    filename_read_name = "FN:" + filename.replace(';', '_') + "|"
     label = "LB:" + lab.replace(';', '_')
     
     if input_format == "fastq":
@@ -137,17 +134,20 @@ def preprocess(handler, lab, fh1, fh2=None, input_format="fastq", filename=None,
             if len(fh1.readline()) == 0:
                 break
             seq = fh1.readline().rstrip()
-            fh1.readline()  # skip name line 2
+            original_name = fh1.readline()  # skip name line 2
             qual = fh1.readline().rstrip()
             if fh2 is not None:
                 assert len(fh2.readline()) > 0
                 seq2 = fh2.readline().rstrip()
-                fh2.readline()  # skip name line 2
+                original_name_2 = fh2.readline()  # skip name line 2
                 qual2 = fh2.readline().rstrip()
-                read_name_hash = 'ID:' + hashize(fullname + seq + qual + seq2 + qual2)
-                handler.add(''.join([filename_read_name, read_name_hash]) + ";%s" % label, seq, seq2, qual, qual2)
+                read_name_hash = 'ID:' + hashize(original_name + original_name_2 + seq + qual + seq2 + qual2)
+                handler.add((filename_read_name + ';' if include_filename else '')
+                                + read_name_hash + '/1;' + label, seq,
+                                prefix2=(filename_read_name + ';' if include_filename else '')
+                                + read_name_hash + '/2;' + label, seq2=seq2, qual1=qual, qual2=qual2)
             else:
-                read_name_hash = 'ID:' + hashize(fullname + seq + qual)
+                read_name_hash = 'ID:' + hashize(original_name + seq + qual)
                 handler.add(''.join([filename_read_name, read_name_hash]) + ";%s" % label, seq, qual1=qual)
             n += 1
     else:
@@ -169,10 +169,14 @@ def preprocess(handler, lab, fh1, fh2=None, input_format="fastq", filename=None,
                         break
                     seqlines2.append(ln.rstrip())
                 seq2 = ''.join(seqlines2)
-                read_name_hash = 'ID:' + hashize(fullname + seq + seq2)
-                handler.add(''.join([filename_read_name, read_name_hash]) + ";%s" % label, seq, seq2=seq2)
+                read_name_hash = 'ID:' + hashize(fullname + ln + seq + seq2)
+                handler.add((filename_read_name + ';' if include_filename else '')
+                                + read_name_hash + '/1;' + label, seq,
+                                prefix2=(filename_read_name + ';' if include_filename else '')
+                                + read_name_hash + '/2;' + label, seq2=seq2, qual1=qual, qual2=qual2)
             else:
-                handler.add(''.join([filename_read_name, read_name_hash]) + ";%s" % label, seq)
+                read_name_hash = 'ID:' + hashize(fullname + ln + seq + qual)
+                handler.add(''.join([filename_read_name, read_name_hash]) + ";%s" % label, seq, qual1=qual)
             n += 1
     
     if not is_file[0]:

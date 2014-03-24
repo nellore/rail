@@ -7,7 +7,7 @@ TERMINUS: no steps follow.
 Reduce step in MapReduce pipelines that collects end-to-end SAM output of 
 Rail-RNA-align/spliced alignment SAM output of Rail-RNA-realign and outputs
 SAM or BAM for each sample, optionally by chromosome. The output is analogous
-to TopHat's accepted_hits.bam and may be used, for example. by Cufflinks.
+to TopHat's accepted_hits.bam and may be used, for example, by Cufflinks.
 
 Input (read from stdin)
 ----------------------------

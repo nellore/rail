@@ -589,7 +589,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         if verbose: print >>sys.stderr, 'Joining thread...'
         thread.join()
     output_stream.flush()
-    print >> sys.stderr, 'DONE with align.py; in/out=%d/%d; ' \
+    print >> sys.stderr, 'DONE with realign.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)
 

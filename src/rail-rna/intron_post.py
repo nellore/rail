@@ -68,7 +68,7 @@ parser.add_argument(\
     '--out', metavar='URL', type=str, required=False,
     default='./',
     help='Bowtie index files are written to this URL. DEFAULT IS CURRENT '
-         ' WORKING DIRECTORY.')
+         'WORKING DIRECTORY.')
 parser.add_argument('--fudge', type=int, required=False, default=1, 
     help='A splice junction may be detected at any position along the read '
          'besides directly before or after it; thus, the sequences recorded '
@@ -270,7 +270,7 @@ if not output_url.isLocal():
     index_path = os.path.join(temp_dir_path, 'index')
     tar = tarfile.open(intron_index_path, 'w:gz')
     for index_file in os.listdir(index_path):
-        tar.add(os.path.join(index_path, index_file))
+        tar.add(os.path.join(index_path, index_file), arcname=index_file)
     tar.close()
     # Upload compressed index
     mover = filemover.FileMover(args=args)

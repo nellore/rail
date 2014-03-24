@@ -42,7 +42,7 @@ class FileMover(object):
                 cmdl.append("--acl-public")
             cmdl.append(fn)
             cmdl.append(url.toNonNativeUrl())
-        elif url.isWgettable():
+        elif url.isCurlable():
             raise RuntimeError("I don't know how to upload to http/ftp URLs")
         elif url.isLocal():
             mkdir_quiet(url.toUrl())
@@ -72,16 +72,16 @@ class FileMover(object):
             extl = subprocess.Popen(cmdl, stdout=sys.stderr).wait()
             if extl > 0:
                 raise RuntimeError("Non-zero exitlevel %d from s3cmd get command '%s'" % (extl, cmd))
-        elif url.isWgettable():
+        elif url.isCurlable():
             oldp = os.getcwd()
             os.chdir(dest)
-            cmdl = ['wget', '-t', '4', '-T', '20', '-w', '25']
+            cmdl = ['curl', '-O', '--retry', '5', '--connect-timeout', '60']
             cmdl.append(url.toUrl())
             cmd = ' '.join(cmdl)
             extl = subprocess.Popen(cmdl, stdout=sys.stderr).wait()
             os.chdir(oldp)
             if extl > 0:
-                raise RuntimeError("Non-zero exitlevel %d from wget command '%s'" % (extl, cmd))
+                raise RuntimeError("Non-zero exitlevel %d from curl command '%s'" % (extl, cmd))
         elif url.isLocal():
             cmdl = ['cp', url.toUrl(), dest]
         else:

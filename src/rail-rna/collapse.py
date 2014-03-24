@@ -60,8 +60,10 @@ while True:
             tokens[1], int(tokens[2]))
         (rname, pos, sample_label) = collapse_position.split(';')
         pos = int(pos)
-    if not line or (last_collapse_position != collapse_position
-        and last_collapse_position is not None and differential_sum != 0):
+    if (not line or 
+        (last_collapse_position != collapse_position
+            and differential_sum != 0)) \
+        and last_collapse_position is not None:
         print 'collapsed\t%s;%s\t%s\t%012d\t%d' % \
             (last_rname, last_bin_number,
                 last_sample_label, last_pos, differential_sum)

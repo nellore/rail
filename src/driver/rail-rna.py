@@ -3,10 +3,9 @@ rail-rna.py
 
 Ben Langmead, 7/28/2013
 
-Driver script for the Rail-RNA pipeline.  Right now, just does Amazon Elastic
-MapReduce mode.  Uses Amazon's elastic-mapreduce Ruby script to actually
-launch the job.  This script creates a shell script and accompanying JSON file
-that are used to run elastic-mapreduce.
+Driver script for the Rail-RNA pipeline. Uses Amazon's elastic-mapreduce Ruby script
+to actuallylaunch the job.  This script creates a shell script and accompanying
+JSON file that are used to run elastic-mapreduce.
 
 WRITE NEW DIAGRAM OF RAIL HERE
 
@@ -377,7 +376,7 @@ def buildFlow(allSteps, stepInfo, inp, out, inter, manifest):
             '''Must cache intron index: see 
             http://docs.aws.amazon.com/ElasticMapReduce/latest/
             DeveloperGuide/emr-plan-input-distributed-cache.html'''
-            steps.append(cl(indirs, outdir, tconf, gconf, cache=inter.plus('index/intron_index.tar.gz#intron_index')))
+            steps.append(cl(indirs, outdir, tconf, gconf, cache=out.plus('index/intron_index.tar.gz#intron_index')))
     return steps
 
 if intermediate is None:
