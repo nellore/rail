@@ -11,7 +11,7 @@ according to genome position but are not sorted. This way, positions in
 particularly active partitions, where coverage is high, are (in not-unusual
 cases, and at least theoretically) randomly assigned to reducers. This balances
 load a bit before Rail-RNA-coverage_pre, where an active partition must be
-handled all at once.
+handled all at once. (Combiner could be implemented before collapse, too.)
 
 Input (read from stdin)
 ----------------------------

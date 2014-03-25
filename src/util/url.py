@@ -43,7 +43,7 @@ class Url(object):
     def isS3(self):
         return self.type[:2] == 's3'
 
-    def isWgettable(self):
+    def isCurlable(self):
         return self.type in ['ftp', 'http']
 
     def isLocal(self):
@@ -72,6 +72,12 @@ class Url(object):
     def toNonNativeUrl(self):
         if self.type[:2] == 's3':
             return 's3:' + self.rest
+        else:
+            return self.type + ':' + self.rest
+
+    def toNativeUrl(self):
+        if self.type[:2] == 's3':
+            return 's3n:' + self.rest
         else:
             return self.type + ':' + self.rest
 

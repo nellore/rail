@@ -8,7 +8,10 @@ filesystems.
 import os
 import sys
 import subprocess
+import time
 from path import mkdir_quiet
+import random
+import threading
 
 
 def addArgs(parser):
@@ -19,6 +22,14 @@ def addArgs(parser):
     parser.add_argument(\
         '--acl-public', action='store_const', const=True, default=False,
         help='Make files uploaded to S3 publicly-readable (only relevant if some output is being pushed to S3)')
+
+class CurlThread(threading.Thread):
+    def __init__(self, cmdl):
+        super(CurlThread, self).__init__()
+        self.cmdl = cmdl
+        self.extl = None
+    def run(self):
+        self.extl = subprocess.Popen(self.cmdl, stdout=sys.stderr).wait()
 
 class FileMover(object):
     """ Responsible for details on how to move files to and from URLs. """
@@ -75,13 +86,25 @@ class FileMover(object):
         elif url.isCurlable():
             oldp = os.getcwd()
             os.chdir(dest)
-            cmdl = ['curl', '-O', '--retry', '5', '--connect-timeout', '60']
+            cmdl = ['curl', '-O', '--connect-timeout', '60']
             cmdl.append(url.toUrl())
             cmd = ' '.join(cmdl)
-            extl = subprocess.Popen(cmdl, stdout=sys.stderr).wait()
+            while True:
+                curl_thread = CurlThread(cmdl)
+                curl_thread.start()
+                while curl_thread.is_alive():
+                    print >>sys.stderr, 'reporter:status:alive'
+                    sys.stderr.flush()
+                    time.sleep(5)
+                if curl_thread.extl > 89:
+                    # If the exit code is greater than the highest-documented curl exit code, there was a timeout
+                    print >>sys.stderr, 'Too many simultaneous connections; restarting in 10 s.'
+                    time.sleep(10)
+                else:
+                    break
             os.chdir(oldp)
-            if extl > 0:
-                raise RuntimeError("Non-zero exitlevel %d from curl command '%s'" % (extl, cmd))
+            if curl_thread.extl > 0:
+                raise RuntimeError('Nonzero exitlevel %d from curl command "%s"' % (curl_thread.extl, cmd))
         elif url.isLocal():
             cmdl = ['cp', url.toUrl(), dest]
         else:
