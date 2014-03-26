@@ -26,8 +26,9 @@ Input is partitioned first by sample label, then sorted by fields 2-3.
 Hadoop output (written to stdout)
 ----------------------------
 Tab-delimited output tuple columns (only 1 per sample):
-1. Sample label
-2. Normalization factor
+1. The character '-', ensuring there's exactly one partition
+2. Sample label
+3. Normalization factor
 
 Other output (written to directory specified by command-line parameter --out)
 ----------------------------
@@ -153,8 +154,8 @@ while True:
             coverage_histogram[last_coverage] = \
                 coverage_histogram.get(last_coverage, 0) + coverage_end_pos \
                 - coverage_start_pos
-        print '%s\t%d' % (last_sample_label, percentile(coverage_histogram,
-                                                            args.percentile))
+        print '-\t%s\t%d' % (last_sample_label, percentile(coverage_histogram,
+                                                              args.percentile))
         output_line_count += 1
         coverage_histogram = {}
         bed_stream.close()

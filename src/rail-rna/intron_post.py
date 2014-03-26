@@ -14,18 +14,20 @@ Two kinds of input lines, one from Rail-RNA-align (max_len) and the other
 from Rail-RNA-intron (intron):
 
 (max_len)
-1. The character 'a'.
-2. A maximum read length output by a Rail-RNA-align mapper.
-3. The character '0'.
+1. The character '-', enforcing a single partition.
+2. The character 'a'.
+3. A maximum read length output by a Rail-RNA-align mapper.
 4. The character '0'.
+5. The character '0'.
 
 (intron)
-1. The character 'i', which will place the row after all 'a's (maximum read
+1. The character '-', enforcing a single partition.
+2. The character 'i', which will place the row after all 'a's (maximum read
     length rows) in lexicographic sort order.
-2. Reference name (RNAME in SAM format) + 
+3. Reference name (RNAME in SAM format) + 
     '+' or '-' indicating which strand is the sense strand
-3. Intron start position (inclusive)
-4. Intron end position (exclusive)
+4. Intron start position (inclusive)
+5. Intron end position (exclusive)
 
 Input is sorted by all four columns.
 
@@ -128,7 +130,8 @@ with open(fasta_file, 'w') as fasta_stream:
         if line:
             _input_line_count += 1
             if line == last_line: continue
-            tokens = line.rstrip().split('\t')
+            # Skip partition
+            tokens = line.rstrip().split('\t')[1:]
             token_count = len(tokens)
             assert token_count == 4
             if last_line_type is not None and tokens[0] != last_line_type:

@@ -22,8 +22,9 @@ Other output (written to directory specified by command-line parameter --out)
 ----------------------------
 File whose name is normalization_factors.tsv by default.
 Tab-delimited tuple columns:
-1. Sample name
-2. Normalization factor
+1. The character '-', ensuring there's exactly one partition
+2. Sample name
+3. Normalization factor
 """
 import os
 import sys
@@ -75,7 +76,7 @@ input_line_count = 0
 normalization_factors = {}
 
 for line in sys.stdin:
-    tokens = line.rstrip().split('\t')
+    tokens = line.rstrip().split('\t')[1:] # Kill partition
     assert len(tokens) == 2, 'Bad input line: %s' % line
     sample_label, normalization_factor = tokens[0], int(tokens[1])
     normalization_factors[sample_label] = normalization_factor

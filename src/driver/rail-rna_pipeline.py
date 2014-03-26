@@ -96,8 +96,8 @@ class BamStep(pipeline.Step):
             inps,
             output,
             name="Bam",
-            aggr=(pipeline.Aggregation(1, None, (2 if tconf.output_bam_by_chromosome else 1), 3)
-                  if gconf.out is not None else pipeline.Aggregation(1, None, 1, 2)),
+            aggr=(pipeline.Aggregation(None, 1, (2 if tconf.output_bam_by_chromosome else 1), 3)
+                  if gconf.out is not None else pipeline.Aggregation(None, 1, 1, 3)),
             reducer=reducer_str)
 
 
@@ -120,7 +120,7 @@ class IntronStep(pipeline.Step):
             inps,
             output,  # output URL
             name="Intron",  # name
-            aggr=pipeline.Aggregation(None, 8, 1, 2),  # 8 tasks per reducer
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 8 tasks per reducer
             reducer=reducer_str,
             multipleOutput=True)
 
@@ -153,7 +153,7 @@ class BedStep(pipeline.Step):
             inps,
             output,  # output URL
             name="Bed",  # namef
-            aggr=pipeline.Aggregation(1, None, 1, 4),
+            aggr=pipeline.Aggregation(None, 1, 1, 4),
             reducer=reducer_str)
 
 
@@ -303,7 +303,7 @@ class CoveragePostStep(pipeline.Step):
             inps,
             output,  # output URL
             name="CoveragePost",  # name
-            aggr=pipeline.Aggregation(1, None, 0, 0),
+            aggr=pipeline.Aggregation(1, None, 1, 2),
             reducer=reducer_str)
 
 

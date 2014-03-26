@@ -41,13 +41,14 @@ class Aggregation(object):
         v = config.hadoopVersion
         confArg = hadoop.confArg(v)
         if self.ntasks is not None:
-            begArgs.append('"%s", "mapred.reduce.tasks=%d",' % (confArg, self.ntasks))
+            ntasks = self.ntasks
         else:
             assert self.ntasksPerReducer is not None
-            begArgs.append('"%s", "mapred.reduce.tasks=%d",' % (confArg, self.ntasksPerReducer * config.nReducers))
-            begArgs.append('"%s", "%s",' % (confArg, hadoop.keyFields(v, self.nbin)))
-            begArgs.append('"%s", "stream.num.map.output.key.fields=%d",' % (confArg, self.nsort))
-            endArgs.append('"-partitioner", "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",')
+            ntasks = self.ntasksPerReducer * config.nReducers
+        begArgs.append('"%s", "mapred.reduce.tasks=%d",' % (confArg, ntasks))
+        begArgs.append('"%s", "%s",' % (confArg, hadoop.keyFields(v, self.nbin)))
+        endArgs.append('"-partitioner", "org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner",')
+        begArgs.append('"%s", "stream.num.map.output.key.fields=%d",' % (confArg, self.nsort))
         return begArgs, endArgs
 
 class PipelineConfig(object):

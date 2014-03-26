@@ -96,11 +96,12 @@ Tab-delimited output tuple columns (unmapped):
 Maximum read lengths found
 
 Tab-delimited output tuple columns (max_len):
-1. The character 'a', which places it before 'i' in 
+1. The character '-', enforcing a single partition.
+2. The character 'a', which places it before 'i' in 
     lexicograhic sort order for reading in Rail-RNA-intron_post
-2. Maximum read length found
-3. The character '0'.
+3. Maximum read length found
 4. The character '0'.
+5. The character '0'.
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -1273,7 +1274,7 @@ class BowtieOutputThread(threading.Thread):
                     multiread = []
                 if not line: 
                     # Write max read size
-                    print >>self.output_stream, 'max_len\ta\t%d\t0\t0' \
+                    print >>self.output_stream, 'max_len\t-\ta\t%d\t0\t0' \
                         % max_read_size
                     _output_line_count += 1
                     break
@@ -1599,11 +1600,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         Maximum read lengths found
 
         Tab-delimited output tuple columns (max_len):
-        1. The character 'a', which places it before 'i' in 
+        1. The character '-', enforcing a single partition.
+        2. The character 'a', which places it before 'i' in 
             lexicograhic sort order for reading in Rail-RNA-intron_post
-        2. Maximum read length found
-        3. The character '0'.
+        3. Maximum read length found
         4. The character '0'.
+        5. The character '0'.
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 

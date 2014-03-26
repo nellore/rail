@@ -492,17 +492,17 @@ elif mode == 'emr':
     #    cmdl.append('s3://elasticmapreduce/bootstrap-actions/configurations/latest/memory-intensive')
     #    cmdl.append('--bootstrap-name')
     #    cmdl.append('"set memory-intensive"')
+    if args.ganglia:
+        cmdl.append('--bootstrap-action')
+        cmdl.append('s3://elasticmapreduce/bootstrap-actions/install-ganglia')
+        cmdl.append('--bootstrap-name')
+        cmdl.append('"ganglia"')
     if not args.no_add_swap:
         cmdl.append('--bootstrap-action')
         cmdl.append('s3://elasticmapreduce/bootstrap-actions/add-swap')
         cmdl.append('--bootstrap-name')
         cmdl.append('"add swap"')
         cmdl.append('--args "%d"' % emrCluster.swap())
-    if args.ganglia:
-        cmdl.append('--bootstrap-action')
-        cmdl.append('s3://elasticmapreduce/bootstrap-actions/install-ganglia')
-        cmdl.append('--bootstrap-name')
-        cmdl.append('"ganglia"')
     numProcessorsPerCore = emrCluster.numProcessorsPerCoreInstance()
     hadoopConfigs = []
     hadoopConfigs.append('-s,mapred.job.reuse.jvm.num.tasks=1')

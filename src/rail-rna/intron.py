@@ -31,12 +31,13 @@ Input is partitioned by column 1.
 Hadoop output (written to stdout)
 ----------------------------
 Tab-delimited columns:
-1. The character 'i', which will place the row after 'a' (maximum read length
+1. The character '-', enforcing a single partition.
+2. The character 'i', which will place the row after 'a' (maximum read length
     rows) in lexicographic sort order.
-2. Reference name (RNAME in SAM format) +
+3. Reference name (RNAME in SAM format) +
     '+' or '-' indicating which strand is the sense strand
-3. Intron start position (inclusive)
-4. Intron end position (exclusive)
+4. Intron start position (inclusive)
+5. Intron end position (exclusive)
 
 OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -351,10 +352,11 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         Hadoop output (written to stdout)
         ----------------------------
         Tab-delimited columns:
-        1. The character 'i', which will place the row after 'a' (maximum read
-            length rows) in lexicographic sort order.
-        2. Reference name (RNAME in SAM format)
-        3. '+' or '-' indicating which strand is the sense strand
+        1. The character '-', enforcing a single partition.
+        2. The character 'i', which will place the row after 'a' (maximum read length
+            rows) in lexicographic sort order.
+        3. Reference name (RNAME in SAM format) +
+            '+' or '-' indicating which strand is the sense strand
         4. Intron start position (inclusive)
         5. Intron end position (exclusive)
 
@@ -450,7 +452,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             intron_strand = ('-' if cluster_splice_site[-1]
                                                 else '+')
                             print >>output_stream, \
-                                'intron\ti\t%s%s\t%012d\t%012d' \
+                                'intron\t-\ti\t%s%s\t%012d\t%012d' \
                                 % (last_rname, intron_strand, 
                                     cluster_splice_site[0],
                                     cluster_splice_site[1])
@@ -472,7 +474,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             intron_strand = ('-' if cluster_splice_site[-1]
                                                 else '+')
                             print >>output_stream, \
-                                'intron\ti\t%s%s\t%012d\t%012d' \
+                                'intron\t-\ti\t%s%s\t%012d\t%012d' \
                                 % (last_rname, intron_strand, 
                                     cluster_splice_site[0],
                                     cluster_splice_site[1])
@@ -495,7 +497,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         intron_strand = ('-' if cluster_splice_site[-1] 
                                             else '+')
                         print >>output_stream, \
-                                    'intron\ti\t%s%s\t%012d\t%012d' \
+                                    'intron\t-\ti\t%s%s\t%012d\t%012d' \
                                     % (last_rname, intron_strand, 
                                         cluster_splice_site[0],
                                         cluster_splice_site[1])

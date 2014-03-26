@@ -75,4 +75,5 @@ while True:
     differential_sum += differential
 
 print >>sys.stderr, "DONE with collapse.py; in/out = %d/%d; time=%0.3f s" \
-    % (input_line_count, output_line_count, start_time - time.time())
+    % (input_line_count, output_line_count, time.time() - start_time)
+    
