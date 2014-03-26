@@ -23,6 +23,8 @@ def addEmrModeArgs(parser):
     parser.add_argument(\
         '--no-add-swap', action='store_const', const=True, help='Do not add swap memory to the cluster.')
     parser.add_argument(\
+        '--ganglia', action='store_const', const=True, default=False, help='Enable Ganglia on the cluster.')
+    parser.add_argument(\
         '--enable-speculative', action='store_const', const=True, help='Enable Hadoop speculative execution for EMR runs (not recommended).')
     parser.add_argument(\
         '--name', metavar='STR', type=str, help='Amazon Elastic MapReduce job name.')

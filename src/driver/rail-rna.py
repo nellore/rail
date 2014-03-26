@@ -259,6 +259,7 @@ if mode == 'emr':
 
 # Parameters governing the algorithm
 tconf = rail_rna_config.Rail_RNAConfig(args)
+tconf.keep_alive = (False if mode == 'local' else True)
 gconf = GenericConfig(args, out, intermediate)
 
 pipelines = set(["preprocess", "align", "align_out", "coverage", "differential"])
@@ -497,11 +498,16 @@ elif mode == 'emr':
         cmdl.append('--bootstrap-name')
         cmdl.append('"add swap"')
         cmdl.append('--args "%d"' % emrCluster.swap())
-    numCore = emrCluster.numCoreProcessors()
+    if args.ganglia:
+        cmdl.append('--bootstrap-action')
+        cmdl.append('s3://elasticmapreduce/bootstrap-actions/install-ganglia')
+        cmdl.append('--bootstrap-name')
+        cmdl.append('"ganglia"')
+    numProcessorsPerCore = emrCluster.numProcessorsPerCoreInstance()
     hadoopConfigs = []
     hadoopConfigs.append('-s,mapred.job.reuse.jvm.num.tasks=1')
-    hadoopConfigs.append('-s,mapred.tasktracker.reduce.tasks.maximum=%d' % numCore)
-    hadoopConfigs.append('-s,mapred.tasktracker.map.tasks.maximum=%d' % numCore)
+    hadoopConfigs.append('-s,mapred.tasktracker.reduce.tasks.maximum=%d' % numProcessorsPerCore)
+    hadoopConfigs.append('-s,mapred.tasktracker.map.tasks.maximum=%d' % numProcessorsPerCore)
     cmdl.append('--bootstrap-action')
     cmdl.append('s3://elasticmapreduce/bootstrap-actions/configure-hadoop')
     cmdl.append('--bootstrap-name')

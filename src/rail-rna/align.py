@@ -634,13 +634,17 @@ def introns_from_read(reference_index, read_seq, readlets,
         new_prefix, new_suffix = [], []
         prefix_pos, prefix_end_pos, prefix_displacement = composed[strand][0]
         suffix_pos, suffix_end_pos, suffix_displacement = composed[strand][-1]
+        if prefix_pos - prefix_displacement < 1:
+            # Skip this part if we're close to an edge of the reference
+            prefix_displacement = 0
         if prefix_displacement:
             if global_alignment.score_matrix(
                         current_read_seq[:prefix_displacement],
                         reference_index.get_stretch(rname,
                             prefix_pos - prefix_displacement - 1,
                             prefix_displacement)
-                    )[-1, -1] >= min_seq_similarity * prefix_displacement:
+                    )[-1, -1] >= \
+                    min_seq_similarity * prefix_displacement:
                 new_prefix = [(prefix_pos - prefix_displacement,
                                     prefix_pos, 0)]
             elif search_for_caps \
@@ -664,6 +668,10 @@ def introns_from_read(reference_index, read_seq, readlets,
         unmapped_displacement = (suffix_end_pos - suffix_pos
                                     + suffix_displacement)
         unmapped_base_count = read_seq_size - unmapped_displacement
+        if suffix_end_pos + unmapped_base_count - 1 \
+            > reference_index.length[rname]:
+            # Skip this part if we're too close to the edge of the reference
+            unmapped_base_count = 0
         if unmapped_base_count > 0:
             if global_alignment.score_matrix(
                                 current_read_seq[unmapped_displacement:],

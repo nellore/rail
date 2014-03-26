@@ -683,5 +683,4 @@ elif __name__ == '__main__':
         def test_cigar_when_read_overlaps_multiple_introns(self):
             """ Fails if CIGAR is not corrected properly. """
 
-
     unittest.main()

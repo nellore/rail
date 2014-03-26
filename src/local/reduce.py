@@ -323,9 +323,9 @@ if tot > 0:
         cmd = 'cat %s | %s >%s 2>%s' % (sorted_fn, reduce_cmd, out_fn, err_fn)
         wd = os.path.join(working_dir, task)
         check_dir(wd, 800)
+        message('Pid %d processing %s' % (os.getpid(), task))
         pipe = subprocess.Popen(cmd, bufsize=-1, shell=True, cwd=wd)
         el = pipe.wait()
-        message('Pid %d processing task "%s" with command: "%s"' % (os.getpid(), task, cmd))
         if el != 0:
             msg = 'Reduce command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
             fail_q.put((msg, sorted_fn, err_fn, cmd))
