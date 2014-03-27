@@ -71,6 +71,9 @@ parser.add_argument(\
     default='./',
     help='Bowtie index files are written to this URL. DEFAULT IS CURRENT '
          'WORKING DIRECTORY.')
+parser.add_argument(\
+    '--verbose', action='store_const', const=True, default=False,
+    help='Print out extra debugging statements')
 parser.add_argument('--fudge', type=int, required=False, default=1, 
     help='A splice junction may be detected at any position along the read '
          'besides directly before or after it; thus, the sequences recorded '
@@ -123,20 +126,28 @@ else:
     index_basename = os.path.join(temp_dir_path, 'index/intron')
 last_line, last_line_type, max_read_size, last_rname = [None]*4
 write_sequence = False
+print >>sys.stderr, 'Opening FASTA for writing....'
 fasta_file = os.path.join(temp_dir_path, 'temp.fa')
 with open(fasta_file, 'w') as fasta_stream:
     while True:
         line = sys.stdin.readline().rstrip()
         if line:
             _input_line_count += 1
-            if line == last_line: continue
+            print >>sys.stderr, 'reporter:status:alive'
+            if line == last_line:
+                if args.verbose:
+                    print >>sys.stderr, 'Duplicate intron call ' \
+                        'encountered; continuing.'
+                continue
             # Skip partition
             tokens = line.rstrip().split('\t')[1:]
             token_count = len(tokens)
             assert token_count == 4
             if last_line_type is not None and tokens[0] != last_line_type:
                 extend_size = last_max_read_size - 1 + args.fudge
-            elif tokens[0] == 'a': 
+            elif tokens[0] == 'a':
+                if args.verbose:
+                    print >>sys.stderr, 'Read a max_len entry from align.'
                 line_type, max_read_size = tokens[0], int(tokens[1])
             if tokens[0] == 'i':
                 rname, pos, end_pos = tokens[1:]
@@ -254,6 +265,7 @@ with open(fasta_file, 'w') as fasta_stream:
             last_intron_combos = intron_combos
             last_line = line
 # Build index
+print >>sys.stderr, 'Running bowtie-build....'
 bowtie_build_process = subprocess.Popen(
                                 [args.bowtie_build_exe,
                                     fasta_file,

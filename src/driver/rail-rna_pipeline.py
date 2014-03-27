@@ -164,6 +164,7 @@ class IntronPostStep(pipeline.Step):
                 --bowtie-build-exe=%%BOWTIE-BUILD%%
                 --bowtie-idx=%%REF_BOWTIE_INDEX%%
                 --out=%s/index
+                --verbose
             """ % gconf.out
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(IntronPostStep, self).__init__(
