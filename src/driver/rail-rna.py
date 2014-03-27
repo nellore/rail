@@ -399,7 +399,7 @@ if mode == 'local':
     toolConf = ToolConfigLocal(appName, True)
     refConf, fileConf = None, None
     if useRef:
-        refConf = RefConfigLocal(reference.toUrl(), intermediate.toUrl(), args.igenomes, True)
+        refConf = RefConfigLocal(reference.toUrl(), intermediate.toUrl(), out.toUrl(), args.igenomes, True)
     if useManifest:
         fileConf = FileConfigLocal(manifest, True)
     localConf = LocalConfig(args)

@@ -88,9 +88,10 @@ class RefConfigHadoop(object):
 class RefConfigLocal(object):
     """ When in local mode, this class's config method is the way to replace
         reference-related placeholders. """
-    def __init__(self, refDir, intermediateDir, iGenomes, checkLocal):
+    def __init__(self, refDir, intermediateDir, outDir, iGenomes, checkLocal):
         self.refDir = os.path.abspath(refDir)
         self.intermediateDir = os.path.abspath(intermediateDir)
+        self.outDir = os.path.abspath(outDir)
         self.iGenomes = iGenomes
         self.checkLocal = checkLocal
     
@@ -105,7 +106,7 @@ class RefConfigLocal(object):
                     if k.startswith('REF_BOWTIE_INDEX'):
                         checkBowtieIndex(self.refDir, iGenomes=self.iGenomes)
                 if k.startswith('REF_INTRON_INDEX'):
-                    s = s.replace(tok, '/'.join([self.intermediateDir, v]))
+                    s = s.replace(tok, '/'.join([self.outDir, v]))
                 else:
                     s = s.replace(tok, '/'.join([self.refDir, v]))
         return s

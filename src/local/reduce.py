@@ -209,7 +209,42 @@ def check_fail_queue():
 # Stage 1. Partition bins into tasks
 ########################################
 
-# Go through all input files in parallel, calculating bin sizes for all bins.
+import random
+message('Writing input records to %d tasks' % args.num_tasks)
+task_names = ["task-%05d" % i for i in xrange(args.num_tasks)]
+tot = 0
+ofhs = {}
+for inp in inps:
+    with openex(inp) as fh:
+        for ln in fh:
+            ln = ln.rstrip()
+            if len(ln) == 0:
+                continue
+            toks = string.split(ln, '\t')
+            if toks[0] == 'DUMMY':
+                continue
+            tot += 1
+            assert len(toks) >= args.bin_fields
+            k = '\t'.join(toks[:args.bin_fields])
+            random.seed(k)
+            task = random.choice(task_names)
+            try:
+                ofhs[task].write(ln)
+            except KeyError:
+                ofhs[task] = open(os.path.join(task_dir, task), 'w')
+                ofhs[task].write(ln)
+            ofhs[task].write('\n')
+
+for fh in ofhs.itervalues():
+    fh.close()
+message('%d input records written' % tot)
+
+'''Code below is memory-intensive if there are too many bins; seed
+random number generator with key and choose random task instead, as above.
+Note that this technically makes for more load imbalance among tasks, but 
+it's less an issue in local mode, where Python processes will simply share 
+resources as managed by the OS.'''
+'''# Go through all input files in parallel, calculating bin sizes for all bins.
 bin_count_queue = multiprocessing.Queue()
 
 
@@ -226,7 +261,6 @@ def bin_count_worker(fn):
             assert len(toks) >= args.bin_fields
             cnt['\t'.join(toks[:args.bin_fields])] += 1
     bin_count_queue.put(cnt)
-
 
 bin_count = defaultdict(int)
 count_pool = multiprocessing.Pool(num_processes)
@@ -282,7 +316,9 @@ if tot > 0:
                 ofhs[task].write('\n')
 
     for fh in ofhs.itervalues():
-        fh.close()
+        fh.close()'''
+
+if tot > 0:
 
     ########################################
     # Stage 2. Sort and reduce each task
