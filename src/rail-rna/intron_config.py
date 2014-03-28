@@ -223,7 +223,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
                 output_intron_combos = False
             last_line, last_strand = line, strand
 
-
 if __name__ == '__main__':
     # Print file's docstring if -h is invoked
     parser = argparse.ArgumentParser(description=__doc__, 
@@ -258,6 +257,7 @@ elif __name__ == '__main__':
     import unittest
     import tempfile
     import shutil
+    from collections import defaultdict
     import os
 
     class TestGo(unittest.TestCase):
@@ -271,13 +271,15 @@ elif __name__ == '__main__':
         def test_overlapping_intron_configuration_1(self):
             """ Fails if intron configurations are not enumerated properly. """
             with open(self.input_file, 'w') as input_stream:
+                '''Recall that input is partitioned by first column and 
+                sorted by the next three columns.'''
                 input_stream.write(
-                        '1\ta\t20\t-\n'
-                        '1\ti\t10\t50\n'
-                        '1\ti\t30\t70\n'
-                        '1\ti\t75\t101\n'
-                        '1\ti\t90\t1300\n'
-                        '1\ti\t91\t101\n'
+                        'chr1\ta\t20\t-\n'
+                        'chr1\ti\t10\t50\n'
+                        'chr1\ti\t30\t70\n'
+                        'chr1\ti\t75\t101\n'
+                        'chr1\ti\t90\t1300\n'
+                        'chr1\ti\t91\t101\n'
                     )
             with open(self.output_file, 'w') as output_stream:
                 with open(self.input_file) as input_stream:
@@ -303,6 +305,50 @@ elif __name__ == '__main__':
                         frozenset([(90, 1300)]),
                         frozenset([(91, 101)]),
                     ]), intron_configs
+                )
+
+        def test_overlapping_intron_configuration_2(self):
+            """ Fails if intron configurations are not enumerated properly. """
+            with open(self.input_file, 'w') as input_stream:
+                '''Recall that input is partitioned by first column and 
+                sorted by the next three columns.'''
+                input_stream.write(
+                        'chr1\ta\t15\t-\n'
+                        'chr1\ta\t20\t-\n'
+                        'chr1\ti\t11\t200\n'
+                        'chr1\ti\t31\t56\n'
+                        'chr1\ti\t75\t201\n'
+                        'chr1\ti\t91\t101\n'
+                        'chr1\ti\t205\t225\n'
+                        'chr2\ti\t21\t76\n'
+                    )
+                # Extend size is 20 above without fudge
+            with open(self.output_file, 'w') as output_stream:
+                with open(self.input_file) as input_stream:
+                    go(input_stream=input_stream, output_stream=output_stream,
+                        fudge=0)
+            '''Read output; store configurations as frozen sets so there are
+            no duplicate configurations.'''
+            intron_configs = defaultdict(set)
+            with open(self.output_file) as result_stream:
+                for line in result_stream:
+                    tokens = line.strip().split('\t')
+                    intron_configs[tokens[1]].add(frozenset(zip(
+                            [int(pos) for pos in tokens[2].split(',')],
+                            [int(end_pos) for end_pos in tokens[3].split(',')]
+                        )))
+            self.assertEqual(
+                    set([
+                        frozenset([(11, 200), (205, 225)]),
+                        frozenset([(31, 56), (75, 201)]),
+                        frozenset([(91, 101)]),
+                        frozenset([(21, 76)])
+                    ]), intron_configs['chr1']
+                )
+            self.assertEqual(
+                    set([
+                        frozenset([(21, 76)])
+                    ]), intron_configs['chr2']
                 )
 
         def tearDown(self):
