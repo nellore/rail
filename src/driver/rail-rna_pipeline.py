@@ -203,7 +203,7 @@ class IntronFastaStep(pipeline.Step):
         super(IntronFastaStep, self).__init__(
             inps,
             output,
-            name="IntronPost",
+            name="IntronFasta",
             aggr=pipeline.Aggregation(None, 8, 4, 4),
             reducer=reducer_str,
             multipleOutput=True)
