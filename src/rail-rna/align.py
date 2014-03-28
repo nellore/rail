@@ -1273,10 +1273,14 @@ class BowtieOutputThread(threading.Thread):
                                 _output_line_count += 1
                     multiread = []
                 if not line: 
-                    # Write max read size
-                    print >>self.output_stream, 'max_len\t-\ta\t%d\t0\t0' \
-                        % max_read_size
-                    _output_line_count += 1
+                    # Write max read size for each strand
+                    for max_len_rname in self.reference_index.length:
+                        for max_len_strand in ['+', '-']:
+                            print >>self.output_stream, \
+                                'max_len\t%s%s\ta\t%d\t-' % (max_len_rname,
+                                                                max_len_strand,
+                                                                max_read_size)
+                        _output_line_count += 1
                     break
                 last_tokens = tokens
                 (last_qname, last_flag, last_rname, last_pos, last_mapq,

@@ -452,7 +452,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             intron_strand = ('-' if cluster_splice_site[-1]
                                                 else '+')
                             print >>output_stream, \
-                                'intron\t-\ti\t%s%s\t%012d\t%012d' \
+                                'intron\t%s%s\ti\t%012d\t%012d' \
                                 % (last_rname, intron_strand, 
                                     cluster_splice_site[0],
                                     cluster_splice_site[1])
@@ -474,7 +474,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                             intron_strand = ('-' if cluster_splice_site[-1]
                                                 else '+')
                             print >>output_stream, \
-                                'intron\t-\ti\t%s%s\t%012d\t%012d' \
+                                'intron\t%s%s\ti\t%012d\t%012d' \
                                 % (last_rname, intron_strand, 
                                     cluster_splice_site[0],
                                     cluster_splice_site[1])
@@ -497,7 +497,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                         intron_strand = ('-' if cluster_splice_site[-1] 
                                             else '+')
                         print >>output_stream, \
-                                    'intron\t-\ti\t%s%s\t%012d\t%012d' \
+                                    'intron\t%s%s\ti\t%012d\t%012d' \
                                     % (last_rname, intron_strand, 
                                         cluster_splice_site[0],
                                         cluster_splice_site[1])

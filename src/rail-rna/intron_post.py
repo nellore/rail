@@ -74,6 +74,10 @@ parser.add_argument(\
 parser.add_argument(\
     '--verbose', action='store_const', const=True, default=False,
     help='Print out extra debugging statements')
+parser.add_argument(\
+    '--keep-alive', action='store_const', const=True, default=False,
+    help='Prints reporter:status:alive messages to stderr to keep EMR '
+         'task alive')
 parser.add_argument('--fudge', type=int, required=False, default=1, 
     help='A splice junction may be detected at any position along the read '
          'besides directly before or after it; thus, the sequences recorded '
@@ -124,20 +128,20 @@ if output_url.isLocal():
 else:
     # Write to temporary directory, and later upload to URL
     index_basename = os.path.join(temp_dir_path, 'index/intron')
-last_line, last_line_type, max_read_size, last_rname = [None]*4
+last_line, last_line_type, max_read_size, last_rname = (None,)*4
+last_end_pos = 1
 write_sequence = False
-print >>sys.stderr, 'Opening FASTA for writing....'
 fasta_file = os.path.join(temp_dir_path, 'temp.fa')
+print >>sys.stderr, 'Opened %s for writing....' % fasta_file
 with open(fasta_file, 'w') as fasta_stream:
     while True:
         line = sys.stdin.readline().rstrip()
         if line:
             _input_line_count += 1
-            print >>sys.stderr, 'reporter:status:alive'
             if line == last_line:
                 if args.verbose:
-                    print >>sys.stderr, 'Duplicate intron call ' \
-                        'encountered; continuing.'
+                    print >>sys.stderr, 'Duplicate line encountered; ' \
+                        'continuing.'
                 continue
             # Skip partition
             tokens = line.rstrip().split('\t')[1:]
@@ -151,6 +155,8 @@ with open(fasta_file, 'w') as fasta_stream:
                 line_type, max_read_size = tokens[0], int(tokens[1])
             if tokens[0] == 'i':
                 rname, pos, end_pos = tokens[1:]
+                if args.keep_alive:
+                    print >>sys.stderr, 'reporter:status:alive'
                 # Grab reverse_strand_string attached to rname
                 reverse_strand_string = rname[-1]
                 rname = rname[:-1]
@@ -162,6 +168,7 @@ with open(fasta_file, 'w') as fasta_stream:
                     ):
                     if last_rname is not None: write_sequence = True
                     intron_combos = set([frozenset([(pos, end_pos)])])
+                    last_end_pos = 1
                 else:
                     new_intron_combos = set()
                     for intron_combo in intron_combos:
@@ -261,7 +268,7 @@ with open(fasta_file, 'w') as fasta_stream:
         else:
             # Line corresponds to an intron
             last_rname, last_reverse_strand_string, last_pos, last_end_pos \
-                = rname, reverse_strand_string, pos, end_pos
+                = rname, reverse_strand_string, pos, max(end_pos, last_end_pos)
             last_intron_combos = intron_combos
             last_line = line
 # Build index

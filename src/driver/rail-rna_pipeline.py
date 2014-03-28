@@ -158,14 +158,15 @@ class BedStep(pipeline.Step):
 
 
 class IntronPostStep(pipeline.Step):
-    def __init__(self, inps, output, _, gconf):
+    def __init__(self, inps, output, tconf, gconf):
         reducer_str = """
             python %%BASE%%/src/rail-rna/intron_post.py
                 --bowtie-build-exe=%%BOWTIE-BUILD%%
                 --bowtie-idx=%%REF_BOWTIE_INDEX%%
                 --out=%s/index
+                %s
                 --verbose
-            """ % gconf.out
+            """ % (gconf.out, '--keep-alive' if tconf.keep_alive else '')
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(IntronPostStep, self).__init__(
             inps,
@@ -174,6 +175,55 @@ class IntronPostStep(pipeline.Step):
             aggr=pipeline.Aggregation(1, None, 1, 5),
             reducer=reducer_str)
 
+class IntronConfigStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/intron_config.py
+                --verbose
+                %s
+            """ % ('',)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(IntronConfigStep, self).__init__(
+            inps,
+            output,
+            name="IntronConfig",
+            aggr=pipeline.Aggregation(None, 1, 1, 4),
+            reducer=reducer_str,
+            multipleOutput=True)
+
+class IntronFastaStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/intron_fasta.py
+                --verbose
+                --bowtie-idx=%%REF_BOWTIE_INDEX%%
+                %s
+            """ % ('',)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(IntronFastaStep, self).__init__(
+            inps,
+            output,
+            name="IntronPost",
+            aggr=pipeline.Aggregation(None, 8, 4, 4),
+            reducer=reducer_str,
+            multipleOutput=True)
+
+class IntronIndexStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/intron_index.py
+                --bowtie-build-exe=%%BOWTIE-BUILD%%
+                --bowtie-idx=%%REF_BOWTIE_INDEX%%
+                --out=%s/index
+                %s
+            """ % (gconf.out, '--keep-alive' if tconf.keep_alive else '')
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(IntronIndexStep, self).__init__(
+            inps,
+            output,
+            name="IntronIndex",
+            aggr=pipeline.Aggregation(1, None, 1, 1),
+            reducer=reducer_str)
 
 class MergeStep(pipeline.Step):
     def __init__(self, inps, output, _, _2):
