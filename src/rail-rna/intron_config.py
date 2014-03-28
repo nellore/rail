@@ -207,7 +207,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
                             # Eliminate dupes
                             continue
                     except IndexError: pass
-                    print >>output_stream, ('intron\t' + strand + '\t' + 
+                    print >>output_stream, ('intron\t' + last_strand + '\t' + 
                             ','.join([str(intron_pos) for 
                                         intron_pos, _ in intron_combo])
                             + '\t' + 
@@ -281,10 +281,11 @@ elif __name__ == '__main__':
                         'chr1\ti\t90\t1300\n'
                         'chr1\ti\t91\t101\n'
                     )
+                # Extend size is 20 above with fudge
             with open(self.output_file, 'w') as output_stream:
                 with open(self.input_file) as input_stream:
                     go(input_stream=input_stream, output_stream=output_stream,
-                        fudge=0)
+                        fudge=1)
 
             '''Read output; store configurations as frozen sets so there are
             no duplicate configurations.'''
@@ -322,11 +323,11 @@ elif __name__ == '__main__':
                         'chr1\ti\t205\t225\n'
                         'chr2\ti\t21\t76\n'
                     )
-                # Extend size is 20 above without fudge
+                # Extend size is 20 above with fudge
             with open(self.output_file, 'w') as output_stream:
                 with open(self.input_file) as input_stream:
                     go(input_stream=input_stream, output_stream=output_stream,
-                        fudge=0)
+                        fudge=1)
             '''Read output; store configurations as frozen sets so there are
             no duplicate configurations.'''
             intron_configs = defaultdict(set)
@@ -340,9 +341,9 @@ elif __name__ == '__main__':
             self.assertEqual(
                     set([
                         frozenset([(11, 200), (205, 225)]),
-                        frozenset([(31, 56), (75, 201)]),
-                        frozenset([(91, 101)]),
-                        frozenset([(21, 76)])
+                        frozenset([(31, 56), (75, 201), (205, 225)]),
+                        frozenset([(31, 56)]),
+                        frozenset([(91, 101)])
                     ]), intron_configs['chr1']
                 )
             self.assertEqual(
