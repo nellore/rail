@@ -54,7 +54,7 @@ class FileMover(object):
             cmdl.append(fn)
             cmdl.append(url.toNonNativeUrl())
         elif url.isCurlable():
-            raise RuntimeError("I don't know how to upload to http/ftp URLs")
+            raise RuntimeError("Can't upload to http/ftp URLs")
         elif url.isLocal():
             mkdir_quiet(url.toUrl())
             cmdl = ['cp', fn, url.toUrl()]

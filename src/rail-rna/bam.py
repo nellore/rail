@@ -127,6 +127,14 @@ move_temporary_file = False # True when temporary file should be uploaded
 while True:
     line = sys.stdin.readline()
     if not line:
+        if output_stream is not None:
+            output_stream.close()
+            if not args.output_sam:
+                samtools_return = samtools_process.wait()
+                if samtools_return:
+                    raise RuntimeError('samtools returned exitlevel %d' 
+                        % samtools_return)
+                subprocess_stdout.close()
         last_output_filename = output_filename
         last_output_path = output_path
         move_temporary_file = True
@@ -136,7 +144,6 @@ while True:
         rname = reference_index.string_to_rname[rname]
     if move_temporary_file and last_sample_label is not None \
         and not output_url.isLocal():
-        # Remove .temp in output filename
         mover.put(last_output_path, 
             output_url.plus(last_output_filename))
         os.remove(last_output_path)
@@ -203,9 +210,7 @@ while True:
                                         ' '.join(sys.argv))
     '''Recall that pos has leading 0's so it is sorted properly; remove them
     below.'''
-    print >>output_stream, ((('%s\t'*4) % (qname, flag, rname
-                                            if rname != '~~~~~' else '*',
-                                            str(int(pos))))
+    print >>output_stream, ((('%s\t'*4) % (qname, flag, rname, str(int(pos))))
                                 + '\t'.join(tokens[5:]))
     last_rname = rname
     last_sample_label = sample_label

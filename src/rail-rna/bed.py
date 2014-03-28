@@ -98,6 +98,8 @@ move_temporary_file = False
 while True:
     line = sys.stdin.readline().rstrip()
     if not line:
+        if output_stream is not None:
+            output_stream.close()
         last_output_filename = output_filename
         last_output_path = output_path
         move_temporary_file = True
