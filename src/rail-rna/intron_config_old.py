@@ -14,24 +14,21 @@ Two kinds of input lines, one from Rail-RNA-align (max_len) and the other
 from Rail-RNA-intron (intron):
 
 (max_len)
-1. Reference name (RNAME in SAM format) +
+1. Reference name (RNAME in SAM format) + 
     '+' or '-' indicating which strand is the sense strand
-2. Sample label
-3. The character 'a'.
-4. A maximum read length output by a Rail-RNA-align mapper.
-5. The character '-'.
+2. The character 'a'.
+3. A maximum read length output by a Rail-RNA-align mapper.
+4. The character '-'.
 
 (intron)
-1. Reference name (RNAME in SAM format) +
+1. Reference name (RNAME in SAM format) + 
     '+' or '-' indicating which strand is the sense strand
-2. Sample label
-3. The character 'i', which will place the row after all 'a's (maximum read
+2. The character 'i', which will place the row after all 'a's (maximum read
     length rows) in lexicographic sort order.
-4. Intron start position (inclusive)
-5. Intron end position (exclusive)
+3. Intron start position (inclusive)
+4. Intron end position (exclusive)
 
-Input is partitioned by strand/sample label (fields 1-2) and sorted by the
-remaining fields.
+Input is partitioned by strand (field 1) and sorted by the remaining fields.
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -49,19 +46,6 @@ import argparse
 import time
 
 _input_line_count, _output_line_count = 0, 0
-
-def running_sum(a_list):
-    """ Generates the running sum of the elements in a list.
-
-        Input:  [a, b, c, d, ...]
-        Output: [a, a+b, a+b+c, a+b+c+d, ...]
-
-        Yield value: next item in output above.
-    """
-    total = 0
-    for item in a_list:
-        total += item
-        yield total
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
         fudge=1):
@@ -103,21 +87,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
         3. Comma-separated list of intron end positions in configuration
         4. extend_size: by how many bases on either side of an intron the
             reference should extend
-
-        input_stream: where to get input
-        output_stream: where to write output
-        verbose: True iff extra debugging messages should be written to stderr
-        fudge: a splice junction may be detected at any position along the read
-            besides directly before or after it; thus, the sequences recorded
-            in the new index should include max_read_size - 1 exonic bases
-            before and after an intron in reference space (on the forward
-            strand). These extensions are extended further by the number of
-            bases fudge to accommodate possible small insertions
-
-        No return value.
     """
     global _input_line_count, _output_line_count
-    last_line, last_line_type, max_read_size = (None,)*3
+    last_line, last_line_type, max_read_size= (None,)*3
     process_introns = True
     while True:
         line = input_stream.readline().rstrip()
@@ -129,16 +101,16 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
                         'Duplicate line encountered; continuing.'
                 continue
             tokens = line.rstrip().split('\t')
-            assert len(tokens) == 5
-            if last_line_type is None and tokens[2] == 'i':
+            assert len(tokens) == 4
+            if last_line_type is None and tokens[1] == 'i':
                 raise RuntimeError('No max_len records were found.')
-            if last_line_type is not None and tokens[2] != last_line_type:
+            if last_line_type is not None and tokens[1] != last_line_type:
                 assert max_read_size is not None
                 extend_size = max_read_size - 1 + fudge
                 extend_size_string = str(extend_size)
                 break
-            elif tokens[2] == 'a':
-                line_type, max_read_size = tokens[2], max(int(tokens[3]),
+            elif tokens[1] == 'a':
+                line_type, max_read_size = tokens[1], max(int(tokens[2]),
                                                             max_read_size)
                 if verbose:
                     print >>sys.stderr, 'Read a max_len record from align.'
@@ -150,8 +122,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
     if verbose:
         print >>sys.stderr, 'Finished processing max_len records from align.'
     if process_introns:
-        last_line, last_strand, last_sample_label = line, tokens[0], tokens[1]
-        intron_combos = [[(int(tokens[3]), int(tokens[4]))]]
+        last_line, last_strand = line, tokens[0]
+        intron_combos = [[(int(tokens[2]), int(tokens[3]))]]
         output_intron_combos = False
         while True:
             line = input_stream.readline().rstrip()
@@ -163,15 +135,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
                             'continuing.'
                     continue
                 tokens = line.rstrip().split('\t')
-                if tokens[2] == 'a':
+                if tokens[1] == 'a':
                     # Already retrieved max_len; just continue
                     continue
-                assert len(tokens) == 5
-                strand, sample_label, pos, end_pos = (tokens[0],
-                                                        tokens[1], 
-                                                        int(tokens[3]),
-                                                        int(tokens[4]))
-                if last_strand == strand and last_sample_label == sample_label:
+                assert len(tokens) == 4
+                strand, pos, end_pos = (tokens[0], int(tokens[2]),
+                                            int(tokens[3]))
+                if last_strand == strand:
                     new_intron_combos, kept_intron_combos = [], []
                     for intron_combo in intron_combos:
                         new_intron_combo = []
@@ -182,10 +152,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
                                 '''If there's no overlap between the current
                                 intron and an intron in an existing
                                 configuration, keep that intron when forming
-                                a new configuration. Otherwise, toss it.
-                                Here, an overlap is defined to occur also
-                                when two introns have no intervening exonic
-                                bases.'''
+                                a new configuration. Otherwise, toss it.'''
                                 new_intron_combo.append(
                                         (intron_pos, intron_end_pos)
                                     )
@@ -198,9 +165,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
                             kept_intron_combos.append(intron_combo)
                         if len(new_intron_combo):
                             new_intron_combos.append(new_intron_combo)
-                    '''Output any intron combos for which the number of exonic
-                    bases between the current intron and the first intron in
-                    the combo is >= extend_size.'''
+                    '''Output any intron combos from which current intron is
+                    separated by extend_size.'''
                     intron_combos = []
                     new_intron_combos.sort()
                     for i, intron_combo in enumerate(new_intron_combos):
@@ -209,24 +175,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
                                 # Eliminate dupe
                                 continue
                         except IndexError: pass
-                        intron_count = len(intron_combo)
-                        exonic_base_counts = [intron_combo[j][0] 
-                            - intron_combo[j-1][1] for j
-                            in xrange(1, intron_count)]
-                        exonic_base_counts.append(pos - intron_combo[-1][1])
-                        exonic_base_sums = \
-                            list(running_sum(exonic_base_counts[::-1]))
-                        cutoff = intron_count
-                        for j in xrange(intron_count):
-                            if exonic_base_sums[j] >= extend_size:
-                                cutoff = j
-                                break
-                        if cutoff != intron_count:
-                            # Output old intron configuration
-                            assert (sum([intron_combo[j][0]
-                                         - intron_combo[j-1][1]
-                                         for j in xrange(1, intron_count)])
-                                      <= extend_size)
+                        if pos - intron_combo[-1][1] >= extend_size:
                             print >>output_stream, ('intron\t' + strand 
                                     + '\t' + 
                                     ','.join([str(intron_pos) for 
@@ -237,24 +186,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
                                                 in intron_combo])
                                     + '\t' + extend_size_string)
                             _output_line_count += 1
-                        # Create new intron configuration
-                        if cutoff:
-                            intron_combos.append(intron_combo[-cutoff:]
-                                                        + [(pos, end_pos)])
                         else:
-                            intron_combos.append([(pos, end_pos)])
+                            # Tack current intron onto combo
+                            intron_combos.append(intron_combo
+                                                    + [(pos, end_pos)])
                     if not len(intron_combos):
-                        '''new_intron_combos may have been empty, leaving the
-                        loop above unexecuted. In this case, [(pos, end_pos)]
-                        still needs to be added as a configuration.'''
-                        intron_combos.append([(pos, end_pos)])
-                    else:
-                        # Remove duplicates from intron_combos
-                        new_intron_combos = []
-                        for intron_combo in intron_combos:
-                            if intron_combo not in new_intron_combos:
-                                new_intron_combos.append(intron_combo)
-                        intron_combos = new_intron_combos
+                        # If no intron combos survived, start a new one
+                        intron_combos = [[(pos, end_pos)]]
                     '''Add kept intron combos---configurations with which the
                     current intron overlaps.'''
                     intron_combos += kept_intron_combos
@@ -269,11 +207,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
                             # Eliminate dupes
                             continue
                     except IndexError: pass
-                    assert (sum([intron_combo[j][0]
-                                         - intron_combo[j-1][1]
-                                         for j in xrange(1,
-                                                          len(intron_combo))])
-                                      <= extend_size)
                     print >>output_stream, ('intron\t' + last_strand + '\t' + 
                             ','.join([str(intron_pos) for 
                                         intron_pos, _ in intron_combo])
@@ -288,8 +221,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, verbose=False,
                 intron_combos'''
                 intron_combos = [[(pos, end_pos)]]
                 output_intron_combos = False
-            last_line, last_strand, last_sample_label = (line, strand,
-                                                            sample_label)
+            last_line, last_strand = line, strand
 
 if __name__ == '__main__':
     # Print file's docstring if -h is invoked
@@ -304,9 +236,9 @@ if __name__ == '__main__':
         help='A splice junction may be detected at any position along the '
              'read besides directly before or after it; thus, the sequences '
              'recorded in the new index should include max_read_size - 1 '
-             'exonic bases before and after an intron in reference space (on '
-             'the forward strand). These extensions are extended further by '
-             'the number of bases --fudge to accommodate possible small '
+             'bases before and after an intron in reference space (on the '
+             'forward strand). These extensions are extended further by the '
+             'number of bases --fudge to accommodate possible small '
              'insertions.')
 
     args = parser.parse_args(sys.argv[1:])
@@ -342,12 +274,12 @@ elif __name__ == '__main__':
                 '''Recall that input is partitioned by first column and 
                 sorted by the next three columns.'''
                 input_stream.write(
-                        'chr1\t1\ta\t20\t-\n'
-                        'chr1\t1\ti\t10\t50\n'
-                        'chr1\t1\ti\t30\t70\n'
-                        'chr1\t1\ti\t75\t101\n'
-                        'chr1\t1\ti\t90\t1300\n'
-                        'chr1\t1\ti\t91\t101\n'
+                        'chr1\ta\t20\t-\n'
+                        'chr1\ti\t10\t50\n'
+                        'chr1\ti\t30\t70\n'
+                        'chr1\ti\t75\t101\n'
+                        'chr1\ti\t90\t1300\n'
+                        'chr1\ti\t91\t101\n'
                     )
                 # Extend size is 20 above with fudge
             with open(self.output_file, 'w') as output_stream:
@@ -365,13 +297,12 @@ elif __name__ == '__main__':
                             [int(pos) for pos in tokens[2].split(',')],
                             [int(end_pos) for end_pos in tokens[3].split(',')]
                         )))
-            print intron_configs
+
             self.assertEqual(
                     set([
                         frozenset([(10, 50)]),
                         frozenset([(30, 70), (75, 101)]),
                         frozenset([(30, 70)]),
-                        frozenset([(75, 101)]),
                         frozenset([(90, 1300)]),
                         frozenset([(91, 101)]),
                     ]), intron_configs
@@ -383,14 +314,14 @@ elif __name__ == '__main__':
                 '''Recall that input is partitioned by first column and 
                 sorted by the next three columns.'''
                 input_stream.write(
-                        'chr1\t1\ta\t15\t-\n'
-                        'chr1\t1\ta\t20\t-\n'
-                        'chr1\t1\ti\t11\t200\n'
-                        'chr1\t1\ti\t31\t56\n'
-                        'chr1\t1\ti\t75\t201\n'
-                        'chr1\t1\ti\t91\t101\n'
-                        'chr1\t1\ti\t205\t225\n'
-                        'chr2\t1\ti\t21\t76\n'
+                        'chr1\ta\t15\t-\n'
+                        'chr1\ta\t20\t-\n'
+                        'chr1\ti\t11\t200\n'
+                        'chr1\ti\t31\t56\n'
+                        'chr1\ti\t75\t201\n'
+                        'chr1\ti\t91\t101\n'
+                        'chr1\ti\t205\t225\n'
+                        'chr2\ti\t21\t76\n'
                     )
                 # Extend size is 20 above with fudge
             with open(self.output_file, 'w') as output_stream:
@@ -410,11 +341,9 @@ elif __name__ == '__main__':
             self.assertEqual(
                     set([
                         frozenset([(11, 200), (205, 225)]),
-                        frozenset([(31, 56), (75, 201)]),
+                        frozenset([(31, 56), (75, 201), (205, 225)]),
                         frozenset([(31, 56)]),
-                        frozenset([(75, 201), (205, 225)]),
-                        frozenset([(91, 101)]),
-                        frozenset([(205, 225)])
+                        frozenset([(91, 101)])
                     ]), intron_configs['chr1']
                 )
             self.assertEqual(

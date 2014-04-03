@@ -164,9 +164,7 @@ with open(fasta_file, 'w') as fasta_stream:
                 if last_rname is None or not (
                         last_rname == rname 
                         and last_reverse_strand_string == reverse_strand_string
-                        and pos - last_end_pos < extend_size
                     ):
-                    if last_rname is not None: write_sequence = True
                     intron_combos = set([frozenset([(pos, end_pos)])])
                     last_end_pos = 1
                 else:

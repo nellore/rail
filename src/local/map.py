@@ -323,7 +323,7 @@ if args.multiple_outputs:
     split_tups = []
     i = 0
     for outfn in outfns:
-        split_tups.append(('task-%05d' % i, outfn))
+        split_tups.append((str(i), outfn))
         i += 1
     split_pool = multiprocessing.Pool(num_processes)
     k2fns = []

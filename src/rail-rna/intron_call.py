@@ -398,7 +398,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
     handle_partition = False
     last_partition_id = None
     candidate_introns = {}
-    candidate_intron_samples = defaultdict(set)
+    candidate_intron_samples = {}
     # Make results reproducible
     random.seed(seed)
     while True:
@@ -406,9 +406,9 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         if line:
             _input_line_count += 1
             tokens = line.rstrip().split('\t')
-            assert len(tokens) == 5
+            assert len(tokens) == 5, tokens
             (partition_id, pos, end_pos, sample_labels,
-                read_count) = (tokens[0], int(tokens[1]), int(tokens[2])
+                read_count) = (tokens[0], int(tokens[1]), int(tokens[2]),
                                 tokens[3], int(tokens[4]))
             sample_labels = sample_labels.split('\x1f')
             assert end_pos > pos, line
@@ -447,7 +447,11 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                 # The sense strand is known, so narrow motif set used
                 if last_reverse_strand:
                     for intron_cluster in intron_clusters:
-                        candidate_intron_samples[]
+                        all_samples = set()
+                        for cluster_pos, cluster_end_pos, _ in intron_cluster:
+                            all_samples = all_samples \
+                                | candidate_intron_samples[(cluster_pos,
+                                                            cluster_end_pos)]
                         ranked_splice_sites = ranked_splice_sites_from_cluster(
                                 reference_index, intron_cluster, last_rname,
                                 _reverse_strand_motifs,
@@ -462,14 +466,21 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                                     == splice_site[2:]], 1)[0]
                             intron_strand = ('-' if cluster_splice_site[-1]
                                                 else '+')
-                            print >>output_stream, \
-                                'intron\t%s%s\ti\t%012d\t%012d' \
-                                % (last_rname, intron_strand, 
-                                    cluster_splice_site[0],
-                                    cluster_splice_site[1])
+                            for a_sample in all_samples:
+                                print >>output_stream, \
+                                    'intron\t%s%s\t%s\ti\t%012d\t%012d' \
+                                    % (last_rname, intron_strand,
+                                        a_sample,
+                                        cluster_splice_site[0],
+                                        cluster_splice_site[1])
                             _output_line_count += 1
                 else:
                     for intron_cluster in intron_clusters:
+                        all_samples = set()
+                        for cluster_pos, cluster_end_pos, _ in intron_cluster:
+                            all_samples = all_samples \
+                                | candidate_intron_samples[(cluster_pos,
+                                                            cluster_end_pos)]
                         ranked_splice_sites = ranked_splice_sites_from_cluster(
                                 reference_index, intron_cluster, last_rname,
                                 _forward_strand_motifs,
@@ -484,15 +495,22 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                                     == splice_site[2:]], 1)[0]
                             intron_strand = ('-' if cluster_splice_site[-1]
                                                 else '+')
-                            print >>output_stream, \
-                                'intron\t%s%s\ti\t%012d\t%012d' \
-                                % (last_rname, intron_strand, 
-                                    cluster_splice_site[0],
-                                    cluster_splice_site[1])
+                            for a_sample in all_samples:
+                                print >>output_stream, \
+                                    'intron\t%s%s\t%s\ti\t%012d\t%012d' \
+                                    % (last_rname, intron_strand,
+                                        a_sample,
+                                        cluster_splice_site[0],
+                                        cluster_splice_site[1])
                             _output_line_count += 1
             else:
                 # The sense strand is unknown, so use a general motif set
                 for intron_cluster in intron_clusters:
+                    all_samples = set()
+                    for cluster_pos, cluster_end_pos, _ in intron_cluster:
+                        all_samples = all_samples \
+                            | candidate_intron_samples[(cluster_pos,
+                                                        cluster_end_pos)]
                     ranked_splice_sites = ranked_splice_sites_from_cluster(
                             reference_index, intron_cluster, last_rname,
                             _unstranded_motifs,
@@ -507,11 +525,12 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                                  == splice_site[2:]], 1)[0]
                         intron_strand = ('-' if cluster_splice_site[-1] 
                                             else '+')
-                        print >>output_stream, \
-                                    'intron\t%s%s\ti\t%012d\t%012d' \
-                                    % (last_rname, intron_strand, 
-                                        cluster_splice_site[0],
-                                        cluster_splice_site[1])
+                        for a_sample in all_samples:
+                            print >>output_stream, \
+                                'intron\t%s%s\t%s\ti\t%012d\t%012d' \
+                                % (last_rname, intron_strand, a_sample,
+                                   cluster_splice_site[0],
+                                   cluster_splice_site[1])
                         _output_line_count += 1
             candidate_introns = {}
             candidate_intron_samples = {}
@@ -520,6 +539,8 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
             candidate_introns[(pos, end_pos)] = \
                 candidate_introns.get((pos, end_pos), 0) + read_count
             for sample_label in sample_labels:
+                if (pos, end_pos) not in candidate_intron_samples:
+                    candidate_intron_samples[(pos, end_pos)] = set()
                 candidate_intron_samples[(pos, end_pos)].add(sample_label)
             (last_partition_id, last_partition_start, last_partition_end, 
                 last_rname) \

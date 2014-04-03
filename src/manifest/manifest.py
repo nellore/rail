@@ -29,3 +29,17 @@ def labels(args):
             else:
                 raise RuntimeError("Wrong number of tokens in line: " + line)
     return labs
+
+class LabelsAndIndices:
+    """ Parse the manifest file to create dictionaries mapping index strings to
+    sample names. """
+    def __init__(self, manifest_file):
+        self.label_to_index = {}
+        self.index_to_label = {}
+        with open(manifest_file) as manifest_stream:
+            for i, line in enumerate(manifest_stream):
+                tokens = line.rstrip().split('\t')
+                assert len(tokens) <= 5, ('Manifest file has invalid line: %s' % line)
+                index_string = str(i)
+                self.label_to_index[tokens[-1]] = index_string
+                self.index_to_label[index_string] = tokens[-1]

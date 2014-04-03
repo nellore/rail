@@ -27,7 +27,7 @@ Hadoop output (written to stdout)
 ----------------------------
 Tab-delimited output tuple columns (only 1 per sample):
 1. The character '-', ensuring there's exactly one partition
-2. Sample label
+2. Original sample label
 3. Normalization factor
 
 Other output (written to directory specified by command-line parameter --out)
@@ -41,9 +41,10 @@ import argparse
 import subprocess
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['util', 'fasta', 'bowtie']:
+for directory_name in ['util', 'fasta', 'bowtie', 'manifest']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
+import manifest
 import bowtie
 import bowtie_index
 import url
@@ -63,6 +64,9 @@ parser.add_argument(\
     '--out', metavar='URL', type=str, required=False, default='.',
     help='URL to which bigBed coverage output should be written. '
          'DEFAULT IS CURRENT WORKING DIRECTORY, NOT STDOUT')
+parser.add_argument('--manifest', type=str, required=False,
+        default='manifest',
+        help='Path to manifest file')
 parser.add_argument(\
     '--bigbed-exe', type=str, required=False, default='bedToBigBed',
     help='Location of the Kent Tools bedToBigBed executable')
@@ -110,6 +114,8 @@ output_filename, output_url = None, None
 '''Make RNAME lengths available from reference FASTA so SAM header can be
 formed; reference_index.rname_lengths[RNAME] is the length of RNAME.''' 
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
+# For mapping sample indices back to original sample labels
+manifest_object = manifest.LabelsAndIndices(args.manifest)
 # Create file with chromosome sizes for bedToBigBed
 sizes_filename = os.path.join(temp_dir_path, 'chrom.sizes')
 with open(sizes_filename, 'w') as sizes_stream:
@@ -141,6 +147,7 @@ while True:
         assert rname in reference_index.string_to_rname, \
             'RNAME number string "%s" not in Bowtie index.' % rname
         rname = reference_index.string_to_rname[rname]
+        sample_label = manifest_object.index_to_label[sample_label]
     if (not line or sample_label != last_sample_label) \
         and last_sample_label is not None:
         # All of a sample's coverage entries have been read

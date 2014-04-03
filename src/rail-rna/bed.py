@@ -48,11 +48,11 @@ import site
 import argparse
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['bowtie', 'util']:
+for directory_name in ['bowtie', 'util', 'manifest']:
     site.addsitedir(os.path.join(base_path, directory_name))
 import bowtie
 import bowtie_index
-
+import manifest
 # Define string version_number
 import version
 import url
@@ -65,6 +65,9 @@ parser.add_argument(\
     '--out', metavar='URL', type=str, required=False, default=None,
     help='URL to which BED output should be written. Default is stdout. '
          'If left unspecified, --output-by-chromosome is taken to be False.')
+parser.add_argument('--manifest', type=str, required=False,
+        default='manifest',
+        help='Path to manifest file')
 parser.add_argument(\
     '--bed-basename', type=str, required=False, 
     default='junctions',
@@ -79,6 +82,8 @@ import time
 start_time = time.time()
 
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
+# For mapping sample indices back to original sample labels
+manifest_object = manifest.LabelsAndIndices(args.manifest)
 (output_filename, last_output_filename, output_path, output_stream, output_url,
     last_sample_label) = [None]*6
 if args.out is not None:
@@ -110,6 +115,7 @@ while True:
             block_sizes, block_starts) \
             = line.split('\t')
         chrom = reference_index.string_to_rname[chrom]
+        sample_label = manifest_object.index_to_label[sample_label]
     if move_temporary_file and last_sample_label is not None \
         and not output_url.isLocal():
         mover.put(last_output_path,

@@ -7,15 +7,18 @@ python absoluteize.py < dmel_flux.manifest > dmel_flux.abs.manifest
 
 python $RAIL_HOME/src/driver/rail-rna.py \
 	--local \
-	--no-differential \
+        --no-differential \
         --manifest dmel_flux.abs.manifest \
-	--input preprocessed_reads \
+	--input preprocess  \
 	--intermediate intermediate \
 	--output local_out \
         --reference $IGENOMES_HOME/Drosophila_melanogaster/UCSC/dm3 \
         --igenomes \
-        --readlet-interval 3 \
+        --min-cap-query-size 8 \
+        --readlet-interval 4 \
+        --readlet-length 25 \
         --num-processes 25 \
-	--cap-search-window-size 0 \
+	--cap-search-window-size 1000 \
+        --output-bam-by-chromosome \
         --keep-all \
 	$*

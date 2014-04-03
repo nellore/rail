@@ -53,11 +53,12 @@ import site
 import argparse
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['util', 'fasta', 'bowtie']:
+for directory_name in ['util', 'fasta', 'bowtie', 'manifest']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
 import bowtie
 import bowtie_index
+import manifest
 # Define string version_number
 import version
 import url
@@ -75,6 +76,9 @@ parser.add_argument(\
     help='Split SAM/BAM output files up by RNAME (typically chromosome) if '
          'True; otherwise output single SAM/BAM file consolidating all'
          'alignments')
+parser.add_argument('--manifest', type=str, required=False,
+        default='manifest',
+        help='Path to manifest file')
 parser.add_argument(\
     '--bam-basename', type=str, required=False, 
     default='alignments',
@@ -108,6 +112,8 @@ reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
 # Get RNAMEs in order of descending length
 sorted_rnames = [reference_index.string_to_rname['%012d' % i]
                     for i in xrange(len(reference_index.string_to_rname) - 1)]
+# For mapping sample indices back to original sample labels
+manifest_object = manifest.LabelsAndIndices(args.manifest)
 
 (output_path, output_filename, output_stream, output_url,
     last_rname, last_sample_label) = [None]*6
@@ -141,6 +147,7 @@ while True:
     else:
         tokens = line.rstrip().split('\t')
         sample_label, rname, pos, qname, flag = tokens[:5]
+        sample_label = manifest_object.index_to_label[sample_label]
         rname = reference_index.string_to_rname[rname]
     if move_temporary_file and last_sample_label is not None \
         and not output_url.isLocal():

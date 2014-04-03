@@ -103,9 +103,10 @@ import subprocess
 import itertools
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['bowtie', 'sample', 'interval']:
+for directory_name in ['bowtie', 'sample', 'interval', 'manifest']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
+import manifest
 import bowtie
 import bowtie_index
 import sample
@@ -211,15 +212,18 @@ def multiread_with_introns(multiread, stranded=False):
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
-    def __init__(self, input_stream, reference_index, output_stream=sys.stdout,
-        exon_differentials=True, exon_intervals=False, stranded=False,
-        verbose=False, bin_size=10000, report_multiplier=1.2):
+    def __init__(self, input_stream, reference_index, manifest_object,
+        output_stream=sys.stdout, exon_differentials=True, 
+        exon_intervals=False, stranded=False, verbose=False, bin_size=10000,
+        report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
                 Bowtie process's stdout.
             reference_index: object of class BowtieIndexReference; for
                 outputing RNAME number strings to facilitate later sorting
+            manifest_object: object of class LabelsAndIndices that maps indices
+                to labels and back; used to shorten intermediate output.
             output_stream: where to emit exon and intron tuples; typically,
                 this is sys.stdout.
             exon_differentials: True iff EC differentials are to be emitted.
@@ -246,6 +250,7 @@ class BowtieOutputThread(threading.Thread):
         self.report_multiplier = report_multiplier
         self.exon_differentials = exon_differentials
         self.exon_intervals = exon_intervals
+        self.manifest_object = manifest_object
 
     def run(self):
         """ Prints SAM, exon_ivals, exon_diffs, and introns.
@@ -290,7 +295,9 @@ class BowtieOutputThread(threading.Thread):
                     # Write only the SAM output if the read was unmapped
                     print >>self.output_stream, 'splice_sam\t' \
                          + '\t'.join(
-                                [sample.parseLab(last_tokens[0][:-2]),
+                                [self.manifest_object.label_to_index[
+                                        sample.parseLab(last_tokens[0][:-2])
+                                    ],
                                     self.reference_index.rname_to_string[
                                             last_tokens[2]
                                         ], '%012d' % 
@@ -304,7 +311,9 @@ class BowtieOutputThread(threading.Thread):
                     corrected_multiread = multiread_with_introns(
                                                 multiread, self.stranded
                                             )
-                    sample_label = sample.parseLab(multiread[0][0][:-2])
+                    sample_label = self.manifest_object.label_to_index[
+                                        sample.parseLab(multiread[0][0][:-2])
+                                        ]
                     for alignment in corrected_multiread:
                         print >>self.output_stream, 'splice_sam\t' \
                             + '\t'.join(
@@ -388,14 +397,11 @@ class BowtieOutputThread(threading.Thread):
                                         partition_end) in partitions:
                                     assert exon_pos < partition_end
                                     # Print increment at interval start
-                                    diff_rname, diff_bin \
-                                        = partition_id.split(';')
                                     print >>self.output_stream, \
-                                        'exon_diff\t%s;%d;%s\t%s\t1' \
-                                        % (diff_rname,
-                                            max(partition_start, exon_pos),
+                                        'exon_diff\t%s\t%s\t%012d\t1' \
+                                        % (partition_id,
                                             sample_label,
-                                            diff_bin)
+                                            max(partition_start, exon_pos))
                                     _output_line_count += 1
                                     assert exon_end_pos > partition_start
                                     if exon_end_pos < partition_end:
@@ -403,12 +409,11 @@ class BowtieOutputThread(threading.Thread):
                                         iff exon ends before partition
                                         ends.'''
                                         print >>self.output_stream, \
-                                            'exon_diff\t%s;%d;%s\t' \
-                                            '%s\t-1' \
-                                            % (diff_rname, 
-                                                exon_end_pos,
+                                            'exon_diff\t%s\t%s\t' \
+                                            '%012d\t-1' \
+                                            % (partition_id, 
                                                 sample_label,
-                                                diff_bin)
+                                                exon_end_pos)
                                         _output_line_count += 1
                 multiread = []
             if not line: break
@@ -437,8 +442,8 @@ def handle_temporary_directory(archive, temp_dir_path):
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     reference_index_base='genome', bowtie_index_base='intron',
     bowtie_args=None, temp_dir_path=tempfile.mkdtemp(), bin_size=10000,
-    verbose=False, exon_differentials=True, exon_intervals=False,
-    stranded=False, report_multiplier=1.2):
+    manifest_file='manifest', verbose=False, exon_differentials=True,
+    exon_intervals=False, stranded=False, report_multiplier=1.2):
     """ Runs Rail-RNA-realign.
 
         Uses Bowtie index including only sequences framing introns to align
@@ -542,6 +547,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             with only the introns.
         bowtie_args: string containing precisely extra command-line arguments
             to pass to Bowtie, e.g., "--tryhard --best"; or None.
+        manifest_file: path to manifest file
         temp_dir_path: path of temporary directory for storing intermediate
             alignments
         bin_size: genome is partitioned in units of bin_size for later load
@@ -563,6 +569,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     import time
     start_time = time.time()
     reference_index = bowtie_index.BowtieIndexReference(reference_index_base)
+    manifest_object = manifest.LabelsAndIndices(manifest_file)
     bowtie_process, bowtie_command, threads = bowtie.proc(
             bowtieExe=bowtie_exe, bowtieIdx=bowtie_index_base,
             readFn=None, bowtieArgs=bowtie_args, sam=True,
@@ -571,6 +578,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     output_thread = BowtieOutputThread(
                         bowtie_process.stdout,
                         reference_index=reference_index,
+                        manifest_object=manifest_object,
                         exon_differentials=exon_differentials, 
                         exon_intervals=exon_intervals, 
                         bin_size=bin_size,
@@ -627,7 +635,10 @@ if __name__ == '__main__':
         '--original-idx', metavar='INDEX', type=str, required=False,
         default='genome',
         help='Path to Bowtie index of original reference. Specify its '
-             'basename.')
+             'basename')
+    parser.add_argument('--manifest', type=str, required=False,
+        default='manifest',
+        help='Path to manifest file')
     parser.add_argument('--archive', metavar='PATH', type=str, 
         default=None,
         help='Save output and Bowtie command to a subdirectory (named using ' 
@@ -666,6 +677,7 @@ if __name__ == '__main__' and not args.test:
         reference_index_base=args.original_idx,
         bowtie_index_base=args.bowtie_idx,
         bowtie_args=bowtie_args,
+        manifest_file=args.manifest,
         temp_dir_path=temp_dir_path, 
         verbose=args.verbose, 
         bin_size=args.partition_length,

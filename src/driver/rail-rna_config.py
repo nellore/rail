@@ -20,11 +20,11 @@ def addArgs(parser):
     parser.add_argument(\
         '--readlet-interval', metavar='INT', type=int, default="4", help='Distance between substrings to extract from read.')
     parser.add_argument(\
-        '--capping-fraction', metavar='FRACTION', type=float, default="0.85", help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
+        '--capping-multiplier', metavar='FRACTION', type=float, default=1.2, help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\
         '--partition-length', metavar='INT', type=int, default=5000, help='Size of genome partitions to use.')
     parser.add_argument(\
-        '--cluster-radius', metavar='INT', type=int, default="50", help='For clustering candidate introns into junctions.')
+        '--cluster-radius', metavar='INT', type=int, default=50, help='For clustering candidate introns into junctions.')
     parser.add_argument(\
         '--motif-radius', type=int, required=False, default=100,
         help='Distance (in bp) from each of the start and end positions '
@@ -121,9 +121,9 @@ class Rail_RNAConfig(object):
         l = self.readletLen = args.readlet_length
         if l < 4:
             raise RuntimeError("Argument for --readlet-length must be >= 4; was %d" % l)
-        c = self.capping_fraction = args.capping_fraction
-        if not 0 <= c < 1:
-            raise RuntimeError("Argument for --capping-fraction must be on [0, 1); was %d" % c)
+        c = self.capping_multiplier = args.capping_multiplier
+        if c < 1:
+            raise RuntimeError("Argument for --capping-multiplier must be >= 1; was %.3f" % c)
         i = self.readletIval = args.readlet_interval
         if i < 1:
             raise RuntimeError("Argument for --readlet-interval must be >= 1; was %d" % i)

@@ -54,7 +54,7 @@ in_args = False
 for i in xrange(1, len(sys.argv)):
     if in_args:
         reduce_argv.append(sys.argv[i])
-    if sys.argv[i] == '--':
+    elif sys.argv[i] == '--':
         argv = sys.argv[:i]
         in_args = True
 
@@ -211,7 +211,7 @@ def check_fail_queue():
 
 import random
 message('Writing input records to %d tasks' % args.num_tasks)
-task_names = ["task-%05d" % i for i in xrange(args.num_tasks)]
+task_names = [str(i) for i in xrange(args.num_tasks)]
 tot = 0
 ofhs = {}
 for inp in inps:
@@ -359,8 +359,11 @@ if tot > 0:
         cmd = 'cat %s | %s >%s 2>%s' % (sorted_fn, reduce_cmd, out_fn, err_fn)
         wd = os.path.join(working_dir, task)
         check_dir(wd, 800)
-        message('Pid %d processing %s' % (os.getpid(), task))
-        pipe = subprocess.Popen(cmd, bufsize=-1, shell=True, cwd=wd)
+        message('Pid %d processing task %s' % (os.getpid(), task))
+        # Simulate MapReduce task partition assignment
+        new_env = os.environ.copy()
+        new_env['mapred_task_partition'] = task
+        pipe = subprocess.Popen(cmd, bufsize=-1, shell=True, cwd=wd, env=new_env)
         el = pipe.wait()
         if el != 0:
             msg = 'Reduce command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)

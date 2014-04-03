@@ -45,9 +45,9 @@ class PreprocessingStep(pipeline.Step):
             mapper=mapper_str)
 
 
-class AlignStep(pipeline.Step):
+class AlignReadsStep(pipeline.Step):
     def __init__(self, inps, output, tconf, _):
-        mapper_str = """
+        '''mapper_str = """
             python %%BASE%%/src/rail-rna/align.py
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --bowtie-exe=%%BOWTIE%%
@@ -68,15 +68,115 @@ class AlignStep(pipeline.Step):
                              '--do-not-search-for-caps' if tconf.do_not_search_for_caps else '',
                              tconf.min_cap_query_size,
                              tconf.cap_search_window_size,
+                             tconf.bowtieArgs())'''
+        mapper_str = """
+            python %%BASE%%/src/rail-rna/align_reads.py
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
+                --bowtie-exe=%%BOWTIE%%
+                --exon-differentials 
+                --partition-length %d
+                --manifest=%%MANIFEST%%
+                --verbose
+                -- %s """ % (tconf.partitionLen,
                              tconf.bowtieArgs())
         mapper_str = re.sub('\s+', ' ', mapper_str.strip())
-        super(AlignStep, self).__init__(
+        super(AlignReadsStep, self).__init__(
             inps,
             output,
-            name="Align",
+            name="AlignReads",
             mapper=mapper_str,
             multipleOutput=True)
 
+class CombineSequencesStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, _):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/sum.py
+                --type 3
+                --value-count 2
+                %s
+        """ % ('',)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(CombineSequencesStep, self).__init__(
+            inps,
+            output,  # output URL
+            name="CombineSequences",  # name
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
+            reducer=reducer_str)
+
+class ReadletizeStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, _):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/readletize.py
+                --max-readlet-size %d 
+                --readlet-interval %d 
+                --capping-multiplier %f
+        """ % (tconf.readletLen, tconf.readletIval, tconf.capping_multiplier)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(ReadletizeStep, self).__init__(
+            inps,
+            output,  # output URL
+            name="Readletize",  # name
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
+            reducer=reducer_str)
+
+class CombineSubsequencesStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, _):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/sum.py
+                --type 3
+                %s
+        """ % ('',)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(CombineSubsequencesStep, self).__init__(
+            inps,
+            output,  # output URL
+            name="CombineSubsequences",  # name
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
+            reducer=reducer_str)
+
+class AlignReadletsStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, _):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/align_readlets.py
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
+                --bowtie-exe=%%BOWTIE%%
+                --verbose
+                -- %s
+        """ % ('-t --sam-nohead --startverbose -v 0 -a -m 80',)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(AlignReadletsStep, self).__init__(
+            inps,
+            output,  # output URL
+            name="AlignReadlets",  # name
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
+            reducer=reducer_str)
+
+class IntronSearchStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, _):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/intron_search.py
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
+                --partition-length %d
+                --max-intron-size %d
+                --min-intron-size %d
+                --verbose %s %s
+                --min-cap-query-size %d
+                --cap-search-window-size %d
+                """ % (tconf.partitionLen,
+                             tconf.max_intron_size,
+                             tconf.min_intron_size,
+                             '--stranded' if tconf.stranded else '',
+                             '--do-not-search-for-caps' if tconf.do_not_search_for_caps else '',
+                             tconf.min_cap_query_size,
+                             tconf.cap_search_window_size)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(IntronSearchStep, self).__init__(
+            inps,
+            output,  # output URL
+            name="IntronSearch",  # name
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
+            reducer=reducer_str,
+            multipleOutput=True)
 
 class BamStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
@@ -86,6 +186,7 @@ class BamStep(pipeline.Step):
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --samtools-exe=%%SAMTOOLS%%
                 --bam-basename=%s
+                --manifest=%%MANIFEST%%
                 %s
                 %s
             """ % (gconf.out, tconf.bam_basename,
@@ -101,10 +202,10 @@ class BamStep(pipeline.Step):
             reducer=reducer_str)
 
 
-class IntronStep(pipeline.Step):
+class IntronCallStep(pipeline.Step):
     def __init__(self, inps, output, tconf, _):
         reducer_str = """
-            python %%BASE%%/src/rail-rna/intron.py
+            python %%BASE%%/src/rail-rna/intron_call.py
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --cluster-radius=%d
                 --intron-partition-overlap=%d
@@ -116,10 +217,10 @@ class IntronStep(pipeline.Step):
                tconf.partitionLen, tconf.motifRadius,
                '--stranded' if tconf.stranded else '')
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(IntronStep, self).__init__(
+        super(IntronCallStep, self).__init__(
             inps,
             output,  # output URL
-            name="Intron",  # name
+            name="IntronCall",  # name
             aggr=pipeline.Aggregation(None, 4, 1, 1),  # 8 tasks per reducer
             reducer=reducer_str,
             multipleOutput=True)
@@ -146,7 +247,8 @@ class BedStep(pipeline.Step):
         reducer_str = """
             python %%BASE%%/src/rail-rna/bed.py 
                 --bowtie-idx=%%REF_BOWTIE_INDEX%%
-                --out=%s/junctions 
+                --out=%s/junctions
+                --manifest=%%MANIFEST%%
                 --bed-basename=%s""" % (gconf.out, tconf.bed_basename)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(BedStep, self).__init__(
@@ -187,7 +289,7 @@ class IntronConfigStep(pipeline.Step):
             inps,
             output,
             name="IntronConfig",
-            aggr=pipeline.Aggregation(None, 1, 1, 4),
+            aggr=pipeline.Aggregation(None, 1, 2, 5),
             reducer=reducer_str,
             multipleOutput=True)
 
@@ -245,7 +347,8 @@ class RealignStep(pipeline.Step):
                 --bowtie-idx=%%REF_INTRON_INDEX%%
                 --bowtie-exe=%%BOWTIE%%
                 --partition-length %d
-                --exon-differentials 
+                --exon-differentials
+                --manifest=%%MANIFEST%%
                 --verbose %s
                 -- %s""" % (tconf.partitionLen,
                             '--stranded' if tconf.stranded else '',
@@ -296,7 +399,7 @@ class NormalizePreStep(pipeline.Step):
 class CollapseStep(pipeline.Step):
     def __init__(self, inps, output, tconf, _):
         reducer_str = """
-            python %%BASE%%/src/rail-rna/collapse.py 
+            python %%BASE%%/src/rail-rna/sum.py 
                 %s
             """ % ('',)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
@@ -305,8 +408,7 @@ class CollapseStep(pipeline.Step):
             output,  # output URL
             name="Collapse",  # name
             aggr=pipeline.Aggregation(None, 8, 1, 1),
-            reducer=reducer_str,
-            multipleOutput=True)
+            reducer=reducer_str)
 
 
 class CoveragePreStep(pipeline.Step):
@@ -333,6 +435,7 @@ class CoverageStep(pipeline.Step):
                 --percentile %f
                 --out=%s/coverage
                 --bigbed-exe=%%BEDTOBIGBED%%
+                --manifest=%%MANIFEST%%
                 --verbose""" % (tconf.normPercentile, gconf.out)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(CoverageStep, self).__init__(

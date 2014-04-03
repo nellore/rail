@@ -1,5 +1,6 @@
 """
 Rail-RNA-coverage_pre
+
 Follows Rail-RNA-collapse
 Precedes Rail-RNA-coverage
 
@@ -82,7 +83,9 @@ while True:
         partition_id, sample_label, pos, differential = (tokens[0],
             tokens[1], int(tokens[2]), int(tokens[3]))
         # Convert RNAME to number string
-        rname = reference_index.rname_to_string[partition_id.split(';')[0]]
+        rname = reference_index.rname_to_string[
+                partition_id.rpartition(';')[0]
+            ]
         if partition_id != last_partition_id \
             or sample_label != last_sample_label:
             '''Reset coverage count for new partitions/sample labels; the next

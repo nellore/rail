@@ -1,20 +1,12 @@
 #!/usr/bin/env python
 """
-Rail-RNA-intron_call
+Rail-RNA-intron
 
 Follows Rail-RNA-align
 Precedes Rail-RNA-intron_config
 
-Reduce step in MapReduce pipelines that infers intron start/end positions from 
-spliced alignments output by Rail-RNA-align. Each worker operates on a set of
-genome partitions, clustering alignments that overlap and associating clusters
-with donor/acceptor motifs.
-
-If the input reads are NOT stranded, then all relevant splice junction
-(donor/acceptor) motifs must be permitted, including, e.g. both GT-AG and
-CT-AC. If the input reads are stranded, motifs that are inconsistent with the
-strand of the flanking aligned sequences can be ignored. The --stranded option
-handles this.
+Reduce step in MapReduce pipelines. Each worker operates on a set of genome
+partitions, clustering alignments that overlap.
 
 Input (read from stdin)
 ----------------------------
@@ -61,8 +53,6 @@ for directory_name in ['interval', 'bowtie']:
 import partition
 import bowtie
 import bowtie_index
-
-_input_line_count, _output_line_count = 0, 0
 
 '''Initialize lists of donor/acceptor motifs in order of descending priority;
 the unstranded motif list is used if --stranded is False; otherwise, 
@@ -324,7 +314,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         output_stream=sys.stdout, bin_size=10000, cluster_radius=5,
         stranded=False, intron_partition_overlap=20, motif_radius=1, 
         min_anchor_significance=9, seed=0, verbose=False):
-    """ Runs Rail-RNA-intron_call.
+    """ Runs Rail-RNA-intron.
 
         Input lines are binned, so they are examined two at a time. When the
         first column of the input --- the partition --- differs between the
@@ -346,25 +336,21 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         Tab-delimited columns:
         1. Reference name (RNAME in SAM format) + ';' + partition number +  
             ('+' or '-' indicating which strand is the sense strand if input
-            reads are strand-specific -- that is, --stranded in
-            Rail-RNA-intron_search was invoked; otherwise, there is no terminal
-            '+' or '-')
+            reads are strand-specific -- that is, --stranded in Rail-RNA-align
+            was invoked; otherwise, there is no terminal '+' or '-')
         2. Candidate intron start (inclusive) on forward strand (1-indexed)
         3. Candidate intron end (exclusive) on forward strand (1-indexed)
-        4. '\x1f'-separated list of sample (label)s in which intron was
-            detected
-        5. Total number of reads supporting intron
 
         Input is partitioned by column 1.
 
         Hadoop output (written to stdout)
         ----------------------------
         Tab-delimited columns:
-        1. Reference name (RNAME in SAM format) +
+        1. The character '-', enforcing a single partition.
+        2. The character 'i', which will place the row after 'a' (maximum read length
+            rows) in lexicographic sort order.
+        3. Reference name (RNAME in SAM format) +
             '+' or '-' indicating which strand is the sense strand
-        2. Sample label
-        3. The character 'i', which will place the row after 'a' (maximum read
-            length rows) in lexicographic sort order.
         4. Intron start position (inclusive)
         5. Intron end position (exclusive)
 
@@ -393,24 +379,22 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
 
         No return value.
     """
-    global _input_line_count, _output_line_count
+    start_time = time.time()
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
+    input_line_count, output_line_count = 0, 0
     handle_partition = False
     last_partition_id = None
     candidate_introns = {}
-    candidate_intron_samples = defaultdict(set)
     # Make results reproducible
     random.seed(seed)
     while True:
         line = input_stream.readline()
         if line:
-            _input_line_count += 1
+            input_line_count += 1
             tokens = line.rstrip().split('\t')
-            assert len(tokens) == 5
-            (partition_id, pos, end_pos, sample_labels,
-                read_count) = (tokens[0], int(tokens[1]), int(tokens[2])
-                                tokens[3], int(tokens[4]))
-            sample_labels = sample_labels.split('\x1f')
+            assert len(tokens) == 3
+            partition_id, pos, end_pos = tokens
+            pos, end_pos = int(pos), int(end_pos)
             assert end_pos > pos, line
             if stranded:
                 '''If input reads are strand-specific, the partition_id has a
@@ -447,7 +431,6 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                 # The sense strand is known, so narrow motif set used
                 if last_reverse_strand:
                     for intron_cluster in intron_clusters:
-                        candidate_intron_samples[]
                         ranked_splice_sites = ranked_splice_sites_from_cluster(
                                 reference_index, intron_cluster, last_rname,
                                 _reverse_strand_motifs,
@@ -467,7 +450,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 % (last_rname, intron_strand, 
                                     cluster_splice_site[0],
                                     cluster_splice_site[1])
-                            _output_line_count += 1
+                            output_line_count += 1
                 else:
                     for intron_cluster in intron_clusters:
                         ranked_splice_sites = ranked_splice_sites_from_cluster(
@@ -489,7 +472,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                 % (last_rname, intron_strand, 
                                     cluster_splice_site[0],
                                     cluster_splice_site[1])
-                            _output_line_count += 1
+                            output_line_count += 1
             else:
                 # The sense strand is unknown, so use a general motif set
                 for intron_cluster in intron_clusters:
@@ -512,21 +495,22 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
                                     % (last_rname, intron_strand, 
                                         cluster_splice_site[0],
                                         cluster_splice_site[1])
-                        _output_line_count += 1
+                        output_line_count += 1
             candidate_introns = {}
-            candidate_intron_samples = {}
             handle_partition = False
         if line:
             candidate_introns[(pos, end_pos)] = \
-                candidate_introns.get((pos, end_pos), 0) + read_count
-            for sample_label in sample_labels:
-                candidate_intron_samples[(pos, end_pos)].add(sample_label)
+                candidate_introns.get((pos, end_pos), 0) + 1
             (last_partition_id, last_partition_start, last_partition_end, 
                 last_rname) \
             = (partition_id, partition_start, partition_end, rname)
             if stranded:
                 last_reverse_strand = reverse_strand
         else: break
+
+    print >> sys.stderr, 'DONE with intron.py; in/out=%d/%d; ' \
+        'time=%0.3f s' % (input_line_count, output_line_count,
+                                time.time() - start_time)
 
 if __name__ == '__main__':
     import argparse
@@ -563,16 +547,12 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
 
 if __name__ == '__main__' and not args.test:
-    start_time = time.time()
     go(bowtie_index_base=args.bowtie_idx,
         bin_size=args.partition_length,
         cluster_radius=args.cluster_radius,
         intron_partition_overlap=args.intron_partition_overlap,
         motif_radius=args.motif_radius,
         verbose=args.verbose)
-    print >> sys.stderr, 'DONE with intron.py; in/out=%d/%d; ' \
-        'time=%0.3f s' % (_input_line_count, _output_line_count,
-                                time.time() - start_time)
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
