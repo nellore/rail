@@ -56,27 +56,47 @@ import site
 import threading
 import subprocess
 import string
+import tempfile
+import atexit
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-site.addsitedir(os.path.join(base_path, 'bowtie'))
+for directory_name in ['bowtie', 'util']:
+    site.addsitedir(os.path.join(base_path, directory_name))
 
+'''For creating a persistent dictionary with an SQLite3 backend; see
+https://pypi.python.org/pypi/sqlitedict'''
+import sqlitedict
 import bowtie
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
 _output_line_count = 0
 
+def handle_temporary_directory(temp_dir_path):
+    """ Deletes temporary directory.
+
+        temp_dir_path: path of temporary directory for storing intermediate
+            alignments; archived if archive is not None.
+
+        No return value.
+    """
+    import shutil
+    shutil.rmtree(temp_dir_path)
+
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
-    def __init__(self, input_stream, output_stream=sys.stdout, verbose=False,
-        report_multiplier=1.2):
+    def __init__(self, input_stream, qname_to_reads, output_stream=sys.stdout,
+        verbose=False, report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
                 Bowtie process's stdout.
             output_stream: where to emit exon and intron tuples; typically,
                 this is sys.stdout.
+            qname_to_reads: maps Bowtie's output qname to seqs associated
+                with aligned readlet; that is, the second column in the input
+                to this file
             verbose: True if alignments should occasionally be written 
                 to stderr.
             bin_size: genome is partitioned in units of bin_size for later load
@@ -91,6 +111,7 @@ class BowtieOutputThread(threading.Thread):
         self.output_stream = output_stream
         self.verbose = verbose
         self.report_multiplier = report_multiplier
+        self.qname_to_reads = qname_to_reads
 
     def run(self):
         """ Prints exons for end-to-end alignments.
@@ -114,6 +135,7 @@ class BowtieOutputThread(threading.Thread):
             (last_qname, last_flag, last_rname, last_pos, last_mapq,
                 last_cigar, last_rnext, last_pnext,
                 last_tlen, last_seq, last_qual) = last_tokens[:11]
+            last_qname = self.qname_to_reads[last_qname]
             last_flag = int(last_flag)
             break
         # While labeled multireadlet, this list may end up simply a unireadlet
@@ -125,6 +147,7 @@ class BowtieOutputThread(threading.Thread):
                 (qname, flag, rname, pos, mapq, cigar, rnext,
                     pnext, tlen, seq, qual) = tokens[:11]
                 flag = int(flag)
+                qname = self.qname_to_reads[qname]
             if self.verbose and next_report_line == i:
                 print >>sys.stderr, \
                     'SAM output record %d: rdname="%s", flag=%d' % (i,
@@ -244,6 +267,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         No return value.
     """
     global _input_line_count
+    # For creating persistent dictionary
+    db_directory = tempfile.mkdtemp()
+    atexit.register(handle_temporary_directory, db_directory)
+    db_filename = os.path.join(db_directory, 'readinfo.db')
+    qname_to_reads = sqlitedict.SqliteDict(db_filename)
     bowtie_process, bowtie_command, threads = bowtie.proc(
             bowtieExe=bowtie_exe, bowtieIdx=bowtie_index_base,
             readFn=None, bowtieArgs=bowtie_args, sam=True,
@@ -251,20 +279,31 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         )
     output_thread = BowtieOutputThread(
             bowtie_process.stdout,
+            qname_to_reads,
             verbose=verbose, 
             output_stream=output_stream,
             report_multiplier=report_multiplier
         )
     threads.append(output_thread)
     output_thread.start()
-    for line in input_stream:
-        _input_line_count += 1
-        qname_and_seq = line.rstrip().split('\t')[::-1]
-        if len(qname_and_seq) != 2:
-            continue
-        qual_seq = ['I'*len(qname_and_seq[-1])]
-        print >>bowtie_process.stdin, '\t'.join(qname_and_seq + qual_seq)
-    bowtie_process.stdin.close()
+    line = None
+    try:
+        for _input_line_count, line in enumerate(input_stream):
+            tokens = line.rstrip().split('\t')
+            assert len(tokens) == 2
+            seq, qname = tokens
+            qual_seq = 'I'*len(seq)
+            index = str(_input_line_count)
+            qname_to_reads[index] = qname
+            print >>bowtie_process.stdin, '\t'.join([index, seq, qual_seq])
+        bowtie_process.stdin.close()
+    except Exception:
+        print >>sys.stderr, 'Error. Stats: input line count=%d, ' \
+            'output line count=%d, line=%s' % (_input_line_count + 1, 
+                                                _output_line_count,
+                                                line if line is not None else
+                                                'line not defined')
+        raise
     # Join threads to pause execution in main thread
     for thread in threads:
         if verbose: print >>sys.stderr, 'Joining thread...'
