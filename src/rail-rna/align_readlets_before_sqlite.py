@@ -6,9 +6,7 @@ Precedes Rail-RNA-intron_search
 
 Alignment script for MapReduce pipelines that wraps Bowtie. Aligns input
 readlet sequences and writes a single output line per readlet belonging to
-a distinct read sequence. THIS CODE ASSUMES THAT BOWTIE RUNS ON JUST ONE
-THREAD; it exploits that Bowtie returns reads in the order in which they were
-sent, which is guaranteed only when on a single thread.
+a distinct read sequence.
 
 Input (read from stdin)
 ----------------------------
@@ -58,8 +56,6 @@ import site
 import threading
 import subprocess
 import string
-import tempfile
-import atexit
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, 'bowtie'))
@@ -70,29 +66,17 @@ import bowtie
 _input_line_count = 0
 _output_line_count = 0
 
-def handle_temporary_directory(temp_dir_path):
-    """ Deletes temporary directory.
-
-        temp_dir_paths: path to temporary directory to delete
-
-        No return value.
-    """
-    import shutil
-    shutil.rmtree(temp_dir_path)
-
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
-    def __init__(self, input_stream, qname_stream, output_stream=sys.stdout,
-        verbose=False, report_multiplier=1.2):
+    def __init__(self, input_stream, output_stream=sys.stdout, verbose=False,
+        report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
                 Bowtie process's stdout.
             output_stream: where to emit exon and intron tuples; typically,
                 this is sys.stdout.
-            qname_stream: where to find long names containing read information
-                associated with readlets
             verbose: True if alignments should occasionally be written 
                 to stderr.
             bin_size: genome is partitioned in units of bin_size for later load
@@ -107,7 +91,6 @@ class BowtieOutputThread(threading.Thread):
         self.output_stream = output_stream
         self.verbose = verbose
         self.report_multiplier = report_multiplier
-        self.qname_stream = qname_stream
 
     def run(self):
         """ Prints exons for end-to-end alignments.
@@ -154,7 +137,6 @@ class BowtieOutputThread(threading.Thread):
                 '''If the next qname doesn't match the last qname or there are
                 no more lines, all of a multireadlet's alignments have been
                 collected.'''
-                reads = self.qname_stream.readline().rstrip().split('\x1d')
                 if not (last_flag & 4):
                     '''Last readlet has at least one alignment; print all
                     alignments for each read from which readlet sequence is
@@ -168,6 +150,7 @@ class BowtieOutputThread(threading.Thread):
                                         )
                     rnames = '\x1f'.join(rnames)
                     poses = '\x1f'.join(poses)
+                    reads = last_qname.split('\x1d')
                     for read in reads:
                         read_id, _, read_rest = read.partition('\x1e')
                         if read_id[-1] == '-':
@@ -181,6 +164,7 @@ class BowtieOutputThread(threading.Thread):
                 else:
                     '''Readlet had no reported alignments; print ONLY when 
                     readlet contains general info about read.'''
+                    reads = last_qname.split('\x1d')
                     for read in reads:
                         read_id, _, read_rest = read.partition('\x1e')
                         if len(read_rest.split('\x1e')) > 2:
@@ -260,39 +244,40 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         No return value.
     """
     global _input_line_count
-    # For storing long qnames
-    temp_dir = tempfile.mkdtemp()
-    atexit.register(handle_temporary_directory, temp_dir)
-    qname_file = os.path.join(temp_dir, 'qnames.temp')
-    readlet_file = os.path.join(temp_dir, 'readlets.temp')
-    with open(qname_file, 'w') as qname_stream:
-        with open(readlet_file, 'w') as readlet_stream:
-            for _input_line_count, line in enumerate(input_stream):
-                tokens = line.rstrip().split('\t')
-                assert len(tokens) == 2
-                seq, qname = tokens
-                print >>readlet_stream, \
-                    '\t'.join([str(_input_line_count), seq, 'I'*len(seq)])
-                print >>qname_stream, qname
     bowtie_process, bowtie_command, threads = bowtie.proc(
             bowtieExe=bowtie_exe, bowtieIdx=bowtie_index_base,
-            readFn=readlet_file, bowtieArgs=bowtie_args, sam=True,
-            stdoutPipe=True, stdinPipe=False
+            readFn=None, bowtieArgs=bowtie_args, sam=True,
+            stdoutPipe=True, stdinPipe=True
         )
-    with open(qname_file) as qname_stream:
-        output_thread = BowtieOutputThread(
-                bowtie_process.stdout,
-                qname_stream,
-                verbose=verbose, 
-                output_stream=output_stream,
-                report_multiplier=report_multiplier
-            )
-        threads.append(output_thread)
-        output_thread.start()
-        # Join threads to pause execution in main thread
-        for thread in threads:
-            if verbose: print >>sys.stderr, 'Joining thread...'
-            thread.join()
+    output_thread = BowtieOutputThread(
+            bowtie_process.stdout,
+            verbose=verbose, 
+            output_stream=output_stream,
+            report_multiplier=report_multiplier
+        )
+    threads.append(output_thread)
+    output_thread.start()
+    line = None
+    try:
+        for line in input_stream:
+            _input_line_count += 1
+            qname_and_seq = line.rstrip().split('\t')[::-1]
+            if len(qname_and_seq) != 2:
+                continue
+            qual_seq = ['I'*len(qname_and_seq[-1])]
+            print >>bowtie_process.stdin, '\t'.join(qname_and_seq + qual_seq)
+        bowtie_process.stdin.close()
+    except Exception:
+        print >>sys.stderr, 'Error. Stats: input line count=%d, ' \
+            'output line count=%d, line=%s' % (_input_line_count, 
+                                                _output_line_count,
+                                                line if line is not None else
+                                                'line not defined')
+        raise
+    # Join threads to pause execution in main thread
+    for thread in threads:
+        if verbose: print >>sys.stderr, 'Joining thread...'
+        thread.join()
     output_stream.flush()
 
 if __name__ == '__main__':

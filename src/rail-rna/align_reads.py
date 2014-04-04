@@ -106,6 +106,9 @@ import site
 import threading
 import subprocess
 import string
+import shutil
+import tempfile
+import atexit
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for directory_name in ['bowtie', 'sample', 'interval', 'manifest']:
@@ -122,6 +125,15 @@ _input_line_count = 0
 _output_line_count = 0
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
+
+def handle_temporary_directory(temp_dir_path):
+    """ Deletes temporary directory.
+
+        temp_dir_paths: path to temporary directory to delete
+
+        No return value.
+    """
+    shutil.rmtree(temp_dir_path)
 
 def write_reads(output_stream, input_stream=sys.stdin, verbose=False,
     report_multiplier=1.2):
@@ -519,13 +531,21 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
 
         No return value.
     """
-    bowtie_process, bowtie_command, threads = bowtie.proc(
-            bowtieExe=bowtie_exe, bowtieIdx=bowtie_index_base,
-            readFn=None, bowtieArgs=bowtie_args, sam=True,
-            stdoutPipe=True, stdinPipe=True
-        )
+    temp_dir = tempfile.mkdtemp()
+    atexit.register(handle_temporary_directory, temp_dir)
+    reads_file = os.path.join(temp_dir, 'reads.temp')
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
+    with open(reads_file, 'w') as read_stream:
+        write_reads(
+            read_stream, input_stream=input_stream, verbose=verbose,
+            report_multiplier=report_multiplier
+        )
+    bowtie_process, bowtie_command, threads = bowtie.proc(
+            bowtieExe=bowtie_exe, bowtieIdx=bowtie_index_base,
+            readFn=reads_file, bowtieArgs=bowtie_args, sam=True,
+            stdoutPipe=True, stdinPipe=False
+        )
     output_thread = BowtieOutputThread(
             bowtie_process.stdout, reference_index, manifest_object,
             exon_differentials=exon_differentials, 
@@ -538,11 +558,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         )
     threads.append(output_thread)
     output_thread.start()
-    write_reads(
-            bowtie_process.stdin, input_stream=input_stream, verbose=verbose,
-            report_multiplier=report_multiplier
-        )
-    bowtie_process.stdin.close()
     # Join threads to pause execution in main thread
     for thread in threads:
         if verbose: print >>sys.stderr, 'Joining thread...'
@@ -622,8 +637,6 @@ elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
     import unittest
-    import shutil
-    import tempfile
 
     class TestWriteReads(unittest.TestCase):
         """ Tests write_reads(). """
