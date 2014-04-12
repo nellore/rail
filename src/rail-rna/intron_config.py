@@ -196,8 +196,8 @@ def edges_and_max_lens_from_input_stream(input_stream, fudge=0,
                     # Yield first edge for strand (before first intron)
                     yield key + (fake_source,
                                     (intron_start, intron_end))
-                    last_partition = key
                     max_len_mode = False
+                    last_partition = key
                 else:
                     intron_start, intron_end = int(value[1]), int(value[2])
                     introns[index] = (intron_start, intron_end)
@@ -406,7 +406,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, max_len, strand,
                     and min(node[0] - parent[1], max_len - 1) \
                     <= source_node_weight:
                     '''Optimization: trash an edge between node and a different
-                    source early if it would give rise to the same paths with
+                    parent early if it would give rise to the same paths with
                     shorter leftward extensions.'''
                     parents_to_remove.append(parent)
                     DAG[parent].remove(node)

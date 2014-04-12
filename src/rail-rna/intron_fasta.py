@@ -56,7 +56,6 @@ bowtie.addArgs(parser)
 args = parser.parse_args()
 
 start_time = time.time()
-input_line_count = 0
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
 for key, xpartition in dp.xstream(sys.stdin, 3, skip_duplicates=True):
     '''For computing maximum left and right extend sizes for every key --
