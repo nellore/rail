@@ -617,8 +617,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
             print >>sys.stderr, 'After consumption, DAG has %d ' \
             'nodes, and reverse DAG has %d nodes.' \
                 % (len(DAG), len(reverse_DAG))
-            print >>sys.stderr, DAG
-            print >>sys.stderr, reverse_DAG
     except NameError: pass
 
 if __name__ == '__main__':
