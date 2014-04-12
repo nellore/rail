@@ -203,6 +203,15 @@ if __name__ == '__main__':
                      (('chr1', '2'), ('i', '91', '101'))]
                 )
 
+        def test_empty_input(self):
+            """ Fails if it fails. """
+            with open(self.input_file, 'w') as input_stream:
+                pass
+            with open(self.input_file) as input_stream:
+                for key, xpartition in xstream(input_stream, 1):
+                    for value in xpartition:
+                        pass
+
         def tearDown(self):
             # Kill temporary directory
             shutil.rmtree(self.temp_dir_path)
