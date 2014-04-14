@@ -95,9 +95,9 @@ class EmrCluster(object):
     
     def emrArgs(self):
         ret = []
-        ret.append("--instance-group master --instance-type %s --instance-count %d --bid-price %0.3f" % (self.itMaster, self.numMaster, self.bidPrice))
+        ret.append("--instance-group master --instance-type %s --instance-count %d" % (self.itMaster, self.numMaster))
         if self.numCore > 0:
-            ret.append("--instance-group core --instance-type %s --instance-count %d --bid-price %0.3f" % (self.itCore, self.numCore, self.bidPrice))
+            ret.append("--instance-group core --instance-type %s --instance-count %d" % (self.itCore, self.numCore))
         if self.numTask > 0:
             ret.append("--instance-group task --instance-type %s --instance-count %d --bid-price %0.3f" % (self.itTask, self.numTask, self.bidPrice))
         return " ".join(ret)

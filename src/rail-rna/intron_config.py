@@ -130,12 +130,12 @@ def edges_and_max_lens_from_input_stream(input_stream, fudge=0,
         the first set of mutually overlapping introns are connected to their
         new sources. Two data structures encode the graph as it is constructed
         [1]: the set unlinked_nodes, containing introns that do not yet have
-        any OUT edges, and linked_nodes, a dictionary that, where possible,
+        any children, and linked_nodes, a dictionary that, where possible,
         maps each intron A to its corresponding successive nonoverlapping
         intron B with the smallest end position read so far. With each new
         intron N read, the nodes in unlinked_nodes and linked_nodes are checked
-        for N is their child, and these edges are yielded. (Note that by
-        construction, nodes are streamed in topological order.) Nodes from
+        for whether N is their child, and these edges are yielded. (Note that
+        by construction, nodes are streamed in topological order.) Nodes from
         unlinked_nodes may thus be promoted to linked_nodes. Each value node in
         linked_nodes is also replaced with N if N has a smaller end position.
         Then every node A in linked_nodes is checked for a
@@ -161,31 +161,31 @@ def edges_and_max_lens_from_input_stream(input_stream, fudge=0,
             of edge tuples with the same strand+sample_label.
     """
     global _input_line_count
-    max_len_mode = False
-    unlinked_nodes = set()
     for key, xpartition in dp.xstream(input_stream, 2, skip_duplicates=True):
-        for value in xpartition:
-            _input_line_count += 1
+        first_intron = True
+        unlinked_nodes = set()
+        for q, value in enumerate(xpartition):
             assert len(value) == 3
-            if value[0] == 'a':
-                if not max_len_mode or key != last_key:
-                    max_len = None
-                    max_len_mode = True
+            _input_line_count += 1
+            if q == 0:
+                # Handle first max_len from partition
+                assert value[0] == 'a', 'First line of partition is not a ' \
+                                        'max_len'
+                max_len = int(value[1])
+            elif value[0] == 'a':
+                # Handle next max_lens from partition
                 max_len = max(max_len, int(value[1]))
             elif value[0] == 'i':
-                if max_len_mode:
-                    # Yield final edges for strand
-                    for node in unlinked_nodes:
-                        current_intron = introns[node]
-                        yield last_partition + (current_intron,
-                                               (current_intron[1]
-                                                    + extend_size, None))
-                    extend_size = max_len - 1 + fudge
+                if first_intron:
                     # Yield max_len, which denotes start of new partition
                     yield max_len + fudge
+                    # Handle first intron from partition
                     intron_start, intron_end = int(value[1]), int(value[2])
                     # Create fake source before first intron
-                    fake_source = (None, max(intron_start - extend_size, 1))
+                    fake_source = (
+                            None,
+                            max(intron_start - (max_len - 1 + fudge), 1)
+                        )
                     introns = {
                             0 : fake_source,
                             1 : (intron_start, intron_end)
@@ -196,9 +196,9 @@ def edges_and_max_lens_from_input_stream(input_stream, fudge=0,
                     # Yield first edge for strand (before first intron)
                     yield key + (fake_source,
                                     (intron_start, intron_end))
-                    max_len_mode = False
-                    last_partition = key
+                    first_intron = False
                 else:
+                    # Handle next introns from partition
                     intron_start, intron_end = int(value[1]), int(value[2])
                     introns[index] = (intron_start, intron_end)
                     nodes_to_trash = []
@@ -224,18 +224,11 @@ def edges_and_max_lens_from_input_stream(input_stream, fudge=0,
                         del linked_nodes[node]
                         del introns[node]
                     index += 1
-                    last_partition = key
-            else:
-                raise RuntimeError('Invalid line: %s. A line should have '
-                                   'either an "a" (denoting a max_len) or '
-                                   'an "i" (denoting an intron) in its '
-                                   'third field.' % line)
-            last_key = key
-    # Output remaining edges on final strand
-    for node in unlinked_nodes:
-        current_intron = introns[node]
-        yield key + (current_intron,
-                                (current_intron[1] + extend_size, None))
+        # Yield final edges for strand
+        for node in unlinked_nodes:
+            current_intron = introns[node]
+            yield key + (current_intron, (current_intron[1]
+                                            + max_len - 1 + fudge, None))
 
 def paths(graph, source, in_node, max_len, last_node, edge_span=2,
     min_edge_span_size=25, can_yield=False):
@@ -744,7 +737,7 @@ elif __name__ == '__main__':
             with open(self.output_file) as result_stream:
                 for line in result_stream:
                     tokens = line.strip().split('\t')
-                    intron_configs[tokens[0]].add(frozenset(zip(
+                    intron_configs[tokens[1]].add(frozenset(zip(
                             [int(pos) for pos in tokens[2].split(',')],
                             [int(end_pos) for end_pos in tokens[3].split(',')]
                         )))

@@ -56,58 +56,60 @@ bowtie.addArgs(parser)
 args = parser.parse_args()
 
 start_time = time.time()
+input_line_count = 0
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
 for key, xpartition in dp.xstream(sys.stdin, 3, skip_duplicates=True):
     '''For computing maximum left and right extend sizes for every key --
     that is, every intron combo (fields 1-3 of input).'''
     left_extend_size, right_extend_size = None, None
-    for input_line_count, value in enumerate(xpartition):
+    for value in xpartition:
         assert len(value) == 2
-        rname = key[0]
-        reverse_strand_string = rname[-1]
-        rname = rname[:-1]
+        input_line_count += 1
         left_extend_size = max(left_extend_size, int(value[-2]))
         right_extend_size = max(right_extend_size, int(value[-1]))
-        intron_combo = \
-                zip([int(pos) for pos in key[1].split(',')],
-                        [int(end_pos) for end_pos in key[2].split(',')])
-        reference_length = reference_index.length[rname]
-        subseqs = []
-        left_start = max(intron_combo[0][0] - left_extend_size, 1)
-        # Add sequence before first intron
+    rname = key[0]
+    reverse_strand_string = rname[-1]
+    rname = rname[:-1]
+    intron_combo = \
+            zip([int(pos) for pos in key[1].split(',')],
+                    [int(end_pos) for end_pos in key[2].split(',')])
+    reference_length = reference_index.length[rname]
+    subseqs = []
+    left_start = max(intron_combo[0][0] - left_extend_size, 1)
+    # Add sequence before first intron
+    subseqs.append(
+            reference_index.get_stretch(rname, left_start - 1, 
+                intron_combo[0][0] - left_start)
+        )
+    # Add sequences between introns
+    for i in xrange(1, len(intron_combo)):
         subseqs.append(
-                reference_index.get_stretch(rname, left_start - 1, 
-                    intron_combo[0][0] - left_start)
-            )
-        # Add sequences between introns
-        for i in xrange(1, len(intron_combo)):
-            subseqs.append(
-                    reference_index.get_stretch(rname, 
-                        intron_combo[i-1][1] - 1,
-                        intron_combo[i][0]
-                        - intron_combo[i-1][1]
-                    )
+                reference_index.get_stretch(rname, 
+                    intron_combo[i-1][1] - 1,
+                    intron_combo[i][0]
+                    - intron_combo[i-1][1]
                 )
-        # Add final sequence
-        subseqs.append(
-                reference_index.get_stretch(rname,
-                    intron_combo[-1][1] - 1,
-                    min(right_extend_size, reference_length - 
-                                        intron_combo[-1][1] + 1))
             )
-        '''A given reference name in the index will be in the following format:
-        original RNAME + '+' or '-' indicating which strand is the sense strand
-        + ';' + start position of sequence + ';' + comma-separated list of
-        subsequence sizes framing introns + ';' + comma-separated list of
-        intron sizes.'''
-        print ('intron\t-\t>' + rname + reverse_strand_string 
-                + ';' + str(left_start) + ';'
-                + ','.join([str(len(subseq)) for subseq in subseqs]) + ';'
-                + ','.join([str(intron_end_pos - intron_pos)
-                            for intron_pos, intron_end_pos
-                            in intron_combo])
-                + '\t' + ''.join(subseqs)
-            )
+    # Add final sequence
+    subseqs.append(
+            reference_index.get_stretch(rname,
+                intron_combo[-1][1] - 1,
+                min(right_extend_size, reference_length - 
+                                    intron_combo[-1][1] + 1))
+        )
+    '''A given reference name in the index will be in the following format:
+    original RNAME + '+' or '-' indicating which strand is the sense strand
+    + ';' + start position of sequence + ';' + comma-separated list of
+    subsequence sizes framing introns + ';' + comma-separated list of
+    intron sizes.'''
+    print ('intron\t-\t>' + rname + reverse_strand_string 
+            + ';' + str(left_start) + ';'
+            + ','.join([str(len(subseq)) for subseq in subseqs]) + ';'
+            + ','.join([str(intron_end_pos - intron_pos)
+                        for intron_pos, intron_end_pos
+                        in intron_combo])
+            + '\t' + ''.join(subseqs)
+        )
 
 print >>sys.stderr, 'DONE with intron_fasta.py; in=%d; ' \
                     'time=%0.3f s' % (input_line_count,

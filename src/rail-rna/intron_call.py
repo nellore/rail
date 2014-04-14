@@ -323,7 +323,7 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
 def go(bowtie_index_base="genome", input_stream=sys.stdin,
         output_stream=sys.stdout, bin_size=10000, cluster_radius=5,
         stranded=False, intron_partition_overlap=20, motif_radius=1, 
-        min_anchor_significance=9, seed=0, verbose=False):
+        min_anchor_significance=9, seed=0, verbose=False, ignore_chrs='chrM'):
     """ Runs Rail-RNA-intron_call.
 
         Input lines are binned, so they are examined two at a time. When the
@@ -390,6 +390,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         motif_radius: distance (in bp) from each of the start and end
             positions of a cluster within which to search for motifs.
         verbose: True iff informative messages should be written to stderr.
+        ignore_chrs: Comma-separated list of RNAMEs to suppress
 
         No return value.
     """
@@ -399,6 +400,7 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
     last_partition_id = None
     candidate_introns = {}
     candidate_intron_samples = {}
+    rnames_to_suppress = set(ignore_chrs.split(','))
     # Make results reproducible
     random.seed(seed)
     while True:
@@ -406,6 +408,14 @@ def go(bowtie_index_base="genome", input_stream=sys.stdin,
         if line:
             _input_line_count += 1
             tokens = line.rstrip().split('\t')
+            if stranded:
+                if partition.parse(tokens[0][:-1],
+                                    bin_size)[0] in rnames_to_suppress:
+                    continue
+            else:
+                if partition.parse(tokens[0],
+                                    bin_size)[0] in rnames_to_suppress:
+                    continue
             assert len(tokens) == 5, tokens
             (partition_id, pos, end_pos, sample_labels,
                 read_count) = (tokens[0], int(tokens[1]), int(tokens[2]),
@@ -573,6 +583,10 @@ if __name__ == '__main__':
         default=20, 
         help='Amount by which partitions overlap their left and right '
              'neighbors')
+    parser.add_argument('--ignore-chrs', type=str, required=False,
+        default='chrM', 
+        help='Comma-separated list of RNAMEs for which intron output should '
+             'be suppressed. Includes chrM by default')
     parser.add_argument(\
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand')
@@ -590,7 +604,8 @@ if __name__ == '__main__' and not args.test:
         cluster_radius=args.cluster_radius,
         intron_partition_overlap=args.intron_partition_overlap,
         motif_radius=args.motif_radius,
-        verbose=args.verbose)
+        verbose=args.verbose,
+        ignore_chrs=args.ignore_chrs)
     print >> sys.stderr, 'DONE with intron.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)

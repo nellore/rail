@@ -128,16 +128,7 @@ with open(fasta_file, 'w') as fasta_stream:
 
 # Build index
 print >>sys.stderr, 'Running bowtie-build....'
-class BowtieBuildThread(threading.Thread):
-    """ Wrapper class for bowtie-build that permits polling for completion.
-    """
-    def __init__(self, command_list):
-        super(BowtieBuildThread, self).__init__()
-        self.command_list = command_list
-        self.bowtie_build_process = None
-    def run(self):
-        self.bowtie_build_process = subprocess.Popen(self.command_list,
-                                        stdout=sys.stderr).wait()
+
 if args.keep_alive:
     class BowtieBuildThread(threading.Thread):
         """ Wrapper class for bowtie-build that permits polling for completion.
