@@ -88,16 +88,6 @@ Tab-delimited output tuple columns (readletize)
 3. The sample label if field 1 is the read sequence's reversed complement;
     else '\x1c'
 
-Maximum read lengths found
-
-Tab-delimited output tuple columns (max_len):
-1. RNAME + ('-' or '+'; all combinations are included)
-2. Sample label
-3. The character 'a', which places it before 'i' in 
-    lexicograhic sort order for reading in Rail-RNA-intron_config
-4. Maximum read length found
-5. The character '-'.
-
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
 import sys
@@ -236,7 +226,6 @@ class BowtieOutputThread(threading.Thread):
         """
         global _output_line_count
         next_report_line = 0
-        max_read_size = 0
         sample_labels = set()
         '''Next read must be known to tell if a read mapped to multiple
         locations, so always work with previous read.'''
@@ -275,7 +264,6 @@ class BowtieOutputThread(threading.Thread):
                 tokens = line.rstrip().split('\t')
                 (qname, flag, rname, pos, mapq, cigar, rnext,
                     pnext, tlen, seq, qual) = tokens[:11]
-                max_read_size = max(max_read_size, len(seq))
                 flag = int(flag)
                 pos = int(pos)
                 seq_size = len(seq)
@@ -381,18 +369,7 @@ class BowtieOutputThread(threading.Thread):
                                     last_end_pos, last_sample_label)
                             _output_line_count += 1
                 multiread = []
-            if not line: 
-                # Write max read size for each strand
-                for max_len_rname in self.reference_index.length:
-                    for max_len_strand in ['+', '-']:
-                        for max_len_sample_label in sample_labels:
-                            print >>self.output_stream, \
-                                'max_len\t%s%s\t%s\ta\t%d\t-' \
-                                                    % (max_len_rname,
-                                                        max_len_strand,
-                                                        max_len_sample_label,
-                                                        max_read_size)
-                    _output_line_count += 1
+            if not line:
                 break
             last_tokens = tokens
             (last_qname, last_flag, last_rname, last_pos, last_mapq,

@@ -12,11 +12,12 @@ import os
 
 # Reference file subdirs when reference directory is a Rail-RNA archive
 refLoc = { \
-    'REF_FASTA'        : 'fasta/genome.fa',
-    'REF_FASTA_INDEX'  : 'fasta/genome.fa.fai',
-    'REF_BOWTIE_INDEX' : 'index/genome',
-    'REF_INTRON_INDEX' : 'index/intron',
-    'REF_GTF'          : 'gtf/genes.gtf' }
+    'REF_FASTA'          : 'fasta/genome.fa',
+    'REF_FASTA_INDEX'    : 'fasta/genome.fa.fai',
+    'REF_BOWTIE_INDEX'   : 'index/genome',
+    'REF_INTRON_INDEX'   : 'index/intron',
+    'REF_COINTRON_INDEX' : 'index/cointron',
+    'REF_GTF'            : 'gtf/genes.gtf' }
 
 # Reference file subdirs when reference directory is an iGenomes archive
 iGenomesLoc = { \
@@ -24,6 +25,7 @@ iGenomesLoc = { \
     'REF_FASTA_INDEX'  : 'Sequence/WholeGenomeFasta/genome.fa.fai',
     'REF_BOWTIE_INDEX' : 'Sequence/BowtieIndex/genome',
     'REF_INTRON_INDEX' : 'index/intron',
+    'REF_COINTRON_INDEX' : 'index/cointron',
     'REF_GTF'          : 'Annotation/Genes/genes.gtf' }
 
 def checkFasta(base, dontCheckIndex=False, iGenomes=False):
@@ -60,6 +62,8 @@ class RefConfigEmr(object):
             if tok in s:
                 if k.startswith('REF_INTRON_INDEX'):
                     s = s.replace(tok, 'intron_index/intron')
+                elif k.startswith('REF_COINTRON_INDEX'):
+                    s = s.replace(tok, 'intron_index/cointron')
                 else:
                     s = s.replace(tok, '/'.join([self.emrLocalDir, v]))
         return s
@@ -105,7 +109,7 @@ class RefConfigLocal(object):
                         checkFasta(self.refDir, iGenomes=self.iGenomes)
                     if k.startswith('REF_BOWTIE_INDEX'):
                         checkBowtieIndex(self.refDir, iGenomes=self.iGenomes)
-                if k.startswith('REF_INTRON_INDEX'):
+                if k.startswith('REF_INTRON_INDEX') or k.startswith('REF_COINTRON_INDEX'):
                     s = s.replace(tok, '/'.join([self.outDir, v]))
                 else:
                     s = s.replace(tok, '/'.join([self.refDir, v]))

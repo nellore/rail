@@ -324,7 +324,9 @@ pipelineSteps = {
     'align'        : ['align_reads', 'combine_sequences', 'readletize', 
                         'combine_subsequences', 'align_readlets', 'intron_search',
                         'intron_call', 'intron_config', 'intron_fasta',
-                        'intron_index', 'realign'],
+                        'intron_index', 'rereadletize', 'recombine_subsequences',
+                        'realign_readlets', 'cointron_search', 'cointron_fasta',
+                        'cointron_index', 'realign_reads'],
     'align_out'    : ['bam', 'bed_pre', 'bed'],
     #'coverage'     : ['normalize_pre', 'normalize'],#, 'normalize_post'],
     #'coverage'      : [],
@@ -344,20 +346,25 @@ stepInfo = {\
     'intron_call'           : ([('intron_search',  '/intron'         )], rail_rna_pipeline.IntronCallStep),
     'intron_post'           : ([('align_reads',          '/max_len'         ),
                                 ('intron_call',         '/intron'          )], rail_rna_pipeline.IntronPostStep),
-    'intron_config'         : ([('align_reads',          '/max_len'         ),
-                                ('intron_call',         '/intron'          )], rail_rna_pipeline.IntronConfigStep),
+    'intron_config'         : ([('intron_call',         '/intron'     )], rail_rna_pipeline.IntronConfigStep),
     'intron_fasta'          : ([('intron_config',  '/intron'          )], rail_rna_pipeline.IntronFastaStep),
+    'rereadletize'          : ([('combine_sequences', '/'            )], rail_rna_pipeline.RereadletizeStep),
+    'recombine_subsequences'  : ([('rereadletize',    '/'               )], rail_rna_pipeline.RecombineSubsequencesStep),
+    'realign_readlets'        : ([('recombine_subsequences','/'          )], rail_rna_pipeline.RealignReadletsStep),
+    'cointron_search'         : ([('realign_readlets',  '/'              )], rail_rna_pipeline.CointronSearchStep),
+    'cointron_fasta'          : ([('cointron_search',  '/intron'            )], rail_rna_pipeline.CointronFastaStep),
+    'cointron_index'          : ([('cointron_fasta',   '/intron'          )], rail_rna_pipeline.CointronIndexStep),
     'intron_index'          : ([('intron_fasta',   '/intron'          )], rail_rna_pipeline.IntronIndexStep),
     'bam'                   : ([('align_reads',          '/end_to_end_sam'  ),
-                                ('realign',        '/splice_sam'      )], rail_rna_pipeline.BamStep),
-    'bed_pre'               : ([('realign',        '/intron'          )], rail_rna_pipeline.BedPreStep),
+                                ('realign_reads',        '/splice_sam'      )], rail_rna_pipeline.BamStep),
+    'bed_pre'               : ([('realign_reads',        '/intron'          )], rail_rna_pipeline.BedPreStep),
     'bed'                   : ([('bed_pre',        '/bed'             )], rail_rna_pipeline.BedStep),
-    'realign'               : ([('align_reads',          '/unmapped'        )], rail_rna_pipeline.RealignStep),
+    'realign_reads'         : ([('align_reads',          '/unmapped'        )], rail_rna_pipeline.RealignReadsStep),
     'coverage_pre'          : ([('collapse',       '/'       )], rail_rna_pipeline.CoveragePreStep),
     'normalize_pre'         : ([('align_reads',          '/exon_diff'       )], rail_rna_pipeline.NormalizePreStep),
     'normalize'             : ([('normalize_pre',  '/o'               )], rail_rna_pipeline.NormalizeStep),
     'collapse'              : ([('align_reads',          '/exon_diff'       ), 
-                                ('realign',        '/exon_diff'       )], rail_rna_pipeline.CollapseStep),
+                                ('realign_reads',        '/exon_diff'       )], rail_rna_pipeline.CollapseStep),
     'coverage'              : ([('coverage_pre',   '/coverage'        )], rail_rna_pipeline.CoverageStep),
     'coverage_post'         : ([('coverage',       ''                 )], rail_rna_pipeline.CoveragePostStep),
     'normalize_post'        : ([('normalize',      ''                 )], rail_rna_pipeline.NormalizePostStep),
@@ -383,13 +390,15 @@ def buildFlow(allSteps, stepInfo, inp, out, inter, manifest):
             else:
                 indirs.append(inp)
         outdir = inter.plus(cur)
-        if cl is not rail_rna_pipeline.RealignStep:
-            steps.append(cl(indirs, outdir, tconf, gconf))
-        else:
+        if cl is rail_rna_pipeline.RealignReadletsStep:
             '''Must cache intron index: see 
             http://docs.aws.amazon.com/ElasticMapReduce/latest/
             DeveloperGuide/emr-plan-input-distributed-cache.html'''
-            steps.append(cl(indirs, outdir, tconf, gconf, cache=out.plus('index/intron_index.tar.gz#intron_index')))
+            steps.append(cl(indirs, outdir, tconf, gconf, cache=out.plus('index/intron.tar.gz#intron_index')))
+        elif cl is rail_rna_pipeline.RealignReadsStep:
+            steps.append(cl(indirs, outdir, tconf, gconf, cache=out.plus('index/cointron.tar.gz#intron_index')))
+        else:
+            steps.append(cl(indirs, outdir, tconf, gconf))
     return steps
 
 if intermediate is None:

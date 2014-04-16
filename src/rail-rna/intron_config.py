@@ -5,31 +5,19 @@ Follows Rail-RNA-intron
 Precedes Rail-RNA-intron_fasta
 
 Reduce step in MapReduce pipelines that outputs all possible configurations of
-nonoverlapping introns on the same strand that a read of length max_len
+nonoverlapping introns on the same strand that a readlet of length readlet_size
 (the maximum read length in the data being analyzed) + args.fudge can span,
 given a minimum exon size min_exon_size.
 
 Input (read from stdin)
 ----------------------------
-Two kinds of input lines, one from Rail-RNA-align (max_len) and the other
-from Rail-RNA-intron (intron):
+Tab-delimited tuple columns:
 
-(max_len)
 1. Reference name (RNAME in SAM format) +
     '+' or '-' indicating which strand is the sense strand
 2. Sample label
-3. The character 'a'.
-4. A maximum read length output by a Rail-RNA-align mapper.
-5. The character '-'.
-
-(intron)
-1. Reference name (RNAME in SAM format) +
-    '+' or '-' indicating which strand is the sense strand
-2. Sample label
-3. The character 'i', which will place the row after all 'a's (maximum read
-    length rows) in lexicographic sort order.
-4. Intron start position (inclusive)
-5. Intron end position (exclusive)
+3. Intron start position (inclusive)
+4. Intron end position (exclusive)
 
 Input is partitioned by strand/sample label (fields 1-2) and sorted by the
 remaining fields. INPUT COORDINATES ARE ASSUMED TO BE 1-INDEXED.
@@ -62,7 +50,7 @@ site.addsitedir(os.path.join(base_path, 'dooplicity'))
 import dooplicity as dp
 _input_line_count, _output_line_count = 0, 0
 
-def edges_and_max_lens_from_input_stream(input_stream, fudge=0, 
+def edges_from_input_stream(input_stream, readlet_size=20,
     min_overlap_exon_size=1):
     """ Generates edges of directed acyclic graph (DAG) of introns.
 
@@ -79,181 +67,153 @@ def edges_and_max_lens_from_input_stream(input_stream, fudge=0,
         The DAG has sources and sinks. Pad the DAG with new sources and sinks
         as follows. Extend an edge to each original source
         (source_start, source_end) from a new source labeled by the tuple
-        (None, max(1, source_start - max_len - fudge + 1)). Extend an edge from
-        each original sink (sink_start, sink_end) to a new sink labeled by
-        the tuple (sink_end + source_start + max_len + fudge - 1, None). So
-        each original source is assigned exactly one new source, and each
-        original sink is assigned exactly one new sink. Here,
-        max_len is the maximum read length for the sample+strand under
-        consideration, and fudge is some number of bases, possibly for
-        accommodating insertions.
+        (None, max(1, source_start - readlet_size + 1)). Extend an edge
+        from each original sink (sink_start, sink_end) to a new sink labeled by
+        the tuple (sink_end + source_start + readlet_size - 1, None).
+        So each original source is assigned exactly one new source, and each
+        original sink is assigned exactly one new sink.
 
         The paths through this DAG span all possible combinations of
         nonoverlapping introns on the strand. Finding all subpaths (sequences
-        of introns), each of whose weights is <= max_len, redundantly
-        enumerates all possible combinations of introns a read
+        of introns), each of whose weights is <= readlet_size, redundantly
+        enumerates all possible combinations of introns a readlet
         can overlap. Unfortunately, obtaining such combinations in
         "hot spots," where there are many alternative splicings and short
-        exons, can become computationally intractable. To (optionally) control
-        these combinatorial blow-ups, impose an effective minimum exon size
-        min_overlap_exon_size by redefining overlap between two introns: two
-        introns overlap if there are fewer than min_overlap_exon_size exonic
-        bases between them.
+        exons, can become computationally intractable for large readlet sizes.
+        To (optionally) control these combinatorial blow-ups, impose an
+        effective minimum exon size min_overlap_exon_size by redefining overlap
+        between two introns: two introns overlap if there are fewer than
+        min_overlap_exon_size exonic bases between them.
 
         The algorithm for generating the edges of the DAG operates on an input
-        stream characterized as follows. input_stream contains two kinds of
-        input lines, one from Rail-RNA-align (max_len) and the other from
-        Rail-RNA-intron (intron):
+        stream whose lines are composed of the following tab-separated fields:
 
-        (max_len)
         1. Reference name (RNAME in SAM format) +
             '+' or '-' indicating which strand is the sense strand
         2. Sample label
-        3. The character 'a'.
-        4. A maximum read length output by a Rail-RNA-align mapper.
-        5. The character '-'.
-
-        (intron)
-        1. Reference name (RNAME in SAM format) +
-            '+' or '-' indicating which strand is the sense strand
-        2. Sample label
-        3. The character 'i', which will place the row after all 'a's (maximum
-            read length rows) in lexicographic sort order.
-        4. Intron start position (inclusive)
-        5. Intron end position (exclusive)
+        3. Intron start position (inclusive)
+        4. Intron end position (exclusive)
 
         The input is partitioned by strand/sample label (fields 1-2) and sorted
         by the remaining fields. INPUT COORDINATES ARE ASSUMED TO BE 1-INDEXED.
 
-        max_lens for a given strand+sample are streamed into the algorithm
-        before introns, and introns are sorted by start position. To start,
-        the first set of mutually overlapping introns are connected to their
-        new sources. Two data structures encode the graph as it is constructed
-        [1]: the set unlinked_nodes, containing introns that do not yet have
-        any children, and linked_nodes, a dictionary that, where possible,
-        maps each intron A to its corresponding successive nonoverlapping
-        intron B with the smallest end position read so far. With each new
-        intron N read, the nodes in unlinked_nodes and linked_nodes are checked
-        for whether N is their child, and these edges are yielded. (Note that
-        by construction, nodes are streamed in topological order.) Nodes from
-        unlinked_nodes may thus be promoted to linked_nodes. Each value node in
-        linked_nodes is also replaced with N if N has a smaller end position.
-        Then every node A in linked_nodes is checked for a
-        path A -> B -> N. If such a path exists, an edge can NEVER connect A
-        with any successive introns, and A is removed from linked_nodes. The
-        algorithm continues until the end of the strand is reached, when the
-        edges connecting remaining unlinked_nodes and their new sinks are
-        yielded.
+        Introns are sorted by start position. To begin, the first set of
+        mutually overlapping introns are connected to their new sources. Two
+        data structures encode the graph as it is constructed [1]: the set
+        unlinked_nodes, containing introns that do not yet have any children,
+        and linked_nodes, a dictionary that, where possible, maps each intron A
+        to its corresponding successive nonoverlapping intron B with the
+        smallest end position read so far. With each new intron N read, the
+        nodes in unlinked_nodes and linked_nodes are checked for whether N is
+        their child, and these edges are yielded. (Note that by construction,
+        nodes are streamed in topological order.) Nodes from unlinked_nodes may
+        thus be promoted to linked_nodes. Each value node in linked_nodes is
+        also replaced with N if N has a smaller end position. Then every node A
+        in linked_nodes is checked for a path A -> B -> N. If such a path
+        exists, an edge can NEVER connect A with any successive introns, and A
+        is removed from linked_nodes. The algorithm continues until the end of
+        the strand is reached, when the edges connecting remaining
+        unlinked_nodes and their new sinks are yielded.
 
         [1] Technically, there are three data structures. unlinked_nodes and
         linked_nodes contain only indices of introns, and "introns" is
         a dictionary that maps indices to tuples (intron_start, intron_end).
 
-        input_stream: where to find sorted max_lens and introns of the form
-            specified above.
-        fudge: by how much a max_len should be extended.
+        input_stream: where to find sorted introns of the form specified above.
+        fudge: by how much a readlet_size should be extended.
         min_exon_size: minimum number of exonic bases between two introns
             for them to be considered nonoverlapping.
 
-        Yield value: Either a max_len or an edge tuple
-            (strand, sample_label, (intron A start, intron A end),
-                (intron B start, intron B end)). A max_len precedes a block
-            of edge tuples with the same strand+sample_label.
+        Yield value: An edge tuple (strand,
+                                    sample_label,
+                                    (intron A start, intron A end),
+                                    (intron B start, intron B end)) or None
+                     at the beginning of a new partition.
     """
     global _input_line_count
     for key, xpartition in dp.xstream(input_stream, 2, skip_duplicates=True):
-        first_intron = True
         unlinked_nodes = set()
         for q, value in enumerate(xpartition):
             assert len(value) == 3
             _input_line_count += 1
-            if q == 0:
-                # Handle first max_len from partition
-                assert value[0] == 'a', 'First line of partition is not a ' \
-                                        'max_len'
-                max_len = int(value[1])
-            elif value[0] == 'a':
-                # Handle next max_lens from partition
-                max_len = max(max_len, int(value[1]))
-            elif value[0] == 'i':
-                if first_intron:
-                    # Yield max_len, which denotes start of new partition
-                    yield max_len + fudge
-                    # Handle first intron from partition
-                    intron_start, intron_end = int(value[1]), int(value[2])
-                    # Create fake source before first intron
-                    fake_source = (
-                            None,
-                            max(intron_start - (max_len - 1 + fudge), 1)
-                        )
-                    introns = {
-                            0 : fake_source,
-                            1 : (intron_start, intron_end)
-                        }
-                    linked_nodes = { 0 : 1 }
-                    unlinked_nodes = set([1])
-                    index = 2
-                    # Yield first edge for strand (before first intron)
-                    yield key + (fake_source,
-                                    (intron_start, intron_end))
-                    first_intron = False
-                else:
-                    # Handle next introns from partition
-                    intron_start, intron_end = int(value[1]), int(value[2])
-                    introns[index] = (intron_start, intron_end)
-                    nodes_to_trash = []
-                    for node in unlinked_nodes:
-                        if intron_start >= introns[node][1] + \
-                            min_overlap_exon_size:
-                            nodes_to_trash.append(node)
-                    for node in nodes_to_trash:
-                        linked_nodes[node] = index
-                        unlinked_nodes.remove(node)
-                    unlinked_nodes.add(index)
-                    nodes_to_trash = []
-                    for node in linked_nodes:
-                        intermediate_node = linked_nodes[node]
-                        if intermediate_node in linked_nodes:
-                            nodes_to_trash.append(node)
-                        else:
-                            yield key + (introns[node],
-                                                (intron_start, intron_end))
-                            if introns[intermediate_node][1] > intron_end:
-                                linked_nodes[node] = index
-                    for node in nodes_to_trash:
-                        del linked_nodes[node]
-                        del introns[node]
-                    index += 1
+            if not q:
+                # Denote start of new partition
+                yield None
+                # Handle first intron from partition
+                intron_start, intron_end = int(value[1]), int(value[2])
+                # Create fake source before first intron
+                fake_source = (
+                        None,
+                        max(intron_start - (readlet_size - 1), 1)
+                    )
+                introns = {
+                        0 : fake_source,
+                        1 : (intron_start, intron_end)
+                    }
+                linked_nodes = { 0 : 1 }
+                unlinked_nodes = set([1])
+                index = 2
+                # Yield first edge for strand (before first intron)
+                yield key + (fake_source,
+                                (intron_start, intron_end))
+                first_intron = False
+            else:
+                # Handle next introns from partition
+                intron_start, intron_end = int(value[1]), int(value[2])
+                introns[index] = (intron_start, intron_end)
+                nodes_to_trash = []
+                for node in unlinked_nodes:
+                    if intron_start >= introns[node][1] + \
+                        min_overlap_exon_size:
+                        nodes_to_trash.append(node)
+                for node in nodes_to_trash:
+                    linked_nodes[node] = index
+                    unlinked_nodes.remove(node)
+                unlinked_nodes.add(index)
+                nodes_to_trash = []
+                for node in linked_nodes:
+                    intermediate_node = linked_nodes[node]
+                    if intermediate_node in linked_nodes:
+                        nodes_to_trash.append(node)
+                    else:
+                        yield key + (introns[node],
+                                            (intron_start, intron_end))
+                        if introns[intermediate_node][1] > intron_end:
+                            linked_nodes[node] = index
+                for node in nodes_to_trash:
+                    del linked_nodes[node]
+                    del introns[node]
+                index += 1
         # Yield final edges for strand
         for node in unlinked_nodes:
             current_intron = introns[node]
             yield key + (current_intron, (current_intron[1]
-                                            + max_len - 1 + fudge, None))
+                                            + readlet_size - 1, None))
 
-def paths(graph, source, in_node, max_len, last_node, edge_span=2,
+def paths(graph, source, in_node, readlet_size, last_node, edge_span=2,
     min_edge_span_size=25, can_yield=False):
-    """ Generates intron combos spanning max_len exonic bases.
+    """ Generates intron combos spanning readlet_size exonic bases.
 
         The algorithm is nonrecursive to ensure Python doesn't choke. Consider
         all paths through "graph" that originate at "source" and pass through
         "in_node." This generator yields all possible maximal subpaths
         (possibly repetitively) (source, in_node, ... , next_to_last_node,
         last_node), each of which represents a sequence of introns beginning at
-        in_node and ending at next_to_last_node that a read of length max_len
-        can overlap. But there is a caveat: if an intron sequence itself has
-        a subpath composed of "edge_span" number of edges whose total
-        weight is not at least min_edge_span_size, that path is suppressed.
-        This controls blowups around many short exons/alternative splicings.
-        source and last_node are included in yielded paths to determine by how
-        many bases on either side of the intron sequence the reference should
-        be extended.
+        in_node and ending at next_to_last_node that a readlet of length
+        readlet_size can overlap. But there is a caveat: if an intron sequence
+        itself has a subpath composed of "edge_span" number of edges whose
+        total weight is not at least min_edge_span_size, that path is
+        suppressed. This controls blowups around many short exons/alternative
+        splicings. source and last_node are included in yielded paths to
+        determine by how many bases on either side of the intron sequence the
+        reference should be extended.
 
         graph: a dictionary. Each key is an out node (intron_start, intron_end)
             of the graph, and its corresponding value is a list of in nodes
             to which it connects.
         source, in_node: an edge that terminates on in_node originates at
             source.
-        max_len: maximum read length
+        readlet_size: maximum readlet size
         edge_span, min_edge_span_size: if an intron sequence from a
             maximal subpath itself has a subpath composed of edge_span number
             of edges whose total weight is not at least min_edge_span_size,
@@ -277,7 +237,8 @@ def paths(graph, source, in_node, max_len, last_node, edge_span=2,
         '''Ensure stream is past point where a given child of in_node could
         connect to another node that gives rise to a maximal path.'''
         for child in graph[in_node]:
-            if child[0] - in_node[1] + last_node[0] - child[1] < max_len - 1:
+            if child[0] - in_node[1] + last_node[0] - child[1] \
+                < readlet_size - 1:
                 return
     path, base_sum  = [source], 0
     path_queue = deque([(in_node, base_sum, path)])
@@ -288,11 +249,11 @@ def paths(graph, source, in_node, max_len, last_node, edge_span=2,
         yielded = False
         if node_count >= 3:
             '''When the path spans at least three nodes, the intron sequence
-            spans at least one node. If the path weight is >= max_len - 1, the
-            terminal node cannot possibly be overlapped by a read overlapping
-            the start node.'''
+            spans at least one node. If the path weight is >= readlet_size - 1,
+            the terminal node cannot possibly be overlapped by a readlet
+            overlapping the start node.'''
             base_sum += path[-1][0] - path[-2][1]
-            if base_sum >= max_len - 1:
+            if base_sum >= readlet_size - 1:
                 yield path
                 yielded = True
             elif node_count >= edge_span + 2 and \
@@ -311,42 +272,44 @@ def paths(graph, source, in_node, max_len, last_node, edge_span=2,
             else:
                 '''in_node is not in the graph, and the end of a path has been
                 reached. Any nodes added to the path will only give rise to an
-                extension to the right of in_node by max_len - 1 bases. Tack on
-                a fake final node that will give rise to this extension.'''
+                extension to the right of in_node by readlet_size - 1 bases.
+                Tack on a fake final node that will give rise to this
+                extension.'''
                 try:
-                    yield path + [(path[-1][1] + max_len - 1, None)]
+                    yield path + [(path[-1][1] + readlet_size - 1, None)]
                 except TypeError:
                     # Path terminates on final fake intron; don't do anything
                     assert path[-1][1] is None
 
-def consume_graph_and_print_combos(DAG, reverse_DAG, max_len, strand,
+def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
     last_node, output_stream, edge_span=2, min_edge_span_size=25,
     full_graph=False):
     """ Consumes graph, printing intron combos that can be overlapped by reads.
 
-        See edges_and_max_lens_from_input_stream()'s docstring for a
-        detailed description of the directed acylic graph (DAG).
+        See edges_from_input_stream()'s docstring for a detailed description of
+        the directed acylic graph (DAG).
 
         To enumerate all possible combinations of introns that can be
         overlapped by a read, consider each node separately, and find the ways
         the intron represented by that node can be the first intron on a
         read; that is, walk every path starting from that node edge by edge
-        until its weight exceeds max_len, the maximal read length.
+        until its weight exceeds readlet_size, the maximal readlet length.
 
         It is not necessary to keep the entire graph in memory, however. The 
         DAG has one or more sources. A source S is removed from the graph
         when all paths originating at every child node C_i of S have been
-        reviewed to find intron sequences that can be overlapped by max_len
-        exonic bases; then S is no longer needed to find by how many 
-        exonic bases to the left of C_i the reference should extend.
+        reviewed to find intron sequences that can be overlapped by
+        readlet_size exonic bases; then S is no longer needed to find by how
+        many exonic bases to the left of C_i the reference should extend.
         More specifically, an edge from S to C_i is removed iff:
         1) All edges that start at C_i have been generated. By construction,
         this occurs if C_i has at least one grandchild.
         2) Every path of maximal length originating at C_i whose weight is
-        < max_len - 1 can be constructed. If {G_j} are the children of C, this
-        occurs if for every j, (the difference between the genomic start
+        < readlet_size - 1 can be constructed. If {G_j} are the children of C,
+        this occurs if for every j, (the difference between the genomic start
         position of the last node (intron) streamed and the genomic end
-        position of G_j) >= max_len - 1 - (weight of edge between C_i and G_j).
+        position of G_j) >= readlet_size - 1 - (weight of edge between
+        C_i and G_j).
 
         Once sources are removed, the graph has new sources that can also
         be "consumed." So the DAG can alternately be generated, making it
@@ -370,7 +333,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, max_len, strand,
         reverse_DAG: a dictionary. Each key is a child node
             (intron_start, intron_end), and its corresponding value is the set
             of its parent nodes.
-        max_len: the maximum read length.
+        readlet_size: maximum readlet size
         strand: current strand
         last_node: child node from last edge added to graph. Used to
             determine of a source can be trashed.
@@ -391,12 +354,12 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, max_len, strand,
         nodes_to_remove = []
         for m, node in enumerate(DAG[source]):
             i = -1
-            source_node_weight = min(node[0] - source[1], max_len - 1)
+            source_node_weight = min(node[0] - source[1], readlet_size - 1)
             parents_to_remove = []
             for parent in reverse_DAG[node]:
                 if parent == source: continue
                 if parent in source_queue \
-                    and min(node[0] - parent[1], max_len - 1) \
+                    and min(node[0] - parent[1], readlet_size - 1) \
                     <= source_node_weight:
                     '''Optimization: trash an edge between node and a different
                     parent early if it would give rise to the same paths with
@@ -406,7 +369,8 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, max_len, strand,
             for parent in parents_to_remove:
                 reverse_DAG[node].remove(parent)
             for i, path in enumerate(
-                                paths(DAG, source, node, max_len, last_node,
+                                paths(DAG, source, node, readlet_size,
+                                        last_node,
                                         edge_span=edge_span,
                                         min_edge_span_size=min_edge_span_size,
                                         can_yield=full_graph)
@@ -419,8 +383,8 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, max_len, strand,
                                   for k in xrange(1, node_count - 1)]),
                         ','.join([str(path[k][1])
                                   for k in xrange(1, node_count - 1)]),
-                        min(max_len - 1, path[1][0] - path[0][1]),
-                        min(max_len - 1,
+                        min(readlet_size - 1, path[1][0] - path[0][1]),
+                        min(readlet_size - 1,
                                 path[-1][0] - path[-2][1])
                     )
                     _output_line_count += 1
@@ -445,15 +409,16 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, max_len, strand,
             # Edges from source are no longer needed to construct extensions
             del DAG[source]
 
-def go(input_stream=sys.stdin, output_stream=sys.stdout,
+def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
         min_overlap_exon_size=1, edge_span=2, min_edge_span_size=25, 
         verbose=False, fudge=0, flush_base_count=10000000):
     """ Runs Rail-RNA-intron_config.
 
         Reduce step in MapReduce pipelines that outputs all possible
-        configurations of nonoverlapping introns on the same strand that a read
-        of length max_len (the maximum read length in the data being analyzed)
-        + args.fudge can span, given a minimum exon size min_exon_size.
+        configurations of nonoverlapping introns on the same strand that a
+        readlet of length readlet_size (the maximum readlet length in the data
+        being analyzed) + args.fudge can span, given a minimum exon size
+        min_exon_size.
 
         The code contained here switches between generating and consuming
         the DAG/printing intron combos. The switch occurs every
@@ -462,26 +427,16 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
 
         Input (read from stdin)
         ----------------------------
-        Two kinds of input lines, one from Rail-RNA-align (max_len) and the
-        other from Rail-RNA-intron (intron):
+        Tab-delimited input tuple columns:
 
-        (max_len)
         1. Reference name (RNAME in SAM format) + 
             '+' or '-' indicating which strand is the sense strand
-        2. The character 'a'.
-        3. A maximum read length output by a Rail-RNA-align mapper.
-        4. The character '-'.
-
-        (intron)
-        1. Reference name (RNAME in SAM format) + 
-            '+' or '-' indicating which strand is the sense strand
-        2. The character 'i', which will place the row after all 'a's (maximum
-            read length rows) in lexicographic sort order.
+        2. Sample label
         3. Intron start position (inclusive)
         4. Intron end position (exclusive)
 
-        Input is partitioned by strand (field 1) and sorted by the remaining
-        fields. INPUT COORDINATES ARE ASSUMED TO BE 1-INDEXED.
+        Input is partitioned by strand+sample label (fields 1-2) and sorted by
+        the remaining fields. INPUT COORDINATES ARE ASSUMED TO BE 1-INDEXED.
 
         Hadoop output (written to stdout)
         ----------------------------
@@ -514,14 +469,14 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
 
         No return value.
     """
-    for edge_or_max_len \
-        in edges_and_max_lens_from_input_stream(
-                input_stream, 
-                fudge=fudge,
-                min_overlap_exon_size=min_overlap_exon_size
-            ):
+    effective_readlet_size = readlet_size + fudge
+    for edge in edges_from_input_stream(
+                        input_stream, 
+                        readlet_size=effective_readlet_size,
+                        min_overlap_exon_size=min_overlap_exon_size
+                    ):
         try:
-            strand, sample_label, start_node, end_node = edge_or_max_len
+            strand, sample_label, start_node, end_node = edge
         except TypeError:
             try:
                 if verbose:
@@ -535,7 +490,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                 consume_graph_and_print_combos(
                         DAG, 
                         reverse_DAG, 
-                        max_len, 
+                        effective_readlet_size,
                         strand,
                         end_node,
                         output_stream,
@@ -550,7 +505,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                     print >>sys.stderr, 'Time taken: %0.3f s' \
                         % (time.time() - consume_start_time)
             except NameError: pass
-            max_len = edge_or_max_len
             DAG, reverse_DAG = defaultdict(set), defaultdict(set)
             flush_threshold = flush_base_count
             continue
@@ -572,7 +526,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
             consume_graph_and_print_combos(
                         DAG, 
                         reverse_DAG,
-                        max_len,
+                        effective_readlet_size,
                         strand,
                         end_node,
                         output_stream,
@@ -598,7 +552,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         consume_graph_and_print_combos(
                 DAG, 
                 reverse_DAG, 
-                max_len, 
+                effective_readlet_size, 
                 strand,
                 end_node,
                 output_stream,
@@ -626,13 +580,16 @@ if __name__ == '__main__':
                         'to overlap if the number of bases between them on '
                         'the reference is less than this value')
     parser.add_argument('--edge-span', type=int, required=False,
-        default=2, help='--edge-span edges of path from DAG representing an '
+        default=1, help='--edge-span edges of path from DAG representing an '
                         'intron combination must have weight >= '
                          '--min-edge-span-size to be output')
     parser.add_argument('--min-edge-span-size', type=int, required=False,
-        default=25, help='--edge-span edges of path from DAG representing an '
+        default=1, help='--edge-span edges of path from DAG representing an '
                          'intron combination must have weight >= '
                          '--min-edge-span-size to be output')
+    parser.add_argument('--readlet-size', type=int, required=False,
+        default=20, help='Size of readlets to be aligned to reference '
+                         'including only exonic bases around introns')
     parser.add_argument('--fudge', type=int, required=False, default=0, 
         help='A splice junction may be detected at any position along the '
              'read besides directly before or after it; thus, the sequences '
@@ -650,6 +607,7 @@ if __name__ == '__main__' and not args.test:
         min_overlap_exon_size=args.min_overlap_exon_size,
         edge_span=args.edge_span,
         min_edge_span_size=args.min_edge_span_size,
+        readlet_size=args.readlet_size,
         verbose=args.verbose,
         fudge=args.fudge)
     print >>sys.stderr, 'DONE with intron_config.py; in/out=%d/%d; ' \
@@ -677,18 +635,17 @@ elif __name__ == '__main__':
                 '''Recall that input is partitioned by first column and 
                 sorted by the next three columns.'''
                 input_stream.write(
-                        'chr1\t1\ta\t20\t-\n'
                         'chr1\t1\ti\t10\t50\n'
                         'chr1\t1\ti\t30\t70\n'
                         'chr1\t1\ti\t75\t101\n'
                         'chr1\t1\ti\t90\t1300\n'
                         'chr1\t1\ti\t91\t101\n'
                     )
-                # Extend size is 20 above with fudge
             with open(self.output_file, 'w') as output_stream:
                 with open(self.input_file) as input_stream:
                     go(input_stream=input_stream, output_stream=output_stream,
-                        fudge=1, edge_span=1, min_edge_span_size=1)
+                        fudge=1, edge_span=1, min_edge_span_size=1,
+                        readlet_size=20)
             '''Read output; store configurations as frozen sets so there are
             no duplicate configurations.'''
             intron_configs = set()
@@ -716,21 +673,17 @@ elif __name__ == '__main__':
                 '''Recall that input is partitioned by first column and 
                 sorted by the next three columns.'''
                 input_stream.write(
-                        'chr1\t1\ta\t15\t-\n'
-                        'chr1\t1\ta\t20\t-\n'
                         'chr1\t1\ti\t11\t200\n'
                         'chr1\t1\ti\t31\t56\n'
                         'chr1\t1\ti\t75\t201\n'
                         'chr1\t1\ti\t91\t101\n'
                         'chr1\t1\ti\t205\t225\n'
-                        'chr2\t1\ta\t15\t-\n'
                         'chr2\t1\ti\t21\t76\n'
                     )
-                # Extend size is 20 above with fudge
             with open(self.output_file, 'w') as output_stream:
                 with open(self.input_file) as input_stream:
                     go(input_stream=input_stream, output_stream=output_stream,
-                        fudge=1)
+                        fudge=1, readlet_size=20)
             '''Read output; store configurations as frozen sets so there are
             no duplicate configurations.'''
             intron_configs = defaultdict(set)

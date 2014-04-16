@@ -281,9 +281,9 @@ class IntronConfigStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducer_str = """
             python %%BASE%%/src/rail-rna/intron_config.py
+                --readlet-size %d
                 --verbose
-                %s
-            """ % ('',)
+            """ % (tconf.cooccurrence_readlet_length,)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(IntronConfigStep, self).__init__(
             inps,
@@ -327,6 +327,131 @@ class IntronIndexStep(pipeline.Step):
             aggr=pipeline.Aggregation(1, None, 1, 1),
             reducer=reducer_str)
 
+class RereadletizeStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, _):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/readletize.py
+                --max-readlet-size %d 
+                --min-readlet-size %d
+                --readlet-interval %d
+        """ % (tconf.cooccurrence_readlet_length,
+               tconf.cooccurrence_readlet_length,
+               tconf.cooccurrence_readlet_ival)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(RereadletizeStep, self).__init__(
+            inps,
+            output,  # output URL
+            name="Rereadletize",  # name
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
+            reducer=reducer_str)
+
+class RecombineSubsequencesStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, _):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/sum.py
+                --type 3
+                %s
+        """ % ('',)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(RecombineSubsequencesStep, self).__init__(
+            inps,
+            output,  # output URL
+            name="RecombineSubsequences",  # name
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
+            reducer=reducer_str)
+
+class RealignReadletsStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf, cache=None):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/align_readlets.py
+                --bowtie-idx=%%REF_INTRON_INDEX%%
+                --bowtie-exe=%%BOWTIE%%
+                --verbose
+                -- %s
+        """ % ('-t --sam-nohead --startverbose -v 0 -a -m 80',)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(RealignReadletsStep, self).__init__(
+            inps,
+            output,  # output URL
+            name="RealignReadlets",  # name
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
+            reducer=reducer_str,
+            cache=cache)
+
+class CointronSearchStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, _):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/cointron_search.py
+                --verbose %s
+                """ % ('',)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(CointronSearchStep, self).__init__(
+            inps,
+            output,  # output URL
+            name="CointronSearch",  # name
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
+            reducer=reducer_str,
+            multipleOutput=True)
+
+class CointronFastaStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/intron_fasta.py
+                --verbose
+                --bowtie-idx=%%REF_BOWTIE_INDEX%%
+                %s
+            """ % ('',)
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(CointronFastaStep, self).__init__(
+            inps,
+            output,
+            name="CointronFasta",
+            aggr=pipeline.Aggregation(None, 8, 4, 4),
+            reducer=reducer_str,
+            multipleOutput=True)
+
+class CointronIndexStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/intron_index.py
+                --bowtie-build-exe=%%BOWTIE-BUILD%%
+                --bowtie-idx=%%REF_BOWTIE_INDEX%%
+                --basename=cointron
+                --out=%s/index
+                %s
+            """ % (gconf.out, '--keep-alive' if tconf.keep_alive else '')
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(CointronIndexStep, self).__init__(
+            inps,
+            output,
+            name="CointronIndex",
+            aggr=pipeline.Aggregation(1, None, 1, 1),
+            reducer=reducer_str)
+
+class RealignReadsStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf, cache=None):
+        mapper_str = """
+            python %%BASE%%/src/rail-rna/realign_reads.py
+                --original-idx=%%REF_BOWTIE_INDEX%% 
+                --bowtie-idx=%%REF_COINTRON_INDEX%%
+                --bowtie-exe=%%BOWTIE%%
+                --partition-length %d
+                --exon-differentials
+                --manifest=%%MANIFEST%%
+                --verbose %s
+                -- %s""" % (tconf.partitionLen,
+                            '--stranded' if tconf.stranded else '',
+                            tconf.bowtieArgs())
+        mapper_str = re.sub('\s+', ' ', mapper_str.strip())
+        super(RealignReadsStep, self).__init__(
+            inps,
+            output,
+            name="RealignReads",
+            mapper=mapper_str,
+            multipleOutput=True,
+            cache=cache
+            )
+
 class MergeStep(pipeline.Step):
     def __init__(self, inps, output, _, _2):
         reducer_str = "python %%BASE%%/src/rail-rna/merge.py --partition-stats"
@@ -337,32 +462,6 @@ class MergeStep(pipeline.Step):
             aggr=pipeline.Aggregation(None, 8, 1, 2),
             reducer=reducer_str,
             multipleOutput=True)
-
-
-class RealignStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, gconf, cache=None):
-        mapper_str = """
-            python %%BASE%%/src/rail-rna/realign.py
-                --original-idx=%%REF_BOWTIE_INDEX%% 
-                --bowtie-idx=%%REF_INTRON_INDEX%%
-                --bowtie-exe=%%BOWTIE%%
-                --partition-length %d
-                --exon-differentials
-                --manifest=%%MANIFEST%%
-                --verbose %s
-                -- %s""" % (tconf.partitionLen,
-                            '--stranded' if tconf.stranded else '',
-                            tconf.bowtieArgs())
-        mapper_str = re.sub('\s+', ' ', mapper_str.strip())
-        super(RealignStep, self).__init__(
-            inps,
-            output,
-            name="Realign",
-            mapper=mapper_str,
-            multipleOutput=True,
-            cache=cache
-            )
-
 
 class WalkPrenormStep(pipeline.Step):
     def __init__(self, inps, output, tconf, _):

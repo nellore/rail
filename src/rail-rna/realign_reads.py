@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
-Rail-RNA-realign
+Rail-RNA-realign_reads
 
-Follows Rail-RNA-intron_post
+Follows Rail-RNA-cointron_search
 Precedes Rail-RNA-collapse / Rail-RNA-bam / Rail-RNA-bed_pre
 
 Realignment script for MapReduce pipelines that wraps Bowtie. Uses Bowtie
@@ -183,8 +183,8 @@ def multiread_with_introns(multiread, stranded=False):
         pos = int(tokens[-3]) + new_offset + \
                 sum(cigar_sizes[:start_index*2])
         if start_index is None or end_index is None:
-            RuntimeError('Invalid SAM line; sum of exon sizes doesn\'t agree '
-                         'with size of reference sequence.')
+            raise RuntimeError('Invalid SAM line; sum of exon sizes doesn\'t '
+                               'agree with size of reference sequence.')
         if start_index == end_index:
             cigar = str(seq_size) + 'M'
             corrected_multiread.add(
@@ -597,7 +597,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         if verbose: print >>sys.stderr, 'Joining thread...'
         thread.join()
     output_stream.flush()
-    print >> sys.stderr, 'DONE with realign.py; in/out=%d/%d; ' \
+    print >> sys.stderr, 'DONE with realign_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)
 

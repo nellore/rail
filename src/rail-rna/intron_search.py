@@ -1136,21 +1136,10 @@ if __name__ == '__main__':
     partition.addArgs(parser)
     bowtie.addArgs(parser)
 
-    # Collect Bowtie arguments, supplied in command line after the -- token
-    argv = sys.argv
-    bowtie_args = ''
-    in_args = False
-    for i, argument in enumerate(sys.argv[1:]):
-        if in_args:
-            bowtie_args += argument + ' '
-        if argument == '--':
-            argv = sys.argv[:i + 1]
-            in_args = True
-
-    '''Now collect other arguments. While the variable args declared below is
+    '''Now collect arguments. While the variable args declared below is
     global, properties of args are also arguments of the go() function so
     different command-line arguments can be passed to it for unit tests.'''
-    args = parser.parse_args(argv[1:])
+    args = parser.parse_args(sys.argv[1:])
 
 if __name__ == '__main__' and not args.test:
     import time

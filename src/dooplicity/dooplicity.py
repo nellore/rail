@@ -90,7 +90,7 @@ class xstream:
                     self._line = self._hadoop_stream.readline()
             self._tokens = self._line.strip().split(self._separator)
             self._next_key = tuple(self._tokens[:self._key_fields])
-            self._value = tuple(self._tokens[self._key_fields:])
+        self._value = tuple(self._tokens[self._key_fields:])
         self._key = self._next_key
         return
 
@@ -116,7 +116,7 @@ if __name__ == '__main__':
             self.temp_dir_path = tempfile.mkdtemp()
             self.input_file = os.path.join(self.temp_dir_path, 'hadoop.temp')
 
-        def test_partitioning(self):
+        def test_partitioning_1(self):
             """ Fails if input data isn't partitioned properly. """
             with open(self.input_file, 'w') as input_stream:
                 # Create some fake data with two key fields
@@ -125,6 +125,7 @@ if __name__ == '__main__':
                         'chr1\t1\ti\t10\t50\n'
                         'chr1\t1\ti\t30\t70\n'
                         'chr1\t1\ti\t75\t101\n'
+                        'chr3\t2\ti\t90\t1300\n'
                         'chr1\t2\ti\t90\t1300\n'
                         'chr1\t2\ti\t91\t101\n'
                     )
@@ -142,10 +143,44 @@ if __name__ == '__main__':
                                             ('i', '30', '70'),
                                             ('i', '75', '101')
                                         ],
+                        ('chr3', '2') : [
+                                            ('i', '90', '1300')
+                                        ],
                         ('chr1', '2') : [
                                             ('i', '90', '1300'),
                                             ('i', '91', '101')
                                         ]
+                    }
+                )
+
+        def test_partitioning_2(self):
+            """ Fails if input data isn't partitioned properly. """
+            with open(self.input_file, 'w') as input_stream:
+                # Create some fake data with two key fields
+                input_stream.write(
+                        '1\tA\n'
+                        '1\tB\n'
+                        '1\tC\n'
+                        '1\tD\n'
+                        '1\tE\n'
+                        '1\tF\n'
+                        '2\tG\n'
+                        '3\tH\n'
+                        '3\tI\n'
+                        '3\tJ\n'
+                    )
+            with open(self.input_file) as input_stream:
+                partitions = {}
+                for key, xpartition in xstream(input_stream, 1):
+                    partitions[key] = []
+                    for value in xpartition:
+                        partitions[key].append(value)
+            self.assertEqual(partitions, 
+                    {
+                        ('1',) : [('A',), ('B',), ('C',),
+                                  ('D',), ('E',), ('F',)],
+                        ('2',) : [('G',)],
+                        ('3',) : [('H',), ('I',), ('J',)]
                     }
                 )
 

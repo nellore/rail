@@ -61,6 +61,10 @@ parser.add_argument(\
     help='Bowtie index files are written to this URL. DEFAULT IS CURRENT '
          'WORKING DIRECTORY.')
 parser.add_argument(\
+    '--basename', type=str, required=False,
+    default='intron',
+    help='Basename for index to be written')
+parser.add_argument(\
     '--keep-alive', action='store_const', const=True, default=False,
     help='Prints reporter:status:alive messages to stderr to keep EMR '
          'task alive')
@@ -101,10 +105,10 @@ else:
     except: pass
 if output_url.isLocal():
     # Write directly to local destination
-    index_basename = os.path.join(output_url.toUrl(), 'intron')
+    index_basename = os.path.join(output_url.toUrl(), args.basename)
 else:
     # Write to temporary directory, and later upload to URL
-    index_basename = os.path.join(temp_dir_path, 'index/intron')
+    index_basename = os.path.join(temp_dir_path, 'index/' + args.basename)
 fasta_file = os.path.join(temp_dir_path, 'temp.fa')
 print >>sys.stderr, 'Opened %s for writing....' % fasta_file
 with open(fasta_file, 'w') as fasta_stream:
@@ -166,7 +170,7 @@ else:
 
 if not output_url.isLocal():
     # Compress index files
-    intron_index_filename = 'intron_index.tar.gz'
+    intron_index_filename = args.basename + '.tar.gz'
     intron_index_path = os.path.join(temp_dir_path, intron_index_filename)
     index_path = os.path.join(temp_dir_path, 'index')
     tar = tarfile.open(intron_index_path, 'w:gz')
