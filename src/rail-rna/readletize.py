@@ -125,6 +125,9 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
         cap_size = int(cap_size*capping_multiplier)
         if cap_size == cap_sizes[-1]:
           cap_size += 1
+    if cap_size != max_readlet_size:
+        # Always have a start or end read of length max_readlet_size
+        cap_sizes.append(max_readlet_size)
     for _input_line_count, line in enumerate(input_stream):
         seq_id = task_partition + ':' + str(_input_line_count)
         tokens = line.rstrip().split('\t')

@@ -283,7 +283,7 @@ class IntronConfigStep(pipeline.Step):
             python %%BASE%%/src/rail-rna/intron_config.py
                 --readlet-size %d
                 --verbose
-            """ % (tconf.cooccurrence_readlet_length,)
+            """ % (tconf.readletLen,)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(IntronConfigStep, self).__init__(
             inps,
@@ -325,39 +325,6 @@ class IntronIndexStep(pipeline.Step):
             output,
             name="IntronIndex",
             aggr=pipeline.Aggregation(1, None, 1, 1),
-            reducer=reducer_str)
-
-class RereadletizeStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, _):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/readletize.py
-                --max-readlet-size %d 
-                --min-readlet-size %d
-                --readlet-interval %d
-        """ % (tconf.cooccurrence_readlet_length,
-               tconf.cooccurrence_readlet_length,
-               tconf.cooccurrence_readlet_ival)
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(RereadletizeStep, self).__init__(
-            inps,
-            output,  # output URL
-            name="Rereadletize",  # name
-            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
-            reducer=reducer_str)
-
-class RecombineSubsequencesStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, _):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/sum.py
-                --type 3
-                %s
-        """ % ('',)
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(RecombineSubsequencesStep, self).__init__(
-            inps,
-            output,  # output URL
-            name="RecombineSubsequences",  # name
-            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
             reducer=reducer_str)
 
 class RealignReadletsStep(pipeline.Step):

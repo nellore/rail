@@ -18,11 +18,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--readlet-length', metavar='INT', type=int, default="25", help='Substring length to extract from read for determining introns.')
     parser.add_argument(\
-        '--cooccurrence-readlet-length', metavar='INT', type=int, default="20", help='Substring length to extract from read for determining intron sequence coocurrences.')
-    parser.add_argument(\
         '--readlet-interval', metavar='INT', type=int, default="4", help='Distance between substrings to extract from read for determining introns.')
-    parser.add_argument(\
-        '--cooccurrence-readlet-interval', metavar='INT', type=int, default="4", help='Distance between substrings to extract from read for determining intron sequence coocurrences.')
     parser.add_argument(\
         '--capping-multiplier', metavar='FRACTION', type=float, default=1.2, help='Successive capping readlets on a given end of a read are tapered in size exponentially with this fractional base.')
     parser.add_argument(\
@@ -125,18 +121,12 @@ class Rail_RNAConfig(object):
         l = self.readletLen = args.readlet_length
         if l < 4:
             raise RuntimeError("Argument for --readlet-length must be >= 4; was %d" % l)
-        if args.cooccurrence_readlet_length < 4:
-            raise RuntimeError("Argument for --cooccurrence-readlet-length must be >= 4; was %d" % args.cooccurrence_readlet_length)
-        self.cooccurrence_readlet_length = args.cooccurrence_readlet_length
         c = self.capping_multiplier = args.capping_multiplier
         if c < 1:
             raise RuntimeError("Argument for --capping-multiplier must be >= 1; was %.3f" % c)
         i = self.readletIval = args.readlet_interval
         if i < 1:
             raise RuntimeError("Argument for --readlet-interval must be >= 1; was %d" % i)
-        self.cooccurrence_readlet_ival = args.cooccurrence_readlet_interval
-        if self.cooccurrence_readlet_ival < 1:
-            raise RuntimeError("Argument for --cooccurrence-readlet-interval must be >= 1; was %d" % self.cooccurrence_readlet_ival)
         r = self.clusterRadius = args.cluster_radius
         if r < 0:
             raise RuntimeError("Argument for --cluster-radius must be >= 0; was %d" % r)

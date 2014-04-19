@@ -802,7 +802,7 @@ def selected_readlet_alignments_by_clustering(readlets, seed=0):
     unclustered_alignments = range(len(alignments))
     clustered_alignments = []
     while unclustered_alignments:
-        pivot = i = random.sample(unclustered_alignments, 1)[0]
+        pivot = i = random.choice(unclustered_alignments)
         new_unclustered_alignments = []
         alignment_cluster = [pivot]
         for j in unclustered_alignments:

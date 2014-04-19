@@ -146,6 +146,8 @@ def different_introns_overlap(intron_iterable_1, intron_iterable_2):
             that overlap. Here, two introns overlap if there is not at least
             one exonic base between them.
     """
+    if intron_iterable_1 is None or intron_iterable_2 is None:
+        return False
     for pos_1, end_pos_1 in intron_iterable_1:
         for pos_2, end_pos_2 in intron_iterable_2:
             if (pos_1, end_pos_1) == (pos_2, end_pos_2):
@@ -154,13 +156,81 @@ def different_introns_overlap(intron_iterable_1, intron_iterable_2):
                 return True
     return False
 
-def maximal_cliques(intron_alignments):
+def compatible(alignment_1, alignment_2, fudge=5):
+    """ Determines whether alignments are compatible.
+
+        Two alignments are compatible iff:
+        1) They are on the same strand; that is, they have the same RNAME
+        (chromosome), agree on which strand is the sense strand, and 
+        both align to either the forward or the reverse strand.
+        2) Their introns are consistent; that is, when an intron from
+        alignment_1 and an intron from alignment_2 overlap, these introns
+        are the same intron.
+        3) The number of bases between alignment_1's start position and
+        alignment_2's start position less any intervening intronic bases
+        from either alignment is equal to the difference in corresponding
+        readlet displacements from the 5' end of the read when the alignments
+        overlap, and is within fudge of this difference when they don't.
+
+        alignment_1: tuple (strand, True if sense strand is forward strand else
+                            False, reference start position of alignment,
+                            reference end position of alignment,
+                            tuple of intron tuples overlapped by alignment,
+                            readlet size,
+                            True if alignment is to forward strand else False,
+                            displacement of readlet from 5' end of read)
+
+
+(rname, True if sense strand is forward strand or
+                                False if sense strand is reverse strand or
+                                None if not known, alignment_start_position,
+                                alignment_end_position, 
+                                tuple of tuples (pos, end_pos) of start
+                                and end positions of introns OR None if 
+                                no introns are overlapped, readlet_size,
+                True if alignment is to forward strand else False, displacement
+                of readlet from 5' end of read
+        alignment_2: takes the same form as alignment_1
+
+        Return value: False if alignments are incompatible; True if alignments
+            are compatible.
+    """
+    if alignment_1[:2] != alignment_2[:2] or alignment_1[6] != alignment_2[6]:
+        # Strands don't agree or alignments aren't to same strand
+        return False
+    if different_introns_overlap(alignment_1[4], alignment_2[4]):
+        # Two distinct introns overlap
+        return False
+    if alignment_1[-1] >= alignment_2[-1]:
+        first_alignment = alignment_2
+        second_alignment = alignment_1
+    else:
+        first_alignment = alignment_1
+        second_alignment = alignment_2
+    overlap_with_introns = second_alignment[2] - first_alignment[3]
+    if overlap_with_introns >= 0:
+        return True
+        # No overlap; impose that readlet separation is within that tolerated
+        #if abs(second_alignment[-1] - first_alignment[-1] + first_alignment[-3]
+        #        - second_alignment[2] + first_alignment[3]) <= fudge:
+        #    return True
+        #else:
+        #    return False
+    else:
+        '''Overlap; since there are no overlapping introns between alignments,
+        compatibility necessarily holds.'''
+        return True
+
+def maximal_cliques(multireadlets):
     """ Based on http://www.kuchaev.com/files/graph.py .
     """
+    start_time = time.time()
     cliques = []
-    alignment_count = len(intron_alignments)
-    intron_alignment_list = list(intron_alignments)
-    if alignment_count == 1:
+    alignments = [alignment + (i,)
+                    for i, multireadlet in enumerate(multireadlets)
+                    for alignment in multireadlet]
+    alignment_count = len(alignments)
+    '''if alignment_count == 1:
         return [intron_alignment_list]
     if alignment_count == 2:
         if not different_introns_overlap(intron_alignment_list[0][4],
@@ -168,17 +238,26 @@ def maximal_cliques(intron_alignments):
             return [sorted(intron_alignment_list,
                         key=lambda alignment: alignment[2])]
         else:
-            return [[intron_alignment_list[0]], [intron_alignment_list[1]]]
+            return [[intron_alignment_list[0]], [intron_alignment_list[1]]]'''
     graph = defaultdict(set)
     for i in xrange(alignment_count):
         for j in xrange(i+1, alignment_count):
-            if not different_introns_overlap(intron_alignment_list[i][4],
-                                                intron_alignment_list[j][4]):
-                graph[intron_alignment_list[i]].add(intron_alignment_list[j])
-                graph[intron_alignment_list[j]].add(intron_alignment_list[i])
+            if not (alignments[i][-1] == alignments[j][-1] or
+                alignments[i][0] != alignments[j][0] or
+                (alignments[i][1] is not None and alignments[j][1] is not None
+                 and alignments[i][1] != alignments[j][1]) or
+                alignments[i][-3] != alignments[j][-3] or
+                different_introns_overlap(alignments[i][4],
+                                                alignments[j][4]) or
+                (alignments[i][-2] == alignments[j][-2] and
+                   alignments[i][2] != alignments[j][2]) or
+                ((alignments[i][-2] < alignments[j][-2]) !=
+                    (alignments[i][2] < alignments[j][2]))):
+                graph[alignments[i]].add(alignments[j])
+                graph[alignments[j]].add(alignments[i])
     nodes = set(graph.keys())
-    stack = [(set(), intron_alignments,
-                set(), None, len(intron_alignments))]
+    stack = [(set(), set(alignments),
+                set(), None, len(alignments))]
     while stack:
         (c_compsub, c_candidates, c_not, c_nd, c_disc_num) = stack.pop()
         if not len(c_candidates) and not len(c_not):
@@ -200,26 +279,20 @@ def maximal_cliques(intron_alignments):
                     if c_nd in new_not:
                         new_disc_num=c_disc_num-1
                         if new_disc_num>0:
-                            new_search_node=(new_compsub,new_candidates,
-                                                new_not,c_nd,new_disc_num)                        
+                            new_search_node=(new_compsub,new_candidates,new_not,c_nd,new_disc_num)                        
                             stack.append(new_search_node)
                     else:
                         new_disc_num=len(nodes)
                         new_nd=c_nd
                         for cand_nd in new_not:
-                            cand_disc_num=len(new_candidates)\
-                                -len(new_candidates.intersection(
-                                        graph[cand_nd])
-                                    ) 
+                            cand_disc_num=len(new_candidates)-len(new_candidates.intersection(graph[cand_nd])) 
                             if cand_disc_num<new_disc_num:
                                 new_disc_num=cand_disc_num
                                 new_nd=cand_nd
-                        new_search_node=(new_compsub,new_candidates,
-                                            new_not,new_nd,new_disc_num)                        
+                        new_search_node=(new_compsub,new_candidates,new_not,new_nd,new_disc_num)                        
                         stack.append(new_search_node)                
                 else:
-                    new_search_node=(new_compsub,new_candidates,
-                                        new_not,c_nd,c_disc_num)
+                    new_search_node=(new_compsub,new_candidates,new_not,c_nd,c_disc_num)
                     stack.append(new_search_node)
                 c_not.add(u) 
                 new_disc_num=0
@@ -227,14 +300,20 @@ def maximal_cliques(intron_alignments):
                     if u not in graph[x]:
                         new_disc_num+=1
                 if new_disc_num<c_disc_num and new_disc_num>0:
-                    new1_search_node=(c_compsub,c_candidates,
-                                        c_not,u,new_disc_num)
+                    new1_search_node=(c_compsub,c_candidates,c_not,u,new_disc_num)
                     stack.append(new1_search_node)
                 else:
-                    new1_search_node=(c_compsub,c_candidates,
-                                        c_not,c_nd,c_disc_num)
-                    stack.append(new1_search_node)    
-    return cliques
+                    new1_search_node=(c_compsub,c_candidates,c_not,c_nd,c_disc_num)
+                    stack.append(new1_search_node)  
+    print >>sys.stderr, [sorted([alignment[:-1] for alignment in clique
+                            if alignment[1] != None],
+                    key=lambda an_alignment: an_alignment[2])
+                    for clique in cliques]
+    print >>sys.stderr, 'time: %f' % (time.time() - start_time)
+    return [sorted([alignment[:-1] for alignment in clique
+                    if alignment[1] != None],
+                    key=lambda an_alignment: an_alignment[2])
+                    for clique in cliques]
 
 def selected_introns_by_clustering(multireadlets, seed=0):
     '''(rname, True if sense strand is forward strand or
@@ -250,6 +329,9 @@ def selected_introns_by_clustering(multireadlets, seed=0):
     alignments = [alignment + (i,)
                     for i, multireadlet in enumerate(multireadlets)
                     for alignment in multireadlet]
+    print >>sys.stderr, 'alignments'
+    print >>sys.stderr, alignments
+    print >>sys.stderr, '/alignments'
     unclustered_alignments = range(len(alignments))
     clustered_alignments = []
     while unclustered_alignments:
@@ -290,6 +372,9 @@ def selected_introns_by_clustering(multireadlets, seed=0):
         unclustered_alignments = new_unclustered_alignments
     cluster_sizes = [len(set([alignment[-1] for alignment in cluster]))
                         for cluster in clustered_alignments]
+    print >>sys.stderr, 'laclusters'
+    print >>sys.stderr, clustered_alignments
+    print >>sys.stderr, '/laclusters'
     largest_cluster_size = max(cluster_sizes)
     largest_clusters = []
     for i, cluster_size in enumerate(cluster_sizes):
@@ -302,7 +387,7 @@ def selected_introns_by_clustering(multireadlets, seed=0):
         return set([])
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, 
-        verbose=False, stranded=False, fudge=10):
+        verbose=False, stranded=False):
     """ Runs Rail-RNA-intron_search.
 
         Input (read from stdin)
@@ -404,16 +489,14 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
             if False not in [alignment[1] is None 
                                 for multireadlet in multireadlets
                                 for alignment in multireadlet]:
-                # No introns to see here
                 continue
-            selected_introns = selected_introns_by_clustering(
+            '''selected_introns = selected_introns_by_clustering(
                                 multireadlets,
                                 seed=seq
-                            )
-            if len(selected_introns):
-                for alignments in maximal_cliques(selected_introns):
-                    left_extend_size = (alignments[0][4][0][0] # first intron 
-                                                               # start
+                            )'''
+            if True:
+                for alignments in maximal_cliques(multireadlets):
+                    left_extend_size = (alignments[0][4][0][0] # first intron start
                                         - alignments[0][2] # alignment start
                                         + alignments[0][-1]) # displacement
                     right_extend_size = (seq_size
@@ -427,25 +510,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         for intron in alignment[4]:
                             introns_to_add.add(intron)
                     intron_starts_and_ends = zip(*sorted(list(introns_to_add)))
-                    '''Ensure number of exonic bases is within fudge of read
-                    size.'''
-                    if abs(seq_size 
-                            - sum([intron_starts_and_ends[0][i+1] 
-                                    - intron_starts_and_ends[1][i]
-                                    for i 
-                                    in xrange(len(intron_starts_and_ends[0])
-                                                    - 1)])
-                            - left_extend_size
-                            - right_extend_size) > fudge:
-                        if verbose:
-                            print >>sys.stderr, 'Killing intron combo', \
-                                intron_starts_and_ends, 'because its exonic ' \
-                                'base sum was not within fudge=%d bases of ' \
-                                'the sequence size=%d' % (fudge, seq_size)
-                        continue
                     print >>output_stream, 'intron\t%s\t%s\t%s\t%d\t%d' % (
-                            alignments[0][0] + ('+' if 
-                                                alignments[0][1] else '-'),
+                            alignments[0][0] + ('+' if alignments[0][1] else '-'),
                             ','.join(map(str, intron_starts_and_ends[0])),
                             ','.join(map(str, intron_starts_and_ends[1])),
                             left_extend_size,
@@ -470,18 +536,13 @@ if __name__ == '__main__':
         default=False,
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
              'WRITE EXONS AND INTRONS TO STDOUT')
-    parser.add_argument('--fudge', type=int, required=False,
-        default=30,
-        help='Permits a sum of exonic bases for an intron combo to be within '
-             'the specified number of bases of a read sequence\'s size; '
-             'this allows for indels with respect to the reference')
 
     args = parser.parse_args(sys.argv[1:])
 
 if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
-    go(verbose=args.verbose, stranded=args.stranded, fudge=args.fudge)
+    go(verbose=args.verbose, stranded=args.stranded)
     print >> sys.stderr, 'DONE with intron_search.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)
