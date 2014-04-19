@@ -392,9 +392,9 @@ def buildFlow(allSteps, stepInfo, inp, out, inter, manifest):
             '''Must cache intron index: see 
             http://docs.aws.amazon.com/ElasticMapReduce/latest/
             DeveloperGuide/emr-plan-input-distributed-cache.html'''
-            steps.append(cl(indirs, outdir, tconf, gconf, cache=out.plus('index/intron.tar.gz#intron_index')))
+            steps.append(cl(indirs, outdir, tconf, gconf, cache=out.plus('index/intron.tar.gz#intron')))
         elif cl is rail_rna_pipeline.RealignReadsStep:
-            steps.append(cl(indirs, outdir, tconf, gconf, cache=out.plus('index/cointron.tar.gz#intron_index')))
+            steps.append(cl(indirs, outdir, tconf, gconf, cache=out.plus('index/cointron.tar.gz#cointron')))
         else:
             steps.append(cl(indirs, outdir, tconf, gconf))
     return steps

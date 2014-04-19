@@ -61,9 +61,9 @@ class RefConfigEmr(object):
             tok = '%' + k.upper() + '%'
             if tok in s:
                 if k.startswith('REF_INTRON_INDEX'):
-                    s = s.replace(tok, 'intron_index/intron')
+                    s = s.replace(tok, 'intron/intron')
                 elif k.startswith('REF_COINTRON_INDEX'):
-                    s = s.replace(tok, 'intron_index/cointron')
+                    s = s.replace(tok, 'cointron/cointron')
                 else:
                     s = s.replace(tok, '/'.join([self.emrLocalDir, v]))
         return s
