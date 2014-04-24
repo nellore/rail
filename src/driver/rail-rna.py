@@ -493,8 +493,8 @@ elif mode == 'emr':
     # Get Rail-RNA scripts and run Makefile for swig code
     cmdl.append(bootstrapTool("rail", src=rail_RNAUrl, dest="/mnt"))
     tarballs = []
-    #if useIndex:
-    #    tarballs.append(Url(reference.toUrl().replace('.tar.gz', '.index.tar.gz')))
+    if useIndex:
+        tarballs.append(Url(reference.toUrl()))
     if useGtf:
         tarballs.append(Url(reference.toUrl().replace('.tar.gz', '.gtf.tar.gz')))
     if len(tarballs) > 0:
