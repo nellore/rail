@@ -101,11 +101,14 @@ def rname_and_introns(rname, offset, readlet_size):
         # Exonic alignment
         return (rname, None, offset + 1,
                 offset + 1 + readlet_size, None, readlet_size)
-    print >>sys.stderr, rname
     if left_size == 'NA':
         left_size = None
+    else:
+        left_size = int(left_size)
     if right_size == 'NA':
         right_size = None
+    else:
+        right_size = int(right_size)
     rname = strand[:-1]
     reverse_strand = True if strand[-1] == '+' else False
     exon_sizes = [int(exon_size) for exon_size in exon_sizes.split(',')]
@@ -164,7 +167,7 @@ def rname_and_introns(rname, offset, readlet_size):
                 left_size, right_size)
 
 def different_introns_overlap(intron_iterable_1, intron_iterable_2):
-    """ Test whether different introns in two iterables overlap.
+    """ Test whether distinct introns in two iterables overlap.
 
         intron_iterable_1: an iterable, each of whose items is an intron
             specified by the tuple (start position, end position)
@@ -183,87 +186,180 @@ def different_introns_overlap(intron_iterable_1, intron_iterable_2):
                 return True
     return False
 
-def maximal_cliques(intron_alignments):
-    """ Based on http://www.kuchaev.com/files/graph.py .
+def cointron_adjacencies(intron_alignments):
+    """ Generates adjacency matrix for cointron graph described below.
+
+        Consider an undirected graph where each node corresponds to
+        an alignment overlapping at least one cointron, as specified by a
+        tuple from the set intron_alignments. Place an edge between two nodes
+        if no two _distinct_ introns overlap, where one intron associated with
+        one node, and the other intron is associated with the other node.
+
+        intron_alignments: A set of tuples (rname, True if sense strand is
+            forward strand or False if sense strand is reverse strand,
+            alignment_start_position, alignment_end_position, tuple of tuples
+            (pos, end_pos) of start and end positions of introns, readlet_size,
+            distance to previous intron or None if beginning of strand,
+            distance to next intron or None if end of strand, True if alignment
+            is to forward strand else False, displacement of readlet from 5'
+            end of read)
+        
+        Yield value: tuple (node A, [list of nodes that connect to A])
     """
-    cliques = []
-    alignment_count = len(intron_alignments)
-    intron_alignment_list = list(intron_alignments)
-    if alignment_count == 1:
-        return [intron_alignment_list]
-    if alignment_count == 2:
-        if not different_introns_overlap(intron_alignment_list[0][4],
-                                            intron_alignment_list[1][4]):
-            return [sorted(intron_alignment_list,
-                        key=lambda alignment: alignment[2])]
+    for compared_alignment in intron_alignments:
+        yield (compared_alignment, [alignment 
+                                    for alignment in intron_alignments
+                                    if not different_introns_overlap(
+                                                    compared_alignment[4],
+                                                    alignment[4]
+                                                )])
+
+def maximal_cliques(intron_alignments):
+    """ Finds maximal cliques of graph of intron combinations.
+
+        Consider an undirected graph where each node corresponds to
+        an alignment overlapping at least one cointron, as specified by a
+        tuple from the set intron_alignments. Place an edge between two nodes
+        for which no two _distinct_ introns overlap, where one intron is
+        associated with one node, and the other intron is associated with the
+        other node. Now enumerate maximal cliques. This gives all possible
+        valid clusters of _consistent_ alignments, and each cluster subsumes
+        a set of introns the read could possibly overlap.
+
+        This code is adapted from NetworkX's find_cliques(), which requires
+        inclusion of the following copyright notice.
+
+        --------
+        Copyright (C) 2004-2012, NetworkX Developers
+        Aric Hagberg <hagberg@lanl.gov>
+        Dan Schult <dschult@colgate.edu>
+        Pieter Swart <swart@lanl.gov>
+        All rights reserved.
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that the following conditions are
+        met:
+
+          * Redistributions of source code must retain the above copyright
+            notice, this list of conditions and the following disclaimer.
+
+          * Redistributions in binary form must reproduce the above
+            copyright notice, this list of conditions and the following
+            disclaimer in the documentation and/or other materials provided
+            with the distribution.
+
+          * Neither the name of the NetworkX Developers nor the names of its
+            contributors may be used to endorse or promote products derived
+            from this software without specific prior written permission.
+
+
+        THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+        "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+        LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+        A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+        OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+        SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+        LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+        DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+        THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+        (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+        OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+        --------
+
+        intron_alignments: A set of tuples (rname, True if sense strand is
+            forward strand or False if sense strand is reverse strand,
+            alignment_start_position, alignment_end_position, tuple of tuples
+            (pos, end_pos) of start and end positions of introns, readlet_size,
+            distance to previous intron or None if beginning of strand,
+            distance to next intron or None if end of strand, True if alignment
+            is to forward strand else False, displacement of readlet from 5'
+            end of read)
+        
+        Yield value: A maximal clique -- a list of intron alignments.
+    """
+    # Cache nbrs and find first pivot (highest degree)
+    maxconn=-1
+    nnbrs={}
+    pivotnbrs=set() # handle empty graph
+    for n,nbrs in cointron_adjacencies(intron_alignments):
+        nbrs=set(nbrs)
+        nbrs.discard(n)
+        conn = len(nbrs)
+        if conn > maxconn:
+            nnbrs[n] = pivotnbrs = nbrs
+            maxconn = conn
         else:
-            return [[intron_alignment_list[0]], [intron_alignment_list[1]]]
-    graph = defaultdict(set)
-    for i in xrange(alignment_count):
-        for j in xrange(i+1, alignment_count):
-            if not different_introns_overlap(intron_alignment_list[i][4],
-                                                intron_alignment_list[j][4]):
-                graph[intron_alignment_list[i]].add(intron_alignment_list[j])
-                graph[intron_alignment_list[j]].add(intron_alignment_list[i])
-    nodes = set(graph.keys())
-    stack = [(set(), intron_alignments,
-                set(), None, len(intron_alignments))]
-    while stack:
-        (c_compsub, c_candidates, c_not, c_nd, c_disc_num) = stack.pop()
-        if not len(c_candidates) and not len(c_not):
-            if len(c_compsub) > 2:
-                cliques.append(
-                        sorted(list(c_compsub),
-                                key=lambda alignment: alignment[2])
-                    )
-                continue
-        for u in list(c_candidates):
-            if c_nd is None or u not in graph[c_nd]:
-                c_candidates.remove(u)
-                Nu=graph[u]                               
-                new_compsub=set(c_compsub)
-                new_compsub.add(u)
-                new_candidates=set(c_candidates.intersection(Nu))
-                new_not=set(c_not.intersection(Nu))  
-                if c_nd is not None:
-                    if c_nd in new_not:
-                        new_disc_num=c_disc_num-1
-                        if new_disc_num>0:
-                            new_search_node=(new_compsub,new_candidates,
-                                                new_not,c_nd,new_disc_num)                        
-                            stack.append(new_search_node)
-                    else:
-                        new_disc_num=len(nodes)
-                        new_nd=c_nd
-                        for cand_nd in new_not:
-                            cand_disc_num=len(new_candidates)\
-                                -len(new_candidates.intersection(
-                                        graph[cand_nd])
-                                    ) 
-                            if cand_disc_num<new_disc_num:
-                                new_disc_num=cand_disc_num
-                                new_nd=cand_nd
-                        new_search_node=(new_compsub,new_candidates,
-                                            new_not,new_nd,new_disc_num)                        
-                        stack.append(new_search_node)                
-                else:
-                    new_search_node=(new_compsub,new_candidates,
-                                        new_not,c_nd,c_disc_num)
-                    stack.append(new_search_node)
-                c_not.add(u) 
-                new_disc_num=0
-                for x in c_candidates:
-                    if u not in graph[x]:
-                        new_disc_num+=1
-                if new_disc_num<c_disc_num and new_disc_num>0:
-                    new1_search_node=(c_compsub,c_candidates,
-                                        c_not,u,new_disc_num)
-                    stack.append(new1_search_node)
-                else:
-                    new1_search_node=(c_compsub,c_candidates,
-                                        c_not,c_nd,c_disc_num)
-                    stack.append(new1_search_node)    
-    return cliques
+            nnbrs[n] = nbrs
+    # Initial setup
+    cand=set(nnbrs)
+    smallcand = set(cand - pivotnbrs)
+    done=set()
+    stack=[]
+    clique_so_far=[]
+    # Start main loop
+    while smallcand or stack:
+        try:
+            # Any nodes left to check?
+            n=smallcand.pop()
+        except KeyError:
+            # back out clique_so_far
+            cand,done,smallcand = stack.pop()
+            clique_so_far.pop()
+            continue
+        # Add next node to clique
+        clique_so_far.append(n)
+        cand.remove(n)
+        done.add(n)
+        nn=nnbrs[n]
+        new_cand = cand & nn
+        new_done = done & nn
+        # check if we have more to search
+        if not new_cand:
+            if not new_done:
+                # Found a clique!
+                yield clique_so_far[:]
+            clique_so_far.pop()
+            continue
+        # Shortcut--only one node left!
+        if not new_done and len(new_cand)==1:
+            yield clique_so_far + list(new_cand)
+            clique_so_far.pop()
+            continue
+        # find pivot node (max connected in cand)
+        # look in done nodes first
+        numb_cand=len(new_cand)
+        maxconndone=-1
+        for n in new_done:
+            cn = new_cand & nnbrs[n]
+            conn=len(cn)
+            if conn > maxconndone:
+                pivotdonenbrs=cn
+                maxconndone=conn
+                if maxconndone==numb_cand:
+                    break
+        # Shortcut--this part of tree already searched
+        if maxconndone == numb_cand:
+            clique_so_far.pop()
+            continue
+        # still finding pivot node
+        # look in cand nodes second
+        maxconn=-1
+        for n in new_cand:
+            cn = new_cand & nnbrs[n]
+            conn=len(cn)
+            if conn > maxconn:
+                pivotnbrs=cn
+                maxconn=conn
+                if maxconn == numb_cand-1:
+                    break
+        # pivot node is max connected in cand from done or cand
+        if maxconndone > maxconn:
+            pivotnbrs = pivotdonenbrs
+        # save search status for later backout
+        stack.append( (cand, done, smallcand) )
+        cand=new_cand
+        done=new_done
+        smallcand = cand - pivotnbrs
 
 def selected_introns_by_clustering(multireadlets, seed=0):
     '''(rname, True if sense strand is forward strand or
@@ -455,24 +551,39 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
             if len(clusters):
                 for selected_introns in clusters:
                     for alignments in maximal_cliques(selected_introns):
-                        left_extend_size = (alignments[0][4][0][0] # first
-                                                                   # intron 
-                                                                   # start
-                                            - alignments[0][2] # alignment
-                                                               # start
-                                            + alignments[0][-1]) # displacement
-                        right_extend_size = (seq_size
-                                            - alignments[-1][-1] # displacement
-                                            - alignments[-1][5] # readlet size
-                                            - alignments[-1][4][-1][1] # last
-                                                                       # intron
-                                                                       # end
-                                            + alignments[-1][3]) # alignment
-                                                                 # end
+                        # Get stats on alignment with smallest start position
+                        (_, _, left_pos,
+                            _, _, left_readlet_size,
+                            left_intron_distance, _,
+                            _, left_displacement) = min(alignments,
+                                key=lambda alignment: alignment[2]
+                            )
+                        # Get stats on alignment with largest end position
+                        (_, _, _,
+                            right_end_pos, _, right_readlet_size,
+                            right_intron_distance, _,
+                            _, right_displacement) = max(alignments,
+                                key=lambda alignment: alignment[3]
+                            )
                         introns_to_add = set()
                         for alignment in alignments:
                             for intron in alignment[4]:
                                 introns_to_add.add(intron)
+                        intron_starts_and_ends = zip(*sorted(
+                                                          list(introns_to_add))
+                                                        )
+                        # Find start position of first intron
+                        left_intron_pos = intron_starts_and_ends[0][0]
+                        # Find end position of last intron
+                        right_intron_end_pos = intron_starts_and_ends[1][-1]
+                        '''Compute distances to ends of read from first and
+                        last introns.'''
+                        left_extend_size = (left_intron_pos - left_pos
+                                             + left_displacement)
+                        right_extend_size = (seq_size - right_displacement
+                                                - right_readlet_size
+                                                + right_end_pos
+                                                - right_intron_end_pos)
                         intron_starts_and_ends = zip(*sorted(
                                                           list(introns_to_add))
                                                         )
@@ -496,20 +607,20 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             continue
                         '''Determine by how much reference should be extended
                         on either side of intron.'''
-                        if left_extend_size > alignments[0][6]:
+                        if left_extend_size > left_intron_distance:
                             left_size = left_extend_size
                         else:
                             left_size = min(left_extend_size + fudge,
-                                            alignments[0][6])
-                        if right_extend_size > alignments[-1][7]:
+                                            left_intron_distance)
+                        if right_extend_size > right_intron_distance:
                             right_size = right_extend_size
                         else:
                             right_size = min(right_extend_size + fudge,
-                                             alignments[-1][7])
+                                             right_intron_distance)
                         print >>output_stream, 'intron\t%s\t%d\t%s\t%s' \
                                 '\t%d\t%d\t%s' % (alignments[0][0] + ('+' if 
                                                     alignments[0][1] else '-'),
-                                intron_starts_and_ends[0][0],
+                                left_intron_pos,
                                 ','.join(map(str,
                                                 intron_starts_and_ends[0][1:]))
                                 if len(intron_starts_and_ends[0][1:]) \
@@ -553,6 +664,7 @@ if __name__ == '__main__' and not args.test:
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)
 elif __name__ == '__main__':
+    import unittest
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
     # Insert unit tests here
