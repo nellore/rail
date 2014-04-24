@@ -47,33 +47,12 @@ class PreprocessingStep(pipeline.Step):
 
 class AlignReadsStep(pipeline.Step):
     def __init__(self, inps, output, tconf, _):
-        '''mapper_str = """
-            python %%BASE%%/src/rail-rna/align.py
-                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
-                --bowtie-exe=%%BOWTIE%%
-                --max-readlet-size %d 
-                --readlet-interval %d 
-                --partition-length %d
-                --max-intron-size %d
-                --min-intron-size %d
-                --capping-fraction %f
-                --exon-differentials 
-                --verbose %s %s
-                --min-cap-query-size %d
-                --cap-search-window-size %d
-                -- %s """ % (tconf.readletLen, tconf.readletIval, tconf.partitionLen,
-                             tconf.max_intron_size,
-                             tconf.min_intron_size, tconf.capping_fraction,
-                             '--stranded' if tconf.stranded else '',
-                             '--do-not-search-for-caps' if tconf.do_not_search_for_caps else '',
-                             tconf.min_cap_query_size,
-                             tconf.cap_search_window_size,
-                             tconf.bowtieArgs())'''
         mapper_str = """
             python %%BASE%%/src/rail-rna/align_reads.py
-                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
-                --bowtie-exe=%%BOWTIE%%
-                --exon-differentials 
+                --bowtie-idx=%%REF_BOWTIE_INDEX%%
+                --bowtie2-idx=%%REF_BOWTIE2_INDEX%%
+                --bowtie2-exe=%%BOWTIE2%%
+                --exon-differentials
                 --partition-length %d
                 --manifest=%%MANIFEST%%
                 --verbose
@@ -182,7 +161,7 @@ class BamStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducer_str = """
             python %%BASE%%/src/rail-rna/bam.py
-                --out=%s/alignments
+                --out=%s/bam
                 --bowtie-idx=%%REF_BOWTIE_INDEX%% 
                 --samtools-exe=%%SAMTOOLS%%
                 --bam-basename=%s
@@ -230,16 +209,15 @@ class BedPreStep(pipeline.Step):
     def __init__(self, inps, output, _, _2):
         reducer_str = """
             python %%BASE%%/src/rail-rna/bed_pre.py
-                --bowtie-idx=%%REF_BOWTIE_INDEX%% %s
+                %s
         """ % ''
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(BedPreStep, self).__init__(
             inps,
             output,  # output URL
             name="BedPre",  # name
-            aggr=pipeline.Aggregation(None, 8, 1, 1),  # 8 tasks per reducer
-            reducer=reducer_str,
-            multipleOutput=True)
+            aggr=pipeline.Aggregation(None, 8, 6, 6),  # 8 tasks per reducer
+            reducer=reducer_str)
 
 
 class BedStep(pipeline.Step):
@@ -247,7 +225,7 @@ class BedStep(pipeline.Step):
         reducer_str = """
             python %%BASE%%/src/rail-rna/bed.py 
                 --bowtie-idx=%%REF_BOWTIE_INDEX%%
-                --out=%s/junctions
+                --out=%s/bed
                 --manifest=%%MANIFEST%%
                 --bed-basename=%s""" % (gconf.out, tconf.bed_basename)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
@@ -255,7 +233,7 @@ class BedStep(pipeline.Step):
             inps,
             output,  # output URL
             name="Bed",  # namef
-            aggr=pipeline.Aggregation(None, 1, 1, 4),
+            aggr=pipeline.Aggregation(None, 1, 2, 4),
             reducer=reducer_str)
 
 
@@ -363,7 +341,7 @@ class CointronSearchStep(pipeline.Step):
 class CointronFastaStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducer_str = """
-            python %%BASE%%/src/rail-rna/intron_fasta.py
+            python %%BASE%%/src/rail-rna/cointron_fasta.py
                 --verbose
                 --bowtie-idx=%%REF_BOWTIE_INDEX%%
                 %s
@@ -373,50 +351,31 @@ class CointronFastaStep(pipeline.Step):
             inps,
             output,
             name="CointronFasta",
-            aggr=pipeline.Aggregation(None, 8, 4, 4),
-            reducer=reducer_str,
-            multipleOutput=True)
-
-class CointronIndexStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, gconf):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/intron_index.py
-                --bowtie-build-exe=%%BOWTIE-BUILD%%
-                --bowtie-idx=%%REF_BOWTIE_INDEX%%
-                --basename=cointron
-                --out=%s/index
-                %s
-            """ % (gconf.out, '--keep-alive' if tconf.keep_alive else '')
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(CointronIndexStep, self).__init__(
-            inps,
-            output,
-            name="CointronIndex",
-            aggr=pipeline.Aggregation(1, None, 1, 1),
+            aggr=pipeline.Aggregation(None, 8, 2, 2),
             reducer=reducer_str)
 
 class RealignReadsStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf, cache=None):
-        mapper_str = """
+        reducer_str = """
             python %%BASE%%/src/rail-rna/realign_reads.py
                 --original-idx=%%REF_BOWTIE_INDEX%% 
-                --bowtie-idx=%%REF_COINTRON_INDEX%%
-                --bowtie-exe=%%BOWTIE%%
+                --bowtie2-exe=%%BOWTIE2%%
                 --partition-length %d
                 --exon-differentials
                 --manifest=%%MANIFEST%%
-                --verbose %s
+                --verbose %s %s
                 -- %s""" % (tconf.partitionLen,
                             '--stranded' if tconf.stranded else '',
+                             '--keep-alive' if tconf.keep_alive else '',
                             tconf.bowtieArgs())
-        mapper_str = re.sub('\s+', ' ', mapper_str.strip())
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(RealignReadsStep, self).__init__(
             inps,
             output,
             name="RealignReads",
-            mapper=mapper_str,
+            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
+            reducer=reducer_str,
             multipleOutput=True,
-            cache=cache
             )
 
 class MergeStep(pipeline.Step):

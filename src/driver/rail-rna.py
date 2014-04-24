@@ -301,8 +301,7 @@ assert len(pipelines) > 0
 useBowtie = 'align' in pipelines
 useIndex = 'align' in pipelines
 useGtf = False and 'align' in pipelines
-useFasta = 'align' in pipelines or 'junction' in pipelines
-useRef = useIndex or useGtf or useFasta
+useRef = useIndex or useGtf
 useKenttools = 'coverage' in pipelines or 'differential' in pipelines
 useSamtools = 'align' in pipelines
 useSraToolkit = 'preprocess' in pipelines
@@ -325,8 +324,8 @@ pipelineSteps = {
                         'combine_subsequences', 'align_readlets', 'intron_search',
                         'intron_call', 'intron_config', 'intron_fasta',
                         'intron_index', 'realign_readlets', 'cointron_search',
-                        'cointron_fasta', 'cointron_index', 'realign_reads'],
-    'align_out'    : ['bam', 'bed_pre', 'bed'],
+                        'cointron_fasta', 'realign_reads'],
+    'align_out'    : ['bed_pre', 'bed', 'bam'],
     #'coverage'     : ['normalize_pre', 'normalize'],#, 'normalize_post'],
     #'coverage'      : [],
     'coverage'     : ['collapse', 'coverage_pre', 'coverage', 'coverage_post'],
@@ -351,13 +350,13 @@ stepInfo = {\
     'cointron_search'         : ([('realign_readlets',  '/'            ),
                                   ('align_readlets', '/'               )], rail_rna_pipeline.CointronSearchStep),
     'cointron_fasta'          : ([('cointron_search',  '/intron'            )], rail_rna_pipeline.CointronFastaStep),
-    'cointron_index'          : ([('cointron_fasta',   '/intron'          )], rail_rna_pipeline.CointronIndexStep),
     'intron_index'          : ([('intron_fasta',   '/intron'          )], rail_rna_pipeline.IntronIndexStep),
     'bam'                   : ([('align_reads',          '/end_to_end_sam'  ),
                                 ('realign_reads',        '/splice_sam'      )], rail_rna_pipeline.BamStep),
-    'bed_pre'               : ([('realign_reads',        '/intron'          )], rail_rna_pipeline.BedPreStep),
-    'bed'                   : ([('bed_pre',        '/bed'             )], rail_rna_pipeline.BedStep),
-    'realign_reads'         : ([('align_reads',          '/unmapped'        )], rail_rna_pipeline.RealignReadsStep),
+    'bed_pre'               : ([('realign_reads',        '/bed'          )], rail_rna_pipeline.BedPreStep),
+    'bed'                   : ([('bed_pre',        '/'             )], rail_rna_pipeline.BedStep),
+    'realign_reads'         : ([('align_reads',          '/unmapped'        ),
+                                ('cointron_fasta', '/'                      )], rail_rna_pipeline.RealignReadsStep),
     'coverage_pre'          : ([('collapse',       '/'       )], rail_rna_pipeline.CoveragePreStep),
     'normalize_pre'         : ([('align_reads',          '/exon_diff'       )], rail_rna_pipeline.NormalizePreStep),
     'normalize'             : ([('normalize_pre',  '/o'               )], rail_rna_pipeline.NormalizeStep),
@@ -393,8 +392,6 @@ def buildFlow(allSteps, stepInfo, inp, out, inter, manifest):
             http://docs.aws.amazon.com/ElasticMapReduce/latest/
             DeveloperGuide/emr-plan-input-distributed-cache.html'''
             steps.append(cl(indirs, outdir, tconf, gconf, cache=out.plus('index/intron.tar.gz#intron')))
-        elif cl is rail_rna_pipeline.RealignReadsStep:
-            steps.append(cl(indirs, outdir, tconf, gconf, cache=out.plus('index/cointron.tar.gz#cointron')))
         else:
             steps.append(cl(indirs, outdir, tconf, gconf))
     return steps
@@ -479,11 +476,12 @@ elif mode == 'emr':
         cmdl.extend(["-c", cred])
     
     cmdl.append(emrCluster.emrArgs())
-    rail_RNAUrl = Url("s3://tornado-emr/bin/rail-rna-%s.tar.gz" % ver)
+    rail_RNAUrl = Url("s3://rail-emr/bin/rail-rna-%s.tar.gz" % ver)
     
     cmdl.append(bootstrapTool("python"))
     if useBowtie:
         cmdl.append(bootstrapTool("bowtie"))
+        cmdl.append(bootstrapTool("bowtie2"))
     if useSraToolkit:
         cmdl.append(bootstrapTool("sra-toolkit"))
     if useR:
@@ -495,12 +493,10 @@ elif mode == 'emr':
     # Get Rail-RNA scripts and run Makefile for swig code
     cmdl.append(bootstrapTool("rail", src=rail_RNAUrl, dest="/mnt"))
     tarballs = []
-    if useIndex:
-        tarballs.append(Url(reference.toUrl().replace('.tar.gz', '.index.tar.gz')))
+    #if useIndex:
+    #    tarballs.append(Url(reference.toUrl().replace('.tar.gz', '.index.tar.gz')))
     if useGtf:
         tarballs.append(Url(reference.toUrl().replace('.tar.gz', '.gtf.tar.gz')))
-    if useFasta:
-        tarballs.append(Url(reference.toUrl().replace('.tar.gz', '.fasta.tar.gz')))
     if len(tarballs) > 0:
         cmdl.append(aws.bootstrapFetchTarballs("reference archives", tarballs, emrLocalDir))
     if useManifest:

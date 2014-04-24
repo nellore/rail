@@ -267,7 +267,6 @@ def do_mapper(tup):
 
 
 num_processes = min(num_processes, len(inps))
-message('Starting %d processes with command: "%s"' % (num_processes, cmd))
 
 tasks, taski = [], 1
 if args.line_by_line:
@@ -287,6 +286,8 @@ else:
         tasks.append((inp, inp, taski))
         taski += 1
 taskn = taski - 1
+
+message('Piping %d task(s) to command "%s"' % (taskn, cmd))
 
 pool = multiprocessing.Pool(num_processes)
 outfns = []

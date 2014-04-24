@@ -19,17 +19,19 @@ site.addsitedir(os.path.join(base_path, "util"))
 
 import path
 
-toolDescs = { 'bowtie'       : ['BOWTIE'],
-              'bowtie-build' : ['BOWTIE_BUILD'],
-              'sra-toolkit'  : ['SRA_TOOLKIT'],
-              'R'            : ['R'],
-              'bedToBigBed'  : ['BEDTOBIGBED', 'KENTTOOLS'],
-              'samtools'     : ['SAMTOOLS'] }
+toolDescs = { 'bowtie'        : ['BOWTIE'],
+              'bowtie-build'  : ['BOWTIE_BUILD'],
+              'bowtie2'       : ['BOWTIE2'],
+              'bowtie2-build' : ['BOWTIE2_BUILD'],
+              'sra-toolkit'   : ['SRA_TOOLKIT'],
+              'R'             : ['R'],
+              'bedToBigBed'   : ['BEDTOBIGBED', 'KENTTOOLS'],
+              'samtools'      : ['SAMTOOLS'] }
 
 # The following tools are installed in EMR mode with apt-get, and therefore
 # can be found in the PATH on the EMR machines.  All other tools get placed in
 # the EMR local dir by the bootstrap actions.
-emrPathTools = set(['bowtie', 'bowtie-build', 'samtools', 'sra-toolkit', 'R'])
+emrPathTools = set(['bowtie', 'bowtie-build', 'bowtie2', 'bowtie2-build', 'samtools', 'sra-toolkit', 'R'])
 
 def checkLocalTool(appName, exe, envs, check=True):
     """ Check for the existence of an executable in the local environment.
@@ -102,9 +104,9 @@ class ToolConfigLocal(object):
 def bootstrapTool(name, src=None, dest=None):
     """ Create a bootstrap action to install the given tool.  There must be a
         bootstrap action called install-<tool-name>.sh in the
-        s3://tornado-emr/bootstrap directory and the script must not need any
+        s3://rail-emr/bootstrap directory and the script must not need any
         arguments. """
-    ret = ['--bootstrap-action s3://tornado-emr/bootstrap/install-%s.sh' % name,
+    ret = ['--bootstrap-action s3://rail-emr/bootstrap/install-%s.sh' % name,
            '--bootstrap-name "%s"' % name ]
     if src is not None and dest is not None:
         ret.append('--args "%s,%s"' % (src.toNonNativeUrl(), dest))

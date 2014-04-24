@@ -143,7 +143,7 @@ def bootstrapFetchFile(name, url, emrLocalDir, destname=None):
     tmp = ""
     if destname is not None:
         tmp = ",%s" % destname
-    ret = ['--bootstrap-action s3://tornado-emr/bootstrap/s3cmd_s3.sh',
+    ret = ['--bootstrap-action s3://rail-emr/bootstrap/s3cmd_s3.sh',
            '--bootstrap-name "%s"' % name,
            '--args "%s,%s%s"' % (url.toNonNativeUrl(), emrLocalDir, tmp)]
     return ' '.join(ret)
@@ -151,7 +151,7 @@ def bootstrapFetchFile(name, url, emrLocalDir, destname=None):
 def bootstrapFetchTarball(name, url, emrLocalDir):
     """ Create a bootstrap action that copies the file at a given path within
         the given bucket into the given directory on the node. """
-    ret = ['--bootstrap-action s3://tornado-emr/bootstrap/s3cmd_s3_tarball.sh',
+    ret = ['--bootstrap-action s3://rail-emr/bootstrap/s3cmd_s3_tarball.sh',
            '--bootstrap-name "%s"' % name,
            '--args "%s,%s"' % (emrLocalDir, url.toNonNativeUrl())]
     return ' '.join(ret)
@@ -159,7 +159,7 @@ def bootstrapFetchTarball(name, url, emrLocalDir):
 def bootstrapFetchTarballs(name, urls, emrLocalDir):
     """ Create a bootstrap action that copies the file at a given path within
         the given bucket into the given directory on the node. """
-    ret = ['--bootstrap-action s3://tornado-emr/bootstrap/s3cmd_s3_tarball.sh',
+    ret = ['--bootstrap-action s3://rail-emr/bootstrap/s3cmd_s3_tarball.sh',
            '--bootstrap-name "%s"' % name,
            '--args "%s,%s"' % (emrLocalDir, ','.join([ url.toNonNativeUrl() for url in urls ])) ]
     return ' '.join(ret)

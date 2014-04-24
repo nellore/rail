@@ -19,6 +19,10 @@ Tab-delimited tuple columns:
     reference should extend
 5. right_extend_size: by how many bases on the right side of an intron the
     reference should extend
+6. By how many bases on the left side of an intron the reference COULD extend,
+    or NA if beginning of strand
+7. By how many bases on the right side of an intron the reference COULD extend,
+    or NA if end of strand
 
 Input is partitioned by the first three fields.
 
@@ -62,11 +66,20 @@ for key, xpartition in dp.xstream(sys.stdin, 3, skip_duplicates=True):
     '''For computing maximum left and right extend sizes for every key --
     that is, every intron combo (fields 1-3 of input).'''
     left_extend_size, right_extend_size = None, None
+    left_size, right_size = None, None
     for value in xpartition:
-        assert len(value) == 2
+        assert len(value) == 4
         input_line_count += 1
-        left_extend_size = max(left_extend_size, int(value[-2]))
-        right_extend_size = max(right_extend_size, int(value[-1]))
+        left_extend_size = max(left_extend_size, int(value[-4]))
+        right_extend_size = max(right_extend_size, int(value[-3]))
+        try:
+            left_size = max(left_size, int(value[-2]))
+        except ValueError:
+            left_size = 'NA'
+        try:
+            right_size = max(right_size, int(value[-1]))
+        except ValueError:
+            right_size = 'NA'
     rname = key[0]
     reverse_strand_string = rname[-1]
     rname = rname[:-1]
@@ -101,13 +114,15 @@ for key, xpartition in dp.xstream(sys.stdin, 3, skip_duplicates=True):
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + ';' + start position of sequence + ';' + comma-separated list of
     subsequence sizes framing introns + ';' + comma-separated list of
-    intron sizes.'''
+    intron sizes + ';' + distance to previous intron or 'NA' if beginning of
+    strand + ';' distance to next intron or 'NA' if end of strand.'''
     print ('intron\t-\t>' + rname + reverse_strand_string 
             + ';' + str(left_start) + ';'
             + ','.join([str(len(subseq)) for subseq in subseqs]) + ';'
             + ','.join([str(intron_end_pos - intron_pos)
                         for intron_pos, intron_end_pos
                         in intron_combo])
+            + ';' + str(left_size) + ';' + str(right_size)
             + '\t' + ''.join(subseqs)
         )
 

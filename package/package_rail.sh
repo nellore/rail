@@ -17,4 +17,4 @@ cp hadoop/*.jar lib
 
 tar -zcvf ${ARNAME} --exclude '*.pyc' --exclude '*.tar.gz' src lib
 
-echo "s3cmd put --acl-public ${ARNAME} s3://tornado-emr/bin/"
+echo "s3cmd put --acl-public ${ARNAME} s3://rail-emr/bin/"

@@ -43,7 +43,9 @@ def addArgs(parser):
         help='Suppress introns whose anchor significance falls below this '
              'value from all output')
     parser.add_argument(\
-        '--bowtie-args', metavar='STR', type=str, help='Arguments to pass to Bowtie for obtaining final SAM/BAM output.')
+        '--bowtie2-args', metavar='STR', type=str, 
+        default='--score-min L,-0.3,-0.3',
+        help='Arguments to pass to Bowtie2 for obtaining final SAM/BAM output.')
     parser.add_argument(\
         '--downsample-reads', metavar='FRACTION', type=float, default=1.0, help='Fraction of reads to randomly downsample to.')
     parser.add_argument(\
@@ -82,7 +84,7 @@ def addArgs(parser):
              'stdout)')
     parser.add_argument(\
         '--bed-basename', type=str, required=False, 
-        default='junctions',
+        default='',
         help='The basename (including path) of all BED output. Basename is '
              'followed by ".bed" if --by-chromosome=False; otherwise, basename is '
              'followed by ".[chrom].bed" for each [chrom]. Ignored if --out is '
@@ -139,7 +141,7 @@ class Rail_RNAConfig(object):
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
-        self._bowtieArgs = args.bowtie_args or ""
+        self._bowtie2Args = args.bowtie2_args or ""
         d = self.downsampleReads = args.downsample_reads
         if d <= 0.0 or d >= 1.00001:
             raise RuntimeError("Argument for --downsample-reads must be in (0, 1]; was %f" % d)
@@ -188,4 +190,4 @@ class Rail_RNAConfig(object):
             raise RuntimeError("Argument for --hmm-overlap must be >= 0; was %d" % o)
     
     def bowtieArgs(self):
-        return ' '.join([self._bowtieArgs, "-t", "--sam-nohead", "--startverbose"])
+        return self._bowtie2Args

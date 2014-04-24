@@ -33,12 +33,14 @@ Hadoop output (written to stdout)
 Tab-delimited tuple columns:
 1. Reference name (RNAME in SAM format) + 
     '+' or '-' indicating which strand is the sense strand
-2. Comma-separated list of intron start positions in configuration
-3. Comma-separated list of intron end positions in configuration
-4. left_extend_size: by how many bases on the left side of an intron the
+2. First intron start position in configuration
+3. Rest of intron start positions in configuration or '\x1c' if there are none
+4. Comma-separated list of intron end positions in configuration
+5. left_extend_size: by how many bases on the left side of an intron the
     reference should extend
-5. right_extend_size: by how many bases on the right side of an intron the
+6. right_extend_size: by how many bases on the right side of an intron the
     reference should extend
+7. Read sequence
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -49,6 +51,7 @@ import re
 import numpy as np
 from collections import defaultdict
 import random
+import argparse
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 site.addsitedir(os.path.join(base_path, 'dooplicity'))
@@ -69,7 +72,9 @@ def rname_and_introns(rname, offset, readlet_size):
         original RNAME + '+' or '-' indicating which strand is the sense
         strand + ';' + start position of sequence + ';' + comma-separated
         list of subsequence sizes framing introns + ';' + comma-separated
-        list of intron sizes.
+        list of intron sizes + ';' + distance to previous intron or 'NA' if
+        beginning of strand + ';' distance to next intron or 'NA' if end of
+        strand.
 
         rname: RNAME from intron reference
         offset: offset from beginning of intron reference
@@ -81,17 +86,26 @@ def rname_and_introns(rname, offset, readlet_size):
                                 alignment_end_position, 
                                 tuple of tuples (pos, end_pos) of start
                                 and end positions of introns OR None if 
-                                no introns are overlapped, readlet_size); here,
+                                no introns are overlapped, readlet_size,
+                                distance to previous intron or None if 
+                                beginning of strand, distance to next
+                                intron or None if end of strand); here,
                             alignment_start_position and alignment_end_position
                             are the start and end positions of the 
                             alignment _along the original reference_
     """
     try:
-        strand, original_pos, exon_sizes, intron_sizes = rname.split(';')
+        (strand, original_pos, exon_sizes,
+            intron_sizes, left_size, right_size) = rname.split(';')
     except ValueError:
         # Exonic alignment
         return (rname, None, offset + 1,
                 offset + 1 + readlet_size, None, readlet_size)
+    print >>sys.stderr, rname
+    if left_size == 'NA':
+        left_size = None
+    if right_size == 'NA':
+        right_size = None
     rname = strand[:-1]
     reverse_strand = True if strand[-1] == '+' else False
     exon_sizes = [int(exon_size) for exon_size in exon_sizes.split(',')]
@@ -123,16 +137,31 @@ def rname_and_introns(rname, offset, readlet_size):
                 original_pos + readlet_size, None, readlet_size)
     else:
         assert start_index < end_index
+        if start_index != 0:
+            left_size = cigar_sizes[start_index*2]
         cigar_sizes[start_index*2] = partial_sizes[start_index] - offset
+        try:
+            left_size -= cigar_sizes[start_index*2]
+        except TypeError:
+            left_size = None
+        if end_index * 2 != len(cigar_sizes) - 1:
+            right_size = cigar_sizes[end_index * 2]
         cigar_sizes[end_index*2] = end_offset - partial_sizes[end_index-1]
+        try:
+            right_size -= cigar_sizes[end_index*2]
+        except TypeError:
+            right_size = None
         last_pos = original_pos
         introns = []
         for j in xrange(start_index*2+1, end_index*2+1, 2):
             last_pos += cigar_sizes[j-1]
             introns.append((last_pos, last_pos + cigar_sizes[j]))
             last_pos += (cigar_sizes[j] + cigar_sizes[j+1])
+        if start_index != 0:
+            left_size = cigar_sizes[start_index*2 - 1]
         return (rname, reverse_strand, 
-                original_pos, last_pos, tuple(introns), readlet_size)
+                original_pos, last_pos, tuple(introns), readlet_size,
+                left_size, right_size)
 
 def different_introns_overlap(intron_iterable_1, intron_iterable_2):
     """ Test whether different introns in two iterables overlap.
@@ -244,6 +273,9 @@ def selected_introns_by_clustering(multireadlets, seed=0):
                                 tuple of tuples (pos, end_pos) of start
                                 and end positions of introns OR None if 
                                 no introns are overlapped, readlet_size,
+                                distance to previous intron or None if
+        beginning of strand, distance to next intron or None if end of
+        strand
                 True if alignment is to forward strand else False, displacement
                 of readlet from 5' end of read)'''
     random.seed(seed)
@@ -295,15 +327,21 @@ def selected_introns_by_clustering(multireadlets, seed=0):
     for i, cluster_size in enumerate(cluster_sizes):
         if cluster_size == largest_cluster_size:
             largest_clusters.append(clustered_alignments[i])
-    if len(largest_clusters) == 1:
-        return set([alignment[:-1] for alignment in largest_clusters[0]
+    multimap_count = len(largest_clusters)
+    if multimap_count:
+        # Return ALL largest clusters
+        return [set([alignment[:-1] for alignment in largest_clusters[i]
                     if alignment[1] is not None])
+                for i in xrange(multimap_count)]
     else:
-        return set([])
+        return []
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, 
         verbose=False, stranded=False, fudge=10):
     """ Runs Rail-RNA-intron_search.
+
+        Reduce step in MapReduce pipelines that builds a map of introns
+        cooccurring on reads.
 
         Input (read from stdin)
         ----------------------------
@@ -312,13 +350,14 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         1. Read sequence ID
         2. Displacement of readlet's 5' end from read's 5' end + '\x1e' +
             displacement of readlet's 3' end from read's 3' end (+, for EXACTLY
-            one readlet of a read sequence, '\x1e' + read sequence + '\x1e' +
-            number of instances of read sequence + '\x1e' + number of instances
-            of read sequence's reversed complement + '\x1e' + (an
-            '\x1f'-separated set of unique sample labels with read sequences
-            that match the original read sequence) + '\x1e' + (an
-            '\x1f'-separated set of unique sample labels with read sequences
-            that match the reversed complement of the original read sequence))
+            one readlet of a read sequence, + '\x1e' + read sequence + '\x1e'
+            + number of instances of read sequence + '\x1e' + number of
+            instances of read sequence's reversed complement + '\x1e'
+            + (an '\x1f'-separated set of unique sample labels with read
+            sequences that match the original read sequence) + '\x1e'
+            + (an '\x1f'-separated set of unique sample labels with read
+            sequences that match the reversed complement of the original read
+            sequence))
         3. '\x1f'-separated list of alignment RNAMEs or '\x1c' if no alignments
         4. '\x1f'-separated list of alignment FLAGs or '\x1c' if no alignments
         5. '\x1f'-separated list of alignment POSes or '\x1c' if no alignments
@@ -327,16 +366,18 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
 
         Hadoop output (written to stdout)
         ----------------------------
-        Tab-delimited columns:
-        1. Reference name (RNAME in SAM format) + ';' + partition number +  
-            ('+' or '-' indicating which strand is the sense strand if input
-                reads are strand-specific -- that is, --stranded in was
-                invoked; otherwise, there is no terminal '+' or '-')
-        2. Candidate intron start (inclusive) on forward strand (1-indexed)
-        3. Candidate intron end (exclusive) on forward strand (1-indexed)
-        4. '\x1f'-separated list of sample (label)s in which intron was
-            detected
-        5. Total number of reads supporting intron
+        Tab-delimited tuple columns:
+        1. Reference name (RNAME in SAM format) + 
+            '+' or '-' indicating which strand is the sense strand
+        2. First intron start position in configuration
+        3. Rest of intron start positions in configuration or '\x1c' if there
+            are none
+        4. Comma-separated list of intron end positions in configuration
+        5. left_extend_size: by how many bases on the left side of an intron
+            the reference should extend
+        6. right_extend_size: by how many bases on the right side of an intron
+            the reference should extend
+        7. Read sequence
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
@@ -390,9 +431,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
             (rname, True if sense strand is forward strand else False,
                 reference start position of alignment, reference end position
                 of alignment, tuple of intron tuples overlapped by alignment,
-                readlet size,
-                True if alignment is to forward strand else False, displacement
-                of readlet from 5' end of read).'''
+                readlet size, distance to previous intron or None if
+                beginning of strand, distance to next intron or None if end of
+                strand, True if alignment is to forward strand else False,
+                displacement of readlet from 5' end of read).'''
             multireadlets = [set([rname_and_introns(rname, pos - 1, seq_size
                                 - displacement[1] - displacement[0])
                                 + (reverse_strand, displacement[1]
@@ -406,55 +448,80 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 for alignment in multireadlet]:
                 # No introns to see here
                 continue
-            selected_introns = selected_introns_by_clustering(
+            clusters = selected_introns_by_clustering(
                                 multireadlets,
                                 seed=seq
                             )
-            if len(selected_introns):
-                for alignments in maximal_cliques(selected_introns):
-                    left_extend_size = (alignments[0][4][0][0] # first intron 
+            if len(clusters):
+                for selected_introns in clusters:
+                    for alignments in maximal_cliques(selected_introns):
+                        left_extend_size = (alignments[0][4][0][0] # first
+                                                                   # intron 
+                                                                   # start
+                                            - alignments[0][2] # alignment
                                                                # start
-                                        - alignments[0][2] # alignment start
-                                        + alignments[0][-1]) # displacement
-                    right_extend_size = (seq_size
-                                        - alignments[-1][-1] # displacement
-                                        - alignments[-1][5] # readlet size
-                                        - alignments[-1][4][-1][1] # last
-                                                                   # intron end
-                                        + alignments[-1][3]) # alignment end
-                    introns_to_add = set()
-                    for alignment in alignments:
-                        for intron in alignment[4]:
-                            introns_to_add.add(intron)
-                    intron_starts_and_ends = zip(*sorted(list(introns_to_add)))
-                    '''Ensure number of exonic bases is within fudge of read
-                    size.'''
-                    if abs(seq_size 
-                            - sum([intron_starts_and_ends[0][i+1] 
-                                    - intron_starts_and_ends[1][i]
-                                    for i 
-                                    in xrange(len(intron_starts_and_ends[0])
-                                                    - 1)])
-                            - left_extend_size
-                            - right_extend_size) > fudge:
-                        if verbose:
-                            print >>sys.stderr, 'Killing intron combo', \
-                                intron_starts_and_ends, 'because its exonic ' \
-                                'base sum was not within fudge=%d bases of ' \
-                                'the sequence size=%d' % (fudge, seq_size)
-                        continue
-                    print >>output_stream, 'intron\t%s\t%s\t%s\t%d\t%d' % (
-                            alignments[0][0] + ('+' if 
-                                                alignments[0][1] else '-'),
-                            ','.join(map(str, intron_starts_and_ends[0])),
-                            ','.join(map(str, intron_starts_and_ends[1])),
-                            left_extend_size,
-                            right_extend_size
-                        )
-                    _output_line_count += 1
+                                            + alignments[0][-1]) # displacement
+                        right_extend_size = (seq_size
+                                            - alignments[-1][-1] # displacement
+                                            - alignments[-1][5] # readlet size
+                                            - alignments[-1][4][-1][1] # last
+                                                                       # intron
+                                                                       # end
+                                            + alignments[-1][3]) # alignment
+                                                                 # end
+                        introns_to_add = set()
+                        for alignment in alignments:
+                            for intron in alignment[4]:
+                                introns_to_add.add(intron)
+                        intron_starts_and_ends = zip(*sorted(
+                                                          list(introns_to_add))
+                                                        )
+                        '''Ensure number of exonic bases is within fudge of
+                        read size.'''
+                        if abs(seq_size 
+                                - sum([intron_starts_and_ends[0][i+1] 
+                                        - intron_starts_and_ends[1][i]
+                                        for i 
+                                        in xrange(
+                                            len(intron_starts_and_ends[0])
+                                                        - 1)])
+                                - left_extend_size
+                                - right_extend_size) > fudge:
+                            if verbose:
+                                print >>sys.stderr, 'Killing intron combo', \
+                                    intron_starts_and_ends, 'because its ' \
+                                    'exonic base sum was not within ' \
+                                    'fudge=%d bases of the sequence ' \
+                                    'size=%d' % (fudge, seq_size)
+                            continue
+                        '''Determine by how much reference should be extended
+                        on either side of intron.'''
+                        if left_extend_size > alignments[0][6]:
+                            left_size = left_extend_size
+                        else:
+                            left_size = min(left_extend_size + fudge,
+                                            alignments[0][6])
+                        if right_extend_size > alignments[-1][7]:
+                            right_size = right_extend_size
+                        else:
+                            right_size = min(right_extend_size + fudge,
+                                             alignments[-1][7])
+                        print >>output_stream, 'intron\t%s\t%d\t%s\t%s' \
+                                '\t%d\t%d\t%s' % (alignments[0][0] + ('+' if 
+                                                    alignments[0][1] else '-'),
+                                intron_starts_and_ends[0][0],
+                                ','.join(map(str,
+                                                intron_starts_and_ends[0][1:]))
+                                if len(intron_starts_and_ends[0][1:]) \
+                                    else '\x1c',
+                                ','.join(map(str, intron_starts_and_ends[1])),
+                                left_size,
+                                right_size,
+                                seq
+                            )
+                        _output_line_count += 1
 
 if __name__ == '__main__':
-    import argparse
     # Print file's docstring if -h is invoked
     parser = argparse.ArgumentParser(description=__doc__, 
                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -471,7 +538,7 @@ if __name__ == '__main__':
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
              'WRITE EXONS AND INTRONS TO STDOUT')
     parser.add_argument('--fudge', type=int, required=False,
-        default=30,
+        default=15,
         help='Permits a sum of exonic bases for an intron combo to be within '
              'the specified number of bases of a read sequence\'s size; '
              'this allows for indels with respect to the reference')
@@ -482,7 +549,7 @@ if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
     go(verbose=args.verbose, stranded=args.stranded, fudge=args.fudge)
-    print >> sys.stderr, 'DONE with intron_search.py; in/out=%d/%d; ' \
+    print >> sys.stderr, 'DONE with cointron_search.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)
 elif __name__ == '__main__':

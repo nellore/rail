@@ -2,7 +2,7 @@
 
 # install-bowtie.sh
 #
-# Install bowtie version 0.12.7 as of now.
+# Install bowtie version 1.0.1 as of now.
 
 set -e
 

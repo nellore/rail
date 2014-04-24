@@ -34,6 +34,7 @@ parser.add_argument('--external-sort', action='store_const', const=True, default
 parser.add_argument('--sort-size', metavar='INT', type=int, default=1024 * 300, help='Memory cap on sorts.')
 parser.add_argument('--messages', metavar='PATH', type=str, help='File to store stderr messages to')
 parser.add_argument('--intermediate', metavar='PATH', type=str, help='Directory to store intermediate data in')
+parser.add_argument('--write-every', type=int, default=200000000, help='Writes to disk only after this many characters have accumulated in memory')
 parser.add_argument('--num-processes', metavar='INT', type=int,
                     help='Max # of simultaneous processes to run.  Default = # processors you have.')
 parser.add_argument('--num-retries', metavar='INT', type=int, default=3,
@@ -212,13 +213,25 @@ def check_fail_queue():
 import random
 message('Writing input records to %d tasks' % args.num_tasks)
 task_names = [str(i) for i in xrange(args.num_tasks)]
+task_lists = defaultdict(list)
 tot = 0
+char_count = 0
 ofhs = {}
 for inp in inps:
     with openex(inp) as fh:
         for ln in fh:
+            if char_count > args.write_every:
+                for task in task_lists:
+                    task_lists[task].append('')
+                    try:
+                        ofhs[task].write('\n'.join(task_lists[task]))
+                    except KeyError:
+                        ofhs[task] = open(os.path.join(task_dir, task), 'w')
+                        ofhs[task].write('\n'.join(task_lists[task]))
+                char_count = 0
             ln = ln.rstrip()
-            if len(ln) == 0:
+            ln_length = len(ln)
+            if ln_length == 0:
                 continue
             toks = string.split(ln, '\t')
             if toks[0] == 'DUMMY':
@@ -228,13 +241,14 @@ for inp in inps:
             k = '\t'.join(toks[:args.bin_fields])
             random.seed(k)
             task = random.choice(task_names)
-            try:
-                ofhs[task].write(ln)
-            except KeyError:
-                ofhs[task] = open(os.path.join(task_dir, task), 'w')
-                ofhs[task].write(ln)
-            ofhs[task].write('\n')
-
+            task_lists[task].append(ln)
+for task in task_lists:
+    task_lists[task].append('')
+    try:
+        ofhs[task].write('\n'.join(task_lists[task]))
+    except KeyError:
+        ofhs[task] = open(os.path.join(task_dir, task), 'w')
+        ofhs[task].write('\n'.join(task_lists[task]))
 for fh in ofhs.itervalues():
     fh.close()
 message('%d input records written' % tot)
@@ -374,6 +388,7 @@ if tot > 0:
             shutil.rmtree(wd)
         return out_fn
 
+    message('Piping %d task(s) to command "%s"' % (len(ofhs.keys()), reduce_cmd))
     reduce_pool = multiprocessing.Pool(num_processes)
     outfns = []
     r = reduce_pool.map_async(do_reduce, ofhs.keys(), callback=outfns.extend)

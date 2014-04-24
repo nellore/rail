@@ -78,8 +78,8 @@ spliced alignment. The order of the fields is as follows.
 Reads with no end-to-end alignments
 
 Tab-delimited output tuple columns (unmapped):
-1. QNAME
-2. SEQ
+1. SEQ
+2. QNAME
 3. QUAL
 
 Tab-delimited output tuple columns (readletize)
@@ -186,8 +186,7 @@ class BowtieOutputThread(threading.Thread):
             input_stream: where to retrieve Bowtie's SAM output, typically a
                 Bowtie process's stdout.
             reference_index: object of class bowtie_index.BowtieIndexReference
-                that permits access to reference; used for realignment of
-                unmapped regions between exonic chunks.
+                that permits access to reference
             manifest_object: object of class LabelsAndIndices that maps indices
                 to labels and back; used to shorten intermediate output.
             output_stream: where to emit exon and intron tuples; typically,
@@ -242,17 +241,6 @@ class BowtieOutputThread(threading.Thread):
             last_pos = int(last_pos)
             last_seq_size = len(last_seq)
             last_end_pos = last_pos + last_seq_size
-            '''Find XM:i field, which is > 0 if read had several valid
-            alignments, but all were suppressed because bowtie -m X was
-            invoked for X an integer >= 1. See Bowtie documentation.'''
-            last_multimapped = False
-            for field in last_tokens[::-1]:
-                if field[:5] == 'XM:i:':
-                    if int(field[5:]) > 0 and (last_flag & 4):
-                        '''If read is multimapped and all alignments were
-                        suppressed.'''
-                        last_multimapped = True
-                    break
             break
         # Initialize counter
         i = 0
@@ -268,17 +256,6 @@ class BowtieOutputThread(threading.Thread):
                 pos = int(pos)
                 seq_size = len(seq)
                 end_pos = pos + seq_size
-                '''Find XM:i field, which is > 0 if read had several valid
-                alignments, but all were suppressed because bowtie -m X was
-                invoked for X an integer >= 1. See Bowtie documentation.'''
-                multimapped = False
-                for field in tokens[::-1]:
-                    if field[:5] == 'XM:i:':
-                        if int(field[5:]) > 0 and (flag & 4):
-                            '''If read is multimapped and all alignments were
-                            suppressed.'''
-                            multimapped = True
-                        break
             if self.verbose and next_report_line == i:
                 print >>sys.stderr, \
                     'SAM output record %d: rdname="%s", flag=%d' % (i,
@@ -296,12 +273,10 @@ class BowtieOutputThread(threading.Thread):
                 '''If the next qname doesn't match the last qname or there are
                 no more lines, all of a multiread's alignments have been
                 collected.'''
-                if (last_flag & 4) \
-                    and not (len(multiread) > 1 or last_multimapped):
-                    '''Write unmapped reads for realignment in another map
-                    step.'''
+                if last_flag & 4:
+                    # Write unmapped reads for realignment in a reduce step
                     print >>self.output_stream, '%s\t%s\t%s\t%s' % ('unmapped',
-                        last_qname, last_seq, last_qual)
+                        last_seq, last_qname, last_qual)
                     _output_line_count += 1
                     '''Write unmapped sequences for readletizing and
                     inferring introns. To reduce alignment burden, find
@@ -334,8 +309,7 @@ class BowtieOutputThread(threading.Thread):
                             + '\t'.join(alignment_tokens[4:])
                             + ('\tNH:i:%d' % len(multiread)))
                         _output_line_count += 1
-                if not (last_flag & 4) and len(multiread) == 1 \
-                    and not last_multimapped:
+                if not (last_flag & 4) and len(multiread) == 1:
                     '''Read maps uniquely; the full alignment is to be called
                     as an exonic chunk (EC).'''
                     partitions = partition.partition(last_rname, last_pos, 
@@ -376,14 +350,14 @@ class BowtieOutputThread(threading.Thread):
                 last_cigar, last_rnext, last_pnext, last_tlen, last_seq,
                 last_qual) = (qname, flag, rname, pos, mapq, cigar,
                 rnext, pnext, tlen, seq, qual)
-            (last_seq_size, last_end_pos, last_multimapped) = (seq_size,
-                end_pos, multimapped)
+            last_seq_size, last_end_pos = seq_size, end_pos
             i += 1
 
-def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
-    bowtie_index_base='genome', manifest_file='manifest', bowtie_args=None, 
-    bin_size=10000, verbose=False, exon_differentials=True,
-    exon_intervals=False, end_to_end_sam=True, report_multiplier=1.2):
+def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
+    bowtie_index_base='genome', bowtie2_index_base='genome2', 
+    manifest_file='manifest', bowtie2_args=None, bin_size=10000, verbose=False,
+    exon_differentials=True, exon_intervals=False, end_to_end_sam=True,
+    report_multiplier=1.2):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -487,13 +461,15 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
 
         input_stream: where to find input reads.
         output_stream: where to emit exonic chunks and introns.
-        bowtie_exe: filename of Bowtie executable; include path if not in
+        bowtie2_exe: filename of Bowtie2 executable; include path if not in
             $PATH.
-        bowtie_index_base: the basename of the Bowtie index files associated
+        bowtie_index_base: the basename of the Bowtie1 index files associated
+            with the reference.
+        bowtie2_index_base: the basename of the Bowtie2 index files associated
             with the reference.
         manifest_file: filename of manifest
-        bowtie_args: string containing precisely extra command-line arguments
-            to pass to first-pass Bowtie, e.g., "--tryhard --best"; or None.
+        bowtie2_args: string containing precisely extra command-line arguments
+            to pass to first-pass Bowtie2.
         bin_size: genome is partitioned in units of bin_size for later load
             balancing.
         verbose: True iff more informative messages should be written to
@@ -509,7 +485,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         No return value.
     """
     temp_dir = tempfile.mkdtemp()
-    atexit.register(handle_temporary_directory, temp_dir)
+    #atexit.register(handle_temporary_directory, temp_dir)
     reads_file = os.path.join(temp_dir, 'reads.temp')
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
@@ -518,11 +494,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             read_stream, input_stream=input_stream, verbose=verbose,
             report_multiplier=report_multiplier
         )
-    bowtie_process, bowtie_command, threads = bowtie.proc(
-            bowtieExe=bowtie_exe, bowtieIdx=bowtie_index_base,
-            readFn=reads_file, bowtieArgs=bowtie_args, sam=True,
-            stdoutPipe=True, stdinPipe=False
-        )
+    bowtie_command = ' '.join([bowtie2_exe,
+        bowtie2_args if bowtie2_args is not None else '',
+        '-t --no-hd --mm', bowtie2_index_base, '--12', reads_file])
+    print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
+    bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1, shell=True,
+        stdout=subprocess.PIPE, stderr=sys.stderr)
     output_thread = BowtieOutputThread(
             bowtie_process.stdout, reference_index, manifest_object,
             exon_differentials=exon_differentials, 
@@ -533,12 +510,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             end_to_end_sam=end_to_end_sam,
             report_multiplier=report_multiplier
         )
-    threads.append(output_thread)
     output_thread.start()
-    # Join threads to pause execution in main thread
-    for thread in threads:
-        if verbose: print >>sys.stderr, 'Joining thread...'
-        thread.join()
+    # Join thread to pause execution in main thread
+    if verbose: print >>sys.stderr, 'Joining thread...'
+    output_thread.join()
+    #bowtie_process.wait()
     output_stream.flush()
 
 if __name__ == '__main__':
@@ -597,9 +573,10 @@ if __name__ == '__main__':
 if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
-    go(bowtie_exe=args.bowtie_exe,
+    go(bowtie2_exe=args.bowtie2_exe,
         bowtie_index_base=args.bowtie_idx,
-        bowtie_args=bowtie_args,
+        bowtie2_index_base=args.bowtie2_idx,
+        bowtie2_args=bowtie_args,
         manifest_file=args.manifest,
         verbose=args.verbose, 
         bin_size=args.partition_length,

@@ -1,6 +1,6 @@
 """
-Rail-RNA-bed
-Follows Rail-RNA-bed_pre
+Rail-RNA-junctions_bed
+Follows Rail-RNA-junctions_bed_pre
 TERMINUS: no steps follow.
 
 Consolidates BED output lines from Rail-RNA-bed_pre into TopHat-like

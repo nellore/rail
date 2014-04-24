@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
-Rail-RNA-bed_pre
-Follows Rail-RNA-bed_pre
-Precedes Rail-RNA-bed
+Rail-RNA-junctions_bed_pre
+Follows Rail-RNA-realign_reads
+Precedes Rail-RNA-junctions_bed
 
 Reduce step in MapReduce pipelines that computes coverage of introns and other
 statistics by sample from Rail-RNA-realign and outputs BED lines for

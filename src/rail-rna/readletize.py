@@ -133,6 +133,8 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
         tokens = line.rstrip().split('\t')
         assert len(tokens) == 3
         seq, samples, reversed_complement_samples = tokens
+        if len(seq) < min_readlet_size:
+            continue
         samples = samples.split('\x1d')
         if samples[0] == '\x1c':
             samples = []

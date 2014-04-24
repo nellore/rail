@@ -57,7 +57,7 @@ parser = argparse.ArgumentParser(description=__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument(\
     '--out', metavar='URL', type=str, required=False,
-    default='./',
+    default='None',
     help='Bowtie index files are written to this URL. DEFAULT IS CURRENT '
          'WORKING DIRECTORY.')
 parser.add_argument(\
@@ -89,7 +89,8 @@ import time
 start_time = time.time()
 
 output_filename, output_stream, output_url = [None]*3
-output_url = url.Url(args.out)
+output_url = url.Url(args.out) if args.out is not None \
+    else url.Url(os.getcwd())
 # Set up temporary destination
 import tempfile
 temp_dir_path = tempfile.mkdtemp()
@@ -173,7 +174,7 @@ if not output_url.isLocal():
     intron_index_filename = args.basename + '.tar.gz'
     intron_index_path = os.path.join(temp_dir_path, intron_index_filename)
     index_path = os.path.join(temp_dir_path, 'index')
-    tar = tarfile.open(intron_index_path, 'w:gz')
+    tar = tarfile.TarFile.gzopen(intron_index_path, mode='w', compresslevel=3)
     for index_file in os.listdir(index_path):
         tar.add(os.path.join(index_path, index_file), arcname=index_file)
     tar.close()
