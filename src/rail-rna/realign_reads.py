@@ -125,6 +125,7 @@ import atexit
 import subprocess
 import itertools
 import re
+import time
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for directory_name in ['bowtie', 'dooplicity', 'sample',
@@ -901,7 +902,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
 
         No return value.
     """
-    import time
     start_time = time.time()
     fasta_file, reads_file = input_files_from_input_stream(input_stream,
                                         verbose=verbose,

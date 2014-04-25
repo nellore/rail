@@ -273,8 +273,9 @@ class BowtieOutputThread(threading.Thread):
                 '''If the next qname doesn't match the last qname or there are
                 no more lines, all of a multiread's alignments have been
                 collected.'''
-                if last_flag & 4:
-                    # Write unmapped reads for realignment in a reduce step
+                if last_flag & 4 or 'S' in last_cigar:
+                    '''Write unmapped/soft-clipped reads for realignment in
+                    a reduce step.'''
                     print >>self.output_stream, '%s\t%s\t%s\t%s' % ('unmapped',
                         last_seq, last_qname, last_qual)
                     _output_line_count += 1
@@ -485,7 +486,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         No return value.
     """
     temp_dir = tempfile.mkdtemp()
-    #atexit.register(handle_temporary_directory, temp_dir)
+    atexit.register(handle_temporary_directory, temp_dir)
     reads_file = os.path.join(temp_dir, 'reads.temp')
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)

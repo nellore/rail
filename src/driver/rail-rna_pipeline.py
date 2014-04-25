@@ -56,7 +56,7 @@ class AlignReadsStep(pipeline.Step):
                 --partition-length %d
                 --manifest=%%MANIFEST%%
                 --verbose
-                -- %s """ % (tconf.partitionLen,
+                -- %s --local""" % (tconf.partitionLen,
                              tconf.bowtieArgs())
         mapper_str = re.sub('\s+', ' ', mapper_str.strip())
         super(AlignReadsStep, self).__init__(
@@ -364,7 +364,7 @@ class RealignReadsStep(pipeline.Step):
                 --exon-differentials
                 --manifest=%%MANIFEST%%
                 --verbose %s %s
-                -- %s""" % (tconf.partitionLen,
+                -- %s --end-to-end""" % (tconf.partitionLen,
                             '--stranded' if tconf.stranded else '',
                              '--keep-alive' if tconf.keep_alive else '',
                             tconf.bowtieArgs())

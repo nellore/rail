@@ -44,7 +44,7 @@ def addArgs(parser):
              'value from all output')
     parser.add_argument(\
         '--bowtie2-args', metavar='STR', type=str, 
-        default='--score-min L,-0.3,-0.3',
+        default='',
         help='Arguments to pass to Bowtie2 for obtaining final SAM/BAM output.')
     parser.add_argument(\
         '--downsample-reads', metavar='FRACTION', type=float, default=1.0, help='Fraction of reads to randomly downsample to.')
