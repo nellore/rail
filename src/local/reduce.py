@@ -229,6 +229,7 @@ for inp in inps:
                         ofhs[task] = open(os.path.join(task_dir, task), 'w')
                         ofhs[task].write('\n'.join(task_lists[task]))
                 char_count = 0
+                task_lists = defaultdict(list)
             ln = ln.rstrip()
             ln_length = len(ln)
             if ln_length == 0:

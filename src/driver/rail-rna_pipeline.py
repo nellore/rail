@@ -157,30 +157,6 @@ class IntronSearchStep(pipeline.Step):
             reducer=reducer_str,
             multipleOutput=True)
 
-class BamStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, gconf):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/bam.py
-                --out=%s/bam
-                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
-                --samtools-exe=%%SAMTOOLS%%
-                --bam-basename=%s
-                --manifest=%%MANIFEST%%
-                %s
-                %s
-            """ % (gconf.out, tconf.bam_basename,
-                   '--output-by-chromosome' if tconf.output_bam_by_chromosome else '',
-                   '--output-sam' if tconf.output_sam else '')
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(BamStep, self).__init__(
-            inps,
-            output,
-            name="Bam",
-            aggr=(pipeline.Aggregation(None, 1, (2 if tconf.output_bam_by_chromosome else 1), 3)
-                  if gconf.out is not None else pipeline.Aggregation(None, 1, 1, 3)),
-            reducer=reducer_str)
-
-
 class IntronCallStep(pipeline.Step):
     def __init__(self, inps, output, tconf, _):
         reducer_str = """
@@ -203,57 +179,6 @@ class IntronCallStep(pipeline.Step):
             aggr=pipeline.Aggregation(None, 4, 1, 1),  # 8 tasks per reducer
             reducer=reducer_str,
             multipleOutput=True)
-
-
-class BedPreStep(pipeline.Step):
-    def __init__(self, inps, output, _, _2):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/bed_pre.py
-                %s
-        """ % ''
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(BedPreStep, self).__init__(
-            inps,
-            output,  # output URL
-            name="BedPre",  # name
-            aggr=pipeline.Aggregation(None, 8, 6, 6),  # 8 tasks per reducer
-            reducer=reducer_str)
-
-
-class BedStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, gconf):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/bed.py 
-                --bowtie-idx=%%REF_BOWTIE_INDEX%%
-                --out=%s/bed
-                --manifest=%%MANIFEST%%
-                --bed-basename=%s""" % (gconf.out, tconf.bed_basename)
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(BedStep, self).__init__(
-            inps,
-            output,  # output URL
-            name="Bed",  # namef
-            aggr=pipeline.Aggregation(None, 1, 2, 4),
-            reducer=reducer_str)
-
-
-class IntronPostStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, gconf):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/intron_post.py
-                --bowtie-build-exe=%%BOWTIE-BUILD%%
-                --bowtie-idx=%%REF_BOWTIE_INDEX%%
-                --out=%s/index
-                %s
-                --verbose
-            """ % (gconf.out, '--keep-alive' if tconf.keep_alive else '')
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(IntronPostStep, self).__init__(
-            inps,
-            output,
-            name="IntronPost",
-            aggr=pipeline.Aggregation(1, None, 1, 5),
-            reducer=reducer_str)
 
 class IntronConfigStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
@@ -378,49 +303,6 @@ class RealignReadsStep(pipeline.Step):
             multipleOutput=True,
             )
 
-class MergeStep(pipeline.Step):
-    def __init__(self, inps, output, _, _2):
-        reducer_str = "python %%BASE%%/src/rail-rna/merge.py --partition-stats"
-        super(MergeStep, self).__init__(
-            inps,
-            output,  # output URL
-            name="Merge",  # name
-            aggr=pipeline.Aggregation(None, 8, 1, 2),
-            reducer=reducer_str,
-            multipleOutput=True)
-
-class WalkPrenormStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, _):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/walk_prenorm.py 
-                --partition-stats 
-                --partition-len=%d""" % tconf.partitionLen
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(WalkPrenormStep, self).__init__(
-            inps,
-            output,  # output URL
-            name="WalkPreNormalize",  # name
-            aggr=pipeline.Aggregation(None, 8, 1, 2),
-            reducer=reducer_str,
-            multipleOutput=True)
-
-
-class NormalizePreStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, _):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/normalize_pre.py 
-                --partition-stats 
-                --partition-len=%d""" % tconf.partitionLen
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(NormalizePreStep, self).__init__(
-            inps,
-            output,  # output URL
-            name="NormalizePre",  # name
-            aggr=pipeline.Aggregation(None, 8, 2, 3),
-            reducer=reducer_str,
-            multipleOutput=True)
-
-
 class CollapseStep(pipeline.Step):
     def __init__(self, inps, output, tconf, _):
         reducer_str = """
@@ -485,101 +367,57 @@ class CoveragePostStep(pipeline.Step):
             aggr=pipeline.Aggregation(1, None, 1, 2),
             reducer=reducer_str)
 
-
-class NormalizeStep(pipeline.Step):
+class BamStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
         reducer_str = """
-            python %%BASE%%/src/rail-rna/normalize2.py 
-                --percentile %f
-                --out_dir=%s/coverage
-                --bigbed_exe=%%BEDTOBIGBED%%
-                --faidx=%%REF_FASTA_INDEX%%
-                --verbose""" % (tconf.normPercentile, gconf.out)
+            python %%BASE%%/src/rail-rna/bam.py
+                --out=%s/bam
+                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
+                --samtools-exe=%%SAMTOOLS%%
+                --bam-basename=%s
+                --manifest=%%MANIFEST%%
+                %s
+                %s
+            """ % (gconf.out, tconf.bam_basename,
+                   '--output-by-chromosome' if tconf.output_bam_by_chromosome else '',
+                   '--output-sam' if tconf.output_sam else '')
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(NormalizeStep, self).__init__(
+        super(BamStep, self).__init__(
+            inps,
+            output,
+            name="Bam",
+            aggr=(pipeline.Aggregation(None, 1, (2 if tconf.output_bam_by_chromosome else 1), 3)
+                  if gconf.out is not None else pipeline.Aggregation(None, 1, 1, 3)),
+            reducer=reducer_str)
+
+
+class BedPreStep(pipeline.Step):
+    def __init__(self, inps, output, _, _2):
+        reducer_str = """
+            python %%BASE%%/src/rail-rna/bed_pre.py
+                %s
+        """ % ''
+        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        super(BedPreStep, self).__init__(
             inps,
             output,  # output URL
-            name="Normalize",  # name
-            aggr=pipeline.Aggregation(None, 1, 1, 3),
+            name="BedPre",  # name
+            aggr=pipeline.Aggregation(None, 8, 6, 6),  # 8 tasks per reducer
             reducer=reducer_str)
 
 
-class NormalizePostStep(pipeline.Step):
-    def __init__(self, inps, output, _, gconf):
+class BedStep(pipeline.Step):
+    def __init__(self, inps, output, tconf, gconf):
         reducer_str = """
-            python %%BASE%%/src/rail-rna/normalize_post.py 
-                --out=%s/normalize 
-                --manifest=%%MANIFEST%%""" % gconf.out
+            python %%BASE%%/src/rail-rna/bed.py 
+                --bowtie-idx=%%REF_BOWTIE_INDEX%%
+                --out=%s/bed
+                --manifest=%%MANIFEST%%
+                --bed-basename=%s""" % (gconf.out, tconf.bed_basename)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(NormalizePostStep, self).__init__(
+        super(BedStep, self).__init__(
             inps,
             output,  # output URL
-            name="NormalizePost",  # name
-            aggr=pipeline.Aggregation(1, None, 0, 0),
-            reducer=reducer_str)
-
-
-class WalkFitStep(pipeline.Step):
-    def __init__(self, inps, output, _, _2):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/walk_fit.py"""
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(WalkFitStep, self).__init__(
-            inps,
-            output,  # output URL
-            name="WalkFit",  # name
-            aggr=pipeline.Aggregation(None, 8, 1, 2),
-            reducer=reducer_str)
-
-
-class EbayesStep(pipeline.Step):
-    """ Just 1 reduce task """
-    def __init__(self, inps, output, _, _2):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/walk_fit.py"""
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(EbayesStep, self).__init__(
-            inps,
-            output,
-            name="EmpiricalBayes",  # name
-            aggr=pipeline.Aggregation(1, None, 0, 0),
-            reducer=reducer_str)
-
-
-class HmmParamsStep(pipeline.Step):
-    def __init__(self, inps, output, _, _2):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/hmm_params.py"""
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(HmmParamsStep, self).__init__(
-            inps,
-            output,
-            name="HMMparams",  # name
-            aggr=pipeline.Aggregation(1, None, 0, 0),
-            reducer=reducer_str)
-
-
-class HmmStep(pipeline.Step):
-    def __init__(self, inps, output, _, _2):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/hmm.py"""
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(HmmStep, self).__init__(
-            inps,
-            output,
-            name="HMM",  # name
-            aggr=pipeline.Aggregation(None, 8, 1, 2),
-            reducer=reducer_str)
-
-
-class AggrPathStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, _):
-        reducer_str = """
-            python %%BASE%%/src/rail-rna/aggr_path.py"""
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(AggrPathStep, self).__init__(
-            inps,
-            output,
-            name="HMMPaths",  # name
-            aggr=pipeline.Aggregation(tconf.numPermutations * 2, None, 1, 2),
+            name="Bed",  # namef
+            aggr=pipeline.Aggregation(None, 1, 2, 4),
             reducer=reducer_str)

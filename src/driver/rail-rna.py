@@ -333,7 +333,7 @@ pipelineSteps = {
 
 allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
 
-stepInfo = {\
+stepInfo = {
     'preprocess'            : ([                                       ], rail_rna_pipeline.PreprocessingStep),
     'align_reads'           : ([('preprocess',     '/push'            )], rail_rna_pipeline.AlignReadsStep),
     'combine_sequences'     : ([('align_reads',    '/readletize'      )], rail_rna_pipeline.CombineSequencesStep),
@@ -342,8 +342,6 @@ stepInfo = {\
     'align_readlets'        : ([('combine_subsequences','/'          )], rail_rna_pipeline.AlignReadletsStep),
     'intron_search'         : ([('align_readlets',  '/'              )], rail_rna_pipeline.IntronSearchStep),
     'intron_call'           : ([('intron_search',  '/intron'         )], rail_rna_pipeline.IntronCallStep),
-    'intron_post'           : ([('align_reads',          '/max_len'         ),
-                                ('intron_call',         '/intron'          )], rail_rna_pipeline.IntronPostStep),
     'intron_config'         : ([('intron_call',         '/intron'     )], rail_rna_pipeline.IntronConfigStep),
     'intron_fasta'          : ([('intron_config',  '/intron'          )], rail_rna_pipeline.IntronFastaStep),
     'realign_readlets'        : ([('combine_subsequences', '/'          )], rail_rna_pipeline.RealignReadletsStep),
@@ -358,18 +356,11 @@ stepInfo = {\
     'realign_reads'         : ([('align_reads',          '/unmapped'        ),
                                 ('cointron_fasta', '/'                      )], rail_rna_pipeline.RealignReadsStep),
     'coverage_pre'          : ([('collapse',       '/'       )], rail_rna_pipeline.CoveragePreStep),
-    'normalize_pre'         : ([('align_reads',          '/exon_diff'       )], rail_rna_pipeline.NormalizePreStep),
-    'normalize'             : ([('normalize_pre',  '/o'               )], rail_rna_pipeline.NormalizeStep),
     'collapse'              : ([('align_reads',          '/exon_diff'       ), 
                                 ('realign_reads',        '/exon_diff'       )], rail_rna_pipeline.CollapseStep),
     'coverage'              : ([('coverage_pre',   '/coverage'        )], rail_rna_pipeline.CoverageStep),
-    'coverage_post'         : ([('coverage',       ''                 )], rail_rna_pipeline.CoveragePostStep),
-    'normalize_post'        : ([('normalize',      ''                 )], rail_rna_pipeline.NormalizePostStep),
-    'walk_fit'              : ([('normalize_post', ''                 )], rail_rna_pipeline.WalkFitStep),
-    'ebayes'                : ([('walk_fit',       ''                 )], rail_rna_pipeline.EbayesStep),
-    'hmm_params'            : ([('ebayes',         ''                 )], rail_rna_pipeline.HmmParamsStep),
-    'hmm'                   : ([('hmm_params',     ''                 )], rail_rna_pipeline.HmmStep),
-    'aggr_path'             : ([('hmm',            ''                 )], rail_rna_pipeline.AggrPathStep) }
+    'coverage_post'         : ([('coverage',       ''                 )], rail_rna_pipeline.CoveragePostStep)
+    }
 
 # 'normalize_post' sends pushes normalization-factor .tsv to out/normalization_factors.tsv
 # 'normalize' sends per-sample coverage bigBed to out

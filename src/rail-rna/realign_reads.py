@@ -237,10 +237,11 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
                                     stderr=sys.stderr,
                                     stdout=sys.stderr
                                 )
-    bowtie_build_process.wait()
-    if bowtie_build_process.returncode:
-        raise RuntimeError('Bowtie index construction failed w/ exitlevel %d.'
-                                % bowtie_build_process.returncode)
+        bowtie_build_process.wait()
+        if bowtie_build_process.returncode:
+            raise RuntimeError('Bowtie index construction failed w/ '
+                               'exitlevel %d.'
+                               % bowtie_build_process.returncode)
 
 def multiread_with_introns(multiread, stranded=False):
     """ Modifies read alignments to correct CIGARs and reference positions.
