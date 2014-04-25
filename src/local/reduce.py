@@ -234,6 +234,7 @@ for inp in inps:
             ln_length = len(ln)
             if ln_length == 0:
                 continue
+            char_count += ln_length
             toks = string.split(ln, '\t')
             if toks[0] == 'DUMMY':
                 continue
