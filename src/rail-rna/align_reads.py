@@ -273,7 +273,7 @@ class BowtieOutputThread(threading.Thread):
                 '''If the next qname doesn't match the last qname or there are
                 no more lines, all of a multiread's alignments have been
                 collected.'''
-                if last_flag & 4 or 'S' in last_cigar:
+                if last_flag & 4:
                     '''Write unmapped/soft-clipped reads for realignment in
                     a reduce step.'''
                     print >>self.output_stream, '%s\t%s\t%s\t%s' % ('unmapped',

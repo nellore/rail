@@ -213,28 +213,14 @@ def check_fail_queue():
 import random
 message('Writing input records to %d tasks' % args.num_tasks)
 task_names = [str(i) for i in xrange(args.num_tasks)]
-task_lists = defaultdict(list)
 tot = 0
-char_count = 0
 ofhs = {}
 for inp in inps:
     with openex(inp) as fh:
         for ln in fh:
-            if char_count > args.write_every:
-                for task in task_lists:
-                    task_lists[task].append('')
-                    try:
-                        ofhs[task].write('\n'.join(task_lists[task]))
-                    except KeyError:
-                        ofhs[task] = open(os.path.join(task_dir, task), 'w')
-                        ofhs[task].write('\n'.join(task_lists[task]))
-                char_count = 0
-                task_lists = defaultdict(list)
             ln = ln.rstrip()
-            ln_length = len(ln)
-            if ln_length == 0:
+            if len(ln) == 0:
                 continue
-            char_count += ln_length
             toks = string.split(ln, '\t')
             if toks[0] == 'DUMMY':
                 continue
@@ -243,14 +229,13 @@ for inp in inps:
             k = '\t'.join(toks[:args.bin_fields])
             random.seed(k)
             task = random.choice(task_names)
-            task_lists[task].append(ln)
-for task in task_lists:
-    task_lists[task].append('')
-    try:
-        ofhs[task].write('\n'.join(task_lists[task]))
-    except KeyError:
-        ofhs[task] = open(os.path.join(task_dir, task), 'w')
-        ofhs[task].write('\n'.join(task_lists[task]))
+            try:
+                ofhs[task].write(ln)
+            except KeyError:
+                ofhs[task] = open(os.path.join(task_dir, task), 'w')
+                ofhs[task].write(ln)
+            ofhs[task].write('\n')
+
 for fh in ofhs.itervalues():
     fh.close()
 message('%d input records written' % tot)
