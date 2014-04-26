@@ -101,14 +101,8 @@ Format 4 (bed); tab-delimited output tuple columns (bed):
     3' end of the read and the 3' end of the intron.
 8. Number of nucleotides between 3' end of intron and 3' end of read from which
     it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
-9. Number of nucleotides spanned by EC on the left (that is, towards the 5'
-    end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
-    STRAND.
-10. Number of nucleotides spanned by EC on the right (that is, towards the 3'
-    end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
-    STRAND.
 --------------------------------------------------------------------
-11. Number of instances of intron, insertion, or deletion in sample; this is
+9. Number of instances of intron, insertion, or deletion in sample; this is
     always +1 before bed_pre combiner/reducer
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
@@ -383,34 +377,6 @@ def multiread_with_introns(multiread, stranded=False):
                             corrected_multiread]
     return multiread_to_return
 
-def filtered_cigar(cigar):
-    """ Filters a cigar string so it contains only Ns and Ms.
-
-        This facilitates outputting exon_diffs and introns.
-
-        cigar: a cigar string with Ms, Ds, Is, Ns, and Ss.
-
-        Return value: a cigar string with Ms and Ns.
-    """
-    cigar_to_filter = re.split(r'([MINDS])', cigar)[:-1]
-    cigar_chars, cigar_sizes = [], []
-    for i in xrange(0, len(cigar_to_filter), 2):
-        if cigar_to_filter[i+1] in 'MN':
-            cigar_chars.append(cigar_to_filter[i+1])
-            cigar_sizes.append(int(cigar_to_filter[i]))
-    last_cigar_char = cigar_chars[0]
-    last_cigar_size = cigar_sizes[0]
-    new_cigar = []
-    for i, char in enumerate(cigar_chars[1:]):
-        if char != last_cigar_char:
-            new_cigar.append(str(last_cigar_size) + last_cigar_char)
-            last_cigar_size = cigar_sizes[i+1]
-            last_cigar_char = char
-        else:
-            last_cigar_size += cigar_sizes[i+1]
-    new_cigar.append(str(last_cigar_size) + last_cigar_char)
-    return ''.join(new_cigar)
-
 def parsed_md(md):
     """ Divides an MD string up by boundaries between ^, letters, and numbers
 
@@ -435,23 +401,30 @@ def parsed_md(md):
         md_to_parse.append(''.join(md_group))
     return md_to_parse
 
-def indels(cigar, md, pos, seq):
-    """ Computes indels from CIGAR, MD string, and POS of a given alignment.
+def indels_introns_and_exons(cigar, md, pos, seq):
+    """ Computes indels, introns, and exons from CIGAR, MD string,
+        and POS of a given alignment.
 
         cigar: CIGAR string
         md: MD:Z string
         pos: position of first aligned base
         seq: read sequence
 
-        Return value: tuple (insertions, deletions), where insertions is a
-            list of tuples (last genomic position before insertion, 
-                                string of inserted bases), and deletions
+        Return value: tuple (insertions, deletions, introns, exons). Insertions
+            is a list of tuples (last genomic position before insertion, 
+                                 string of inserted bases). Deletions
             is a list of tuples (first genomic position of deletion,
-                                    string of deleted bases)
+                                 string of deleted bases). Introns is a list
+            of tuples (intron start position (inclusive),
+                       intron end position (exclusive),
+                       left_diplacement, right_displacement). Exons is a list
+            of tuples (exon start position (inclusive),
+                       exon end position (exclusive)).
     """
-    insertions, deletions = [], []
+    insertions, deletions, introns, exons = [], [], [], []
     cigar = re.split(r'([MINDS])', cigar)[:-1]
     md = parsed_md(md)
+    seq_size = len(seq)
     cigar_chars, cigar_sizes = [], []
     cigar_index, md_index, seq_index = 0, 0, 0
     max_cigar_index = len(cigar)
@@ -480,11 +453,17 @@ def indels(cigar, md, pos, seq):
                     break
                 elif aligned_bases == aligned_base_cap:
                     break
+            # Add exon
+            exons.append((pos, pos + aligned_base_cap))
             pos += aligned_base_cap
             seq_index += aligned_base_cap
         elif cigar[cigar_index+1] == 'N':
+            skip_increment = int(cigar[cigar_index])
+            # Add intron
+            introns.append((pos, pos + skip_increment,
+                            seq_index, seq_size - seq_index))
             # Skip region of reference
-            pos += int(cigar[cigar_index])
+            pos += skip_increment
         elif cigar[cigar_index+1] == 'I':
             # Insertion
             insert_size = int(cigar[cigar_index])
@@ -502,10 +481,24 @@ def indels(cigar, md, pos, seq):
             pos += delete_size
             md_index += 2
         else:
-            # Soft clip; ignore
+            # Soft clip
             assert cigar[cigar_index+1] == 'S'
+            # Advance seq_index
+            seq_index += int(cigar[cigar_index])
         cigar_index += 2
-    return insertions, deletions
+    # Merge exonic chunks; indels could have chopped them up
+    new_exons = []
+    last_exon = exons[0]
+    for exon in exons[1:]:
+        if exon[0] == last_exon[1]:
+            # Merge ECs
+            last_exon = (last_exon[0], exon[1])
+        else:
+            # Push last exon to new exon list
+            new_exons.append(last_exon)
+            last_exon = exon
+    new_exons.append(last_exon)
+    return insertions, deletions, introns, new_exons
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
@@ -628,80 +621,56 @@ class BowtieOutputThread(threading.Thread):
                         exactly one alignment.'''
                         alignment = list(corrected_multiread)[0]
                         cigar = alignment[5]
-                        cigar_for_introns = filtered_cigar(cigar)
-                        pos = int(alignment[3])
                         rname = alignment[2]
-                        cigar_chars = [-1] + [i for i, char
-                            in enumerate(cigar_for_introns) 
-                            if char == 'M' or char == 'N']
-                        base_counts = \
-                            [int(cigar_for_introns[
-                                    (cigar_chars[i]+1):cigar_chars[i+1]
-                                ]) for i in xrange(len(cigar_chars)-1)]
-                        if 'I' in cigar or 'D' in cigar:
-                            # Output indels
-                            md = [field for field in alignment
+                        pos = int(alignment[3])
+                        seq = alignment[9]
+                        md = [field for field in alignment
                                     if field[:5] == 'MD:Z:'][0][5:]
-                            insertions, deletions = indels(cigar, md, pos,
-                                                            alignment[9])
-                            for insert_pos, insert_seq in insertions:
-                                print >>self.output_stream, (
-                                       ('bed\tI\t%s\t%s\t%012d\t%012d\t%s'
-                                        '\t\x1c\t\x1c\t\x1c\t\x1c\t1')
-                                        % (sample_label, self.reference_index.\
-                                            rname_to_string[rname],
-                                            insert_pos, insert_pos,
-                                            insert_seq)
-                                    )
-                                _output_line_count += 1
-                            for del_pos, del_seq in deletions:
-                                print >>self.output_stream, (
-                                       ('bed\tD\t%s\t%s\t%012d\t%012d\t%s'
-                                        '\t\x1c\t\x1c\t\x1c\t\x1c\t1')
-                                        % (sample_label, self.reference_index.\
-                                            rname_to_string[rname],
-                                            del_pos, del_pos + len(del_seq),
-                                            del_seq)
-                                    )
-                                _output_line_count += 1
-                        if 'N' in cigar_for_introns:
-                            '''There's some chance the alignment was
-                            entirely in a region called as exonic; output
-                            introns only if they're present.'''
-                            reverse_strand_string = alignment[-2][-1]
-                            assert reverse_strand_string == '+' or \
-                                reverse_strand_string == '-'
-                            # Gather intron stats to be output
-                            introns = [(pos + sum(base_counts[:i]),
-                                            pos + sum(base_counts[:i+1]),
-                                            base_counts[i-1],
-                                            base_counts[i+1],
-                                            sum(base_counts[:i:2]),
-                                            sum(base_counts[i+1::2]))
-                                            for i in xrange(1,
-                                                len(base_counts), 2)]
-                            for (intron_pos, intron_end_pos,
-                                    left_anchor_size, right_anchor_size,
-                                    left_displacement, right_displacement) \
-                                in introns:
-                                print >>self.output_stream, (
-                                        ('bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
-                                         '%d\t%d\t%d\t%d\t1')
-                                         % (sample_label, 
-                                            self.reference_index.\
-                                            rname_to_string[rname],
-                                            intron_pos, intron_end_pos,
-                                            reverse_strand_string,
-                                            left_displacement,
-                                            right_displacement,
-                                            left_anchor_size,
-                                            right_anchor_size)
-                                    )
-                                _output_line_count += 1
+                        insertions, deletions, introns, exons \
+                                                    = indels_introns_and_exons(
+                                                        cigar, md, pos, seq
+                                                    )
+                        # Output indels
+                        for insert_pos, insert_seq in insertions:
+                            print >>self.output_stream, (
+                                   ('bed\tI\t%s\t%s\t%012d\t%012d\t%s'
+                                    '\t\x1c\t\x1c\t1')
+                                    % (sample_label, self.reference_index.\
+                                        rname_to_string[rname],
+                                        insert_pos, insert_pos,
+                                        insert_seq)
+                                )
+                            _output_line_count += 1
+                        for del_pos, del_seq in deletions:
+                            print >>self.output_stream, (
+                                   ('bed\tD\t%s\t%s\t%012d\t%012d\t%s'
+                                    '\t\x1c\t\x1c\t1')
+                                    % (sample_label, self.reference_index.\
+                                        rname_to_string[rname],
+                                        del_pos, del_pos + len(del_seq),
+                                        del_seq)
+                                )
+                            _output_line_count += 1
+                        reverse_strand_string = alignment[-2][-1]
+                        assert reverse_strand_string == '+' or \
+                            reverse_strand_string == '-'
+                        # Output introns
+                        for (intron_pos, intron_end_pos,
+                                left_displacement, right_displacement) \
+                            in introns:
+                            print >>self.output_stream, (
+                                    ('bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
+                                     '%d\t%d\t1')
+                                     % (sample_label, 
+                                        self.reference_index.\
+                                        rname_to_string[rname],
+                                        intron_pos, intron_end_pos,
+                                        reverse_strand_string,
+                                        left_displacement,
+                                        right_displacement)
+                                )
+                            _output_line_count += 1
                         # Output exonic chunks
-                        exons = [(pos + sum(base_counts[:i]),
-                                    pos + sum(base_counts[:i+1])) for i
-                                    in xrange(0, len(base_counts), 2)]
                         if self.exon_intervals:
                             for exon_pos, exon_end_pos in exons:
                                 partitions = partition.partition(
@@ -861,14 +830,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         8. Number of nucleotides between 3' end of intron and 3' end of read
             from which it was inferred, ASSUMING THE SENSE STRAND IS THE
             FORWARD STRAND.
-        9. Number of nucleotides spanned by EC on the left (that is, towards
-            the 5' end of the read) of the intron, ASSUMING THE SENSE STRAND IS
-            THE FORWARD STRAND.
-        10. Number of nucleotides spanned by EC on the right (that is, towards
-            the 3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS
-            THE FORWARD STRAND.
         ---------------------------------------------------------------------
-        11. Number of instances of intron, insertion, or deletion in sample;
+        9. Number of instances of intron, insertion, or deletion in sample;
             this is always +1 before bed_pre combiner/reducer
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
@@ -1034,8 +997,8 @@ elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
     import unittest
-    class TestIndels(unittest.TestCase):
-        """ Tests indels(); needs no fixture 
+    class TestIndelsIntronsAndExons(unittest.TestCase):
+        """ Tests indels_introns_and_exons(); needs no fixture 
 
             Some examples are ripped from:
             http://onetipperday.blogspot.com/2012/07/
@@ -1043,34 +1006,57 @@ elif __name__ == '__main__':
             SAM output of a dmel simulation
         """
         def test_read_1(self):
-            """ Fails if example doesn't give expected indels."""
-            self.assertEquals(([], [(18909816, 'GG')]),
-                         indels('20M2D9M', '20^GG7A1', 18909796,
+            """ Fails if example doesn't give expected indels/introns/exons."""
+            self.assertEquals(([], [(18909816, 'GG')], [], 
+                               [(18909796, 18909816), (18909818, 18909827)]),
+                         indels_introns_and_exons(
+                                '20M2D9M', '20^GG7A1', 18909796,
                                 'TAGCCTCTGTCAGCACTCCTGAGTTCAGA')
                     )
 
         def test_read_2(self):
-            """ Fails if example doesn't give expected indels."""
-            self.assertEquals(([], [(73888560, 'GG')]),
-                         indels('20M2D9M', '20^GG8C0', 73888540,
+            """ Fails if example doesn't give expected indels/introns/exons."""
+            self.assertEquals(([], [(73888560, 'GG')], [],
+                               [(73888540, 73888560), (73888562, 73888571)]),
+                         indels_introns_and_exons(
+                                '20M2D9M', '20^GG8C0', 73888540,
                                 'TAGCCTCTGTCAGCACTCCTGAGTTCAGA')
                     )
 
         def test_read_3(self):
-            """ Fails if example doesn't give expected indels."""
-            self.assertEquals(([(20620369, 'CA')], [(20620365, 'GT')]),
-                         indels('20M151N47M2D3M2I4M', '67^GT3T2C0', 20620147,
+            """ Fails if example doesn't give expected indels/introns/exons."""
+            self.assertEquals(([(20620369, 'CA')], [(20620365, 'GT')],
+                               [(20620167, 20620318, 20, 56)],
+                               [(20620147, 20620167), (20620318, 20620365),
+                                (20620367, 20620374)]),
+                         indels_introns_and_exons(
+                                '20M151N47M2D3M2I4M', '67^GT3T2C0', 20620147,
                                 'CCGCACCCGTACTGCTACAGATTTCCATCATCGCCACCCGCGGGC'
                                 'ATTCTGAAAAAGAGCGACGAAGAAGCAACCT')
                     )
 
         def test_read_4(self):
-            """ Fails if example doesn't give expected indels."""
-            self.assertEquals(([(20620155, 'CT')], []),
-                         indels('9M2I63M70N2M', '1A2C1A0G1G1C1C0C1G2A54',
+            """ Fails if example doesn't give expected indels/introns/exons."""
+            self.assertEquals(([(20620155, 'CT')], [],
+                               [(20620219, 20620289, 74, 2)],
+                               [(20620147, 20620219), (20620289, 20620291)]),
+                         indels_introns_and_exons(
+                                '9M2I63M70N2M', '1A2C1A0G1G1C1C0C1G2A54',
                                  20620147,
                                 'TTCTNCCTGCTTGTATGACCGTGTTGGGCGTGAGTGGCTTGTCCC'
                                 'TCAAGTAGAGACCATAGCGAGATGGGTACCT')
                     )
+
+    class MultireadWithIntrons(unittest.TestCase):
+        """ Tests multiread_with_introns(); needs no fixture 
+
+            Some examples are ripped from:
+            http://onetipperday.blogspot.com/2012/07/
+            deeply-understanding-sam-tags.html; others are from actual
+            SAM output of a dmel simulation
+        """
+        def test_multiread_1(self):
+            """ Fails if SAM output is not adjusted properly. """
+            pass
 
     unittest.main()

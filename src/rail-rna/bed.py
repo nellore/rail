@@ -19,22 +19,14 @@ Tab-delimited input tuple columns:
 6. '+' or '-' indicating which strand is the sense strand for introns,
    inserted sequence for insertions, or deleted sequence for deletions
 ----Next fields are for introns only; they are '\x1c' for indels----
-7. COMMA-SEPARATED LIST OF UNIQUE number of nucleotides between 5' end of
-    intron and 5' end of read from which it was inferred, ASSUMING THE SENSE
-    STRAND IS THE FORWARD STRAND. That is, if the sense strand is the reverse
-    strand, this is the distance between the 3' end of the read and the 3' end
-    of the intron.
-8. COMMA-SEPARATED LIST OF UNIQUE number of nucleotides between 3' end of
-    intron and 3' end of read from which it was inferred, ASSUMING THE SENSE
-    STRAND IS THE FORWARD STRAND.
-9. MIN mumber of nucleotides spanned by EC on the left (that is, towards the 5'
-    end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
-    STRAND.
-10. MIN number of nucleotides spanned by EC on the right (that is, towards the
-    3' end of the read) of the intron, ASSUMING THE SENSE STRAND IS THE FORWARD
-    STRAND.
+7. MAX number of nucleotides between 5' end of intron and 5' end of read from
+    which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
+    That is, if the sense strand is the reverse strand, this is the distance
+    between the 3' end of the read and the 3' end of the intron.
+8. MAX number of nucleotides between 3' end of intron and 3' end of read from
+    which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
 --------------------------------------------------------------------
-11. Number of instances of intron, insertion, or deletion in sample; this is
+9. Number of instances of intron, insertion, or deletion in sample; this is
     always +1 before bed_pre combiner/reducer
 
 Input is partitioned by fields 1-2 and sorted by fields 3-5
@@ -130,32 +122,21 @@ for (line_type, sample_label), xpartition in dp.xstream(sys.stdin, 2):
                                                          sample_label)
         if line_type == 'N':
             for i, (rname, pos, end_pos, reverse_strand_string,
-                    left_displacements, right_displacements,
-                    left_anchor_size, right_anchor_size, coverage) \
+                    max_left_overhang, max_right_overhang, coverage) \
                 in enumerate(xpartition):
                 pos, end_pos = int(pos) - 1, int(end_pos) - 1
-                left_displacements = map(int, left_displacements.split(','))
-                right_displacements = map(int, right_displacements.split(','))
-                displacements = (left_displacements 
-                                 if reverse_strand_string == '+'
-                                 else right_displacements)
-                max_left_overhang = max(left_displacements)
-                max_right_overhang = max(right_displacements)
+                max_left_overhang, max_right_overhang \
+                    = int(max_left_overhang), int(max_right_overhang)
                 start_position = pos - max_left_overhang
                 end_position = end_pos + max_right_overhang
-                print >>output_stream, '%s\t%d\t%d\tJUNC%08d;' \
-                                       'maximin_anchor_size=%d;' \
-                                       'unique_displacement_count=%d\t' \
+                print >>output_stream, '%s\t%d\t%d\tJUNC%08d\t' \
                                        '%s\t%s\t%d\t%d\t227,29,118\t2\t' \
                                        '%d,%d\t0,%d' % (
                                             reference_index.string_to_rname[
                                                     rname
                                                 ],
                                             start_position,
-                                            end_position, i+1,
-                                            max(int(left_anchor_size),
-                                                int(right_anchor_size)),
-                                            len(displacements), coverage,
+                                            end_position, i+1, coverage,
                                             reverse_strand_string,
                                             start_position, end_position,
                                             max_left_overhang,
@@ -164,7 +145,7 @@ for (line_type, sample_label), xpartition in dp.xstream(sys.stdin, 2):
                                         )
             input_line_count += i
         else:
-            for i, (rname, pos, end_pos, seq, _, _, _, _, coverage) \
+            for i, (rname, pos, end_pos, seq, _, _, coverage) \
                 in enumerate(xpartition):
                 pos, end_pos = int(pos) - 1, int(end_pos) - 1
                 print >>output_stream, '%s\t%d\t%d\t%s\t%s' \
