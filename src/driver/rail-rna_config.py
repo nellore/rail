@@ -26,7 +26,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--cluster-radius', metavar='INT', type=int, default=50, help='For clustering candidate introns into junctions.')
     parser.add_argument(\
-        '--motif-radius', type=int, required=False, default=100,
+        '--motif-radius', type=int, required=False, default=3,
         help='Distance (in bp) from each of the start and end positions '
              'of a cluster within which to search for motifs')
     parser.add_argument(\
@@ -37,11 +37,6 @@ def addArgs(parser):
     parser.add_argument('--max-intron-size', type=int, required=False,
         default=500000, 
         help='Filters introns of length greater than this value')
-    parser.add_argument('--min-anchor-significance', type=int,
-        required=False,
-        default=8, 
-        help='Suppress introns whose anchor significance falls below this '
-             'value from all output')
     parser.add_argument(\
         '--bowtie2-args', metavar='STR', type=str, 
         default='',
@@ -165,9 +160,6 @@ class Rail_RNAConfig(object):
             raise RuntimeError("Argument for --max_intron_size must be >=0; was %d" % self.max_intron_size)
         if self.min_intron_size < 0:
             raise RuntimeError("Argument for --min_intron_size must be >=0; was %d" % self.min_intron_size)
-        self.min_anchor_significance = args.min_anchor_significance
-        if self.min_anchor_significance < 0:
-            raise RuntimeError("Argument for --min_anchor_significance must be >=0; was %d" % self.min_anchor_significance)
         self.discardMate1 = args.discard_mate1
         self.discardMate2 = args.discard_mate2
         self.stranded = args.stranded

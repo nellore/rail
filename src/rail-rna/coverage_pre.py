@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Rail-RNA-coverage_pre
 
