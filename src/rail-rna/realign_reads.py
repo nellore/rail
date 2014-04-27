@@ -148,6 +148,7 @@ def input_files_from_input_stream(input_stream,
 
         Return value: tuple (path to FASTA reference file, path to read file)
     """
+    global _input_line_count
     prefasta_filename = os.path.join(temp_dir_path, 'temp.prefa')
     deduped_fasta_filename = os.path.join(temp_dir_path, 'temp.deduped.prefa')
     final_fasta_filename = os.path.join(temp_dir_path, 'temp.fa')
@@ -158,6 +159,7 @@ def input_files_from_input_stream(input_stream,
         with open(reads_filename, 'w') as read_stream:
             for read_seq, xpartition in dp.xstream(input_stream, 1):
                 for value in xpartition:
+                    _input_line_count += 1
                     if value[0][0] == '\x1c':
                         # Add to FASTA reference
                         print >>fasta_stream, '\t'.join([value[0][1:],
@@ -237,6 +239,18 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
                                'exitlevel %d.'
                                % bowtie_build_process.returncode)
 
+def running_sum(iterable):
+    """ Generates a running sum of the numbers in an iterable
+
+        iterable: some iterable with numbers
+
+        Yield value: next value in running sum
+    """
+    total = 0
+    for number in iterable:
+        total += number
+        yield total
+
 def multiread_with_introns(multiread, stranded=False):
     """ Modifies read alignments to correct CIGARs and reference positions.
 
@@ -267,114 +281,62 @@ def multiread_with_introns(multiread, stranded=False):
             a list of tuples, each of whose elements are the tokens from a line
             of SAM representing an alignment.
     """
-    corrected_multiread = set()
-    for i in xrange(len(multiread)):
-        tokens = multiread[i][2].split(';')
-        reverse_strand_string = tokens[-4][-1]
-        assert reverse_strand_string == '+' or reverse_strand_string == '-', \
-            'Strand is %s, which is invalid' % tokens[-4]
+    new_multiread = set()
+    for alignment in multiread:
+        tokens = alignment[2].split(';')
+        offset = int(alignment[3]) - 1
+        cigar = re.split(r'([MINDS])', alignment[5])[:-1]
+        flag = int(alignment[1])
+        reverse_strand_string = tokens[0][-1]
+        assert reverse_strand_string in '+-'
         reverse_strand = (True if reverse_strand_string == '-' else False)
-        flag = int(multiread[i][1])
         if stranded and (flag & 16 != 0) == reverse_strand:
             # Strand of alignment doesn't agree with strand of intron
             continue
-        rname = tokens[-4][:-1]
-        offset = int(multiread[i][3]) - 1
-        exon_sizes = [int(exon_size) for exon_size in tokens[-2].split(',')]
-        intron_sizes = [int(intron_size) for intron_size
-                            in tokens[-1].split(',')]
-        assert len(intron_sizes) == len(exon_sizes) - 1
-        cigar_sizes = [None]*(len(exon_sizes) + len(intron_sizes))
-        cigar_sizes[::2] = exon_sizes
-        cigar_sizes[1::2] = intron_sizes
-        partial_sizes = [sum(exon_sizes[:j+1]) for j
-                            in xrange(len(exon_sizes))]
-        start_index, end_index = None, None
-        for j, partial_size in enumerate(partial_sizes):
-            if partial_size > offset:
-                start_index = j
-                new_offset = (offset - partial_sizes[j-1]
-                                if j != 0 else offset)
-                break
-        old_cigar_list = re.split(r'([MIDS])', multiread[i][5])[:-1]
-        old_cigar_chars = old_cigar_list[1::2]
-        old_cigar_sizes = map(int, old_cigar_list[::2])
-        assert len(old_cigar_chars) == len(old_cigar_sizes)
-        aligned_base_count = sum([old_cigar_sizes[j]
-                                    for j in xrange(len(old_cigar_sizes))
-                                    if old_cigar_chars[j] == 'M'])
-        end_offset = aligned_base_count + offset
-        for j, partial_size in enumerate(partial_sizes):
-            if partial_size >= end_offset:
-                end_index = j
-                break
-        cigar_sizes[start_index*2] = partial_sizes[start_index] - offset
-        cigar_sizes[end_index*2] = end_offset - partial_sizes[end_index-1]
-        pos = int(tokens[-3]) + new_offset + \
-                sum(cigar_sizes[:start_index*2])
-        if start_index is None or end_index is None:
-            raise RuntimeError('Invalid SAM line; sum of exon sizes doesn\'t '
-                               'agree with size of reference sequence.')
-        if start_index == end_index:
-            # Just use old cigar
-            corrected_multiread.add(
-                    (multiread[i][0], multiread[i][1], rname, str(pos))
-                        + tuple(multiread[i][4:])
-                )
-            continue
-        assert start_index < end_index
-        matches = []
-        skips = []
-        for j in xrange(start_index*2, end_index*2+1):
-            if j % 2 == 0:
-                matches.append(cigar_sizes[j])
-            else:
-                skips.append(cigar_sizes[j])
-        # Transform original cigar into final cigar
-        match_index, exon_sum, new_exon_sum = 0, 0, 0
+        rname = tokens[0][:-1]
+        exon_sizes = map(int, tokens[-2].split(','))
+        intron_sizes = map(int, tokens[-1].split(','))
+        for i, exon_sum in enumerate(running_sum(exon_sizes)):
+            if exon_sum > offset: break
+        # Compute start position of alignment
+        pos = offset + sum(intron_sizes[:i]) + int(tokens[1])
+        # Adjust exon/intron lists so they start where alignment starts
+        exon_sizes = exon_sizes[i:]
+        exon_sizes[0] = exon_sum - offset
+        intron_sizes = intron_sizes[i:]
         new_cigar = []
-        for j, old_cigar_size in enumerate(old_cigar_sizes):
-            if old_cigar_chars[j] == 'M':
-                exon_sum += old_cigar_size
-                bases_to_align = exon_sum - new_exon_sum
-                if bases_to_align > 0:
-                    while True:
-                        if matches[match_index] < bases_to_align:
-                            if matches[match_index] > 0:
-                                new_cigar.append(
-                                        str(matches[match_index]) + 'M' +
-                                        str(skips[match_index]) + 'N'
-                                    )
-                            else:
-                                assert matches[match_index] == 0
-                                new_cigar.append(
-                                        str(skips[match_index]) + 'N'
-                                    )
-                            bases_to_align -= matches[match_index]
-                            match_index += 1
-                        else:
-                            new_cigar.append(str(bases_to_align) + 'M')
-                            matches[match_index] -= bases_to_align
-                            break
-                    new_exon_sum = exon_sum
-                else:
-                    new_cigar.append(
-                            str(old_cigar_size) + 'M'
+        for i in xrange(0, len(cigar), 2):
+            char_type = cigar[i+1]
+            base_count = int(cigar[i])
+            if char_type in 'MD':
+                for j, exon_sum in enumerate(running_sum(exon_sizes)):
+                    if exon_sum >= base_count: break
+                for k in xrange(j):
+                    new_cigar.extend(
+                            [(str(exon_sizes[k]) + char_type)
+                                if exon_sizes[k] != 0 else '',
+                             str(intron_sizes[k]), 'N']
                         )
-            elif old_cigar_chars[j] in 'DIS':
-                new_cigar.append(str(old_cigar_size) + old_cigar_chars[j])
+                last_size = base_count - (exon_sum - exon_sizes[j])
+                new_cigar.extend([str(last_size), char_type])
+                new_size = exon_sum - base_count
+                exon_sizes = exon_sizes[j:]
+                exon_sizes[0] = new_size
+                intron_sizes = intron_sizes[j:]
+            elif char_type in 'IS':
+                new_cigar.extend([cigar[i], char_type])
             else:
                 raise RuntimeError('Bowtie2 CIGAR chars are expected to be '
                                    'in set (DIMS).')
-        corrected_multiread.add(
-                    (multiread[i][0], multiread[i][1], rname, str(pos),
-                        multiread[i][4], ''.join(new_cigar))
-                    + tuple(multiread[i][6:])
-                    + (('XS:A:' + reverse_strand_string),)
+        new_multiread.add(
+                    (alignment[0], alignment[1], rname, str(pos),
+                        alignment[4], ''.join(new_cigar))
+                    + tuple(alignment[6:])
+                    + ('XS:A:' + reverse_strand_string,)
                 )
-    NH_field = 'NH:i:' + str(len(corrected_multiread))
+    NH_field = 'NH:i:' + str(len(new_multiread))
     multiread_to_return = [alignment + (NH_field,) for alignment in
-                            corrected_multiread]
+                            new_multiread]
     return multiread_to_return
 
 def parsed_md(md):
@@ -429,6 +391,9 @@ def indels_introns_and_exons(cigar, md, pos, seq):
     cigar_index, md_index, seq_index = 0, 0, 0
     max_cigar_index = len(cigar)
     while cigar_index != max_cigar_index:
+        if cigar[cigar_index] == 0:
+            cigar_index += 2
+            continue
         if cigar[cigar_index+1] == 'M':
             aligned_base_cap = int(cigar[cigar_index])
             aligned_bases = 0
@@ -550,171 +515,154 @@ class BowtieOutputThread(threading.Thread):
 
             No return value.
         """
-        global _input_line_count, _output_line_count
+        global _output_line_count
         next_report_line = 0
-        '''Next read must be known to tell if a read mapped to multiple
-        locations, so always work with previous read.'''
-        while True:
-            line = self.input_stream.readline()
-            if not line: return # Bowtie output nothing
-            # Skip header line
-            if line[0] == '@': continue
-            last_tokens = line.rstrip().split('\t')
-            last_qname = last_tokens[0]
-            last_flag = int(last_tokens[1])
-            break
-        # Initialize counter
         i = 0
-        # While labeled multiread, this list may end up simply a uniread
-        multiread = []
-        while True:
-            line = self.input_stream.readline()
-            if line:
-                tokens = line.rstrip().split('\t')
-                qname = tokens[0]
-                flag = int(tokens[1])
-                _input_line_count += 1
-            if self.verbose and next_report_line == i:
-                print >>sys.stderr, \
-                    'SAM output record %d: rdname="%s", flag=%d' \
-                    % (i, last_qname, last_flag)
-                next_report_line = int((next_report_line + 1)
-                    * self.report_multiplier + 1) - 1
-            multiread.append(last_tokens)
-            if not line or qname != last_qname:
-                if (last_flag & 4):
-                    # Write only the SAM output if the read was unmapped
+        for (qname,), xpartition in dp.xstream(self.input_stream, 1):
+            # While labeled multiread, this list may end up simply a uniread
+            multiread = []
+            for rest_of_line in xpartition:
+                i += 1
+                flag = int(rest_of_line[0])
+                if self.verbose and next_report_line == i:
+                    print >>sys.stderr, \
+                        'SAM output record %d: rdname="%s", flag=%d' \
+                        % (i, qname, flag)
+                    next_report_line = max(int(next_report_line
+                        * self.report_multiplier), next_report_line + 1)
+                multiread.append((qname,) + rest_of_line)
+            if flag & 4:
+                # Write only the SAM output if the read was unmapped
+                print >>self.output_stream, 'splice_sam\t' \
+                     + '\t'.join(
+                            list((self.manifest_object.label_to_index[
+                                    sample.parseLab(qname[:-2])
+                                ],
+                                self.reference_index.rname_to_string[
+                                        rest_of_line[1]
+                                    ], '%012d' % 
+                                int(rest_of_line[2]),
+                                qname[:-2],
+                                rest_of_line[0]) + rest_of_line[3:])
+                        )
+            else:
+                '''Correct positions to match original reference's, correct
+                CIGARs, and eliminate duplicates.'''
+                corrected_multiread = multiread_with_introns(
+                                            multiread, self.stranded
+                                        )
+                sample_label = self.manifest_object.label_to_index[
+                                    sample.parseLab(multiread[0][0][:-2])
+                                    ]
+                for alignment in corrected_multiread:
                     print >>self.output_stream, 'splice_sam\t' \
-                         + '\t'.join(
-                                [self.manifest_object.label_to_index[
-                                        sample.parseLab(last_tokens[0][:-2])
-                                    ],
-                                    self.reference_index.rname_to_string[
-                                            last_tokens[2]
-                                        ], '%012d' % 
-                                    int(last_tokens[3]),
-                                    last_tokens[0][:-2],
-                                    last_tokens[1]] + last_tokens[4:]
-                            )
-                else:
-                    '''Correct positions to match original reference's, correct
-                    CIGARs, and eliminate duplicates.'''
-                    corrected_multiread = multiread_with_introns(
-                                                multiread, self.stranded
-                                            )
-                    sample_label = self.manifest_object.label_to_index[
-                                        sample.parseLab(multiread[0][0][:-2])
-                                        ]
-                    for alignment in corrected_multiread:
-                        print >>self.output_stream, 'splice_sam\t' \
-                            + '\t'.join(
-                                (sample_label,
-                                    self.reference_index.rname_to_string[
-                                            alignment[2]
-                                        ], '%012d' % int(alignment[3]),
-                                    alignment[0][:-2],
-                                    alignment[1]) + alignment[4:]
+                        + '\t'.join(
+                            (sample_label,
+                                self.reference_index.rname_to_string[
+                                        alignment[2]
+                                    ], '%012d' % int(alignment[3]),
+                                alignment[0][:-2],
+                                alignment[1]) + alignment[4:]
+                        )
+                    _output_line_count += 1
+                if len(corrected_multiread) == 1:
+                    '''Output exonic chunks and introns only if there is
+                    exactly one alignment.'''
+                    alignment = list(corrected_multiread)[0]
+                    cigar = alignment[5]
+                    rname = alignment[2]
+                    pos = int(alignment[3])
+                    seq = alignment[9]
+                    md = [field for field in alignment
+                                if field[:5] == 'MD:Z:'][0][5:]
+                    insertions, deletions, introns, exons \
+                                                = indels_introns_and_exons(
+                                                    cigar, md, pos, seq
+                                                )
+                    # Output indels
+                    for insert_pos, insert_seq in insertions:
+                        print >>self.output_stream, (
+                               ('bed\tI\t%s\t%s\t%012d\t%012d\t%s'
+                                '\t\x1c\t\x1c\t1')
+                                % (sample_label, self.reference_index.\
+                                    rname_to_string[rname],
+                                    insert_pos, insert_pos,
+                                    insert_seq)
                             )
                         _output_line_count += 1
-                    if len(corrected_multiread) == 1:
-                        '''Output exonic chunks and introns only if there is
-                        exactly one alignment.'''
-                        alignment = list(corrected_multiread)[0]
-                        cigar = alignment[5]
-                        rname = alignment[2]
-                        pos = int(alignment[3])
-                        seq = alignment[9]
-                        md = [field for field in alignment
-                                    if field[:5] == 'MD:Z:'][0][5:]
-                        insertions, deletions, introns, exons \
-                                                    = indels_introns_and_exons(
-                                                        cigar, md, pos, seq
-                                                    )
-                        # Output indels
-                        for insert_pos, insert_seq in insertions:
-                            print >>self.output_stream, (
-                                   ('bed\tI\t%s\t%s\t%012d\t%012d\t%s'
-                                    '\t\x1c\t\x1c\t1')
-                                    % (sample_label, self.reference_index.\
-                                        rname_to_string[rname],
-                                        insert_pos, insert_pos,
-                                        insert_seq)
-                                )
-                            _output_line_count += 1
-                        for del_pos, del_seq in deletions:
-                            print >>self.output_stream, (
-                                   ('bed\tD\t%s\t%s\t%012d\t%012d\t%s'
-                                    '\t\x1c\t\x1c\t1')
-                                    % (sample_label, self.reference_index.\
-                                        rname_to_string[rname],
-                                        del_pos, del_pos + len(del_seq),
-                                        del_seq)
-                                )
-                            _output_line_count += 1
-                        reverse_strand_string = alignment[-2][-1]
-                        assert reverse_strand_string == '+' or \
-                            reverse_strand_string == '-'
-                        # Output introns
-                        for (intron_pos, intron_end_pos,
-                                left_displacement, right_displacement) \
-                            in introns:
-                            print >>self.output_stream, (
-                                    ('bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
-                                     '%d\t%d\t1')
-                                     % (sample_label, 
-                                        self.reference_index.\
-                                        rname_to_string[rname],
-                                        intron_pos, intron_end_pos,
-                                        reverse_strand_string,
-                                        left_displacement,
-                                        right_displacement)
-                                )
-                            _output_line_count += 1
-                        # Output exonic chunks
-                        if self.exon_intervals:
-                            for exon_pos, exon_end_pos in exons:
-                                partitions = partition.partition(
-                                        rname, exon_pos, exon_end_pos,
-                                        self.bin_size)
-                                for partition_id, _, _ in partitions:
-                                    print >>self.output_stream, \
-                                        'exon_ival\t%s\t%012d\t' \
-                                        '%012d\t%s' \
-                                        % (partition_id,
-                                            exon_pos, exon_end_pos, 
-                                            sample_label)
-                                    _output_line_count += 1
-                        if self.exon_differentials:
-                            for exon_pos, exon_end_pos in exons:
-                                partitions = partition.partition(
+                    for del_pos, del_seq in deletions:
+                        print >>self.output_stream, (
+                               ('bed\tD\t%s\t%s\t%012d\t%012d\t%s'
+                                '\t\x1c\t\x1c\t1')
+                                % (sample_label, self.reference_index.\
+                                    rname_to_string[rname],
+                                    del_pos, del_pos + len(del_seq),
+                                    del_seq)
+                            )
+                        _output_line_count += 1
+                    # Output exonic chunks
+                    if self.exon_intervals:
+                        for exon_pos, exon_end_pos in exons:
+                            partitions = partition.partition(
                                     rname, exon_pos, exon_end_pos,
                                     self.bin_size)
-                                for (partition_id, partition_start, 
-                                        partition_end) in partitions:
-                                    assert exon_pos < partition_end
-                                    # Print increment at interval start
+                            for partition_id, _, _ in partitions:
+                                print >>self.output_stream, \
+                                    'exon_ival\t%s\t%012d\t' \
+                                    '%012d\t%s' \
+                                    % (partition_id,
+                                        exon_pos, exon_end_pos, 
+                                        sample_label)
+                                _output_line_count += 1
+                    if self.exon_differentials:
+                        for exon_pos, exon_end_pos in exons:
+                            partitions = partition.partition(
+                                rname, exon_pos, exon_end_pos,
+                                self.bin_size)
+                            for (partition_id, partition_start, 
+                                    partition_end) in partitions:
+                                assert exon_pos < partition_end
+                                # Print increment at interval start
+                                print >>self.output_stream, \
+                                    'exon_diff\t%s\t%s\t%012d\t1' \
+                                    % (partition_id,
+                                        sample_label,
+                                        max(partition_start, exon_pos))
+                                _output_line_count += 1
+                                assert exon_end_pos > partition_start
+                                if exon_end_pos < partition_end:
+                                    '''Print decrement at interval end 
+                                    iff exon ends before partition
+                                    ends.'''
                                     print >>self.output_stream, \
-                                        'exon_diff\t%s\t%s\t%012d\t1' \
-                                        % (partition_id,
+                                        'exon_diff\t%s\t%s\t' \
+                                        '%012d\t-1' \
+                                        % (partition_id, 
                                             sample_label,
-                                            max(partition_start, exon_pos))
+                                            exon_end_pos)
                                     _output_line_count += 1
-                                    assert exon_end_pos > partition_start
-                                    if exon_end_pos < partition_end:
-                                        '''Print decrement at interval end 
-                                        iff exon ends before partition
-                                        ends.'''
-                                        print >>self.output_stream, \
-                                            'exon_diff\t%s\t%s\t' \
-                                            '%012d\t-1' \
-                                            % (partition_id, 
-                                                sample_label,
-                                                exon_end_pos)
-                                        _output_line_count += 1
-                multiread = []
-            if not line: break
-            last_tokens, last_qname, last_flag = tokens, qname, flag
-            i += 1
+                    try:
+                        reverse_strand_string = [field for field in alignment
+                                        if field[:5] == 'XS:A:'][0][5:]
+                    except IndexError:
+                        # No introns
+                        continue
+                    # Output introns
+                    for (intron_pos, intron_end_pos,
+                            left_displacement, right_displacement) \
+                        in introns:
+                        print >>self.output_stream, (
+                                ('bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
+                                 '%d\t%d\t1')
+                                 % (sample_label, 
+                                    self.reference_index.\
+                                    rname_to_string[rname],
+                                    intron_pos, intron_end_pos,
+                                    reverse_strand_string,
+                                    left_displacement,
+                                    right_displacement)
+                            )
+                        _output_line_count += 1
 
 def handle_temporary_directory(archive, temp_dir_path):
     """ Archives or deletes temporary directory.
