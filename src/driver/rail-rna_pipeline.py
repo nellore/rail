@@ -283,7 +283,7 @@ class RealignReadsStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf, cache=None):
         reducer_str = """
             python %%BASE%%/src/rail-rna/realign_reads.py
-                --original-idx=%%REF_BOWTIE_INDEX%% 
+                --original-idx=%%REF_BOWTIE_INDEX%%
                 --bowtie2-exe=%%BOWTIE2%%
                 --partition-length %d
                 --exon-differentials

@@ -361,7 +361,7 @@ def parsed_md(md):
             md_group.append(char)
     if md_group:
         md_to_parse.append(''.join(md_group))
-    return md_to_parse
+    return [char for char in md_to_parse if char != '0']
 
 def indels_introns_and_exons(cigar, md, pos, seq):
     """ Computes indels, introns, and exons from CIGAR, MD string,
@@ -439,19 +439,25 @@ def indels_introns_and_exons(cigar, md, pos, seq):
         elif cigar[cigar_index+1] == 'D':
             assert md[md_index] == '^'
             # Deletion
-            deletions.append((pos, md[md_index+1]))
             delete_size = int(cigar[cigar_index])
-            assert len(md[md_index+1]) == delete_size
+            md_delete_size = len(md[md_index+1])
+            assert md_delete_size >= delete_size
+            deletions.append((pos, md[md_index+1][:delete_size]))
+            if md_delete_size > delete_size:
+                # Deletion contains an intron
+                md[md_index+1] = md[md_index+1][delete_size:]
+            else:
+                md_index += 2
             # Skip deleted part of reference
             pos += delete_size
-            md_index += 2
         else:
             # Soft clip
             assert cigar[cigar_index+1] == 'S'
             # Advance seq_index
             seq_index += int(cigar[cigar_index])
         cigar_index += 2
-    # Merge exonic chunks; indels could have chopped them up
+    '''Merge exonic chunks/deletions; insertions/introns could have chopped
+    them up.'''
     new_exons = []
     last_exon = exons[0]
     for exon in exons[1:]:
@@ -933,7 +939,7 @@ if __name__ == '__main__' and not args.test:
         bowtie2_build_exe=args.bowtie2_build_exe,
         bowtie2_args=bowtie_args,
         manifest_file=args.manifest,
-        temp_dir_path=temp_dir_path, 
+        temp_dir_path=temp_dir_path,
         verbose=args.verbose, 
         bin_size=args.partition_length,
         exon_differentials=args.exon_differentials,
