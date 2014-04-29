@@ -210,9 +210,10 @@ def check_fail_queue():
 # Stage 1. Partition bins into tasks
 ########################################
 
-import random
+import hashlib
 message('Writing input records to %d tasks' % args.num_tasks)
 task_names = [str(i) for i in xrange(args.num_tasks)]
+task_count = len(task_names)
 tot = 0
 ofhs = {}
 for inp in inps:
@@ -227,8 +228,7 @@ for inp in inps:
             tot += 1
             assert len(toks) >= args.bin_fields
             k = '\t'.join(toks[:args.bin_fields])
-            random.seed(k)
-            task = random.choice(task_names)
+            task = task_names[int(hashlib.md5(k).hexdigest(), 16) % task_count]
             try:
                 ofhs[task].write(ln)
             except KeyError:
@@ -240,8 +240,8 @@ for fh in ofhs.itervalues():
     fh.close()
 message('%d input records written' % tot)
 
-'''Code below is memory-intensive if there are too many bins; seed
-random number generator with key and choose random task instead, as above.
+'''Code below is memory-intensive if there are too many bins; choose
+task based on hash instead, as above.
 Note that this technically makes for more load imbalance among tasks, but 
 it's less an issue in local mode, where Python processes will simply share 
 resources as managed by the OS.'''

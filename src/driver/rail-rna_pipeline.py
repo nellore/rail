@@ -291,7 +291,7 @@ class RealignReadsStep(pipeline.Step):
                 --verbose %s %s
                 -- %s --end-to-end """ % (tconf.partitionLen,
                             '--stranded' if tconf.stranded else '',
-                             '--keep-alive' if tconf.keep_alive else '',
+                            '--keep-alive' if tconf.keep_alive else '',
                             tconf.bowtieArgs())
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(RealignReadsStep, self).__init__(
@@ -343,7 +343,10 @@ class CoverageStep(pipeline.Step):
                 --out=%s/coverage
                 --bigbed-exe=%%BEDTOBIGBED%%
                 --manifest=%%MANIFEST%%
-                --verbose""" % (tconf.normPercentile, gconf.out)
+                %s
+                --verbose """ % (tconf.normPercentile, gconf.out,
+                                '--keep-alive' if tconf.keep_alive else '',
+                                )
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(CoverageStep, self).__init__(
             inps,
@@ -378,9 +381,11 @@ class BamStep(pipeline.Step):
                 --manifest=%%MANIFEST%%
                 %s
                 %s
+                %s
             """ % (gconf.out, tconf.bam_basename,
                    '--output-by-chromosome' if tconf.output_bam_by_chromosome else '',
-                   '--output-sam' if tconf.output_sam else '')
+                   '--output-sam' if tconf.output_sam else '',
+                   '--keep-alive' if tconf.keep_alive else '')
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(BamStep, self).__init__(
             inps,

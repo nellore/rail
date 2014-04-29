@@ -39,6 +39,7 @@ import sys
 import site
 import argparse
 import subprocess
+import threading
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for directory_name in ['util', 'fasta', 'bowtie', 'manifest']:
@@ -75,12 +76,28 @@ parser.add_argument('--bigbed-basename', type=str, required=False, default='',
          'followed by ".[sample label].bb"; if basename is an empty string, '
          'a sample\'s bigBed filename is simply [sample label].bb')
 parser.add_argument(\
+    '--keep-alive', action='store_const', const=True, default=False,
+    help='Prints reporter:status:alive messages to stderr to keep EMR '
+         'task alive')
+parser.add_argument(\
     '--verbose', action='store_const', const=True, default=False,
     help='Print out extra debugging statements')
 
 filemover.addArgs(parser)
 bowtie.addArgs(parser)
 args = parser.parse_args()
+
+if args.keep_alive:
+    class BedToBigBedThread(threading.Thread):
+        """ Wrapper class for bedtobigbed that permits polling for completion.
+        """
+        def __init__(self, command_list):
+            super(BedToBigBedThread, self).__init__()
+            self.command_list = command_list
+            self.bedtobigbed_process = None
+        def run(self):
+            self.bedtobigbed_process = subprocess.Popen(self.command_list,
+                                            stdout=sys.stderr).wait()
 
 def percentile(histogram, percentile=0.75):
     """ Given histogram, computes desired percentile.
@@ -177,17 +194,40 @@ while True:
         else:
             # Write to temporary directory, and later upload to URL
             bigbed_file_path = os.path.join(temp_dir_path, bigbed_filename)
-        bedtobigbed_command = ' '.join([args.bigbed_exe, bed_filename,
-            sizes_filename, bigbed_file_path])
-        bedtobigbed_process = subprocess.Popen(bedtobigbed_command, shell=True,
-            bufsize=-1, stdout=(sys.stderr if args.verbose else os.devnull))
-        bigbed_return = bedtobigbed_process.wait()
-        if bigbed_return:
-            raise RuntimeError('bedToBigBed command ' + bedtobigbed_command
-                + (' returned with exitlevel %d' % bigbed_return))
+        if args.keep_alive:
+            bedtobigbed_thread = BedToBigBedThread([args.bigbed_exe,
+                                                        bed_filename,
+                                                        sizes_filename,
+                                                        bigbed_file_path])
+            bedtobigbed_thread.start()
+            while bedtobigbed_thread.is_alive():
+                print >>sys.stderr, 'reporter:status:alive'
+                sys.stderr.flush()
+                time.sleep(5)
+            if bedtobigbed_thread.bedtobigbed_process:
+                raise RuntimeError('bedtobigbed process failed w/ '
+                                   'exitlevel %d.'
+                                    % bedtobigbed_thread.bedtobigbed_process)
+        else:
+            bedtobigbed_process = subprocess.Popen(
+                                        [args.bigbed_exe,
+                                            bed_filename,
+                                            sizes_filename,
+                                            bigbed_file_path],
+                                        stderr=sys.stderr,
+                                        stdout=sys.stderr,
+                                        bufsize=-1
+                                    )
+            bedtobigbed_process.wait()
+            if bedtobigbed_process.returncode:
+                raise RuntimeError('bedtobigbed process failed w/ '
+                                   'exitlevel %d.'
+                                    % bedtobigbed_process.returncode)
         if args.verbose:
-            print >>sys.stderr, ('bedToBigBed command ' + bedtobigbed_command
-                + ' succeeded.' )
+            print >>sys.stderr, ('bedToBigBed command '
+                                 + ' '.join([args.bigbed_exe, bed_filename,
+                                             sizes_filename, bigbed_file_path])
+                                 + ' succeeded.')
         if not output_url.isLocal():
             # bigBed must be uploaded to URL and deleted
             mover.put(bigbed_file_path, output_url.plus(bigbed_filename))

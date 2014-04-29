@@ -51,6 +51,7 @@ import os
 import sys
 import site
 import argparse
+import threading
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for directory_name in ['util', 'fasta', 'bowtie', 'manifest']:
@@ -93,6 +94,10 @@ parser.add_argument(\
     default='samtools',
     help='Path to executable for samtools')
 parser.add_argument(\
+    '--keep-alive', action='store_const', const=True, default=False,
+    help='Prints reporter:status:alive messages to stderr to keep EMR '
+         'task alive')
+parser.add_argument(\
     '--output-sam', action='store_const', const=True, default=False, 
     help='Output SAM files if True; otherwise output BAM files')
 
@@ -131,6 +136,8 @@ if args.out is not None:
 input_line_count = 0
 move_temporary_file = False # True when temporary file should be uploaded
 while True:
+    if args.keep_alive:
+        print >>sys.stderr, 'reporter:status:alive'
     line = sys.stdin.readline()
     if not line:
         if output_stream is not None:
