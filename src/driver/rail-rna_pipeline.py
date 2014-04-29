@@ -139,14 +139,14 @@ class IntronSearchStep(pipeline.Step):
                 --max-intron-size %d
                 --min-intron-size %d
                 --verbose %s %s
-                --min-cap-query-size %d
+                --min-cap-size %d
                 --cap-search-window-size %d
                 """ % (tconf.partitionLen,
                              tconf.max_intron_size,
                              tconf.min_intron_size,
                              '--stranded' if tconf.stranded else '',
                              '--do-not-search-for-caps' if tconf.do_not_search_for_caps else '',
-                             tconf.min_cap_query_size,
+                             tconf.min_cap_size,
                              tconf.cap_search_window_size)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(IntronSearchStep, self).__init__(

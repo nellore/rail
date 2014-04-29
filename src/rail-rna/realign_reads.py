@@ -173,7 +173,7 @@ def input_files_from_input_stream(input_stream,
         print >>sys.stderr, 'Done! Sorting and deduplicating prefasta...'
     # Sort prefasta and eliminate duplicate lines
     dedup_process_return = subprocess.call(
-            r'''sort %s | sed '$!N; /^\(.*\)\n\1$/!P; D' > %s'''
+            r'''sort %s | uniq > %s'''
             % (prefasta_filename, deduped_fasta_filename), shell=True
         )
     if dedup_process_return != 0:

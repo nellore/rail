@@ -98,7 +98,7 @@ def addArgs(parser):
              'cap) that precedes the first EC and the cap that follows the '
              'last EC. Such caps are subsequently added as ECs themselves. '
              'Use this command-line parameter to turn the feature off')
-    parser.add_argument('--min-cap-query-size', type=int, required=False,
+    parser.add_argument('--min-cap-size', type=int, required=False,
         default=8,
         help='The reference is not searched for a segment of a read that '
              'precedes the first EC or follows the last EC smaller than this '
@@ -171,9 +171,9 @@ class Rail_RNAConfig(object):
         self.poolTech = args.pool_tech_replicates
         self.poolBio = args.pool_bio_replicates
         self.do_not_search_for_caps = args.do_not_search_for_caps
-        if args.min_cap_query_size < 0:
-            raise RuntimeError("Argument for --min-cap-query-size must be in > 0; was %d" % args.min_cap_query_size)
-        self.min_cap_query_size = args.min_cap_query_size
+        if args.min_cap_size < 0:
+            raise RuntimeError("Argument for --min-cap-size must be in > 0; was %d" % args.min_cap_size)
+        self.min_cap_size = args.min_cap_size
         if args.cap_search_window_size < 0:
             raise RuntimeError("Argument for --cap-search-window-size must be in > 0; was %d" % args.cap_search_window_size)
         self.cap_search_window_size = args.cap_search_window_size

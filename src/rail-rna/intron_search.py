@@ -284,10 +284,56 @@ def composed_and_sorted_readlets(readlets):
     (pos, end_pos, displacement) ordered by pos, the reference position.'''
     return composed
 
+def maximal_suffix_match(query_seq, search_window,
+                            min_cap_size=8, max_cap_count=5):
+    """ Finds maximum matching suffix of query_seq closest to start of window.
+
+        query_seq: sequence to search for.
+        search_window: sequence to search in.
+        min_cap_size: minimum size of sequence to search for; this is used to
+            enumerate initial possible matches for query_seq (that is, matches
+            of the min_cap_size-length suffix of query_seq)
+        max_cap_count: initial list of initial possible matches is barred from
+            exceeding this value.
+
+        Return value: tuple (offset of match from beginning of search_window, 
+                                length of maximum matching suffix of query_seq)
+                      for the longest suffix CLOSEST to the start of the window
+                      or None if (no suffix found or max_cap_count exceeded)
+    """
+    query_seq_size = len(query_seq)
+    offset = query_seq_size - min_cap_size
+    suffix_seq = query_seq[offset:]
+    suffixes = []
+    while len(suffixes) <= max_cap_count:
+        suffix = re.search(suffix_seq, search_window[offset:])
+        if suffix is None:
+            break
+        else:
+            extra_base_count = 0
+            offset += suffix.start()
+            while min_cap_size + extra_base_count < query_seq_size:
+                if query_seq[-min_cap_size-extra_base_count-1] \
+                    == search_window[offset-extra_base_count-1]:
+                    extra_base_count += 1
+                else:
+                    break
+            suffixes.append((-(extra_base_count + min_cap_size),
+                                offset - extra_base_count))
+            offset += 1
+    try:
+        if len(suffixes) <= max_cap_count:
+            suffix = min(suffixes)
+            return (suffix[1], -suffix[0])
+        else:
+            return None
+    except ValueError:
+        # No prefix found
+        return None
+
 def unmapped_region_splits(unmapped_seq, left_reference_seq,
         right_reference_seq, global_alignment=GlobalAlignment()):
-    """ Distributes a read's unmapped region between two framing mapped
-        regions.
+    """ Distributes read's unmapped region between two framing mapped regions.
 
         The algorithm used is best illustrated with an example:
         Read         5' mmmmmmmmmmmmmmmmmmmm??????|????MMMMMMMMMMMMMMMMMMMMM 3'
@@ -370,8 +416,8 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
 
 def introns_from_read(reference_index, read_seq, readlets,
     search_for_caps=True, max_discrepancy=2, min_seq_similarity=0.85,
-    min_cap_query_size=8, cap_search_window_size=1000, seed=0,
-    global_alignment=GlobalAlignment()):
+    min_cap_size=8, cap_search_window_size=1000, seed=0,
+    max_cap_count=5, readlet_interval=4, global_alignment=GlobalAlignment()):
     """ Composes a given read's aligned readlets and returns introns.
 
         reference_index: object of class bowtie_index.BowtieIndexReference that
@@ -403,10 +449,15 @@ def introns_from_read(reference_index, read_seq, readlets,
             region is incorporated into a single EC spanning the two original
             ECs via DP filling. See the class GlobalAlignment for the
             substitution matrix used.
-        min_cap_query_size: the reference is not searched for a cap smaller
+        min_cap_size: the reference is not searched for a cap smaller
             than this size.
         cap_search_window_size: the size (in bp) of the reference subsequence
             in which to search for a cap.
+        max_cap_count: maximum number of possible caps of size
+            min_cap_size to consider when searching for caps.
+        readlet_interval: distance between successive readlets; used to rule
+            out prefix and suffix caps that are too far from alignments
+            covering read
         seed: seed for random number generator; used to break ties in median 
             index when performing DP filling.
         global_alignment: instance of GlobalAlignment class used for fast
@@ -455,7 +506,7 @@ def introns_from_read(reference_index, read_seq, readlets,
                 new_prefix = [(prefix_pos - prefix_displacement,
                                     prefix_pos, 0)]
             elif search_for_caps \
-                and prefix_displacement >= min_cap_query_size \
+                and prefix_displacement >= min_cap_size \
                 and cap_search_window_size > 0:
                 '''If region shouldn't be filled and region to the left isn't
                 too small, search for prefix.'''
@@ -465,13 +516,21 @@ def introns_from_read(reference_index, read_seq, readlets,
                         search_pos,
                         prefix_pos - 1 - search_pos
                     )
-                prefix = re.search(current_read_seq[:min_cap_query_size][::-1],
-                                    search_window[::-1])
-                if prefix is not None:
-                    new_prefix_pos = prefix_pos - prefix.end()
-                    new_prefix = [(new_prefix_pos,
-                                        new_prefix_pos + min_cap_query_size,
+                try:
+                    new_prefix_offset, new_prefix_size \
+                        = maximal_suffix_match(
+                                current_read_seq[:prefix_displacement][::-1],
+                                search_window[::-1]
+                            )
+                    if prefix_displacement - new_prefix_size \
+                        <= readlet_interval:
+                        new_prefix = [(prefix_pos - new_prefix_offset
+                                        - new_prefix_size,
+                                        prefix_pos - new_prefix_offset,
                                         0)]
+                except TypeError:
+                    # maximal_suffix_match returned None
+                    pass
         unmapped_displacement = (suffix_end_pos - suffix_pos
                                     + suffix_displacement)
         unmapped_base_count = read_seq_size - unmapped_displacement
@@ -491,7 +550,7 @@ def introns_from_read(reference_index, read_seq, readlets,
                                 suffix_end_pos + unmapped_base_count,
                                 unmapped_displacement)]
             elif search_for_caps \
-                and unmapped_base_count >= min_cap_query_size \
+                and unmapped_base_count >= min_cap_size \
                 and cap_search_window_size > 0:
                 '''If region shouldn't be filled and region to the right isn't
                 too small, search for suffix.'''
@@ -502,15 +561,21 @@ def introns_from_read(reference_index, read_seq, readlets,
                         min(cap_search_window_size, 
                              reference_index.rname_lengths[rname] - search_pos)
                     )
-                suffix = re.search(
-                                current_read_seq[-min_cap_query_size:],
+                try:
+                    new_suffix_offset, new_suffix_size \
+                        = maximal_suffix_match(
+                                current_read_seq[-unmapped_base_count:],
                                 search_window
                             )
-                if suffix is not None:
-                    new_suffix_pos = suffix_end_pos + suffix.start()
-                    new_suffix = [(new_suffix_pos,
-                                    new_suffix_pos + min_cap_query_size,
-                                    read_seq_size - min_cap_query_size)]
+                    if unmapped_base_count - new_suffix_size \
+                        <= readlet_interval:
+                        new_suffix = [(suffix_end_pos + new_suffix_offset,
+                                        suffix_end_pos + new_suffix_offset
+                                        + new_suffix_size,
+                                        read_seq_size - new_suffix_size)]
+                except TypeError:
+                    # maximal_suffix_match returned None
+                    pass
         composed_and_capped[strand] = (new_prefix + composed[strand]
                                         + new_suffix)
     introns = {}
@@ -837,7 +902,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bin_size=10000,
     max_discrepancy=2, min_seq_similarity=0.85, min_intron_size=5,
     max_intron_size=500000, intron_partition_overlap=20,
     global_alignment=GlobalAlignment(), search_for_caps=True,
-    min_cap_query_size=8, cap_search_window_size=1000):
+    min_cap_size=8, cap_search_window_size=1000,
+    max_cap_count=5):
     """ Runs Rail-RNA-intron_search.
 
         Input (read from stdin)
@@ -909,10 +975,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bin_size=10000,
             of a read (a cap) that precedes the first EC and the segment of a
             read that follows the last EC. Such segments are subsequently added
             as an ECs themselves, and introns may be called between them.
-        min_cap_query_size: the reference is not searched for a cap smaller
+        min_cap_size: the reference is not searched for a cap smaller
             than this size.
         cap_search_window_size: the size (in bp) of the reference subsequence
             in which to search for a cap.
+        max_cap_count: maximum number of possible caps of size
+            min_cap_size to consider when searching for caps.
         global_alignment: instance of GlobalAlignment class used for fast
                 realignment of exonic chunks via Weave.
         report_multiplier: if verbose is True, the line number of an alignment,
@@ -991,8 +1059,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bin_size=10000,
                     min_seq_similarity=min_seq_similarity,
                     global_alignment=global_alignment,
                     search_for_caps=search_for_caps,
-                    min_cap_query_size=min_cap_query_size,
+                    min_cap_size=min_cap_size,
                     cap_search_window_size=cap_search_window_size,
+                    max_cap_count=max_cap_count,
                     seed=seq
                 )
             # Print introns
@@ -1113,6 +1182,10 @@ if __name__ == '__main__':
              '(length of unmapped region), the unmapped region is '
              'incorporated into a single EC spanning the two original ECs '
              'via DP filling')
+    parser.add_argument('--max-cap-count', type=int, required=False, 
+        default=5,
+        help='Maximum number of possible prefixes or suffixes of size '
+             '--min-cap-query-size to consider when searching for caps')
     parser.add_argument('--do-not-search_for_caps',
         action='store_const',
         const=True,
@@ -1121,7 +1194,7 @@ if __name__ == '__main__':
              'cap) that precedes the first EC and the cap that follows the '
              'last EC. Such caps are subsequently added as ECs themselves. '
              'Use this command-line parameter to turn the feature off')
-    parser.add_argument('--min-cap-query-size', type=int, required=False,
+    parser.add_argument('--min-cap-size', type=int, required=False,
         default=8,
         help='The reference is not searched for a segment of a read that '
              'precedes the first EC or follows the last EC smaller than this '
@@ -1156,8 +1229,9 @@ if __name__ == '__main__' and not args.test:
         max_intron_size=args.max_intron_size,
         intron_partition_overlap=args.intron_partition_overlap,
         search_for_caps=(not args.do_not_search_for_caps),
-        min_cap_query_size=args.min_cap_query_size,
+        min_cap_size=args.min_cap_size,
         cap_search_window_size=args.cap_search_window_size,
+        max_cap_count=args.max_cap_count,
         global_alignment=global_alignment)
     print >> sys.stderr, 'DONE with intron_search.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
@@ -1275,6 +1349,52 @@ elif __name__ == '__main__':
                                         )
                                     )
     
+    class TestMaximalSuffixMatch(unittest.TestCase):
+        """ Tests maximal_suffix_match(); needs no fixture. """
+        def test_one_instance_1(self):
+            """ Fails if maximal suffix match is not identified.
+            """
+            self.assertEqual(
+                    maximal_suffix_match(
+                            'ATAGCATTA', 'CAGTCAGACCCATACCAATAGCATTA'
+                        ),
+                    (17, 9)
+                )
+
+        def test_one_instance_2(self):
+            """ Fails if maximal suffix match is not identified.
+            """
+            self.assertEqual(
+                    maximal_suffix_match(
+                            'CGATACGTCAGACCATG',
+                            'ATGGCATACGATACGTCAGACCATGCAGGACCTTTACCTACATACTG'
+                        ),
+                    (8, 17)
+                )
+
+        def test_one_instance_3(self):
+            """ Fails if maximal suffix match is not identified.
+            """
+            self.assertEqual(
+                    maximal_suffix_match(
+                            'CGATACGTCAGACCATG',
+                            'ATGGCATAATACGTCAGACCATGCAGGACCTTTACCTACATACTG'
+                        ),
+                    (8, 15)
+                )
+
+        def test_filtering_of_more_than_max_cap_count_instances(self):
+            """ Fails if maximal suffix matches are not filtered out.
+            """
+            self.assertEqual(
+                    maximal_suffix_match(
+                            'ATAGCATTA',
+                            'CAGTCAGACCCATACCAATAGCATTAATAGCATTA',
+                            max_cap_count=1
+                        ),
+                    None
+                )
+
     class TestIntronsFromRead(unittest.TestCase):
         """ Tests introns_from_read(). """
         def setUp(self):
@@ -1559,6 +1679,29 @@ elif __name__ == '__main__':
             self.assertEquals(introns, 
                                 {('chr1', False) : [(244, 250),
                                                     (267, 273)]})
+
+        def test_that_prefix_and_suffix_ECs_are_found_3(self):
+            """ Fails if unaligned prefix and suffix don't become ECs.
+                
+                Reference is searched for unmapped regions before first EC
+                and after last EC. Here, the read has exactly one EC, so it's
+                the first one and the last one on the read. Read is taken to be
+                the first line of reference_seq.
+            """
+            '''Second line of read_seq below is the only EC identified at
+            first; first and third lines also appear in reference, and introns
+            separate each line.'''
+            # ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG
+            read_seq = 'ATGGCATACG' \
+                       'GTCAGACCATGCAg' \
+                       'CCTACATAC'
+            readlets = [('chr1', False, 15, 29, 10)]
+            introns = introns_from_read(
+                                self.reference_index, read_seq, readlets
+                             )
+            self.assertEquals(introns, 
+                                {('chr1', False) : [(11, 15),
+                                                    (29, 37)]})
 
         def test_that_strange_mapping_is_thrown_out(self):
             """ Fails if any exons or introns are returned.
