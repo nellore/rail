@@ -2,13 +2,9 @@
 
 # install-pypy.sh
 #
-# Install PyPy.
+# Install PyPy as of now.
+# Reference: http://stackoverflow.com/questions/21803988/pypy-issue-with-shared-libraries-libffi-so-5
 
-# Got this list from http://doc.pypy.org/en/latest/getting-started-python.html
-sudo apt-get --yes install \
- gcc make python-dev libffi-dev libsqlite3-dev pkg-config \
- libz-dev libbz2-dev libncurses-dev libexpat1-dev \
- libssl-dev libgc-dev python-sphinx python-greenlet || { echo "apt-get failed" ; exit 1 }
-
-# TODO: actually get PyPy.  Note that the pypy-c binary is not enough, you
-# also need to have all the supporting directories!
+set -e
+sudo add-apt-repository --yes ppa:pypy/ppa
+sudo apt-get --yes install pypy pypy || { echo 'apt-get failed'; exit 1; }

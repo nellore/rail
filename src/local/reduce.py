@@ -1,5 +1,4 @@
-#!/usr/bin/perl
-
+#!/usr/bin/python
 """
 reduce.py
 
@@ -318,6 +317,61 @@ if tot > 0:
 
     for fh in ofhs.itervalues():
         fh.close()'''
+
+''' this multithreaded code is actually SLOWER than partitioning on a single thread
+import Queue
+
+def do_partition(input_file_and_write_queue):
+    try:
+        input_file, current_queue = input_file_and_write_queue
+        with openex(input_file) as input_stream:
+            for line in input_stream:
+                tokens = line.strip().split('\t')
+                if tokens[0] == 'DUMMY':
+                    continue
+                assert len(tokens) >= args.bin_fields
+                key = '\t'.join(tokens[:args.bin_fields])
+                task = int(hashlib.md5(key).hexdigest(), 16) % args.num_tasks
+                current_queue.put((task, line))
+    except Exception as e:
+        message = ('Partitioning failed: %s' % e.message)
+        fail_q.put((msg, input, 'N/A', cmd))
+
+message('Writing input records to %d tasks' % args.num_tasks)
+output_files = {}
+manager = multiprocessing.Manager()
+write_queue = manager.Queue()
+partition_pool = multiprocessing.Pool(num_processes)
+caller = partition_pool.map_async(do_partition, [(inp, write_queue) for inp in inps])
+write_count = 0
+while not caller.ready():
+    try:
+        to_write = write_queue.get_nowait()
+        try:
+            output_files[to_write[0]].write(to_write[1])
+            write_count += 1
+        except KeyError:
+            output_files[to_write[0]] = open(os.path.join(task_dir, str(to_write[0])), 'w')
+            output_files[to_write[0]].write(to_write[1])
+            write_count += 1
+    except Queue.Empty:
+        pass
+while not write_queue.empty():
+    to_write = write_queue.get_nowait()
+    try:
+        output_files[to_write[0]].write(to_write[1])
+        write_count += 1
+    except KeyError:
+        output_files[to_write[0]] = open(os.path.join(task_dir, str(to_write[0])), 'w')
+        output_files[to_write[0]].write(to_write[1])
+        write_count += 1
+for output_key in output_files:
+    output_files[output_key].close()
+check_fail_queue()
+output_filenames = [str(i) for i in xrange(args.num_tasks)]
+message('%d input records written' % write_count)
+
+'''
 
 if tot > 0:
 

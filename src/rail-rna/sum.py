@@ -63,11 +63,15 @@ parser.add_argument(\
         help='If 1, assume final fields are ints. If 2, assume final fields '
              'are floats. Otherwise, assume final fields are strings.'
     )
+parser.add_argument(\
+        '--target', type=str, required=False, default='',
+        help='Skip lines that do not begin with this string.'
+    )
 
 args = parser.parse_args()
 
+target_size = len(args.target)
 input_line_count, output_line_count = 0, 0
-
 if args.type == 1:
     last_key, totals, write_line = None, [0]*args.value_count, False
     while True:
@@ -80,6 +84,7 @@ if args.type == 1:
                 # Write final line
                 write_line = True
         else:
+            if line[:target_size] != args.target: continue
             input_line_count += 1
             tokens = line.rstrip().split('\t')
             key = tokens[:-args.value_count]
@@ -106,6 +111,7 @@ elif args.type == 2:
                 # Write final line
                 write_line = True
         else:
+            if line[:target_size] != args.target: continue
             input_line_count += 1
             tokens = line.rstrip().split('\t')
             key = tokens[:-args.value_count]
@@ -133,6 +139,7 @@ else:
                 # Write final line
                 write_line = True
         else:
+            if line[:target_size] != args.target: continue
             input_line_count += 1
             tokens = line.rstrip().split('\t')
             key = tokens[:-args.value_count]

@@ -49,11 +49,8 @@ import threading
 import string
 import subprocess
 import re
-import numpy as np
 import random
 import itertools
-# For fast global alignment
-from scipy import weave
 from collections import defaultdict
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -64,154 +61,9 @@ import bowtie
 import bowtie_index
 import sample
 import partition
+from collections import deque
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
-
-class GlobalAlignment:
-    """ Invokes Weave to obtain alignment score matrix with C. """
-
-    def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-5],
-                                            [-1, 1,-1,-1,-1,-5],
-                                            [-1,-1, 1,-1,-1,-5],
-                                            [-1,-1,-1, 1,-1,-5],
-                                            [-1,-1,-1,-1,-1,-5],
-                                            [-5,-5,-5,-5,-5,-5]]):
-        """ Constructor for GlobalAlignment.
-
-            Places substitution_matrix directly in string containing C code
-            that obtains score matrix for global alignment. Executes C with
-            Weave on trivial case (two sequences, each one character) to 
-            ensure code is precompiled.
-
-            substitution_matrix: 6 x 6 substitution matrix (list of
-                lists); rows and columns correspond to ACGTN-, where N is aNy
-                and - is a gap. Default: +1 for match, -2 for gap, -1 for
-                everything else.
-        """
-        '''Set supporting code including libraries and the function 
-        integer_sequence(), which converts a sequence of nucleotides to
-        an array of indices that correspond to indices of the substitution
-        matrix---also set in the constructor.'''
-        self.support_code = """ 
-                        int* integer_sequence(const char* seq, int length) {
-                            int i;
-                            int* int_seq = (int *)malloc(sizeof(int)*length);
-                            for (i = 0; seq[i]; i++) {
-                                switch (seq[i]) {
-                                    case 'A':
-                                    case 'a':
-                                        int_seq[i] = 0;
-                                        break;
-                                    case 'C':
-                                    case 'c':
-                                        int_seq[i] = 1;
-                                        break;
-                                    case 'G':
-                                    case 'g':
-                                        int_seq[i] = 2;
-                                        break;
-                                    case 'T':
-                                    case 't':
-                                        int_seq[i] = 3;
-                                        break;
-                                    case 'N':
-                                        int_seq[i] = 4;
-                                        break;
-                                    case '-':
-                                        int_seq[i] = 5;
-                                        break;
-                                    default:
-                                        int_seq[i] = 4;
-                                }
-                            }
-                            return int_seq;
-                        }
-                        """
-        '''Score matrix code is written in C/C++; see self.support_code above
-        for dependencies. substitution_matrix is embedded in code below.'''
-        self.score_matrix_code = """
-                const char* c_first_seq = first_seq.c_str();
-                const char* c_second_seq = second_seq.c_str();
-                int row_count = first_seq.length() + 1;
-                int column_count = second_seq.length() + 1;
-                npy_intp dims[2] = {row_count, column_count};
-                PyObject* to_return = PyArray_SimpleNew(2, dims, NPY_INT);
-                int* score_matrix = (int *)((PyArrayObject*) to_return)->data;
-                int* substitution_matrix = (int *)malloc(sizeof(int)*6*6);
-                int* int_first_seq = integer_sequence(c_first_seq,
-                                                        row_count - 1);
-                int* int_second_seq = integer_sequence(c_second_seq,
-                                                        column_count - 1);
-            """ + """""".join(
-                            [("""substitution_matrix[%d] = %d;""" % ((i*6 + j), 
-                                substitution_matrix[i][j])) 
-                                for i in xrange(6) for j in xrange(6)]
-                        ) \
-            + """
-                int i, j;
-                score_matrix[0] = 0;
-                for (i = 1; i < row_count; i++) {
-                    score_matrix[i*column_count] = i 
-                        * substitution_matrix[int_first_seq[i-1]*6+5];
-                }
-                for (j = 1; j < column_count; j++) {
-                    score_matrix[j] = j 
-                        * substitution_matrix[5*6+int_second_seq[j-1]];
-                }
-                int diagonal, vertical, horizontal;
-                for (i = 1; i < row_count; i++) {
-                    for (j = 1; j < column_count; j++) {
-                        diagonal = score_matrix[(i-1)*column_count + j-1]
-                            + substitution_matrix[int_first_seq[i-1]*6
-                                                    +int_second_seq[j-1]];
-                        vertical = score_matrix[(i-1)*column_count + j]
-                            + substitution_matrix[int_first_seq[i-1]*6+5];
-                        horizontal = score_matrix[i*column_count + j-1]
-                            + substitution_matrix[5*6+int_second_seq[j-1]];
-                        score_matrix[i*column_count + j] = std::max(
-                                horizontal, std::max(diagonal, vertical)
-                            );
-                    }
-                }
-                free(int_first_seq);
-                free(int_second_seq);
-                free(substitution_matrix);
-                return_val = to_return;
-            """
-        stdout_holder = os.dup(sys.stdout.fileno())
-        try:
-            # Suppress compiler output by redirecting stdout temporarily
-            devnull = open(os.devnull, 'w')
-            os.dup2(devnull.fileno(), sys.stdout.fileno())
-            self.score_matrix('N', 'N')
-        except Exception as e:
-            print >>sys.stderr, 'C code for computing score matrix failed ' \
-                                'to compile. Get Python\'s distutils to use ' \
-                                'g++, and try again.'
-            raise
-        finally:
-            # Turn the tap back on
-            os.dup2(stdout_holder, sys.stdout.fileno())
-
-    def score_matrix(self, first_seq, second_seq):
-        """ Computes score matrix for global alignment of two DNA sequences.
-
-            The substitution matrix is specified when the GlobalAlignment
-            class is instantiated.
-
-            first_seq: first sequence (string).
-            second_seq: second sequence (string).
-
-            Return value: score_matrix, a numpy array whose dimensions are
-                (len(first_seq) + 1) x (len(second_seq) + 1). It can be used to
-                trace back the best global alignment.
-        """
-        return weave.inline(
-                                self.score_matrix_code,
-                                ['first_seq', 'second_seq'], 
-                                support_code=self.support_code,
-                                verbose=0
-                            )
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
@@ -299,16 +151,24 @@ def maximal_suffix_match(query_seq, search_window,
         Return value: tuple (offset of match from beginning of search_window, 
                                 length of maximum matching suffix of query_seq)
                       for the longest suffix CLOSEST to the start of the window
-                      or None if (no suffix found or max_cap_count exceeded)
+                      or None if (no suffix found or max_cap_count exceeded
+                        or last min_cap_size characters of suffix match
+                        last min_cap_size characters of first len(query_seq)
+                        characters of search_window)
     """
     query_seq_size = len(query_seq)
     offset = query_seq_size - min_cap_size
     suffix_seq = query_seq[offset:]
     suffixes = []
+    first_search = True
     while len(suffixes) <= max_cap_count:
         suffix = re.search(suffix_seq, search_window[offset:])
         if suffix is None:
             break
+        elif first_search and not suffix.start():
+            '''Suffix was found on first search at very beginning of window;
+            it's VERY likely just an extension.'''
+            return None
         else:
             extra_base_count = 0
             offset += suffix.start()
@@ -321,6 +181,7 @@ def maximal_suffix_match(query_seq, search_window,
             suffixes.append((-(extra_base_count + min_cap_size),
                                 offset - extra_base_count))
             offset += 1
+        first_search = False
     try:
         if len(suffixes) <= max_cap_count:
             suffix = min(suffixes)
@@ -328,8 +189,220 @@ def maximal_suffix_match(query_seq, search_window,
         else:
             return None
     except ValueError:
-        # No prefix found
+        # No suffixes found
         return None
+
+if 'pypy' not in sys.version.lower():
+    # For fast global alignment without PyPy
+    from scipy import weave
+    class GlobalAlignment:
+        """ Invokes Weave to obtain alignment score matrix with C. """
+
+        def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-5],
+                                                [-1, 1,-1,-1,-1,-5],
+                                                [-1,-1, 1,-1,-1,-5],
+                                                [-1,-1,-1, 1,-1,-5],
+                                                [-1,-1,-1,-1,-1,-5],
+                                                [-5,-5,-5,-5,-5,-5]]):
+            """ Constructor for GlobalAlignment.
+
+                Places substitution_matrix directly in string containing C code
+                that obtains score matrix for global alignment. Executes C with
+                Weave on trivial case (two sequences, each one character) to 
+                ensure code is precompiled.
+
+                substitution_matrix: 6 x 6 substitution matrix (list of
+                    lists); rows and columns correspond to ACGTN-, where N is
+                    aNy and - is a gap. Default: +1 for match, -5 for gap,
+                    -1 for everything else.
+            """
+            '''Set supporting code including libraries and the function 
+            integer_sequence(), which converts a sequence of nucleotides to
+            an array of indices that correspond to indices of the substitution
+            matrix---also set in the constructor.'''
+            self.support_code = """ 
+                        int* integer_sequence(const char* seq, int length) {
+                            int i;
+                            int* int_seq = (int *)malloc(sizeof(int)*length);
+                            for (i = 0; seq[i]; i++) {
+                                switch (seq[i]) {
+                                    case 'A':
+                                    case 'a':
+                                        int_seq[i] = 0;
+                                        break;
+                                    case 'C':
+                                    case 'c':
+                                        int_seq[i] = 1;
+                                        break;
+                                    case 'G':
+                                    case 'g':
+                                        int_seq[i] = 2;
+                                        break;
+                                    case 'T':
+                                    case 't':
+                                        int_seq[i] = 3;
+                                        break;
+                                    case 'N':
+                                        int_seq[i] = 4;
+                                        break;
+                                    case '-':
+                                        int_seq[i] = 5;
+                                        break;
+                                    default:
+                                        int_seq[i] = 4;
+                                }
+                            }
+                            return int_seq;
+                        }
+                        """
+            '''Score matrix code is written in C/C++; see self.support_code
+            above for dependencies. substitution_matrix is embedded in code
+            below.'''
+            self.score_matrix_code = """
+                const char* c_first_seq = first_seq.c_str();
+                const char* c_second_seq = second_seq.c_str();
+                int row_count = first_seq.length() + 1;
+                int column_count = second_seq.length() + 1;
+                npy_intp dims[2] = {row_count, column_count};
+                PyObject* to_return = PyArray_SimpleNew(2, dims, NPY_INT);
+                int* score_matrix = (int *)((PyArrayObject*) to_return)->data;
+                int* substitution_matrix = (int *)malloc(sizeof(int)*6*6);
+                int* int_first_seq = integer_sequence(c_first_seq,
+                                                        row_count - 1);
+                int* int_second_seq = integer_sequence(c_second_seq,
+                                                        column_count - 1);
+            """ + """""".join(
+                            [("""substitution_matrix[%d] = %d;""" % ((i*6 + j), 
+                                substitution_matrix[i][j])) 
+                                for i in xrange(6) for j in xrange(6)]
+                        ) \
+            + """
+                int i, j;
+                score_matrix[0] = 0;
+                for (i = 1; i < row_count; i++) {
+                    score_matrix[i*column_count] = i 
+                        * substitution_matrix[int_first_seq[i-1]*6+5];
+                }
+                for (j = 1; j < column_count; j++) {
+                    score_matrix[j] = j 
+                        * substitution_matrix[5*6+int_second_seq[j-1]];
+                }
+                int diagonal, vertical, horizontal;
+                for (i = 1; i < row_count; i++) {
+                    for (j = 1; j < column_count; j++) {
+                        diagonal = score_matrix[(i-1)*column_count + j-1]
+                            + substitution_matrix[int_first_seq[i-1]*6
+                                                    +int_second_seq[j-1]];
+                        vertical = score_matrix[(i-1)*column_count + j]
+                            + substitution_matrix[int_first_seq[i-1]*6+5];
+                        horizontal = score_matrix[i*column_count + j-1]
+                            + substitution_matrix[5*6+int_second_seq[j-1]];
+                        score_matrix[i*column_count + j] = std::max(
+                                horizontal, std::max(diagonal, vertical)
+                            );
+                    }
+                }
+                free(int_first_seq);
+                free(int_second_seq);
+                free(substitution_matrix);
+                return_val = to_return;
+            """
+            stdout_holder = os.dup(sys.stdout.fileno())
+            try:
+                # Suppress compiler output by redirecting stdout temporarily
+                devnull = open(os.devnull, 'w')
+                os.dup2(devnull.fileno(), sys.stdout.fileno())
+                self.score_matrix('N', 'N')
+            except Exception as e:
+                print >>sys.stderr, 'C code for computing score matrix ' \
+                                    'failed to compile. Get Python\'s ' \
+                                    'distutils to use g++, and try again.'
+                raise
+            finally:
+                # Turn the tap back on
+                os.dup2(stdout_holder, sys.stdout.fileno())
+
+        def score_matrix(self, first_seq, second_seq):
+            """ Computes score matrix for global alignment of two sequences.
+
+                The substitution matrix is specified when the GlobalAlignment
+                class is instantiated.
+
+                first_seq: first sequence (string).
+                second_seq: second sequence (string).
+
+                Return value: score_matrix, a numpy array whose dimensions are
+                    (len(first_seq) + 1) x (len(second_seq) + 1). It can be
+                    used to trace back the best global alignment.
+            """
+            return weave.inline(
+                                    self.score_matrix_code,
+                                    ['first_seq', 'second_seq'], 
+                                    support_code=self.support_code,
+                                    verbose=0
+                                )
+else:
+    # Use Python version of class
+    class GlobalAlignment:
+        """ Uses Python to obtain alignment score matrix. """
+
+        def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-5],
+                                                [-1, 1,-1,-1,-1,-5],
+                                                [-1,-1, 1,-1,-1,-5],
+                                                [-1,-1,-1, 1,-1,-5],
+                                                [-1,-1,-1,-1,-1,-5],
+                                                [-5,-5,-5,-5,-5,-5]]):
+            """ Constructor for GlobalAlignment.
+
+                substitution_matrix: 6 x 6 substitution matrix (list of
+                    lists); rows and columns correspond to ACGTN-, where N is
+                    aNy and - is a gap. Default: +1 for match, -5 for gap,
+                    -1 for everything else.
+            """
+            self.substitution_matrix = substitution_matrix
+
+        def score_matrix(self, first_seq, second_seq):
+            """ Computes score matrix for global alignment of two sequences.
+
+                The substitution matrix is specified when the GlobalAlignment
+                class is instantiated.
+
+                first_seq: first sequence (string).
+                second_seq: second sequence (string).
+
+                Return value: score_matrix, a numpy array whose dimensions are
+                    (len(first_seq) + 1) x (len(second_seq) + 1). It can be
+                    used to trace back the best global alignment.
+            """
+            first_seq = ['ACGTN-'.index(char) for char in first_seq]
+            second_seq = ['ACGTN-'.index(char) for char in second_seq]
+            row_count = len(first_seq) + 1
+            column_count = len(second_seq) + 1
+            score_matrix = [[0 for i in xrange(column_count)]
+                                for j in xrange(row_count)]
+            for j in xrange(1, column_count):
+                score_matrix[0][j] = j \
+                    * self.substitution_matrix[5][second_seq[j-1]]
+            for i in xrange(1, row_count):
+                score_matrix[i][0] = i \
+                    * self.substitution_matrix[first_seq[i-1]][5]
+            for i in xrange(1, row_count):
+                for j in xrange(1, column_count):
+                    score_matrix[i][j] = max(score_matrix[i-1][j-1] 
+                                                + self.substitution_matrix[
+                                                        first_seq[i-1]]
+                                                        [second_seq[j-1]
+                                                    ], # diagonal
+                                             score_matrix[i-1][j]
+                                                + self.substitution_matrix[
+                                                        first_seq[i-1]][5
+                                                    ], # vertical
+                                             score_matrix[i][j-1]
+                                                + self.substitution_matrix[
+                                                        5][second_seq[j-1]
+                                                    ] # horizontal
+                                            )
+            return score_matrix
 
 def unmapped_region_splits(unmapped_seq, left_reference_seq,
         right_reference_seq, global_alignment=GlobalAlignment()):
@@ -408,11 +481,13 @@ def unmapped_region_splits(unmapped_seq, left_reference_seq,
         )
     right_score_matrix = global_alignment.score_matrix(
             unmapped_seq[::-1], right_reference_seq[::-1], 
-        )[::-1,::-1]
-    total_score_matrix_diagonal = np.diagonal(left_score_matrix) \
-                                  + np.diagonal(right_score_matrix)
-    return np.argwhere(np.amax(total_score_matrix_diagonal) 
-                                == total_score_matrix_diagonal).flatten()
+        )
+    total_score_matrix_diagonal = [left_score_matrix[i][i] 
+                                    + right_score_matrix[-i-1][-i-1]
+                                    for i in xrange(len(left_score_matrix))]
+    max_element = max(total_score_matrix_diagonal)
+    return [i for i, element in enumerate(total_score_matrix_diagonal)
+                if element == max_element]
 
 def introns_from_read(reference_index, read_seq, readlets,
     search_for_caps=True, max_discrepancy=2, min_seq_similarity=0.85,
@@ -501,7 +576,7 @@ def introns_from_read(reference_index, read_seq, readlets,
                         reference_index.get_stretch(rname,
                             prefix_pos - prefix_displacement - 1,
                             prefix_displacement)
-                    )[-1, -1] >= \
+                    )[-1][-1] >= \
                     min_seq_similarity * prefix_displacement:
                 new_prefix = [(prefix_pos - prefix_displacement,
                                     prefix_pos, 0)]
@@ -544,7 +619,7 @@ def introns_from_read(reference_index, read_seq, readlets,
                                 reference_index.get_stretch(rname,
                                     suffix_end_pos - 1, 
                                     unmapped_base_count)
-                            )[-1, -1] >= (min_seq_similarity
+                            )[-1][-1] >= (min_seq_similarity
                                              * unmapped_base_count):
                 new_suffix = [(suffix_end_pos,
                                 suffix_end_pos + unmapped_base_count,
@@ -576,7 +651,7 @@ def introns_from_read(reference_index, read_seq, readlets,
                 except TypeError:
                     # maximal_suffix_match returned None
                     pass
-        composed_and_capped[strand] = (new_prefix + composed[strand]
+        composed_and_capped[strand] = deque(new_prefix + composed[strand]
                                         + new_suffix)
     introns = {}
     '''To make continuing outer loop from inner loop below possible.'''
@@ -591,9 +666,10 @@ def introns_from_read(reference_index, read_seq, readlets,
         else:
             current_read_seq = read_seq
         last_pos, last_end_pos, last_displacement \
-            = composed_and_capped[strand][0]
+            = composed_and_capped[strand].popleft()
         unmapped_displacement = last_displacement + last_end_pos - last_pos
-        for pos, end_pos, displacement in composed_and_capped[strand][1:]:
+        while composed_and_capped[strand]:
+            pos, end_pos, displacement = composed_and_capped[strand].popleft()
             next_unmapped_displacement = displacement + end_pos - pos
             if last_displacement >= displacement or \
                 unmapped_displacement >= next_unmapped_displacement or \
@@ -721,7 +797,7 @@ def introns_from_read(reference_index, read_seq, readlets,
                             ],
                             reference_index.get_stretch(rname,
                                 last_end_pos - 1, pos - last_end_pos) 
-                        )[-1, -1] >= min_seq_similarity * read_distance:
+                        )[-1][-1] >= min_seq_similarity * read_distance:
                         '''If the unmapped region should be filled,
                         last_displacement and last_pos should remain the same
                         on next iteration, but last_end_pos must change; two
@@ -733,33 +809,127 @@ def introns_from_read(reference_index, read_seq, readlets,
                         it, and don't merge ECs. Call only EC #1.'''
                         call_exon = True
                 elif discrepancy > max_discrepancy:
-                    '''Do DP framing: compute how to distribute unmapped bases
-                    between ECs.'''
-                    splits = \
-                        unmapped_region_splits(
-                            current_read_seq[unmapped_displacement:
-                                displacement], 
-                            reference_index.get_stretch(rname,
+                    new_suffix_offset, new_prefix_offset = None, None
+                    if read_distance >= min_cap_size + readlet_interval:
+                        '''If the unmapped region is large enough, search
+                        for a small exon.'''
+                        left_search_window = reference_index.get_stretch(
+                                rname,
                                 last_end_pos - 1,
-                                read_distance), 
-                            reference_index.get_stretch(rname,
-                                pos - read_distance - 1, read_distance)
-                        )
-                    '''Decide which split to use: choose the median index. If 
-                    there is a tie in median indices, break it at random.'''
-                    split_count = len(splits)
-                    split_end = split_count / 2
-                    if split_count % 2:
-                        split = splits[split_end]
-                    else:
-                        # If split count is even, break tie
-                        split = random.choice(
-                                        splits[(split_end-1):(split_end+1)]
+                                min(cap_search_window_size, 
+                                     pos - last_end_pos)
+                            )
+                        right_search_window = reference_index.get_stretch(
+                                rname,
+                                max(pos - cap_search_window_size,
+                                    last_end_pos) - 1,
+                                min(cap_search_window_size,
+                                    pos - last_end_pos)
+                            )
+                        try:
+                            suffix_substring \
+                                = current_read_seq[
+                                                unmapped_displacement:
+                                                unmapped_displacement
+                                                +read_distance-readlet_interval
+                                            ]
+                            new_suffix_offset, new_suffix_size \
+                                = maximal_suffix_match(
+                                        suffix_substring,
+                                        left_search_window
                                     )
-                    pos += split - read_distance
-                    displacement += split - read_distance
-                    last_end_pos += split
-                    call_exon, call_intron = True, True
+                        except TypeError:
+                            # maximal_suffix_match returned None
+                            pass
+                        try:
+                            prefix_substring \
+                                = current_read_seq[
+                                                unmapped_displacement
+                                                +readlet_interval:
+                                                unmapped_displacement
+                                                +read_distance
+                                            ]
+                            new_prefix_offset, new_prefix_size \
+                                = maximal_suffix_match(
+                                        prefix_substring[::-1],
+                                        right_search_window[::-1]
+                                    )
+                        except TypeError:
+                            # maximal_suffix_match returned None
+                            pass
+                        use_prefix = False
+                        if new_prefix_offset is not None \
+                            and new_suffix_offset is not None:
+                            # Must choose between offsets
+                            if new_prefix_size > new_suffix_size:
+                                # Always choose larger candidate
+                                use_prefix = True
+                            elif new_prefix_size == new_suffix_size:
+                                # Break tie at random
+                                if random.random(): use_prefix = True
+                        elif new_prefix_offset is not None:
+                            use_prefix = True
+                        if new_prefix_offset is not None \
+                            or new_suffix_offset is not None:
+                            if use_prefix:
+                                new_pos \
+                                    = pos - new_prefix_offset - new_prefix_size
+                                new_end_pos = pos - new_prefix_offset
+                                new_displacement = displacement \
+                                                    - len(prefix_substring)
+                                if new_pos - last_end_pos <= readlet_interval:
+                                    # No intron; DP frame instead
+                                    new_prefix_offset = None
+                                    new_suffix_offset = None
+                            else:
+                                new_pos = last_end_pos + new_suffix_offset
+                                new_end_pos = new_pos + new_suffix_size
+                                new_displacement = unmapped_displacement \
+                                                    + len(suffix_substring) \
+                                                    - new_suffix_size
+                                if pos - new_end_pos <= readlet_interval:
+                                    # No intron; DP frame instead
+                                    new_prefix_offset = None
+                                    new_suffix_offset = None
+                            if new_prefix_offset is not None \
+                                or new_suffix_offset is not None:
+                                '''Push new exon and current exon, then
+                                try loop again.'''
+                                composed_and_capped[strand].extendleft(
+                                        [(pos, end_pos, displacement),
+                                         (new_pos, new_end_pos,
+                                            new_displacement)]
+                                    )
+                    if new_prefix_offset is None \
+                        and new_suffix_offset is None:
+                        '''Do DP framing: compute how to distribute unmapped
+                        bases between ECs.'''
+                        splits = \
+                            unmapped_region_splits(
+                                current_read_seq[unmapped_displacement:
+                                    displacement], 
+                                reference_index.get_stretch(rname,
+                                    last_end_pos - 1,
+                                    read_distance), 
+                                reference_index.get_stretch(rname,
+                                    pos - read_distance - 1, read_distance)
+                            )
+                        '''Decide which split to use: choose the median index.
+                        If there is a tie in median indices, break it at
+                        random.'''
+                        split_count = len(splits)
+                        split_end = split_count / 2
+                        if split_count % 2:
+                            split = splits[split_end]
+                        else:
+                            # If split count is even, break tie
+                            split = random.choice(
+                                            splits[(split_end-1):(split_end+1)]
+                                        )
+                        pos += split - read_distance
+                        displacement += split - read_distance
+                        last_end_pos += split
+                        call_exon, call_intron = True, True
                 else: 
                     '''discrepancy < -max_discrepancy; is likely a large
                     insertion with respect to reference, but not too large:
@@ -1174,7 +1344,7 @@ if __name__ == '__main__':
         default=500000, 
         help='Filters introns of length greater than this value')
     parser.add_argument('--min-seq-similarity', type=float, required=False,
-        default=1., 
+        default=0.7, 
         help='If the difference in length between an unmapped region framed '
              'by two ECs and its corresponding gap in the reference is <= the '
              'command-line option --max-discrepancy AND the score of global '

@@ -26,12 +26,13 @@ toolDescs = { 'bowtie'        : ['BOWTIE'],
               'sra-toolkit'   : ['SRA_TOOLKIT'],
               'R'             : ['R'],
               'bedToBigBed'   : ['BEDTOBIGBED', 'KENTTOOLS'],
-              'samtools'      : ['SAMTOOLS'] }
+              'samtools'      : ['SAMTOOLS'],
+              'pypy'          : ['PYPY']}
 
 # The following tools are installed in EMR mode with apt-get, and therefore
 # can be found in the PATH on the EMR machines.  All other tools get placed in
 # the EMR local dir by the bootstrap actions.
-emrPathTools = set(['bowtie', 'bowtie-build', 'bowtie2', 'bowtie2-build', 'samtools', 'sra-toolkit', 'R'])
+emrPathTools = set(['bowtie', 'bowtie-build', 'bowtie2', 'bowtie2-build', 'samtools', 'sra-toolkit', 'R', 'pypy'])
 
 def checkLocalTool(appName, exe, envs, check=True):
     """ Check for the existence of an executable in the local environment.
@@ -46,10 +47,16 @@ def checkLocalTool(appName, exe, envs, check=True):
             if check and not path.is_exe(envExe):
                 raise RuntimeError('Value in "%s" environment variable does not point to executable: %s' % (var, envExe))
             return envExe
-    pathwhich = path.which(exe)
+    # Favor PyPy over Python
+    if exe == 'pypy':
+        pathwhich = path.which(exe)
+        if pathwhich is None:
+            pathwhich = path.which('python')
+    else:
+        pathwhich = path.which(exe)
     if pathwhich is None:
         raise RuntimeError('Could not find path for %s' % exe + '.')
-    return path.which(exe)
+    return pathwhich
 
 def configureTools(appName, s, check=True):
     """ Given name of application and a string that might have %TOOLNAME%

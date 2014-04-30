@@ -49,7 +49,7 @@ import sys
 import re
 import itertools
 from collections import defaultdict
-import numpy as np
+import math
 import site
 import random
 import time
@@ -256,21 +256,34 @@ def ranked_splice_sites_from_cluster(reference_index, intron_cluster,
     assert max_end_position >= min_end_position and \
         max_start_position >= min_start_position
     # For computing z-scores
-    mean_start_position = np.average(start_positions, weights=weights)
-    mean_end_position = np.average(end_positions, weights=weights)
+    position_count = len(start_positions)
+    mean_start_position = float(sum(
+                            [start_positions[i]*weights[i]
+                                for i in xrange(position_count)]
+                                )
+                            )
+    mean_end_position = float(sum(
+                            [end_positions[i]*weights[i]
+                                for i in xrange(position_count)]
+                                )
+                            )
     # Maxes below avoid future ZeroDivisionError exceptions
-    stdev_start_position = max(np.sqrt(
-                                np.average(
-                                    (np.array(start_positions)
-                                        -mean_start_position)**2, 
-                                    weights=weights)
-                                ), 1e-6)
-    stdev_end_position = max(np.sqrt(
-                                np.average(
-                                    (np.array(end_positions)
-                                        -mean_end_position)**2, 
-                                    weights=weights)
-                                ), 1e-6)
+    math.sqrt(sum([(start_positions[i] - mean_start_position)**2*weights[i]
+            for i in xrange(position_count)]))
+    stdev_start_position \
+        = max(math.sqrt(
+            sum(
+                    [(start_positions[i] - mean_start_position)**2*weights[i]
+                        for i in xrange(position_count)]
+                    )
+            ), 1e-6)
+    stdev_end_position \
+        = max(math.sqrt(
+            sum(
+                    [(end_positions[i] - mean_end_position)**2*weights[i]
+                        for i in xrange(position_count)]
+                    )
+            ), 1e-6)
     # Initialize list for storing ranked intron start/end positions
     ranked_introns = []
     for motif_priority_class in motifs:
@@ -633,9 +646,9 @@ elif __name__ == '__main__':
             self.assertEquals(len(clusters), 1)
             self.assertEquals(
                     sorted(clusters[0]), 
-                    [(4, 24),
-                     (5, 25),
-                     (10, 30)]
+                    [(4, 24, 1),
+                     (5, 25, 1),
+                     (10, 30, 1)]
                 )
 
         def test_that_overlapping_introns_of_different_size_separate(self):
@@ -653,12 +666,12 @@ elif __name__ == '__main__':
             self.assertEquals(len(clusters), 2)
             self.assertEquals(
                     sorted(clusters[0]),
-                    [(10, 40)]
+                    [(10, 40, 1)]
                 )
             self.assertEquals(
                     sorted(clusters[1]),
-                    [(4, 24), 
-                     (5, 25)]
+                    [(4, 24, 1), 
+                     (5, 25, 1)]
                 )
 
     class TestRankedSpliceSitesFromCluster(unittest.TestCase):
@@ -694,9 +707,9 @@ elif __name__ == '__main__':
         def test_that_second_line_of_reference_is_called_as_an_intron(self):
             """ Fails if reference_seq's second line isn't called as an intron.
             """
-            cluster = [(49, 96),
-                       (48, 95),
-                       (47, 94)]
+            cluster = [(49, 96, 1),
+                       (48, 95, 1),
+                       (47, 94, 1)]
             splice_sites = ranked_splice_sites_from_cluster(
                     self.reference_index, cluster,
                     'chr1', _unstranded_motifs, motif_radius=1, verbose=False

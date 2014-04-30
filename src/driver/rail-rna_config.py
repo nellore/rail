@@ -16,7 +16,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--quality', metavar='STR', type=str, default="phred33", help='Quality string format.')
     parser.add_argument(\
-        '--readlet-length', metavar='INT', type=int, default="25", help='Substring length to extract from read for determining introns.')
+        '--readlet-length', metavar='INT', type=int, default="23", help='Substring length to extract from read for determining introns.')
     parser.add_argument(\
         '--readlet-interval', metavar='INT', type=int, default="4", help='Distance between substrings to extract from read for determining introns.')
     parser.add_argument(\

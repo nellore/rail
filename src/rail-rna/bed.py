@@ -106,7 +106,7 @@ for (line_type, sample_label), xpartition in dp.xstream(sys.stdin, 2):
     type_string = ('insertions' if line_type == 'I' else
                     ('deletions' if line_type == 'D' else 'junctions'))
     output_filename = ((args.bed_basename + '.' 
-                          if args.bed_basename is not '' else '')
+                          if args.bed_basename != '' else '')
                           + type_string + '.' + sample_label + '.bed')
     if output_url.isLocal():
         output_path = os.path.join(args.out, output_filename)

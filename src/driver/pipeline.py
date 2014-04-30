@@ -100,7 +100,7 @@ class Step(object):
         glue = None
         if self.mapper is not None:
             final = self.reducer is None
-            lines.append('python %BASE%/src/local/map.py \\')
+            lines.append('%PYPY% %BASE%/src/local/map.py \\')
             lines.append('    --name "%s" \\' % self.name)
             for inp in self.inputs:
                 lines.append('    --input "%s" \\' % inp.toUrl())
@@ -129,7 +129,7 @@ fi
         
         if self.reducer is not None:
             first = self.mapper is None
-            lines.append('python %BASE%/src/local/reduce.py \\')
+            lines.append('%PYPY% %BASE%/src/local/reduce.py \\')
             lines.append('    --name "%s" \\' % self.name)
             if first:
                 lines.append('    --input "%s" \\' % ','.join([inp.toUrl() for inp in self.inputs]))
