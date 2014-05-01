@@ -595,7 +595,8 @@ def introns_from_read(reference_index, read_seq, readlets,
                     new_prefix_offset, new_prefix_size \
                         = maximal_suffix_match(
                                 current_read_seq[:prefix_displacement][::-1],
-                                search_window[::-1]
+                                search_window[::-1],
+                                min_cap_size=min_cap_size
                             )
                     if prefix_displacement - new_prefix_size \
                         <= readlet_interval:
@@ -640,7 +641,8 @@ def introns_from_read(reference_index, read_seq, readlets,
                     new_suffix_offset, new_suffix_size \
                         = maximal_suffix_match(
                                 current_read_seq[-unmapped_base_count:],
-                                search_window
+                                search_window,
+                                min_cap_size=min_cap_size
                             )
                     if unmapped_base_count - new_suffix_size \
                         <= readlet_interval:
@@ -761,14 +763,15 @@ def introns_from_read(reference_index, read_seq, readlets,
                     UMR = unmapped region.
                     The displacement of EC #2's left end is to the right of the
                     displacement of EC #1's right end, and there is an unmapped
-                    read region between them. Extend the unmapped region by one
-                    nucleotide on either side; splice junctions will have to be
-                    determined more precisely. See past if-else.'''
-                    last_end_pos -= 1
-                    pos += 1
-                    unmapped_displacement -= 1
-                    displacement += 1
-                    read_distance += 2
+                    read region between them. [COMMENTED OUT: Extend the
+                    unmapped region by one nucleotide on either side]; splice
+                    junctions will have to be determined more precisely. See
+                    past if-else.'''
+                    last_end_pos -= 2
+                    pos += 2
+                    unmapped_displacement -= 2
+                    displacement += 2
+                    read_distance += 4
                 else:
                     '''read_distance < 0
                     Example case handled:
@@ -780,14 +783,19 @@ def introns_from_read(reference_index, read_seq, readlets,
                     The displacement of EC #2's left end is to the left of the 
                     displacement of EC #1's right end; at least a pair of
                     readlets, one from each EC, overlaps on the read. Call the
-                    overlap + one nucleotide on either side the unmapped
-                    region; splice junctions will have to be determined more
-                    precisely. See past if-else.'''
+                    overlap [COMMENTED OUT: + one nucleotide on either side]
+                    the unmapped region; splice junctions will have to be
+                    determined more precisely. See past if-else.'''
                     unmapped_displacement, displacement = \
-                        displacement - 1, unmapped_displacement + 1
-                    read_distance = -read_distance + 2
-                    last_end_pos -= read_distance - 1
-                    pos += read_distance - 1
+                        displacement - 2, unmapped_displacement + 2
+                    read_distance = -read_distance + 4
+                    last_end_pos -= read_distance - 2
+                    pos += read_distance - 2
+                    # unmapped_displacement, displacement = \
+                    #     displacement, unmapped_displacement
+                    # read_distance = -read_distance
+                    # last_end_pos -= read_distance
+                    # pos += read_distance
                 # Now decide whether to DP fill or DP frame
                 if abs(discrepancy) <= max_discrepancy:
                     # DP Fill
@@ -810,15 +818,22 @@ def introns_from_read(reference_index, read_seq, readlets,
                         call_exon = True
                 elif discrepancy > max_discrepancy:
                     new_suffix_offset, new_prefix_offset = None, None
-                    if read_distance >= min_cap_size + readlet_interval:
-                        '''If the unmapped region is large enough, search
-                        for a small exon.'''
+                    if read_distance >= min_cap_size + readlet_interval and \
+                        reference_distance >= min_cap_size + readlet_interval:
+                        '''If the unmapped region is large enough and the
+                        reference distance is large enough, search for a small
+                        exon.'''
+                        left_search_start = last_end_pos
                         left_search_window = reference_index.get_stretch(
                                 rname,
                                 last_end_pos - 1,
                                 min(cap_search_window_size, 
                                      pos - last_end_pos)
                             )
+                        right_search_end = max(pos - cap_search_window_size,
+                                                last_end_pos) + \
+                                           min(cap_search_window_size,
+                                                pos - last_end_pos)
                         right_search_window = reference_index.get_stretch(
                                 rname,
                                 max(pos - cap_search_window_size,
@@ -836,7 +851,8 @@ def introns_from_read(reference_index, read_seq, readlets,
                             new_suffix_offset, new_suffix_size \
                                 = maximal_suffix_match(
                                         suffix_substring,
-                                        left_search_window
+                                        left_search_window,
+                                        min_cap_size=min_cap_size
                                     )
                         except TypeError:
                             # maximal_suffix_match returned None
@@ -852,7 +868,8 @@ def introns_from_read(reference_index, read_seq, readlets,
                             new_prefix_offset, new_prefix_size \
                                 = maximal_suffix_match(
                                         prefix_substring[::-1],
-                                        right_search_window[::-1]
+                                        right_search_window[::-1],
+                                        min_cap_size=min_cap_size
                                     )
                         except TypeError:
                             # maximal_suffix_match returned None
@@ -873,16 +890,18 @@ def introns_from_read(reference_index, read_seq, readlets,
                             or new_suffix_offset is not None:
                             if use_prefix:
                                 new_pos \
-                                    = pos - new_prefix_offset - new_prefix_size
-                                new_end_pos = pos - new_prefix_offset
-                                new_displacement = displacement \
-                                                    - len(prefix_substring)
+                                    = right_search_end - new_prefix_offset \
+                                         - new_prefix_size
+                                new_end_pos \
+                                    = new_pos + new_prefix_size
+                                new_displacement = unmapped_displacement \
+                                                    + readlet_interval
                                 if new_pos - last_end_pos <= readlet_interval:
                                     # No intron; DP frame instead
                                     new_prefix_offset = None
                                     new_suffix_offset = None
                             else:
-                                new_pos = last_end_pos + new_suffix_offset
+                                new_pos = left_search_start + new_suffix_offset
                                 new_end_pos = new_pos + new_suffix_size
                                 new_displacement = unmapped_displacement \
                                                     + len(suffix_substring) \
@@ -1570,7 +1589,7 @@ elif __name__ == '__main__':
         def setUp(self):
             """ Creates temporary directory and Bowtie index. """
             reference_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
-                            'GCTACATAGTACATCTAGGCATACTACGTgaCATACGgaCTACGTAA' \
+                            'GCTACATAGTACATCTAGGCATACTACGTgcCATACGgaCTACGTAA' \
                             'ATCCAGATTACGATACAAaTACGAAcTCccATAGCAaCATaCTAGac' \
                             'CAttAaaGACTAGACTAACAGACAaAACTAGCATacGATCATGACaA' \
                             'ACGAGATCCATATAtTTAGCAaGACTAaACGATACGATACAGTACaA' \
@@ -1888,6 +1907,54 @@ elif __name__ == '__main__':
                                 self.reference_index, read_seq, readlets
                             )
             self.assertEquals({}, introns)
+
+        def test_that_small_exon_is_found_1(self):
+            reference_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
+                            'GCTACATAGTACATCTAGGCATACTACGTgcCATACGgaCTACGTAA' \
+                            'ATCCAGATTACGATACAAaTACGAAcTCccATAGCAaCATaCTAGac' \
+                            'CAttAaaGACTAGACTAACAGACAaAACTAGCATacGATCATGACaA' \
+                            'ACGAGATCCATATAtTTAGCAaGACTAaACGATACGATACAGTACaA' \
+                            'ATACAGaaATCAGaGCAGAAaATACAGATCAaAGCTAGCAaAAtAtA'
+            """ Fails if two introns aren't returned rather than one.
+
+                Here, the read_seq is taken from the second and third lines
+                of reference_seq.
+            """
+            read_seq = 'GCTACATAGTACA' \
+                       'GTGCCATACG' \
+                       'ATCCAGATTACGATACAAATACGA'
+            readlets = [('chr1', False, 48, 61, 0),
+                        ('chr1', False, 95, 119, 23)]
+            introns = introns_from_read(
+                            self.reference_index, read_seq, readlets,
+                            min_cap_size=6, readlet_interval=1
+                        )
+            self.assertEquals({('chr1', False) : [(61, 75),
+                                                  (85, 95)]}, introns)
+
+        def test_that_small_exon_is_found_2(self):
+            reference_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
+                            'GCTACATAGTACATCTAGGCATACTACGTgcCATACGgaCTACGTAA' \
+                            'ATCCAGATTACGATACAAaTACGAAcTCccATAGCAaCATaCTAGac' \
+                            'CAttAaaGACTAGACTAACAGACAaAACTAGCATacGATCATGACaA' \
+                            'ACGAGATCCATATAtTTAGCAaGACTAaACGATACGATACAGTACaA' \
+                            'ATACAGaaATCAGaGCAGAAaATACAGATCAaAGCTAGCAaAAtAtA'
+            """ Fails if two introns aren't returned rather than one.
+
+                Here, the read_seq is taken from the first and second lines
+                of reference_seq.
+            """
+            read_seq = 'ATGGCATACGATACGTCAG' \
+                       'CTACATACTG' \
+                       'GTGCCATACGGACTACGTAA'
+            readlets = [('chr1', False, 1, 20, 0),
+                        ('chr1', False, 75, 95, 29)]
+            introns = introns_from_read(
+                            self.reference_index, read_seq, readlets,
+                            min_cap_size=6, readlet_interval=1
+                        )
+            self.assertEquals({('chr1', False) : [(20, 38),
+                                                  (48, 75)]}, introns)
 
         def tearDown(self):
             # Kill temporary directory
