@@ -97,7 +97,8 @@ if args.keep_alive:
             self.bedtobigbed_process = None
         def run(self):
             self.bedtobigbed_process = subprocess.Popen(self.command_list,
-                                            stdout=sys.stderr).wait()
+                                            stdout=sys.stderr,
+                                            stderr=sys.stderr).wait()
 
 def percentile(histogram, percentile=0.75):
     """ Given histogram, computes desired percentile.
@@ -126,6 +127,8 @@ start_time = time.time()
 import tempfile
 temp_dir_path = tempfile.mkdtemp()
 bed_filename = os.path.join(temp_dir_path, 'temp.bed')
+if args.verbose:
+    print >>sys.stderr, 'Writing to temporary bed %s .' % bed_filename
 output_filename, output_url = None, None
 
 '''Make RNAME lengths available from reference FASTA so SAM header can be
@@ -135,6 +138,8 @@ reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
 manifest_object = manifest.LabelsAndIndices(args.manifest)
 # Create file with chromosome sizes for bedToBigBed
 sizes_filename = os.path.join(temp_dir_path, 'chrom.sizes')
+if args.verbose:
+    print >>sys.stderr, 'Sizes file: %s .' % sizes_filename
 with open(sizes_filename, 'w') as sizes_stream:
     for rname in reference_index.rname_lengths:
         print >>sizes_stream, '%s %d' % (rname, 
@@ -194,11 +199,13 @@ while True:
         else:
             # Write to temporary directory, and later upload to URL
             bigbed_file_path = os.path.join(temp_dir_path, bigbed_filename)
+        bigbed_command = [args.bigbed_exe, bed_filename, sizes_filename,
+                            bigbed_file_path]
+        if args.verbose:
+            print >>sys.stderr, 'Writing bigbed with command %s .' \
+                % ' '.join(bigbed_command)
         if args.keep_alive:
-            bedtobigbed_thread = BedToBigBedThread([args.bigbed_exe,
-                                                        bed_filename,
-                                                        sizes_filename,
-                                                        bigbed_file_path])
+            bedtobigbed_thread = BedToBigBedThread(bigbed_command)
             bedtobigbed_thread.start()
             while bedtobigbed_thread.is_alive():
                 print >>sys.stderr, 'reporter:status:alive'
@@ -210,10 +217,7 @@ while True:
                                     % bedtobigbed_thread.bedtobigbed_process)
         else:
             bedtobigbed_process = subprocess.Popen(
-                                        [args.bigbed_exe,
-                                            bed_filename,
-                                            sizes_filename,
-                                            bigbed_file_path],
+                                        bigbed_command,
                                         stderr=sys.stderr,
                                         stdout=sys.stderr,
                                         bufsize=-1

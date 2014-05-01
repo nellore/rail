@@ -209,121 +209,15 @@ def check_fail_queue():
 # Stage 1. Partition bins into tasks
 ########################################
 
+# Write to one file per task PER PROCESS so task assignment can be performed in parallel
+
 import hashlib
-message('Writing input records to %d tasks' % args.num_tasks)
-task_names = [str(i) for i in xrange(args.num_tasks)]
-task_count = len(task_names)
-tot = 0
-ofhs = {}
-for inp in inps:
-    with openex(inp) as fh:
-        for ln in fh:
-            ln = ln.rstrip()
-            if len(ln) == 0:
-                continue
-            toks = string.split(ln, '\t')
-            if toks[0] == 'DUMMY':
-                continue
-            tot += 1
-            assert len(toks) >= args.bin_fields
-            k = '\t'.join(toks[:args.bin_fields])
-            task = task_names[int(hashlib.md5(k).hexdigest(), 16) % task_count]
-            try:
-                ofhs[task].write(ln)
-            except KeyError:
-                ofhs[task] = open(os.path.join(task_dir, task), 'w')
-                ofhs[task].write(ln)
-            ofhs[task].write('\n')
 
-for fh in ofhs.itervalues():
-    fh.close()
-message('%d input records written' % tot)
-
-'''Code below is memory-intensive if there are too many bins; choose
-task based on hash instead, as above.
-Note that this technically makes for more load imbalance among tasks, but 
-it's less an issue in local mode, where Python processes will simply share 
-resources as managed by the OS.'''
-'''# Go through all input files in parallel, calculating bin sizes for all bins.
-bin_count_queue = multiprocessing.Queue()
-
-
-def bin_count_worker(fn):
-    cnt = defaultdict(int)
-    with openex(fn) as fh:
-        for ln in fh:
-            ln = ln.rstrip()
-            if len(ln) == 0:
-                continue
-            toks = string.split(ln, '\t')
-            if toks[0] == 'DUMMY':
-                continue
-            assert len(toks) >= args.bin_fields
-            cnt['\t'.join(toks[:args.bin_fields])] += 1
-    bin_count_queue.put(cnt)
-
-bin_count = defaultdict(int)
-count_pool = multiprocessing.Pool(num_processes)
-r = count_pool.map_async(bin_count_worker, inps)
-while not r.ready():
-    r.wait(1)
-check_fail_queue()
-
-tot = 0
-for _ in xrange(len(inps)):
-    cnt = bin_count_queue.get()
-    assert cnt is not None
-    for k, v in cnt.iteritems():
-        bin_count[k] += v
-        tot += v
-
-if tot > 0:
-    message('Allocating %d input records to %d tasks' % (tot, args.num_tasks))
-
-    # Allocate bins to tasks, always adding to task with least tuples so far
-    task_names = ["task-%05d" % i for i in xrange(args.num_tasks)]
-    taskq = [(0, task_names[i], []) for i in xrange(args.num_tasks)]
-    key2task = {}
-    for k, v in bin_count.iteritems():
-        sz, nm, klist = heapq.heappop(taskq)
-        sz += v
-        klist.append(k)
-        assert k not in key2task
-        heapq.heappush(taskq, (sz, nm, klist))
-        key2task[k] = nm
-
-    message('Writing tasks')
-
-    # Write out all the tasks to files within 'taskDir'
-    ofhs = {}
-
-    for inp in inps:
-        with openex(inp) as fh:
-            for ln in fh:
-                ln = ln.rstrip()
-                if len(ln) == 0:
-                    continue
-                toks = string.split(ln, '\t')
-                if toks[0] == 'DUMMY':
-                    continue
-                assert len(toks) >= args.bin_fields
-                k = '\t'.join(toks[:args.bin_fields])
-                assert k in key2task, 'No such key: "%s"' % k
-                task = key2task[k]
-                if task not in ofhs:
-                    ofhs[task] = open(os.path.join(task_dir, task), 'w')
-                ofhs[task].write(ln)
-                ofhs[task].write('\n')
-
-    for fh in ofhs.itervalues():
-        fh.close()'''
-
-''' this multithreaded code is actually SLOWER than partitioning on a single thread
-import Queue
-
-def do_partition(input_file_and_write_queue):
+def do_partition(index_and_input_file):
+    index, input_file = index_and_input_file
+    output_files = {}
+    line_count = 0
     try:
-        input_file, current_queue = input_file_and_write_queue
         with openex(input_file) as input_stream:
             for line in input_stream:
                 tokens = line.strip().split('\t')
@@ -332,46 +226,31 @@ def do_partition(input_file_and_write_queue):
                 assert len(tokens) >= args.bin_fields
                 key = '\t'.join(tokens[:args.bin_fields])
                 task = int(hashlib.md5(key).hexdigest(), 16) % args.num_tasks
-                current_queue.put((task, line))
+                try:
+                    output_files[task].write(line)
+                    line_count += 1
+                except KeyError:
+                    output_files[task] = open(os.path.join(task_dir, '%d.%d' % (task, index)), 'w')
+                    output_files[task].write(line)
+                    line_count += 1
     except Exception as e:
         message = ('Partitioning failed: %s' % e.message)
-        fail_q.put((msg, input, 'N/A', cmd))
+        fail_q.put((msg, input_file, 'N/A', cmd))
+    finally:
+        for task in output_files:
+            output_files[task].close()
+        return line_count
 
 message('Writing input records to %d tasks' % args.num_tasks)
-output_files = {}
-manager = multiprocessing.Manager()
-write_queue = manager.Queue()
 partition_pool = multiprocessing.Pool(num_processes)
-caller = partition_pool.map_async(do_partition, [(inp, write_queue) for inp in inps])
-write_count = 0
+tots = []
+caller = partition_pool.map_async(do_partition, enumerate(inps), callback=tots.extend)
 while not caller.ready():
-    try:
-        to_write = write_queue.get_nowait()
-        try:
-            output_files[to_write[0]].write(to_write[1])
-            write_count += 1
-        except KeyError:
-            output_files[to_write[0]] = open(os.path.join(task_dir, str(to_write[0])), 'w')
-            output_files[to_write[0]].write(to_write[1])
-            write_count += 1
-    except Queue.Empty:
-        pass
-while not write_queue.empty():
-    to_write = write_queue.get_nowait()
-    try:
-        output_files[to_write[0]].write(to_write[1])
-        write_count += 1
-    except KeyError:
-        output_files[to_write[0]] = open(os.path.join(task_dir, str(to_write[0])), 'w')
-        output_files[to_write[0]].write(to_write[1])
-        write_count += 1
-for output_key in output_files:
-    output_files[output_key].close()
+    caller.wait(1)
 check_fail_queue()
-output_filenames = [str(i) for i in xrange(args.num_tasks)]
-message('%d input records written' % write_count)
-
-'''
+tot = sum(tots)
+del tots
+message('%d input records written.' % tot)
 
 if tot > 0:
 
@@ -381,22 +260,29 @@ if tot > 0:
 
     message('Sorting tasks')
     need_sort = args.num_tasks > 1 or args.sort_fields > args.bin_fields
+    task_names = map(str, range(args.num_tasks))
+    import glob
+
     if need_sort:
         def do_sort(task, external=True, keep=args.keep_all):
             assert external  # only know how to use external sort for now
-            input_fn, sorted_fn = os.path.join(task_dir, task), os.path.join(stask_dir, task)
-            sort_err_fn = os.path.join(sort_err_dir, task)
-            cmd = 'sort -S %d -k1,%d %s >%s 2>%s' % (args.sort_size, args.sort_fields, input_fn, sorted_fn, sort_err_fn)
-            el = os.system(cmd)
-            if el != 0:
-                msg = 'Sort command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
-                fail_q.put((msg, input_fn, sort_err_fn, cmd))
-            elif not keep:
-                os.remove(input_fn)
-                os.remove(sort_err_fn)
+            input_fns = os.path.join(task_dir, task + '.*')
+            input_fns_glob = glob.glob(input_fns)
+            if input_fns_glob:
+                sorted_fn = os.path.join(stask_dir, task + '.0')
+                sort_err_fn = os.path.join(sort_err_dir, task)
+                cmd = 'cat %s | sort -S %d -k1,%d >%s 2>%s' % (input_fns, args.sort_size, args.sort_fields, sorted_fn, sort_err_fn)
+                el = os.system(cmd)
+                if el != 0:
+                    msg = 'Sort command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
+                    fail_q.put((msg, input_fn, sort_err_fn, cmd))
+                elif not keep:
+                    for input_fn in input_fns_glob:
+                        os.remove(input_fn)
+                    os.remove(sort_err_fn)
 
         sortPool = multiprocessing.Pool(num_processes)
-        r = sortPool.map_async(do_sort, ofhs.keys())
+        r = sortPool.map_async(do_sort, task_names)
         while not r.ready():
             r.wait(1)
         check_fail_queue()
@@ -405,34 +291,35 @@ if tot > 0:
     reduce_input_dir = stask_dir if need_sort else task_dir
 
     def do_reduce(task, keep=args.keep_all):
-        sorted_fn = os.path.join(reduce_input_dir, task)
-        sorted_fn = os.path.abspath(sorted_fn)
-        if not os.path.exists(sorted_fn):
-            raise RuntimeError('No such sorted task: "%s"' % sorted_fn)
-        out_fn, err_fn = os.path.join(output, task), os.path.join(err_dir, task)
-        out_fn, err_fn = os.path.abspath(out_fn), os.path.abspath(err_fn)
-        cmd = 'cat %s | %s >%s 2>%s' % (sorted_fn, reduce_cmd, out_fn, err_fn)
-        wd = os.path.join(working_dir, task)
-        check_dir(wd, 800)
-        message('Pid %d processing task %s' % (os.getpid(), task))
-        # Simulate MapReduce task partition assignment
-        new_env = os.environ.copy()
-        new_env['mapred_task_partition'] = task
-        pipe = subprocess.Popen(cmd, bufsize=-1, shell=True, cwd=wd, env=new_env)
-        el = pipe.wait()
-        if el != 0:
-            msg = 'Reduce command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
-            fail_q.put((msg, sorted_fn, err_fn, cmd))
-        elif not keep:
-            os.remove(sorted_fn)
-            os.remove(err_fn)
-            shutil.rmtree(wd)
-        return out_fn
+        sorted_fns = os.path.join(reduce_input_dir, task + '.*')
+        sorted_fns = os.path.abspath(sorted_fns)
+        sorted_fns_glob = glob.glob(sorted_fns)
+        if sorted_fns_glob:
+            out_fn, err_fn = os.path.join(output, task), os.path.join(err_dir, task)
+            out_fn, err_fn = os.path.abspath(out_fn), os.path.abspath(err_fn)
+            cmd = 'cat %s | %s >%s 2>%s' % (sorted_fns, reduce_cmd, out_fn, err_fn)
+            wd = os.path.join(working_dir, task)
+            check_dir(wd, 800)
+            message('Pid %d processing task %s' % (os.getpid(), task))
+            # Simulate MapReduce task partition assignment
+            new_env = os.environ.copy()
+            new_env['mapred_task_partition'] = task
+            pipe = subprocess.Popen(cmd, bufsize=-1, shell=True, cwd=wd, env=new_env)
+            el = pipe.wait()
+            if el != 0:
+                msg = 'Reduce command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
+                fail_q.put((msg, sorted_fn, err_fn, cmd))
+            elif not keep:
+                for a_file in sorted_fns_glob:
+                    os.remove(a_file)
+                os.remove(err_fn)
+                shutil.rmtree(wd)
+            return out_fn
 
-    message('Piping %d task(s) to command "%s"' % (len(ofhs.keys()), reduce_cmd))
+    message('Piping %d task(s) to command "%s"' % (len(task_names), reduce_cmd))
     reduce_pool = multiprocessing.Pool(num_processes)
     outfns = []
-    r = reduce_pool.map_async(do_reduce, ofhs.keys(), callback=outfns.extend)
+    r = reduce_pool.map_async(do_reduce, task_names, callback=outfns.extend)
     while not r.ready():
         r.wait(1)
     check_fail_queue()
@@ -463,7 +350,7 @@ if tot > 0:
 
         split_pool = multiprocessing.Pool(num_processes)
         k2fns = []
-        r = split_pool.map_async(do_split, ofhs.keys(), callback=k2fns.extend)
+        r = split_pool.map_async(do_split, task_names, callback=k2fns.extend)
         while not r.ready():
             r.wait(1)
         check_fail_queue()
