@@ -69,72 +69,13 @@ _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 _input_line_count = 0
 _output_line_count = 0
 
-def composed_and_sorted_readlets(readlets):
-    """ Composes overlapping readlets and sorts them by reference position.
+# Initialize forward- and reverse-strand motifs
 
-        This function assumes that for overlapping readlets mapping to, for
-        example, the forward strand and covering the reference like so:
-
-            Reference  5'---------------------3'
-            Readlet 1       =========
-            Readlet 2           ============
-            Readlet 3      ===============    ,
-
-        the displacement of the readlet whose pos is smallest
-        (here, Readlet 3), is the displacement of the interval overlapped ---
-        EVEN IF THE OTHER READLETS' DISPLACEMENTS SEEM INCONSISTENT WITH THAT
-        DISPLACEMENT given readlet pos's AND end_pos's. See below for
-        definitions of displacement, pos, and end_pos.
-
-        readlets: list of tuples (rname, reverse_strand, pos, end_pos,
-            displacement), each of which corresponds to a readlet. rname is the
-            SAM-format RNAME, typically the chromosome to which the readlet
-            maps. reverse_strand is True iff the readlet's reversed complement
-            aligns to the reference. The readlet should span the reference
-            interval [pos, end_pos). displacement is the number of bases
-            between the 5' (3') end of the readlet, which aligns to the forward
-            (reverse) strand, and the 5' (3') end of the read.
-
-        Return value: dictionary with each key a tuple (rname, reverse_strand)
-            uniquely identifying a strand and each value a list of tuples
-            (pos, end_pos, displacement) sorted by pos in ascending order;
-            here, each tuple from the list denotes an exonic interval spanning
-            [pos, end_pos) and displacement is the number of bases between the
-            5' (3') end of the interval, composed of readlets aligning to the
-            forward (reverse) strand, and the 5' (3') end of the read.
-    """
-    # Create dictionary separating readlets by strands to which they align
-    uncomposed = {}
-    for rname, reverse_strand, pos, end_pos, displacement in readlets:
-        assert end_pos > pos
-        if not uncomposed.has_key((rname, reverse_strand)):
-            uncomposed[(rname, reverse_strand)] = []
-        uncomposed[(rname, reverse_strand)].append((pos, end_pos, 
-                                                    displacement))
-    to_delete = []
-    for strand in uncomposed:
-        # Sort by start positions on reference
-        uncomposed[strand].sort()
-    for strand in to_delete: del uncomposed[strand]
-    
-    # Create dictionary for merging readlets whose alignments overlap
-    composed = {}
-    for strand in uncomposed:
-        composed[strand] = [uncomposed[strand][0]]
-        for pos, end_pos, displacement in uncomposed[strand][1:]:
-            if pos <= composed[strand][-1][1]:
-                '''If start position of readlet is <= end position of last
-                interval, merge into one interval by changing only the
-                interval's end position.'''
-                composed[strand][-1] = (composed[strand][-1][0],
-                                        max(end_pos, composed[strand][-1][1]),
-                                        composed[strand][-1][2])
-            else:
-                # Start a new interval
-                composed[strand].append((pos, end_pos, displacement))
-    '''Now composed[strand] is list of candidate exonic chunks
-    (pos, end_pos, displacement) ordered by pos, the reference position.'''
-    return composed
+_prioritized_reverse_strand_motifs = [('CT', 'AC'), ('CT', 'GC'), ('GT', 'AT')]
+_reverse_strand_motifs = set(_prioritized_reverse_strand_motifs)
+_prioritized_forward_strand_motifs = [('GT', 'AG'), ('GC', 'AG'), ('AT', 'AC')]
+_forward_strand_motifs = set(_prioritized_forward_strand_motifs)
+_all_motifs = _reverse_strand_motifs | _forward_strand_motifs
 
 def maximal_suffix_match(query_seq, search_window,
                             min_cap_size=8, max_cap_count=5):
@@ -192,798 +133,7 @@ def maximal_suffix_match(query_seq, search_window,
         # No suffixes found
         return None
 
-if 'pypy' not in sys.version.lower():
-    # For fast global alignment without PyPy
-    from scipy import weave
-    class GlobalAlignment:
-        """ Invokes Weave to obtain alignment score matrix with C. """
-
-        def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-5],
-                                                [-1, 1,-1,-1,-1,-5],
-                                                [-1,-1, 1,-1,-1,-5],
-                                                [-1,-1,-1, 1,-1,-5],
-                                                [-1,-1,-1,-1,-1,-5],
-                                                [-5,-5,-5,-5,-5,-5]]):
-            """ Constructor for GlobalAlignment.
-
-                Places substitution_matrix directly in string containing C code
-                that obtains score matrix for global alignment. Executes C with
-                Weave on trivial case (two sequences, each one character) to 
-                ensure code is precompiled.
-
-                substitution_matrix: 6 x 6 substitution matrix (list of
-                    lists); rows and columns correspond to ACGTN-, where N is
-                    aNy and - is a gap. Default: +1 for match, -5 for gap,
-                    -1 for everything else.
-            """
-            '''Set supporting code including libraries and the function 
-            integer_sequence(), which converts a sequence of nucleotides to
-            an array of indices that correspond to indices of the substitution
-            matrix---also set in the constructor.'''
-            self.support_code = """ 
-                        int* integer_sequence(const char* seq, int length) {
-                            int i;
-                            int* int_seq = (int *)malloc(sizeof(int)*length);
-                            for (i = 0; seq[i]; i++) {
-                                switch (seq[i]) {
-                                    case 'A':
-                                    case 'a':
-                                        int_seq[i] = 0;
-                                        break;
-                                    case 'C':
-                                    case 'c':
-                                        int_seq[i] = 1;
-                                        break;
-                                    case 'G':
-                                    case 'g':
-                                        int_seq[i] = 2;
-                                        break;
-                                    case 'T':
-                                    case 't':
-                                        int_seq[i] = 3;
-                                        break;
-                                    case 'N':
-                                        int_seq[i] = 4;
-                                        break;
-                                    case '-':
-                                        int_seq[i] = 5;
-                                        break;
-                                    default:
-                                        int_seq[i] = 4;
-                                }
-                            }
-                            return int_seq;
-                        }
-                        """
-            '''Score matrix code is written in C/C++; see self.support_code
-            above for dependencies. substitution_matrix is embedded in code
-            below.'''
-            self.score_matrix_code = """
-                const char* c_first_seq = first_seq.c_str();
-                const char* c_second_seq = second_seq.c_str();
-                int row_count = first_seq.length() + 1;
-                int column_count = second_seq.length() + 1;
-                npy_intp dims[2] = {row_count, column_count};
-                PyObject* to_return = PyArray_SimpleNew(2, dims, NPY_INT);
-                int* score_matrix = (int *)((PyArrayObject*) to_return)->data;
-                int* substitution_matrix = (int *)malloc(sizeof(int)*6*6);
-                int* int_first_seq = integer_sequence(c_first_seq,
-                                                        row_count - 1);
-                int* int_second_seq = integer_sequence(c_second_seq,
-                                                        column_count - 1);
-            """ + """""".join(
-                            [("""substitution_matrix[%d] = %d;""" % ((i*6 + j), 
-                                substitution_matrix[i][j])) 
-                                for i in xrange(6) for j in xrange(6)]
-                        ) \
-            + """
-                int i, j;
-                score_matrix[0] = 0;
-                for (i = 1; i < row_count; i++) {
-                    score_matrix[i*column_count] = i 
-                        * substitution_matrix[int_first_seq[i-1]*6+5];
-                }
-                for (j = 1; j < column_count; j++) {
-                    score_matrix[j] = j 
-                        * substitution_matrix[5*6+int_second_seq[j-1]];
-                }
-                int diagonal, vertical, horizontal;
-                for (i = 1; i < row_count; i++) {
-                    for (j = 1; j < column_count; j++) {
-                        diagonal = score_matrix[(i-1)*column_count + j-1]
-                            + substitution_matrix[int_first_seq[i-1]*6
-                                                    +int_second_seq[j-1]];
-                        vertical = score_matrix[(i-1)*column_count + j]
-                            + substitution_matrix[int_first_seq[i-1]*6+5];
-                        horizontal = score_matrix[i*column_count + j-1]
-                            + substitution_matrix[5*6+int_second_seq[j-1]];
-                        score_matrix[i*column_count + j] = std::max(
-                                horizontal, std::max(diagonal, vertical)
-                            );
-                    }
-                }
-                free(int_first_seq);
-                free(int_second_seq);
-                free(substitution_matrix);
-                return_val = to_return;
-            """
-            stdout_holder = os.dup(sys.stdout.fileno())
-            try:
-                # Suppress compiler output by redirecting stdout temporarily
-                devnull = open(os.devnull, 'w')
-                os.dup2(devnull.fileno(), sys.stdout.fileno())
-                self.score_matrix('N', 'N')
-            except Exception as e:
-                print >>sys.stderr, 'C code for computing score matrix ' \
-                                    'failed to compile. Get Python\'s ' \
-                                    'distutils to use g++, and try again.'
-                raise
-            finally:
-                # Turn the tap back on
-                os.dup2(stdout_holder, sys.stdout.fileno())
-
-        def score_matrix(self, first_seq, second_seq):
-            """ Computes score matrix for global alignment of two sequences.
-
-                The substitution matrix is specified when the GlobalAlignment
-                class is instantiated.
-
-                first_seq: first sequence (string).
-                second_seq: second sequence (string).
-
-                Return value: score_matrix, a numpy array whose dimensions are
-                    (len(first_seq) + 1) x (len(second_seq) + 1). It can be
-                    used to trace back the best global alignment.
-            """
-            return weave.inline(
-                                    self.score_matrix_code,
-                                    ['first_seq', 'second_seq'], 
-                                    support_code=self.support_code,
-                                    verbose=0
-                                )
-else:
-    # Use Python version of class
-    class GlobalAlignment:
-        """ Uses Python to obtain alignment score matrix. """
-
-        def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-5],
-                                                [-1, 1,-1,-1,-1,-5],
-                                                [-1,-1, 1,-1,-1,-5],
-                                                [-1,-1,-1, 1,-1,-5],
-                                                [-1,-1,-1,-1,-1,-5],
-                                                [-5,-5,-5,-5,-5,-5]]):
-            """ Constructor for GlobalAlignment.
-
-                substitution_matrix: 6 x 6 substitution matrix (list of
-                    lists); rows and columns correspond to ACGTN-, where N is
-                    aNy and - is a gap. Default: +1 for match, -5 for gap,
-                    -1 for everything else.
-            """
-            self.substitution_matrix = substitution_matrix
-
-        def score_matrix(self, first_seq, second_seq):
-            """ Computes score matrix for global alignment of two sequences.
-
-                The substitution matrix is specified when the GlobalAlignment
-                class is instantiated.
-
-                first_seq: first sequence (string).
-                second_seq: second sequence (string).
-
-                Return value: score_matrix, a numpy array whose dimensions are
-                    (len(first_seq) + 1) x (len(second_seq) + 1). It can be
-                    used to trace back the best global alignment.
-            """
-            first_seq = ['ACGTN-'.index(char) for char in first_seq]
-            second_seq = ['ACGTN-'.index(char) for char in second_seq]
-            row_count = len(first_seq) + 1
-            column_count = len(second_seq) + 1
-            score_matrix = [[0 for i in xrange(column_count)]
-                                for j in xrange(row_count)]
-            for j in xrange(1, column_count):
-                score_matrix[0][j] = j \
-                    * self.substitution_matrix[5][second_seq[j-1]]
-            for i in xrange(1, row_count):
-                score_matrix[i][0] = i \
-                    * self.substitution_matrix[first_seq[i-1]][5]
-            for i in xrange(1, row_count):
-                for j in xrange(1, column_count):
-                    score_matrix[i][j] = max(score_matrix[i-1][j-1] 
-                                                + self.substitution_matrix[
-                                                        first_seq[i-1]]
-                                                        [second_seq[j-1]
-                                                    ], # diagonal
-                                             score_matrix[i-1][j]
-                                                + self.substitution_matrix[
-                                                        first_seq[i-1]][5
-                                                    ], # vertical
-                                             score_matrix[i][j-1]
-                                                + self.substitution_matrix[
-                                                        5][second_seq[j-1]
-                                                    ] # horizontal
-                                            )
-            return score_matrix
-
-def unmapped_region_splits(unmapped_seq, left_reference_seq,
-        right_reference_seq, global_alignment=GlobalAlignment()):
-    """ Distributes read's unmapped region between two framing mapped regions.
-
-        The algorithm used is best illustrated with an example:
-        Read         5' mmmmmmmmmmmmmmmmmmmm??????|????MMMMMMMMMMMMMMMMMMMMM 3'
-
-        Reference    5' ...mmmmmmmmmLLLLLL|LLLLBB...BBRRRRRR|RRRRMMMMMMMM... 3'
-
-        Besides the pipe bars, each character above represents a base. Call the 
-        unmapped region of the read denoted by the string of question marks
-        above unmapped_seq. Read M's were previously mapped to reference M's by
-        Bowtie. Similarly, read m's were mapped to reference m's. THE ALGORITHM
-        ASSUMES THAT THE M's and m's ARE FORWARD-STRAND ALIGNMENTS. B's denote
-        extra (presumably intronic) bases of the reference not considered by
-        the algorithm. Let K be the number of bases of the read spanned by the
-        unmapped region (i.e., the number of question marks). Call the K bases
-        of the reference following the lefthand mapped region (represented by
-        L's above) left_reference_seq. Similarly, call the K bases of the
-        reference preceding the righthand mapped region (represented by R's
-        above) right_reference_seq. Note that the lengths of unmapped_seq,
-        left_reference_seq, and right_reference_seq are the same. Also note
-        that in general, left_reference_seq and right_reference_seq may
-        overlap.
-
-        The algo first fills two (K + 1) x (K + 1) score matrices according to
-        rules encoded in global_alignment's substitution matrix:
-        left_score_matrix scores alignment of unmapped_seq to
-        left_reference_seq, while right_score_matrix scores alignment of
-        REVERSED unmapped_seq to REVERSED right_reference_seq. Let all matrices
-        be 0-indexed, and consider only left_score_matrix. Recall that the
-        lower righthand corner element of the matrix is the score of the best
-        global alignment. More generally, the (S_L, S_L) element of
-        left_score_matrix is the score of the best global alignment of the
-        FIRST S_L bases of unmapped_seq to the FIRST S_L bases of
-        left_reference_seq. Similar logic would apply to right_score_matrix,
-        but first flip right_score_matrix upside-down and leftside-right. Then
-        the (K - S_R, K - S_R) element of right_score_matrix is the score of
-        the best global alignment of the FINAL S_R bases of unmapped_seq to the
-        FINAL S_R bases of right_reference_seq.
-
-        The algo picks out the best "jump" (represented by the pipe bars) from
-        left_reference_seq to right_reference_seq for alignment of
-        unmapped_seq; that is, it finds the value of S_L that maximizes the sum
-        of the scores of the best global alignments of the first S_L bases of
-        unmapped_seq to the first S_L bases of left_reference_seq and the final
-        (K - S_L) bases of unmapped_seq to the final (K - S_L) bases of
-        right_reference_seq. The maximum diagonal element of the matrix
-        (left_score_matrix + right_score_matrix) is indexed by (S_L, S_L).
-        The maximum may be degenerate --- that is, there may be a tie among
-        more than one S_L.
-
-        unmapped_seq: unmapped sequence (string; see paragraph above).
-        left_reference_seq: left reference sequence (string; see paragraphs 
-            above).
-        right_reference_seq: right reference sequence (string; see paragraphs
-            above). unmapped_seq, left_reference_seq, and right_reference_seq
-            all have the same length.
-        global_alignment: instance of GlobalAlignment class used for fast
-                alignment. Encapsulates substitution matrix.
-
-        Return value: List of possible S_L (see paragraphs above for
-            definition).
-    """
-    unmapped_seq_size = len(unmapped_seq)
-    assert unmapped_seq_size == len(left_reference_seq)
-    assert unmapped_seq_size == len(right_reference_seq)
-
-    unmapped_seq = unmapped_seq.upper()
-    left_reference_seq = left_reference_seq.upper()
-    right_reference_seq = right_reference_seq.upper()
-
-    left_score_matrix = global_alignment.score_matrix(
-            unmapped_seq, left_reference_seq
-        )
-    right_score_matrix = global_alignment.score_matrix(
-            unmapped_seq[::-1], right_reference_seq[::-1], 
-        )
-    total_score_matrix_diagonal = [left_score_matrix[i][i] 
-                                    + right_score_matrix[-i-1][-i-1]
-                                    for i in xrange(len(left_score_matrix))]
-    max_element = max(total_score_matrix_diagonal)
-    return [i for i, element in enumerate(total_score_matrix_diagonal)
-                if element == max_element]
-
-def introns_from_read(reference_index, read_seq, readlets,
-    search_for_caps=True, max_discrepancy=2, min_seq_similarity=0.85,
-    min_cap_size=8, cap_search_window_size=1000, seed=0,
-    max_cap_count=5, readlet_interval=4, global_alignment=GlobalAlignment()):
-    """ Composes a given read's aligned readlets and returns introns.
-
-        reference_index: object of class bowtie_index.BowtieIndexReference that
-            permits access to reference; used for realignment of unmapped
-            regions between exonic chunks.
-        read_seq: sequence of the original read from which the readlets are
-            derived.
-        readlets: list of tuples (rname, reverse_strand, pos, end_pos,
-            displacement), each of which corresponds to a readlet. rname is the
-            SAM-format RNAME, typically the chromosome to which the readlet
-            maps. reverse_strand is True iff the readlet's reversed complement
-            aligns to the reference. The readlet should span the interval
-            [pos, end_pos). displacement is the number of bases between the
-            5' (3') end of the readlet, which aligns to the forward (reverse)
-            strand, and the 5' (3') end of the read.
-        search_for_caps: True iff reference should be searched for the segment
-            of a read (a cap) that precedes the first EC and the segment of a
-            read that follows the last EC. Such segments are subsequently added
-            as an ECs themselves, and introns may be called between them.
-        max_discrepancy: if the difference in length between an unmapped region
-            framed by two ECs and its corresponding gap in the reference is
-            <= this value, the unmapped region is considered a candidate for
-            incorporation into a single EC spanning the two original ECs via
-            DP filling.
-        min_seq_similarity: if the difference in length between an unmapped
-            region framed by two ECs and its corresponding gap in the reference
-            is <= max_discrepancy AND the score of global alignment is >= 
-            min_seq_similarity * (length of unmapped region), the unmapped
-            region is incorporated into a single EC spanning the two original
-            ECs via DP filling. See the class GlobalAlignment for the
-            substitution matrix used.
-        min_cap_size: the reference is not searched for a cap smaller
-            than this size.
-        cap_search_window_size: the size (in bp) of the reference subsequence
-            in which to search for a cap.
-        max_cap_count: maximum number of possible caps of size
-            min_cap_size to consider when searching for caps.
-        readlet_interval: distance between successive readlets; used to rule
-            out prefix and suffix caps that are too far from alignments
-            covering read
-        seed: seed for random number generator; used to break ties in median 
-            index when performing DP filling.
-        global_alignment: instance of GlobalAlignment class used for fast
-                realignment of exonic chunks via Weave.
-
-        Return value: A dictionary where each key is a strand (i.e., a tuple
-            (rname, reverse_strand)), and its corresponding value is a list
-            of tuples (pos, end_pos)), each of which denotes an intron. rname
-            contains the SAM-format RNAME --- typically a chromosome. When
-            input reads are strand-specific, reverse_strand is True iff the
-            sense strand is the reverse strand; otherwise, it merely denotes
-            the strand to which the intron's flanking ECs were presumed to
-            align. The intron spans the interval [pos, end_pos).
-    """
-    random.seed(seed)
-    composed = composed_and_sorted_readlets(readlets)
-    read_seq = read_seq.upper()
-    reversed_complement_read_seq = read_seq[::-1].translate(
-            _reversed_complement_translation_table
-        )
-    read_seq_size = len(read_seq)
-    composed_and_capped = {}
-    # Add caps
-    for strand in composed:
-        rname, reverse_strand = strand
-        if reverse_strand:
-            '''Handle reverse-strand reads the same way forward strands are
-            handled.'''
-            current_read_seq = reversed_complement_read_seq
-        else:
-            current_read_seq = read_seq
-        new_prefix, new_suffix = [], []
-        prefix_pos, prefix_end_pos, prefix_displacement = composed[strand][0]
-        suffix_pos, suffix_end_pos, suffix_displacement = composed[strand][-1]
-        if prefix_pos - prefix_displacement < 1:
-            # Skip this part if we're close to an edge of the reference
-            prefix_displacement = 0
-        if prefix_displacement:
-            if global_alignment.score_matrix(
-                        current_read_seq[:prefix_displacement],
-                        reference_index.get_stretch(rname,
-                            prefix_pos - prefix_displacement - 1,
-                            prefix_displacement)
-                    )[-1][-1] >= \
-                    min_seq_similarity * prefix_displacement:
-                new_prefix = [(prefix_pos - prefix_displacement,
-                                    prefix_pos, 0)]
-            elif search_for_caps \
-                and prefix_displacement >= min_cap_size \
-                and cap_search_window_size > 0:
-                '''If region shouldn't be filled and region to the left isn't
-                too small, search for prefix.'''
-                search_pos = max(0, prefix_pos - 1 - cap_search_window_size)
-                search_window = reference_index.get_stretch(
-                        rname,
-                        search_pos,
-                        prefix_pos - 1 - search_pos
-                    )
-                try:
-                    new_prefix_offset, new_prefix_size \
-                        = maximal_suffix_match(
-                                current_read_seq[:prefix_displacement][::-1],
-                                search_window[::-1],
-                                min_cap_size=min_cap_size
-                            )
-                    if prefix_displacement - new_prefix_size \
-                        <= readlet_interval:
-                        new_prefix = [(prefix_pos - new_prefix_offset
-                                        - new_prefix_size,
-                                        prefix_pos - new_prefix_offset,
-                                        0)]
-                except TypeError:
-                    # maximal_suffix_match returned None
-                    pass
-        unmapped_displacement = (suffix_end_pos - suffix_pos
-                                    + suffix_displacement)
-        unmapped_base_count = read_seq_size - unmapped_displacement
-        if suffix_end_pos + unmapped_base_count - 1 \
-            > reference_index.length[rname]:
-            # Skip this part if we're too close to the edge of the reference
-            unmapped_base_count = 0
-        if unmapped_base_count > 0:
-            if global_alignment.score_matrix(
-                                current_read_seq[unmapped_displacement:],
-                                reference_index.get_stretch(rname,
-                                    suffix_end_pos - 1, 
-                                    unmapped_base_count)
-                            )[-1][-1] >= (min_seq_similarity
-                                             * unmapped_base_count):
-                new_suffix = [(suffix_end_pos,
-                                suffix_end_pos + unmapped_base_count,
-                                unmapped_displacement)]
-            elif search_for_caps \
-                and unmapped_base_count >= min_cap_size \
-                and cap_search_window_size > 0:
-                '''If region shouldn't be filled and region to the right isn't
-                too small, search for suffix.'''
-                search_pos = suffix_end_pos - 1
-                search_window = reference_index.get_stretch(
-                        rname,
-                        search_pos,
-                        min(cap_search_window_size, 
-                             reference_index.rname_lengths[rname] - search_pos)
-                    )
-                try:
-                    new_suffix_offset, new_suffix_size \
-                        = maximal_suffix_match(
-                                current_read_seq[-unmapped_base_count:],
-                                search_window,
-                                min_cap_size=min_cap_size
-                            )
-                    if unmapped_base_count - new_suffix_size \
-                        <= readlet_interval:
-                        new_suffix = [(suffix_end_pos + new_suffix_offset,
-                                        suffix_end_pos + new_suffix_offset
-                                        + new_suffix_size,
-                                        read_seq_size - new_suffix_size)]
-                except TypeError:
-                    # maximal_suffix_match returned None
-                    pass
-        composed_and_capped[strand] = deque(new_prefix + composed[strand]
-                                        + new_suffix)
-    introns = {}
-    '''To make continuing outer loop from inner loop below possible.'''
-    continue_strand_loop = False
-    for strand in composed_and_capped:
-        introns[strand] = []
-        rname, reverse_strand = strand
-        if reverse_strand:
-            '''Handle reverse-strand reads the same way forward strands are
-            handled.'''
-            current_read_seq = reversed_complement_read_seq
-        else:
-            current_read_seq = read_seq
-        last_pos, last_end_pos, last_displacement \
-            = composed_and_capped[strand].popleft()
-        unmapped_displacement = last_displacement + last_end_pos - last_pos
-        while composed_and_capped[strand]:
-            pos, end_pos, displacement = composed_and_capped[strand].popleft()
-            next_unmapped_displacement = displacement + end_pos - pos
-            if last_displacement >= displacement or \
-                unmapped_displacement >= next_unmapped_displacement or \
-                unmapped_displacement > read_seq_size or \
-                next_unmapped_displacement > read_seq_size:
-                '''Example cases handled:
-                The 5' or 3' end of EC #1 isn't to the left of the 5'  or 3'
-                end of EC #2 along the read:
-
-                        5'                                       3'
-                                             EC #1
-                Read      |--------------=================
-                                        ===================-----|
-                                              EC #2
-
-                                             EC #1
-                Read      |----------=======================
-                                        ===================-----|
-                                              EC #2
-
-
-                Read      |-----=============------=============|
-                                    EC #2              EC #1
-
-                The 3' end of either EC is computed to be displaced beyond the
-                3' end of the read:
-                                                              EC
-                                                     ===================
-                Read      |-------------------------------------|
-
-                These situations are pathological. Throw out the strand by
-                deleting it from the exon and intron list after continuing.'''
-                continue_strand_loop = True
-                introns[strand] = []
-                break
-            reference_distance = pos - last_end_pos
-            read_distance = displacement - unmapped_displacement
-            discrepancy = reference_distance - read_distance
-            call_exon, call_intron = False, False
-            if not read_distance:
-                if pos - last_end_pos == 0:
-                    '''Example case handled:
-                                        EC #1                   EC #2
-                    Read       |=====================|=====================|
-                                                 
-                    Reference ...====================|====================...    
-                                      EC #1                   EC #2
-                                      (EC #1 and #2 are unseparated on
-                                        read and reference)
-                    The ECs should be merged.'''
-                    unmapped_displacement = end_pos - pos + displacement
-                    last_end_pos = end_pos
-                elif pos - last_end_pos < 0:
-                    '''Example case handled:
-                                        EC #1                   EC #2
-                    Read       |=====================|=====================|
-                                                 
-                    Reference ...=====================
-                                                    =======================...    
-                                      EC #1                   EC #2
-                                      (EC #1 and #2 may overlap.)
-                    This case covers the outside possibility that 
-                    EC #1 overlaps EC #2 by as much the constraint that EC #2
-                    doesn't begin before EC #1 on the reference allows. This is
-                    likely an insertion in the read with respect to the
-                    reference. Keep the ECs distinct. CAN BE MODIFIED LATER TO
-                    ACCOMMODATE CALLING INDELS.'''
-                    call_exon = True
-                else:
-                    '''pos - last_end_pos > 0
-                    Example case handled:
-                                       EC #1                   EC #2
-                    Read       |=====================|=====================|
-                                                     /\
-                    Reference ...====================--====================...    
-                                     EC #1         intron         EC #2
-                    If there are no bases between the ECs in the read sequence 
-                    and the size of the candidate intron is > 0, call EC #1 and
-                    intron.'''
-                    call_exon, call_intron = True, True
-            else:
-                if read_distance > 0:
-                    '''Example case handled:
-                                        EC #1        UMR      EC #2
-                    Read          |==============-----------========|        
-                                               /             \
-                    Reference ...==============---------------========...
-                                     EC #1         intron       EC #2
-                    UMR = unmapped region.
-                    The displacement of EC #2's left end is to the right of the
-                    displacement of EC #1's right end, and there is an unmapped
-                    read region between them. [COMMENTED OUT: Extend the
-                    unmapped region by one nucleotide on either side]; splice
-                    junctions will have to be determined more precisely. See
-                    past if-else.'''
-                    last_end_pos -= 2
-                    pos += 2
-                    unmapped_displacement -= 2
-                    displacement += 2
-                    read_distance += 4
-                else:
-                    '''read_distance < 0
-                    Example case handled:
-                                      EC #1                
-                    Read          |=====================        EC #2
-                                                ========================|
-                    Reference    ...=============------------------=======...
-                                        EC #1          intron       EC #2
-                    The displacement of EC #2's left end is to the left of the 
-                    displacement of EC #1's right end; at least a pair of
-                    readlets, one from each EC, overlaps on the read. Call the
-                    overlap [COMMENTED OUT: + one nucleotide on either side]
-                    the unmapped region; splice junctions will have to be
-                    determined more precisely. See past if-else.'''
-                    unmapped_displacement, displacement = \
-                        displacement - 2, unmapped_displacement + 2
-                    read_distance = -read_distance + 4
-                    last_end_pos -= read_distance - 2
-                    pos += read_distance - 2
-                    # unmapped_displacement, displacement = \
-                    #     displacement, unmapped_displacement
-                    # read_distance = -read_distance
-                    # last_end_pos -= read_distance
-                    # pos += read_distance
-                # Now decide whether to DP fill or DP frame
-                if abs(discrepancy) <= max_discrepancy:
-                    # DP Fill
-                    if global_alignment.score_matrix(
-                            current_read_seq[
-                                unmapped_displacement:displacement
-                            ],
-                            reference_index.get_stretch(rname,
-                                last_end_pos - 1, pos - last_end_pos) 
-                        )[-1][-1] >= min_seq_similarity * read_distance:
-                        '''If the unmapped region should be filled,
-                        last_displacement and last_pos should remain the same
-                        on next iteration, but last_end_pos must change; two
-                        ECs are merged.'''
-                        unmapped_displacement = end_pos - pos + displacement
-                        last_end_pos = end_pos
-                    else:
-                        '''If the unmapped region should not be filled, ignore
-                        it, and don't merge ECs. Call only EC #1.'''
-                        call_exon = True
-                elif discrepancy > max_discrepancy:
-                    new_suffix_offset, new_prefix_offset = None, None
-                    if read_distance >= min_cap_size + readlet_interval and \
-                        reference_distance >= min_cap_size + readlet_interval:
-                        '''If the unmapped region is large enough and the
-                        reference distance is large enough, search for a small
-                        exon.'''
-                        left_search_start = last_end_pos
-                        left_search_window = reference_index.get_stretch(
-                                rname,
-                                last_end_pos - 1,
-                                min(cap_search_window_size, 
-                                     pos - last_end_pos)
-                            )
-                        right_search_end = max(pos - cap_search_window_size,
-                                                last_end_pos) + \
-                                           min(cap_search_window_size,
-                                                pos - last_end_pos)
-                        right_search_window = reference_index.get_stretch(
-                                rname,
-                                max(pos - cap_search_window_size,
-                                    last_end_pos) - 1,
-                                min(cap_search_window_size,
-                                    pos - last_end_pos)
-                            )
-                        try:
-                            suffix_substring \
-                                = current_read_seq[
-                                                unmapped_displacement:
-                                                unmapped_displacement
-                                                +read_distance-readlet_interval
-                                            ]
-                            new_suffix_offset, new_suffix_size \
-                                = maximal_suffix_match(
-                                        suffix_substring,
-                                        left_search_window,
-                                        min_cap_size=min_cap_size
-                                    )
-                        except TypeError:
-                            # maximal_suffix_match returned None
-                            pass
-                        try:
-                            prefix_substring \
-                                = current_read_seq[
-                                                unmapped_displacement
-                                                +readlet_interval:
-                                                unmapped_displacement
-                                                +read_distance
-                                            ]
-                            new_prefix_offset, new_prefix_size \
-                                = maximal_suffix_match(
-                                        prefix_substring[::-1],
-                                        right_search_window[::-1],
-                                        min_cap_size=min_cap_size
-                                    )
-                        except TypeError:
-                            # maximal_suffix_match returned None
-                            pass
-                        use_prefix = False
-                        if new_prefix_offset is not None \
-                            and new_suffix_offset is not None:
-                            # Must choose between offsets
-                            if new_prefix_size > new_suffix_size:
-                                # Always choose larger candidate
-                                use_prefix = True
-                            elif new_prefix_size == new_suffix_size:
-                                # Break tie at random
-                                if random.random(): use_prefix = True
-                        elif new_prefix_offset is not None:
-                            use_prefix = True
-                        if new_prefix_offset is not None \
-                            or new_suffix_offset is not None:
-                            if use_prefix:
-                                new_pos \
-                                    = right_search_end - new_prefix_offset \
-                                         - new_prefix_size
-                                new_end_pos \
-                                    = new_pos + new_prefix_size
-                                new_displacement = unmapped_displacement \
-                                                    + readlet_interval
-                                if new_pos - last_end_pos <= readlet_interval:
-                                    # No intron; DP frame instead
-                                    new_prefix_offset = None
-                                    new_suffix_offset = None
-                            else:
-                                new_pos = left_search_start + new_suffix_offset
-                                new_end_pos = new_pos + new_suffix_size
-                                new_displacement = unmapped_displacement \
-                                                    + len(suffix_substring) \
-                                                    - new_suffix_size
-                                if pos - new_end_pos <= readlet_interval:
-                                    # No intron; DP frame instead
-                                    new_prefix_offset = None
-                                    new_suffix_offset = None
-                            if new_prefix_offset is not None \
-                                or new_suffix_offset is not None:
-                                '''Push new exon and current exon, then
-                                try loop again.'''
-                                composed_and_capped[strand].extendleft(
-                                        [(pos, end_pos, displacement),
-                                         (new_pos, new_end_pos,
-                                            new_displacement)]
-                                    )
-                    if new_prefix_offset is None \
-                        and new_suffix_offset is None:
-                        '''Do DP framing: compute how to distribute unmapped
-                        bases between ECs.'''
-                        splits = \
-                            unmapped_region_splits(
-                                current_read_seq[unmapped_displacement:
-                                    displacement], 
-                                reference_index.get_stretch(rname,
-                                    last_end_pos - 1,
-                                    read_distance), 
-                                reference_index.get_stretch(rname,
-                                    pos - read_distance - 1, read_distance)
-                            )
-                        '''Decide which split to use: choose the median index.
-                        If there is a tie in median indices, break it at
-                        random.'''
-                        split_count = len(splits)
-                        split_end = split_count / 2
-                        if split_count % 2:
-                            split = splits[split_end]
-                        else:
-                            # If split count is even, break tie
-                            split = random.choice(
-                                            splits[(split_end-1):(split_end+1)]
-                                        )
-                        pos += split - read_distance
-                        displacement += split - read_distance
-                        last_end_pos += split
-                        call_exon, call_intron = True, True
-                else: 
-                    '''discrepancy < -max_discrepancy; is likely a large
-                    insertion with respect to reference, but not too large:
-                    EC #2 never begins before EC #1 on the reference.
-                    Again, call distinct ECs. CAN BE MODIFIED LATER TO
-                    ACCOMMODATE CALLING INDELS.
-
-                    Example case handled:
-                                      EC #1       UMR          EC #2               
-                    Read          |==========--------------==============|
-
-                    Reference        ...==========---==============...
-                                           EC #1  gap     EC #2
-                    UMR = unmapped region.
-                    '''
-                    call_exon = True
-            if call_intron:
-                # Call the reference region between the two ECs an intron.
-                introns[strand].append((last_end_pos, pos))
-            if call_exon:
-                unmapped_displacement = end_pos - pos + displacement
-                (last_pos, last_end_pos, last_displacement) = \
-                    (pos, end_pos, displacement)
-        if continue_strand_loop:
-            continue_strand_loop = False
-            continue
-    strands_to_remove = []
-    for strand in introns:
-        if introns[strand] == []:
-            strands_to_remove.append(strand)
-    for strand in strands_to_remove:
-        del introns[strand]
-    return introns
-
-def selected_readlet_alignments_by_clustering(readlets, seed=0):
+def selected_readlet_alignments_by_clustering(readlets):
     """ Selects multireadlet alignment via a correlation clustering algorithm.
     
         Consider a list "readlets" whose items {R_i} correspond to the aligned
@@ -1039,13 +189,10 @@ def selected_readlet_alignments_by_clustering(readlets, seed=0):
             alignments {R_ij} of a readlet. Each R_ij is a tuple
             (rname, reverse_strand, pos, end_pos, displacement).
             See above for a detailed explanation.
-        seed: seed for randomized algorithm QuickClust to ensure that results
-            for a given read are reproducible.
 
         Return value: a list of selected alignment tuples
             (rname, reverse_strand, pos, end_pos, displacement).
     """
-    random.seed(seed)
     alignments = [alignment + (i,) for i, multireadlet
                                         in enumerate(readlets)
                                         for alignment in multireadlet]
@@ -1086,13 +233,473 @@ def selected_readlet_alignments_by_clustering(readlets, seed=0):
     else:
         return []
 
-def go(input_stream=sys.stdin, output_stream=sys.stdout, bin_size=10000,
+def alignment_adjacencies(alignments):
+    """ Generates adjacency matrix for graph described below.
+
+        Consider an undirected graph where each node corresponds to
+        an alignment of a distinct multireadlet. Place an edge between two
+        nodes that are "order-consistent"; that is:
+
+        1) They have the same strand label
+        2) If the displacements of the corresponding readlets from the 5' end
+        of the read are equal, their genomic positions on the reference are
+        also equal.
+        3) If the displacement of node A is greater than the displacement of
+        node B, the genomic position of node A is greater than the genomic
+        position of node B.
+
+        cluster: a list of alignment tuples
+            (rname, reverse_strand, pos, end_pos, displacement), each
+            corresponding to a distinct readlet
+        
+        Yield value: tuple (node A, [list of nodes that connect to A])
+    """
+    for compared_alignment in alignments:
+        yield (compared_alignment, [alignment 
+                                    for alignment in alignments
+                                    if (compared_alignment[:2] == alignment[:2]
+                                    and (compared_alignment[2]
+                                            == alignment[2]
+                                            if compared_alignment[4]
+                                            == alignment[4] else
+                                            ((compared_alignment[2]
+                                                < alignment[2])
+                                            == (compared_alignment[4]
+                                                < alignment[4]))))])
+
+def largest_maximal_clique(cluster):
+    """ Finds maximal cliques of graph of multireadlet alignment cluster.
+
+        Consider an undirected graph where each node corresponds to
+        an alignment of a distinct multireadlet. Place an edge between two
+        nodes that are "order-consistent"; that is:
+
+        1) They have the same strand label
+        2) If the displacements of the corresponding readlets from the 5' end
+        of the read are equal, their genomic positions on the reference are
+        also equal.
+        3) If the displacement of node A is greater than the displacement of
+        node B, the genomic position of node A is greater than the genomic
+        position of node B.
+
+        Now enumerate maximal cliques. This gives all possible maximal groups
+        of mutually consistent alignments. Return the largest group. If there's
+        a tie, break it at random.
+
+        This code is adapted from NetworkX's find_cliques(), which requires
+        inclusion of the following copyright notice.
+
+        --------
+        Copyright (C) 2004-2012, NetworkX Developers
+        Aric Hagberg <hagberg@lanl.gov>
+        Dan Schult <dschult@colgate.edu>
+        Pieter Swart <swart@lanl.gov>
+        All rights reserved.
+
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that the following conditions are
+        met:
+
+          * Redistributions of source code must retain the above copyright
+            notice, this list of conditions and the following disclaimer.
+
+          * Redistributions in binary form must reproduce the above
+            copyright notice, this list of conditions and the following
+            disclaimer in the documentation and/or other materials provided
+            with the distribution.
+
+          * Neither the name of the NetworkX Developers nor the names of its
+            contributors may be used to endorse or promote products derived
+            from this software without specific prior written permission.
+
+
+        THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+        "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+        LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+        A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+        OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+        SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+        LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+        DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+        THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+        (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+        OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+        --------
+
+        cluster: a list of alignment tuples
+            (rname, reverse_strand, pos, end_pos, displacement), each
+            corresponding to a distinct readlet
+        
+        Return value: largest maximal clique -- a list of alignments.
+    """
+    clique_time = time.time()
+    cliques = []
+    # Cache nbrs and find first pivot (highest degree)
+    maxconn=-1
+    nnbrs={}
+    pivotnbrs=set() # handle empty graph
+    for n,nbrs in alignment_adjacencies(cluster):
+        nbrs=set(nbrs)
+        nbrs.discard(n)
+        conn = len(nbrs)
+        if conn > maxconn:
+            nnbrs[n] = pivotnbrs = nbrs
+            maxconn = conn
+        else:
+            nnbrs[n] = nbrs
+    # Initial setup
+    cand=set(nnbrs)
+    smallcand = set(cand - pivotnbrs)
+    done=set()
+    stack=[]
+    clique_so_far=[]
+    # Start main loop
+    while smallcand or stack:
+        try:
+            # Any nodes left to check?
+            n=smallcand.pop()
+        except KeyError:
+            # back out clique_so_far
+            cand,done,smallcand = stack.pop()
+            clique_so_far.pop()
+            continue
+        # Add next node to clique
+        clique_so_far.append(n)
+        cand.remove(n)
+        done.add(n)
+        nn=nnbrs[n]
+        new_cand = cand & nn
+        new_done = done & nn
+        # check if we have more to search
+        if not new_cand:
+            if not new_done:
+                # Found a clique!
+                cliques.append(clique_so_far[:])
+            clique_so_far.pop()
+            continue
+        # Shortcut--only one node left!
+        if not new_done and len(new_cand)==1:
+            cliques.append(clique_so_far + list(new_cand))
+            clique_so_far.pop()
+            continue
+        # find pivot node (max connected in cand)
+        # look in done nodes first
+        numb_cand=len(new_cand)
+        maxconndone=-1
+        for n in new_done:
+            cn = new_cand & nnbrs[n]
+            conn=len(cn)
+            if conn > maxconndone:
+                pivotdonenbrs=cn
+                maxconndone=conn
+                if maxconndone==numb_cand:
+                    break
+        # Shortcut--this part of tree already searched
+        if maxconndone == numb_cand:
+            clique_so_far.pop()
+            continue
+        # still finding pivot node
+        # look in cand nodes second
+        maxconn=-1
+        for n in new_cand:
+            cn = new_cand & nnbrs[n]
+            conn=len(cn)
+            if conn > maxconn:
+                pivotnbrs=cn
+                maxconn=conn
+                if maxconn == numb_cand-1:
+                    break
+        # pivot node is max connected in cand from done or cand
+        if maxconndone > maxconn:
+            pivotnbrs = pivotdonenbrs
+        # save search status for later backout
+        stack.append( (cand, done, smallcand) )
+        cand=new_cand
+        done=new_done
+        smallcand = cand - pivotnbrs
+    try:
+        max_clique_size = max(map(len, cliques))
+    except ValueError:
+        assert not cluster
+        return []
+    largest_cliques = [clique for clique in cliques
+                        if len(clique) == max_clique_size]
+    largest_clique_count = len(largest_cliques)
+    assert largest_clique_count >= 1
+    if largest_clique_count == 1:
+        return largest_cliques[0]
+    return random.choice(largest_cliques)
+
+def pairwise(iterable):
+    """ Iterates through iterable in pairs.
+
+        If iterable's items are [a1, a2, a3, a4, ...], yields tuples (a1, a2),
+        (a2, a3), (a3, a4), .... See
+        https://docs.python.org/2/library/itertools.html.
+
+        Return value: generator for pairs
+    """
+    left, right = itertools.tee(iterable)
+    next(right, None)
+    return itertools.izip(left, right)
+
+def introns_from_clique(clique, read_seq, reference_index,
+        min_exon_size=8, min_intron_size=10, max_intron_size=500000,
+        search_window_size=1000, stranded=False, motif_radius=1,
+        reverse_reverse_strand=False):
+    """ 
+        NOTE THAT clique LIST IS SORTED ASSUMING THE ONLY READLETS WHOSE
+        DISPLACEMENTS ARE THE SAME ARE CAPPING READLETS. IF THE READLETIZING
+        SCHEME IS CHANGED, THIS SORTING SCHEME SHOULD ALSO BE CHANGED.
+
+        clique: list of alignment tuples
+            (rname, reverse_strand, pos, end_pos, displacement), all of which
+            are order-consistent
+        read_seq: sequence of the original read from which the readlets are
+            derived.
+        reference_index: object of class bowtie_index.BowtieIndexReference that
+            permits access to reference; used for realignment of unmapped
+            regions between exonic chunks.
+        min_exon_size: minimum size of exons to search for
+        min_intron_size: do not return introns < this size
+        max_intron_size: do not return introns > this size
+        search_window_size: size of search window flanking an alignment
+            in which to search for an exon
+        stranded: True iff input reads are strand-specific
+        motif_radius: radius (in bp) around unmapped region in which to search
+            for motif; keep this small!
+        reverse_reverse_strand: if True, original read sequence was
+            reverse-complemented before alignment of constituent readlets
+    """
+    read_seq = read_seq.upper()
+    if not clique:
+        return []
+    rname, reverse_strand = clique[0][:2]
+    if reverse_reverse_strand:
+        reverse_strand = not reverse_strand
+    candidate_introns = []
+    # Arrange sort so that longest aligning capping readlet is used as flank
+    clique.sort(key=lambda alignment: (alignment[-1], alignment[-2] if
+                                                        alignment[-1] == 0
+                                                        else alignment[-3]))
+    '''Call introns overlapped by read using constraint that all are on the
+    same strand. First call introns between mapped regions by iterating 
+    through flanking alignments.'''
+    for ((_, _, left_pos, left_end_pos, left_displacement),
+            (_, _, right_pos, right_end_pos, right_displacement)) \
+        in pairwise(clique):
+        '''Assume that flanking alignments provide the exact _size_ of an
+        intron; this happens if there are no intervening exons.'''
+        read_span = right_displacement + right_end_pos - right_pos \
+                        - left_displacement
+        intron_size = right_end_pos - left_pos - read_span
+        unmapped_start = left_displacement + left_end_pos - left_pos
+        unmapped_end = right_displacement
+        if unmapped_start > unmapped_end:
+            '''Alignments overlap on read; turn the unmapped region into
+            the overlap.'''
+            unmapped_start, unmapped_end = unmapped_end, unmapped_start
+            unmapped_size = unmapped_end - unmapped_start
+            right_pos += unmapped_size
+            left_end_pos -= unmapped_size
+        else:
+            unmapped_size = unmapped_end - unmapped_start
+        # Expand unmapped region
+        right_pos += motif_radius
+        left_end_pos -= motif_radius
+        unmapped_size += 2 * motif_radius
+        unmapped_start -= motif_radius
+        unmapped_end += motif_radius
+        if min_intron_size <= intron_size <= max_intron_size:
+            candidate_introns.append(
+                    (left_end_pos, 
+                        intron_size, 
+                        unmapped_size,
+                        unmapped_start,
+                        unmapped_end)
+                )
+    # Motifs must agree on strand
+    introns = []
+    if stranded:
+        if reverse_strand:
+            search_motifs = _reverse_strand_motifs
+        else:
+            search_motifs = _forward_strand_motifs
+    else:
+        search_motifs = _all_motifs
+    for i, (pos, intron_size, unmapped_size, unmapped_start, 
+            unmapped_end) in enumerate(candidate_introns):    
+        left_motif_window = reference_index.get_stretch(
+                                    rname,
+                                    pos - 1,
+                                    unmapped_size
+                                )
+        right_motif_window = reference_index.get_stretch(
+                                    rname,
+                                    pos - 1 + intron_size - 2,
+                                    unmapped_size
+                                )
+        found_motifs = []
+        for j in xrange(unmapped_size - 1):
+            candidate_motif = (left_motif_window[j:j+2],
+                                right_motif_window[j:j+2])
+            if candidate_motif in search_motifs:
+                introns.append(
+                        (i, pos + j,
+                         pos + intron_size + j,
+                         intron_size,
+                         unmapped_start,
+                         unmapped_end,
+                         candidate_motif,
+                         )
+                    )
+    # Enumerate groups of introns that agree on strand
+    forward_strand_introns = [intron for intron in introns if intron[-1]
+                                    in _forward_strand_motifs]
+    reverse_strand_introns = [intron for intron in introns if intron[-1]
+                                    in _reverse_strand_motifs]
+    forward_strand_intron_set = set([intron[0] for intron
+                                        in forward_strand_introns])
+    reverse_strand_intron_set = set([intron[0] for intron
+                                        in reverse_strand_introns])
+    forward_strand_intron_count = len(forward_strand_intron_set)
+    reverse_strand_intron_count = len(reverse_strand_intron_set)
+    filtered_introns = []
+    if forward_strand_intron_count != 0 \
+        and forward_strand_intron_count == reverse_strand_intron_count:
+        '''Try to break tie with priority class. If this can't be done,
+        be conservative and don't call any introns.'''
+        forward_strand_priority_sum = 0
+        final_forward_strand_introns = []
+        for i in forward_strand_intron_set:
+            candidate_motifs = [intron for intron in forward_strand_introns
+                                if i == intron[0]]
+            if len(candidate_motifs) >= 1:
+                priorities \
+                    = [_prioritized_forward_strand_motifs.index(motif[-1])
+                        for motif in candidate_motifs]
+                min_priority = min(priorities)
+                priority_indices = [j for j, priority in enumerate(priorities)
+                                        if priority == min_priority]
+                if len(priority_indices) == 1:
+                    final_forward_strand_introns.append(candidate_motifs[
+                                                          priority_indices[0]
+                                                        ][1:] + (False,))
+                forward_strand_priority_sum += min_priority
+        reverse_strand_priority_sum = 0
+        final_reverse_strand_introns = []
+        for i in reverse_strand_intron_set:
+            candidate_motifs = [intron for intron in reverse_strand_introns
+                                if i == intron[0]]
+            if len(candidate_motifs) >= 1:
+                priorities \
+                    = [_prioritized_reverse_strand_motifs.index(motif[-1])
+                        for motif in candidate_motifs]
+                min_priority = min(priorities)
+                priority_indices = [j for j, priority in enumerate(priorities)
+                                        if priority == min_priority]
+                if len(priority_indices) == 1:
+                    final_reverse_strand_introns.append(candidate_motifs[
+                                                          priority_indices[0]
+                                                        ][1:] + (True,))
+                reverse_strand_priority_sum += min_priority
+        if reverse_strand_priority_sum > forward_strand_priority_sum:
+            filtered_introns = final_forward_strand_introns
+        elif reverse_strand_priority_sum < forward_strand_priority_sum:
+            filtered_introns = final_reverse_strand_introns
+    elif forward_strand_intron_count > reverse_strand_intron_count:
+        for i in forward_strand_intron_set:
+            candidate_motifs = [intron for intron in forward_strand_introns
+                                if i == intron[0]]
+            if len(candidate_motifs) >= 1:
+                priorities \
+                    = [_prioritized_forward_strand_motifs.index(motif[-1])
+                        for motif in candidate_motifs]
+                min_priority = min(priorities)
+                priority_indices = [j for j, priority in enumerate(priorities)
+                                        if priority == min_priority]
+                if len(priority_indices) == 1:
+                    filtered_introns.append(candidate_motifs[
+                                                priority_indices[0]
+                                            ][1:] + (False,))
+    elif reverse_strand_intron_count > forward_strand_intron_count:
+        for i in reverse_strand_intron_set:
+            candidate_motifs = [intron for intron in reverse_strand_introns
+                                if i == intron[0]]
+            if len(candidate_motifs) >= 1:
+                priorities \
+                    = [_prioritized_reverse_strand_motifs.index(motif[-1])
+                        for motif in candidate_motifs]
+                min_priority = min(priorities)
+                priority_indices = [j for j, priority in enumerate(priorities)
+                                        if priority == min_priority]
+                if len(priority_indices) == 1:
+                    filtered_introns.append(candidate_motifs[
+                                                priority_indices[0]
+                                            ][1:] + (True,))
+    final_introns = deque()
+    # Search for small exons that could split introns
+    for (pos, end_pos, intron_size, unmapped_start, unmapped_end,
+            intron_motif, intron_reverse_strand) in filtered_introns:
+        final_introns.append((rname, intron_reverse_strand, pos, end_pos))
+        '''if unmapped_end - unmapped_start >= min_exon_size:
+            # Search for just _one_ intervening exon
+            if intron_reverse_strand:
+                left_caps = [motif[1] for motif in _reverse_strand_motifs
+                                if motif[0] == intron_motif[0]]
+                right_caps = [motif[0] for motif in _reverse_strand_motifs
+                                if motif[1] == intron_motif[1]]
+            else:
+                left_caps = [motif[1] for motif in _forward_strand_motifs
+                                if motif[0] == intron_motif[0]]
+                right_caps = [motif[0] for motif in _forward_strand_motifs
+                                if motif[1] == intron_motif[1]]
+            caps = itertools.product(left_caps, right_caps)
+            search_strings = [cap[0] + read_seq[unmapped_start:unmapped_end]
+                                + cap[1] for cap in caps]
+            if intron_size <= search_window_size:
+                search_displacement = 0
+                search_window = reference_index.get_stretch(
+                        rname,
+                        pos - 1,
+                        intron_size
+                    )
+            else:
+                # Randomly select start position of search window 
+                search_displacement = random.randint(
+                                            0, 
+                                            intron_size - search_window_size
+                                        )
+                search_window = reference_index.get_stretch(
+                        rname,
+                        pos - 1 + search_displacement,
+                        search_window_size
+                    )
+            hits = []
+            for search_string in search_strings:
+                hits.extend(list(re.findall('(?=(%s))' % search_string, 
+                                    search_window)))
+            hit_count = len(hits)
+            if hit_count == 0:
+                # String not found; call single intron
+                final_introns.append((rname, intron_reverse_strand,
+                                            pos, end_pos))
+            elif hit_count == 1:
+                # Call two introns
+                final_introns.extend([(rname, intron_reverse_strand,
+                                            pos, hits[0].start()),
+                                           (rname, intron_reverse_strand,
+                                            hits[0].end(), end_pos)])
+            else:
+                # At least two pairs of possible introns, so add nothing
+                pass'''
+    # Search for prefix and suffix exons
+    return final_introns
+
+def go(input_stream=sys.stdin, output_stream=sys.stdout,
     bowtie_index_base='genome', verbose=False, stranded=False,
-    max_discrepancy=2, min_seq_similarity=0.85, min_intron_size=5,
-    max_intron_size=500000, intron_partition_overlap=20,
-    global_alignment=GlobalAlignment(), search_for_caps=True,
-    min_cap_size=8, cap_search_window_size=1000,
-    max_cap_count=5):
+    min_exon_size=8, min_intron_size=15, max_intron_size=500000,
+    motif_radius=1, search_window_size=1000):
     """ Runs Rail-RNA-intron_search.
 
         Input (read from stdin)
@@ -1236,99 +843,94 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bin_size=10000,
                                 for i, multireadlet
                                 in enumerate(collected_readlets)]
             # Set seed for each read so results for read are reproducible
-            filtered_alignments \
-                = selected_readlet_alignments_by_clustering(
-                                multireadlets,
-                                seed=seq[::-1]
-                            )
-            introns = introns_from_read(
-                    reference_index, seq,
-                    filtered_alignments,
-                    max_discrepancy=max_discrepancy,
-                    min_seq_similarity=min_seq_similarity,
-                    global_alignment=global_alignment,
-                    search_for_caps=search_for_caps,
-                    min_cap_size=min_cap_size,
-                    cap_search_window_size=cap_search_window_size,
-                    max_cap_count=max_cap_count,
-                    seed=seq
-                )
-            # Print introns
-            for intron_strand in introns:
-                intron_rname, intron_reverse_strand = intron_strand
-                for intron_pos, intron_end_pos in introns[intron_strand]:
-                    if intron_end_pos - intron_pos > max_intron_size:
-                        if verbose: 
-                            print >>sys.stderr, 'Intron of size > ' \
-                                'max-intron-size = %d filtered at ' \
-                                '%s:%d-%d' % (max_intron_size, intron_rname,
-                                                intron_pos, intron_end_pos)
-                        continue
-                    if intron_end_pos - intron_pos < min_intron_size:
-                        if verbose:
-                            print >>sys.stderr, 'Intron of size < ' \
-                                'min-intron-size = %d filtered at ' \
-                                '%s:%d-%d' % (min_intron_size, intron_rname,
-                                                intron_pos, intron_end_pos)
-                        continue
-                    partitions = partition.partition(intron_rname, intron_pos,
-                            intron_pos + 1, bin_size,
-                            fudge=intron_partition_overlap
+            random.seed(seq)
+            sample_labels = set((sample_labels.split('\x1f')
+                                    if len(sample_labels) else []))
+            reversed_complement_sample_labels \
+                = set((reversed_complement_sample_labels.split('\x1f')
+                        if len(reversed_complement_sample_labels) else []))
+            if stranded:
+                if sample_labels:
+                    introns = introns_from_clique(
+                            largest_maximal_clique(
+                                    selected_readlet_alignments_by_clustering(
+                                            multireadlets
+                                        )
+                                ),
+                            seq,
+                            reference_index,
+                            min_exon_size=min_exon_size,
+                            min_intron_size=min_intron_size,
+                            max_intron_size=max_intron_size,
+                            search_window_size=search_window_size,
+                            stranded=stranded,
+                            motif_radius=motif_radius,
+                            reverse_reverse_strand=False
                         )
-                    if stranded:
-                        intron_reverse_strand_string = '-' if \
-                            intron_reverse_strand else '+'
-                        intron_strand_string = '+' if \
-                            intron_reverse_strand else '-'
-                        '''If input reads are stranded, whether the intron
-                        is on the forward or reverse strand depends on
-                        whether the original sequence was reverse-complemented
-                        before alignment.'''
-                        if sample_labels:
-                            for (partition_id, partition_start, 
-                                    partition_end) in partitions:
-                                print >>output_stream, \
-                                    'intron\t%s%s\t%012d\t%012d\t%s\t%d' \
-                                    % (partition_id,
-                                        intron_reverse_strand_string,
-                                        intron_pos,
-                                        intron_end_pos,
-                                        sample_labels,
-                                        seq_count
-                                    )
-                                _output_line_count += 1
-                        if reversed_complement_sample_labels:
-                            for (partition_id, partition_start, 
-                                    partition_end) in partitions:
-                                print >>output_stream, \
-                                    'intron\t%s%s\t%012d\t%012d\t%s\t%d' \
-                                    % (partition_id,
-                                        intron_strand_string,
-                                        intron_pos,
-                                        intron_end_pos,
-                                        reversed_complement_sample_labels,
-                                        reversed_complement_seq_count
-                                    )
-                                _output_line_count += 1
-                    else:
-                        '''Strand to which original sequence aligned isn't
-                        significant.'''
-                        final_labels = '\x1f'.join(
-                                set((sample_labels.split('\x1f')
-                            if len(sample_labels) else [])
-                            + (reversed_complement_sample_labels.split('\x1f')
-                            if len(reversed_complement_sample_labels) 
-                            else []))
-                            )
-                        for (partition_id, partition_start, 
-                                    partition_end) in partitions:
-                            print >>output_stream, \
-                                'intron\t%s\t%012d\t%012d\t%s\t%d' \
-                                % (partition_id, intron_pos, intron_end_pos,
-                                    final_labels, seq_count
-                                    + reversed_complement_seq_count
+                    for sample_label in sample_labels:
+                        for (intron_rname, intron_reverse_strand,
+                             intron_pos, intron_end_pos) in introns:
+                            print '%s%s\t%s\t%012d\t%012d' % (
+                                    intron_rname,
+                                    '-' if intron_reverse_strand else '+',
+                                    sample_label,
+                                    intron_pos,
+                                    intron_end_pos
                                 )
-                            _output_line_count += 1
+                if reversed_complement_sample_labels:
+                    introns = introns_from_clique(
+                            largest_maximal_clique(
+                                    selected_readlet_alignments_by_clustering(
+                                            multireadlets
+                                        )
+                                ),
+                            seq,
+                            reference_index,
+                            min_exon_size=min_exon_size,
+                            min_intron_size=min_intron_size,
+                            max_intron_size=max_intron_size,
+                            search_window_size=search_window_size,
+                            stranded=stranded,
+                            motif_radius=motif_radius,
+                            reverse_reverse_strand=True
+                        )
+                    for sample_label in reversed_complement_sample_labels:
+                        for (intron_rname, intron_reverse_strand,
+                             intron_pos, intron_end_pos) in introns:
+                            print '%s%s\t%s\t%012d\t%012d' % (
+                                    intron_rname,
+                                    '-' if intron_reverse_strand else '+',
+                                    sample_label,
+                                    intron_pos,
+                                    intron_end_pos
+                                )
+            else:
+                introns = introns_from_clique(
+                        largest_maximal_clique(
+                                selected_readlet_alignments_by_clustering(
+                                        multireadlets
+                                    )
+                            ),
+                        seq,
+                        reference_index,
+                        min_exon_size=min_exon_size,
+                        min_intron_size=min_intron_size,
+                        max_intron_size=max_intron_size,
+                        search_window_size=search_window_size,
+                        motif_radius=motif_radius,
+                        stranded=stranded
+                    )
+                for sample_label in (sample_labels
+                                        | reversed_complement_sample_labels):
+                    for (intron_rname, intron_reverse_strand,
+                             intron_pos, intron_end_pos) in introns:
+                        print '%s%s\t%s\t%012d\t%012d' % (
+                                intron_rname,
+                                '-' if intron_reverse_strand else '+',
+                                sample_label,
+                                intron_pos,
+                                intron_end_pos
+                            )
             seq_info_captured = False
             collected_readlets = []
             readlet_displacements = []
@@ -1352,47 +954,23 @@ if __name__ == '__main__':
         default=False,
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
              'WRITE EXONS AND INTRONS TO STDOUT')
-    parser.add_argument('--intron-partition-overlap', type=int, required=False,
-        default=20, 
-        help='Amount by which partitions overlap their left and right '
-             'neighbors')
     parser.add_argument('--min-intron-size', type=int, required=False,
         default=5,
         help='Filters introns of length smaller than this value')
     parser.add_argument('--max-intron-size', type=int, required=False,
         default=500000, 
         help='Filters introns of length greater than this value')
-    parser.add_argument('--min-seq-similarity', type=float, required=False,
-        default=0.7, 
-        help='If the difference in length between an unmapped region framed '
-             'by two ECs and its corresponding gap in the reference is <= the '
-             'command-line option --max-discrepancy AND the score of global '
-             'alignment is >= --min-seq-similarity * '
-             '(length of unmapped region), the unmapped region is '
-             'incorporated into a single EC spanning the two original ECs '
-             'via DP filling')
-    parser.add_argument('--max-cap-count', type=int, required=False, 
-        default=5,
-        help='Maximum number of possible prefixes or suffixes of size '
-             '--min-cap-query-size to consider when searching for caps')
-    parser.add_argument('--do-not-search_for_caps',
-        action='store_const',
-        const=True,
-        default=False,
-        help='Ordinarily, reference is searched for the segment of a read (a '
-             'cap) that precedes the first EC and the cap that follows the '
-             'last EC. Such caps are subsequently added as ECs themselves. '
-             'Use this command-line parameter to turn the feature off')
-    parser.add_argument('--min-cap-size', type=int, required=False,
+    parser.add_argument('--min-exon-size', type=int, required=False,
         default=8,
-        help='The reference is not searched for a segment of a read that '
-             'precedes the first EC or follows the last EC smaller than this '
-             'size')
-    parser.add_argument('--cap-search-window-size', type=int, required=False,
+        help='Minimum size of exons to search for')
+    parser.add_argument('--search-window-size', type=int, required=False,
         default=1000,
-        help='The size (in bp) of the reference subsequence in which to '
-             'search for a cap --- i.e., a segment of a read that follows '
-             'the last EC or precedes the first EC.')
+        help='Size of window (in bp) in which to search for exons between '
+             'anchoring alignments')
+    parser.add_argument('--motif-radius', type=int, required=False,
+        default=1,
+        help='Number of bases to tack on to either end of an unmapped region '
+             'when searching for motifs')
 
     # Add command-line arguments for dependencies
     partition.addArgs(parser)
@@ -1406,22 +984,14 @@ if __name__ == '__main__':
 if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
-    '''Compile global alignment code; substitution matrix can be set to
-    nondefault here if desired.'''
-    global_alignment = GlobalAlignment()
     go(bowtie_index_base=args.bowtie_idx,
         verbose=args.verbose, 
-        bin_size=args.partition_length,
         stranded=args.stranded,
-        min_seq_similarity=args.min_seq_similarity,
         min_intron_size=args.min_intron_size,
         max_intron_size=args.max_intron_size,
-        intron_partition_overlap=args.intron_partition_overlap,
-        search_for_caps=(not args.do_not_search_for_caps),
-        min_cap_size=args.min_cap_size,
-        cap_search_window_size=args.cap_search_window_size,
-        max_cap_count=args.max_cap_count,
-        global_alignment=global_alignment)
+        min_exon_size=args.min_exon_size,
+        motif_radius=args.motif_radius,
+        search_window_size=args.search_window_size)
     print >> sys.stderr, 'DONE with intron_search.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)

@@ -116,7 +116,7 @@ for key, xpartition in dp.xstream(sys.stdin, 3, skip_duplicates=True):
     subsequence sizes framing introns + ';' + comma-separated list of
     intron sizes + ';' + distance to previous intron or 'NA' if beginning of
     strand + ';' distance to next intron or 'NA' if end of strand.'''
-    print ('intron\t-\t>' + rname + reverse_strand_string 
+    print ('-\t>' + rname + reverse_strand_string 
             + ';' + str(left_start) + ';'
             + ','.join([str(len(subseq)) for subseq in subseqs]) + ';'
             + ','.join([str(intron_end_pos - intron_pos)

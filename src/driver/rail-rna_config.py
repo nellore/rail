@@ -24,19 +24,21 @@ def addArgs(parser):
     parser.add_argument(\
         '--partition-length', metavar='INT', type=int, default=5000, help='Size of genome partitions to use.')
     parser.add_argument(\
-        '--cluster-radius', metavar='INT', type=int, default=50, help='For clustering candidate introns into junctions.')
-    parser.add_argument(\
         '--motif-radius', type=int, required=False, default=3,
         help='Distance (in bp) from each of the start and end positions '
-             'of a cluster within which to search for motifs')
+             'of a candidate intron within which to search for motifs')
     parser.add_argument(\
-        '--intron-partition-overlap', metavar='INT', type=int, default="50", help='# of nucleotides of overlap between intron-finding partitions.')
-    parser.add_argument('--min-intron-size', type=int, required=False,
-        default=5,
-        help='Filters introns of length smaller than this value')
-    parser.add_argument('--max-intron-size', type=int, required=False,
-        default=500000, 
-        help='Filters introns of length greater than this value')
+        '--search-window-size', type=int, required=False, default=1000,
+        help='Size of window in which to search for small exons')
+    parser.add_argument(\
+        '--min-intron-size', type=int, required=False, default=10,
+        help='Minimum size of introns detected')
+    parser.add_argument(\
+        '--max-intron-size', type=int, required=False, default=500000,
+        help='Maximum size of introns detected')
+    parser.add_argument(\
+        '--min-exon-size', type=int, required=False, default=8,
+        help='Minimum size of exons searched for; smaller exons may be found on realignment')
     parser.add_argument(\
         '--bowtie2-args', metavar='STR', type=str, 
         default='',
@@ -90,24 +92,6 @@ def addArgs(parser):
     parser.add_argument(\
         '--output-sam', action='store_const', const=True, default=False, 
         help='Output SAM files if True; otherwise output BAM files')
-    parser.add_argument('--do-not-search_for_caps',
-        action='store_const',
-        const=True,
-        default=False,
-        help='Ordinarily, reference is searched for the segment of a read (a '
-             'cap) that precedes the first EC and the cap that follows the '
-             'last EC. Such caps are subsequently added as ECs themselves. '
-             'Use this command-line parameter to turn the feature off')
-    parser.add_argument('--min-cap-size', type=int, required=False,
-        default=8,
-        help='The reference is not searched for a segment of a read that '
-             'precedes the first EC or follows the last EC smaller than this '
-             'size')
-    parser.add_argument('--cap-search-window-size', type=int, required=False,
-        default=1000,
-        help='The size (in bp) of the reference subsequence in which to '
-             'search for a cap --- i.e., a segment of a read that follows '
-             'the last EC or precedes the first EC.')
 
 class Rail_RNAConfig(object):
     
@@ -118,21 +102,15 @@ class Rail_RNAConfig(object):
         l = self.readletLen = args.readlet_length
         if l < 4:
             raise RuntimeError("Argument for --readlet-length must be >= 4; was %d" % l)
-        c = self.capping_multiplier = args.capping_multiplier
-        if c < 1:
-            raise RuntimeError("Argument for --capping-multiplier must be >= 1; was %.3f" % c)
         i = self.readletIval = args.readlet_interval
         if i < 1:
             raise RuntimeError("Argument for --readlet-interval must be >= 1; was %d" % i)
-        r = self.clusterRadius = args.cluster_radius
-        if r < 0:
-            raise RuntimeError("Argument for --cluster-radius must be >= 0; was %d" % r)
+        c = self.capping_multiplier = args.capping_multiplier
+        if c < 1:
+            raise RuntimeError("Argument for --capping-multiplier must be >= 1; was %.3f" % c)
         mr = self.motifRadius = args.motif_radius
         if mr < 0:
             raise RuntimeError("Argument for --motif-radius must be >= 0; was %d" % mr)
-        i = self.intronPartitionOlap = args.intron_partition_overlap
-        if i < 0:
-            raise RuntimeError("Argument for --intron-partition-overlap must be >= 0; was %d" % i)
         p = self.partitionLen = args.partition_length
         if p < 100:
             raise RuntimeError("Argument for --partition-length must be >= 100; was %d" % p)
@@ -154,6 +132,9 @@ class Rail_RNAConfig(object):
             raise RuntimeError("Argument for --permutations must be >= 0; was %d" % p)
         self.min_intron_size = args.min_intron_size
         self.max_intron_size = args.max_intron_size
+        self.min_exon_size = args.min_exon_size
+        self.motif_radius = args.motif_radius
+        self.search_window_size = args.search_window_size
         if self.max_intron_size < args.min_intron_size:
             raise RuntimeError("Argument for --max_intron_size (%d) must be less than argument for --min_intron_size (%d)" % (self.max_intron_size, self.min_intron_size))
         if self.max_intron_size < 0:
@@ -170,13 +151,6 @@ class Rail_RNAConfig(object):
         self.output_sam = args.output_sam
         self.poolTech = args.pool_tech_replicates
         self.poolBio = args.pool_bio_replicates
-        self.do_not_search_for_caps = args.do_not_search_for_caps
-        if args.min_cap_size < 0:
-            raise RuntimeError("Argument for --min-cap-size must be in > 0; was %d" % args.min_cap_size)
-        self.min_cap_size = args.min_cap_size
-        if args.cap_search_window_size < 0:
-            raise RuntimeError("Argument for --cap-search-window-size must be in > 0; was %d" % args.cap_search_window_size)
-        self.cap_search_window_size = args.cap_search_window_size
         o = self.hmmOlap = args.hmm_overlap
         if o < 0:
             raise RuntimeError("Argument for --hmm-overlap must be >= 0; was %d" % o)

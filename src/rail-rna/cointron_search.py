@@ -616,7 +616,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         else:
                             right_size = min(right_extend_size + fudge,
                                              right_intron_distance)
-                        print >>output_stream, 'intron\t%s\t%d\t%s\t%s' \
+                        print >>output_stream, '%s\t%d\t%s\t%s' \
                                 '\t%d\t%d\t%s' % (alignments[0][0] + ('+' if 
                                                     alignments[0][1] else '-'),
                                 left_intron_pos,

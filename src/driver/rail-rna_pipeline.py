@@ -136,47 +136,24 @@ class IntronSearchStep(pipeline.Step):
                 --partition-length %d
                 --max-intron-size %d
                 --min-intron-size %d
-                --verbose %s %s
-                --min-cap-size %d
-                --cap-search-window-size %d
+                --min-exon-size %d
+                --search-window-size %d
+                --motif-radius %d
+                --verbose
                 """ % (tconf.partitionLen,
-                             tconf.max_intron_size,
-                             tconf.min_intron_size,
-                             '--stranded' if tconf.stranded else '',
-                             '--do-not-search-for-caps' if tconf.do_not_search_for_caps else '',
-                             tconf.min_cap_size,
-                             tconf.cap_search_window_size)
+                            tconf.max_intron_size,
+                            tconf.min_intron_size,
+                            tconf.min_exon_size,
+                            tconf.search_window_size,
+                            tconf.motif_radius
+                        )
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
         super(IntronSearchStep, self).__init__(
             inps,
             output,  # output URL
             name="IntronSearch",  # name
             aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
-            reducer=reducer_str,
-            multipleOutput=True)
-
-class IntronCallStep(pipeline.Step):
-    def __init__(self, inps, output, tconf, _):
-        reducer_str = """
-            %%PYPY%% %%BASE%%/src/rail-rna/intron_call.py
-                --bowtie-idx=%%REF_BOWTIE_INDEX%% 
-                --cluster-radius=%d
-                --intron-partition-overlap=%d
-                --verbose
-                --partition-length %d
-                --motif-radius=%d
-                %s
-        """ % (tconf.clusterRadius, tconf.intronPartitionOlap,
-               tconf.partitionLen, tconf.motifRadius,
-               '--stranded' if tconf.stranded else '')
-        reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        super(IntronCallStep, self).__init__(
-            inps,
-            output,  # output URL
-            name="IntronCall",  # name
-            aggr=pipeline.Aggregation(None, 4, 1, 1),  # 8 tasks per reducer
-            reducer=reducer_str,
-            multipleOutput=True)
+            reducer=reducer_str)
 
 class IntronConfigStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
@@ -190,9 +167,8 @@ class IntronConfigStep(pipeline.Step):
             inps,
             output,
             name="IntronConfig",
-            aggr=pipeline.Aggregation(None, 1, 2, 5),
-            reducer=reducer_str,
-            multipleOutput=True)
+            aggr=pipeline.Aggregation(None, 1, 2, 4),
+            reducer=reducer_str)
 
 class IntronFastaStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
@@ -208,8 +184,7 @@ class IntronFastaStep(pipeline.Step):
             output,
             name="IntronFasta",
             aggr=pipeline.Aggregation(None, 8, 4, 4),
-            reducer=reducer_str,
-            multipleOutput=True)
+            reducer=reducer_str)
 
 class IntronIndexStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):
@@ -258,8 +233,7 @@ class CointronSearchStep(pipeline.Step):
             output,  # output URL
             name="CointronSearch",  # name
             aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
-            reducer=reducer_str,
-            multipleOutput=True)
+            reducer=reducer_str)
 
 class CointronFastaStep(pipeline.Step):
     def __init__(self, inps, output, tconf, gconf):

@@ -139,13 +139,13 @@ def edges_from_input_stream(input_stream, readlet_size=20,
     for key, xpartition in dp.xstream(input_stream, 2, skip_duplicates=True):
         unlinked_nodes = set()
         for q, value in enumerate(xpartition):
-            assert len(value) == 3
+            assert len(value) == 2
             _input_line_count += 1
             if not q:
                 # Denote start of new partition
                 yield None
                 # Handle first intron from partition
-                intron_start, intron_end = int(value[1]), int(value[2])
+                intron_start, intron_end = int(value[0]), int(value[1])
                 # Create fake source before first intron
                 fake_source = (
                         None,
@@ -164,7 +164,7 @@ def edges_from_input_stream(input_stream, readlet_size=20,
                 first_intron = False
             else:
                 # Handle next introns from partition
-                intron_start, intron_end = int(value[1]), int(value[2])
+                intron_start, intron_end = int(value[0]), int(value[1])
                 introns[index] = (intron_start, intron_end)
                 nodes_to_trash = []
                 for node in unlinked_nodes:
@@ -384,7 +384,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
                     node_count = len(path)
                     left_size = path[1][0] - path[0][1]
                     right_size = path[-1][0] - path[-2][1]
-                    print >>output_stream, 'intron\t%s\t%s\t%s\t%d' \
+                    print >>output_stream, '%s\t%s\t%s\t%d' \
                         '\t%d\t%s\t%s' % (
                         strand,
                         ','.join([str(path[k][0])
