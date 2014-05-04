@@ -83,6 +83,218 @@ _right_forward_elements = set(['AG', 'AC'])
 _left_elements = _left_reverse_elements | _left_forward_elements
 _right_elements = _right_reverse_elements | _right_forward_elements
 
+if 'pypy' not in sys.version.lower():
+    # For fast global alignment without PyPy
+    from scipy import weave
+    class GlobalAlignment:
+        """ Invokes Weave to obtain alignment score matrix with C. """
+
+        def __init__(self, substitution_matrix=[[ 0,-1,-1,-1,-1,-1],
+                                                [-1, 0,-1,-1,-1,-1],
+                                                [-1,-1, 0,-1,-1,-1],
+                                                [-1,-1,-1, 0,-1,-1],
+                                                [-1,-1,-1,-1,-1,-1],
+                                                [-1,-1,-1,-1,-1,-1]]):
+            """ Constructor for GlobalAlignment.
+
+                Places substitution_matrix directly in string containing C code
+                that obtains score matrix for global alignment. Executes C with
+                Weave on trivial case (two sequences, each one character) to 
+                ensure code is precompiled.
+
+                substitution_matrix: 6 x 6 substitution matrix (list of
+                    lists); rows and columns correspond to ACGTN-, where N is
+                    aNy and - is a gap. Default: +1 for match, -5 for gap,
+                    -1 for everything else.
+            """
+            '''Set supporting code including libraries and the function 
+            integer_sequence(), which converts a sequence of nucleotides to
+            an array of indices that correspond to indices of the substitution
+            matrix---also set in the constructor.'''
+            self.support_code = """ 
+                        int* integer_sequence(const char* seq, int length) {
+                            int i;
+                            int* int_seq = (int *)malloc(sizeof(int)*length);
+                            for (i = 0; seq[i]; i++) {
+                                switch (seq[i]) {
+                                    case 'A':
+                                    case 'a':
+                                        int_seq[i] = 0;
+                                        break;
+                                    case 'C':
+                                    case 'c':
+                                        int_seq[i] = 1;
+                                        break;
+                                    case 'G':
+                                    case 'g':
+                                        int_seq[i] = 2;
+                                        break;
+                                    case 'T':
+                                    case 't':
+                                        int_seq[i] = 3;
+                                        break;
+                                    case 'N':
+                                        int_seq[i] = 4;
+                                        break;
+                                    case '-':
+                                        int_seq[i] = 5;
+                                        break;
+                                    default:
+                                        int_seq[i] = 4;
+                                }
+                            }
+                            return int_seq;
+                        }
+                        """
+            '''Score matrix code is written in C/C++; see self.support_code
+            above for dependencies. substitution_matrix is embedded in code
+            below.'''
+            self.score_matrix_code = """
+                const char* c_first_seq = first_seq.c_str();
+                const char* c_second_seq = second_seq.c_str();
+                int row_count = first_seq.length() + 1;
+                int column_count = second_seq.length() + 1;
+                npy_intp dims[2] = {row_count, column_count};
+                PyObject* to_return = PyArray_SimpleNew(2, dims, NPY_INT);
+                int* score_matrix = (int *)((PyArrayObject*) to_return)->data;
+                int* substitution_matrix = (int *)malloc(sizeof(int)*6*6);
+                int* int_first_seq = integer_sequence(c_first_seq,
+                                                        row_count - 1);
+                int* int_second_seq = integer_sequence(c_second_seq,
+                                                        column_count - 1);
+            """ + """""".join(
+                            [("""substitution_matrix[%d] = %d;""" % ((i*6 + j), 
+                                substitution_matrix[i][j])) 
+                                for i in xrange(6) for j in xrange(6)]
+                        ) \
+            + """
+                int i, j;
+                score_matrix[0] = 0;
+                for (i = 1; i < row_count; i++) {
+                    score_matrix[i*column_count] = i 
+                        * substitution_matrix[int_first_seq[i-1]*6+5];
+                }
+                for (j = 1; j < column_count; j++) {
+                    score_matrix[j] = j 
+                        * substitution_matrix[5*6+int_second_seq[j-1]];
+                }
+                int diagonal, vertical, horizontal;
+                for (i = 1; i < row_count; i++) {
+                    for (j = 1; j < column_count; j++) {
+                        diagonal = score_matrix[(i-1)*column_count + j-1]
+                            + substitution_matrix[int_first_seq[i-1]*6
+                                                    +int_second_seq[j-1]];
+                        vertical = score_matrix[(i-1)*column_count + j]
+                            + substitution_matrix[int_first_seq[i-1]*6+5];
+                        horizontal = score_matrix[i*column_count + j-1]
+                            + substitution_matrix[5*6+int_second_seq[j-1]];
+                        score_matrix[i*column_count + j] = std::max(
+                                horizontal, std::max(diagonal, vertical)
+                            );
+                    }
+                }
+                free(int_first_seq);
+                free(int_second_seq);
+                free(substitution_matrix);
+                return_val = to_return;
+            """
+            stdout_holder = os.dup(sys.stdout.fileno())
+            try:
+                # Suppress compiler output by redirecting stdout temporarily
+                devnull = open(os.devnull, 'w')
+                os.dup2(devnull.fileno(), sys.stdout.fileno())
+                self.score_matrix('N', 'N')
+            except Exception as e:
+                print >>sys.stderr, 'C code for computing score matrix ' \
+                                    'failed to compile. Get Python\'s ' \
+                                    'distutils to use g++, and try again.'
+                raise
+            finally:
+                # Turn the tap back on
+                os.dup2(stdout_holder, sys.stdout.fileno())
+
+        def score_matrix(self, first_seq, second_seq):
+            """ Computes score matrix for global alignment of two sequences.
+
+                The substitution matrix is specified when the GlobalAlignment
+                class is instantiated.
+
+                first_seq: first sequence (string).
+                second_seq: second sequence (string).
+
+                Return value: score_matrix, a numpy array whose dimensions are
+                    (len(first_seq) + 1) x (len(second_seq) + 1). It can be
+                    used to trace back the best global alignment.
+            """
+            return weave.inline(
+                                    self.score_matrix_code,
+                                    ['first_seq', 'second_seq'], 
+                                    support_code=self.support_code,
+                                    verbose=0
+                                )
+else:
+    # Use Python version of class
+    class GlobalAlignment:
+        """ Uses Python to obtain alignment score matrix. """
+
+        def __init__(self, substitution_matrix=[[ 0,-1,-1,-1,-1,-1],
+                                                [-1, 0,-1,-1,-1,-1],
+                                                [-1,-1, 0,-1,-1,-1],
+                                                [-1,-1,-1, 0,-1,-1],
+                                                [-1,-1,-1,-1,-1,-1],
+                                                [-1,-1,-1,-1,-1,-1]]):
+            """ Constructor for GlobalAlignment.
+
+                substitution_matrix: 6 x 6 substitution matrix (list of
+                    lists); rows and columns correspond to ACGTN-, where N is
+                    aNy and - is a gap. Default: +1 for match, -5 for gap,
+                    -1 for everything else.
+            """
+            self.substitution_matrix = substitution_matrix
+
+        def score_matrix(self, first_seq, second_seq):
+            """ Computes score matrix for global alignment of two sequences.
+
+                The substitution matrix is specified when the GlobalAlignment
+                class is instantiated.
+
+                first_seq: first sequence (string).
+                second_seq: second sequence (string).
+
+                Return value: score_matrix, a numpy array whose dimensions are
+                    (len(first_seq) + 1) x (len(second_seq) + 1). It can be
+                    used to trace back the best global alignment.
+            """
+            first_seq = ['ACGTN-'.index(char) for char in first_seq]
+            second_seq = ['ACGTN-'.index(char) for char in second_seq]
+            row_count = len(first_seq) + 1
+            column_count = len(second_seq) + 1
+            score_matrix = [[0 for i in xrange(column_count)]
+                                for j in xrange(row_count)]
+            for j in xrange(1, column_count):
+                score_matrix[0][j] = j \
+                    * self.substitution_matrix[5][second_seq[j-1]]
+            for i in xrange(1, row_count):
+                score_matrix[i][0] = i \
+                    * self.substitution_matrix[first_seq[i-1]][5]
+            for i in xrange(1, row_count):
+                for j in xrange(1, column_count):
+                    score_matrix[i][j] = max(score_matrix[i-1][j-1] 
+                                                + self.substitution_matrix[
+                                                        first_seq[i-1]]
+                                                        [second_seq[j-1]
+                                                    ], # diagonal
+                                             score_matrix[i-1][j]
+                                                + self.substitution_matrix[
+                                                        first_seq[i-1]][5
+                                                    ], # vertical
+                                             score_matrix[i][j-1]
+                                                + self.substitution_matrix[
+                                                        5][second_seq[j-1]
+                                                    ] # horizontal
+                                            )
+            return score_matrix
+
 def maximal_suffix_match(query_seq, search_window,
                             min_cap_size=8, max_cap_count=5):
     """ Finds maximum matching suffix of query_seq closest to start of window.
@@ -1131,5 +1343,5 @@ elif __name__ == '__main__':
     import unittest
     import shutil
     import tempfile
-   
+
     unittest.main()
