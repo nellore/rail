@@ -1004,10 +1004,12 @@ def introns_from_clique(clique, read_seq, reference_index,
                                             )
         try:
             max_score = max([intron[-1] for intron in candidate_introns])
-            for (rname, intron_reverse_strand,
-                    pos, end_pos, alignment_score) in candidate_introns:
-                if alignment_score == max_score:
-                    yield (rname, intron_reverse_strand, pos, end_pos)
+            if max_score > 0:
+                # Filter out very bad alignments
+                for (rname, intron_reverse_strand,
+                        pos, end_pos, alignment_score) in candidate_introns:
+                    if alignment_score == max_score:
+                        yield (rname, intron_reverse_strand, pos, end_pos)
         except ValueError:
             # No introns found
             pass
