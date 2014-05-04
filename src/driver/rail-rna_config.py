@@ -24,7 +24,7 @@ def addArgs(parser):
     parser.add_argument(\
         '--partition-length', metavar='INT', type=int, default=5000, help='Size of genome partitions to use.')
     parser.add_argument(\
-        '--motif-radius', type=int, required=False, default=3,
+        '--motif-radius', type=int, required=False, default=5,
         help='Distance (in bp) from each of the start and end positions '
              'of a candidate intron within which to search for motifs')
     parser.add_argument(\
@@ -37,7 +37,7 @@ def addArgs(parser):
         '--max-intron-size', type=int, required=False, default=500000,
         help='Maximum size of introns detected')
     parser.add_argument(\
-        '--min-exon-size', type=int, required=False, default=8,
+        '--min-exon-size', type=int, required=False, default=9,
         help='Minimum size of exons searched for; smaller exons may be found on realignment')
     parser.add_argument(\
         '--bowtie2-args', metavar='STR', type=str, 

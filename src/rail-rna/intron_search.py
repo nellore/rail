@@ -76,6 +76,225 @@ _reverse_strand_motifs = set(_prioritized_reverse_strand_motifs)
 _prioritized_forward_strand_motifs = [('GT', 'AG'), ('GC', 'AG'), ('AT', 'AC')]
 _forward_strand_motifs = set(_prioritized_forward_strand_motifs)
 _all_motifs = _reverse_strand_motifs | _forward_strand_motifs
+_left_reverse_elements = set(['CT', 'GT'])
+_left_forward_elements = set(['GT', 'GC', 'AT'])
+_right_reverse_elements = set(['AC', 'GC', 'AT'])
+_right_forward_elements = set(['AG', 'AC'])
+_left_elements = _left_reverse_elements | _left_forward_elements
+_right_elements = _right_reverse_elements | _right_forward_elements
+
+if 'pypy' not in sys.version.lower():
+    # For fast global alignment without PyPy
+    from scipy import weave
+    class GlobalAlignment:
+        """ Invokes Weave to obtain alignment score matrix with C. """
+
+        def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-5],
+                                                [-1, 1,-1,-1,-1,-5],
+                                                [-1,-1, 1,-1,-1,-5],
+                                                [-1,-1,-1, 1,-1,-5],
+                                                [-1,-1,-1,-1,-1,-5],
+                                                [-5,-5,-5,-5,-5,-5]]):
+            """ Constructor for GlobalAlignment.
+
+                Places substitution_matrix directly in string containing C code
+                that obtains score matrix for global alignment. Executes C with
+                Weave on trivial case (two sequences, each one character) to 
+                ensure code is precompiled.
+
+                substitution_matrix: 6 x 6 substitution matrix (list of
+                    lists); rows and columns correspond to ACGTN-, where N is
+                    aNy and - is a gap. Default: +1 for match, -5 for gap,
+                    -1 for everything else.
+            """
+            '''Set supporting code including libraries and the function 
+            integer_sequence(), which converts a sequence of nucleotides to
+            an array of indices that correspond to indices of the substitution
+            matrix---also set in the constructor.'''
+            self.support_code = """ 
+                        int* integer_sequence(const char* seq, int length) {
+                            int i;
+                            int* int_seq = (int *)malloc(sizeof(int)*length);
+                            for (i = 0; seq[i]; i++) {
+                                switch (seq[i]) {
+                                    case 'A':
+                                    case 'a':
+                                        int_seq[i] = 0;
+                                        break;
+                                    case 'C':
+                                    case 'c':
+                                        int_seq[i] = 1;
+                                        break;
+                                    case 'G':
+                                    case 'g':
+                                        int_seq[i] = 2;
+                                        break;
+                                    case 'T':
+                                    case 't':
+                                        int_seq[i] = 3;
+                                        break;
+                                    case 'N':
+                                        int_seq[i] = 4;
+                                        break;
+                                    case '-':
+                                        int_seq[i] = 5;
+                                        break;
+                                    default:
+                                        int_seq[i] = 4;
+                                }
+                            }
+                            return int_seq;
+                        }
+                        """
+            '''Score matrix code is written in C/C++; see self.support_code
+            above for dependencies. substitution_matrix is embedded in code
+            below.'''
+            self.score_matrix_code = """
+                const char* c_first_seq = first_seq.c_str();
+                const char* c_second_seq = second_seq.c_str();
+                int row_count = first_seq.length() + 1;
+                int column_count = second_seq.length() + 1;
+                npy_intp dims[2] = {row_count, column_count};
+                PyObject* to_return = PyArray_SimpleNew(2, dims, NPY_INT);
+                int* score_matrix = (int *)((PyArrayObject*) to_return)->data;
+                int* substitution_matrix = (int *)malloc(sizeof(int)*6*6);
+                int* int_first_seq = integer_sequence(c_first_seq,
+                                                        row_count - 1);
+                int* int_second_seq = integer_sequence(c_second_seq,
+                                                        column_count - 1);
+            """ + """""".join(
+                            [("""substitution_matrix[%d] = %d;""" % ((i*6 + j), 
+                                substitution_matrix[i][j])) 
+                                for i in xrange(6) for j in xrange(6)]
+                        ) \
+            + """
+                int i, j;
+                score_matrix[0] = 0;
+                for (i = 1; i < row_count; i++) {
+                    score_matrix[i*column_count] = i 
+                        * substitution_matrix[int_first_seq[i-1]*6+5];
+                }
+                for (j = 1; j < column_count; j++) {
+                    score_matrix[j] = j 
+                        * substitution_matrix[5*6+int_second_seq[j-1]];
+                }
+                int diagonal, vertical, horizontal;
+                for (i = 1; i < row_count; i++) {
+                    for (j = 1; j < column_count; j++) {
+                        diagonal = score_matrix[(i-1)*column_count + j-1]
+                            + substitution_matrix[int_first_seq[i-1]*6
+                                                    +int_second_seq[j-1]];
+                        vertical = score_matrix[(i-1)*column_count + j]
+                            + substitution_matrix[int_first_seq[i-1]*6+5];
+                        horizontal = score_matrix[i*column_count + j-1]
+                            + substitution_matrix[5*6+int_second_seq[j-1]];
+                        score_matrix[i*column_count + j] = std::max(
+                                horizontal, std::max(diagonal, vertical)
+                            );
+                    }
+                }
+                free(int_first_seq);
+                free(int_second_seq);
+                free(substitution_matrix);
+                return_val = to_return;
+            """
+            stdout_holder = os.dup(sys.stdout.fileno())
+            try:
+                # Suppress compiler output by redirecting stdout temporarily
+                devnull = open(os.devnull, 'w')
+                os.dup2(devnull.fileno(), sys.stdout.fileno())
+                self.score_matrix('N', 'N')
+            except Exception as e:
+                print >>sys.stderr, 'C code for computing score matrix ' \
+                                    'failed to compile. Get Python\'s ' \
+                                    'distutils to use g++, and try again.'
+                raise
+            finally:
+                # Turn the tap back on
+                os.dup2(stdout_holder, sys.stdout.fileno())
+
+        def score_matrix(self, first_seq, second_seq):
+            """ Computes score matrix for global alignment of two sequences.
+
+                The substitution matrix is specified when the GlobalAlignment
+                class is instantiated.
+
+                first_seq: first sequence (string).
+                second_seq: second sequence (string).
+
+                Return value: score_matrix, a numpy array whose dimensions are
+                    (len(first_seq) + 1) x (len(second_seq) + 1). It can be
+                    used to trace back the best global alignment.
+            """
+            return weave.inline(
+                                    self.score_matrix_code,
+                                    ['first_seq', 'second_seq'], 
+                                    support_code=self.support_code,
+                                    verbose=0
+                                )
+else:
+    # Use Python version of class
+    class GlobalAlignment:
+        """ Uses Python to obtain alignment score matrix. """
+
+        def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-5],
+                                                [-1, 1,-1,-1,-1,-5],
+                                                [-1,-1, 1,-1,-1,-5],
+                                                [-1,-1,-1, 1,-1,-5],
+                                                [-1,-1,-1,-1,-1,-5],
+                                                [-5,-5,-5,-5,-5,-5]]):
+            """ Constructor for GlobalAlignment.
+
+                substitution_matrix: 6 x 6 substitution matrix (list of
+                    lists); rows and columns correspond to ACGTN-, where N is
+                    aNy and - is a gap. Default: +1 for match, -5 for gap,
+                    -1 for everything else.
+            """
+            self.substitution_matrix = substitution_matrix
+
+        def score_matrix(self, first_seq, second_seq):
+            """ Computes score matrix for global alignment of two sequences.
+
+                The substitution matrix is specified when the GlobalAlignment
+                class is instantiated.
+
+                first_seq: first sequence (string).
+                second_seq: second sequence (string).
+
+                Return value: score_matrix, a numpy array whose dimensions are
+                    (len(first_seq) + 1) x (len(second_seq) + 1). It can be
+                    used to trace back the best global alignment.
+            """
+            first_seq = ['ACGTN-'.index(char) for char in first_seq]
+            second_seq = ['ACGTN-'.index(char) for char in second_seq]
+            row_count = len(first_seq) + 1
+            column_count = len(second_seq) + 1
+            score_matrix = [[0 for i in xrange(column_count)]
+                                for j in xrange(row_count)]
+            for j in xrange(1, column_count):
+                score_matrix[0][j] = j \
+                    * self.substitution_matrix[5][second_seq[j-1]]
+            for i in xrange(1, row_count):
+                score_matrix[i][0] = i \
+                    * self.substitution_matrix[first_seq[i-1]][5]
+            for i in xrange(1, row_count):
+                for j in xrange(1, column_count):
+                    score_matrix[i][j] = max(score_matrix[i-1][j-1] 
+                                                + self.substitution_matrix[
+                                                        first_seq[i-1]]
+                                                        [second_seq[j-1]
+                                                    ], # diagonal
+                                             score_matrix[i-1][j]
+                                                + self.substitution_matrix[
+                                                        first_seq[i-1]][5
+                                                    ], # vertical
+                                             score_matrix[i][j-1]
+                                                + self.substitution_matrix[
+                                                        5][second_seq[j-1]
+                                                    ] # horizontal
+                                            )
+            return score_matrix
+
 
 def maximal_suffix_match(query_seq, search_window,
                             min_cap_size=8, max_cap_count=5):
@@ -446,7 +665,7 @@ def pairwise(iterable):
 def introns_from_clique(clique, read_seq, reference_index,
         min_exon_size=8, min_intron_size=10, max_intron_size=500000,
         search_window_size=1000, stranded=False, motif_radius=1,
-        reverse_reverse_strand=False):
+        reverse_reverse_strand=False, global_alignment=GlobalAlignment()):
     """ 
         NOTE THAT clique LIST IS SORTED ASSUMING THE ONLY READLETS WHOSE
         DISPLACEMENTS ARE THE SAME ARE CAPPING READLETS. IF THE READLETIZING
@@ -471,235 +690,332 @@ def introns_from_clique(clique, read_seq, reference_index,
         reverse_reverse_strand: if True, original read sequence was
             reverse-complemented before alignment of constituent readlets
     """
-    read_seq = read_seq.upper()
     if not clique:
-        return []
+        return
+    read_seq = read_seq.upper()
+    read_seq_size = len(read_seq)
+    if stranded:
+        if reverse_strand:
+            search_motifs = _reverse_strand_motifs
+            left_search_motifs = _left_reverse_elements
+            right_search_motifs = _right_reverse_elements
+        else:
+            search_motifs = _forward_strand_motifs
+            left_search_motifs = _left_forward_elements
+            right_search_motifs = _right_forward_elements
+    else:
+        search_motifs = _all_motifs
+        left_search_motifs = _left_elements
+        right_search_motifs = _right_elements
     rname, reverse_strand = clique[0][:2]
+    if reverse_strand:
+        read_seq = read_seq[::-1].translate(
+            _reversed_complement_translation_table
+        )
     if reverse_reverse_strand:
         reverse_strand = not reverse_strand
-    candidate_introns = []
     # Arrange sort so that longest aligning capping readlet is used as flank
     clique.sort(key=lambda alignment: (alignment[-1], alignment[-2] if
                                                         alignment[-1] == 0
                                                         else alignment[-3]))
-    '''Call introns overlapped by read using constraint that all are on the
-    same strand. First call introns between mapped regions by iterating 
-    through flanking alignments.'''
+    _, _, prefix_pos, prefix_end_pos, prefix_displacement = clique[0]
+    _, _, suffix_pos, suffix_end_pos, suffix_displacement = clique[-1]
+    new_prefix, new_suffix = [], []
+    if clique[0][-1] >= min_exon_size:
+        # Find possible maximal matching prefixes
+        search_pos = max(0, prefix_pos - 1 - search_window_size)
+        search_window = reference_index.get_stretch(
+                rname,
+                search_pos,
+                prefix_pos - 1 - search_pos
+            )
+        try:
+            new_prefix_offset, new_prefix_size \
+                = maximal_suffix_match(
+                        read_seq[:prefix_displacement][::-1],
+                        search_window[::-1],
+                        min_cap_size=min_exon_size
+                    )
+            new_prefix = [(rname, reverse_strand, 
+                            prefix_pos - new_prefix_offset
+                            - new_prefix_size,
+                            prefix_pos - new_prefix_offset,
+                            0)]
+        except TypeError:
+            # maximal_suffix_match returned None
+            pass
+    unmapped_displacement = suffix_end_pos - suffix_pos + suffix_displacement
+    unmapped_base_count = read_seq_size - unmapped_displacement
+    if suffix_end_pos + unmapped_base_count - 1 \
+        > reference_index.length[rname]:
+        # Skip this part if too close to edge of reference
+        unmapped_base_count = 0
+    if unmapped_base_count >= min_exon_size:
+        search_pos = suffix_end_pos - 1
+        search_window = reference_index.get_stretch(
+                rname,
+                search_pos,
+                min(search_window_size, 
+                     reference_index.rname_lengths[rname] - search_pos)
+            )
+        try:
+            new_suffix_offset, new_suffix_size \
+                = maximal_suffix_match(
+                        read_seq[-unmapped_base_count:],
+                        search_window,
+                        min_cap_size=min_exon_size
+                    )
+            new_suffix = [(rname, reverse_strand,
+                            suffix_end_pos + new_suffix_offset,
+                            suffix_end_pos + new_suffix_offset
+                            + new_suffix_size,
+                            read_seq_size - new_suffix_size)]
+        except TypeError:
+            # maximal_suffix_match returned None
+            pass
     for ((_, _, left_pos, left_end_pos, left_displacement),
             (_, _, right_pos, right_end_pos, right_displacement)) \
-        in pairwise(clique):
-        '''Assume that flanking alignments provide the exact _size_ of an
-        intron; this happens if there are no intervening exons.'''
-        read_span = right_displacement + right_end_pos - right_pos \
-                        - left_displacement
-        intron_size = right_end_pos - left_pos - read_span
+        in pairwise(new_prefix + clique + new_suffix):
+        candidate_introns = []
         unmapped_start = left_displacement + left_end_pos - left_pos
         unmapped_end = right_displacement
-        if unmapped_start > unmapped_end:
-            '''Alignments overlap on read; turn the unmapped region into
-            the overlap.'''
-            unmapped_start, unmapped_end = unmapped_end, unmapped_start
-            unmapped_size = unmapped_end - unmapped_start
-            right_pos += unmapped_size
-            left_end_pos -= unmapped_size
-        else:
-            unmapped_size = unmapped_end - unmapped_start
-        # Expand unmapped region
-        right_pos += motif_radius
-        left_end_pos -= motif_radius
-        unmapped_size += 2 * motif_radius
-        unmapped_start -= motif_radius
-        unmapped_end += motif_radius
-        if min_intron_size <= intron_size <= max_intron_size:
-            candidate_introns.append(
-                    (left_end_pos, 
-                        intron_size, 
-                        unmapped_size,
-                        unmapped_start,
-                        unmapped_end)
-                )
-    # Motifs must agree on strand
-    introns = []
-    if stranded:
-        if reverse_strand:
-            search_motifs = _reverse_strand_motifs
-        else:
-            search_motifs = _forward_strand_motifs
-    else:
-        search_motifs = _all_motifs
-    for i, (pos, intron_size, unmapped_size, unmapped_start, 
-            unmapped_end) in enumerate(candidate_introns):    
+        read_span = right_displacement + right_end_pos - right_pos \
+                        - left_displacement
+        # Store number of intronic bases in intevening region
+        intronic_base_count = right_end_pos - left_pos - read_span
+        if intronic_base_count <= min_intron_size:
+            # Filter out introns that are too small
+            continue
+        left_motif_search_pos_1 = left_end_pos - motif_radius
+        right_motif_search_pos_1 = right_pos - motif_radius
+        left_motif_search_pos_2 = right_motif_search_pos_1 \
+                                   - intronic_base_count
+        right_motif_search_pos_2 = left_motif_search_pos_1 \
+                                   + intronic_base_count
+        left_motif_search_bounds = (
+                min(left_motif_search_pos_1, left_motif_search_pos_2),
+                max(left_motif_search_pos_1 + 2 * motif_radius,
+                    left_motif_search_pos_2 + 2 * motif_radius)
+            )
+        right_motif_search_bounds = (
+                min(right_motif_search_pos_1, right_motif_search_pos_2) - 2,
+                max(right_motif_search_pos_1 + 2 * motif_radius,
+                    right_motif_search_pos_2 + 2 * motif_radius) - 2
+            )
+        right_motif_search_size = right_motif_search_bounds[1] \
+                                    - right_motif_search_bounds[0]
+        left_motif_search_size = left_motif_search_bounds[1] \
+                                    - left_motif_search_bounds[0]
         left_motif_window = reference_index.get_stretch(
-                                    rname,
-                                    pos - 1,
-                                    unmapped_size
-                                )
+                                        rname,
+                                        left_motif_search_bounds[0] - 1,
+                                        left_motif_search_size
+                                    )
         right_motif_window = reference_index.get_stretch(
+                                        rname,
+                                        right_motif_search_bounds[0] - 1,
+                                        right_motif_search_size
+                                    )
+        left_offsets = []
+        left_motifs = []
+        right_offsets = []
+        right_motifs = []
+        for i in xrange(left_motif_search_size):
+            if left_motif_window[i:i+2] in left_search_motifs:
+                left_motifs.append(left_motif_window[i:i+2])
+                left_offsets.append(i)
+        for i in xrange(right_motif_search_size):
+            if right_motif_window[i:i+2] in right_search_motifs:
+                right_motifs.append(right_motif_window[i:i+2])
+                right_offsets.append(i)
+        product_offsets = list(itertools.product(left_offsets, right_offsets))
+        product_motifs = list(itertools.product(left_motifs, right_motifs))
+        candidate_introns = []
+        for i in xrange(len(product_motifs)):
+            if product_motifs[i] in search_motifs:
+                '''Appropriate motif combo found! Compute intron size
+                ASSUMING ONE INTRON and number of intervening exonic bases.'''
+                intron_pos \
+                    = left_motif_search_bounds[0] + product_offsets[i][0]
+                intron_end_pos \
+                    = right_motif_search_bounds[0] + product_offsets[i][1] + 2
+                intron_size = intron_end_pos - intron_pos
+                if intron_size < intronic_base_count:
+                    '''Intervening exonic bases should only split up the single
+                    intron and be mistakenly counted as intronic bases,
+                    increasing intron_size. If intron_size
+                    < intronic_base_count, a deletion or a mismap may be
+                    responsible, but admitting the option increases the
+                    false positive rate. Ignore.'''
+                    continue
+                # Assume at most ONE intermediate small exon
+                small_exon_size = intron_size - intronic_base_count
+                if min_intron_size <= intron_size <= max_intron_size:
+                    if small_exon_size == 0:
+                        '''No need to search for intermediate exon. Realign
+                        and add to list of candidate exons.'''
+                        left_stretch = reference_index.get_stretch(
+                                                        rname,
+                                                        left_pos - 1,
+                                                        intron_pos
+                                                        - left_pos
+                                                    )
+                        right_stretch = reference_index.get_stretch(
+                                                        rname,
+                                                        intron_end_pos - 1,
+                                                        right_end_pos
+                                                        - intron_end_pos
+                                                    )
+                        reference_minus_intron = left_stretch + right_stretch
+                        alignment_score = global_alignment.score_matrix(
+                                                read_seq[
+                                                    left_displacement:
+                                                    left_displacement+read_span
+                                                ],
+                                                reference_minus_intron)[-1][-1]
+                        candidate_introns.append(
+                                (
                                     rname,
-                                    pos - 1 + intron_size - 2,
-                                    unmapped_size
+                                    True if product_motifs[i] in
+                                    _reverse_strand_motifs else False,
+                                    intron_pos,
+                                    intron_end_pos,
+                                    alignment_score
                                 )
-        found_motifs = []
-        for j in xrange(unmapped_size - 1):
-            candidate_motif = (left_motif_window[j:j+2],
-                                right_motif_window[j:j+2])
-            if candidate_motif in search_motifs:
-                introns.append(
-                        (i, pos + j,
-                         pos + intron_size + j,
-                         intron_size,
-                         unmapped_start,
-                         unmapped_end,
-                         candidate_motif,
-                         )
-                    )
-    # Enumerate groups of introns that agree on strand
-    forward_strand_introns = [intron for intron in introns if intron[-1]
-                                    in _forward_strand_motifs]
-    reverse_strand_introns = [intron for intron in introns if intron[-1]
-                                    in _reverse_strand_motifs]
-    forward_strand_intron_set = set([intron[0] for intron
-                                        in forward_strand_introns])
-    reverse_strand_intron_set = set([intron[0] for intron
-                                        in reverse_strand_introns])
-    forward_strand_intron_count = len(forward_strand_intron_set)
-    reverse_strand_intron_count = len(reverse_strand_intron_set)
-    filtered_introns = []
-    if forward_strand_intron_count != 0 \
-        and forward_strand_intron_count == reverse_strand_intron_count:
-        '''Try to break tie with priority class. If this can't be done,
-        be conservative and don't call any introns.'''
-        forward_strand_priority_sum = 0
-        final_forward_strand_introns = []
-        for i in forward_strand_intron_set:
-            candidate_motifs = [intron for intron in forward_strand_introns
-                                if i == intron[0]]
-            if len(candidate_motifs) >= 1:
-                priorities \
-                    = [_prioritized_forward_strand_motifs.index(motif[-1])
-                        for motif in candidate_motifs]
-                min_priority = min(priorities)
-                priority_indices = [j for j, priority in enumerate(priorities)
-                                        if priority == min_priority]
-                if len(priority_indices) == 1:
-                    final_forward_strand_introns.append(candidate_motifs[
-                                                          priority_indices[0]
-                                                        ][1:] + (False,))
-                forward_strand_priority_sum += min_priority
-        reverse_strand_priority_sum = 0
-        final_reverse_strand_introns = []
-        for i in reverse_strand_intron_set:
-            candidate_motifs = [intron for intron in reverse_strand_introns
-                                if i == intron[0]]
-            if len(candidate_motifs) >= 1:
-                priorities \
-                    = [_prioritized_reverse_strand_motifs.index(motif[-1])
-                        for motif in candidate_motifs]
-                min_priority = min(priorities)
-                priority_indices = [j for j, priority in enumerate(priorities)
-                                        if priority == min_priority]
-                if len(priority_indices) == 1:
-                    final_reverse_strand_introns.append(candidate_motifs[
-                                                          priority_indices[0]
-                                                        ][1:] + (True,))
-                reverse_strand_priority_sum += min_priority
-        if reverse_strand_priority_sum > forward_strand_priority_sum:
-            filtered_introns = final_forward_strand_introns
-        elif reverse_strand_priority_sum < forward_strand_priority_sum:
-            filtered_introns = final_reverse_strand_introns
-    elif forward_strand_intron_count > reverse_strand_intron_count:
-        for i in forward_strand_intron_set:
-            candidate_motifs = [intron for intron in forward_strand_introns
-                                if i == intron[0]]
-            if len(candidate_motifs) >= 1:
-                priorities \
-                    = [_prioritized_forward_strand_motifs.index(motif[-1])
-                        for motif in candidate_motifs]
-                min_priority = min(priorities)
-                priority_indices = [j for j, priority in enumerate(priorities)
-                                        if priority == min_priority]
-                if len(priority_indices) == 1:
-                    filtered_introns.append(candidate_motifs[
-                                                priority_indices[0]
-                                            ][1:] + (False,))
-    elif reverse_strand_intron_count > forward_strand_intron_count:
-        for i in reverse_strand_intron_set:
-            candidate_motifs = [intron for intron in reverse_strand_introns
-                                if i == intron[0]]
-            if len(candidate_motifs) >= 1:
-                priorities \
-                    = [_prioritized_reverse_strand_motifs.index(motif[-1])
-                        for motif in candidate_motifs]
-                min_priority = min(priorities)
-                priority_indices = [j for j, priority in enumerate(priorities)
-                                        if priority == min_priority]
-                if len(priority_indices) == 1:
-                    filtered_introns.append(candidate_motifs[
-                                                priority_indices[0]
-                                            ][1:] + (True,))
-    final_introns = deque()
-    # Search for small exons that could split introns
-    for (pos, end_pos, intron_size, unmapped_start, unmapped_end,
-            intron_motif, intron_reverse_strand) in filtered_introns:
-        final_introns.append((rname, intron_reverse_strand, pos, end_pos))
-        '''if unmapped_end - unmapped_start >= min_exon_size:
-            # Search for just _one_ intervening exon
-            if intron_reverse_strand:
-                left_caps = [motif[1] for motif in _reverse_strand_motifs
-                                if motif[0] == intron_motif[0]]
-                right_caps = [motif[0] for motif in _reverse_strand_motifs
-                                if motif[1] == intron_motif[1]]
-            else:
-                left_caps = [motif[1] for motif in _forward_strand_motifs
-                                if motif[0] == intron_motif[0]]
-                right_caps = [motif[0] for motif in _forward_strand_motifs
-                                if motif[1] == intron_motif[1]]
-            caps = itertools.product(left_caps, right_caps)
-            search_strings = [cap[0] + read_seq[unmapped_start:unmapped_end]
-                                + cap[1] for cap in caps]
-            if intron_size <= search_window_size:
-                search_displacement = 0
-                search_window = reference_index.get_stretch(
-                        rname,
-                        pos - 1,
-                        intron_size
-                    )
-            else:
-                # Randomly select start position of search window 
-                search_displacement = random.randint(
-                                            0, 
-                                            intron_size - search_window_size
-                                        )
-                search_window = reference_index.get_stretch(
-                        rname,
-                        pos - 1 + search_displacement,
-                        search_window_size
-                    )
-            hits = []
-            for search_string in search_strings:
-                hits.extend(list(re.findall('(?=(%s))' % search_string, 
-                                    search_window)))
-            hit_count = len(hits)
-            if hit_count == 0:
-                # String not found; call single intron
-                final_introns.append((rname, intron_reverse_strand,
-                                            pos, end_pos))
-            elif hit_count == 1:
-                # Call two introns
-                final_introns.extend([(rname, intron_reverse_strand,
-                                            pos, hits[0].start()),
-                                           (rname, intron_reverse_strand,
-                                            hits[0].end(), end_pos)])
-            else:
-                # At least two pairs of possible introns, so add nothing
-                pass'''
-    # Search for prefix and suffix exons
-    return final_introns
+                            )
+                    elif small_exon_size >= min_exon_size:
+                        '''Search only within 1000 bases of either end of the
+                        intron to find where to split it. Enumerate possible
+                        motif ends and starts, and match small exon. Its bases
+                        from the read are well-defined assuming no complicating
+                        indels.'''
+                        small_exon_start = intron_pos - left_end_pos \
+                                             + unmapped_start
+                        small_exon_end = unmapped_end - right_pos \
+                                          + intron_end_pos
+                        small_exon = read_seq[small_exon_start:small_exon_end]
+                        if len(small_exon) != small_exon_size:
+                            # Motif search provided combo that's out of bounds
+                            continue
+                        left_caps = [motif[1] for motif in search_motifs
+                                        if motif[0] == product_motifs[i][0]]
+                        right_caps = [motif[0] for motif in search_motifs
+                                        if motif[1] == product_motifs[i][1]]
+                        cap_combos = list(
+                                itertools.product(left_caps, right_caps)
+                            )
+                        small_exon = read_seq[small_exon_start:
+                                                small_exon_end]
+                        '''Only need to compute alignment score once; it's the
+                        same for all small exons found since only exact
+                        matches are admitted.'''
+                        intron_reverse_strand = (
+                                True if product_motifs[i] in
+                                _reverse_strand_motifs else False
+                            )
+                        left_stretch = reference_index.get_stretch(
+                                                        rname,
+                                                        left_pos - 1,
+                                                        intron_pos
+                                                        - left_pos
+                                                    )
+                        right_stretch = reference_index.get_stretch(
+                                                        rname,
+                                                        intron_end_pos - 1,
+                                                        right_end_pos
+                                                        - intron_end_pos
+                                                    )
+                        reference_minus_introns = left_stretch + small_exon \
+                                                    + right_stretch
+                        if intron_size <= 2 * search_window_size:
+                            search_windows = [reference_index.get_stretch(
+                                                        rname,
+                                                        intron_pos - 1,
+                                                        intron_size
+                                                    )]
+                        else:
+                            search_windows = [reference_index.get_stretch(
+                                                        rname,
+                                                        intron_pos - 1,
+                                                        search_window_size
+                                                ),
+                                              reference_index.get_stretch(
+                                                        rname,
+                                                        intron_end_pos
+                                                        - search_window_size
+                                                        - 1,
+                                                        search_window_size
+                                                    )]
+                        found_alignment_score = False
+                        for cap_combo in cap_combos:
+                            capped_exon \
+                                = cap_combo[0] + small_exon + cap_combo[1]
+                            for j, search_window in enumerate(search_windows):
+                                for small_exon_match \
+                                    in re.finditer(capped_exon, search_window):
+                                    if not found_alignment_score:
+                                        alignment_score \
+                                            = global_alignment.score_matrix(
+                                                    read_seq[
+                                                        left_displacement:
+                                                        left_displacement
+                                                        + read_span
+                                                    ],
+                                                    reference_minus_introns
+                                                )[-1][-1]
+                                        found_alignment_score = True
+                                    # Split original intron
+                                    if j == 0:
+                                        # First search-window type
+                                        first_intron_end_pos \
+                                            = intron_pos \
+                                                + small_exon_match.start() + 2
+                                        second_intron_pos \
+                                            = first_intron_end_pos \
+                                                + small_exon_size
+                                    else:
+                                        # j == 1: second search-window type
+                                        second_intron_pos \
+                                            = intron_end_pos \
+                                                - search_window_size \
+                                                + small_exon_match.end() - 2
+                                        first_intron_end_pos \
+                                            = second_intron_pos \
+                                                - small_exon_size
+                                    if min_intron_size \
+                                        <= first_intron_end_pos - intron_pos \
+                                        <= max_intron_size:
+                                        candidate_introns.append(
+                                                (rname,
+                                                  intron_reverse_strand,
+                                                  intron_pos,
+                                                  first_intron_end_pos,
+                                                  alignment_score)
+                                            )
+                                    if min_intron_size \
+                                        <= intron_end_pos - second_intron_pos \
+                                        <= max_intron_size:
+                                        candidate_introns.append(
+                                                (rname,
+                                                  intron_reverse_strand,
+                                                  second_intron_pos,
+                                                  intron_end_pos,
+                                                  alignment_score)
+                                            )
+        try:
+            max_score = max([intron[-1] for intron in candidate_introns])
+            for (rname, intron_reverse_strand,
+                    pos, end_pos, alignment_score) in candidate_introns:
+                if alignment_score == max_score:
+                    yield (rname, intron_reverse_strand, pos, end_pos)
+        except ValueError:
+            # No introns found
+            pass
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout,
-    bowtie_index_base='genome', verbose=False, stranded=False,
-    min_exon_size=8, min_intron_size=15, max_intron_size=500000,
-    motif_radius=1, search_window_size=1000):
+    bowtie_index_base='genome', verbose=False, stranded=False, min_exon_size=8,
+    min_intron_size=15, max_intron_size=500000, motif_radius=1,
+    search_window_size=1000, global_alignment=GlobalAlignment()):
     """ Runs Rail-RNA-intron_search.
 
         Input (read from stdin)
@@ -778,7 +1094,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         max_cap_count: maximum number of possible caps of size
             min_cap_size to consider when searching for caps.
         global_alignment: instance of GlobalAlignment class used for fast
-                realignment of exonic chunks via Weave.
+                realignment via Weave or Pypy.
         report_multiplier: if verbose is True, the line number of an alignment,
             read, or first readlet of a read written to stderr increases
             exponentially with base report_multiplier.
@@ -851,7 +1167,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         if len(reversed_complement_sample_labels) else []))
             if stranded:
                 if sample_labels:
-                    introns = introns_from_clique(
+                    introns = list(introns_from_clique(
                             largest_maximal_clique(
                                     selected_readlet_alignments_by_clustering(
                                             multireadlets
@@ -865,8 +1181,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             search_window_size=search_window_size,
                             stranded=stranded,
                             motif_radius=motif_radius,
-                            reverse_reverse_strand=False
-                        )
+                            reverse_reverse_strand=False,
+                            global_alignment=global_alignment
+                        ))
                     for sample_label in sample_labels:
                         for (intron_rname, intron_reverse_strand,
                              intron_pos, intron_end_pos) in introns:
@@ -877,6 +1194,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                     intron_pos,
                                     intron_end_pos
                                 )
+                            _output_line_count += 1
                 if reversed_complement_sample_labels:
                     introns = introns_from_clique(
                             largest_maximal_clique(
@@ -892,7 +1210,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             search_window_size=search_window_size,
                             stranded=stranded,
                             motif_radius=motif_radius,
-                            reverse_reverse_strand=True
+                            reverse_reverse_strand=True,
+                            global_alignment=global_alignment
                         )
                     for sample_label in reversed_complement_sample_labels:
                         for (intron_rname, intron_reverse_strand,
@@ -904,6 +1223,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                     intron_pos,
                                     intron_end_pos
                                 )
+                            _output_line_count += 1
             else:
                 introns = introns_from_clique(
                         largest_maximal_clique(
@@ -918,7 +1238,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         max_intron_size=max_intron_size,
                         search_window_size=search_window_size,
                         motif_radius=motif_radius,
-                        stranded=stranded
+                        stranded=stranded,
+                        global_alignment=global_alignment
                     )
                 for sample_label in (sample_labels
                                         | reversed_complement_sample_labels):
@@ -931,6 +1252,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 intron_pos,
                                 intron_end_pos
                             )
+                        _output_line_count += 1
             seq_info_captured = False
             collected_readlets = []
             readlet_displacements = []
@@ -984,6 +1306,7 @@ if __name__ == '__main__':
 if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
+    global_alignment = GlobalAlignment()
     go(bowtie_index_base=args.bowtie_idx,
         verbose=args.verbose, 
         stranded=args.stranded,
@@ -991,7 +1314,8 @@ if __name__ == '__main__' and not args.test:
         max_intron_size=args.max_intron_size,
         min_exon_size=args.min_exon_size,
         motif_radius=args.motif_radius,
-        search_window_size=args.search_window_size)
+        search_window_size=args.search_window_size,
+        global_alignment=global_alignment)
     print >> sys.stderr, 'DONE with intron_search.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)
