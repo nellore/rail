@@ -1344,4 +1344,7 @@ elif __name__ == '__main__':
     import shutil
     import tempfile
 
+    # Precomile global_alignment
+    if 'pypy' not in sys.version.lower():
+        global_alignment = GlobalAlignment()
     unittest.main()
