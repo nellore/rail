@@ -89,12 +89,12 @@ if 'pypy' not in sys.version.lower():
     class GlobalAlignment:
         """ Invokes Weave to obtain alignment score matrix with C. """
 
-        def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-5],
-                                                [-1, 1,-1,-1,-1,-5],
-                                                [-1,-1, 1,-1,-1,-5],
-                                                [-1,-1,-1, 1,-1,-5],
-                                                [-1,-1,-1,-1,-1,-5],
-                                                [-5,-5,-5,-5,-5,-5]]):
+        def __init__(self, substitution_matrix=[[ 0,-1,-1,-1,-1,-1],
+                                                [-1, 0,-1,-1,-1,-1],
+                                                [-1,-1, 0,-1,-1,-1],
+                                                [-1,-1,-1, 0,-1,-1],
+                                                [-1,-1,-1,-1,-1,-1],
+                                                [-1,-1,-1,-1,-1,-1]]):
             """ Constructor for GlobalAlignment.
 
                 Places substitution_matrix directly in string containing C code
@@ -237,12 +237,12 @@ else:
     class GlobalAlignment:
         """ Uses Python to obtain alignment score matrix. """
 
-        def __init__(self, substitution_matrix=[[ 1,-1,-1,-1,-1,-5],
-                                                [-1, 1,-1,-1,-1,-5],
-                                                [-1,-1, 1,-1,-1,-5],
-                                                [-1,-1,-1, 1,-1,-5],
-                                                [-1,-1,-1,-1,-1,-5],
-                                                [-5,-5,-5,-5,-5,-5]]):
+        def __init__(self, substitution_matrix=[[ 0,-1,-1,-1,-1,-1],
+                                                [-1, 0,-1,-1,-1,-1],
+                                                [-1,-1, 0,-1,-1,-1],
+                                                [-1,-1,-1, 0,-1,-1],
+                                                [-1,-1,-1,-1,-1,-1],
+                                                [-1,-1,-1,-1,-1,-1]]):
             """ Constructor for GlobalAlignment.
 
                 substitution_matrix: 6 x 6 substitution matrix (list of
@@ -294,7 +294,6 @@ else:
                                                     ] # horizontal
                                             )
             return score_matrix
-
 
 def maximal_suffix_match(query_seq, search_window,
                             min_cap_size=8, max_cap_count=5):
@@ -665,7 +664,8 @@ def pairwise(iterable):
 def introns_from_clique(clique, read_seq, reference_index,
         min_exon_size=8, min_intron_size=10, max_intron_size=500000,
         search_window_size=1000, stranded=False, motif_radius=1,
-        reverse_reverse_strand=False, global_alignment=GlobalAlignment()):
+        reverse_reverse_strand=False, global_alignment=GlobalAlignment(),
+        max_gaps_mismatches=5):
     """ 
         NOTE THAT clique LIST IS SORTED ASSUMING THE ONLY READLETS WHOSE
         DISPLACEMENTS ARE THE SAME ARE CAPPING READLETS. IF THE READLETIZING
@@ -689,6 +689,10 @@ def introns_from_clique(clique, read_seq, reference_index,
             for motif; keep this small!
         reverse_reverse_strand: if True, original read sequence was
             reverse-complemented before alignment of constituent readlets
+        global_alignment: object of class GlobalAlignment used for fast
+            realignment to reference
+        max_gaps_mismatches: maximum number of (gaps + mismatches) to permit
+            in realignments to reference minus intron
     """
     if not clique:
         return
@@ -1004,8 +1008,9 @@ def introns_from_clique(clique, read_seq, reference_index,
                                             )
         try:
             max_score = max([intron[-1] for intron in candidate_introns])
-            if max_score > 0:
-                # Filter out very bad alignments
+            if max_score >= -max_gaps_mismatches:
+                '''Filter out alignments with more than max_gap_mismatches
+                gaps or mismatches.'''
                 for (rname, intron_reverse_strand,
                         pos, end_pos, alignment_score) in candidate_introns:
                     if alignment_score == max_score:
@@ -1017,7 +1022,8 @@ def introns_from_clique(clique, read_seq, reference_index,
 def go(input_stream=sys.stdin, output_stream=sys.stdout,
     bowtie_index_base='genome', verbose=False, stranded=False, min_exon_size=8,
     min_intron_size=15, max_intron_size=500000, motif_radius=1,
-    search_window_size=1000, global_alignment=GlobalAlignment()):
+    search_window_size=1000, global_alignment=GlobalAlignment(),
+    max_gaps_mismatches=5):
     """ Runs Rail-RNA-intron_search.
 
         Input (read from stdin)
@@ -1097,6 +1103,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
             min_cap_size to consider when searching for caps.
         global_alignment: instance of GlobalAlignment class used for fast
                 realignment via Weave or Pypy.
+        max_gaps_mismatches: maximum number of gaps/mismatches to permit in
+            a realignment to reference without intron
         report_multiplier: if verbose is True, the line number of an alignment,
             read, or first readlet of a read written to stderr increases
             exponentially with base report_multiplier.
@@ -1184,7 +1192,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             stranded=stranded,
                             motif_radius=motif_radius,
                             reverse_reverse_strand=False,
-                            global_alignment=global_alignment
+                            global_alignment=global_alignment,
+                            max_gaps_mismatches=max_gaps_mismatches
                         ))
                     for sample_label in sample_labels:
                         for (intron_rname, intron_reverse_strand,
@@ -1213,7 +1222,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             stranded=stranded,
                             motif_radius=motif_radius,
                             reverse_reverse_strand=True,
-                            global_alignment=global_alignment
+                            global_alignment=global_alignment,
+                            max_gaps_mismatches=max_gaps_mismatches
                         )
                     for sample_label in reversed_complement_sample_labels:
                         for (intron_rname, intron_reverse_strand,
@@ -1241,7 +1251,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         search_window_size=search_window_size,
                         motif_radius=motif_radius,
                         stranded=stranded,
-                        global_alignment=global_alignment
+                        global_alignment=global_alignment,
+                        max_gaps_mismatches=max_gaps_mismatches
                     )
                 for sample_label in (sample_labels
                                         | reversed_complement_sample_labels):
@@ -1291,6 +1302,10 @@ if __name__ == '__main__':
         default=1000,
         help='Size of window (in bp) in which to search for exons between '
              'anchoring alignments')
+    parser.add_argument('--max-gaps-mismatches', type=int, required=False,
+        default=6,
+        help='Maximum number of (gaps + mismatches) to permit in a '
+             'realignment to reference without intron')
     parser.add_argument('--motif-radius', type=int, required=False,
         default=1,
         help='Number of bases to tack on to either end of an unmapped region '
