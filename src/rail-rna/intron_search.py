@@ -1303,7 +1303,7 @@ if __name__ == '__main__':
         help='Size of window (in bp) in which to search for exons between '
              'anchoring alignments')
     parser.add_argument('--max-gaps-mismatches', type=int, required=False,
-        default=6,
+        default=2,
         help='Maximum number of (gaps + mismatches) to permit in a '
              'realignment to reference without intron')
     parser.add_argument('--motif-radius', type=int, required=False,
@@ -1332,6 +1332,7 @@ if __name__ == '__main__' and not args.test:
         min_exon_size=args.min_exon_size,
         motif_radius=args.motif_radius,
         search_window_size=args.search_window_size,
+        max_gaps_mismatches=args.max_gaps_mismatches,
         global_alignment=global_alignment)
     print >> sys.stderr, 'DONE with intron_search.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
