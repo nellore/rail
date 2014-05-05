@@ -1303,7 +1303,7 @@ if __name__ == '__main__':
         help='Size of window (in bp) in which to search for exons between '
              'anchoring alignments')
     parser.add_argument('--max-gaps-mismatches', type=int, required=False,
-        default=2,
+        default=0,
         help='Maximum number of (gaps + mismatches) to permit in a '
              'realignment to reference without intron')
     parser.add_argument('--motif-radius', type=int, required=False,
