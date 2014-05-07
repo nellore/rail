@@ -804,12 +804,12 @@ def introns_from_clique(clique, read_seq, reference_index,
         right_motif_search_bounds = (
                 min(right_motif_search_pos_1, right_motif_search_pos_2) - 2,
                 max(right_motif_search_pos_1 + 2 * motif_radius,
-                    right_motif_search_pos_2 + 2 * motif_radius) - 2
+                    right_motif_search_pos_2 + 2 * motif_radius)
             )
-        right_motif_search_size = right_motif_search_bounds[1] \
-                                    - right_motif_search_bounds[0]
         left_motif_search_size = left_motif_search_bounds[1] \
                                     - left_motif_search_bounds[0]
+        right_motif_search_size = right_motif_search_bounds[1] \
+                                    - right_motif_search_bounds[0]
         left_motif_window = reference_index.get_stretch(
                                         rname,
                                         left_motif_search_bounds[0] - 1,
@@ -1348,4 +1348,120 @@ elif __name__ == '__main__':
     # Precomile global_alignment
     if 'pypy' not in sys.version.lower():
         global_alignment = GlobalAlignment()
+
+    def random_sequence(seq_size):
+        """ Gets random sequence of nucleotides.
+
+            seq_size: number of bases to return.
+
+            Return value: string of random nucleotides.
+        """
+        return ''.join([random.choice('ATCG') for _ in xrange(seq_size)])
+    
+    class TestMaximalSuffixMatch(unittest.TestCase):
+        """ Tests maximal_suffix_match(); needs no fixture. """
+        def test_one_instance_1(self):
+            """ Fails if maximal suffix match is not identified.
+            """
+            self.assertEqual(
+                    maximal_suffix_match(
+                            'ATAGCATTA', 'CAGTCAGACCCATACCAATAGCATTA'
+                        ),
+                    (17, 9)
+                )
+
+        def test_one_instance_2(self):
+            """ Fails if maximal suffix match is not identified.
+            """
+            self.assertEqual(
+                    maximal_suffix_match(
+                            'CGATACGTCAGACCATG',
+                            'ATGGCATACGATACGTCAGACCATGCAGGACCTTTACCTACATACTG'
+                        ),
+                    (8, 17)
+                )
+
+        def test_one_instance_3(self):
+            """ Fails if maximal suffix match is not identified.
+            """
+            self.assertEqual(
+                    maximal_suffix_match(
+                            'CGATACGTCAGACCATG',
+                            'ATGGCATAATACGTCAGACCATGCAGGACCTTTACCTACATACTG'
+                        ),
+                    (8, 15)
+                )
+
+        def test_filtering_of_more_than_max_cap_count_instances(self):
+            """ Fails if maximal suffix matches are not filtered out.
+            """
+            self.assertEqual(
+                    maximal_suffix_match(
+                            'ATAGCATTA',
+                            'CAGTCAGACCCATACCAATAGCATTAATAGCATTA',
+                            max_cap_count=1
+                        ),
+                    None
+                )
+
+    class TestIntronsFromClique(unittest.TestCase):
+        """ Tests introns_from_clique(). """
+        def setUp(self):
+            """ Creates temporary directory and Bowtie index. """
+            reference_seq = 'ATGGCATACGATACGTCAGACCATGCAggACctTTacCTACATACTG' \
+                            'GTTACATAGTACATATAGGCATACTAGGTgcCATACGgaCTACGTAG' \
+                            'ATCCAGATTACGATACAAaTACGAAcTCccATAGCAaCATaCTAGac' \
+                            'CAttAaaGACTAGACTAACAGACAaAACTAGCATacGATCATGACaA' \
+                            'ACGAGATCCATATAtTTAGCAaGACTAaACGATACGATACAGTACaA' \
+                            'ATACAGaaATCAGaGCAGAAaATACAGATCAaAGCTAGCAaAAtAtA'
+            self.temp_dir_path = tempfile.mkdtemp()
+            fasta_file = os.path.join(self.temp_dir_path, 'test.fa')
+            self.bowtie_build_base = os.path.join(self.temp_dir_path, 'test')
+            fasta_stream = open(fasta_file, 'w')
+            print >>fasta_stream, '>chr1'
+            print >>fasta_stream, \
+                '\n'.join([reference_seq[i:i+50] for i in range(0, 251, 50)])
+            fasta_stream.close()
+            bowtie_build_process = subprocess.call(
+                    [args.bowtie_build_exe,
+                    fasta_file,
+                    self.bowtie_build_base],
+                    stdout=open(os.devnull, 'w'),
+                    stderr=subprocess.STDOUT
+                )
+            self.reference_index = bowtie_index.BowtieIndexReference(
+                                    self.bowtie_build_base
+                                   )
+
+        def test_split_intron_1(self):
+            """ Fails if single intron is not split in two.
+
+                Single intron that's too large spans second line of
+                reference_seq above. There is a small exon in the middle
+                whose bases are initially mistaken for intronic bases.
+                read_seq below contains the small exon and a few bases outside
+                it.
+            """
+            '''Each line of read_seq below and reference_seq above spans
+            47 bases.'''
+            read_seq = 'AGGACCTTTACCTACATACTGGCATACTAGATCCAGATTACGATAC'
+            clique = [('chr1', False, 27, 48, 0), ('chr1', False, 95, 111, 30)]
+            introns = introns_from_clique(clique, read_seq,
+                                            self.reference_index,
+                                            min_exon_size=8,
+                                            min_intron_size=5,
+                                            search_window_size=1000,
+                                            stranded=False,
+                                            motif_radius=0,
+                                            global_alignment=global_alignment,
+                                            max_gaps_mismatches=5)
+            self.assertEquals(
+                    list(introns),
+                    [('chr1', False, 48, 66), ('chr1', False, 75, 95)]
+                )
+            
+
+        def tearDown(self):
+            # Kill temporary directory
+            shutil.rmtree(self.temp_dir_path)
     unittest.main()
