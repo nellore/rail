@@ -68,85 +68,43 @@ import dooplicity as dp
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument(\
-        '--target', type=str, required=False, default='',
-        help='Skip lines that do not begin with this string.'
-    )
 args = parser.parse_args()
 
 import time
 start_time = time.time()
 input_line_count, output_line_count = 0, 0
-if args.target:
-    # Must skip some lines
-    for key, xpartition \
-            in dp.xstream(sys.stdin, 7):
-        if key[0] != args.target:
-            for value in xpartition:
-                print '\t'.join(key + value)
-            continue
-        (_, line_type, sample_label, rname,
-            pos, end_pos, strand_or_seq) = key
-        if line_type == 'N':
-            coverage_sum = 0
-            max_left_displacement, max_right_displacement = None, None
-            for left_displacement, right_displacement, coverage in xpartition:
-                input_line_count += 1
-                max_left_displacement = max(int(left_displacement),
-                                            max_left_displacement)
-                max_right_displacement = max(int(right_displacement),
-                                             max_right_displacement)
-                coverage_sum += int(coverage)
-            assert max_left_displacement is not None
-            assert max_right_displacement is not None
-            print >>sys.stdout, 'N\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d' \
-                                % (sample_label, rname, pos, end_pos,
-                                    strand_or_seq, max_left_displacement,
-                                    max_right_displacement, coverage_sum)
-            output_line_count += 1
-        else:
-            assert line_type in 'ID'
-            coverage_sum = 0
-            for _, _, coverage in xpartition:
-                input_line_count += 1
-                coverage_sum += int(coverage)
-            print >>sys.stdout, '%s\t%s\t%s\t%s\t%s\t%s\t' \
-                                '\x1c\t\x1c\t%d' \
-                                % (line_type, sample_label, rname, pos,
-                                    end_pos, strand_or_seq, coverage_sum)
-            output_line_count += 1
-else:
-    for (line_type, sample_label, rname,
-            pos, end_pos, strand_or_seq), xpartition \
-        in dp.xstream(sys.stdin, 6):
-        if line_type == 'N':
-            coverage_sum = 0
-            max_left_displacement, max_right_displacement = None, None
-            for left_displacement, right_displacement, coverage in xpartition:
-                input_line_count += 1
-                max_left_displacement = max(int(left_displacement),
-                                            max_left_displacement)
-                max_right_displacement = max(int(right_displacement),
-                                             max_right_displacement)
-                coverage_sum += int(coverage)
-            assert max_left_displacement is not None
-            assert max_right_displacement is not None
-            print >>sys.stdout, 'N\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d' \
-                                % (sample_label, rname, pos, end_pos,
-                                    strand_or_seq, max_left_displacement,
-                                    max_right_displacement, coverage_sum)
-            output_line_count += 1
-        else:
-            assert line_type in 'ID'
-            coverage_sum = 0
-            for _, _, coverage in xpartition:
-                input_line_count += 1
-                coverage_sum += int(coverage)
-            print >>sys.stdout, '%s\t%s\t%s\t%s\t%s\t%s\t' \
-                                '\x1c\t\x1c\t%d' \
-                                % (line_type, sample_label, rname, pos,
-                                    end_pos, strand_or_seq, coverage_sum)
-            output_line_count += 1
+
+for (line_type, sample_label, rname,
+        pos, end_pos, strand_or_seq), xpartition \
+    in dp.xstream(sys.stdin, 6):
+    if line_type == 'N':
+        coverage_sum = 0
+        max_left_displacement, max_right_displacement = None, None
+        for left_displacement, right_displacement, coverage in xpartition:
+            input_line_count += 1
+            max_left_displacement = max(int(left_displacement),
+                                        max_left_displacement)
+            max_right_displacement = max(int(right_displacement),
+                                         max_right_displacement)
+            coverage_sum += int(coverage)
+        assert max_left_displacement is not None
+        assert max_right_displacement is not None
+        print >>sys.stdout, 'N\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d' \
+                            % (sample_label, rname, pos, end_pos,
+                                strand_or_seq, max_left_displacement,
+                                max_right_displacement, coverage_sum)
+        output_line_count += 1
+    else:
+        assert line_type in 'ID'
+        coverage_sum = 0
+        for _, _, coverage in xpartition:
+            input_line_count += 1
+            coverage_sum += int(coverage)
+        print >>sys.stdout, '%s\t%s\t%s\t%s\t%s\t%s\t' \
+                            '\x1c\t\x1c\t%d' \
+                            % (line_type, sample_label, rname, pos,
+                                end_pos, strand_or_seq, coverage_sum)
+        output_line_count += 1
 
 print >>sys.stderr, 'DONE with bed_pre.py; in/out =%d/%d; time=%0.3f s' \
                         % (input_line_count, output_line_count,

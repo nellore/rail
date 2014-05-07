@@ -191,6 +191,9 @@ fi
         else:
             endArgs.append('"-mapper", "cat",')
 
+        if self.combiner is not None:
+            endArgs.append('"-combiner", "%s",' % self.combiner)
+        
         if self.cache is not None:
             begArgs.append('"-archives", "%s",' % self.cache.toNativeUrl())
         
@@ -198,9 +201,6 @@ fi
             endArgs.append('"-reducer", "%s",' % self.reducer)
         else:
             begArgs.append('"%s", "mapred.reduce.tasks=0",' % hadoop.confArg(config.hadoopVersion))
-        
-        if self.combiner is not None:
-            endArgs.append('"-combiner", "%s",' % self.combiner)
 
         if self.inputFormat is not None:
             endArgs.append('"-inputformat", "%s",' % self.inputFormat)
