@@ -61,6 +61,18 @@ import dooplicity as dp
 _input_line_count = 0
 _output_line_count = 0
 
+def running_sum(iterable):
+    """ Generates a running sum of the numbers in an iterable
+
+        iterable: some iterable with numbers
+
+        Yield value: next value in running sum
+    """
+    total = 0
+    for number in iterable:
+        total += number
+        yield total
+
 def rname_and_introns(rname, offset, readlet_size):
     """ Extracts strand and introns overlapped by readlet from RNAME and POS.
 
@@ -87,8 +99,10 @@ def rname_and_introns(rname, offset, readlet_size):
                                 and end positions of introns OR None if 
                                 no introns are overlapped, readlet_size,
                                 distance to previous intron or None if 
-                                beginning of strand, distance to next
-                                intron or None if end of strand); here,
+                                beginning of strand / not relevant (exonic
+                                alignment), distance to next intron or None if
+                                end of strand / not relevant
+                                (exonic alignment)); here,
                             alignment_start_position and alignment_end_position
                             are the start and end positions of the 
                             alignment _along the original reference_
@@ -99,71 +113,49 @@ def rname_and_introns(rname, offset, readlet_size):
     except ValueError:
         # Exonic alignment
         return (rname, None, offset + 1,
-                offset + 1 + readlet_size, None, readlet_size)
-    if left_size == 'NA':
-        left_size = None
-    else:
+                offset + 1 + readlet_size, None, readlet_size,
+                None, None)
+    try:
         left_size = int(left_size)
-    if right_size == 'NA':
-        right_size = None
-    else:
+    except ValueError:
+        left_size = None
+    try:
         right_size = int(right_size)
+    except ValueError:
+        right_size = None
     rname = strand[:-1]
-    reverse_strand = True if strand[-1] == '+' else False
+    reverse_strand = True if strand[-1] == '-' else False
     exon_sizes = [int(exon_size) for exon_size in exon_sizes.split(',')]
     intron_sizes = [int(intron_size) for intron_size
                         in intron_sizes.split(',')]
     assert len(intron_sizes) == len(exon_sizes) - 1
-    cigar_sizes = [None]*(len(exon_sizes) + len(intron_sizes))
-    cigar_sizes[::2] = exon_sizes
-    cigar_sizes[1::2] = intron_sizes
-    partial_sizes = [sum(exon_sizes[:j+1]) for j in xrange(len(exon_sizes))]
-    start_index, end_index = None, None
-    for j, partial_size in enumerate(partial_sizes):
-        if partial_size > offset:
-            start_index = j
-            new_offset = (offset - partial_sizes[j-1] if j != 0 else offset)
-            break
-    end_offset = readlet_size + offset
-    for j, partial_size in enumerate(partial_sizes):
-        if partial_size >= end_offset:
-            end_index = j
-            break
-    original_pos = int(original_pos) + new_offset \
-                    + sum(cigar_sizes[:start_index*2])
-    if start_index is None or end_index is None:
-        raise RuntimeError('Invalid alignment; sum of exon sizes doesn\'t '
-                           'agree with size of reference sequence.')
-    if start_index == end_index:
-        return (rname, None, original_pos,
-                original_pos + readlet_size, None, readlet_size)
-    else:
-        assert start_index < end_index
-        if start_index != 0:
-            left_size = cigar_sizes[start_index*2]
-        cigar_sizes[start_index*2] = partial_sizes[start_index] - offset
-        try:
-            left_size -= cigar_sizes[start_index*2]
-        except TypeError:
-            left_size = None
-        if end_index * 2 != len(cigar_sizes) - 1:
-            right_size = cigar_sizes[end_index * 2]
-        cigar_sizes[end_index*2] = end_offset - partial_sizes[end_index-1]
-        try:
-            right_size -= cigar_sizes[end_index*2]
-        except TypeError:
-            right_size = None
-        last_pos = original_pos
-        introns = []
-        for j in xrange(start_index*2+1, end_index*2+1, 2):
-            last_pos += cigar_sizes[j-1]
-            introns.append((last_pos, last_pos + cigar_sizes[j]))
-            last_pos += (cigar_sizes[j] + cigar_sizes[j+1])
-        if start_index != 0:
-            left_size = cigar_sizes[start_index*2 - 1]
+    for i, exon_sum in enumerate(running_sum(exon_sizes)):
+        if exon_sum > offset: break
+    # Compute start position of alignment
+    pos = offset + sum(intron_sizes[:i]) + int(original_pos)
+    # Adjust exon/intron lists so they start where alignment starts
+    exon_sizes = exon_sizes[i:]
+    if i != 0:
+        left_size = exon_sizes[0]
+    exon_sizes[0] = exon_sum - offset
+    intron_sizes = intron_sizes[i:]
+    for i, exon_sum in enumerate(running_sum(exon_sizes)):
+        if exon_sum >= readlet_size: break
+    if i != len(exon_sizes) - 1:
+        right_size = exon_sizes[i]
+    intron_size_sum = 0
+    introns = []
+    for j in xrange(i):
+        intron_pos = sum(exon_sizes[:j+1]) + sum(intron_sizes[:j]) + pos
+        intron_end_pos = intron_pos + intron_sizes[j]
+        introns.append((intron_pos, intron_end_pos))
+        intron_size_sum += intron_sizes[j]
+    end_pos = readlet_size + intron_size_sum + pos
+    if introns:
         return (rname, reverse_strand, 
-                original_pos, last_pos, tuple(introns), readlet_size,
-                left_size, right_size)
+                    pos, end_pos, tuple(introns), readlet_size,
+                    left_size, right_size)
+    return (rname, None, pos, end_pos, None, readlet_size, None, None)
 
 def different_introns_overlap(intron_iterable_1, intron_iterable_2):
     """ Test whether distinct introns in two iterables overlap.
@@ -666,5 +658,33 @@ elif __name__ == '__main__':
     import unittest
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
-    # Insert unit tests here
+    class TestRnameAndIntrons(unittest.TestCase):
+        """ Tests rname_and_introns(); needs no fixture. """
+        
+        def test_read_1(self):
+            """ Fails if example doesn't give expected introns."""
+            self.assertEquals(('chr10', True, 
+                                101478239, 101480750,
+                                ((101478258, 101480744),), 25,
+                                155, 82),
+                            rname_and_introns(
+                                'chr10-;101478234;24,24;2486;155;82',
+                                5,
+                                25
+                            )
+                    )
+
+        def test_read_2(self):
+            """ Fails if example doesn't give expected introns."""
+            self.assertEquals(('chr6', True, 
+                                161054930, 161056165,
+                                ((161054945, 161056155),), 25,
+                                16, 11273),
+                        rname_and_introns(
+                            'chr6-;161049359;24,16,24;5546,1210;21874;11273',
+                            25,
+                            25
+                        )
+                    )
+
     unittest.main()

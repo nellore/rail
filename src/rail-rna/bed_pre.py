@@ -81,8 +81,11 @@ if args.target:
     # Must skip some lines
     for key, xpartition \
             in dp.xstream(sys.stdin, 7):
-        if key[0] != args.target: continue
-        (line_type, sample_label, rname,
+        if key[0] != args.target:
+            for value in xpartition:
+                print '\t'.join(key + value)
+            continue
+        (_, line_type, sample_label, rname,
             pos, end_pos, strand_or_seq) = key
         if line_type == 'N':
             coverage_sum = 0

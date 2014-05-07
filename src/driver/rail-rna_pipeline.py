@@ -56,12 +56,20 @@ class AlignReadsStep(pipeline.Step):
                 --verbose
                 -- %s --local """ % (tconf.partitionLen,
                              tconf.bowtieArgs())
+        combiner_str = """
+            %%PYPY%% %%BASE%%/src/rail-rna/sum.py
+                --type 3
+                --value-count 2
+                --target %s
+        """ % ('readletize',)
         mapper_str = re.sub('\s+', ' ', mapper_str.strip())
+        combiner_str = re.sub('\s+', ' ', combiner_str.strip())
         super(AlignReadsStep, self).__init__(
             inps,
             output,
             name="AlignReads",
             mapper=mapper_str,
+            combiner=combiner_str,
             multipleOutput=True)
 
 class CombineSequencesStep(pipeline.Step):
@@ -88,13 +96,19 @@ class ReadletizeStep(pipeline.Step):
                 --readlet-interval %d 
                 --capping-multiplier %f
         """ % (tconf.readletLen, tconf.readletIval, tconf.capping_multiplier)
+        combiner_str = """
+            %%PYPY%% %%BASE%%/src/rail-rna/sum.py
+                --type 3 %s
+        """ % ('',)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        combiner_str = re.sub('\s+', ' ', combiner_str.strip())
         super(ReadletizeStep, self).__init__(
             inps,
             output,  # output URL
             name="Readletize",  # name
             aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
-            reducer=reducer_str)
+            reducer=reducer_str,
+            combiner=combiner_str)
 
 class CombineSubsequencesStep(pipeline.Step):
     def __init__(self, inps, output, tconf, _):
@@ -265,13 +279,19 @@ class RealignReadsStep(pipeline.Step):
                             '--stranded' if tconf.stranded else '',
                             '--keep-alive' if tconf.keep_alive else '',
                             tconf.bowtieArgs())
+        combiner_str = """
+            %%PYPY%% %%BASE%%/src/rail-rna/sum.py 
+                --target %s
+            """ % ('exon_diff',)
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
+        combiner_str = re.sub('\s+', ' ', combiner_str.strip())
         super(RealignReadsStep, self).__init__(
             inps,
             output,
             name="RealignReads",
             aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
             reducer=reducer_str,
+            combiner=combiner_str,
             multipleOutput=True,
             )
 

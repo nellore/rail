@@ -84,7 +84,9 @@ if args.type == 1:
                 # Write final line
                 write_line = True
         else:
-            if line[:target_size] != args.target: continue
+            if line[:target_size] != args.target:
+                sys.stdout.write(line)
+                continue
             input_line_count += 1
             tokens = line.rstrip().split('\t')
             key = tokens[:-args.value_count]
@@ -111,7 +113,9 @@ elif args.type == 2:
                 # Write final line
                 write_line = True
         else:
-            if line[:target_size] != args.target: continue
+            if line[:target_size] != args.target:
+                sys.stdout.write(line)
+                continue
             input_line_count += 1
             tokens = line.rstrip().split('\t')
             key = tokens[:-args.value_count]
@@ -139,7 +143,9 @@ else:
                 # Write final line
                 write_line = True
         else:
-            if line[:target_size] != args.target: continue
+            if line[:target_size] != args.target:
+                sys.stdout.write(line)
+                continue
             input_line_count += 1
             tokens = line.rstrip().split('\t')
             key = tokens[:-args.value_count]

@@ -81,7 +81,8 @@ class Step(object):
         reducer=None,
         lineByLine=False,
         multipleOutput=False,
-        cache=None):
+        cache=None,
+        combiner=None):
         
         self.name = name
         self.inputs = inps
@@ -92,6 +93,7 @@ class Step(object):
         self.lineByLine = lineByLine
         self.multipleOutput = multipleOutput
         self.cache = cache
+        self.combiner = combiner
         self.inputFormat = None
         self.outputFormat = None
     
@@ -197,6 +199,9 @@ fi
         else:
             begArgs.append('"%s", "mapred.reduce.tasks=0",' % hadoop.confArg(config.hadoopVersion))
         
+        if self.combiner is not None:
+            endArgs.append('"-combiner", "%s",' % self.combiner)
+
         if self.inputFormat is not None:
             endArgs.append('"-inputformat", "%s",' % self.inputFormat)
         if self.outputFormat is not None:

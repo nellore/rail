@@ -326,8 +326,8 @@ pipelineSteps = {
                         'intron_index', 'realign_readlets', 'cointron_search',
                         'cointron_fasta', 'realign_reads'],
     'align_out'    : ['bed_pre', 'bed', 'bam'],
-    'coverage'      : [],
-    #'coverage'     : ['collapse', 'coverage_pre', 'coverage', 'coverage_post'],
+    #'coverage'      : [],
+    'coverage'     : ['collapse', 'coverage_pre', 'coverage', 'coverage_post'],
     'differential' : ['walk_fit', 'ebayes', 'hmm_params', 'hmm', 'aggr_path'] }
 
 allSteps = [ i for sub in map(pipelineSteps.get, pipelines) for i in sub ]
@@ -466,8 +466,9 @@ elif mode == 'emr':
     
     cmdl.append(emrCluster.emrArgs())
     rail_RNAUrl = Url("s3://rail-emr/bin/rail-rna-%s.tar.gz" % ver)
-    
-    cmdl.append(bootstrapTool("pypy"))
+    pypy_url = Url("s3://rail-emr/bin/pypy-2.2.1-linux_x86_64-portable.tar.bz2")
+
+    cmdl.append(bootstrapTool("pypy", src=pypy_url))
     if useBowtie:
         cmdl.append(bootstrapTool("bowtie"))
         cmdl.append(bootstrapTool("bowtie2"))

@@ -235,7 +235,7 @@ def do_partition(index_and_input_file):
                     line_count += 1
     except Exception as e:
         message = ('Partitioning failed: %s' % e.message)
-        fail_q.put((msg, input_file, 'N/A', cmd))
+        fail_q.put((message, input_file, 'N/A', cmd))
     finally:
         for task in output_files:
             output_files[task].close()
@@ -308,7 +308,7 @@ if tot > 0:
             el = pipe.wait()
             if el != 0:
                 msg = 'Reduce command "%s" for sort task "%s" failed with exitlevel: %d' % (cmd, task, el)
-                fail_q.put((msg, sorted_fn, err_fn, cmd))
+                fail_q.put((msg, sorted_fns, err_fn, cmd))
             elif not keep:
                 for a_file in sorted_fns_glob:
                     os.remove(a_file)

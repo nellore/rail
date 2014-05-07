@@ -21,4 +21,3 @@ s3cmd get ${1} . || { echo 's3cmd failed' ; exit 1; }
 mkdir -p ${2}
 tar -xzf $fn -C ${2} || { echo 'untar failed' ; exit 1; }
 rm -f $fn
-make -C ${2}/src || { echo 'make failed' ; exit 1; }
