@@ -78,7 +78,6 @@ class CombineSequencesStep(pipeline.Step):
             output,  # output URL
             name="CombineSequences",  # name
             aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
-            combiner=reducer_str,
             reducer=reducer_str)
 
 class ReadletizeStep(pipeline.Step):
@@ -110,8 +109,7 @@ class CombineSubsequencesStep(pipeline.Step):
             output,  # output URL
             name="CombineSubsequences",  # name
             aggr=pipeline.Aggregation(None, 4, 1, 1),  # 4 tasks per reducer
-            reducer=reducer_str,
-            combiner=reducer_str)
+            reducer=reducer_str)
 
 class AlignReadletsStep(pipeline.Step):
     def __init__(self, inps, output, tconf, _):
@@ -268,7 +266,6 @@ class RealignReadsStep(pipeline.Step):
                             '--keep-alive' if tconf.keep_alive else '',
                             tconf.bowtieArgs())
         reducer_str = re.sub('\s+', ' ', reducer_str.strip())
-        combiner_str = re.sub('\s+', ' ', combiner_str.strip())
         super(RealignReadsStep, self).__init__(
             inps,
             output,
@@ -290,8 +287,7 @@ class CollapseStep(pipeline.Step):
             output,  # output URL
             name="Collapse",  # name
             aggr=pipeline.Aggregation(None, 8, 1, 1),
-            reducer=reducer_str,
-            combiner=reducer_str)
+            reducer=reducer_str)
 
 
 class CoveragePreStep(pipeline.Step):
@@ -384,8 +380,7 @@ class BedPreStep(pipeline.Step):
             output,  # output URL
             name="BedPre",  # name
             aggr=pipeline.Aggregation(None, 8, 6, 6),  # 8 tasks per reducer
-            reducer=reducer_str,
-            combiner=reducer_str)
+            reducer=reducer_str)
 
 
 class BedStep(pipeline.Step):
