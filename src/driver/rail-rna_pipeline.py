@@ -286,7 +286,7 @@ class CollapseStep(pipeline.Step):
             inps,
             output,  # output URL
             name="Collapse",  # name
-            aggr=pipeline.Aggregation(None, 8, 1, 1),
+            aggr=pipeline.Aggregation(None, 8, 3, 3),
             reducer=reducer_str)
 
 

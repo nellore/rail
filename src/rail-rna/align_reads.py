@@ -75,6 +75,23 @@ spliced alignment. The order of the fields is as follows.
 12. QUAL
 ... + optional fields
 
+Introns/insertions/deletions
+
+(bed); tab-delimited output tuple columns (bed):
+1. 'I' or 'D' insertion or deletion line
+2. Sample label
+3. Number string representing RNAME
+4. Start position (Last base before insertion or first base of deletion)
+5. End position (Last base before insertion or last base of deletion 
+                    (exclusive))
+6. Inserted sequence for insertions or deleted sequence for deletions
+----Next fields are for introns only; they are '\x1c' for indels----
+7. '\x1c'
+8. '\x1c'
+--------------------------------------------------------------------
+9. Number of instances of insertion or deletion in sample; this is
+    always +1 before bed_pre combiner/reducer
+
 Reads with no end-to-end alignments
 
 Tab-delimited output tuple columns (unmapped):
@@ -101,7 +118,8 @@ import tempfile
 import atexit
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['bowtie', 'sample', 'interval', 'manifest']:
+for directory_name in ['bowtie', 'sample', 'interval', 'manifest',
+                        'cigar_parse', 'dooplicity']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
 import bowtie
@@ -109,6 +127,8 @@ import bowtie_index
 import sample
 import partition
 import manifest
+from cigar_parse import indels_introns_and_exons
+import dooplicity as dp
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
@@ -225,134 +245,136 @@ class BowtieOutputThread(threading.Thread):
         """
         global _output_line_count
         next_report_line = 0
-        sample_labels = set()
-        '''Next read must be known to tell if a read mapped to multiple
-        locations, so always work with previous read.'''
-        while True:
-            line = self.input_stream.readline()
-            if not line: return # Bowtie output nothing
-            # Skip header line
-            if line[0] == '@': continue
-            last_tokens = line.rstrip().split('\t')
-            (last_qname, last_flag, last_rname, last_pos, last_mapq,
-                last_cigar, last_rnext, last_pnext,
-                last_tlen, last_seq, last_qual) = last_tokens[:11]
-            last_flag = int(last_flag)
-            last_pos = int(last_pos)
-            last_seq_size = len(last_seq)
-            last_end_pos = last_pos + last_seq_size
-            break
-        # Initialize counter
         i = 0
-        # While labeled multiread, this list may end up simply a uniread
-        multiread = []
-        while True:
-            line = self.input_stream.readline()
-            if line:
-                tokens = line.rstrip().split('\t')
-                (qname, flag, rname, pos, mapq, cigar, rnext,
-                    pnext, tlen, seq, qual) = tokens[:11]
-                flag = int(flag)
-                pos = int(pos)
-                seq_size = len(seq)
-                end_pos = pos + seq_size
-            if self.verbose and next_report_line == i:
-                print >>sys.stderr, \
-                    'SAM output record %d: rdname="%s", flag=%d' % (i,
-                                                                    last_qname,
-                                                                    last_flag)
-                next_report_line = int((next_report_line + 1)
-                    * self.report_multiplier + 1) - 1
-            # Use indices as sample labels rather than sample labels themselves
-            last_sample_label = self.manifest_object.label_to_index[
-                                        sample.parseLab(last_qname)
-                                    ]
-            sample_labels.add(last_sample_label)
-            multiread.append(last_tokens)
-            if not line or qname != last_qname:
-                '''If the next qname doesn't match the last qname or there are
-                no more lines, all of a multiread's alignments have been
-                collected.'''
-                if last_flag & 4 or 'S' in last_cigar:
-                    '''Write unmapped/soft-clipped reads for realignment in
-                    a reduce step.'''
-                    print >>self.output_stream, '%s\t%s\t%s\t%s' % ('unmapped',
-                        last_seq, last_qname, last_qual)
-                    _output_line_count += 1
-                    '''Write unmapped sequences for readletizing and
-                    inferring introns. To reduce alignment burden, find
-                    reversed complement and only write sequence that comes
-                    first in lexicographic order.'''
-                    last_seq = last_seq.upper()
-                    reversed_complement_last_seq = last_seq[::-1].translate(
-                            _reversed_complement_translation_table
-                        )
-                    if last_seq < reversed_complement_last_seq:
-                        self.output_stream.write('readletize\t%s\t%s\t\x1c\n' \
-                            % (last_seq, last_sample_label))
-                    else:
-                        print >>self.output_stream, \
-                            'readletize\t%s\t\x1c\t%s' \
-                            % (reversed_complement_last_seq, last_sample_label)
-                elif self.end_to_end_sam:
-                    '''End-to-end SAM is output for every line with at least
-                    one possible alignment.'''
-                    for alignment_tokens in multiread:
-                        print >>self.output_stream, (
-                            ('%s\t%s\t%s\t%012d\t%s\t%s\t'
-                                % ('end_to_end_sam', last_sample_label, 
+        for (qname,), xpartition in dp.xstream(self.input_stream, 1):
+            # While labeled multiread, this list may end up simply a uniread
+            multiread = []
+            sample_label = self.manifest_object.label_to_index[
+                        sample.parseLab(qname)
+                    ]
+            for rest_of_line in xpartition:
+                i += 1
+                flag = int(rest_of_line[0])
+                cigar = rest_of_line[4]
+                rname = rest_of_line[1]
+                pos = int(rest_of_line[2])
+                seq, qual = rest_of_line[8], rest_of_line[9]
+                if self.verbose and next_report_line == i:
+                    print >>sys.stderr, \
+                        'SAM output record %d: rdname="%s", flag=%d' \
+                        % (i, qname, flag)
+                    next_report_line = max(int(next_report_line
+                        * self.report_multiplier), next_report_line + 1)
+                multiread.append((qname,) + rest_of_line)
+            if flag & 4 or 'S' in cigar:
+                '''Write unmapped/soft-clipped reads for realignment in
+                a reduce step.'''
+                print >>self.output_stream, '%s\t%s\t%s\t%s' % ('unmapped',
+                    seq, qname, qual)
+                _output_line_count += 1
+                '''Write unmapped sequences for readletizing and
+                inferring introns. To reduce alignment burden, find
+                reversed complement and only write sequence that comes
+                first in lexicographic order.'''
+                seq = seq.upper()
+                reversed_complement_seq = seq[::-1].translate(
+                        _reversed_complement_translation_table
+                    )
+                if seq < reversed_complement_seq:
+                    print >>self.output_stream, \
+                        'readletize\t%s\t\x1c\t%s' % (seq, sample_label)
+                else:
+                    print >>self.output_stream, \
+                        'readletize\t%s\t\x1c\t%s' \
+                        % (reversed_complement_seq, sample_label)
+            elif self.end_to_end_sam:
+                '''End-to-end SAM is output for every line with at least one
+                possible alignment.'''
+                for alignment in multiread:
+                    print >>self.output_stream, (
+                        ('%s\t%s\t%s\t%012d\t%s\t%s\t'
+                            % ('end_to_end_sam', sample_label, 
                                 self.reference_index.rname_to_string[
-                                        alignment_tokens[2]
-                                    ],
-                                int(alignment_tokens[3]),
-                                alignment_tokens[0][:-2],
-                                alignment_tokens[1])) 
-                            + '\t'.join(alignment_tokens[4:])
-                            + ('\tNH:i:%d' % len(multiread)))
-                        _output_line_count += 1
-                if not (last_flag & 4) and len(multiread) == 1:
-                    '''Read maps uniquely; the full alignment is to be called
-                    as an exonic chunk (EC).'''
-                    partitions = partition.partition(last_rname, last_pos, 
-                        last_end_pos, self.bin_size)
-                    if self.exon_differentials:
-                        for (partition_id, 
-                            partition_start, partition_end) in partitions:
+                                    alignment[2]
+                                ],
+                            int(alignment[3]),
+                            alignment[0][:-2],
+                            alignment[1])) 
+                        + '\t'.join(alignment[4:])
+                        + ('\tNH:i:%d' % len(multiread)))
+                    _output_line_count += 1
+            if not (flag & 4) and len(multiread) == 1:
+                '''Output exonic chunks and indels only if there is exactly one
+                alignment.'''
+                alignment = multiread[0]
+                md = [field for field in alignment
+                            if field[:5] == 'MD:Z:'][0][5:]
+                insertions, deletions, _, exons \
+                                            = indels_introns_and_exons(
+                                                cigar, md, pos, seq
+                                            )
+                # Output indels
+                for insert_pos, insert_seq in insertions:
+                    print >>self.output_stream, (
+                           ('bed\tI\t%s\t%s\t%012d\t%012d\t%s'
+                            '\t\x1c\t\x1c\t1')
+                            % (sample_label, self.reference_index.\
+                                rname_to_string[rname],
+                                insert_pos, insert_pos,
+                                insert_seq)
+                        )
+                    _output_line_count += 1
+                for del_pos, del_seq in deletions:
+                    print >>self.output_stream, (
+                           ('bed\tD\t%s\t%s\t%012d\t%012d\t%s'
+                            '\t\x1c\t\x1c\t1')
+                            % (sample_label, self.reference_index.\
+                                rname_to_string[rname],
+                                del_pos, del_pos + len(del_seq),
+                                del_seq)
+                        )
+                    _output_line_count += 1
+                # Output exonic chunks
+                if self.exon_intervals:
+                    for exon_pos, exon_end_pos in exons:
+                        partitions = partition.partition(
+                                rname, exon_pos, exon_end_pos,
+                                self.bin_size)
+                        for partition_id, _, _ in partitions:
+                            print >>self.output_stream, \
+                                'exon_ival\t%s\t%012d\t' \
+                                '%012d\t%s' \
+                                % (partition_id,
+                                    exon_pos, exon_end_pos, 
+                                    sample_label)
+                            _output_line_count += 1
+                if self.exon_differentials:
+                    for exon_pos, exon_end_pos in exons:
+                        partitions = partition.partition(
+                            rname, exon_pos, exon_end_pos,
+                            self.bin_size)
+                        for (partition_id, partition_start, 
+                                partition_end) in partitions:
+                            assert exon_pos < partition_end
                             # Print increment at interval start
-                            assert last_pos < partition_end
                             print >>self.output_stream, \
                                 'exon_diff\t%s\t%s\t%012d\t1' \
                                 % (partition_id,
-                                    last_sample_label,
-                                    max(partition_start, last_pos))
+                                    sample_label,
+                                    max(partition_start, exon_pos))
                             _output_line_count += 1
-                            assert last_end_pos > partition_start
-                            if last_end_pos < partition_end:
-                                '''Print decrement at interval end iff exon
-                                ends before partition ends.'''
+                            assert exon_end_pos > partition_start
+                            if exon_end_pos < partition_end:
+                                '''Print decrement at interval end 
+                                iff exon ends before partition
+                                ends.'''
                                 print >>self.output_stream, \
-                                    'exon_diff\t%s\t%s\t%012d\t-1' \
-                                    % (partition_id,
-                                        last_sample_label,
-                                        last_end_pos)
+                                    'exon_diff\t%s\t%s\t' \
+                                    '%012d\t-1' \
+                                    % (partition_id, 
+                                        sample_label,
+                                        exon_end_pos)
                                 _output_line_count += 1
-                    if self.exon_intervals:
-                        for partition_id, _, _ in partitions:
-                            print >>self.output_stream, \
-                                'exon_ival\t%s\t%012d\t%012d\t%s' \
-                                % (partition_id, last_pos, 
-                                    last_end_pos, last_sample_label)
-                            _output_line_count += 1
-                multiread = []
-            if not line:
-                break
-            last_tokens = tokens
-            (last_qname, last_flag, last_rname, last_pos, last_mapq,
-                last_cigar, last_rnext, last_pnext, last_tlen, last_seq,
-                last_qual) = (qname, flag, rname, pos, mapq, cigar,
-                rnext, pnext, tlen, seq, qual)
-            last_seq_size, last_end_pos = seq_size, end_pos
-            i += 1
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 

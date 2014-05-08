@@ -11,7 +11,9 @@ Copyright (c) 2014 Abhi Nellore and Ben Langmead. License TBD.
 class xstream:
     """ Permits Pythonic iteration through Hadoop input streams.
 
-        All iterators are implemented as generators.
+        All iterators are implemented as generators. Could have subclassed
+        itertools.groupby here; however, implementation of itertools.groupby
+        may change from version to version.
 
         Usage: for key, xpartition in xstream(hadoop_stream):
                    for value in xpartition:

@@ -42,7 +42,7 @@ import subprocess
 import threading
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['util', 'fasta', 'bowtie', 'manifest']:
+for directory_name in ['util', 'fasta', 'bowtie', 'manifest', 'dooplicity']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
 import manifest
@@ -52,6 +52,9 @@ import url
 import path
 import filemover
 import fasta
+import itertools
+from collections import defaultdict
+import dooplicity as dp
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -146,132 +149,106 @@ with open(sizes_filename, 'w') as sizes_stream:
             reference_index.rname_lengths[rname])
 
 input_line_count, output_line_count = 0, 0
-last_sample_label, last_rname, last_pos, last_coverage = [None]*4
-'''Dictionary for which each key is a coverage (i.e., number of ECs covering
-a given base). Its corresponding value is the number of bases with that
-coverage.'''
-coverage_histogram = {}
 output_url = url.Url(args.out)
 if output_url.isLocal():
     # Set up destination directory
     try: os.makedirs(output_url.toUrl())
     except: pass
-bed_stream = open(bed_filename, 'w')
 mover = filemover.FileMover(args=args)
-while True:
-    line = sys.stdin.readline()
-    if line:
-        input_line_count += 1
-        tokens = line.rstrip().split()
-        assert len(tokens) == 4, 'Bad input line:\n' + line
-        sample_label, rname, pos, coverage = (tokens[0], tokens[1],
-                                                int(tokens[2]), int(tokens[3]))
-        assert rname in reference_index.string_to_rname, \
-            'RNAME number string "%s" not in Bowtie index.' % rname
-        rname = reference_index.string_to_rname[rname]
+for (sample_label,), xpartition in dp.xstream(sys.stdin, 1):
+    try:
         sample_label = manifest_object.index_to_label[sample_label]
-    if (not line or sample_label != last_sample_label) \
-        and last_sample_label is not None:
-        # All of a sample's coverage entries have been read
-        if last_coverage != 0 \
-            and last_pos < reference_index.rname_lengths[last_rname]:
-            # Output final coverage entry for sample
-            coverage_start_pos, coverage_end_pos = (last_pos - 1,
-                reference_index.rname_lengths[last_rname])
-            print >>bed_stream, '%s\t%d\t%d\t%d' % (last_rname,
-                coverage_start_pos, coverage_end_pos, last_coverage)
-            coverage_histogram[last_coverage] = \
-                coverage_histogram.get(last_coverage, 0) + coverage_end_pos \
-                - coverage_start_pos
-        print '-\t%s\t%d' % (last_sample_label, percentile(coverage_histogram,
-                                                              args.percentile))
-        output_line_count += 1
-        coverage_histogram = {}
-        bed_stream.close()
-        # Write bigBed
-        assert os.path.exists(sizes_filename)
-        assert path.is_exe(args.bigbed_exe)
-        bigbed_filename = ((args.bigbed_basename + '.') 
-            if args.bigbed_basename != '' else '') + last_sample_label + '.bb'
-        if output_url.isLocal():
-            # Write directly to local destination
-            bigbed_file_path = os.path.join(args.out, bigbed_filename)
-        else:
-            # Write to temporary directory, and later upload to URL
-            bigbed_file_path = os.path.join(temp_dir_path, bigbed_filename)
-        bigbed_command = [args.bigbed_exe, bed_filename, sizes_filename,
-                            bigbed_file_path]
-        if args.verbose:
-            print >>sys.stderr, 'Writing bigbed with command %s .' \
-                % ' '.join(bigbed_command)
-        if args.keep_alive:
-            bedtobigbed_thread = BedToBigBedThread(bigbed_command)
-            bedtobigbed_thread.start()
-            while bedtobigbed_thread.is_alive():
-                print >>sys.stderr, 'reporter:status:alive'
-                sys.stderr.flush()
-                time.sleep(5)
-            if bedtobigbed_thread.bedtobigbed_process:
-                raise RuntimeError('bedtobigbed process failed w/ '
-                                   'exitlevel %d.'
-                                    % bedtobigbed_thread.bedtobigbed_process)
-        else:
-            bedtobigbed_process = subprocess.Popen(
-                                        bigbed_command,
-                                        stderr=sys.stderr,
-                                        stdout=sys.stderr,
-                                        bufsize=-1
-                                    )
-            bedtobigbed_process.wait()
-            if bedtobigbed_process.returncode:
-                raise RuntimeError('bedtobigbed process failed w/ '
-                                   'exitlevel %d.'
-                                    % bedtobigbed_process.returncode)
-        if args.verbose:
-            print >>sys.stderr, ('bedToBigBed command '
-                                 + ' '.join([args.bigbed_exe, bed_filename,
-                                             sizes_filename, bigbed_file_path])
-                                 + ' succeeded.')
-        if not output_url.isLocal():
-            # bigBed must be uploaded to URL and deleted
-            mover.put(bigbed_file_path, output_url.plus(bigbed_filename))
-            os.remove(bigbed_file_path)
-        bed_stream = open(bed_filename, 'w')
-    elif last_sample_label is not None and sample_label == last_sample_label:
-        if last_rname == rname:
-            if last_coverage != 0:
-                '''Add to histogram only if coverage > 0 to minimize
-                dictionary size.'''
-                coverage_histogram[last_coverage] \
-                    = coverage_histogram.get(last_coverage, 0) \
-                    + (pos - last_pos)
-            if coverage != last_coverage and last_coverage != 0:
-                print >>bed_stream, '%s\t%d\t%d\t%d' % (last_rname,
-                    last_pos - 1, pos - 1, last_coverage)
-            elif last_coverage != 0:
-                assert coverage == last_coverage
-                # So next output interval extends back to previous pos
-                pos = last_pos
-        elif last_coverage != 0 \
-            and last_pos < reference_index.rname_lengths[last_rname]:
-            # Output final coverage entry for RNAME
-            coverage_start_pos, coverage_end_pos = (last_pos - 1,
-                reference_index.rname_lengths[last_rname])
-            print >>bed_stream, '%s\t%d\t%d\t%d' % (last_rname,
-                coverage_start_pos, coverage_end_pos, last_coverage)
-            coverage_histogram[last_coverage] = \
-                coverage_histogram.get(last_coverage, 0) + coverage_end_pos \
-                - coverage_start_pos
-    if not line: break
-    last_sample_label, last_rname, last_pos, last_coverage = (sample_label,
-        rname, pos, coverage)
-
-bed_stream.close()
+    except KeyError:
+        raise RuntimeError('Sample label index "%s" was not recorded.'
+                                % sample_label)
+    '''Dictionary for which each key is a coverage (i.e., number of ECs
+    covering a given base). Its corresponding value is the number of bases with
+    that coverage.'''
+    coverage_histogram = defaultdict(int)
+    with open(bed_filename, 'w') as bed_stream:
+        for rname, coverages in itertools.groupby(xpartition, 
+                                                    key=lambda val: val[0]):
+            try:
+                rname = reference_index.string_to_rname[rname]
+            except KeyError:
+                raise RuntimeError(
+                        'RNAME number string "%s" not in Bowtie index.' 
+                        % rname
+                    )
+            last_pos, coverage = 0, 0
+            for _, pos, coverage in coverages:
+                pos, coverage = int(pos), int(coverage)
+                input_line_count += 1
+                # BED is zero-indexed, while input is 1-indexed
+                pos -= 1
+                print >>bed_stream, '%s\t%d\t%d\t%d' % (rname,
+                    last_pos, pos, coverage)
+                if coverage != 0:
+                    # Only care about nonzero-coverage regions
+                    coverage_histogram[coverage] += pos - last_pos
+                last_pos = pos
+            if last_pos != reference_index.rname_lengths[rname]:
+                # Print coverage up to end of strand
+                print >>bed_stream, '%s\t%d\t%d\t%d' % (rname,
+                    last_pos, reference_index.rname_lengths[rname], coverage)
+    # Output normalization factor
+    print '-\t%s\t%d' % (sample_label, percentile(coverage_histogram,
+                                                    args.percentile))
+    output_line_count += 1
+    # Write bigBed
+    assert os.path.exists(sizes_filename)
+    assert path.is_exe(args.bigbed_exe)
+    bigbed_filename = ((args.bigbed_basename + '.') 
+        if args.bigbed_basename != '' else '') + sample_label + '.bb'
+    if output_url.isLocal():
+        # Write directly to local destination
+        bigbed_file_path = os.path.join(args.out, bigbed_filename)
+    else:
+        # Write to temporary directory, and later upload to URL
+        bigbed_file_path = os.path.join(temp_dir_path, bigbed_filename)
+    bigbed_command = [args.bigbed_exe, bed_filename, sizes_filename,
+                        bigbed_file_path]
+    if args.verbose:
+        print >>sys.stderr, 'Writing bigbed with command %s .' \
+            % ' '.join(bigbed_command)
+    if args.keep_alive:
+        bedtobigbed_thread = BedToBigBedThread(bigbed_command)
+        bedtobigbed_thread.start()
+        while bedtobigbed_thread.is_alive():
+            print >>sys.stderr, 'reporter:status:alive'
+            sys.stderr.flush()
+            time.sleep(5)
+        if bedtobigbed_thread.bedtobigbed_process:
+            raise RuntimeError('bedtobigbed process failed w/ '
+                               'exitlevel %d.'
+                                % bedtobigbed_thread.bedtobigbed_process)
+    else:
+        bedtobigbed_process = subprocess.Popen(
+                                    bigbed_command,
+                                    stderr=sys.stderr,
+                                    stdout=sys.stderr,
+                                    bufsize=-1
+                                )
+        bedtobigbed_process.wait()
+        if bedtobigbed_process.returncode:
+            raise RuntimeError('bedtobigbed process failed w/ '
+                               'exitlevel %d.'
+                                % bedtobigbed_process.returncode)
+    if args.verbose:
+        print >>sys.stderr, ('bedToBigBed command '
+                             + ' '.join([args.bigbed_exe, bed_filename,
+                                         sizes_filename, bigbed_file_path])
+                             + ' succeeded.')
+    if not output_url.isLocal():
+        # bigBed must be uploaded to URL and deleted
+        mover.put(bigbed_file_path, output_url.plus(bigbed_filename))
+        os.remove(bigbed_file_path)
 
 if not output_url.isLocal():
     # Clean up
     import shutil
     shutil.rmtree(temp_dir_path)
 
-print >>sys.stderr, 'DONE with coverage.py; in=%d; time=%0.3f s' \
-                        % (input_line_count, time.time() - start_time)
+print >>sys.stderr, 'DONE with coverage.py; in/out=%d/%d; time=%0.3f s' \
+                        % (input_line_count, output_line_count,
+                            time.time() - start_time)

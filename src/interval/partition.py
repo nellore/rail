@@ -1,100 +1,48 @@
-'''
+"""
 partition.py
-'''
 
-import math
+Contains a generator for partitioning genome into bins.
+"""
 
 def addArgs(parser):
-    parser.add_argument(\
-        '--ntasks', metavar='NUMTASKS', type=int, required=False,
-        help='Number of reduce tasks')
-    parser.add_argument(\
-        '--genomeLen', metavar='LEN', type=int, required=False,
-        help='Total length of the genome; required so that we can accurately calculate bin sizes')
     parser.add_argument(\
         '--partition-length', metavar='LEN', type=int, required=False,
         help='Length of a single genome partition')
 
-def binSize(args):
-    if args.partition_length is not None:
-        return args.partition_length
-    elif args.genomeLen is not None:
-        return int(math.ceil(1.0 * args.genomeLen / args.ntasks))
-    else:
-        return 10000
+def partition(rname, pos, end_pos, bin_size):
+    """ Assigns the interval rname:[pos, end_pos) to one or more partitions.
 
-def partition(refid, st, en, binSize, fudge=0):
-    ''' Assign the interval refid:[st, en) to one or more partitions
-        based on partition bin size and the interval's start and end
-        positions. The interval is
-        (optionally) extended on both ends by some fudge factor before
-        overlapping.'''
-    binid_st = int((st - fudge - 1) / binSize)
-    binid_en = int((en + fudge - 2) / binSize)
-    return [ (";".join([refid, str(i)]), (i * binSize + 1), ((i+1) * binSize) + 1) for i in xrange(binid_st, binid_en+1) ]
+        rname: RNAME on which interval lies
+        pos: start position of interval (inclusive) AND 1-BASED
+        end_pos: end position if interval (exclusive) AND 1-BASED
+        bin_size: number of bases spanned by partition
 
-def partitionOverlaps(refid, st, en, binSize, fudge=0):
-    ''' Assign the interval refid:[st, en) to one or more partitions based on
-        which partitions are overlapped by the interval.  The interval is
-        (optionally) extended on both ends by some fudge factor before
-        overlapping. '''
-    binid_st = int((st - fudge    ) / binSize)
-    binid_en = int((en + fudge - 1) / binSize)
-    return [ (";".join([refid, str(i)]), i * binSize, (i+1) * binSize) for i in xrange(binid_st, binid_en+1) ]
-
-def partitionStartOverlaps(refid, st, en, binSize, fudge=0):
-    ''' Assign the interval refid:[st, en) to one or more partitions based on
-        which partitions are overlapped by the interval.  The interval is
-        (optionally) extended on both ends by some fudge factor before
-        overlapping. '''
-    binid_st = int((st - fudge) / binSize)
-    binid_en = int((st + fudge) / binSize)
-    return [ (";".join([refid, str(i)]), i * binSize, (i+1) * binSize) for i in xrange(binid_st, binid_en+1) ]
-
-def parse(st, binSz):
-    ''' Parse a partition id. '''
-    toks = st.split(";")
-    if len(toks) != 2:
-        raise RuntimeError("Expected two tokens separated by ;, got %d: '%s'" % (len(toks), st))
-    refid, i = toks[0], int(toks[1])
-    b = i * binSz
-    return refid, b+1, b + binSz+1
+        Yield value: Tuple (rname + ';' + partition number starting at 0,
+                                start position of partition (1-BASED),
+                                end position of partition (1-BASED))
+    """
+    first_bin = (pos - 1) / bin_size
+    last_bin = (end_pos - 2) / bin_size
+    for bin_number in xrange(first_bin, last_bin + 1):
+        bin_pos = bin_number * bin_size + 1
+        bin_end_pos = bin_pos + bin_size
+        yield ';'.join([rname, str(bin_number)]), bin_pos, bin_end_pos
 
 if __name__ == '__main__':
     import unittest
 
-    class TestFlatIntervals(unittest.TestCase):
+    class TestPartition(unittest.TestCase):
+        """ Tests partition(); needs not fixture. """
 
-        def test1(self):
-            pt = partition("blah", 27, 37, 10)
-            self.assertEqual(2, len(pt))
-            refid, st, en = parse(pt[0][0], 10)
-            self.assertEqual("blah", refid)
-            self.assertEqual(20, st)
-            self.assertEqual(30, en)
-            refid, st, en = parse(pt[1][0], 10)
-            self.assertEqual("blah", refid)
-            self.assertEqual(30, st)
-            self.assertEqual(40, en)
-        
-        def test2(self):
-            ps = partitionOverlaps('p', 99, 100, 100, fudge=0)
-            self.assertEquals(1, len(ps))
-        
-        def test3(self):
-            ps = partitionOverlaps('p', 99, 100, 100, fudge=1)
-            self.assertEquals(2, len(ps))
-        
-        def test4(self):
-            ps = partitionStartOverlaps('p', 90, 95, 100, fudge=8)
-            self.assertEquals(1, len(ps))
-        
-        def test5(self):
-            ps = partitionStartOverlaps('p', 90, 95, 100, fudge=11)
-            self.assertEquals(2, len(ps))
-        
-        def test6(self):
-            ps = partitionOverlaps('p', 90, 95, 100, fudge=8)
-            self.assertEquals(2, len(ps))
+        def test_interval_within_partition(self):
+            """ Fails if first partition not returned. """
+            self.assertEquals(list(partition('chr1', 27, 5001, 5000)),
+                            [('chr1;0', 1, 5001)])
+
+        def test_interval_across_three_partitions(self):
+            """ Fails if three partitions are not returned. """
+            self.assertEquals(list(partition('chr1', 20, 10002, 5000)),
+                            [('chr1;0', 1, 5001), ('chr1;1', 5001, 10001),
+                             ('chr1;2', 10001, 15001)])
         
     unittest.main()
