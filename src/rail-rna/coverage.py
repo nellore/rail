@@ -181,7 +181,7 @@ for (sample_label,), xpartition in dp.xstream(sys.stdin, 1):
                 input_line_count += 1
                 # BED is zero-indexed, while input is 1-indexed
                 pos -= 1
-                print >>bed_stream, '%s\t%d\t%d\t%d' % (rname,
+                print >>bed_stream, '%s\t%d\t%d\tNA\t%d' % (rname,
                     last_pos, pos, coverage)
                 if coverage != 0:
                     # Only care about nonzero-coverage regions
@@ -189,7 +189,7 @@ for (sample_label,), xpartition in dp.xstream(sys.stdin, 1):
                 last_pos = pos
             if last_pos != reference_index.rname_lengths[rname]:
                 # Print coverage up to end of strand
-                print >>bed_stream, '%s\t%d\t%d\t%d' % (rname,
+                print >>bed_stream, '%s\t%d\t%d\tNA\t%d' % (rname,
                     last_pos, reference_index.rname_lengths[rname], coverage)
     # Output normalization factor
     print '-\t%s\t%d' % (sample_label, percentile(coverage_histogram,
