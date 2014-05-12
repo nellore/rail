@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Rail-RNA-coverage
 Follows Rail-RNA-coverage_pre
@@ -42,7 +43,7 @@ import subprocess
 import threading
 
 base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for directory_name in ['util', 'fasta', 'bowtie', 'manifest', 'dooplicity']:
+for directory_name in ['util', 'bowtie', 'manifest', 'dooplicity']:
     site.addsitedir(os.path.join(base_path, directory_name))
 
 import manifest
@@ -51,7 +52,6 @@ import bowtie_index
 import url
 import path
 import filemover
-import fasta
 import itertools
 from collections import defaultdict
 import dooplicity as dp
@@ -181,7 +181,7 @@ for (sample_label,), xpartition in dp.xstream(sys.stdin, 1):
                 input_line_count += 1
                 # BED is zero-indexed, while input is 1-indexed
                 pos -= 1
-                print >>bed_stream, '%s\t%d\t%d\tNA\t%d' % (rname,
+                print >>bed_stream, '%s\t%d\t%d\t%d' % (rname,
                     last_pos, pos, coverage)
                 if coverage != 0:
                     # Only care about nonzero-coverage regions
@@ -189,7 +189,7 @@ for (sample_label,), xpartition in dp.xstream(sys.stdin, 1):
                 last_pos = pos
             if last_pos != reference_index.rname_lengths[rname]:
                 # Print coverage up to end of strand
-                print >>bed_stream, '%s\t%d\t%d\tNA\t%d' % (rname,
+                print >>bed_stream, '%s\t%d\t%d\t%d' % (rname,
                     last_pos, reference_index.rname_lengths[rname], coverage)
     # Output normalization factor
     print '-\t%s\t%d' % (sample_label, percentile(coverage_histogram,

@@ -139,10 +139,12 @@ while True:
     if args.keep_alive:
         print >>sys.stderr, 'reporter:status:alive'
     line = sys.stdin.readline()
+    print >>sys.stderr, input_line_count
     if not line:
         if output_stream is not None:
             output_stream.close()
             if not args.output_sam:
+                print >>sys.stderr, 'samtools returning'
                 samtools_return = samtools_process.wait()
                 if samtools_return:
                     raise RuntimeError('samtools returned exitlevel %d' 
@@ -158,6 +160,7 @@ while True:
         rname = reference_index.string_to_rname[rname]
     if move_temporary_file and last_sample_label is not None \
         and not output_url.isLocal():
+        print >>sys.stderr, 'movin'
         mover.put(last_output_path, 
             output_url.plus(last_output_filename))
         os.remove(last_output_path)
@@ -207,6 +210,7 @@ while True:
         if not args.output_sam:
             # Start samtools and reroute output_stream to subprocess stdin
             subprocess_stdout = output_stream
+            print >>sys.stderr, 'starting samtools process'
             samtools_process = \
                 subprocess.Popen([args.samtools_exe, 'view', '-bS', '-'],
                                     stdin=subprocess.PIPE,
