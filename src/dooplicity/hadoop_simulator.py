@@ -216,7 +216,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                     task_file_streams[key].write(line_to_write)
             multiple_output_process_return = multiple_output_process.wait()
             if multiple_output_process_return != 0:
-                return (('Streaming command failed with exit level %d.')
+                return (('Exit level was %d.')
                         % multiple_output_process_return, command_to_run)
             for key in task_file_streams:
                 task_file_streams[key].close()
@@ -233,7 +233,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                                     bufsize=-1
                                                 )
             if single_output_process_return != 0:
-                return (('Streaming command failed with exit level %d.')
+                return (('Exit level was %d.')
                         % single_output_process_return, command_to_run)
         return tuple()
     except Exception as e:
@@ -450,6 +450,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         errors = ['Streaming command "%s" failed: %s' % 
                                   (error[1], error[0]) for error
                                   in return_values if len(error) == 2]
+                        errors = [('%d) ' % (i + 1)) + error
+                                    for i, error in enumerate(errors)]
                         iface.fail('\n'.join(errors),
                                     steps=(job_flow[step_number:]
                                             if step_number != 0 else None))
@@ -512,18 +514,19 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         errors = ['Partitioning failed on input file %s. ' % 
                                    error for error in task_filenames
                                    if len(error) == 1]
+                        errors = [('%d) ' % (i + 1)) + error
+                                    for i, error in enumerate(errors)]
                         iface.fail('\n'.join(errors),
                                    (job_flow[step_number:]
                                     if step_number != 0 else None))
                         failed = True
                         raise RuntimeError
-                    iface.status(('    Partitioning inputs into tasks; '
-                                      'input files partitioned: %d/%d\r')
+                    iface.status(('    Inputs partitioned: %d/%d\r')
                                  % (len(return_values), input_file_count))
                     time.sleep(0.2)
                 iface.step('    Partitioned %s into tasks.'
                             % dp_iface.inflected(input_file_count,
-                                                 'input file'))
+                                                 'input'))
                 return_values = []
                 input_files = [os.path.join(output_dir, '%d.*' % i) 
                                for i in xrange(step_data['task_count'])]
@@ -563,6 +566,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         errors = ['Streaming command "%s" failed: %s' % 
                                   (error[1], error[0]) for error 
                                   in return_values if len(error) == 2]
+                        errors = [('%d) ' % (i + 1)) + error
+                                    for i, error in enumerate(errors)]
                         iface.fail('\n'.join(errors),
                                    (job_flow[step_number:]
                                     if step_number != 0 else None))

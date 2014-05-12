@@ -13,18 +13,6 @@ import tempfile
 import os
 import json
 
-class style:
-   PURPLE = '\033[95m'
-   CYAN = '\033[96m'
-   DARKCYAN = '\033[36m'
-   BLUE = '\033[94m'
-   GREEN = '\033[92m'
-   YELLOW = '\033[93m'
-   RED = '\033[91m'
-   BOLD = '\033[1m'
-   UNDERLINE = '\033[4m'
-   END = '\033[0m'
-
 def inflected(number, word, es=False):
     """ Returns string with word in appropriate form.
 
@@ -63,6 +51,7 @@ class UpdateThread(threading.Thread):
 
 class DooplicityInterface:
     def __init__(self, branding=None):
+        # Disable line-wrapping
         sys.stdout.write('\n')
         sys.stdout.flush()
         try:
@@ -83,7 +72,7 @@ class DooplicityInterface:
                                     self._date_format,
                                     time.localtime(self._start_time)
                                 )
-        print >>sys.stdout, style.RED + '\n~.oOo.~\n'
+        print '\n~.oOo.~\n'
         sys.stdout.flush()
         self._update_thread = UpdateThread(self._start_time)
 
