@@ -136,9 +136,9 @@ if args.out is not None:
 input_line_count = 0
 move_temporary_file = False # True when temporary file should be uploaded
 while True:
+    line = sys.stdin.readline()
     if args.keep_alive:
         print >>sys.stderr, 'reporter:status:alive'
-    line = sys.stdin.readline()
     print >>sys.stderr, input_line_count
     if not line:
         if output_stream is not None:

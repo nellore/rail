@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 """
 hadoop_simulator.py
-Part of Dooplicity framework.
+Part of Dooplicity framework
 
 Runs JSON-encoded Hadoop Streaming job flow. FUNCTIONALITY IS IDIOSYNCRATIC;
 it is currently confined to those features used by Rail. Format of input JSON
-mirrors that used by elastic-mapreduce-ruby. Any files input to a mapper can
-be gzip'd, but inputs to a reducer currently cannot be.
-
-Copyright (c) 2014 Abhi Nellore and Ben Langmead.
+mirrors that of StepConfig list from JSON sent to EMR via RunJobsFlow. Any
+files input to a mapper can be gzip'd, but inputs to a reducer currently cannot
+be.
 
 Licensed under the MIT License:
+
+Copyright (c) 2014 Abhi Nellore and Ben Langmead.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -29,39 +30,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
-This software uses npyscreen for simple interface construction, which is in
-the same directory as Dooplicity and requires inclusion of the following
-copyright notice:
-
-Copyright (c) 2004--2009, Nicholas P. S. Cole (n@npcole.com)
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER ''AS IS'' AND ANY
-EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 import argparse
 import sys
 import os
 import shutil
-from dooplicity_version import version
 from collections import defaultdict, OrderedDict
 import time
 import glob
@@ -69,6 +43,18 @@ import hashlib
 import subprocess
 import json
 import dooplicity_interface as dp_iface
+import signal
+
+def init_worker():
+    """ Prevents KeyboardInterrupt from reaching a pool's workers.
+
+        Exiting gracefully after KeyboardInterrupt or SystemExit is a
+        challenge. The solution implemented here is by John Reese and is from
+        http://noswap.com/blog/python-multiprocessing-keyboardinterrupt .
+
+        No return value.
+    """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 def presorted_tasks(input_file, process_id, sort_options, output_dir,
                     key_fields, separator, task_count, memcap):
@@ -100,7 +86,9 @@ def presorted_tasks(input_file, process_id, sort_options, output_dir,
         task_streams = {}
         with open(input_file) as input_stream:
             for line in input_stream:
-                key = '\t'.join(line.strip().split('\t')[:key_fields])
+                key = separator.join(
+                            line.strip().split(separator)[:key_fields]
+                        )
                 task = int(hashlib.md5(key).hexdigest(), 16) % task_count
                 try:
                     task_streams[task].write(line)
@@ -283,9 +271,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         if D_arg[0] == 'mapred.reduce.tasks':
                             step_args['task_count'] = int(D_arg[1])
                         elif D_arg[0] == 'mapred.text.key.partitioner.options':
-                            step_args['sort_options'] = D_arg[1].strip()
+                            step_args['key_fields'] \
+                                = int(D_arg[1].split(',')[-1])
                         elif D_arg[0] == 'stream.num.map.output.key.fields':
-                            step_args['key_fields'] = int(D_arg[1])
+                            step_args['sort_options'] = '-k1,%s' % D_arg[1]
                     elif arg_name == 'input':
                         try:
                             step_args['input'] = ','.join(
@@ -418,14 +407,14 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         # No outputformat
                         pass
                 return_values = []
-                map_pool = multiprocessing.Pool(num_processes)
+                pool = multiprocessing.Pool(num_processes, init_worker)
                 input_files = [input_file for input_file in step_inputs
                                 if os.path.isfile(input_file)]
                 input_file_count = len(input_files)
                 err_dir = os.path.join(steps[step]['output'], 'dp.map.err')
                 for i, input_file in enumerate(input_files):
                     if os.path.isfile(input_file):
-                        map_pool.apply_async(
+                        pool.apply_async(
                             step_runner_with_error_return, 
                             args=(step_data['mapper'], input_file,
                                 output_dir, err_dir, i,
@@ -435,7 +424,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 None),
                             callback=return_values.append
                         )
-                map_pool.close()
+                pool.close()
                 iface.step('Step %d/%d: %s' % 
                             (step_number + 1, total_steps, step))
                 while len(return_values) != input_file_count:
@@ -485,10 +474,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 input_files = [input_file for input_file in step_inputs
                                 if os.path.isfile(input_file)]
                 input_file_count = len(input_files)
-                partition_pool = multiprocessing.Pool(num_processes)
+                pool = multiprocessing.Pool(num_processes, init_worker)
                 for i, input_file in enumerate(input_files):
                     if os.path.isfile(input_file):
-                        partition_pool.apply_async(
+                        pool.apply_async(
                                             presorted_tasks,
                                             args=(input_file, i,
                                                 step_data['sort_options'],
@@ -499,7 +488,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                                 memcap),
                                             callback=return_values.append
                                         )
-                partition_pool.close()
+                pool.close()
                 iface.step('Step %d/%d: %s'
                              % (step_number + 1, total_steps, step))
                 while len(return_values) != input_file_count:
@@ -534,7 +523,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 input_files = [input_file for input_file in input_files
                                 if glob.glob(input_file)]
                 input_file_count = len(input_files)
-                reduce_pool = multiprocessing.Pool(num_processes)
+                pool = multiprocessing.Pool(num_processes, init_worker)
                 try:
                     multiple_outputs = (step_data['outputformat']
                                         == 'edu.jhu.cs.MultipleOutputFormat')
@@ -543,7 +532,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 err_dir = os.path.join(steps[step]['output'], 'dp.reduce.err')
                 output_dir = step_data['output']
                 for i, input_file in enumerate(input_files):
-                    reduce_pool.apply_async(
+                    pool.apply_async(
                             step_runner_with_error_return, 
                             args=(step_data['reducer'], input_file,
                                 output_dir, err_dir, i, 
@@ -553,7 +542,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 memcap),
                              callback=return_values.append
                         )
-                reduce_pool.close()
+                pool.close()
                 while len(return_values) != input_file_count:
                     try:
                         max_tuple = max(map(len, return_values))
@@ -580,7 +569,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                            % dp_iface.inflected(input_file_count, 'task'))
             step_number += 1
         iface.done()
-    except:
+    except Exception:
         if not failed:
             time.sleep(0.2)
             if 'step_number' in locals():
@@ -588,7 +577,16 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             if step_number != 0 else None))
             else:
                 iface.fail()
-        raise
+    except KeyboardInterrupt, SystemExit:
+        if 'step_number' in locals():
+            iface.fail(steps=(job_flow[step_number:]
+                        if step_number != 0 else None),
+                        opener='*****Terminated*****')
+        else:
+            iface.fail()
+        if 'pool' in locals():
+            pool.terminate()
+            pool.join()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, 
@@ -601,8 +599,9 @@ if __name__ == '__main__':
         )
     parser.add_argument(
             '-j', '--json-config', type=str, required=True,
-            help='JSON configuration file. Google Getting Started with ' \
-                 'Amazon Elastic MapReduce for formatting information.'
+            help='JSON configuration file in format of StepConfig list from '
+                 'RunJobFlow EMR API request. Google Amazon Elastic MapReduce '
+                 'API Reference Amazon for formatting information.'
         )
     parser.add_argument(
             '-f', '--force', action='store_const', const=True,
