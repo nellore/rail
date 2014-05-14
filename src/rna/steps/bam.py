@@ -66,7 +66,6 @@ import bowtie_index
 import manifest
 # Define string version_number
 import version
-import url
 import filemover
 import dooplicity as dp
 
@@ -129,7 +128,7 @@ manifest_object = manifest.LabelsAndIndices(args.manifest)
     last_rname, last_sample_label) = [None]*6
 if args.out is not None:
     output_url = dp.Url(args.out)
-    if output_url.is_local():
+    if output_url.is_local:
         # Set up destination directory
         try: os.makedirs(output_url.to_url())
         except: pass
@@ -164,7 +163,7 @@ while True:
         sample_label = manifest_object.index_to_label[sample_label]
         rname = reference_index.string_to_rname[rname]
     if move_temporary_file and last_sample_label is not None \
-        and not output_url.is_local():
+        and not output_url.is_local:
         print >>sys.stderr, 'movin'
         mover.put(last_output_path, 
             output_url.plus(last_output_filename))
@@ -196,7 +195,7 @@ while True:
             output_filename = args.bam_basename + '.' + sample_label \
                     + (('.' + out_rname) if args.output_by_chromosome else ''
                         ) + ('.sam' if args.output_sam else '.bam')
-            if output_url.is_local():
+            if output_url.is_local:
                 output_path = os.path.join(args.out, output_filename)
             else:
                 output_path = os.path.join(temp_dir_path, output_filename)
@@ -239,7 +238,7 @@ while True:
     last_sample_label = sample_label
     input_line_count += 1
 
-if not output_url.is_local():
+if not output_url.is_local:
     # Clean up
     import shutil
     shutil.rmtree(temp_dir_path)

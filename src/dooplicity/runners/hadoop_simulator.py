@@ -585,7 +585,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         if 'pool' in locals():
             pool.terminate()
             pool.join()
-        raise
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, 

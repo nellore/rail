@@ -249,7 +249,7 @@ def go(args):
             # Does input file need to be pulled down?
             to_delete = []
             input_url_1 = Url(fn1)
-            if input_url_1.is_local():
+            if input_url_1.is_local:
                 mover.get(input_url_1)
                 fn1 = os.path.basename(fn1)
                 assert os.path.exists(fn1)
@@ -257,7 +257,7 @@ def go(args):
                     to_delete.append(fn1)
                 if fn2 is not None:
                     input_url_2 = Url(fn2)
-                    assert not input_url_2.is_local()
+                    assert not input_url_2.is_local
                     mover.get(input_url_2)
                     fn2 = os.path.basename(fn2)
                     assert os.path.exists(fn2)

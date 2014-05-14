@@ -53,8 +53,6 @@ site.addsitedir(dp_path)
 import manifest
 import bowtie
 import bowtie_index
-import url
-import path
 import filemover
 import itertools
 from collections import defaultdict
@@ -153,8 +151,8 @@ with open(sizes_filename, 'w') as sizes_stream:
             reference_index.rname_lengths[rname])
 
 input_line_count, output_line_count = 0, 0
-output_url = url.Url(args.out)
-if output_url.is_local():
+output_url = dp.Url(args.out)
+if output_url.is_local:
     # Set up destination directory
     try: os.makedirs(output_url.to_url())
     except: pass
@@ -204,7 +202,7 @@ for (sample_label,), xpartition in dp.xstream(sys.stdin, 1):
     assert path.is_exe(args.bigbed_exe)
     bigbed_filename = ((args.bigbed_basename + '.') 
         if args.bigbed_basename != '' else '') + sample_label + '.bb'
-    if output_url.is_local():
+    if output_url.is_local:
         # Write directly to local destination
         bigbed_file_path = os.path.join(args.out, bigbed_filename)
     else:
@@ -243,12 +241,12 @@ for (sample_label,), xpartition in dp.xstream(sys.stdin, 1):
                              + ' '.join([args.bigbed_exe, bed_filename,
                                          sizes_filename, bigbed_file_path])
                              + ' succeeded.')
-    if not output_url.is_local():
+    if not output_url.is_local:
         # bigBed must be uploaded to URL and deleted
         mover.put(bigbed_file_path, output_url.plus(bigbed_filename))
         os.remove(bigbed_file_path)
 
-if not output_url.is_local():
+if not output_url.is_local:
     # Clean up
     import shutil
     shutil.rmtree(temp_dir_path)

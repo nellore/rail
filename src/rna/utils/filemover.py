@@ -53,7 +53,7 @@ class FileMover:
             No return value.
         """
         assert os.path.exists(filename)
-        if url.is_s3():
+        if url.is_s3:
             command_list = ['s3cmd']
             if self.s3cred is not None:
                 command_list.append('-c')
@@ -63,9 +63,9 @@ class FileMover:
                 command_list.append("--acl-public")
             command_list.append(filename)
             command_list.append(url.to_nonnative_url())
-        elif url.is_curlable():
+        elif url.is_curlable:
             raise RuntimeError('Can\'t upload to http/ftp URLs.')
-        elif url.is_local():
+        elif url.is_local:
             try:
                 os.path.makedirs(url.to_url())
             except OSError:
@@ -91,7 +91,7 @@ class FileMover:
 
             No return value.
         """
-        if url.is_s3():
+        if url.is_s3:
             command_list = ['s3cmd']
             if self.s3cred is not None:
                 command_list.append("-c")
@@ -105,7 +105,7 @@ class FileMover:
             if exit_level > 0:
                 raise RuntimeError('Non-zero exitlevel %d from s3cmd '
                                    'get command "%s"' % (exit_level, command))
-        elif url.is_curlable():
+        elif url.is_curlable:
             oldp = os.getcwd()
             os.chdir(dest)
             command_list = ['curl', '-O', '--connect-timeout', '60']
@@ -130,7 +130,7 @@ class FileMover:
             if curl_thread.exit_level > 0:
                 raise RuntimeError('Nonzero exitlevel %d from curl command '
                                    '"%s"' % (curl_thread.exit_level, command))
-        elif url.is_local():
+        elif url.is_local:
             command_list = ['cp', url.to_url(), dest]
         else:
             command_list = ["hadoop", "fs", "-get"]

@@ -60,7 +60,6 @@ import manifest
 import atexit
 # Define string version_number
 from version import version_number
-import url
 import filemover
 import subprocess
 import shutil
@@ -94,7 +93,7 @@ manifest_object = manifest.LabelsAndIndices(args.manifest)
 output_url = dp.Url(args.out) if args.out is not None \
     else dp.Url(os.getcwd())
 input_line_count = 0
-if output_url.is_local():
+if output_url.is_local:
     # Set up destination directory
     try: os.makedirs(output_url.to_url())
     except: pass
@@ -113,7 +112,7 @@ for (line_type, sample_label), xpartition in dp.xstream(sys.stdin, 2):
     output_filename = ((args.bed_basename + '.' 
                           if args.bed_basename != '' else '')
                           + type_string + '.' + sample_label + '.bed')
-    if output_url.is_local():
+    if output_url.is_local:
         output_path = os.path.join(args.out, output_filename)
     else:
         output_path = os.path.join(temp_dir_path, output_filename)
@@ -158,7 +157,7 @@ for (line_type, sample_label), xpartition in dp.xstream(sys.stdin, 2):
                                                 rname
                                             ], pos, end_pos, seq, coverage)
             input_line_count += i
-    if not output_url.is_local():
+    if not output_url.is_local:
         mover.put(output_path, output_url.plus(output_filename))
         os.remove(output_path)
 

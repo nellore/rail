@@ -92,7 +92,7 @@ if args.out is not None:
     write to a temporary file that will later be uploaded to the
     destination.'''
     output_url = Url(args.out)
-    if output_url.is_local():
+    if output_url.is_local:
         try: os.makedirs(output_url.to_url())
         except: pass
         output_filename = os.path.join(args.out, args.normalize_filename)
@@ -116,7 +116,7 @@ for sample_label in sample_labels:
 
 if args.out is not None:
     output_stream.close()
-    if not output_url.is_local():
+    if not output_url.is_local:
         mover = filemover.FileMover(args=args)
         mover.put(output_filename, output_url.plus(args.normalize_filename))
         import shutil

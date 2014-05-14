@@ -100,7 +100,7 @@ import tempfile
 temp_dir_path = tempfile.mkdtemp()
 # For deleting temporary directory, even on unexpected exit
 atexit.register(handle_temporary_directory, temp_dir_path)
-if output_url.is_local():
+if output_url.is_local:
     # Set up final destination
     try: os.makedirs(output_url.to_url())
     except: pass
@@ -108,7 +108,7 @@ else:
     # Set up temporary destination
     try: os.makedirs(os.path.join(temp_dir_path, 'index'))
     except: pass
-if output_url.is_local():
+if output_url.is_local:
     # Write directly to local destination
     index_basename = os.path.join(output_url.to_url(), args.basename)
 else:
@@ -173,7 +173,7 @@ else:
         raise RuntimeError('Bowtie index construction failed w/ exitlevel %d.'
                                 % bowtie_build_process.returncode)
 
-if not output_url.is_local():
+if not output_url.is_local:
     # Compress index files
     intron_index_filename = args.basename + '.tar.gz'
     intron_index_path = os.path.join(temp_dir_path, intron_index_filename)
