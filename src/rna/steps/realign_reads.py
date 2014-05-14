@@ -414,7 +414,7 @@ class BowtieOutputThread(threading.Thread):
                 print >>self.output_stream, 'splice_sam\t' \
                      + '\t'.join(
                             list((self.manifest_object.label_to_index[
-                                    sample.parseLab(qname[:-2])
+                                    sample.parse_label(qname[:-2])
                                 ],
                                 self.reference_index.rname_to_string[
                                         rest_of_line[1]
@@ -430,7 +430,7 @@ class BowtieOutputThread(threading.Thread):
                                             multiread, self.stranded
                                         )
                 sample_label = self.manifest_object.label_to_index[
-                                    sample.parseLab(multiread[0][0][:-2])
+                                    sample.parse_label(multiread[0][0][:-2])
                                     ]
                 for alignment in corrected_multiread:
                     print >>self.output_stream, 'splice_sam\t' \
@@ -778,8 +778,8 @@ if __name__ == '__main__':
              'this process\'s PID) of PATH')
 
     # Add command-line arguments for dependencies
-    partition.addArgs(parser)
-    bowtie.addArgs(parser)
+    partition.add_args(parser)
+    bowtie.add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv

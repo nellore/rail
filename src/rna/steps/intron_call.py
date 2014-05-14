@@ -609,8 +609,8 @@ if __name__ == '__main__':
         help='Assume input reads come from the sense strand')
 
     # Add command-line arguments for dependencies
-    partition.addArgs(parser)
-    bowtie.addArgs(parser)
+    partition.add_args(parser)
+    bowtie.add_args(parser)
 
     args = parser.parse_args(sys.argv[1:])
 

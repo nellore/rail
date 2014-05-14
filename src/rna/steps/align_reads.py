@@ -180,7 +180,9 @@ def write_reads(output_stream, input_stream=sys.stdin, verbose=False,
                 'tab-separated tokens:\n%sA valid line has 3, 5, or 6 such '
                 'tokens.' % line)
         # Check that a properly formed label is embedded in the read name
-        sample.hasLab(tokens[0], mustHave=True)
+        if not sample.has_label(tokens[0]):
+            raise RuntimeError('QNAME %s is missing sample label.'
+                                % tokens[0])
         if len(tokens) == 3:
             to_write = '%s\t%s\t%s' \
                 % (tokens[0], tokens[1], tokens[2])
@@ -253,7 +255,7 @@ class BowtieOutputThread(threading.Thread):
             # While labeled multiread, this list may end up simply a uniread
             multiread = []
             sample_label = self.manifest_object.label_to_index[
-                        sample.parseLab(qname)
+                        sample.parse_label(qname)
                     ]
             for rest_of_line in xpartition:
                 i += 1
@@ -576,8 +578,8 @@ if __name__ == '__main__':
              'WRITE EXONS AND INTRONS TO STDOUT')
 
     # Add command-line arguments for dependencies
-    partition.addArgs(parser)
-    bowtie.addArgs(parser)
+    partition.add_args(parser)
+    bowtie.add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv

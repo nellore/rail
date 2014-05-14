@@ -1,32 +1,54 @@
-'''
+"""
 sample.py
+Part of Rail-RNA
 
-Helper functions for checking for and parsing sample names. 
-'''
+Contains helper functions for checking for and parsing sample names. 
+"""
 
 import re
 
-parseLabReStr = ".*;LB:([^;]*)"
-parseIDReStr = ".*;ID:([^;]*)"
-parseLabRe = re.compile(parseLabReStr)
-parseIDRe = re.compile(parseIDReStr)
+parse_label_pattern = ".*;LB:([^;]*)"
+parse_id_pattern = ".*;ID:([^;]*)"
+parse_label_compiled = re.compile(parse_label_pattern)
+parse_id_compiled = re.compile(parse_id_pattern)
 
-def parseLab(nm):
-    """Parse sample label from read name.  Label is at the end of the read name like: <name>;LB:<label>"""
-    m = parseLabRe.match(nm)
-    if m.group(1) is None:
-        raise RuntimeError("Read name did not match regular expression '%s': %s" % (parseLabReStr, nm))
-    return m.group(1)
+def parse_label(qname):
+    """ Parse sample label from read's QNAME. 
 
-def parseID(nm):
-    """Parse sample label from read name.  Label is at the end of the read name like: <name>;LB:<label>"""
-    m = parseIDRe.match(nm)
-    if m.group(1) is None:
-        raise RuntimeError("Read name did not match regular expression '%s': %s" % (parseIDReStr, nm))
-    return m.group(1)
+        The label is at the end of the read name: <name>;LB:<label>.
 
-def hasLab(nm, mustHave=False):
-    """Return true iff read name has label at the end."""
-    ret = parseLabRe.match(nm)
-    if not ret and mustHave:
-        raise RuntimeError("Read name did not match regular expression '%s': %s" % (parseLabReStr, nm))
+        qname: QNAME in SAM format
+
+        Return value: sample label
+    """
+    name_match = parse_label_compiled.match(qname)
+    if name_match.group(1) is None:
+        raise RuntimeError(('Read name did not match regular expression '
+                            '"%s": %s') % (parse_label_pattern, qname))
+    return name_match.group(1)
+
+def parse_id(qname):
+    """ Parse ID from read name.
+
+        The ID is embedded in the read name: <name>;ID:<label>.
+
+        qname: QNAME in SAM format
+
+        Return value: ID
+    """
+    name_match = parse_id_compiled.match(qname)
+    if name_match.group(1) is None:
+        raise RuntimeError(('Read name did not match regular expression '
+                            '"%s": %s') % (parse_id_pattern, qname))
+    return name_match.group(1)
+
+def has_label(qname):
+    """ Return True iff read name has label at the end.
+
+        qname: QNAME in SAM format
+
+        Return value: True iff read name has a label.
+    """
+    if not parse_label_compiled.match(qname):
+        return False
+    return True

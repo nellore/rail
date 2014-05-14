@@ -60,7 +60,7 @@ parser = argparse.ArgumentParser(description=__doc__,
 parser.add_argument(\
     '--verbose', action='store_const', const=True, default=False,
     help='Print out extra debugging statements')
-bowtie.addArgs(parser)
+bowtie.add_args(parser)
 args = parser.parse_args()
 
 start_time = time.time()

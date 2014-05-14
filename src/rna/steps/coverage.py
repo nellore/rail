@@ -90,8 +90,8 @@ parser.add_argument(\
     '--verbose', action='store_const', const=True, default=False,
     help='Print out extra debugging statements')
 
-filemover.addArgs(parser)
-bowtie.addArgs(parser)
+filemover.add_args(parser)
+bowtie.add_args(parser)
 args = parser.parse_args()
 
 if args.keep_alive:
@@ -156,7 +156,7 @@ input_line_count, output_line_count = 0, 0
 output_url = url.Url(args.out)
 if output_url.is_local():
     # Set up destination directory
-    try: os.makedirs(output_url.toUrl())
+    try: os.makedirs(output_url.to_url())
     except: pass
 mover = filemover.FileMover(args=args)
 for (sample_label,), xpartition in dp.xstream(sys.stdin, 1):

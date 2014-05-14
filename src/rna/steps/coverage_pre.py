@@ -70,7 +70,7 @@ parser.add_argument(\
     '--partition-stats', action='store_const', const=True, 
     help='Output statistics about bin sizes, time taken per bin, number of '
          'bins per reducer')
-bowtie.addArgs(parser)
+bowtie.add_args(parser)
 
 args = parser.parse_args()
 

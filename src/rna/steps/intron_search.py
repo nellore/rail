@@ -1316,8 +1316,8 @@ if __name__ == '__main__':
              'when searching for motifs')
 
     # Add command-line arguments for dependencies
-    partition.addArgs(parser)
-    bowtie.addArgs(parser)
+    partition.add_args(parser)
+    bowtie.add_args(parser)
 
     '''Now collect arguments. While the variable args declared below is
     global, properties of args are also arguments of the go() function so

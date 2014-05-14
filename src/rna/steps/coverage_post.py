@@ -59,8 +59,8 @@ parser.add_argument(\
     '--verbose', action='store_const', const=True, default=False,
     help='Print out extra debugging statements')
 
-manifest.addArgs(parser)
-filemover.addArgs(parser)
+manifest.add_args(parser)
+filemover.add_args(parser)
 args = parser.parse_args()
 
 import time

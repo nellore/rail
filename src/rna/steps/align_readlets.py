@@ -316,7 +316,7 @@ if __name__ == '__main__':
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN')
 
     # Add command-line arguments for dependencies
-    bowtie.addArgs(parser)
+    bowtie.add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv

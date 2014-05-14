@@ -303,7 +303,7 @@ if __name__ == '__main__':
     parser.add_argument('--test', action='store_const', const=True, default=False, help='Do unit tests')
     parser.add_argument('--profile', action='store_const', const=True, default=False, help='Profile code')
 
-    filemover.addArgs(parser)
+    filemover.add_args(parser)
     master_args = parser.parse_args()
     if master_args.profile:
         import cProfile

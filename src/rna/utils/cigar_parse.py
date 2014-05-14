@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
 cigar_parse.py
+Part of Rail-RNA
 
 Includes a function that outputs indels, introns, and exons from a genome
 position, CIGAR string, and MD string.

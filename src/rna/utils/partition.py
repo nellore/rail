@@ -1,10 +1,11 @@
 """
 partition.py
+Part of Rail-RNA
 
 Contains a generator for partitioning genome into bins.
 """
 
-def addArgs(parser):
+def add_args(parser):
     parser.add_argument(\
         '--partition-length', metavar='LEN', type=int, required=False,
         help='Length of a single genome partition')

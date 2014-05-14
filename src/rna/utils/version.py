@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
-Rail-RNA utility: version
+version.py
+Part of Rail-RNA
 
 Stores version number of Rail-RNA as a string.
 """

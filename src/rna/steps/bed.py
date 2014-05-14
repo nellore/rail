@@ -81,8 +81,8 @@ parser.add_argument(\
     help='The basename (excluding path) of all BED output. Basename is '
          'followed by ".[junctions/insertions/deletions].[sample_label].bed"')
 
-bowtie.addArgs(parser)
-filemover.addArgs(parser)
+bowtie.add_args(parser)
+filemover.add_args(parser)
 args = parser.parse_args()
 
 import time

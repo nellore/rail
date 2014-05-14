@@ -106,8 +106,8 @@ parser.add_argument(\
     '--output-sam', action='store_const', const=True, default=False, 
     help='Output SAM files if True; otherwise output BAM files')
 
-filemover.addArgs(parser)
-bowtie.addArgs(parser)
+filemover.add_args(parser)
+bowtie.add_args(parser)
 args = parser.parse_args()
 
 if not args.output_sam:

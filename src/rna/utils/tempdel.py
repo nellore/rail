@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
 tempdel.py
+Part of Rail-RNA
 
 For deleting temporary directories on exit from Python script.
 """

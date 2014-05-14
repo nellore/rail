@@ -73,8 +73,8 @@ parser.add_argument(\
     help='Prints reporter:status:alive messages to stderr to keep EMR '
          'task alive')
 
-filemover.addArgs(parser)
-bowtie.addArgs(parser)
+filemover.add_args(parser)
+bowtie.add_args(parser)
 args = parser.parse_args()
 
 def handle_temporary_directory(temp_dir_path):
