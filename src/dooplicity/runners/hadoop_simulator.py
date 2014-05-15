@@ -9,6 +9,10 @@ mirrors that of StepConfig list from JSON sent to EMR via RunJobsFlow. Any
 files input to a mapper can be gzip'd, but inputs to a reducer currently cannot
 be.
 
+TODO: Implement -k option: Kill intermediates when they're no longer necessary.
+This requires checking rest of steps to see if an intermediate directory
+appears.
+
 Licensed under the MIT License:
 
 Copyright (c) 2014 Abhi Nellore and Ben Langmead.
@@ -590,24 +594,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, 
                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-            '-b', '--branding', type=str, required=False, default=None,
-            help='Text file with heading to write to stdout when running job. '
-                 'This is where the name of a software package or ASCII art '
-                 'can go.'
-        )
-    parser.add_argument(
-            '-j', '--json-config', type=str, required=True,
-            help='JSON configuration file in format of StepConfig list from '
-                 'RunJobFlow EMR API request. Google Amazon Elastic MapReduce '
-                 'API Reference Amazon for formatting information.'
-        )
-    parser.add_argument(
-            '-f', '--force', action='store_const', const=True,
-            default=False,
-            help='Erase all existing directories when writing ' \
-                  'intermediates.'
-        )
-    parser.add_argument(
             '-m', '--memcap', type=int, required=False, default=(1024*300),
             help='Maximum amount of memory to use per UNIX sort instance.'
         )
@@ -625,6 +611,7 @@ if __name__ == '__main__':
             default=False,
             help='Keeps all intermediate output.'
         )
+    dp_iface.add_args(parser)
     args = parser.parse_args(sys.argv[1:])
     run_simulation(args.branding, args.json_config, args.force,
                     args.memcap, args.num_processes, args.separator,

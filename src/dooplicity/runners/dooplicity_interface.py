@@ -39,6 +39,30 @@ import os
 import json
 import itertools
 
+def add_args(parser):
+    """ Adds relevant arguments to an object of class argparse.ArgumentParser.
+
+        No return value.
+    """
+    parser.add_argument(
+            '-b', '--branding', type=str, required=False, default=None,
+            help='Text file with heading to write to stdout when running job. '
+                 'This is where the name of a software package or ASCII art '
+                 'can go.'
+        )
+    parser.add_argument(
+            '-j', '--json-config', type=str, required=True,
+            help='JSON configuration file in format of StepConfig list from '
+                 'RunJobFlow EMR API request. Google Amazon Elastic MapReduce '
+                 'API Reference Amazon for formatting information.'
+        )
+    parser.add_argument(
+            '-f', '--force', action='store_const', const=True,
+            default=False,
+            help='Erase all existing directories when writing ' \
+                  'intermediates.'
+        )
+
 def inflected(number, word, es=False):
     """ Returns string with word in appropriate form.
 
@@ -74,7 +98,7 @@ class UpdateThread(threading.Thread):
             h, m = divmod(m, 60)
             # Edit just the time line of the header
             progress = next(progress_char_gen)
-            sys.stdout.write('\r\x1b[K%02dh:%02dm:%02ds %s %s' 
+            sys.stdout.write('\r\x1b[K%02dh:%02dm:%02ds   %s   %s' 
                                 % (h, m, s, progress, self.message))
             sys.stdout.flush()
             time.sleep(.04)
@@ -127,7 +151,7 @@ class DooplicityInterface:
         m, s = divmod(time.time() - self._start_time, 60)
         h, m = divmod(m, 60)
         for output_stream in self._write_streams:
-            print >>output_stream, '%02dh:%02dm:%02ds | %s' \
+            print >>output_stream, '%02dh:%02dm:%02ds |___| %s' \
                                     % (h, m, s, message)
             output_stream.flush()
         # Restart self._update_thread
@@ -189,14 +213,30 @@ class DooplicityInterface:
         if steps:
             temp_dir = tempfile.mkdtemp()
             temp_json_file = os.path.join(temp_dir, 'temp.json')
+            try:
+                json_index = sys.argv.index('--json')
+            except ValueError:
+                json_index = -1
+            try:
+                json_index = max(sys.argv.index('-j'), json_index)
+            except ValueError:
+                pass
             with open(temp_json_file, 'w') as json_stream:
                 json.dump(steps, json_stream)
+                sys.argv[json_index+1] = temp_json_file
+                if '-f' not in sys.argv or '--force' not in sys.argv:
+                    extra_arg = '-f'
+                else:
+                    extra_arg = ''
                 for output_stream in self._write_streams:
                     print >>output_stream, 'To start this job flow from ' \
                                            'where it left off, run:'
-                    print >>output_stream, '%s %s -j %s -f' \
-                        % (sys.executable, os.path.abspath(sys.argv[0]),
-                           temp_json_file)
+                    print >>output_stream, '%s %s %s %s' % (
+                            sys.executable,
+                            os.path.abspath(sys.argv[0]),
+                            ' '.join(sys.argv[1:]),
+                            extra_arg
+                        )
                     output_stream.flush()
 
     def done(self, message=''):
