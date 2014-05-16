@@ -1,0 +1,10 @@
+aTaTCGAtg.              aCa  acgg  
+`cGa   `TTa.            `"'  `TCA  
+ aCg   .GtG'  .cgaa.   tcga   AgT  
+ TTTcagATC'  `C  GTCa  `AtG   aGt  
+ tgA`CTg.     .aC"TaG   cGC   CCG  
+ aCg  `GGA.  tAC  GGA   TCG   ATG  
+cGGAa  tTCTc `GtGC""Ca cAGCt aTaGc
+----------------------------------
+| | | | | | | | | Rail-RNA v0.1.0
+----------------------------------
