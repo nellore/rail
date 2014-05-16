@@ -1,5 +1,6 @@
 Rail
 ====
+----UPDATE THIS BY MAY 19----
 
 This is the source repository for the Rail-*, which currently includes just
 the Rail-RNA suite of RNA-seq analysis software.
