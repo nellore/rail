@@ -31,7 +31,7 @@ THE SOFTWARE.
 """
 
 import threading
-from dooplicity_version import version
+from dooplicity_version import version as _version
 import sys
 import time
 import tempfile
@@ -106,7 +106,7 @@ class UpdateThread(threading.Thread):
 class DooplicityInterface:
     """ Encapsulates methods for writing status updates to console. """
 
-    def __init__(self, branding=None):
+    def __init__(self, branding=None, opener='Started job flow on {time}.'):
         # Disable line-wrapping
         sys.stdout.write('\n')
         sys.stdout.flush()
@@ -115,7 +115,7 @@ class DooplicityInterface:
                 sys.stdout.write(branding_stream.read())
         except TypeError:
             # No branding
-            print 'Dooplicity v%s' % version
+            print 'Dooplicity v%s' % _version
         self._start_time = time.time()
         self._date_format = '%A, %b %d, %Y at %I:%M:%S %p %Z'
         if sys.stderr.isatty():
@@ -123,10 +123,10 @@ class DooplicityInterface:
         else:
             self._write_streams = [sys.stderr, sys.stdout]
         for output_stream in self._write_streams:
-            print >>output_stream, 'Started job flow on %s.' % time.strftime(
+            print >>output_stream, opener.format(time=time.strftime(
                                     self._date_format,
                                     time.localtime(self._start_time)
-                                )
+                                ))
         print '\n~.oOo.~\n'
         sys.stdout.flush()
         self._update_thread = UpdateThread(self._start_time)
@@ -176,15 +176,19 @@ class DooplicityInterface:
         self._update_thread.start()
 
     def fail(self, message='', steps=[],
-             opener='*****Errors encountered*****'):
+             opener='*****Errors encountered*****',
+             middler=('Job flow failed on {date}. '
+                      'Run time was {length} seconds.')):
         """ Optionally prints a fail message and run time took on failure.
 
             Also outputs command for resuming job if one or more steps
             completed.
 
-            opener: string containing opening message
-            message: string containing error message
+            message: string containing error message; sandwich between
+                opener and middler
             steps: JSON array of residual steps in pipeline
+            opener: string containing opening message
+            middler: generic fail message with {date} and {length}
 
             No return value.
         """
@@ -205,10 +209,11 @@ class DooplicityInterface:
                 print >>output_stream, message
         end_time = time.time()
         for output_stream in self._write_streams:
-            print >>output_stream, 'Job flow failed on %s. Run time was ' \
-                '%.03f seconds.' % (time.strftime(self._date_format,
-                                    time.localtime(end_time)),
-                                    end_time - self._start_time)
+            print >>output_stream, middler.format(
+                    date=(time.strftime(self._date_format,
+                                    time.localtime(end_time))),
+                    length=('%.03f' % (end_time - self._start_time))
+                )
             output_stream.flush()
         if steps:
             temp_dir = tempfile.mkdtemp()
@@ -239,7 +244,8 @@ class DooplicityInterface:
                         )
                     output_stream.flush()
 
-    def done(self, message=''):
+    def done(self, message='', closer=('Finished job flow on {date}. '
+                                       'Run time was {length} seconds.')):
         """ Writes a message on completion of the job flow.
 
             message: string
@@ -263,11 +269,12 @@ class DooplicityInterface:
         print '\n~.oOo.~\n'
         sys.stdout.flush()
         for output_stream in self._write_streams:
-            print >>output_stream, ('Finished job flow on %s. Run time was '
-                                    '%.03f seconds.') \
-                                    % (time.strftime(self._date_format,
-                                      time.localtime(end_time)),
-                                      end_time - self._start_time)
+            print >>output_stream, closer.format(
+                                    date=(time.strftime(self._date_format,
+                                            time.localtime(end_time))),
+                                    length=('%.03f' % 
+                                                (end_time - self._start_time))
+                                )
             output_stream.flush()
         sys.stdout.write('\n')
         sys.stdout.flush()

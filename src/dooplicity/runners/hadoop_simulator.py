@@ -235,7 +235,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
 
 def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates):
-    """ Runs Hadoop Streaming simulation. Requires curses wrapping.
+    """ Runs Hadoop Streaming simulation.
 
         FUNCTIONALITY IS IDIOSYNCRATIC; it is currently confined to those
         features used by Rail. Format of input JSON mirrors that used by
@@ -347,7 +347,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             try:
                 shutil.rmtree(steps[step]['output'])
             except OSError:
-                pass
+                # Probably just a file then
+                os.remove(steps[step]['output'])
             try:
                 os.makedirs(steps[step]['output'])
             except OSError:
@@ -436,7 +437,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         max_tuple = -1
                         pass
                     if max_tuple > 0:
-                        # There are error tuples
+                        '''There are error tuples; could put error message
+                        directly in RuntimeError, but then it would be
+                        positioned after the Dooplicity message about
+                        resuming the job.'''
                         errors = ['Streaming command "%s" failed: %s' % 
                                   (error[1], error[0]) for error
                                   in return_values if len(error) == 2]
@@ -570,7 +574,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                            % dp_iface.inflected(input_file_count, 'task'))
             step_number += 1
         iface.done()
-    except Exception:
+    except Exception, GeneratorExit:
+        # GeneratorExit added just in case this happens on modifying code
         if not failed:
             time.sleep(0.2)
             if 'step_number' in locals():

@@ -7,15 +7,6 @@ application-specific command-line parameters. These configuration files are
 parsable by Dooplicity's hadoop_simulator.py and emr_runner.py.
 
 PEP 8's line length convention violated here to improve readability.
-
-TO GET S3 CFG
-
-elif os.getenv("HOME"):
-        config_file = os.path.join(os.getenv("HOME"), ".s3cfg")
-+    # Windows.
-    elif os.name == "nt" and os.getenv("USERPROFILE"):
-        config_file = os.path.join(os.getenv("USERPROFILE"), "Application
-Data", "s3cmd.ini")
 """
 
 def add_args(parser):

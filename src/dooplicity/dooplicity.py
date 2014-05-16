@@ -114,7 +114,7 @@ class Url:
             url: URL string
         """
         if ':' in url:
-            colon_index = s.index(':')
+            colon_index = url.index(':')
             prefix = url[:colon_index].lower()
             if prefix[:3] == 's3n':
                 self.type = 's3n'
