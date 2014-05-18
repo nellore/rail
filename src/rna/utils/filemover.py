@@ -150,7 +150,7 @@ class FileMover:
                     print >>sys.stderr, 'reporter:status:alive'
                     sys.stderr.flush()
                     time.sleep(60)
-                if curl_thread.exit_level > 89:
+                if curl_thread.process_return > 89:
                     '''If the exit code is greater than the highest-documented
                     curl exit code, there was a timeout.'''
                     print >>sys.stderr, 'Too many simultaneous connections; ' \
@@ -159,9 +159,10 @@ class FileMover:
                 else:
                     break
             os.chdir(oldp)
-            if curl_thread.exit_level > 0:
-                raise RuntimeError('Nonzero exitlevel %d from curl command '
-                                   '"%s"' % (curl_thread.exit_level, command))
+            if curl_thread.process_return > 0:
+                raise RuntimeError(('Nonzero exitlevel %d from curl command '
+                                    '"%s"') 
+                                        % (curl_thread.exit_level, command))
         elif url.is_local:
             command_list = ['cp', url.to_url(), dest]
         else:

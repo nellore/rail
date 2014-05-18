@@ -74,15 +74,19 @@ def run_job_flow(branding, json_config, force, no_browser=False,
         w/ API.'''
         aws_ansible = ab.AWSAnsible(profile=profile, region=region,
                                     valid_regions=_aws_regions)
-        s3_ansible = ab.S3Ansible(aws_exe=aws_exe, iface=iface)
-        # Serialize relevant parts of JSON configuration
-        with open(json_config) as json_stream:
-            full_payload = json.load(json_stream)
+        s3_ansible = ab.S3Ansible(aws_exe=aws_exe, profile=profile,
+                                    iface=iface)
+        # Serialize JSON configuration
+        if json_config is not None:
+            with open(json_config) as json_stream:
+                full_payload = json.load(json_stream)
+        else:
+            full_payload = json.load(sys.stdin)
         try:
             job_flow = full_payload['Steps']
         except Exception:
             raise RuntimeError(
-                    'JSON file not in proper format. Ensure that the JSON '
+                    'Input JSON not in proper format. Ensure that the JSON '
                     'object has a Steps key.'
                 )
         step_count = len(job_flow)
@@ -183,7 +187,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
                                     'and use use its name + a subdirectory as '
                                     'the output directory.') % bucket)
         iface.step('Set up output directories on S3.')
-        job_flow_response = aws_ansible.post_request(json_config)
+        job_flow_response = aws_ansible.post_request(full_payload)
         json_response = json.load(job_flow_response)
         if 'JobFlowId' not in json_response:
             raise RuntimeError('Job submission failed. Server returned the '
@@ -208,7 +212,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
         iface.fail()
         raise
     except KeyboardInterrupt, SystemExit:
-        if job_flow_id not in locals():
+        if 'job_flow_id' not in locals():
             iface.fail(opener='*****Terminated without submitting job.*****',
                         middler=('End time was {date}. '
                                  'Script was running for {length} seconds.'))

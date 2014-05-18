@@ -37,8 +37,12 @@ import hmac
 import binascii
 import math
 import subprocess
+import json
 from version import version as _version
 from functools import wraps
+from shutil import copyfile
+import threading
+import sys
 
 def clean_url(url):
     """ Tacks an s3:// onto the beginning of a URL if necessary. 
@@ -79,11 +83,13 @@ class S3Ansible:
         Another option is to use Boto directly, but it comes with a lot of
         unused classes --- tools never touched by Dooplicity/Rail. Further, my
         preference is to integrate tools with good command-line APIs so
-        languages can be mixed and matched. That said, the AWS CLI does 
-        depend on Boto.... -AN
+        languages can be mixed and matched. It should be noted that the AWS
+        CLI "uses the boto successor botcore under the hood."
+        -http://stackoverflow.com/questions/15287724
+        /aws-s3-client-for-linux-with-multipart-upload .
     """
 
-    def __init__(self, aws_exe='aws', iface=None):
+    def __init__(self, aws_exe='aws', profile='default', iface=None):
         """ Initializes S3Ansible.
 
             aws_exe: path to aws executable. Should be unnecessary on all
@@ -94,6 +100,7 @@ class S3Ansible:
                 updates or None if no such updates should be written.
         """
         self.aws = aws_exe
+        self.profile = profile
         self._osdevnull = open(os.devnull, 'w')
         self.iface = iface
 
@@ -108,11 +115,43 @@ class S3Ansible:
             No return value.
         """
         cleaned_url = clean_url(bucket)
-        subprocess.check_call(' '.join([self.aws, 's3 mb', cleaned_url]),
+        subprocess.check_call(' '.join([self.aws, '--profile', self.profile,
+                                        's3 mb', cleaned_url]),
                                 bufsize=-1,
                                 shell=True,
                                 stderr=self._osdevnull,
                                 stdout=self._osdevnull)
+
+    def exists(self, path):
+        """ Checks whether a file on S3 exists.
+
+            A file and a directory on S3 can have the same name since
+            directories are just included in key names.
+
+            path: file on S3
+
+            Return value: True iff file exists; else False
+        """
+        cleaned_url = clean_url(path)
+        # Extract filename from URL; everything after terminal slash
+        filename = cleaned_url[::-1][:cleaned_url[::-1].index('/')][::-1]
+        try:
+            aws_command = ' '.join([self.aws, '--profile', self.profile, 
+                                        's3 ls', cleaned_url])
+            aws_process = subprocess.Popen(aws_command,
+                                            stdout=subprocess.PIPE,
+                                            stderr=self._osdevnull,
+                                            shell=True,
+                                            bufsize=-1)
+            filename_size = len(filename)
+            for line in aws_process.stdout:
+                line = line.strip()
+                if line[:3] != 'PRE' and filename == line[-filename_size:]:
+                    return True
+            return False
+        except subprocess.CalledProcessError:
+            # No bucket
+            return False
 
     def is_dir(self, path):
         """ Checks whether a directory on S3 exists.
@@ -130,13 +169,14 @@ class S3Ansible:
             cleaned_url = cleaned_url[:-1]
         # Now the URL has just one trailing slash
         try:
-            aws_command = ' '.join([self.aws, 's3 ls', cleaned_url])
+            aws_command = ' '.join([self.aws, '--profile', self.profile, 
+                                        's3 ls', cleaned_url])
             list_out = \
                 subprocess.check_output(aws_command,
                                          stderr=self._osdevnull,
                                          shell=True,
                                          bufsize=-1).strip()
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             # Bucket doesn't exist
             return False
         if list_out:
@@ -159,30 +199,91 @@ class S3Ansible:
         while cleaned_url[-2] == '/':
             cleaned_url = cleaned_url[:-1]
         # Now the URL has just one trailing slash
-        aws_command = ' '.join([self.aws, 's3 rm --recursive', cleaned_url])
+        aws_command = ' '.join([self.aws, '--profile', self.profile,
+                                    's3 rm --recursive', cleaned_url])
         if self.iface:
             rm_process = subprocess.Popen(aws_command,
                                             bufsize=-1,
                                             stdout=subprocess.PIPE,
                                             stderr=self._osdevnull,
                                             shell=True)
+            lim = 70 # Max number of chars to print in delete message
+            process_start = time.time()
+            printed = False
+            self.iface.status(
+                    'Searching for existing files on S3 to delete...'
+                )
+            line = rm_process.stdout.readline()
+            try:
+                to_print = line.split('\r')[1].strip('\r\n')
+            except IndexError:
+                to_print = line.strip('\r\n')
+            self.iface.status(
+                    to_print[:lim] \
+                        + ('...' if len(to_print) > lim else '')
+                )
             for line in rm_process.stdout:
-                try:
-                    self.iface.status(line.split('\r')[1].strip('\r\n'))
-                except IndexError:
-                    self.iface.status(line.strip())
+                if time.time() - process_start > 10:
+                    self.iface.status('**If deletion is taking too long, '
+                                      'CTRL+C out and choose different '
+                                      'output directories.**')
+                    process_start = time.time()
+                    printed = False
+                elif not printed and time.time() - process_start > 5:
+                    try:
+                        to_print = line.split('\r')[1].strip('\r\n')
+                    except IndexError:
+                        to_print = line.strip('\r\n')
+                    self.iface.status(
+                            to_print[:lim] \
+                                + ('...' if len(to_print) > lim else '')
+                        )
+                    printed = True
             if rm_process.wait():
                 '''Bucket does not exist; OR there's another error, but fail
                 silently.'''
                 pass
         else:
             try:
-                subprocess.check_call(aws_command_list, bufsize=-1,
+                subprocess.check_call(aws_command, bufsize=-1,
                                             stdout=self._osdevnull,
-                                            stderr=self._osdevnull)
+                                            stderr=self._osdevnull,
+                                            shell=True)
             except subprocess.CalledProcessError:
                 # Bucket does not exist
                 pass
+
+    def put(self, source, destination):
+        """ Copies a file to S3. 
+
+            source: file from local filesystem
+            destination: destination on S3
+
+            No return value.
+        """
+        aws_command = ' '.join([self.aws, '--profile', self.profile,
+                                    's3 cp', os.path.abspath(source),
+                                    clean_url(destination)])
+        subprocess.check_call(aws_command, bufsize=-1,
+                                    stdout=self._osdevnull,
+                                    stderr=sys.stderr,
+                                    shell=True)
+
+    def get(self, source, destination='.'):
+        """ Gets a file from S3.
+
+            source: file from S3
+            destination: destination on local filesystem
+
+            No return value
+        """
+        aws_command = ' '.join([self.aws, '--profile', self.profile,
+                                    's3 cp', clean_url(source),
+                                    os.path.abspath(destination)])
+        subprocess.check_call(aws_command, bufsize=-1,
+                                    stdout=self._osdevnull,
+                                    stderr=sys.stderr,
+                                    shell=True)
 
 def aws_params_from_json(json_object, prefix=''):
     """ Parses JSON object to generate AWS query string params.
@@ -405,13 +506,13 @@ class AWSAnsible:
                                     )
         self.host_header = '.'.join([self.region, split_base_suffix[0]])
 
-    def post_request(self, json_config, target='ElasticMapReduce.RunJobFlow'):
+    def post_request(self, json_object, target='ElasticMapReduce.RunJobFlow'):
         """ Submits JSON payload to AWS using Signature Version 4.
 
             Reference: http://docs.aws.amazon.com/general/latest/gr/
                 sigv4-create-canonical-request.html
 
-            json_config: file containing json payload
+            json_object: object containing json payload
             target: the X-Amz-Target from the request header. Google for more
                 information; for submitting job flows, this is
                 ElasticMapReduce.RunJobFlow.
@@ -419,9 +520,7 @@ class AWSAnsible:
             Return value: file-like object of type urllib2.urlopen with
                 response
         """
-        with open(json_config) as json_stream:
-            payload \
-                = ''.join([line.strip() for line in json_stream.readlines()])
+        payload = json.dumps(json_object)
         hashed_payload = hashlib.sha256(payload).hexdigest()
         headers = {
                 'Content-Type' : 'application/x-amz-json-1.1',
@@ -464,8 +563,8 @@ class AWSAnsible:
                         )
         headers['Authorization'] = ('%s Credential=%s/%s/%s/%s/aws4_request, '
                 'SignedHeaders=%s, Signature=%s'
-            ) % (self.algorithm, self._aws_access_key_id, datestamp, self.region,
-                    self.service, signed_headers, signature)
+            ) % (self.algorithm, self._aws_access_key_id, datestamp,
+                    self.region, self.service, signed_headers, signature)
         request = urllib2.Request(''.join([self.base_prefix, self.host_header, 
                                         self.canonical_uri]), 
                                     headers=headers,
@@ -497,7 +596,7 @@ class Url:
                 self.type = 'local'
             else:
                 raise RuntimeError(('Unrecognized URL %s; it\'s not S3, HDFS, '
-                                   'HTTP, FTP, or local.') % url)
+                                    'HTTP, FTP, or local.') % url)
             self.suffix = url[colon_index+1:]
         else:
             self.type = 'local'
@@ -563,3 +662,155 @@ class Url:
             return 's3n:' + self.suffix
         else:
             return self.type + ':' + self.suffix
+
+class CommandThread(threading.Thread):
+    """ Runs a command on a separate thread. """
+    def __init__(self, command_list):
+        super(CommandThread, self).__init__()
+        self.command_list = command_list
+        self.process_return = None
+        self._osdevnull = open(os.devnull, 'w')
+    def run(self):
+        self.process_return \
+            = subprocess.Popen(self.command_list, stdout=self._osdevnull,
+                                                stderr=self._osdevnull).wait()
+
+class WebAnsible:
+    """ Ultimate goal: seamless communication with various web services.
+
+        For now, just distinguishes among S3, the local filesystem, and the
+        web.
+    """
+    def __init__(self, curl_exe='curl', keep_alive=False):
+        """ curl_exe: curl executable
+            keep_alive: True iff status messages should be written to stderr
+        """
+        self.curl = curl_exe
+        self.keep_alive = keep_alive
+        self._osdevnull = open(os.devnull, 'w')
+
+    def exists(self, path):
+        curl_process = subprocess.Popen(' '.join(['curl', '--head', path]),
+                                shell=True, bufsize=-1,
+                                stderr=subprocess.PIPE,
+                                stdout=self._osdevnull)
+        curl_err = curl_process.stderr.read()
+        curl_process.wait()
+        if 'resolve host' in curl_err:
+            return False
+        return True
+
+    def put(self, source, destination):
+        raise RuntimeError('Cannot upload to FTP, HTTP, or HTTPS.')
+
+    def get(self, source, destination='.'):
+        """ Retrives file from web (http, https, ftp) source.
+
+            Note that if the destination has a file whose name is the same
+            as the source name, THAT FILE IS DELETED -- EVEN IF the destination
+            has a different filename! This is a curl quirk, and if it
+            becomes a problem in pipelines, it will be addressed.
+
+            source: filename of source
+            destination: filename of destination
+        """
+        old_directory = os.getcwd()
+        source_filename = source[::-1][:source[::-1].index('/')][::-1]
+        if not os.path.isdir(destination):
+            final_file = destination
+            destination = os.path.dirname(destination)
+        else:
+            final_file = os.path.join(destination, source_filename)
+        os.chdir(destination)
+        command_list = ['curl', '-O', '--connect-timeout', '60', source]
+        command = ' '.join(command_list)
+        while True:
+            curl_thread = CommandThread(command_list)
+            curl_thread.start()
+            if self.keep_alive:
+                while curl_thread.is_alive():
+                    print >>sys.stderr, 'reporter:status:alive'
+                    sys.stderr.flush()
+                    time.sleep(60)
+            else:
+                curl_thread.join()
+            if curl_thread.process_return > 89:
+                '''If the exit code is greater than the highest-documented
+                curl exit code, there was a timeout.'''
+                print >>sys.stderr, 'Too many simultaneous connections; ' \
+                                    'restarting in 10 s.'
+                time.sleep(10)
+            else:
+                break
+        os.chdir(old_directory)
+        os.rename(os.path.join(destination, source_filename),
+                    final_file)
+        if curl_thread.process_return > 0:
+            raise RuntimeError(('Nonzero exitlevel %d from curl command '
+                                '"%s"') % (curl_thread.exit_level, command))
+
+class Ansible:
+    """ Ultimate goal: seamless communication with various web services.
+
+        For now, just distinguishes among S3, the local filesystem, and the
+        web. Perhaps class structure could be improved.
+    """
+    def __init__(self, aws_exe='aws', profile='default', curl_exe='curl',
+                    keep_alive=False):
+        self.s3_ansible = S3Ansible(aws_exe=aws_exe, profile=profile)
+        self.web_ansible = WebAnsible(curl_exe=curl_exe, keep_alive=keep_alive)
+
+    def exists(self, url):
+        """ Returns whether a given file exists. 
+
+            Note that on S3, this refers to an exact key name, so "directories"
+            and filenames with the same name are allowed to coexist. This
+            function returns whether the input key is actually a _file_, not
+            whether the key + a terminal slash is present. On the other hand,
+            if a file is local, this function returns True whether or not the
+            file is a directory. The idea here is to return whether the URL
+            would have to be overwritten if writing to it.
+
+            url: URL-- can be local, on S3, or on the web
+
+            Return value: True iff the file exists, else False.
+        """
+        url = Url(url)
+        if url.is_local:
+            return os.path.exists(os.path.abspath(url.to_url()))
+        elif url.is_s3:
+            return self.s3_ansible.exists(url.to_url())
+        elif url.is_curlable:
+            return self.web_ansible.exists(url.to_url())
+
+    def get(self, url, destination='.'):
+        """ Copies a file at url to the local destination.
+
+            url: URL-- can be local, on S3, or on the web
+            destination: destination on local filesystem
+
+            No return value.
+        """
+        url = Url(url)
+        if url.is_local:
+            copyfile(url.to_url(), destination)
+        elif url.is_s3:
+            self.s3_ansible.get(url.to_url(), destination)
+        elif url.is_curlable:
+            self.web_ansible.get(url.to_url(), destination)
+
+    def put(self, source, url):
+        """ Copies a file from source to the url .
+
+            source: where to retrieve file from local filesystem
+            destination: destination URL
+
+            No return value.
+        """
+        url = Url(url)
+        if url.is_local:
+            copyfile(source, url.to_url())
+        elif url.is_s3:
+            self.s3_ansible.put(source, url.to_url())
+        elif url.is_curlable:
+            self.web_ansible.put(source, url.to_url())

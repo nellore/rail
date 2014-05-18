@@ -51,10 +51,11 @@ def add_args(parser):
                  'can go.'
         )
     parser.add_argument(
-            '-j', '--json-config', type=str, required=True,
+            '-j', '--json-config', type=str, required=False, default=None,
             help='JSON configuration file in format of StepConfig list from '
                  'RunJobFlow EMR API request. Google Amazon Elastic MapReduce '
-                 'API Reference Amazon for formatting information.'
+                 'API Reference Amazon for formatting information. If left '
+                 'unspecified, configuration is read from stdin.'
         )
     parser.add_argument(
             '-f', '--force', action='store_const', const=True,

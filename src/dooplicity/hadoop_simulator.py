@@ -261,8 +261,20 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
     failed = False
     try:
         # Serialize JSON configuration
-        with open(json_config) as json_stream:
-            job_flow = json.load(json_stream)
+        if json_config is not None:
+            with open(json_config) as json_stream:
+                full_payload = json.load(json_stream)
+        else:
+            full_payload = json.load(sys.stdin)
+        try:
+            job_flow = full_payload['Steps']
+        except KeyError:
+            iface.fail(
+                    'Input JSON not in proper format. Ensure that the JSON '
+                    'object has a Steps key.'
+                )
+            failed = True
+            raise
         step_count = len(job_flow)
         steps = OrderedDict()
         try:
