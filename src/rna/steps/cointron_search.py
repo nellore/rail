@@ -53,14 +53,15 @@ import random
 import argparse
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
-import dooplicity as dp
+from dooplicity.tools import xstream
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
@@ -484,7 +485,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         No return value.
     """
     global _input_line_count, _output_line_count
-    for (seq_id,), xpartition in dp.xstream(input_stream, 1):
+    for (seq_id,), xpartition in xstream(input_stream, 1):
         '''Input is readletized, and readlets must be composed.'''
         collected_readlets = defaultdict(list)
         seq_info_captured = False

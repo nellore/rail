@@ -52,17 +52,18 @@ import time
 import itertools
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
 import partition
 import bowtie
 import bowtie_index
-import dooplicity as dp
+from dooplicity.tools import xstream
 
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -79,7 +80,7 @@ input_line_count, output_line_count = 0, 0
 bin_count = 0
 # For converting RNAMEs to number strings
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
-for (partition_id, sample_label), xpartition in dp.xstream(sys.stdin, 2):
+for (partition_id, sample_label), xpartition in xstream(sys.stdin, 2):
     bin_count += 1
     bin_start_time, bin_diff_count = time.time(), 0
     rname = reference_index.rname_to_string[

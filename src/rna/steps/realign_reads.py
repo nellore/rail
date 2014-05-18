@@ -122,14 +122,15 @@ import re
 import time
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
-import dooplicity as dp
+from dooplicity.tools import xstream
 import manifest
 import bowtie
 import bowtie_index
@@ -161,7 +162,7 @@ def input_files_from_input_stream(input_stream,
         print >>sys.stderr, 'Writing prefasta and input reads...'
     with open(prefasta_filename, 'w') as fasta_stream:
         with open(reads_filename, 'w') as read_stream:
-            for read_seq, xpartition in dp.xstream(input_stream, 1):
+            for read_seq, xpartition in xstream(input_stream, 1):
                 for value in xpartition:
                     _input_line_count += 1
                     if value[0][0] == '\x1c':
@@ -396,7 +397,7 @@ class BowtieOutputThread(threading.Thread):
         global _output_line_count
         next_report_line = 0
         i = 0
-        for (qname,), xpartition in dp.xstream(self.input_stream, 1):
+        for (qname,), xpartition in xstream(self.input_stream, 1):
             # While labeled multiread, this list may end up simply a uniread
             multiread = []
             for rest_of_line in xpartition:

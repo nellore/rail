@@ -43,12 +43,13 @@ import subprocess
 import threading
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
 import manifest
 import bowtie
@@ -56,7 +57,8 @@ import bowtie_index
 import filemover
 import itertools
 from collections import defaultdict
-import dooplicity as dp
+from dooplicity.tools import xstream
+from dooplicity.ansibles import Url
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -151,13 +153,13 @@ with open(sizes_filename, 'w') as sizes_stream:
             reference_index.rname_lengths[rname])
 
 input_line_count, output_line_count = 0, 0
-output_url = dp.Url(args.out)
+output_url = Url(args.out)
 if output_url.is_local:
     # Set up destination directory
     try: os.makedirs(output_url.to_url())
     except: pass
 mover = filemover.FileMover(args=args)
-for (sample_label,), xpartition in dp.xstream(sys.stdin, 1):
+for (sample_label,), xpartition in xstream(sys.stdin, 1):
     try:
         sample_label = manifest_object.index_to_label[sample_label]
     except KeyError:

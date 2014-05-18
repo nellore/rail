@@ -62,13 +62,14 @@ import argparse
 import site
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
-import dooplicity as dp
+site.addsitedir(base_path)
+from dooplicity.tools import xstream
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -81,7 +82,7 @@ input_line_count, output_line_count = 0, 0
 
 for (line_type, sample_label, rname,
         pos, end_pos, strand_or_seq), xpartition \
-    in dp.xstream(sys.stdin, 6):
+    in xstream(sys.stdin, 6):
     if line_type == 'N':
         coverage_sum = 0
         max_left_displacement, max_right_displacement = None, None

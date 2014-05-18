@@ -54,12 +54,13 @@ import argparse
 import threading
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
 import bowtie
 import bowtie_index
@@ -67,7 +68,7 @@ import manifest
 # Define string version_number
 import version
 import filemover
-import dooplicity as dp
+from dooplicity.ansibles import Url
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -127,7 +128,7 @@ manifest_object = manifest.LabelsAndIndices(args.manifest)
 (output_path, output_filename, output_stream, output_url,
     last_rname, last_sample_label) = [None]*6
 if args.out is not None:
-    output_url = dp.Url(args.out)
+    output_url = Url(args.out)
     if output_url.is_local:
         # Set up destination directory
         try: os.makedirs(output_url.to_url())

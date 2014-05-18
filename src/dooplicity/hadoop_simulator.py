@@ -46,7 +46,7 @@ import glob
 import hashlib
 import subprocess
 import json
-import dooplicity_interface as dp_iface
+import interface as dp_iface
 import signal
 
 def init_worker():

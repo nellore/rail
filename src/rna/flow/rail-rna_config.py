@@ -2,12 +2,47 @@
 rail-rna_config.py
 Part of Rail-RNA
 
-Contains class that generates JSON configuration files for Rail-RNA from
+Contains classes that generate JSON configuration files for Rail-RNA from
 application-specific command-line parameters. These configuration files are
 parsable by Dooplicity's hadoop_simulator.py and emr_runner.py.
 
-PEP 8's line length convention violated here to improve readability.
+Class structure is designed so only those arguments relevant to scripts
+are included. For example, if a script "rail-rna_preprocess_local.py"
+were written, add_args(parser) for that class would add to the parser only
+those arguments relevant to preprocessing input data in local mode.
+
+The descriptions of command-line arguments contained here assume that a
+calling script has the command-line options "--local", "--cloud",
+"--preprocess", "--align", and "--all".
+
+TO PUT IN rail-rna.py:
+
+modes = set(['local', 'cloud'])
+        # Implement Hadoop mode after paper submission
+        if mode not in modes:
+            self.errors.append('Mode ("--mode") must be one of '
+                               '{{"local", "cloud"}}, but {0} was '
+                               'entered.'.format(mode))
+        self.mode = mode
+        job_flows = set(['preprocess', 'align', 'all'])
+        if job_flow not in job_flows:
+            self.errors.append('Job flow ("--job-flows") must be one of '
+                               '{{"preprocess", "align", "all"}}, but {0} was '
+                               'entered.'.format(mode))
 """
+
+import os
+
+base_path = os.path.abspath(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                )
+utils_path = os.path.join(base_path, 'rna/utils')
+site.addsitedir(utils_path)
+site.addsitedir(base_path)
+import dooplicity.ansibles as ab
+from filemover import FileMover
+import tempfile
+import shutil
 
 def add_args(parser):
     """ Adds relevant arguments to an object of class argparse.ArgumentParser.
@@ -21,9 +56,281 @@ def add_args(parser):
                  'can go.'
         )
 
+class RailRnaJson(object):
+    """ Base class for constructing JSON from input parameters.
+
+        Checks only those parameters that are common to all modes/job flows.
+    """
+    def __init__(self, manifest, output_dir,
+            intermediate_dir='./intermediate', force=False,
+            s3cmd_exe='s3cmd', s3cmd_config=None
+        ):
+        # At the very least, the JSON payload will be composed of steps
+        self.json_payload = { 'Steps': [] }
+        '''Store all errors uncovered in a list, then output. This prevents the
+        user from having to rerun Rail-RNA to find what else is wrong with
+        the command-line parameters.'''
+        self.errors = []
+        self.temp = []
+        self.manifest = manifest
+        self.output_dir = output_dir
+        self.intermediate_dir = intermediate_dir
+        self.s3cmd_exe = s3cmd_exe
+        self.s3cmd_config = s3cmd_config
+        self.checked_s3 = False
+        self.file_mover = FileMover(s3cmd_exe=self.s3cmd_exe,
+                                    s3cred=self.s3cmd_config)
+        self.initialized = True
+
+    def check_s3(self, reason=None):
+        """ Checks for s3cmd and AWS credentials; sets up S3Ansible.
+
+            In this script, S3 checking is performed as soon as it is found
+            that S3 is needed. If anything is awry, a RuntimeError is raised
+            _immediately_ (the standard behavior is to raise a RuntimeError
+            only after errors are accumulated). A reason specifying where
+            S3 credentials were first needed can also be provided.
+
+            reason: string specifying where S3 credentials were first
+                needed.
+
+            No return value.
+        """
+        if not ab.which(s3cmd_exe):
+            self.errors.append(('The s3cmd executable ("--s3cmd-exe") "{0}" '
+                                'was not found. Make sure that the '
+                                'executable is in PATH or specify the '
+                                'location of the executable with '
+                                '"--s3cmd-exe".').format(self.s3cmd_exe))
+        if self.s3cmd_config is not None:
+            self.s3_ansible = ab.S3Ansible(s3cmd_exe=self.s3cmd_exe,
+                                            config=self.s3cmd_config)
+        elif os.name == 'nt' and os.getenv('USERPROFILE'):
+            s3cmd_config_file = os.path.join(os.getenv('USERPROFILE'),
+                    'Application Data', 's3cmd.ini'
+                )
+            self.s3_ansible = ab.S3Ansible(s3cmd_exe=self.s3cmd_exe,
+                                        config=self.s3cmd_config)
+        elif os.getenv('HOME'):
+            s3cmd_config_file = os.path.join(os.getenv('HOME'), '.s3cfg')
+            self.s3_ansible = ab.S3Ansible()
+        else:
+            self.errors.append('A valid s3cmd configuration file was not '
+                               'found. Check that s3cmd is installed '
+                               'properly, or specify the location of the '
+                               'configuration file with "--s3cmd-config".')
+        if reason:
+            raise RuntimeError(('\n'.join(['%d) %s' % (i, error) for i, error
+                                in enumerate(self.errors)]) + 
+                                '\n\nNote that s3cmd is needed because {0}. '
+                                'If all dependence on S3 in the pipeline is\n'
+                                'removed, s3cmd need not be '
+                                'installed.').format(reason))
+        else:
+            raise RuntimeError('\n'.join(['%d) %s' % (i, error) for i, error
+                                in enumerate(self.errors)]) + 
+                                '\n\nIf all dependence on S3 in the pipeline '
+                                'is removed, s3cmd need not be installed.')
+        self.checked_s3 = True
+
+    def add_args(parser):
+        parser.add_argument(
+            '--s3cmd-exe', type=str, required=False,
+            default='s3cmd',
+            help='s3cmd executable. If s3cmd is in PATH, this is simply ' \
+                 '"s3cmd". If it\'s not, the full path to s3cmd should be ' \
+                 'specified. If S3 is never used in a given job flow, ' \
+                 'this parameter is inconsequential.'
+        )
+        parser.add_argument(
+            '--s3cmd-config', type=str, required=False,
+            default=None,
+            help='Path to s3cmd configuration file. If this is left ' \
+                 'unspecified, the default configuration is used.'
+        )
+
+class RailRnaJsonLocal(RailRnaJson):
+    """ Base class for constructing local-mode JSON from input parameters.
+
+        Subsumes only those parameters relevant to local mode. Checks for files
+        on local filesystem.
+    """
+    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
+                    force=False, s3cmd_exe='s3cmd', s3cmd_config=None,
+                    num_processes=1, keep_intermediates=False):
+        try:
+            if self.initialized:
+                pass
+        except NameError:
+            # Must initialize superclass
+            RailRnaJson.__init__(manifest, output_dir,
+                                    intermediate_dir=intermediate_dir,
+                                    force=force, s3cmd_exe=s3cmd_exe,
+                                    s3cmd_config=s3cmd_config)
+            self.initialized = True
+        output_dir_url = ab.Url(output_dir)
+        if not (output_dir_url.is_local or output_dir_url.is_s3):
+            self.errors.append(('Output directory must be local or on S3 '
+                                'when running Rail-RNA in local ("--local") '
+                                'mode, but {0} was entered.').format(
+                                        output_dir
+                                    ))
+        if output_dir_url.is_s3:
+            if not self.checked_s3:
+                RailRnaJson.check_s3(reason='the output directory is on S3')
+            # Create S3 bucket if it doesn't exist
+            self.s3_ansible.create_bucket(ab.bucket_from_url(output_dir))
+        if not ab.Url(intermediate_dir).is_local:
+            self.errors.append(('Intermediate directory must be local '
+                                'when running Rail-RNA in local ("--local") '
+                                'mode, but {0} was entered.').format(
+                                        intermediate_dir
+                                    ))
+        # Check manifest; download it if necessary
+        manifest_url = ab.Url(self.manifest)
+        if manifest_url.is_s3 and not self.checked_s3:
+            RailRnaJson.check_s3(reason='the manifest file is on S3')
+        if not file_mover.exists(manifest_url.to_url()):
+            self.errors.append(('Manifest file ("--manifest") {0} '
+                                'does not exist. Check the URL and '
+                                'try again.').format(manifest))
+        else:
+            self.manifest_dir = tempfile.mkdtemp()
+            if not manifest_url.is_local:
+                self.manifest = os.path.join(self.manifest_dir, 'MANIFEST')
+                file_mover.get(manifest_url, dest=self.manifest)
+            else:
+                self.manifest = manifest
+            files_to_check = []
+            with open(manifest) as manifest_stream:
+                for line in manifest_stream:
+                    tokens = line.strip().split('\t')
+                    if len(tokens) == 5:
+                        files_to_check.extend([tokens[0], tokens[2]])
+                    elif len(tokens) == 3:
+                        files_to_check.append(tokens[0])
+                    else:
+                        self.errors.append(('The following line from the '
+                                            'manifest file {0} '
+                                            'has an invalid number of '
+                                            'tokens:\n{1}'
+                                            ).format(
+                                                    manifest,
+                                                    line
+                                                ))
+            if files_to_check:
+                for filename in files_to_check:
+                    filename_url = ab.Url(filename)
+                    if not file_mover.exists(filename_url):
+                        self.errors.append(('The file {0} from the manifest '
+                                            'file {1} does not exist. Check '
+                                            'the URL and try again.').format(
+                                                                filename,
+                                                                manifest
+                                                            ))
+            else:
+                self.errors.append(('Manifest file ("--manifest") {0} '
+                                    'has no valid lines.').format(
+                                                                manifest
+                                                            ))
+        from multiprocessing import cpu_count
+        if num_processes:
+            if not (isinstance(num_processes, int)
+                                    and num_processes >= 1):
+                self.errors.append('Number of processes ("--num-processes") '
+                                   'must be an integer >= 1, '
+                                   'but {0} was entered.'.format(
+                                                    num_processes
+                                                ))
+            else:
+                self.num_processes = num_processes
+        else:
+            try:
+                self.num_processes = cpu_count()
+            except NotImplementedError:
+                self.num_processes = 1
+            if self.num_processes != 1:
+                self.num_processes -= 1
+        self.keep_intermediates = keep_intermediates
+
+    def add_args(parser):
+        """ Adds parameter descriptions relevant to local mode to an object
+            of class argparse.ArgumentParser.
+
+            No return value.
+        """
+        parser.add_argument(
+            '-m', '--manifest', type=str, required=True,
+            help='Myrna-style manifest file listing sample FASTAs and/or ' \
+                 'FASTQs to analyze. When running Rail-RNA in local ' \
+                 '("--local") mode, this file must be on the local ' \
+                 'filesystem. Each line of the file is ' \
+                 'is in one of two formats: ' \
+                 '\n\n(for unpaired input reads)\n' \
+                 '<URL><TAB><MD5 checksum or "0" if not included><TAB>' \
+                 '<sample label>' \
+                 '\n\n(for paired-end input reads)\n' \
+                 '<URL 1><TAB><MD5 checksum or "0" if not included><TAB>' \
+                 '<URL 2><TAB><MD5 checksum or "0" if not included><TAB>' \
+                 '<sample label>.'
+        )
+        parser.add_argument(
+            '-o', '--output', type=str, required=False,
+            default='./rail-rna_out',
+            help='Output directory. This directory is not overwritten ' \
+                 'unless the force overwrite ("--force") parameter is also ' \
+                 'invoked.'
+        )
+        parser.add_argument(
+            '--intermediate', type=str, required=False,
+            default='./rail-rna_intermediate',
+            help='Directory in which to store intermediate files, which ' \
+                 'may be useful for debugging. Invoke ' \
+                 '"--keep-intermediates" to prevent deletion of ' \
+                 'intermediate files after a job flow is completed.'
+        )
+        parser.add_argument(
+            '--num-processes', type=int, required=True,
+            default=None,
+            help='Number of processes to run simultaneously. This defaults to '
+                 'the number of cores on the machine less 1 if more than one '
+                 'core is available, or simply 1 if the program could not '
+                 'determine the number of available cores.'
+        )
+        parser.add_argument(
+            '--keep-intermediates', action='store_const', const=True,
+            default=False,
+            help='Keeps intermediate files after a job flow is completed.'
+        )
+
+class RailRnaJsonPreprocess(RailRnaJson):
+    """ Base class for constructing preprocess-mode JSON from input parameters.
+    """
+    def __init__():
+        super(RailRnaJsonPreprocess, self).__init__()
+
+class RailRnaJsonAlign(RailRnaJson):
+
+class RailRnaJsonAll(RailRnaJsonPreprocess, RailRnaJsonAlign):
+
+class RailRnaJsonPreprocessLocal(RailRnaJson, RailRnaJsonPreprocess,
+                                                RailRnaJsonLocal):
+
+class RailRnaJsonAlignLocal(RailRnaJsonAlign, RailRnaJsonLocal):
+
+class RailRnaJsonAllLocal(RailRnaJsonAll, RailRnaJsonLocal)
+
+class RailRnaJsonPreprocessCloud(RailRnaJsonPreprocess, RailRnaJsonAws):
+
+
 class RailRnaJson:
-    def __init__(self, manifest_file, output_dir, mode='local',
-        job_flow='all', input_dir=None, intermediate_dir='intermediate',
+    """ Base class for constructing JSON from input parameters.
+
+        Checks only those parameters that are common to all modes/job flows.
+    """
+    def __init__(self, manifest, output_dir, input_dir=None,
+        intermediate_dir='intermediate', mode='local',
+        job_flow='all', region='us-east-1', 
         log_uri=None, ami_version='2.4.2', visible_to_all_users=False, tags=[],
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -86,24 +393,24 @@ class RailRnaJson:
         modes = set(['local', 'cloud'])
         # Implement Hadoop mode after paper submission
         if mode not in modes:
-            raise RuntimeError('Mode ("--mode") must be one of '
+            self.errors.append('Mode ("--mode") must be one of '
                                '{"local", "cloud"}, but {0} was '
                                'entered.'.format(mode))
         self.mode = mode
         job_flows = set(['preprocess', 'align', 'all'])
         if job_flow not in job_flows:
-            raise RuntimeError('Job flow ("--job-flows") must be one of '
+            self.errors.append('Job flow ("--job-flows") must be one of '
                                '{"preprocess", "align", "all"}, but {0} was '
                                'entered.'.format(mode))
         self.job_flow = job_flow
         actions_on_failure \
             = set(['TERMINATE_JOB_FLOW', 'CANCEL_AND_WAIT', 'CONTINUE',
                     'TERMINATE_CLUSTER'])
-        self.manifest_file = manifest_file
+        self.manifest = manifest
         self.intermediate_dir = intermediate_dir
         self.output_dir = output_dir
         if action_on_failure not in actions_on_failure:
-            raise RuntimeError('Action on failure ("--action-on-failure") '
+            self.errors.append('Action on failure ("--action-on-failure") '
                                'must be one of {"TERMINATE_JOB_FLOW", '
                                '"CANCEL_AND_WAIT", "CONTINUE", '
                                '"TERMINATE_CLUSTER"}, but '
@@ -114,7 +421,7 @@ class RailRnaJson:
         self.hadoop_jar = hadoop_jar
         if not (isinstance(num_processes, int)
                 and num_processes >= 1):
-            raise RuntimeError('Number of processes ("--num-processes") must '
+            self.errors.append('Number of processes ("--num-processes") must '
                                'be an integer >= 1, '
                                'but {0} was entered.'.format(
                                                 num_processes
@@ -127,7 +434,7 @@ class RailRnaJson:
                                  '"m2.xlarge", "m2.2xlarge", "m2.4xlarge", '
                                  '"cc1.4xlarge"}, but {0} was entered.')
         if master_instance_type not in instance_core_counts:
-            raise RuntimeError(('Master instance type '
+            self.errors.append(('Master instance type '
                                '("--master-instance-type") not valid. %s')
                                 % instance_type_message.format(
                                                         master_instance_type
@@ -137,7 +444,7 @@ class RailRnaJson:
             self.core_instance_type = self.master_instance_type
         else:
             if core_instance_type not in instance_core_counts:
-                raise RuntimeError(('Core instance type '
+                self.errors.append(('Core instance type '
                                     '("--core-instance-type") not valid. %s')
                                     % instance_type_message.format(
                                                         core_instance_type
@@ -147,7 +454,7 @@ class RailRnaJson:
             self.task_instance_type = self.master_instance_type
         else:
             if task_instance_type not in instance_core_counts:
-                raise RuntimeError(('Task instance type '
+                self.errors.append(('Task instance type '
                                     '("--task-instance-type") not valid. %s')
                                     % instance_type_message.format(
                                                         task_instance_type
@@ -158,7 +465,7 @@ class RailRnaJson:
         else:
             if not (isinstance(master_instance bid_price, float) 
                     and master_instance_bid_price > 0):
-                raise RuntimeError('Spot instance bid price for master nodes '
+                self.errors.append('Spot instance bid price for master nodes '
                                    '(--master-instance-bid-price) must be '
                                    '> 0, but {0} was entered.'.format(
                                                     master_instance_bid_price
@@ -170,7 +477,7 @@ class RailRnaJson:
         else:
             if not (isinstance(core_instance bid_price, float) 
                     and core_instance_bid_price > 0):
-                raise RuntimeError('Spot instance bid price for core nodes '
+                self.errors.append('Spot instance bid price for core nodes '
                                    '(--core-instance-bid-price) must be '
                                    '> 0, but {0} was entered.'.format(
                                                     core_instance_bid_price
@@ -182,7 +489,7 @@ class RailRnaJson:
         else:
             if not (isinstance(task_instance bid_price, float) 
                     and task_instance_bid_price > 0):
-                raise RuntimeError('Spot instance bid price for task nodes '
+                self.errors.append('Spot instance bid price for task nodes '
                                    '(--task-instance-bid-price) must be '
                                    '> 0, but {0} was entered.'.format(
                                                     task_instance_bid_price
@@ -191,7 +498,7 @@ class RailRnaJson:
             self.task_instance_bid_price = task_instance_bid_price
         if not (isinstance(master_instance_count, int)
                 and master_instance_count >= 1):
-            raise RuntimeError('Master instance count '
+            self.errors.append('Master instance count '
                                '("--master-instance-count") must be an '
                                'integer >= 1, but {0} was entered.'.format(
                                                     master_instance_count
@@ -199,7 +506,7 @@ class RailRnaJson:
         self.master_instance_count = master_instance_count
         if not (isinstance(core_instance_count, int)
                 and core_instance_count >= 0):
-            raise RuntimeError('Core instance count '
+            self.errors.append('Core instance count '
                                '("--core-instance-count") must be an '
                                'integer >= 1, but {0} was entered.'.format(
                                                     core_instance_count
@@ -207,7 +514,7 @@ class RailRnaJson:
         self.core_instance_count = core_instance_count
         if not (isinstance(task_instance_count, int)
                 and task_instance_count >= 0):
-            raise RuntimeError('Task instance count '
+            self.errors.append('Task instance count '
                                '("--task-instance-count") must be an '
                                'integer >= 1, but {0} was entered.'.format(
                                                     task_instance_count
@@ -225,7 +532,7 @@ class RailRnaJson:
         self.verbose = verbose
         if not (isinstance(nucleotides_per_input, int) and
                 nucleotides_per_input > 0):
-            raise RuntimeError('Nucleotides per input '
+            self.errors.append('Nucleotides per input '
                                '(--nucleotides-per-input) must be an integer '
                                '> 0, but {0} was entered.'.format(
                                                         nucleotides_per_input
@@ -233,20 +540,20 @@ class RailRnaJson:
         self.nucleotides_per_input = nucleotides_per_input
         if not (isinstance(genome_partition_length, int) and
                 genome_partition_length > 0):
-            raise RuntimeError('Genome partition length '
+            self.errors.append('Genome partition length '
                                '(--genome-partition-length) must be an '
                                'integer > 0, but {0} was entered.'.format(
                                                         genome_partition_length
                                                     ))
         self.genome_partition_length = genome_partition_length
         if not (isinstance(min_readlet_size, int) and min_readlet_size > 0):
-            raise RuntimeError('Minimum readlet size (--min-readlet-size) '
+            self.errors.append('Minimum readlet size (--min-readlet-size) '
                                'must be an integer > 0, but '
                                '{0} was entered.'.format(min_readlet_size))
         self.min_readlet_size = min_readlet_size
         if not (isinstance(max_readlet_size, int) and max_readlet_size
                 >= min_readlet_size):
-            raise RuntimeError('Maximum readlet size (--max-readlet-size) '
+            self.errors.append('Maximum readlet size (--max-readlet-size) '
                                'must be an integer >= minimum readlet size '
                                '(--min-readlet-size) = '
                                '{0}, but {1} was entered.'.format(
@@ -256,7 +563,7 @@ class RailRnaJson:
         self.max_readlet_size = max_readlet_size
         if not (isinstance(readlet_interval, int) and readlet_interval
                 > 0):
-            raise RuntimeError('Readlet interval (--readlet-interval) '
+            self.errors.append('Readlet interval (--readlet-interval) '
                                'must be an integer > 0, '
                                'but {0} was entered.'.format(
                                                     readlet_interval
@@ -264,20 +571,20 @@ class RailRnaJson:
         self.readlet_interval = readlet_interval
         if not (isinstance(cap_size_multiplier, float) and cap_size_multiplier
                 > 1):
-            raise RuntimeError('Cap size multiplier (--cap-size-multiplier) '
+            self.errors.append('Cap size multiplier (--cap-size-multiplier) '
                                'must be > 1, '
                                'but {0} was entered.'.format(
                                                     cap_size_multiplier
                                                 ))
         self.cap_size_multiplier = cap_size_multiplier
         if not (isinstance(min_intron_size, int) and min_intron_size > 0):
-            raise RuntimeError('Minimum intron size (--min-intron-size) '
+            self.errors.append('Minimum intron size (--min-intron-size) '
                                'must be an integer > 0, but '
                                '{0} was entered.'.format(min_intron_size))
         self.min_intron_size = min_intron_size
         if not (isinstance(max_intron_size, int) and max_intron_size
                 >= min_intron_size):
-            raise RuntimeError('Maximum intron size (--max-intron-size) '
+            self.errors.append('Maximum intron size (--max-intron-size) '
                                'must be an integer >= minimum intron size '
                                '(--min-readlet-size) = '
                                '{0}, but {1} was entered.'.format(
@@ -286,26 +593,26 @@ class RailRnaJson:
                                                 ))
         self.max_intron_size = max_intron_size
         if not (isinstance(min_exon_size, int) and min_exon_size > 0):
-            raise RuntimeError('Minimum exon size (--min-exon-size) '
+            self.errors.append('Minimum exon size (--min-exon-size) '
                                'must be an integer > 0, but '
                                '{0} was entered.'.format(min_exon_size))
         self.min_exon_size = min_exon_size
         if not (isinstance(motif_search_window_size, int) and 
                     motif_search_window_size >= 0):
-            raise RuntimeError('Motif search window size '
+            self.errors.append('Motif search window size '
                                '(--motif-search-window-size) must be an '
                                'integer > 0, but {0} was entered.'.format(
                                                     motif_search_window_size
                                                 ))
         if not (isinstance(motif_radius, int) and
                     motif_radius >= 0):
-            raise RuntimeError('Motif radius (--motif-radius) must be an '
+            self.errors.append('Motif radius (--motif-radius) must be an '
                                'integer >= 0, but {0} was entered.'.format(
                                                     motif_radius
                                                 ))
         if not (isinstance(normalize_percentile, float) and
                     0 <= normalize_percentile <= 1):
-            raise RuntimeError('Normalization percentile '
+            self.errors.append('Normalization percentile '
                                '(--normalize-percentile) must on the '
                                'interval [0, 1], but {0} was entered'.format(
                                                     normalize_percentile
@@ -556,7 +863,7 @@ class RailRnaJson:
             "HadoopJarStep": {
                 "Args": [
                     "-D", "mapred.reduce.tasks=0",
-                    "-input", "{manifest_file}",
+                    "-input", "{manifest}",
                     "-output", "{preprocess_dir}",
                     "-mapper", "pypy /mnt/src/rail-rna/preprocess.py --nucs-per-file={nucleotides_per_input} {gzip_output} --push={upload_dir} --ignore-first-token",
                     "-reducer", "cat",
@@ -565,7 +872,7 @@ class RailRnaJson:
                 "Jar": "/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar"
             },
         }""".format(action_on_failure=self.action_on_failure,
-                    manifest_file=self.manifest_file
+                    manifest=self.manifest
                     preprocess_dir=os.path.join(self.intermediate_dir, 
                                                 'preprocess')
                     nucleotides_per_input=self.nucleotides_per_input,

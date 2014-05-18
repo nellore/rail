@@ -45,15 +45,16 @@ import atexit
 import threading
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
 import bowtie
-import dooplicity as dp
+from dooplicity.ansibles import Url
 import filemover
 
 # Print file's docstring if -h is invoked
@@ -93,8 +94,8 @@ import time
 start_time = time.time()
 
 output_filename, output_stream, output_url = [None]*3
-output_url = dp.Url(args.out) if args.out is not None \
-    else dp.Url(os.getcwd())
+output_url = Url(args.out) if args.out is not None \
+    else Url(os.getcwd())
 # Set up temporary destination
 import tempfile
 temp_dir_path = tempfile.mkdtemp()

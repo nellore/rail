@@ -118,12 +118,13 @@ import tempfile
 import atexit
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
 import bowtie
 import bowtie_index
@@ -131,7 +132,7 @@ import sample
 import partition
 import manifest
 from cigar_parse import indels_introns_and_exons
-import dooplicity as dp
+from dooplicity.tools import xstream
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
@@ -251,7 +252,7 @@ class BowtieOutputThread(threading.Thread):
         global _output_line_count
         next_report_line = 0
         i = 0
-        for (qname,), xpartition in dp.xstream(self.input_stream, 1):
+        for (qname,), xpartition in xstream(self.input_stream, 1):
             # While labeled multiread, this list may end up simply a uniread
             multiread = []
             sample_label = self.manifest_object.label_to_index[

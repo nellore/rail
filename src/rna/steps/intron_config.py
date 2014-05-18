@@ -50,14 +50,15 @@ import os
 import site
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
-import dooplicity as dp
+from dooplicity.tools import xstream
 _input_line_count, _output_line_count = 0, 0
 
 def edges_from_input_stream(input_stream, readlet_size=20,
@@ -141,7 +142,7 @@ def edges_from_input_stream(input_stream, readlet_size=20,
                      at the beginning of a new partition.
     """
     global _input_line_count
-    for key, xpartition in dp.xstream(input_stream, 2, skip_duplicates=True):
+    for key, xpartition in xstream(input_stream, 2, skip_duplicates=True):
         unlinked_nodes = set()
         for q, value in enumerate(xpartition):
             assert len(value) == 2

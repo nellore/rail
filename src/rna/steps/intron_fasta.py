@@ -44,16 +44,17 @@ import site
 import argparse
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
 import bowtie
 import bowtie_index
-import dooplicity as dp
+from dooplicity.tools import xstream
 
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -66,7 +67,7 @@ args = parser.parse_args()
 start_time = time.time()
 input_line_count = 0
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
-for key, xpartition in dp.xstream(sys.stdin, 3, skip_duplicates=True):
+for key, xpartition in xstream(sys.stdin, 3, skip_duplicates=True):
     '''For computing maximum left and right extend sizes for every key --
     that is, every intron combo (fields 1-3 of input).'''
     left_extend_size, right_extend_size = None, None

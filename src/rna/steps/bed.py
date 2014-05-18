@@ -46,14 +46,16 @@ import site
 import argparse
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
-import dooplicity as dp
+from dooplicity.ansibles import Url
+from dooplicity.tools import xstream
 import bowtie
 import bowtie_index
 import manifest
@@ -90,8 +92,8 @@ start_time = time.time()
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
 # For mapping sample indices back to original sample labels
 manifest_object = manifest.LabelsAndIndices(args.manifest)
-output_url = dp.Url(args.out) if args.out is not None \
-    else dp.Url(os.getcwd())
+output_url = Url(args.out) if args.out is not None \
+    else Url(os.getcwd())
 input_line_count = 0
 if output_url.is_local:
     # Set up destination directory
@@ -104,7 +106,7 @@ else:
     temp_dir_path = tempfile.mkdtemp()
     from tempdel import remove_temporary_directories
     atexit.register(remove_temporary_directories, [temp_dir_path])
-for (line_type, sample_label), xpartition in dp.xstream(sys.stdin, 2):
+for (line_type, sample_label), xpartition in xstream(sys.stdin, 2):
     assert line_type in 'NID'
     sample_label = manifest_object.index_to_label[sample_label]
     type_string = ('insertions' if line_type == 'I' else

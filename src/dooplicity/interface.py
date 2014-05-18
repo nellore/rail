@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-dooplicity_interface.py
+interface.py
 Part of Dooplicity framework
 
 Contains Dooplicity console interface class used by local mode, Hadoop mode,
@@ -31,7 +31,7 @@ THE SOFTWARE.
 """
 
 import threading
-from dooplicity_version import version as _version
+from version import version as _version
 import sys
 import time
 import tempfile

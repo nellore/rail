@@ -1,6 +1,6 @@
 """
 filemover.py
-Part of Rail-RNA
+Part of Dooplicity framework
 
 Utilities for moving files around among local, hdfs, s3, http and ftp
 filesystems.
@@ -37,11 +37,13 @@ class CommandThread(threading.Thread):
 class FileMover:
     """ Responsible for details on how to move files to and from URLs. """
     
-    def __init__(self, args=None, s3cred=None, s3public=False):
+    def __init__(self, args=None, s3cmd_exe='s3cmd', s3cred=None,
+                    s3public=False):
         if args is not None:
             self.s3cred, self.s3public = args.s3cfg, args.acl_public
         else:
             self.s3cred, self.s3public = s3cred, s3public
+        self.s3cmd_exe = s3cmd_exe
     
     def put(self, filename, url):
         """ Uploads a local file to a URL.
@@ -54,7 +56,7 @@ class FileMover:
         """
         assert os.path.exists(filename)
         if url.is_s3:
-            command_list = ['s3cmd']
+            command_list = [self.s3cmd_exe]
             if self.s3cred is not None:
                 command_list.append('-c')
                 command_list.append(self.s3cred)
@@ -82,6 +84,36 @@ class FileMover:
         if exit_level > 0:
             raise RuntimeError('Non-zero exitlevel %d from push command "%s".'
                                % (exit_level, command))
+
+    def exists(self, url):
+        if url.is_local:
+            return os.path.exists(url.to_url())
+        elif url.is_curlable:
+            curl_process = subprocess.Popen(['curl', '--head', url.to_url()],
+                                shell=True, bufsize=-1, stderr=subprocess.PIPE,
+                                stdout=subprocess.PIPE)
+            curl_err = curl_process.stderr.read()
+            curl_process.wait()
+            if 'resolve host' in curl_err:
+                return False
+            return True
+        elif url.is_s3:
+            command_list = [self.s3cmd_exe]
+            if self.s3cred is not None:
+                command_list.append('-c')
+                command_list.append(self.s3cred)
+            command_list.extend(['ls', url])
+            s3cmd_process = subprocess.Popen(command_list, 
+                                                stdout=subprocess.PIPE,
+                                                stderr=subprocess.PIPE)
+            url_string = url.to_url()
+            for line in s3cmd_process.stdout:
+                if (url_string + '\n') in line or (url_string + '/\n') in line:
+                    return True
+            s3cmd_process.wait()
+            return False
+        else:
+            return False
     
     def get(self, url, dest="."):
         """ Get a file to local directory.
@@ -117,7 +149,7 @@ class FileMover:
                 while curl_thread.is_alive():
                     print >>sys.stderr, 'reporter:status:alive'
                     sys.stderr.flush()
-                    time.sleep(5)
+                    time.sleep(60)
                 if curl_thread.exit_level > 89:
                     '''If the exit code is greater than the highest-documented
                     curl exit code, there was a timeout.'''

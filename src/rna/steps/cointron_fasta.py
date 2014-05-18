@@ -44,16 +44,17 @@ import copy
 import string
 
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna/utils')
-dp_path = os.path.join(base_path, 'dooplicity')
 site.addsitedir(utils_path)
-site.addsitedir(dp_path)
+site.addsitedir(base_path)
 
 import bowtie
 import bowtie_index
-import dooplicity as dp
+from dooplicity.tools import xstream
 
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -67,7 +68,7 @@ start_time = time.time()
 input_line_count = 0
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
 reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
-for key, xpartition in dp.xstream(sys.stdin, 2, skip_duplicates=True):
+for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
     # Store max extend sizes and sequences for identical intron combos
     combos = {}
     first_start_position = int(key[1])
