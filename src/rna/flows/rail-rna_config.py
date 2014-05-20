@@ -418,7 +418,7 @@ class RailRnaLocal:
                     num_processes=1, keep_intermediates=False):
         """ base: instance of RailRnaErrors """
         # Initialize ansible for easy checks
-        ansible = ab.Ansible()             )
+        ansible = ab.Ansible()
         if not ab.Url(base,intermediate_dir).is_local:
             base.errors.append(('Intermediate directory must be local '
                                 'when running Rail-RNA in local ("--local") '
@@ -470,8 +470,6 @@ class RailRnaLocal:
                 base.manifest_dir = tempfile.mkdtemp()
                 base.manifest = os.path.join(base.manifest_dir, 'MANIFEST')
                 ansible.get(manifest_url, destination=base.manifest)
-            else:
-                base.manifest = manifest
             files_to_check = []
             with open(base.manifest) as manifest_stream:
                 for line in manifest_stream:
@@ -486,43 +484,46 @@ class RailRnaLocal:
                                             'has an invalid number of '
                                             'tokens:\n{1}'
                                             ).format(
-                                                    manifest,
+                                                    manifest_url.to_url(),
                                                     line
                                                 ))
-            if files_to_check and check_manifest:
-                # Check files in manifest only if in preprocess job flow
-                for filename in files_to_check:
-                    filename_url = ab.Url(filename)
-                    if filename_url.is_s3 \
-                        and 'AWS CLI' not in base.checked_programs:
-                            base.check_s3(reason=('at least one sample '
+            if files_to_check:
+                if check_manifest:
+                    # Check files in manifest only if in preprocess job flow
+                    for filename in files_to_check:
+                        filename_url = ab.Url(filename)
+                        if filename_url.is_s3 \
+                            and 'AWS CLI' not in base.checked_programs:
+                                base.check_s3(reason=('at least one sample '
+                                                      'FASTA/FASTQ from the '
+                                                      'manifest file is on '
+                                                      'S3'))
+                                # Change ansible params
+                                ansible.aws_exe = base.aws_exe
+                                ansible.profile = base.profile
+                        elif filename_url.is_curlable \
+                            and 'Curl' not in base.checked_programs:
+                            base.curl_exe = base.check_program('curl', 'Curl',
+                                                '--curl_exe',
+                                                entered_exe=base.curl_exe,
+                                                reason=('at least one sample '
                                                   'FASTA/FASTQ from the '
-                                                  'manifest file is on S3'))
-                            # Change ansible params
-                            ansible.aws_exe = base.aws_exe
-                            ansible.profile = base.profile
-                    elif filename_url.is_curlable \
-                        and 'Curl' not in base.checked_programs:
-                        base.curl_exe = base.check_program('curl', 'Curl',
-                                            '--curl_exe',
-                                            entered_exe=base.curl_exe,
-                                            reason=('at least one sample '
-                                              'FASTA/FASTQ from the '
-                                              'manifest file is on '
-                                              'the web'))
-                        ansible.curl_exe = base.curl_exe
-                    if not ansible.exists(filename_url):
-                        base.errors.append(('The file {0} from the manifest '
-                                            'file {1} does not exist. Check '
-                                            'the URL and try again.').format(
-                                                                filename,
-                                                                manifest
-                                                            ))
+                                                  'manifest file is on '
+                                                  'the web'))
+                            ansible.curl_exe = base.curl_exe
+                        if not ansible.exists(filename_url):
+                            base.errors.append(('The file {0} from the '
+                                                'manifest file {1} does not '
+                                                'exist. Check the URL and try '
+                                                'again.').format(
+                                                        filename,
+                                                        manifest_url.to_url()
+                                                    ))
             else:
                 base.errors.append(('Manifest file ("--manifest") {0} '
                                     'has no valid lines.').format(
-                                                                manifest
-                                                            ))
+                                                        manifest_url.to_url()
+                                                    ))
         from multiprocessing import cpu_count
         if num_processes:
             if not (isinstance(num_processes, int)
@@ -608,7 +609,8 @@ class RailRnaCloud:
         Subsumes only those parameters relevant to cloud mode. Adds errors
         to base instance of RailRnaErrors.
     """
-    def __init__(self, base, log_uri=None, ami_version='2.4.2',
+    def __init__(self, base, check_manifest=False,
+        log_uri=None, ami_version='2.4.2',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -668,6 +670,98 @@ class RailRnaCloud:
         base.visible_to_all_users = visible_to_all_users
         base.tags = str([tag.strip() for tag in tags.split(',')])
         base.name = name
+
+        # Initialize ansible for easy checks
+        ansible = ab.Ansible(aws_exe=base.aws_exe, profile=base.profile)
+        if ab.Url(base,intermediate_dir).is_local:
+            base.errors.append(('Intermediate directory must be on HDFS or S3 '
+                                'when running Rail-RNA in cloud ("--cloud") '
+                                'mode, but {0} was entered.').format(
+                                        base.intermediate_dir
+                                    ))
+        output_dir_url = ab.Url(base.output_dir)
+        if not output_dir_url.is_s3:
+            base.errors.append(('Output directory must be on S3 '
+                                'when running Rail-RNA in cloud ("--cloud") '
+                                'mode, but {0} was entered.').format(
+                                        base.output_dir
+                                    ))
+        if not base.force and ansible.s3_ansible.is_dir(base.output_dir):
+            base.errors.append(('Output directory {0} exists on S3, and '
+                                '"--force" was not invoked to permit '
+                                'overwriting it.').format(base_output_dir))
+        # Check manifest; download it if necessary
+        manifest_url = ab.Url(base.manifest)
+        if manifest_url.is_curlable \
+            and 'Curl' not in base.checked_programs:
+            base.curl_exe = base.check_program('curl', 'Curl', '--curl_exe',
+                                    entered_exe=base.curl_exe,
+                                    reason='the manifest file is on the web')
+            ansible.curl_exe = base.curl_exe
+        if not ansible.exists(manifest_url.to_url()):
+            base.errors.append(('Manifest file ("--manifest") {0} '
+                                'does not exist. Check the URL and '
+                                'try again.').format(base.manifest))
+        else:
+            if not manifest_url.is_local:
+                temp_manifest_dir = tempfile.mkdtemp()
+                manifest = os.path.join(base.manifest_dir, 'MANIFEST')
+                ansible.get(manifest_url, destination=temp_manifest)
+            else:
+                manifest = manifest_url.to_url()
+            files_to_check = []
+            with open(manifest) as manifest_stream:
+                for line in manifest_stream:
+                    tokens = line.strip().split('\t')
+                    if len(tokens) == 5:
+                        files_to_check.extend([tokens[0], tokens[2]])
+                    elif len(tokens) == 3:
+                        files_to_check.append(tokens[0])
+                    else:
+                        base.errors.append(('The following line from the '
+                                            'manifest file {0} '
+                                            'has an invalid number of '
+                                            'tokens:\n{1}'
+                                            ).format(
+                                                    manifest_url.to_url(),
+                                                    line
+                                                ))
+            if files_to_check:
+                if check_manifest:
+                    # Check files in manifest only if in preprocess job flow
+                    for filename in files_to_check:
+                        filename_url = ab.Url(filename)
+                        if filename_url.is_curlable \
+                            and 'Curl' not in base.checked_programs:
+                            base.curl_exe = base.check_program('curl', 'Curl',
+                                                '--curl_exe',
+                                                entered_exe=base.curl_exe,
+                                                reason=('at least one sample '
+                                                  'FASTA/FASTQ from the '
+                                                  'manifest file is on '
+                                                  'the web'))
+                            ansible.curl_exe = base.curl_exe
+                        if not ansible.exists(filename_url):
+                            base.errors.append(('The file {0} from the '
+                                                'manifest file {1} does not '
+                                                'exist the URL and try '
+                                                'again.').format(
+                                                        filename,
+                                                        manifest_url.to_url()
+                                                    ))
+            else:
+                base.errors.append(('Manifest file ("--manifest") {0} '
+                                    'has no valid lines.').format(
+                                                        manifest_url.to_url()
+                                                    ))
+            if not manifest_url.is_s3 and output_dir_url.is_s3:
+                # Copy manifest file to S3 before job flow starts
+                base.manifest = path_join(unix=True, base.output_dir,
+                                                manifest)
+                ansible.put(manifest, base.manifest)
+            if not manifest_url.is_local:
+                # Clean up
+                shutil.rmtree(temp_manifest_dir)
 
         actions_on_failure \
             = set(['TERMINATE_JOB_FLOW', 'CANCEL_AND_WAIT', 'CONTINUE',
@@ -1873,7 +1967,8 @@ class RailRnaCloudPreprocessJson:
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
-        RailRnaCloud(base, log_uri=log_uri, ami_version=ami_version,
+        RailRnaCloud(base, check_manifest=True,
+            log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
             name=name,
             action_on_failure=action_on_failure,
@@ -1983,7 +2078,16 @@ class RailRnaCloudAlignJson:
     """ Constructs JSON for cloud mode + align job flow. """
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
-        verbose=False, nucleotides_per_input=8000000, gzip_input=True,
+        verbose=False, bowtie1_exe=None, bowtie1_idx='genome',
+        bowtie1_build_exe=None, bowtie2_exe=None,
+        bowtie2_build_exe=None, bowtie2_idx='genome',
+        bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+        genome_partition_length=5000, max_readlet_size=25,
+        min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
+        max_intron_size=500000, min_intron_size=10, min_exon_size=9,
+        motif_search_window_size=1000, motif_radius=5,
+        normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+        output_sam=False, bam_basename='alignments', bed_basename='',
         log_uri=None, ami_version='2.4.2',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
@@ -1999,7 +2103,8 @@ class RailRnaCloudAlignJson:
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
-        RailRnaCloud(base, log_uri=log_uri, ami_version=ami_version,
+        RailRnaCloud(base, check_manifest=False,
+            log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
             name=name,
             action_on_failure=action_on_failure,
@@ -2042,7 +2147,172 @@ class RailRnaCloudAlignJson:
         self._json_serial['Steps'] \
             = RailRnaCloud.hadoop_debugging_steps(base) + \
                 steps(
-                    RailRnaAlign.protosteps(base, base.input_dir),
+                    RailRnaAlign.protosteps(base, base.input_dir, cloud=True),
+                    base.action_on_failure,
+                    base.hadoop_jar, '/mnt/src/rna/steps',
+                    reducer_count, base.intermediate_dir, unix=True
+                )
+        self._json_serial['AmiVersion'] = base.ami_version
+        if base.log_uri is not None:
+            self._json_serial['LogUri'] = base.log_uri
+        else:
+            self._json_serial['LogUri'] = path_join(True, base.output_dir,
+                                                        'logs')
+        self._json_serial['Name'] = base.name
+        self._json_serial['NewSupportedProducts'] = []
+        self._json_serial['Tags'] = base.tags
+        self._json_serial['VisibleToAllUsers'] = (
+                'true' if base.visible_to_all_users else 'false'
+            )
+        self._json_serial['Instances'] = RailRnaCloud.instances(base)
+        self._json_serial['BootstrapActions'] \
+            = RailRnaPreprocess.bootstrap(base) + RailRnaCloud.bootstrap(base)
+    
+    @property
+    def json_serial(self):
+        return self._json_serial
+
+class RailRnaLocalAllJson:
+    """ Constructs JSON for local mode + preprocess+align job flow. """
+    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
+        force=False, aws_exe=None, profile='default', region='us-east-1',
+        verbose=False, nucleotides_per_input=8000000, gzip_input=True,
+        bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
+        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
+        bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+        genome_partition_length=5000, max_readlet_size=25,
+        min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
+        max_intron_size=500000, min_intron_size=10, min_exon_size=9,
+        motif_search_window_size=1000, motif_radius=5,
+        normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+        output_sam=False, bam_basename='alignments', bed_basename='',
+        num_processes=1, keep_intermediates=False):
+        base = RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose)
+        RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
+            gzip_input=gzip_input)
+        RailRnaLocal(base, check_manifest=True, num_processes=num_processes,
+            keep_intermediates=keep_intermediates)
+        RailRnaAlign(cloud=False, bowtie1_exe=None,
+            bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
+            bowtie2_build_exe=None, bowtie2_idx='genome',
+            bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+            genome_partition_length=5000, max_readlet_size=25,
+            min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
+            max_intron_size=500000, min_intron_size=10, min_exon_size=9,
+            motif_search_window_size=1000, motif_radius=5,
+            normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+            output_sam=False, bam_basename='alignments', bed_basename='')
+        if base.errors:
+            raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i, error) for i, error in errors]
+                        )
+                )
+        self._json_serial = {}
+        step_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 
+                                                    'steps'))
+        middle_dir = os.path.join(base.intermediate_dir, 'preprocess', 'push')
+        self._json_serial['Steps'] = \
+            steps(RailRnaPreprocess.protosteps(base,
+                middle_dir), '', '', step_dir, base.num_processes,
+                base.intermediate_dir, unix=False
+            ) + \
+            steps(RailRnaAlign.protosteps(base,
+                middle_dir, cloud=False), '', '', step_dir,
+                base.num_processes, base.intermediate_dir, unix=False
+            )
+
+    @property
+    def json_serial(self):
+        return self._json_serial
+
+class RailRnaCloudAllJson:
+    """ Constructs JSON for cloud mode + preprocess+align job flow. """
+    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
+        force=False, aws_exe=None, profile='default', region='us-east-1',
+        verbose=False, nucleotides_per_input=8000000, gzip_input=True,
+        bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
+        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
+        bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+        genome_partition_length=5000, max_readlet_size=25,
+        min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
+        max_intron_size=500000, min_intron_size=10, min_exon_size=9,
+        motif_search_window_size=1000, motif_radius=5,
+        normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+        output_sam=False, bam_basename='alignments', bed_basename='',
+        log_uri=None, ami_version='2.4.2',
+        visible_to_all_users=False, tags='',
+        name='Rail-RNA Job Flow',
+        action_on_failure='TERMINATE_JOB_FLOW',
+        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar',
+        master_instance_count=1, master_instance_type='c1.xlarge',
+        master_instance_bid_price=None, core_instance_count=1,
+        core_instance_type=None, core_instance_bid_price=None,
+        task_instance_count=0, task_instance_type=None,
+        task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
+        termination_protected=False):
+        base = RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose)
+        RailRnaCloud(base, check_manifest=True, 
+            log_uri=log_uri, ami_version=ami_version,
+            visible_to_all_users=visible_to_all_users, tags=tags,
+            name=name,
+            action_on_failure=action_on_failure,
+            hadoop_jar=hadoop_jar, master_instance_count=master_instance_count,
+            master_instance_type=master_instance_type,
+            master_instance_bid_price=master_instance_bid_price,
+            core_instance_count=core_instance_count,
+            core_instance_type=core_instance_type,
+            core_instance_bid_price=core_instance_bid_price,
+            task_instance_count=task_instance_count,
+            task_instance_type=task_instance_type,
+            task_instance_bid_price=task_instance_bid_price,
+            ec2_key_name=ec2_key_name, keep_alive=keep_alive,
+            termination_protected=termination_protected)
+        RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
+            gzip_input=gzip_input)
+        RailRnaAlign(cloud=True, bowtie1_exe=None,
+            bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
+            bowtie2_build_exe=None, bowtie2_idx='genome',
+            bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+            genome_partition_length=5000, max_readlet_size=25,
+            min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
+            max_intron_size=500000, min_intron_size=10, min_exon_size=9,
+            motif_search_window_size=1000, motif_radius=5,
+            normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+            output_sam=False, bam_basename='alignments', bed_basename='',
+            s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
+                                        profile=base.profile))
+        if base.errors:
+            raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i, error) for i, error in errors]
+                        )
+                )
+        self._json_serial = {}
+        if base.core_instance_count > 0:
+            reducer_count = base.core_instance_count \
+                * base.instance_core_counts[base.core_instance_type]
+        else:
+            reducer_count = base.master_instance_count \
+                * base.instance_core_counts[base.core_instance_type]
+        middle_dir = path_join(unix=True, base.intermediate_dir,
+                                        'preprocess', 'push')
+        self._json_serial['Steps'] \
+            = RailRnaCloud.hadoop_debugging_steps(base) + \
+                steps(
+                    RailRnaPreprocess.protosteps(base, middle_dir),
+                    base.action_on_failure,
+                    base.hadoop_jar, '/mnt/src/rna/steps',
+                    reducer_count, base.intermediate_dir, unix=True
+                )
+                steps(
+                    RailRnaAlign.protosteps(base, middle_dir, cloud=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
