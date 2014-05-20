@@ -30,11 +30,13 @@ modes = set(['local', 'cloud'])
 """
 
 import os
-
 base_path = os.path.abspath(
-                    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
                 )
 utils_path = os.path.join(base_path, 'rna', 'utils')
+import site
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 import dooplicity.ansibles as ab
@@ -66,7 +68,7 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
         Return value: step dictionary
     """
     to_return = {
-        'Name' : name
+        'Name' : name,
         'ActionOnFailure' : action_on_failure,
         'HadoopJarStep' : {
             'Jar' : jar,
@@ -94,7 +96,7 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
             '-partitioner',
             'org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner',
         ])
-    for an_input in inputs.split(',')
+    for an_input in inputs:
         to_return['HadoopJarStep']['Args'].extend([
                 '-input', an_input.strip()
             ])
@@ -151,7 +153,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
     """
     true_steps = []
     for protostep in protosteps:
-        assert ('keys' in protostep and 'part' in protostep) or
+        assert ('keys' in protostep and 'part' in protostep) or \
                 ('keys' not in protostep and 'part' not in protostep)
         true_steps.append(step(
                             name=protostep['name'],
@@ -173,7 +175,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                                      else sys.executable, step_dir,
                                                     protostep['run'])
                                     if 'keys' in protostep
-                                    else 'cat')
+                                    else 'cat'),
                             action_on_failure=action_on_failure,
                             jar=jar,
                             tasks=(reducer_count * protostep['taskx']
@@ -184,10 +186,10 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                             key_fields=(protostep['keys']
                                 if 'keys' in protostep else None),
                             archives=(protostep['archives']
-                                if 'archives' in protostep else None)
+                                if 'archives' in protostep else None),
                             multiple_outputs=(True if 'multiple_outputs'
                                     in protostep else False
-                                )
+                                ),
                             inputformat=(protostep['inputformat']
                                 if 'inputformat' in protostep else None)
                         )
@@ -756,7 +758,7 @@ class RailRnaCloud:
                                                     ))
             if not manifest_url.is_s3 and output_dir_url.is_s3:
                 # Copy manifest file to S3 before job flow starts
-                base.manifest = path_join(unix=True, base.output_dir,
+                base.manifest = path_join(True, base.output_dir,
                                                 manifest)
                 ansible.put(manifest, base.manifest)
             if not manifest_url.is_local:
@@ -821,7 +823,7 @@ class RailRnaCloud:
         if master_instance_bid_price is None:
             base.spot_master = False
         else:
-            if not (isinstance(master_instance bid_price, float) 
+            if not (isinstance(master_instance_bid_price, float) 
                     and master_instance_bid_price > 0):
                 base.errors.append('Spot instance bid price for master nodes '
                                    '(--master-instance-bid-price) must be '
@@ -833,7 +835,7 @@ class RailRnaCloud:
         if core_instance_bid_price is None:
             base.spot_core = False
         else:
-            if not (isinstance(core_instance bid_price, float) 
+            if not (isinstance(core_instance_bid_price, float) 
                     and core_instance_bid_price > 0):
                 base.errors.append('Spot instance bid price for core nodes '
                                    '(--core-instance-bid-price) must be '
@@ -845,7 +847,7 @@ class RailRnaCloud:
         if task_instance_bid_price is None:
             base.spot_task = False
         else:
-            if not (isinstance(task_instance bid_price, float) 
+            if not (isinstance(task_instance_bid_price, float) 
                     and task_instance_bid_price > 0):
                 base.errors.append('Spot instance bid price for task nodes '
                                    '(--task-instance-bid-price) must be '
@@ -889,60 +891,12 @@ class RailRnaCloud:
         base.termination_protected = termination_protected
 
     @staticmethod
-    def add_args(parser, usage=None):
-        """ usage: argparse.SUPPRESS if advanced options should be suppressed;
-                else None
-        """
-        parser.add_argument('--name', type=str, required=False,
+    def add_args(basic_group, advanced_group=None):
+        basic_group.add_argument('--name', type=str, required=False,
             default='Rail-RNA Job Flow',
             help='Name of job flow on Elastic MapReduce'
         )
-        parser.add_argument('--log-uri', type=str, required=False,
-            default=None,
-            usage=usage,
-            help=('Directory on S3 in which to store Hadoop logs. Defaults '
-                  'to "logs" subdirectory of output directory.')
-        )
-        parser.add_argument('--ami-version', type=str, required=False,
-            default='2.4.2',
-            usage=usage,
-            help='Version of Amazon Linux AMI to use on EC2.'
-        )
-        parser.add_argument('--visible-to-all-users', action='store_const',
-            const=True,
-            default=False,
-            usage=usage,
-            help='Makes EC2 cluster visible to all IAM users within the ' \
-                 'EMR CLI'
-        )
-        parser.add_argument('--action-on-failure', type=str, required=False,
-            default='TERMINATE_JOB_FLOW',
-            usage=usage,
-            help='Specifies what action to take if a job flow fails on a ' \
-                 'given step. Options are {"TERMINATE_JOB_FLOW", ' \
-                 '"CANCEL_AND_WAIT", "CONTINUE", "TERMINATE_CLUSTER"}.'
-        )
-        parser.add_argument('--hadoop-jar', type=str, required=False,
-            default='/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar'
-            usage=usage,
-            help='Hadoop Streaming Java ARchive to use. Controls version ' \
-                 'of Hadoop Streaming.'
-        )
-        parser.add_argument('--master-instance-count', type=str,
-            required=False,
-            default=1,
-            usage=usage,
-            help=('Number of master instances. A master instance helps manage '
-                  'the cluster, tracking the status of each task.')
-        )
-        parser.add_argument('-c', '--core-instance-count', type=str,
-            required=False,
-            default=1,
-            usage=usage,
-            help=('Number of core instances. A core instance runs Hadoop '
-                  'maps and reduces and stores intermediate data.')
-        )
-        parser.add_argument('--task-instance-count', type=str,
+        basic_group.add_argument('--task-instance-count', type=str,
             required=False,
             default=0,
             help=('Number of task instances. A task instance runs Hadoop '
@@ -951,73 +905,118 @@ class RailRnaCloud:
                   'the user loses spot instances because her bid price '
                   'fell below market value, her job flow will not fail.')
         )
-        parser.add_argument('--master-instance-bid-price', type=str,
-            required=False,
-            default=None,
-            usage=usage,
-            help=('Bid price for master instances (in dollars/hour). Invoke '
-                  'only if running master instances as spot instances.')
-        )
-        parser.add_argument('--core-instance-bid-price', type=str,
+        basic_group.add_argument('--core-instance-bid-price', type=str,
             required=False,
             default=None,
             help=('Bid price for core instances (in dollars/hour). Invoke '
                   'only if running core instances as spot instances.')
         )
-        parser.add_argument('--task-instance-bid-price', type=str,
+        basic_group.add_argument('--task-instance-bid-price', type=str,
             required=False,
             default=None,
             help=('Bid price for each task instance (in dollars/hour). Invoke '
                   'only if running task instances as spot instances.')
         )
-        parser.add_argument('--master-instance-type', type=str,
-            required=False,
-            default='c1.xlarge',
-            usage=usage,
-            help=('Master instance type. c1.xlarge is most cost-effective '
-                  'across the board for Rail-RNA.')
-        )
-        parser.add_argument('--core-instance-type', type=str,
-            required=False,
-            default=None,
-            usage=usage,
-            help=('Core instance type. c1.xlarge seems most cost-effective '
-                  'across the board for Rail-RNA. Defaults to master '
-                  'instance type if left unspecified.')
-        )
-        parser.add_argument('--task-instance-type', type=str,
-            required=False,
-            default=None,
-            usage=usage,
-            help=('Task instance type. c1.xlarge seems most cost-effective '
-                  'across the board for Rail-RNA. Defaults to master '
-                  'instance type if left unspecified.')
-        )
-        parser.add_argument('--ec2-key-name', type=str,
-            reqired=False,
-            default=None,
-            usage=usage,
-            help=('Name of key pair for connecting to EC2 instances via, '
-                  'for example, SSH. May be useful for debugging.')
-        )
-        parser.add_argument('--keep-alive', type=str,
-            required=False,
-            default=False,
-            usage=usage,
-            help='Keeps EC2 cluster alive after job flow is completed.'
-        )
-        parser.add_argument('--termination-protected', type=str,
-            required=False,
-            default=False,
-            usage=usage,
-            help='Protects cluster from termination in case of job flow ' \
-                 'failure.'
-        )
-        parser.add_argument('--region', type=str,
+        basic_group.add_argument('--region', type=str,
             required=False,
             default='us-east-1',
             help='Amazon data center in which to run Elastic MapReduce job.'
         )
+        if advanced_group is not None:
+            advanced_group.add_argument('--log-uri', type=str, required=False,
+                default=None,
+                help=('Directory on S3 in which to store Hadoop logs. '
+                      'Defaults to "logs" subdirectory of output directory.')
+            )
+            advanced_group.add_argument('--ami-version', type=str,
+                required=False,
+                default='2.4.2',
+                help='Version of Amazon Linux AMI to use on EC2.'
+            )
+            advanced_group.add_argument('--visible-to-all-users',
+                action='store_const',
+                const=True,
+                default=False,
+                help='Makes EC2 cluster visible to all IAM users within the ' \
+                     'EMR CLI'
+            )
+            advanced_group.add_argument('--action-on-failure', type=str,
+                required=False,
+                default='TERMINATE_JOB_FLOW',
+                help='Specifies what action to take if a job flow fails on ' \
+                     'a given step. Options are {"TERMINATE_JOB_FLOW", ' \
+                     '"CANCEL_AND_WAIT", "CONTINUE", "TERMINATE_CLUSTER"}.'
+            )
+            advanced_group.add_argument('--hadoop-jar', type=str,
+                required=False,
+                default=('/home/hadoop/contrib/streaming/'
+                         'hadoop-streaming-1.0.3.jar'),
+                help='Hadoop Streaming Java ARchive to use. Controls ' \
+                     'version of Hadoop Streaming.'
+            )
+            advanced_group.add_argument('--master-instance-count', type=str,
+                required=False,
+                default=1,
+                usage=usage,
+                help=('Number of master instances. A master instance helps '
+                      'manage the cluster, tracking the status of each task.')
+            )
+            advanced_group.add_argument('-c', '--core-instance-count',
+                type=str,
+                required=False,
+                default=1,
+                usage=usage,
+                help=('Number of core instances. A core instance runs Hadoop '
+                      'maps and reduces and stores intermediate data.')
+            )
+            advanced_group.add_argument('--master-instance-bid-price',
+                type=str,
+                required=False,
+                default=None,
+                usage=usage,
+                help=('Bid price for master instances (in dollars/hour). '
+                      'Invoke only if running master instances as spot '
+                      'instances.')
+            )
+            advanced_group.add_argument('--master-instance-type', type=str,
+                required=False,
+                default='c1.xlarge',
+                usage=usage,
+                help=('Master instance type. c1.xlarge is most cost-effective '
+                      'across the board for Rail-RNA.')
+            )
+            advanced_group.add_argument('--core-instance-type', type=str,
+                required=False,
+                default=None,
+                usage=usage,
+                help=('Core instance type. c1.xlarge is most cost-effective '
+                      'across the board for Rail-RNA. Defaults to master '
+                      'instance type if left unspecified.')
+            )
+            advanced_group.add_argument('--task-instance-type', type=str,
+                required=False,
+                default=None,
+                help=('Task instance type. c1.xlarge is most cost-effective '
+                      'across the board for Rail-RNA. Defaults to master '
+                      'instance type if left unspecified.')
+            )
+            advanced_group.add_argument('--ec2-key-name', type=str,
+                reqired=False,
+                default=None,
+                help=('Name of key pair for connecting to EC2 instances via, '
+                      'for example, SSH. May be useful for debugging.')
+            )
+            advanced_group.add_argument('--keep-alive', type=str,
+                required=False,
+                default=False,
+                help='Keeps EC2 cluster alive after job flow is completed.'
+            )
+            advanced_group.add_argument('--termination-protected', type=str,
+                required=False,
+                default=False,
+                help='Protects cluster from termination in case of job flow ' \
+                     'failure.'
+            )
 
     @staticmethod
     def hadoop_debugging_steps(base):
@@ -1172,7 +1171,7 @@ class RailRnaPreprocess:
                                                     '--gzip-output' if
                                                     base.gzip_output else '',
                                                     output_dir
-                                                )
+                                                ),
                 'inputs' : [base.manifest],
                 'output' : output_dir,
                 'no_output_prefix' : True,
@@ -1261,13 +1260,13 @@ class RailRnaAlign:
                     base_errors.append(('Input directory ("--input-dir") '
                                         '"{0}" does not exist').format(
                                                             input_dir
-                                                        )
+                                                        ))
                 else:
                     base.input_dir = input_dir
         else:
             # Cloud mode; check S3 for genome if necessary
             assert s3_ansible is not None
-            if assembly == 'hg19'
+            if assembly == 'hg19':
                 base.index_archive = 's3://rail-emr/index/hg19_UCSC.tar.gz'
             else:
                 if not Url(assembly).is_s3:
@@ -1389,52 +1388,52 @@ class RailRnaAlign:
         base.bed_basename = bed_basename
 
     @staticmethod
-    def add_args(parser, usage=None, cloud=False):
+    def add_args(basic_group, advanced_group=None, cloud=False):
         """ usage: argparse.SUPPRESS if advanced options should be suppressed;
                 else None
         """
         if not cloud:
-            parser.add_argument(
+            basic_group.add_argument(
                 '--bowtie1-exe', type=str, required=False,
                 default=None,
                 help=('Path to Bowtie 1 executable. This can be left out if '
                       '"bowtie" is in PATH and is executable.')
             )
-            parser.add_argument(
+            basic_group.add_argument(
                 '-1', '--bowtie1-idx', type=str, required=True,
                 help='Path to Bowtie 1 index. Include basename.'
             )
-            parser.add_argument(
+            basic_group.add_argument(
                 '--bowtie2-exe', type=str, required=False,
                 default=None,
                 help=('Path to Bowtie 2 executable. This can be left out if '
                       '"bowtie2" is in PATH and is executable.')
             )
-            parser.add_argument(
+            basic_group.add_argument(
                 '-2', '--bowtie2-idx', type=str, required=True,
                 help='Path to Bowtie 2 index. Include basename.'
             )
-            parser.add_argument(
+            basic_group.add_argument(
                 '--bowtie2_args', type=str, required=False,
                 default='',
                 help=('Additional arguments to pass to Bowtie 2, which is '
                       'used to obtain final end-to-end alignments and spliced '
                       'alignments in output SAM/BAM files.')
             )
-            parser.add_argument(
+            basic_group.add_argument(
                 '--samtools-exe', type=str, required=False,
                 default=None,
                 help=('Path to SAMTools executable. This can be left out if '
                       '"samtools" is in PATH and is executable.')
             )
-            parser.add_argument(
+            basic_group.add_argument(
                 '--bedtobigbed-exe', type=str, required=False,
                 default=None,
                 help=('Path to BedToBigBed executable. This can be left out '
                       'if "bedToBigBed" is in PATH and is executable.')
             )
         else:
-            parser.add_argument(
+            basic_group.add_argument(
                 '--assembly', type=str, required=False,
                 default='hg19',
                 help=('One of the following:\n'
@@ -1445,120 +1444,116 @@ class RailRnaAlign:
                       'that contains BOTH Bowtie 1 and Bowtie 2 index files '
                       '(12 in total), all with the basename "genome".')
             )
-        parser.add_argument(
-            '--genome-partition-length', type=int, required=False,
-            usage=usage,
-            default=5000,
-            help=('Smallest unit of a genome (in nucleotides) addressable by '
-                  'a single task when computing coverage from exon '
-                  'differentials. Making this parameter too small (~hundreds '
-                  'of nucleotides) can bloat intermediate files, but making '
-                  'it too large (~the size of a chromosome) could compromise '
-                  'the scalability of the pipeline.')
-        )
-        parser.add_argument(
-            '--max-readlet-size', type=int, required=False,
-            default=25,
-            usage=usage,
-            help=('Maximum size of a given segment from a read that is 1) '
-                  'mapped to the genome using Bowtie 1 when searching for '
-                  'introns; and 2) mapped to a set of transcriptome elements '
-                  'using Bowtie 2 when finalizing spliced alignments.'
-                  'Decreasing the value of this parameter may increase recall '
-                  'of introns while compromising precision. For human-size '
-                  'genomes, values between 20 and 25 are recommended.')
-        )
-        parser.add_argument(
-            '--min-readlet-size', type=int, required=False,
-            default=15,
-            usage=usage,
-            help=('Minimum size of a given "capping readlet" -- that is, a '
-                  'read segment whose end coincides with a read end -- that '
-                  'is 1) mapped to the genome using Bowtie 1 when searching '
-                  'for introns; and 2) mapped to a set of transcriptome '
-                  'elements using Bowtie 2 when finalizing spliced '
-                  'alignments. Decreasing the value of this parameter may '
-                  'increase recall of rare introns overlapped towards the '
-                  'ends of a few reads in a sample while compromising '
-                  'precision.')
-        )
-        parser.add_argument(
-            '--readlet-interval', type=int, required=False,
-            default=4,
-            usage=usage,
-            help=('Distance (in nucleotides) between overlapping readlets '
-                  'mapped to genome and set of transcriptome elements. '
-                  'Decreasing this parameter may increase sensitivity while '
-                  'increasing the time the pipeline takes.')
-        )
-        parser.add_argument(
-            '--cap-size-multiplier', type=float, required=False,
-            default=1.2,
-            usage=usage,
-            help=('Successive capping readlets on a given end of a read are '
-                  'increased in size exponentially with this base.')
-        )
-        parser.add_argument(
+        basic_group.add_argument(
             '--max-intron-size', type=int, required=False,
             default=500000,
             help=('Introns spanning more than this many nucleotides are '
                   'automatically filtered out.')
         )
-        parser.add_argument(
+        basic_group.add_argument(
             '--min-intron-size', type=int, required=False,
             default=10,
             help=('Introns spanning fewer than this many nucleotides are '
                   'automatically filtered out.')
         )
-        parser.add_argument(
+        basic_group.add_argument(
             '--min-exon-size', type=int, required=False,
             default=9,
             help=('The aligner will not be sensitive to exons smaller than '
                   'this size.')
         )
-        parser.add_argument(
-            '--motif-search-window-size', type=int, required=False,
-            default=1000,
-            usage=usage,
-            help=('Size of window in which to search for exons of size '
-                  '"--min-exon-size" capped by appropriate donor/acceptor '
-                  'motifs when inferring intron positions.')
-        )
-        parser.add_argument(
-            '--motif-radius', type=int, required=False,
-            default=5,
-            usage=usage,
-            help=('Number of nucleotides of ostensible intron ends within '
-                  'which to search for a donor/acceptor motif.')
-        )
-        parser.add_argument(
+        basic_group.add_argument(
             '--normalize-percentile', type=float, required=False,
             default=0.75,
             help=('Percentile used for computing normalization factors for '
                   'sample coverage.')
         )
-        parser.add_argument(
+        basic_group.add_argument(
             '--do-not-output-bam-by-chr', action='store_const', const=True,
             default=False,
             help=('Places alignments for all chromosomes in a single file '
                   'rather than dividing them up by reference name.')
         )
-        parser.add_argument(
+        basic_group.add_argument(
             '--output-sam', action='store_const', const=True,
             default=False,
             help='Outputs SAM files rather than BAM files.'
         )
-        parser.add_argument(
+        basic_group.add_argument(
             '--bam-basename', type=str, required=False,
             default='alignments',
             help='Basename to use for BAM output files.'
         )
-        parser.add_argument(
+        basic_group.add_argument(
             '--bed-basename', type=str, required=False,
             default='',
             help=('Basename to use for BED output files; there is an output '
                   'for each of insertions, deletions, and introns.')
         )
+        if advanced_group is not None:
+            advanced_group.add_argument(
+                '--genome-partition-length', type=int, required=False,
+                default=5000,
+                help=('Smallest unit of a genome (in nucleotides) addressable '
+                      'by a single task when computing coverage from exon '
+                      'differentials. Making this parameter too small '
+                      '(~hundreds of nucleotides) can bloat intermediate '
+                      'files, but making it too large '
+                      '(~the size of a chromosome) could compromise '
+                      'the scalability of the pipeline.')
+            )
+            advanced_group.add_argument(
+                '--max-readlet-size', type=int, required=False,
+                default=25,
+                help=('Maximum size of a given segment from a read that is 1) '
+                      'mapped to the genome using Bowtie 1 when searching for '
+                      'introns; and 2) mapped to a set of transcriptome '
+                      'elements using Bowtie 2 when finalizing spliced '
+                      'alignments. Decreasing the value of this parameter '
+                      'may increase recall of introns while compromising '
+                      'precision. For human-size genomes, values between '
+                      '20 and 25 are recommended.')
+            )
+            advanced_group.add_argument(
+                '--min-readlet-size', type=int, required=False,
+                default=15,
+                help=('Minimum size of a given "capping readlet" -- that is, '
+                      'a read segment whose end coincides with a read end '
+                      '-- that is a) mapped to the genome using Bowtie 1 '
+                      'when searching for introns; and 2) mapped to a set of '
+                      'transcriptome elements using Bowtie 2 when finalizing '
+                      'spliced alignments. Decreasing the value of this '
+                      'parameter may increase recall of rare introns '
+                      'overlapped towards the ends of a few reads in a sample '
+                      'while compromising precision.')
+            )
+            advanced_group.add_argument(
+                '--readlet-interval', type=int, required=False,
+                default=4,
+                help=('Distance (in nucleotides) between overlapping readlets '
+                      'mapped to genome and set of transcriptome elements. '
+                      'Decreasing this parameter may increase sensitivity '
+                      'while increasing the time the pipeline takes.')
+            )
+            advanced_group.add_argument(
+                '--cap-size-multiplier', type=float, required=False,
+                default=1.2,
+                help=('Successive capping readlets on a given end of a read '
+                      'are increased in size exponentially with this base.')
+            )
+            advanced_group.add_argument(
+                '--motif-search-window-size', type=int, required=False,
+                default=1000,
+                help=('Size of window in which to search for exons of size '
+                      '"--min-exon-size" capped by appropriate donor/acceptor '
+                      'motifs when inferring intron positions.')
+            )
+            advanced_group.add_argument(
+                '--motif-radius', type=int, required=False,
+                default=5,
+                help=('Number of nucleotides of ostensible intron ends within '
+                      'which to search for a donor/acceptor motif.')
+            )
 
     @staticmethod
     def protosteps(base, input_dir, cloud=False):
@@ -1586,10 +1581,10 @@ class RailRnaAlign:
             {
                 'name' : 'Aggregate duplicate read sequences',
                 'run' : 'sum.py --type 3 --value-count 2',
-                'inputs' : [path_join(cloud, 'align_reads', 'readletize')]
+                'inputs' : [path_join(cloud, 'align_reads', 'readletize')],
                 'output' : 'combine_sequences',
                 'taskx' : 4,
-                'part' : 'k1,1'
+                'part' : 'k1,1',
                 'keys' : 1
             },
             {
@@ -1601,19 +1596,19 @@ class RailRnaAlign:
                                     base.readlet_interval,
                                     base.cap_size_multiplier
                                 ),
-                'inputs' : [path_join(cloud, 'align_reads', 'readletize')]
+                'inputs' : [path_join(cloud, 'align_reads', 'readletize')],
                 'output' : 'combine_sequences',
                 'taskx' : 4,
-                'part' : 'k1,1'
+                'part' : 'k1,1',
                 'keys' : 1
             },
             {
                 'name' : 'Aggregate duplicate readlet sequences',
                 'run' : 'sum.py --type 3',
-                'inputs' : ['readletize']
+                'inputs' : ['readletize'],
                 'output' : 'combine_subsequences',
                 'taskx' : 4,
-                'part' : 'k1,1'
+                'part' : 'k1,1',
                 'keys' : 1
             },
             {
@@ -1626,10 +1621,10 @@ class RailRnaAlign:
                                     base.bowtie_exe,
                                     verbose
                                 ),
-                'inputs' : [path_join(cloud, 'align_reads', 'readletize')]
+                'inputs' : [path_join(cloud, 'align_reads', 'readletize')],
                 'output' : 'combine_sequences',
                 'taskx' : 4,
-                'part' : 'k1,1'
+                'part' : 'k1,1',
                 'keys' : 1
             },
             {
@@ -1649,7 +1644,7 @@ class RailRnaAlign:
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
                 'taskx' : 4,
-                'part' : 'k1,1'
+                'part' : 'k1,1',
                 'keys' : 1
             },
             {
@@ -1662,7 +1657,7 @@ class RailRnaAlign:
                 'inputs' : ['intron_search'],
                 'output' : 'intron_config',
                 'taskx' : 1,
-                'part' : 'k1,2'
+                'part' : 'k1,2',
                 'keys' : 4
             },
             {
@@ -1715,7 +1710,7 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Finalize intron cooccurrences on reads',
-                'run' : ('cointron_search.py {0}').format(verbose)
+                'run' : ('cointron_search.py {0}').format(verbose),
                 'inputs' : ['realign_readlets', 'align_readlets'],
                 'output' : 'cointron_search',
                 'taskx' : 4,
@@ -1731,7 +1726,7 @@ class RailRnaAlign:
                                                     base.bowtie2_exe,
                                                     base.partition_length,
                                                     manifest,
-                                                    verbose)
+                                                    verbose),
                 'inputs' : ['cointron_fasta'],
                 'output' : 'realign_reads',
                 'taskx' : 4,
@@ -1764,15 +1759,15 @@ class RailRnaAlign:
                 'name' : 'Write bigbeds with exome coverage by sample',
                 'run' : ('coverage.py --bowtie-idx={0} --percentile={1}'
                          '--out={2} --bigbed-exe={3} '
-                         '--manifest={4} {5}'.format(base.bowtie_idx,
+                         '--manifest={4} {5}').format(base.bowtie_idx,
                                                      base.normalize_percentile,
                                                      path_join(cloud,
                                                         base.output_dir,
                                                         'coverage'),
                                                      base.bigbed_exe,
                                                      manifest,
-                                                     verbose)
-                'inputs' : [path_join(cloud, 'coverage_pre', 'coverage')]
+                                                     verbose),
+                'inputs' : [path_join(cloud, 'coverage_pre', 'coverage')],
                 'output' : 'coverage',
                 'taskx' : 1,
                 'part' : 'k1,1',
@@ -1785,7 +1780,7 @@ class RailRnaAlign:
                                                             base.output_dir,
                                                             'normalize'),
                                                         manifest
-                                                    )
+                                                    ),
                 'inputs' : ['coverage'],
                 'output' : 'coverage_post',
                 'taskx' : None,
@@ -1833,7 +1828,7 @@ class RailRnaAlign:
                                     ),
                 'inputs' : [path_join(cloud, 'align_reads', 'end_to_end_sam'),
                             path_join(cloud, 'realign_reads', 'splice_sam')],
-                'output' : 'bam'
+                'output' : 'bam',
                 'taskx' : 1,
                 'part' : 'k1,1',
                 'keys' : 3
@@ -2301,7 +2296,7 @@ class RailRnaCloudAllJson:
         else:
             reducer_count = base.master_instance_count \
                 * base.instance_core_counts[base.core_instance_type]
-        middle_dir = path_join(unix=True, base.intermediate_dir,
+        middle_dir = path_join(True, base.intermediate_dir,
                                         'preprocess', 'push')
         self._json_serial['Steps'] \
             = RailRnaCloud.hadoop_debugging_steps(base) + \
@@ -2310,7 +2305,7 @@ class RailRnaCloudAllJson:
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
-                )
+                ) + \
                 steps(
                     RailRnaAlign.protosteps(base, middle_dir, cloud=True),
                     base.action_on_failure,
