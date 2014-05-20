@@ -40,7 +40,7 @@ site.addsitedir(base_path)
 import dooplicity.ansibles as ab
 import tempfile
 import shutil
-from tools import which, is_exe, path_join
+from dooplicity.tools import which, is_exe, path_join
 from argparse import SUPPRESS
 
 def step(name, inputs, output, mapper='cat', reducer='cat', 
@@ -799,6 +799,10 @@ class RailRnaCloud:
         """ usage: argparse.SUPPRESS if advanced options should be suppressed;
                 else None
         """
+        parser.add_argument('--name', type=str, required=False,
+            default='Rail-RNA Job Flow',
+            help='Name of job flow on Elastic MapReduce'
+        )
         parser.add_argument('--log-uri', type=str, required=False,
             default=None,
             usage=usage,
@@ -914,6 +918,11 @@ class RailRnaCloud:
             usage=usage,
             help='Protects cluster from termination in case of job flow ' \
                  'failure.'
+        )
+        parser.add_argument('--region', type=str,
+            required=False,
+            default='us-east-1',
+            help='Amazon data center in which to run Elastic MapReduce job.'
         )
 
     @staticmethod
@@ -1070,8 +1079,9 @@ class RailRnaPreprocess:
                                                     base.gzip_output else '',
                                                     output_dir
                                                 )
-                'inputs' : base.manifest,
-                'output' : 'preprocess',
+                'inputs' : [base.manifest],
+                'output' : output_dir,
+                'no_output_prefix' : True,
                 'inputformat' : (
                         'org.apache.hadoop.mapred.lib.NLineInputFormat'
                     ),
@@ -1096,9 +1106,9 @@ class RailRnaPreprocess:
 
 class RailRnaAlign:
     """ Sets parameters relevant to just the "align" job flow. """
-    def __init__(self, base, cloud=False, bowtie1_exe=None,
-        bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
-        bowtie2_build_exe=None, bowtie2_idx='genome',
+    def __init__(self, base, input_dir=None, cloud=False,
+        bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
+        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
         bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
         genome_partition_length=5000, max_readlet_size=25,
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
@@ -1151,6 +1161,15 @@ class RailRnaAlign:
             base.bedtobigbed_exe = base.check_program('bedToBigBed', 
                                     'BedToBigBed', '--bedtobigbed-exe',
                                     entered_exe=bedtobigbed_exe)
+            # Check input dir
+            if input_dir is not None:
+                if not os.path.exists(input_dir):
+                    base_errors.append(('Input directory ("--input-dir") '
+                                        '"{0}" does not exist').format(
+                                                            input_dir
+                                                        )
+                else:
+                    base.input_dir = input_dir
         else:
             # Cloud mode; check S3 for genome if necessary
             assert s3_ansible is not None
@@ -1158,11 +1177,25 @@ class RailRnaAlign:
                 base.index_archive = 's3://rail-emr/index/hg19_UCSC.tar.gz'
             else:
                 if not Url(assembly).is_s3:
-                    base.errors.append('Bowtie index archive must be on S3 '
-                                       ' in cloud ("--cloud") mode.')
+                    base.errors.append(('Bowtie index archive must be on S3'
+                                        ' in cloud ("--cloud") mode, but '
+                                        '"{0}" was entered.').format(assembly))
                 elif not s3_ansible.exists(assembly):
                     base.errors.append('Bowtie index archive was not found '
                                        'on S3 at "{0}".'.format(assembly))
+                else:
+                    base.index_archive = assembly
+            if input_dir is not None:
+                if not Url(input_dir).is_s3:
+                    base.errors.append(('Input directory must be on S3, but '
+                                        '"{0}" was entered.').format(
+                                                                input_dir
+                                                            ))
+                elif not s3_ansible.is_dir(input_dir):
+                    base.errors.append(('Input directory "{0}" was not found '
+                                        'on S3.').format(input_dir))
+                else:
+                    base.input_dir = input_dir
             # Set up cloud params
             base.bowtie1_idx = '/mnt/index/genome'
             base.bowtie2_idx = '/mnt/index/genome'
@@ -1262,11 +1295,11 @@ class RailRnaAlign:
         base.bed_basename = bed_basename
 
     @staticmethod
-    def add_args(parser, usage=None, local=False):
+    def add_args(parser, usage=None, cloud=False):
         """ usage: argparse.SUPPRESS if advanced options should be suppressed;
                 else None
         """
-        if local:
+        if not cloud:
             parser.add_argument(
                 '--bowtie1-exe', type=str, required=False,
                 default=None,
@@ -1555,7 +1588,7 @@ class RailRnaAlign:
                 'run' : ('intron_index.py --bowtie-build-exe={0}'
                          '--out={1} {2}').format(base.bowtie1_build_exe,
                                                  path_join(cloud,
-                                                            output_dir,
+                                                            base.utput_dir,
                                                             index),
                                                  keep_alive),
                 'inputs' : ['intron_fasta'],
@@ -1572,7 +1605,7 @@ class RailRnaAlign:
                                                         'intron/intron'
                                                         if cloud else
                                                         path_join(cloud,
-                                                            output_dir,
+                                                            base.output_dir,
                                                             index,
                                                             intron),
                                                         base.bowtie1_exe,
@@ -1640,7 +1673,7 @@ class RailRnaAlign:
                          '--manifest={4} {5}'.format(base.bowtie_idx,
                                                      base.normalize_percentile,
                                                      path_join(cloud,
-                                                        output_dir,
+                                                        base.output_dir,
                                                         'coverage'),
                                                      base.bigbed_exe,
                                                      manifest,
@@ -1655,8 +1688,8 @@ class RailRnaAlign:
                 'name' : 'Write normalization factors for sample coverages',
                 'run' : 'coverage_post --out={0} --manifest={1}'.format(
                                                         path_join(cloud,
-                                                                  output_dir,
-                                                                  'normalize'),
+                                                            base.output_dir,
+                                                            'normalize'),
                                                         manifest
                                                     )
                 'inputs' : ['coverage'],
@@ -1809,11 +1842,226 @@ class RailRnaLocalPreprocessJson:
                         )
                 )
         self._json_serial = {}
-        self._json_serial['Steps'] = []
-        steps = self._json_serial['Steps']
         step_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 
                                                     'steps'))
+        self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
+                base.output_dir), '', '', step_dir, base.num_processes,
+                base.intermediate_dir, unix=False
+            )
+    
+    @property
+    def json_serial(self):
+        return self._json_serial
 
+class RailRnaCloudPreprocessJson:
+    """ Constructs JSON for cloud mode + preprocess job flow. """
+    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
+        force=False, aws_exe=None, profile='default', region='us-east-1',
+        verbose=False, nucleotides_per_input=8000000, gzip_input=True,
+        log_uri=None, ami_version='2.4.2',
+        visible_to_all_users=False, tags='',
+        name='Rail-RNA Job Flow',
+        action_on_failure='TERMINATE_JOB_FLOW',
+        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar',
+        master_instance_count=1, master_instance_type='c1.xlarge',
+        master_instance_bid_price=None, core_instance_count=1,
+        core_instance_type=None, core_instance_bid_price=None,
+        task_instance_count=0, task_instance_type=None,
+        task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
+        termination_protected=False):
+        base = RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose)
+        RailRnaCloud(base, log_uri=log_uri, ami_version=ami_version,
+            visible_to_all_users=visible_to_all_users, tags=tags,
+            name=name,
+            action_on_failure=action_on_failure,
+            hadoop_jar=hadoop_jar, master_instance_count=master_instance_count,
+            master_instance_type=master_instance_type,
+            master_instance_bid_price=master_instance_bid_price,
+            core_instance_count=core_instance_count,
+            core_instance_type=core_instance_type,
+            core_instance_bid_price=core_instance_bid_price,
+            task_instance_count=task_instance_count,
+            task_instance_type=task_instance_type,
+            task_instance_bid_price=task_instance_bid_price,
+            ec2_key_name=ec2_key_name, keep_alive=keep_alive,
+            termination_protected=termination_protected)
+        RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
+            gzip_input=gzip_input)
+        if base.errors:
+            raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i, error) for i, error in errors]
+                        )
+                )
+        self._json_serial = {}
+        if base.core_instance_count > 0:
+            reducer_count = base.core_instance_count \
+                * base.instance_core_counts[base.core_instance_type]
+        else:
+            reducer_count = base.master_instance_count \
+                * base.instance_core_counts[base.core_instance_type]
+        self._json_serial['Steps'] \
+            = RailRnaCloud.hadoop_debugging_steps(base) + steps(
+                    RailRnaPreprocess.protosteps(base, base.output_dir),
+                    base.action_on_failure,
+                    base.hadoop_jar, '/mnt/src/rna/steps',
+                    reducer_count, base.intermediate_dir, unix=True
+                )
+        self._json_serial['AmiVersion'] = base.ami_version
+        if base.log_uri is not None:
+            self._json_serial['LogUri'] = base.log_uri
+        else:
+            self._json_serial['LogUri'] = path_join(True, base.output_dir,
+                                                        'logs')
+        self._json_serial['Name'] = base.name
+        self._json_serial['NewSupportedProducts'] = []
+        self._json_serial['Tags'] = base.tags
+        self._json_serial['VisibleToAllUsers'] = (
+                'true' if base.visible_to_all_users else 'false'
+            )
+        self._json_serial['Instances'] = RailRnaCloud.instances(base)
+        self._json_serial['BootstrapActions'] \
+            = RailRnaPreprocess.bootstrap(base) + RailRnaCloud.bootstrap(base)
+    
+    @property
+    def json_serial(self):
+        return self._json_serial
+
+class RailRnaLocalAlignJson:
+    """ Constructs JSON for local mode + align job flow. """
+    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
+        force=False, aws_exe=None, profile='default', region='us-east-1',
+        verbose=False, bowtie1_exe=None,
+        bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
+        bowtie2_build_exe=None, bowtie2_idx='genome',
+        bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+        genome_partition_length=5000, max_readlet_size=25,
+        min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
+        max_intron_size=500000, min_intron_size=10, min_exon_size=9,
+        motif_search_window_size=1000, motif_radius=5,
+        normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+        output_sam=False, bam_basename='alignments', bed_basename='',
+        num_processes=1, keep_intermediates=False):
+        base = RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose)
+        RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
+            keep_intermediates=keep_intermediates)
+        RailRnaAlign(cloud=False, bowtie1_exe=None,
+            bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
+            bowtie2_build_exe=None, bowtie2_idx='genome',
+            bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+            genome_partition_length=5000, max_readlet_size=25,
+            min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
+            max_intron_size=500000, min_intron_size=10, min_exon_size=9,
+            motif_search_window_size=1000, motif_radius=5,
+            normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+            output_sam=False, bam_basename='alignments', bed_basename='')
+        if base.errors:
+            raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i, error) for i, error in errors]
+                        )
+                )
+        self._json_serial = {}
+        step_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 
+                                                    'steps'))
+        self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
+                base.output_dir, cloud=False), '', '', step_dir,
+                base.num_processes, base.intermediate_dir, unix=False
+            )
+
+    @property
+    def json_serial(self):
+        return self._json_serial
+
+class RailRnaCloudAlignJson:
+    """ Constructs JSON for cloud mode + align job flow. """
+    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
+        force=False, aws_exe=None, profile='default', region='us-east-1',
+        verbose=False, nucleotides_per_input=8000000, gzip_input=True,
+        log_uri=None, ami_version='2.4.2',
+        visible_to_all_users=False, tags='',
+        name='Rail-RNA Job Flow',
+        action_on_failure='TERMINATE_JOB_FLOW',
+        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar',
+        master_instance_count=1, master_instance_type='c1.xlarge',
+        master_instance_bid_price=None, core_instance_count=1,
+        core_instance_type=None, core_instance_bid_price=None,
+        task_instance_count=0, task_instance_type=None,
+        task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
+        termination_protected=False):
+        base = RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose)
+        RailRnaCloud(base, log_uri=log_uri, ami_version=ami_version,
+            visible_to_all_users=visible_to_all_users, tags=tags,
+            name=name,
+            action_on_failure=action_on_failure,
+            hadoop_jar=hadoop_jar, master_instance_count=master_instance_count,
+            master_instance_type=master_instance_type,
+            master_instance_bid_price=master_instance_bid_price,
+            core_instance_count=core_instance_count,
+            core_instance_type=core_instance_type,
+            core_instance_bid_price=core_instance_bid_price,
+            task_instance_count=task_instance_count,
+            task_instance_type=task_instance_type,
+            task_instance_bid_price=task_instance_bid_price,
+            ec2_key_name=ec2_key_name, keep_alive=keep_alive,
+            termination_protected=termination_protected)
+        RailRnaAlign(cloud=True, bowtie1_exe=None,
+            bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
+            bowtie2_build_exe=None, bowtie2_idx='genome',
+            bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+            genome_partition_length=5000, max_readlet_size=25,
+            min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
+            max_intron_size=500000, min_intron_size=10, min_exon_size=9,
+            motif_search_window_size=1000, motif_radius=5,
+            normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+            output_sam=False, bam_basename='alignments', bed_basename='',
+            s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
+                                        profile=base.profile))
+        if base.errors:
+            raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i, error) for i, error in errors]
+                        )
+                )
+        self._json_serial = {}
+        if base.core_instance_count > 0:
+            reducer_count = base.core_instance_count \
+                * base.instance_core_counts[base.core_instance_type]
+        else:
+            reducer_count = base.master_instance_count \
+                * base.instance_core_counts[base.core_instance_type]
+        self._json_serial['Steps'] \
+            = RailRnaCloud.hadoop_debugging_steps(base) + \
+                steps(
+                    RailRnaAlign.protosteps(base, base.input_dir),
+                    base.action_on_failure,
+                    base.hadoop_jar, '/mnt/src/rna/steps',
+                    reducer_count, base.intermediate_dir, unix=True
+                )
+        self._json_serial['AmiVersion'] = base.ami_version
+        if base.log_uri is not None:
+            self._json_serial['LogUri'] = base.log_uri
+        else:
+            self._json_serial['LogUri'] = path_join(True, base.output_dir,
+                                                        'logs')
+        self._json_serial['Name'] = base.name
+        self._json_serial['NewSupportedProducts'] = []
+        self._json_serial['Tags'] = base.tags
+        self._json_serial['VisibleToAllUsers'] = (
+                'true' if base.visible_to_all_users else 'false'
+            )
+        self._json_serial['Instances'] = RailRnaCloud.instances(base)
+        self._json_serial['BootstrapActions'] \
+            = RailRnaPreprocess.bootstrap(base) + RailRnaCloud.bootstrap(base)
     
     @property
     def json_serial(self):
