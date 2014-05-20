@@ -34,35 +34,14 @@ import os
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
                 )
-utils_path = os.path.join(base_path, 'rna/utils')
+utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 import dooplicity.ansibles as ab
 import tempfile
 import shutil
-from tools import which, is_exe
+from tools import which, is_exe, path_join
 from argparse import SUPPRESS
-
-def path_join(unix, *args):
-    """ Performs UNIX-like os.path.joins on Windows systems if necessary.
-
-        unix: True iff UNIX-like path join should be performed; else False
-
-        Return value: joined path
-    """
-    args_list = []
-    if unix:
-        for i in xrange(len(args) - 1):
-            try:
-                if args[i][-1] != '/':
-                    args_list.append(args[i] + '/')
-            except IndexError:
-                # Empty element
-                pass
-        args_list.append(args[-1])
-        return ''.join(args_list)
-    else:
-        return os.path.join(*args)
 
 def step(name, inputs, output, mapper='cat', reducer='cat', 
     action_on_failure='TERMINATE_JOB_FLOW',
@@ -136,7 +115,7 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
 
 def steps(pseudosteps, action_on_failure, jar, step_dir, 
             reducer_count, intermediate_dir, unix=False):
-    """ Turns dictionary with "pseudosteps" into well-formed StepConfig array.
+    """ Turns list with "pseudosteps" into well-formed StepConfig list.
 
         A pseudostep looks like this:
 
@@ -166,7 +145,7 @@ def steps(pseudosteps, action_on_failure, jar, step_dir,
         reducer_count: number of reducers; determines number of tasks
         unix: performs UNIX-like path joins
 
-        Return value: array of StepConfigs (see Elastic MapReduce API docs)
+        Return value: list of StepConfigs (see Elastic MapReduce API docs)
     """
     true_steps = []
     for pseudostep in pseudosteps:

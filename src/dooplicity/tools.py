@@ -3,8 +3,7 @@
 tools.py
 Part of Dooplicity framework
 
-Includes a class for iterating through streams easily and another for checking
-whether an executable is in the PATH.
+Includes a class for iterating through streams easily and a couple other tools.
 
 The functions which() and is_exe() was taken from
 http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
@@ -70,6 +69,27 @@ def which(program):
                     return candidate
 
     return None
+
+def path_join(unix, *args):
+    """ Performs UNIX-like os.path.joins on Windows systems if necessary.
+
+        unix: True iff UNIX-like path join should be performed; else False
+
+        Return value: joined path
+    """
+    args_list = []
+    if unix:
+        for i in xrange(len(args) - 1):
+            try:
+                if args[i][-1] != '/':
+                    args_list.append(args[i] + '/')
+            except IndexError:
+                # Empty element
+                pass
+        args_list.append(args[-1])
+        return ''.join(args_list)
+    else:
+        return os.path.join(*args)
 
 class xstream:
     """ Permits Pythonic iteration through partitioned/sorted input streams.

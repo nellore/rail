@@ -66,7 +66,7 @@ base_path = os.path.abspath(
                         os.path.realpath(__file__)))
                     )
                 )
-utils_path = os.path.join(base_path, 'rna/utils')
+utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 from dooplicity.tools import xstream
