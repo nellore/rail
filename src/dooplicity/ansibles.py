@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 ansibles.py
 Part of Dooplicity framework
@@ -485,7 +486,9 @@ class AWSAnsible:
                                     'the desired AWS access key ID and '
                                     'secret access key, respectively, or\n'
                                     '2) A file ".aws/config" exists in your '
-                                    'home directory with the right settings. '
+                                    'home directory with the right settings '
+                                    'for the profile specified (or for '
+                                    '[default] if no profile was specified). '
                                     'To set this file up, run "aws --config" '
                                     'after installing the CLI.'))
         if region is not None:

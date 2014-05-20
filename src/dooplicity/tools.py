@@ -3,7 +3,12 @@
 tools.py
 Part of Dooplicity framework
 
-Currently just includes a class for iterating through streams easily.
+Includes a class for iterating through streams easily and another for checking
+whether an executable is in the PATH.
+
+The functions which() and is_exe() was taken from
+http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
+and is not covered under the license below.
 
 Licensed under the MIT License:
 
@@ -30,6 +35,41 @@ THE SOFTWARE.
 
 from itertools import groupby
 import os
+
+def is_exe(fpath):
+    """ Tests whether a file is executable.
+
+        fpath: path to file
+
+        Return value: True iff file exists and is executable.
+    """
+    return os.path.exists(fpath) and os.access(fpath, os.X_OK)
+
+def which(program):
+    """ Tests whether an executable is in PATH.
+
+        program: executable to search for
+
+        Return value: path to executable or None if the executable is not
+            found.
+    """
+    def ext_candidates(fpath):
+        yield fpath
+        for ext in os.environ.get("PATHEXT", "").split(os.pathsep):
+            yield fpath + ext
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            exe_file = os.path.join(path, program)
+            for candidate in ext_candidates(exe_file):
+                if is_exe(candidate):
+                    return candidate
+
+    return None
 
 class xstream:
     """ Permits Pythonic iteration through partitioned/sorted input streams.
