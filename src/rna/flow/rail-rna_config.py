@@ -74,11 +74,6 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
         }
 
     }
-    if multiple_outputs:
-        # This only matters on EMR
-        to_return['HadoopJarStep']['Args'].extend([
-            '-libjars', '/mnt/lib/multiplefiles.jar'
-        ])
     to_return.extend(['-D', 'mapred.reduce.tasks=%d' % tasks])
     if partioner_options is not None and key_fields is not None:
         to_return['HadoopJarStep']['Args'].extend([
@@ -86,6 +81,11 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
                             % partitioner_options,
                 '-D', 'stream.num.map.output.key.fields=%d' % key_fields
             ])
+    if multiple_outputs:
+        # This only matters in cloud mode
+        to_return['HadoopJarStep']['Args'].extend([
+            '-libjars', '/mnt/lib/multiplefiles.jar'
+        ])
     if archives is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-archives', archives
@@ -113,11 +113,11 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
             ])
     return to_return
 
-def steps(pseudosteps, action_on_failure, jar, step_dir, 
+def steps(protosteps, action_on_failure, jar, step_dir, 
             reducer_count, intermediate_dir, unix=False):
-    """ Turns list with "pseudosteps" into well-formed StepConfig list.
+    """ Turns list with "protosteps" into well-formed StepConfig list.
 
-        A pseudostep looks like this:
+        A protostep looks like this:
 
             {
                 'name' : [name of step]
@@ -131,59 +131,65 @@ def steps(pseudosteps, action_on_failure, jar, step_dir,
                 'keys'  : Number of key fields; present only if reducer
                 'part'  : KeyFieldBasedPartitioner options; present only if
                             reducer
-                'taskx' : number of tasks per reducer
+                'taskx' : number of tasks per reducer or None if total number
+                    of tasks should be 1
                 'inputformat' : input format; present only if necessary
                 'archives' : archives parameter; present only if necessary
                 'multiple_outputs' : key that's present iff there are multiple
                     outputs
             }
 
-        pseudosteps: array of pseudosteps
+        protosteps: array of protosteps
         action_on_failure: action on failure to take
         jar: path to Hadoop Streaming jar
         step_dir: where to find Python scripts for steps
         reducer_count: number of reducers; determines number of tasks
-        unix: performs UNIX-like path joins
+        unix: performs UNIX-like path joins; also inserts pypy in for
+            executable since unix=True only on EMR
 
         Return value: list of StepConfigs (see Elastic MapReduce API docs)
     """
     true_steps = []
-    for pseudostep in pseudosteps:
-        assert ('keys' in pseudostep and 'part' in pseudostep) or
-                ('keys' not in pseudostep and 'part' not in pseudostep)
+    for protostep in protosteps:
+        assert ('keys' in protostep and 'part' in protostep) or
+                ('keys' not in protostep and 'part' not in protostep)
         true_steps.append(step(
-                            name=pseudostep['name'],
+                            name=protostep['name'],
                             inputs=([path_join(unix, intermediate_dir,
                                         an_input) for an_input in
-                                        pseudostep['inputs']]
+                                        protostep['inputs']]
                                     if 'no_input_prefix' not in
-                                    pseudostep else pseudostep['inputs']),
+                                    protostep else protostep['inputs']),
                             output=(path_join(unix, intermediate_dir,
-                                                    pseudostep['output'])
+                                                    protostep['output'])
                                     if 'no_output_prefix' not in
-                                    pseudostep else pseudostep['output']),
-                            mapper=(path_join(unix, step_dir,
-                                                    pseudostep['run'])
-                                    if 'keys' not in pseudostep
+                                    protostep else protostep['output']),
+                            mapper=(path_join(unix, 'pypy' if unix
+                                    else sys.executable, step_dir,
+                                                    protostep['run'])
+                                    if 'keys' not in protostep
                                     else 'cat'),
-                            reducer=(path_join(unix, step_dir,
-                                                    pseudostep['run'])
-                                    if 'keys' in pseudostep
+                            reducer=(path_join(unix, 'pypy' if unix
+                                     else sys.executable, step_dir,
+                                                    protostep['run'])
+                                    if 'keys' in protostep
                                     else 'cat')
                             action_on_failure=action_on_failure,
                             jar=jar,
-                            tasks=reducer_count * pseudostep['taskx'],
-                            partitioner_options=(pseudostep['part']
-                                if 'part' in pseudostep else None),
-                            key_fields=(pseudostep['keys']
-                                if 'keys' in pseudostep else None),
-                            archives=(pseudostep['archives']
-                                if 'archives' in pseudostep else None)
+                            tasks=(reducer_count * protostep['taskx']
+                                    if protostep['taskx'] is not None
+                                    else 1),
+                            partitioner_options=(protostep['part']
+                                if 'part' in protostep else None),
+                            key_fields=(protostep['keys']
+                                if 'keys' in protostep else None),
+                            archives=(protostep['archives']
+                                if 'archives' in protostep else None)
                             multiple_outputs=(True if 'multiple_outputs'
-                                    in pseudostep else False
+                                    in protostep else False
                                 )
-                            inputformat=(pseudostep['inputformat']
-                                if 'inputformat' in pseudostep else None)
+                            inputformat=(protostep['inputformat']
+                                if 'inputformat' in protostep else None)
                         )
                     )
     return true_steps
@@ -319,7 +325,7 @@ class RailRnaErrors:
                                     'not be installed.'))
         self.checked_programs.add('AWS CLI')
 
-    def check_program(exe, program_name, parameter, var_to_set,
+    def check_program(exe, program_name, parameter,
                         entered_exe=None, reason=None):
         """ Checks if program in PATH or if user specified it properly.
 
@@ -329,7 +335,6 @@ class RailRnaErrors:
             program name: name of program
             parameter: corresponding command line parameter
                 (e.g., --bowtie-exe)
-            var_to_set: variable to set (e.g., "object.bowtie_exe")
             entered_exe: None if the user didn't enter an executable; otherwise
                 whatever the user entered
             reason: FOR CURL ONLY: raise RuntimeError _immediately_ if Curl
@@ -349,7 +354,7 @@ class RailRnaErrors:
                                                             parameter)
                     )
             else:
-                var_to_set = exe
+                to_return = exe
         elif not is_exe(entered_exe):
             self.errors.append(
                     ('The executable "{0}" entered for {1} via "{2}" was '
@@ -358,7 +363,7 @@ class RailRnaErrors:
                                                                 parameter)
                 )
         else:
-            var_to_set = entered_exe
+            to_return = entered_exe
         if original_errors_size != len(self.errors) and reason:
             raise RuntimeError(('\n'.join(['%d) %s' % (i, error)
                                 for i, error
@@ -368,6 +373,7 @@ class RailRnaErrors:
                                 'removed from the pipeline, Curl need '
                                 'not be installed.').format(reason))
         self.checked_programs.add(program_name)
+        return to_return
 
     @staticmethod
     def add_args(parser):
@@ -450,11 +456,11 @@ class RailRnaLocal:
             ansible.aws_exe = base.aws_exe
             ansible.profile = base.profile
         elif manifest_url.is_curlable \
-             and 'Curl' not in base.checked_programs:
-             base.check_program('curl', 'Curl', '--curl_exe', base.curl_exe,
+            and 'Curl' not in base.checked_programs:
+            base.curl_exe = base.check_program('curl', 'Curl', '--curl_exe',
                                     entered_exe=base.curl_exe,
                                     reason='the manifest file is on the web')
-             ansible.curl_exe = base.curl_exe
+            ansible.curl_exe = base.curl_exe
         if not ansible.exists(manifest_url.to_url()):
             base.errors.append(('Manifest file ("--manifest") {0} '
                                 'does not exist. Check the URL and '
@@ -497,14 +503,14 @@ class RailRnaLocal:
                             ansible.profile = base.profile
                     elif filename_url.is_curlable \
                         and 'Curl' not in base.checked_programs:
-                            base.check_program('curl', 'Curl', '--curl_exe', 
-                                                base.curl_exe,
-                                                entered_exe=base.curl_exe,
-                                                reason=('at least one sample '
-                                                  'FASTA/FASTQ from the '
-                                                  'manifest file is on '
-                                                  'the web'))
-                            ansible.curl_exe = base.curl_exe
+                        base.curl_exe = base.check_program('curl', 'Curl',
+                                            '--curl_exe',
+                                            entered_exe=base.curl_exe,
+                                            reason=('at least one sample '
+                                              'FASTA/FASTQ from the '
+                                              'manifest file is on '
+                                              'the web'))
+                        ansible.curl_exe = base.curl_exe
                     if not ansible.exists(filename_url):
                         base.errors.append(('The file {0} from the manifest '
                                             'file {1} does not exist. Check '
@@ -618,7 +624,7 @@ class RailRnaCloud:
         base.check_s3(reason='Rail-RNA is running in cloud ("--cloud") mode')
 
         # Initialize possible options
-        instance_core_counts = {
+        base.instance_core_counts = {
             "m1.small"    : 1,
             "m1.large"    : 2,
             "m1.xlarge"   : 4,
@@ -630,7 +636,7 @@ class RailRnaCloud:
             "cc1.4xlarge" : 8
         }
 
-        instance_swap_allocations = {
+        base.instance_swap_allocations = {
             "m1.small"    : (2 *1024), #  1.7 GB
             "m1.large"    : (8 *1024), #  7.5 GB
             "m1.xlarge"   : (16*1024), # 15.0 GB
@@ -643,7 +649,7 @@ class RailRnaCloud:
         }
 
         '''Not currently in use, but may become important if there are
-        32- vs. 64-bit issues: instance_bits = {
+        32- vs. 64-bit issues: base.instance_bits = {
             "m1.small"    : 32,
             "m1.large"    : 64,
             "m1.xlarge"   : 64,
@@ -691,7 +697,7 @@ class RailRnaCloud:
                                  '"m1.xlarge", "c1.medium", "c1.xlarge", '
                                  '"m2.xlarge", "m2.2xlarge", "m2.4xlarge", '
                                  '"cc1.4xlarge"}, but {0} was entered.')
-        if master_instance_type not in instance_core_counts:
+        if master_instance_type not in base.instance_core_counts:
             base.errors.append(('Master instance type '
                                '("--master-instance-type") not valid. %s')
                                 % instance_type_message.format(
@@ -701,7 +707,7 @@ class RailRnaCloud:
         if core_instance_type is None:
             base.core_instance_type = base.master_instance_type
         else:
-            if core_instance_type not in instance_core_counts:
+            if core_instance_type not in base.instance_core_counts:
                 base.errors.append(('Core instance type '
                                     '("--core-instance-type") not valid. %s')
                                     % instance_type_message.format(
@@ -711,7 +717,7 @@ class RailRnaCloud:
         if task_instance_type is None:
             base.task_instance_type = base.master_instance_type
         else:
-            if task_instance_type not in instance_core_counts:
+            if task_instance_type not in base.instance_core_counts:
                 base.errors.append(('Task instance type '
                                     '("--task-instance-type") not valid. %s')
                                     % instance_type_message.format(
@@ -910,6 +916,112 @@ class RailRnaCloud:
                  'failure.'
         )
 
+    @staticmethod
+    def hadoop_debugging_steps(base):
+        return [
+            {
+                'ActionOnFailure' : base.action_on_failure,
+                'HadoopJarStep' : {
+                    'Args' : [
+                        ('s3://us-east-1.elasticmapreduce/libs/'
+                         'state-pusher/0.1/fetch')
+                    ],
+                    'Jar' : ('s3://us-east-1.elasticmapreduce/libs/'
+                             'script-runner/script-runner.jar')
+                },
+                'Name' : 'Set up Hadoop Debugging'
+            }
+        ]
+
+    @staticmethod
+    def bootstrap(base):
+        return [
+            {
+                'Name' : 'Allocate swap space',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        base.swap_allocation
+                    ],
+                    'Path' : 's3://elasticmapreduce/bootstrap-actions/add-swap'
+                }
+            },
+            {
+                'Name' : 'Configure Hadoop',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        '-s',
+                        'mapred.job.reuse.jvm.num.tasks=1',
+                        '-s',
+                        'mapred.tasktracker.reduce.tasks.maximum=8',
+                        '-s',
+                        'mapred.tasktracker.map.tasks.maximum=8',
+                        '-m',
+                        'mapred.map.tasks.speculative.execution=false',
+                        '-m',
+                        'mapred.reduce.tasks.speculative.execution=false'
+                    ],
+                    'Path' : ('s3://elasticmapreduce/bootstrap-actions/'
+                              'configure-hadoop')
+                }
+            }
+        ]
+
+    @staticmethod
+    def instances(base):
+        to_return = {
+            'HadoopVersion' : '1.0.3',
+            'InstanceGroups' : [
+                {
+                    'InstanceCount' : base.master_instance_count,
+                    'InstanceRole' : 'MASTER',
+                    'InstanceType': base.master_instance_type,
+                    'Name' : 'Master Instance Group'
+                },
+                {
+                    'InstanceCount' : base.core_instance_count,
+                    'InstanceRole' : 'CORE',
+                    'InstanceType': base.core_instance_type,
+                    'Name' : 'Core Instance Group'
+                },
+                {
+                    'InstanceCount' : base.task_instance_count,
+                    'InstanceRole' : 'MASTER',
+                    'InstanceType': base.task_instance_type,
+                    'Name' : 'Task Instance Group'
+                }
+            ],
+            'KeepJobFlowAliveWhenNoSteps': 'false',
+            'TerminationProtected': ('true' if base.termination_protected
+                                        else 'false')
+        }
+        if base.ec2_key_name is not None:
+            to_return['Ec2KeyName'] = base.ec2_key_name
+        if base.master_instance_bid_price is not None:
+            to_return['InstanceGroups'][0]['BidPrice'] \
+                = '%0.03f' % base.master_instance_bid_price
+            to_return['InstanceGroups'][0]['Market'] \
+                = 'SPOT'
+        else:
+            to_return['InstanceGroups'][0]['Market'] \
+                = 'ON_DEMAND'
+        if base.core_instance_bid_price is not None:
+            to_return['InstanceGroups'][1]['BidPrice'] \
+                = '%0.03f' % base.core_instance_bid_price
+            to_return['InstanceGroups'][1]['Market'] \
+                = 'SPOT'
+        else:
+            to_return['InstanceGroups'][1]['Market'] \
+                = 'ON_DEMAND'
+        if base.task_instance_bid_price is not None:
+            to_return['InstanceGroups'][2]['BidPrice'] \
+                = '%0.03f' % base.task_instance_bid_price
+            to_return['InstanceGroups'][2]['Market'] \
+                = 'SPOT'
+        else:
+            to_return['InstanceGroups'][2]['Market'] \
+                = 'ON_DEMAND'
+        return to_return
+
 class RailRnaPreprocess:
     """ Sets parameters relevant to just the preprocessing step of a job flow.
     """
@@ -946,9 +1058,45 @@ class RailRnaPreprocess:
                   'preprocessing faster but takes up more hard drive space.')
         )
 
+    @staticmethod
+    def protosteps(base, output_dir):
+        return [
+            {
+                'name' : 'Preprocess input reads',
+                'run' : ('preprocess.py --nucs-per-file={0} {1} '
+                         '--push={2} --ignore-first-token').format(
+                                                    base.nucleotides_per_file,
+                                                    '--gzip-output' if
+                                                    base.gzip_output else '',
+                                                    output_dir
+                                                )
+                'inputs' : base.manifest,
+                'output' : 'preprocess',
+                'inputformat' : (
+                        'org.apache.hadoop.mapred.lib.NLineInputFormat'
+                    ),
+                'taskx' : 0
+            }
+        ]
+
+    @staticmethod
+    def bootstrap():
+        return [
+            {
+                'Name' : 'PyPy',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        ('s3://rail-emr/bin/'
+                         'pypy-2.2.1-linux_x86_64-portable.tar.bz2')
+                    ],  
+                    'Path' : 's3://rail-emr/bootstrap/install-pypy.sh'
+                }
+            }
+        ]
+
 class RailRnaAlign:
     """ Sets parameters relevant to just the "align" job flow. """
-    def __init__(self, base, local=False, bowtie1_exe=None,
+    def __init__(self, base, cloud=False, bowtie1_exe=None,
         bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
         bowtie2_build_exe=None, bowtie2_idx='genome',
         bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
@@ -959,15 +1107,15 @@ class RailRnaAlign:
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         assembly='hg19', s3_ansible=None):
-        if local:
+        if not cloud:
             '''Programs and Bowtie indices should be checked only in local
             mode.'''
-            base.check_program('bowtie', 'Bowtie 1', '--bowtie1-exe',
-                                base.bowtie_exe, entered_exe=bowtie1_exe)
-            base.check_program('bowtie-build', 'Bowtie 1 Build',
-                                '--bowtie1-build-exe',
-                                base.bowtie1_build_exe,
-                                entered_exe=bowtie1_build_exe)
+            base.bowtie1_exe = base.check_program('bowtie', 'Bowtie 1',
+                                '--bowtie1-exe', entered_exe=bowtie1_exe)
+            base.bowtie1_build_exe = base.check_program('bowtie-build',
+                                            'Bowtie 1 Build',
+                                            '--bowtie1-build-exe',
+                                            entered_exe=bowtie1_build_exe)
             for extension in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', 
                                 '.rev.1.ebwt', '.rev.2.ebwt']:
                 index_file = bowtie1_idx + extension
@@ -979,12 +1127,13 @@ class RailRnaAlign:
                 elif not os.path.exists(index_file):
                     base.errors.append(('Bowtie 1 index file {0} does not '
                                         'exist.').format(index_file))
-            base.check_program('bowtie2', 'Bowtie 2', '--bowtie2-exe',
-                                base.bowtie2_exe, entered_exe=bowtie2_exe)
-            base.check_program('bowtie2-build', 'Bowtie 2 Build',
-                                '--bowtie2-build-exe',
-                                base.bowtie2_build_exe,
-                                entered_exe=bowtie2_build_exe)
+            base.bowtie1_idx = bowtie1_idx
+            base.bowtie2_exe = base.check_program('bowtie2', 'Bowtie 2',
+                                '--bowtie2-exe', entered_exe=bowtie2_exe)
+            base.bowtie2_build_exe = base.check_program('bowtie-build',
+                                            'Bowtie 2 Build',
+                                            '--bowtie2-build-exe',
+                                            entered_exe=bowtie2_build_exe)
             for extension in ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', 
                                 '.rev.1.bt2', '.rev.2.bt2']:
                 index_file = bowtie2_idx + extension
@@ -996,11 +1145,12 @@ class RailRnaAlign:
                 elif not os.path.exists(index_file):
                     base.errors.append(('Bowtie 2 index file {0} does not '
                                         'exist.').format(index_file))
-            base.check_program('samtools', 'SAMTools', '--samtools-exe',
-                                base.samtools_exe, entered_exe=samtools_exe)
-            base.check_program('bedToBigBed', 'BedToBigBed',
-                                '--bedtobigbed-exe', base.bedtobigbed_exe,
-                                entered_exe=bedtobigbed_exe)
+            base.bowtie2_idx = bowtie2_idx
+            base.samtools_exe = base.check_program('samtools', 'SAMTools',
+                                '--samtools-exe', entered_exe=samtools_exe)
+            base.bedtobigbed_exe = base.check_program('bedToBigBed', 
+                                    'BedToBigBed', '--bedtobigbed-exe',
+                                    entered_exe=bedtobigbed_exe)
         else:
             # Cloud mode; check S3 for genome if necessary
             assert s3_ansible is not None
@@ -1013,6 +1163,16 @@ class RailRnaAlign:
                 elif not s3_ansible.exists(assembly):
                     base.errors.append('Bowtie index archive was not found '
                                        'on S3 at "{0}".'.format(assembly))
+            # Set up cloud params
+            base.bowtie1_idx = '/mnt/index/genome'
+            base.bowtie2_idx = '/mnt/index/genome'
+            base.bedtobigbed_exe='/mnt/bin/bedToBigBed'
+            base.samtools_exe='samtools'
+            base.bowtie1_exe='bowtie'
+            base.bowtie2_exe='bowtie2'
+            base.bowtie1_build_exe='bowtie-build'
+            base.bowtie2_build_exe='bowtie2-build'
+
         # Assume bowtie2 args are kosher for now
         base.bowtie2_args = bowtie2_args
         if not (isinstance(genome_partition_length, int) and
@@ -1274,8 +1434,359 @@ class RailRnaAlign:
         )
 
     @staticmethod
-    def pseudosteps(input_dir, intermediate_dir, output_dir, step_dir):
+    def protosteps(base, input_dir, cloud=False):
+        manifest = ('/mnt/MANIFEST' if cloud else base.manifest)
+        verbose = ('--verbose' if base.verbose else '')
+        keep_alive = ('--keep-alive' if cloud else '')
+        return [  
+            {
+                'name' : 'Align reads to genome',
+                'run' : ('align.py --bowtie-idx={0} --bowtie2_idx={1}'
+                         '--bowtie2-exe={2}'
+                         '--exon-differentials --partition-length={3}'
+                         '--manifest={4} {5}').format(base.bowtie1_idx,
+                                                        base.bowtie2_idx,
+                                                        base.bowtie2_exe,
+                                                        base.partition_length,
+                                                        manifest,
+                                                        verbose),
+                'inputs' : [input_dir],
+                'no_input_prefix' : True,
+                'output' : 'align_reads',
+                'taskx' : 0,
+                'multiple_outputs' : True
+            },
+            {
+                'name' : 'Aggregate duplicate read sequences',
+                'run' : 'sum.py --type 3 --value-count 2',
+                'inputs' : [path_join(cloud, 'align_reads', 'readletize')]
+                'output' : 'combine_sequences',
+                'taskx' : 4,
+                'part' : 'k1,1'
+                'keys' : 1
+            },
+            {
+                'name' : 'Segment reads into readlets',
+                'run' : ('readletize.py --max_readlet_size={0} '
+                         '--readlet-interval={1} '
+                         '--capping-multiplier={2}').format(
+                                    base.max_readlet_size,
+                                    base.readlet_interval,
+                                    base.cap_size_multiplier
+                                ),
+                'inputs' : [path_join(cloud, 'align_reads', 'readletize')]
+                'output' : 'combine_sequences',
+                'taskx' : 4,
+                'part' : 'k1,1'
+                'keys' : 1
+            },
+            {
+                'name' : 'Aggregate duplicate readlet sequences',
+                'run' : 'sum.py --type 3',
+                'inputs' : ['readletize']
+                'output' : 'combine_subsequences',
+                'taskx' : 4,
+                'part' : 'k1,1'
+                'keys' : 1
+            },
+            {
+                'name' : 'Align unique readlets to genome',
+                'run' : ('align_readlets.py --bowtie-idx={0} '
+                         '--bowtie-exe={1} {2}'
+                         '-- -t --sam-nohead --startverbose '
+                         '-v 0 -a -m 80').format(
+                                    base.bowtie_idx,
+                                    base.bowtie_exe,
+                                    verbose
+                                ),
+                'inputs' : [path_join(cloud, 'align_reads', 'readletize')]
+                'output' : 'combine_sequences',
+                'taskx' : 4,
+                'part' : 'k1,1'
+                'keys' : 1
+            },
+            {
+                'name' : 'Search for introns using readlet alignments',
+                'run' : ('intron_search.py --bowtie-idx={0} '
+                         '--partition-length={1} --max-intron-size={2}'
+                         '--min-intron-size={3} --min-exon-size={4}'
+                         '--search-window-size={5} '
+                         '--motif-radius={6} {7}').format(base.bowtie1_idx,
+                                                        base.partition_length,
+                                                        base.max_intron_size,
+                                                        base.min_intron_size,
+                                                        base.min_exon_size,
+                                                base.motif_search_window_size,
+                                                        base.motif_radius,
+                                                        verbose),
+                'inputs' : ['align_readlets'],
+                'output' : 'intron_search',
+                'taskx' : 4,
+                'part' : 'k1,1'
+                'keys' : 1
+            },
+            {
+                'name' : 'Enumerate possible intron cooccurrences on readlets',
+                'run' : ('intron_config.py '
+                         '--readlet-size={0} {1}').format(
+                                                        base.max_readlet_size,
+                                                        verbose
+                                                    ),
+                'inputs' : ['intron_search'],
+                'output' : 'intron_config',
+                'taskx' : 1,
+                'part' : 'k1,2'
+                'keys' : 4
+            },
+            {
+                'name' : 'Get transcriptome elements for readlet realignment',
+                'run' : ('intron_fasta.py --bowtie-idx={0} {1}').format(
+                                                        base.bowtie1_idx,
+                                                        verbose
+                                                    ),
+                'inputs' : ['intron_config'],
+                'output' : 'intron_fasta',
+                'taskx' : 8,
+                'part' : 'k1,4',
+                'keys' : 4
+            },
+            {
+                'name' : 'Build index of transcriptome elements',
+                'run' : ('intron_index.py --bowtie-build-exe={0}'
+                         '--out={1} {2}').format(base.bowtie1_build_exe,
+                                                 path_join(cloud,
+                                                            output_dir,
+                                                            index),
+                                                 keep_alive),
+                'inputs' : ['intron_fasta'],
+                'output' : 'intron_index',
+                'taskx' : None,
+                'part' : 'k1,1',
+                'keys' : 1
+            },
+            {
+                'name' : 'Align readlets to transcriptome elements',
+                'run' : ('align_readlets.py --bowtie-idx={0} '
+                         '--bowtie-exe={1} {2} -- -t --sam-nohead '
+                         '--startverbose -v -a -m 80').format(
+                                                        'intron/intron'
+                                                        if cloud else
+                                                        path_join(cloud,
+                                                            output_dir,
+                                                            index,
+                                                            intron),
+                                                        base.bowtie1_exe,
+                                                        verbose
+                                                    ),
+                'inputs' : ['combine_subsequences'],
+                'output' : 'realign_readlets',
+                'taskx' : 4,
+                'archives' : ('s3n://rail-experiments/geuvadis_again/index/'
+                              'intron.tar.gz#intron'),
+                'part' : 'k1,1',
+                'keys' : 1,
+            },
+            {
+                'name' : 'Finalize intron cooccurrences on reads',
+                'run' : ('cointron_search.py {0}').format(verbose)
+                'inputs' : ['realign_readlets', 'align_readlets'],
+                'output' : 'cointron_search',
+                'taskx' : 4,
+                'part' : 'k1,1',
+                'keys' : 1
+            },
+            {
+                'name' : 'Align reads to transcriptome elements',
+                'run' : ('realign_reads.py --original-idx={0} '
+                         '--bowtie2-exe={1} --partition-length={2} '
+                         '--exon-differentials --manifest={3} {4} '
+                         '-- --end-to-end').format(base.bowtie1_idx,
+                                                    base.bowtie2_exe,
+                                                    base.partition_length,
+                                                    manifest,
+                                                    verbose)
+                'inputs' : ['cointron_fasta'],
+                'output' : 'realign_reads',
+                'taskx' : 4,
+                'part' : 'k1,1',
+                'keys' : 1,
+                'multiple_outputs' : True
+            },
+            {
+                'name' : 'Merge exon differentials at same genomic positions',
+                'run' : 'sum.py',
+                'inputs' : [path_join(cloud, 'align_reads', 'exon_diff'),
+                            path_join(cloud, 'realign_reads', 'exon_diff')],
+                'output' : 'collapse',
+                'taskx' : 8,
+                'part' : 'k1,3',
+                'keys' : 3
+            },
+            {
+                'name' : 'Compile sample coverages from exon differentials',
+                'run' : ('coverage_pre.py --bowtie-idx={0} '
+                         '--partition-stats').format(base.bowtie1_idx),
+                'inputs' : ['collapse'],
+                'output' : 'coverage_pre',
+                'taskx' : 8,
+                'part' : 'k1,2',
+                'keys' : 3,
+                'multiple_outputs' : True
+            },
+            {
+                'name' : 'Write bigbeds with exome coverage by sample',
+                'run' : ('coverage.py --bowtie-idx={0} --percentile={1}'
+                         '--out={2} --bigbed-exe={3} '
+                         '--manifest={4} {5}'.format(base.bowtie_idx,
+                                                     base.normalize_percentile,
+                                                     path_join(cloud,
+                                                        output_dir,
+                                                        'coverage'),
+                                                     base.bigbed_exe,
+                                                     manifest,
+                                                     verbose)
+                'inputs' : [path_join(cloud, 'coverage_pre', 'coverage')]
+                'output' : 'coverage',
+                'taskx' : 1,
+                'part' : 'k1,1',
+                'keys' : 3
+            },
+            {
+                'name' : 'Write normalization factors for sample coverages',
+                'run' : 'coverage_post --out={0} --manifest={1}'.format(
+                                                        path_join(cloud,
+                                                                  output_dir,
+                                                                  'normalize'),
+                                                        manifest
+                                                    )
+                'inputs' : ['coverage'],
+                'output' : 'coverage_post',
+                'taskx' : None,
+                'part' : 'k1,1',
+                'keys' : 2
+            },
+            {
+                'name' : 'Aggregate intron and index results by sample',
+                'run' : 'bed_pre.py',
+                'inputs' : [path_join(cloud, 'realign_reads', 'bed'),
+                            path_join(cloud, 'align_reads', 'bed')],
+                'output' : 'bed_pre',
+                'taskx' : 8,
+                'part' : 'k1,6',
+                'keys' : 6
+            },
+            {
+                'name' : 'Write beds with intron and indel results by sample',
+                'run' : ('bed.py --bowtie-idx={0} --out={1} '
+                         '--manifest={2} --bed-basename={3}').format(
+                                                        base.bowtie1_idx,
+                                                        path_join(cloud,
+                                                            output_dir,
+                                                            'bed'),
+                                                        manifest,
+                                                        base.bed_basename
+                                                    ),
+                'inputs' : ['bed_pre'],
+                'output' : 'bed',
+                'taskx' : 1,
+                'part' : 'k1,2',
+                'keys' : 4,
+            },
+            {
+                'name' : 'Write bams with alignments by sample',
+                'run' : ('bam.py --out={0} --bowtie-idx={1} '
+                         '--samtools-exe={2} --bam-basename={3} '
+                         '--manifest={4} {5}').format(
+                                        path_join(cloud, output_dir, 'bam'),
+                                        base.bowtie1_idx,
+                                        base.samtools_exe,
+                                        base.bam_basename,
+                                        manifest,
+                                        keep_alive
+                                    ),
+                'inputs' : [path_join(cloud, 'align_reads', 'end_to_end_sam'),
+                            path_join(cloud, 'realign_reads', 'splice_sam')],
+                'output' : 'bam'
+                'taskx' : 1,
+                'part' : 'k1,1',
+                'keys' : 3
+            }]
 
+    @staticmethod
+    def bootstrap(base):
+        return [
+            {
+                'Name' : 'Install PyPy',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        ('s3://rail-emr/bin/'
+                         'pypy-2.2.1-linux_x86_64-portable.tar.bz2')
+                    ],
+                    'Path' : 's3://rail-emr/bootstrap/install-pypy.sh'
+                }
+            },
+            {
+                'Name' : 'Install Bowtie 1',
+                'ScriptBootstrapAction' : {
+                    'Args' : [],
+                    'Path' : 's3://rail-emr/bootstrap/install-bowtie.sh'
+                }
+            },
+            {
+                'Name' : 'Install Bowtie 2',
+                'ScriptBootstrapAction' : {
+                    'Args' : [],
+                    'Path' : 's3://rail-emr/bootstrap/install-bowtie2.sh'
+                }
+            },
+            {
+                'Name' : 'Install BedToBigBed',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        '/mnt/bin'
+                    ],
+                    'Path' : 's3://rail-emr/bootstrap/install-kenttools.sh'
+                }
+            },
+            {
+                'Name' : 'Install SAMTools',
+                'ScriptBootstrapAction' : {
+                    'Args' : [],
+                    'Path' : 's3://rail-emr/bootstrap/install-samtools.sh'
+                }
+            },
+            {
+                'Name' : 'Install Rail-RNA',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        's3://rail-emr/bin/rail-rna-0.1.0.tar.gz',
+                        '/mnt'
+                    ],
+                    'Path' : 's3://rail-emr/bootstrap/install-rail.sh'
+                }
+            },
+            {
+                'Name' : 'Transfer Bowtie indexes to nodes',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        '/mnt',
+                        base.assembly
+                    ],
+                    'Path' : 's3://rail-emr/bootstrap/s3cmd_s3_tarball.sh'
+                }
+            },
+            {
+                'Name' : 'Transfer manifest file to nodes',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        base.manifest,
+                        '/mnt',
+                        'MANIFEST'
+                    ],
+                    'Path' : 's3://rail-emr/bootstrap/s3cmd_s3.sh'
+                }
+            }
+        ]
 
 class RailRnaLocalPreprocessJson:
     """ Constructs JSON for local mode + preprocess job flow. """
@@ -1302,23 +1813,7 @@ class RailRnaLocalPreprocessJson:
         steps = self._json_serial['Steps']
         step_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 
                                                     'steps'))
-        steps.append(
-            step(name='Preprocess input reads',
-                    tasks=0,
-                    inputs=base.manifest,
-                    output=os.path.join(base_intermediate_dir, 'preprocess'),
-                    mapper=' '.join([sys.executable, 
-                                        os.path.join(step_dir, 
-                                            'preprocess.py'),
-                                        '--nucs-per-file=%d'
-                                        % base.nucleotides_per_input,
-                                        '--gzip-output'
-                                        if base.gzip_input else '',
-                                        '--ignore-first-token',
-                                        '--push=',
-                                        base.output_dir])
-                )
-            )
+
     
     @property
     def json_serial(self):
