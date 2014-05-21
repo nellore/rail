@@ -55,7 +55,7 @@ class RecordHandler(object):
             assert self.outfn is not None
             dest_url = self.push_destination.to_url()
             print >> sys.stderr, "  Pushing '%s' to '%s' ..." % (self.outfn, dest_url)
-            if self.push_destination.isLocal():
+            if self.push_destination.is_local:
                 if not os.path.exists(dest_url):
                     print >> sys.stderr, "    Making local destination directory: %s" % dest_url
                     os.mkdir(dest_url)
@@ -252,7 +252,7 @@ def go(args):
             input_url_1 = Url(fn1)
             if input_url_1.is_local:
                 mover.get(input_url_1)
-                fn1 = os.path.basename(fn1)
+                fn1 = os.path.abspath(fn1)
                 assert os.path.exists(fn1)
                 if not args.keep:
                     to_delete.append(fn1)

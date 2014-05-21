@@ -12,21 +12,6 @@ are included.
 The descriptions of command-line arguments contained here assume that a
 calling script has the command-line options "--local", "--cloud",
 "--preprocess", "--align", and "--all".
-
-TO PUT IN rail-rna.py:
-
-modes = set(['local', 'cloud'])
-        # Implement Hadoop mode after paper submission
-        if mode not in modes:
-            self.errors.append('Mode ("--mode") must be one of '
-                               '{{"local", "cloud"}}, but {0} was '
-                               'entered.'.format(mode))
-        self.mode = mode
-        job_flows = set(['preprocess', 'align', 'all'])
-        if job_flow not in job_flows:
-            self.errors.append('Job flow ("--job-flows") must be one of '
-                               '{{"preprocess", "align", "all"}}, but {0} was '
-                               'entered.'.format(mode))
 """
 
 import os
@@ -44,6 +29,7 @@ import tempfile
 import shutil
 from dooplicity.tools import which, is_exe, path_join
 from argparse import SUPPRESS
+import sys
 
 def step(name, inputs, output, mapper='cat', reducer='cat', 
     action_on_failure='TERMINATE_JOB_FLOW',
@@ -76,8 +62,10 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
         }
 
     }
-    to_return.extend(['-D', 'mapred.reduce.tasks=%d' % tasks])
-    if partioner_options is not None and key_fields is not None:
+    to_return['HadoopJarStep']['Args'].extend(
+            ['-D', 'mapred.reduce.tasks=%d' % tasks]
+        )
+    if partitioner_options is not None and key_fields is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-D', 'mapred.text.key.partitioner.options=-%s'
                             % partitioner_options,
@@ -96,9 +84,8 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
             '-partitioner',
             'org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner',
         ])
-    for an_input in inputs:
-        to_return['HadoopJarStep']['Args'].extend([
-                '-input', an_input.strip()
+    to_return['HadoopJarStep']['Args'].extend([
+                '-input', ','.join([an_input.strip() for an_input in inputs])
             ])
     to_return['HadoopJarStep']['Args'].extend([
             '-output', output,
@@ -106,15 +93,16 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
             '-reducer', reducer
         ])
     if multiple_outputs:
-        to_return.extend([
+        to_return['HadoopJarStep']['Args'].extend([
                 '-outputformat', 'edu.jhu.cs.MultipleOutputFormat'
             ])
-    if input_format is not None:
-        to_return.extend([
-                '-intputformat', inputformat
+    if inputformat is not None:
+        to_return['HadoopJarStep']['Args'].extend([
+                '-inputformat', inputformat
             ])
     return to_return
 
+# TODO: Flesh out specification of protostep and migrate to Dooplicity
 def steps(protosteps, action_on_failure, jar, step_dir, 
             reducer_count, intermediate_dir, unix=False):
     """ Turns list with "protosteps" into well-formed StepConfig list.
@@ -166,16 +154,18 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                                                     protostep['output'])
                                     if 'no_output_prefix' not in
                                     protostep else protostep['output']),
-                            mapper=(path_join(unix, 'pypy' if unix
-                                    else sys.executable, step_dir,
-                                                    protostep['run'])
+                            mapper=' '.join(['pypy' if unix
+                                    else sys.executable, 
+                                    path_join(unix, step_dir,
+                                                    protostep['run'])])
                                     if 'keys' not in protostep
-                                    else 'cat'),
-                            reducer=(path_join(unix, 'pypy' if unix
-                                     else sys.executable, step_dir,
-                                                    protostep['run'])
+                                    else 'cat',
+                            reducer=' '.join(['pypy' if unix
+                                    else sys.executable, 
+                                    path_join(unix, step_dir,
+                                                    protostep['run'])]) 
                                     if 'keys' in protostep
-                                    else 'cat'),
+                                    else 'cat',
                             action_on_failure=action_on_failure,
                             jar=jar,
                             tasks=(reducer_count * protostep['taskx']
@@ -203,7 +193,8 @@ class RailRnaErrors:
     """
     def __init__(self, manifest, output_dir,
             intermediate_dir='./intermediate', force=False, aws_exe=None,
-            profile='default', region='us-east-1', verbose=False
+            profile='default', region='us-east-1', verbose=False,
+            curl_exe=None
         ):
         '''Store all errors uncovered in a list, then output. This prevents the
         user from having to rerun Rail-RNA to find what else is wrong with
@@ -311,23 +302,25 @@ class RailRnaErrors:
                                 )
         if len(self.errors) != original_errors_size:
             if reason:
-                raise RuntimeError(('\n'.join(['%d) %s' % (i, error)
+                raise RuntimeError((('\n'.join(['%d) %s' % (i+1, error)
                                     for i, error
-                                    in enumerate(self.errors)]) + 
+                                    in enumerate(self.errors)]) 
+                                    if len(errors) > 1 else errors[0]) + 
                                     '\n\nNote that the AWS CLI is needed '
                                     'because {0}. If all dependence on S3 in '
                                     'the pipeline is removed, the AWS CLI '
                                     'need not be installed.').format(reason))
             else:
-                raise RuntimeError(('\n'.join(['%d) %s' % (i, error)
+                raise RuntimeError((('\n'.join(['%d) %s' % (i+1, error)
                                     for i, error
-                                    in enumerate(self.errors)]) + 
+                                    in enumerate(self.errors)])
+                                    if len(errors) > 1 else errors[0]) + 
                                     '\n\nIf all dependence on S3 in the '
                                     'pipeline is removed, the AWS CLI need '
                                     'not be installed.'))
         self.checked_programs.add('AWS CLI')
 
-    def check_program(exe, program_name, parameter,
+    def check_program(self, exe, program_name, parameter,
                         entered_exe=None, reason=None):
         """ Checks if program in PATH or if user specified it properly.
 
@@ -367,9 +360,10 @@ class RailRnaErrors:
         else:
             to_return = entered_exe
         if original_errors_size != len(self.errors) and reason:
-            raise RuntimeError(('\n'.join(['%d) %s' % (i, error)
+            raise RuntimeError((('\n'.join(['%d) %s' % (i+1, error)
                                 for i, error
-                                in enumerate(self.errors)]) + 
+                                in enumerate(self.errors)])
+                                if len(errors) > 1 else errors[0]) + 
                                 '\n\nNote that Curl is needed because {0}.'
                                 ' If all dependence on web resources is '
                                 'removed from the pipeline, Curl need '
@@ -421,7 +415,7 @@ class RailRnaLocal:
         """ base: instance of RailRnaErrors """
         # Initialize ansible for easy checks
         ansible = ab.Ansible()
-        if not ab.Url(base,intermediate_dir).is_local:
+        if not ab.Url(base.intermediate_dir).is_local:
             base.errors.append(('Intermediate directory must be local '
                                 'when running Rail-RNA in local ("--local") '
                                 'mode, but {0} was entered.').format(
@@ -513,7 +507,7 @@ class RailRnaLocal:
                                                   'manifest file is on '
                                                   'the web'))
                             ansible.curl_exe = base.curl_exe
-                        if not ansible.exists(filename_url):
+                        if not ansible.exists(filename):
                             base.errors.append(('The file {0} from the '
                                                 'manifest file {1} does not '
                                                 'exist. Check the URL and try '
@@ -558,9 +552,7 @@ class RailRnaLocal:
         parser.add_argument(
             '-m', '--manifest', type=str, required=True,
             help='Myrna-style manifest file listing sample FASTAs and/or ' \
-                 'FASTQs to analyze. When running Rail-RNA in local ' \
-                 '("--local") mode, this file must be on the local ' \
-                 'filesystem. Each line of the file is ' \
+                 'FASTQs to analyze. Each line of the file is ' \
                  'is in one of two formats: ' \
                  '\n\n(for unpaired input reads)\n' \
                  '<URL><TAB><MD5 checksum or "0" if not included><TAB>' \
@@ -587,7 +579,7 @@ class RailRnaLocal:
                  'intermediate files after a job flow is completed.'
         )
         parser.add_argument(
-            '--num-processes', type=int, required=False,
+           '-p', '--num-processes', type=int, required=False,
             default=None,
             help=('Number of processes to run simultaneously. This defaults '
                   'to the number of cores on the machine less 1 if more than '
@@ -891,12 +883,59 @@ class RailRnaCloud:
         base.termination_protected = termination_protected
 
     @staticmethod
-    def add_args(basic_group, advanced_group=None):
-        basic_group.add_argument('--name', type=str, required=False,
+    def add_args(parser, usage=None):
+        """ usage: argparse.SUPPRESS if advanced options should be suppressed;
+                else None
+        """
+        parser.add_argument('--name', type=str, required=False,
             default='Rail-RNA Job Flow',
             help='Name of job flow on Elastic MapReduce'
         )
-        basic_group.add_argument('--task-instance-count', type=str,
+        parser.add_argument('--log-uri', type=str, required=False,
+            default=None,
+            help=(('Directory on S3 in which to store Hadoop logs. Defaults '
+                  'to "logs" subdirectory of output directory.')
+                    if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--ami-version', type=str, required=False,
+            default='2.4.2',
+            help=('Version of Amazon Linux AMI to use on EC2.'
+                    if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--visible-to-all-users', action='store_const',
+            const=True,
+            default=False,
+            help=('Makes EC2 cluster visible to all IAM users within the '
+                  'EMR CLI' if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--action-on-failure', type=str, required=False,
+            default='TERMINATE_JOB_FLOW',
+            help=('Specifies what action to take if a job flow fails on a '
+                  'given step. Options are {"TERMINATE_JOB_FLOW", ' 
+                  '"CANCEL_AND_WAIT", "CONTINUE", "TERMINATE_CLUSTER"}.'
+                    if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--hadoop-jar', type=str, required=False,
+            default='/home/hadoop/contrib/streaming/' \
+                    'hadoop-streaming-1.0.3.jar',
+            help=('Hadoop Streaming Java ARchive to use. Controls version '
+                  'of Hadoop Streaming.' if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--master-instance-count', type=str,
+            required=False,
+            default=1,
+            help=('Number of master instances. A master instance helps manage '
+                  'the cluster, tracking the status of each task.'
+                  if usage is None else SUPPRESS)
+        )
+        parser.add_argument('-c', '--core-instance-count', type=str,
+            required=False,
+            default=1,
+            help=('Number of core instances. A core instance runs Hadoop '
+                  'maps and reduces and stores intermediate data.'
+                  if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--task-instance-count', type=str,
             required=False,
             default=0,
             help=('Number of task instances. A task instance runs Hadoop '
@@ -905,118 +944,72 @@ class RailRnaCloud:
                   'the user loses spot instances because her bid price '
                   'fell below market value, her job flow will not fail.')
         )
-        basic_group.add_argument('--core-instance-bid-price', type=str,
+        parser.add_argument('--master-instance-bid-price', type=str,
+            required=False,
+            default=None,
+            help=('Bid price for master instances (in dollars/hour). Invoke '
+                  'only if running master instances as spot instances.'
+                  if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--core-instance-bid-price', type=str,
             required=False,
             default=None,
             help=('Bid price for core instances (in dollars/hour). Invoke '
                   'only if running core instances as spot instances.')
         )
-        basic_group.add_argument('--task-instance-bid-price', type=str,
+        parser.add_argument('--task-instance-bid-price', type=str,
             required=False,
             default=None,
             help=('Bid price for each task instance (in dollars/hour). Invoke '
                   'only if running task instances as spot instances.')
         )
-        basic_group.add_argument('--region', type=str,
+        parser.add_argument('--master-instance-type', type=str,
+            required=False,
+            default='c1.xlarge',
+            help=('Master instance type. c1.xlarge is most cost-effective '
+                  'across the board for Rail-RNA.'
+                  if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--core-instance-type', type=str,
+            required=False,
+            default=None,
+            help=('Core instance type. c1.xlarge seems most cost-effective '
+                  'across the board for Rail-RNA. Defaults to master '
+                  'instance type if left unspecified.'
+                  if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--task-instance-type', type=str,
+            required=False,
+            default=None,
+            help=('Task instance type. c1.xlarge seems most cost-effective '
+                  'across the board for Rail-RNA. Defaults to master '
+                  'instance type if left unspecified.'
+                  if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--ec2-key-name', type=str,
+            required=False,
+            default=None,
+            help=('Name of key pair for connecting to EC2 instances via, '
+                  'for example, SSH. May be useful for debugging.'
+                  if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--keep-alive', type=str,
+            required=False,
+            default=False,
+            help=('Keeps EC2 cluster alive after job flow is completed.'
+                  if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--termination-protected', type=str,
+            required=False,
+            default=False,
+            help=('Protects cluster from termination in case of job flow ' 
+                  'failure.' if usage is None else SUPPRESS)
+        )
+        parser.add_argument('--region', type=str,
             required=False,
             default='us-east-1',
             help='Amazon data center in which to run Elastic MapReduce job.'
         )
-        if advanced_group is not None:
-            advanced_group.add_argument('--log-uri', type=str, required=False,
-                default=None,
-                help=('Directory on S3 in which to store Hadoop logs. '
-                      'Defaults to "logs" subdirectory of output directory.')
-            )
-            advanced_group.add_argument('--ami-version', type=str,
-                required=False,
-                default='2.4.2',
-                help='Version of Amazon Linux AMI to use on EC2.'
-            )
-            advanced_group.add_argument('--visible-to-all-users',
-                action='store_const',
-                const=True,
-                default=False,
-                help='Makes EC2 cluster visible to all IAM users within the ' \
-                     'EMR CLI'
-            )
-            advanced_group.add_argument('--action-on-failure', type=str,
-                required=False,
-                default='TERMINATE_JOB_FLOW',
-                help='Specifies what action to take if a job flow fails on ' \
-                     'a given step. Options are {"TERMINATE_JOB_FLOW", ' \
-                     '"CANCEL_AND_WAIT", "CONTINUE", "TERMINATE_CLUSTER"}.'
-            )
-            advanced_group.add_argument('--hadoop-jar', type=str,
-                required=False,
-                default=('/home/hadoop/contrib/streaming/'
-                         'hadoop-streaming-1.0.3.jar'),
-                help='Hadoop Streaming Java ARchive to use. Controls ' \
-                     'version of Hadoop Streaming.'
-            )
-            advanced_group.add_argument('--master-instance-count', type=str,
-                required=False,
-                default=1,
-                usage=usage,
-                help=('Number of master instances. A master instance helps '
-                      'manage the cluster, tracking the status of each task.')
-            )
-            advanced_group.add_argument('-c', '--core-instance-count',
-                type=str,
-                required=False,
-                default=1,
-                usage=usage,
-                help=('Number of core instances. A core instance runs Hadoop '
-                      'maps and reduces and stores intermediate data.')
-            )
-            advanced_group.add_argument('--master-instance-bid-price',
-                type=str,
-                required=False,
-                default=None,
-                usage=usage,
-                help=('Bid price for master instances (in dollars/hour). '
-                      'Invoke only if running master instances as spot '
-                      'instances.')
-            )
-            advanced_group.add_argument('--master-instance-type', type=str,
-                required=False,
-                default='c1.xlarge',
-                usage=usage,
-                help=('Master instance type. c1.xlarge is most cost-effective '
-                      'across the board for Rail-RNA.')
-            )
-            advanced_group.add_argument('--core-instance-type', type=str,
-                required=False,
-                default=None,
-                usage=usage,
-                help=('Core instance type. c1.xlarge is most cost-effective '
-                      'across the board for Rail-RNA. Defaults to master '
-                      'instance type if left unspecified.')
-            )
-            advanced_group.add_argument('--task-instance-type', type=str,
-                required=False,
-                default=None,
-                help=('Task instance type. c1.xlarge is most cost-effective '
-                      'across the board for Rail-RNA. Defaults to master '
-                      'instance type if left unspecified.')
-            )
-            advanced_group.add_argument('--ec2-key-name', type=str,
-                reqired=False,
-                default=None,
-                help=('Name of key pair for connecting to EC2 instances via, '
-                      'for example, SSH. May be useful for debugging.')
-            )
-            advanced_group.add_argument('--keep-alive', type=str,
-                required=False,
-                default=False,
-                help='Keeps EC2 cluster alive after job flow is completed.'
-            )
-            advanced_group.add_argument('--termination-protected', type=str,
-                required=False,
-                default=False,
-                help='Protects cluster from termination in case of job flow ' \
-                     'failure.'
-            )
 
     @staticmethod
     def hadoop_debugging_steps(base):
@@ -1032,6 +1025,22 @@ class RailRnaCloud:
                              'script-runner/script-runner.jar')
                 },
                 'Name' : 'Set up Hadoop Debugging'
+            }
+        ]
+
+    @staticmethod
+    def misc_steps(base):
+        return [
+            {
+                'ActionOnFailure' : base.action_on_failure,
+                'HadoopJarStep' : {
+                    'Args' : [
+                        '--src,s3://rail-emr/index/hg19_UCSC.tar.gz',
+                        '--dest,hdfs:///index/'
+                    ],
+                    'Jar' : '/home/hadoop/lib/emr-s3distcp-1.0.jar'
+                },
+                'Name' : 'Copy Bowtie indexes from S3 to HDFS'
             }
         ]
 
@@ -1070,6 +1079,7 @@ class RailRnaCloud:
 
     @staticmethod
     def instances(base):
+        assert base.master_instance_count >= 1
         to_return = {
             'HadoopVersion' : '1.0.3',
             'InstanceGroups' : [
@@ -1078,26 +1088,12 @@ class RailRnaCloud:
                     'InstanceRole' : 'MASTER',
                     'InstanceType': base.master_instance_type,
                     'Name' : 'Master Instance Group'
-                },
-                {
-                    'InstanceCount' : base.core_instance_count,
-                    'InstanceRole' : 'CORE',
-                    'InstanceType': base.core_instance_type,
-                    'Name' : 'Core Instance Group'
-                },
-                {
-                    'InstanceCount' : base.task_instance_count,
-                    'InstanceRole' : 'MASTER',
-                    'InstanceType': base.task_instance_type,
-                    'Name' : 'Task Instance Group'
                 }
             ],
             'KeepJobFlowAliveWhenNoSteps': 'false',
             'TerminationProtected': ('true' if base.termination_protected
                                         else 'false')
         }
-        if base.ec2_key_name is not None:
-            to_return['Ec2KeyName'] = base.ec2_key_name
         if base.master_instance_bid_price is not None:
             to_return['InstanceGroups'][0]['BidPrice'] \
                 = '%0.03f' % base.master_instance_bid_price
@@ -1106,22 +1102,40 @@ class RailRnaCloud:
         else:
             to_return['InstanceGroups'][0]['Market'] \
                 = 'ON_DEMAND'
-        if base.core_instance_bid_price is not None:
-            to_return['InstanceGroups'][1]['BidPrice'] \
-                = '%0.03f' % base.core_instance_bid_price
-            to_return['InstanceGroups'][1]['Market'] \
-                = 'SPOT'
-        else:
-            to_return['InstanceGroups'][1]['Market'] \
-                = 'ON_DEMAND'
-        if base.task_instance_bid_price is not None:
-            to_return['InstanceGroups'][2]['BidPrice'] \
-                = '%0.03f' % base.task_instance_bid_price
-            to_return['InstanceGroups'][2]['Market'] \
-                = 'SPOT'
-        else:
-            to_return['InstanceGroups'][2]['Market'] \
-                = 'ON_DEMAND'
+        if base.core_instance_count:
+            to_return['InstanceGroups'].append(
+                    {
+                        'InstanceCount' : base.core_instance_count,
+                        'InstanceRole' : 'CORE',
+                        'InstanceType': base.core_instance_type,
+                        'Name' : 'Core Instance Group'
+                    }
+                )
+            if base.core_instance_bid_price is not None:
+                to_return['InstanceGroups'][1]['BidPrice'] \
+                    = '%0.03f' % base.core_instance_bid_price
+                to_return['InstanceGroups'][1]['Market'] \
+                    = 'SPOT'
+            else:
+                to_return['InstanceGroups'][1]['Market'] \
+                    = 'ON_DEMAND'
+        if base.task_instance_count:
+            to_return['InstanceGroups'].append(
+                    {
+                        'InstanceCount' : base.task_instance_count,
+                        'InstanceRole' : 'TASK',
+                        'InstanceType': base.task_instance_type,
+                        'Name' : 'Task Instance Group'
+                    }
+                )
+            if base.task_instance_bid_price is not None:
+                to_return['InstanceGroups'][1]['BidPrice'] \
+                    = '%0.03f' % base.task_instance_bid_price
+                to_return['InstanceGroups'][1]['Market'] \
+                    = 'SPOT'
+            else:
+                to_return['InstanceGroups'][1]['Market'] \
+                    = 'ON_DEMAND'
         return to_return
 
 class RailRnaPreprocess:
@@ -1154,23 +1168,27 @@ class RailRnaPreprocess:
                   'cores available.')
         )
         parser.add_argument(
-            '--do-not-gzip-output', action='store_const', const=True,
+            '--do-not-gzip-input', action='store_const', const=True,
             default=False,
             help=('Leaves output of preprocess step uncompressed. This makes '
                   'preprocessing faster but takes up more hard drive space.')
         )
 
     @staticmethod
-    def protosteps(base, output_dir):
+    def protosteps(base, output_dir, cloud=False):
         return [
             {
                 'name' : 'Preprocess input reads',
-                'run' : ('preprocess.py --nucs-per-file={0} {1} '
-                         '--push={2} --ignore-first-token').format(
-                                                    base.nucleotides_per_file,
+                'run' : ('preprocess.py --keep --nucs-per-file={0} {1} '
+                         '--push={2} {3}').format(
+                                                    base.nucleotides_per_input,
                                                     '--gzip-output' if
-                                                    base.gzip_output else '',
-                                                    output_dir
+                                                    base.gzip_input else '',
+                                                    path_join(cloud,
+                                                        output_dir,
+                                                        'push'),
+                                                    '--ignore-first-token' if
+                                                    cloud else ''
                                                 ),
                 'inputs' : [base.manifest],
                 'output' : output_dir,
@@ -1367,6 +1385,7 @@ class RailRnaAlign:
                                'integer > 0, but {0} was entered.'.format(
                                                     motif_search_window_size
                                                 ))
+        base.motif_search_window_size = motif_search_window_size
         if not (isinstance(motif_radius, int) and
                     motif_radius >= 0):
             base.errors.append('Motif radius (--motif-radius) must be an '
@@ -1388,52 +1407,64 @@ class RailRnaAlign:
         base.bed_basename = bed_basename
 
     @staticmethod
-    def add_args(basic_group, advanced_group=None, cloud=False):
+    def add_args(parser, usage=None, cloud=False):
         """ usage: argparse.SUPPRESS if advanced options should be suppressed;
                 else None
         """
         if not cloud:
-            basic_group.add_argument(
+            parser.add_argument(
                 '--bowtie1-exe', type=str, required=False,
                 default=None,
                 help=('Path to Bowtie 1 executable. This can be left out if '
                       '"bowtie" is in PATH and is executable.')
             )
-            basic_group.add_argument(
+            parser.add_argument(
+                '--bowtie1-build-exe', type=str, required=False,
+                default=None,
+                help=('Path to Bowtie 1 Build executable. This can be left '
+                      'out if "bowtie-build" is in PATH and is executable.')
+            )
+            parser.add_argument(
                 '-1', '--bowtie1-idx', type=str, required=True,
                 help='Path to Bowtie 1 index. Include basename.'
             )
-            basic_group.add_argument(
+            parser.add_argument(
                 '--bowtie2-exe', type=str, required=False,
                 default=None,
                 help=('Path to Bowtie 2 executable. This can be left out if '
                       '"bowtie2" is in PATH and is executable.')
             )
-            basic_group.add_argument(
+            parser.add_argument(
+                '--bowtie2-build-exe', type=str, required=False,
+                default=None,
+                help=('Path to Bowtie 2 Build executable. This can be left '
+                      'out if "bowtie2-build" is in PATH and is executable.')
+            )
+            parser.add_argument(
                 '-2', '--bowtie2-idx', type=str, required=True,
                 help='Path to Bowtie 2 index. Include basename.'
             )
-            basic_group.add_argument(
+            parser.add_argument(
                 '--bowtie2_args', type=str, required=False,
                 default='',
                 help=('Additional arguments to pass to Bowtie 2, which is '
                       'used to obtain final end-to-end alignments and spliced '
                       'alignments in output SAM/BAM files.')
             )
-            basic_group.add_argument(
+            parser.add_argument(
                 '--samtools-exe', type=str, required=False,
                 default=None,
                 help=('Path to SAMTools executable. This can be left out if '
                       '"samtools" is in PATH and is executable.')
             )
-            basic_group.add_argument(
+            parser.add_argument(
                 '--bedtobigbed-exe', type=str, required=False,
                 default=None,
                 help=('Path to BedToBigBed executable. This can be left out '
                       'if "bedToBigBed" is in PATH and is executable.')
             )
         else:
-            basic_group.add_argument(
+            parser.add_argument(
                 '--assembly', type=str, required=False,
                 default='hg19',
                 help=('One of the following:\n'
@@ -1444,116 +1475,119 @@ class RailRnaAlign:
                       'that contains BOTH Bowtie 1 and Bowtie 2 index files '
                       '(12 in total), all with the basename "genome".')
             )
-        basic_group.add_argument(
+        parser.add_argument(
+            '--genome-partition-length', type=int, required=False,
+            default=5000,
+            help=(('Smallest unit of a genome (in nucleotides) addressable by '
+                  'a single task when computing coverage from exon '
+                  'differentials. Making this parameter too small (~hundreds '
+                  'of nucleotides) can bloat intermediate files, but making '
+                  'it too large (~the size of a chromosome) could compromise '
+                  'the scalability of the pipeline.') if usage is None else
+                    SUPPRESS)
+        )
+        parser.add_argument(
+            '--max-readlet-size', type=int, required=False,
+            default=25,
+            help=(('Maximum size of a given segment from a read that is 1) '
+                  'mapped to the genome using Bowtie 1 when searching for '
+                  'introns; and 2) mapped to a set of transcriptome elements '
+                  'using Bowtie 2 when finalizing spliced alignments.'
+                  'Decreasing the value of this parameter may increase recall '
+                  'of introns while compromising precision. For human-size '
+                  'genomes, values between 20 and 25 are recommended.')
+                    if usage is None else SUPPRESS)
+        )
+        parser.add_argument(
+            '--min-readlet-size', type=int, required=False,
+            default=15,
+            help=(('Minimum size of a given "capping readlet" -- that is, a '
+                  'read segment whose end coincides with a read end -- that '
+                  'is 1) mapped to the genome using Bowtie 1 when searching '
+                  'for introns; and 2) mapped to a set of transcriptome '
+                  'elements using Bowtie 2 when finalizing spliced '
+                  'alignments. Decreasing the value of this parameter may '
+                  'increase recall of rare introns overlapped towards the '
+                  'ends of a few reads in a sample while compromising '
+                  'precision.') if usage is None else SUPPRESS)
+        )
+        parser.add_argument(
+            '--readlet-interval', type=int, required=False,
+            default=4,
+            help=(('Distance (in nucleotides) between overlapping readlets '
+                  'mapped to genome and set of transcriptome elements. '
+                  'Decreasing this parameter may increase sensitivity while '
+                  'increasing the time the pipeline takes.')
+                    if usage is None else SUPPRESS)
+        )
+        parser.add_argument(
+            '--cap-size-multiplier', type=float, required=False,
+            default=1.2,
+            help=(('Successive capping readlets on a given end of a read are '
+                  'increased in size exponentially with this base.')
+                    if usage is None else SUPPRESS)
+        )
+        parser.add_argument(
             '--max-intron-size', type=int, required=False,
             default=500000,
             help=('Introns spanning more than this many nucleotides are '
                   'automatically filtered out.')
         )
-        basic_group.add_argument(
+        parser.add_argument(
             '--min-intron-size', type=int, required=False,
             default=10,
             help=('Introns spanning fewer than this many nucleotides are '
                   'automatically filtered out.')
         )
-        basic_group.add_argument(
+        parser.add_argument(
             '--min-exon-size', type=int, required=False,
             default=9,
             help=('The aligner will not be sensitive to exons smaller than '
                   'this size.')
         )
-        basic_group.add_argument(
+        parser.add_argument(
+            '--motif-search-window-size', type=int, required=False,
+            default=1000,
+            help=(('Size of window in which to search for exons of size '
+                  '"--min-exon-size" capped by appropriate donor/acceptor '
+                  'motifs when inferring intron positions.')
+                    if usage is None else SUPPRESS)
+        )
+        parser.add_argument(
+            '--motif-radius', type=int, required=False,
+            default=5,
+            help=(('Number of nucleotides of ostensible intron ends within '
+                  'which to search for a donor/acceptor motif.')
+                    if usage is None else SUPPRESS)
+        )
+        parser.add_argument(
             '--normalize-percentile', type=float, required=False,
             default=0.75,
             help=('Percentile used for computing normalization factors for '
                   'sample coverage.')
         )
-        basic_group.add_argument(
+        parser.add_argument(
             '--do-not-output-bam-by-chr', action='store_const', const=True,
             default=False,
             help=('Places alignments for all chromosomes in a single file '
                   'rather than dividing them up by reference name.')
         )
-        basic_group.add_argument(
+        parser.add_argument(
             '--output-sam', action='store_const', const=True,
             default=False,
             help='Outputs SAM files rather than BAM files.'
         )
-        basic_group.add_argument(
+        parser.add_argument(
             '--bam-basename', type=str, required=False,
             default='alignments',
             help='Basename to use for BAM output files.'
         )
-        basic_group.add_argument(
+        parser.add_argument(
             '--bed-basename', type=str, required=False,
             default='',
             help=('Basename to use for BED output files; there is an output '
                   'for each of insertions, deletions, and introns.')
         )
-        if advanced_group is not None:
-            advanced_group.add_argument(
-                '--genome-partition-length', type=int, required=False,
-                default=5000,
-                help=('Smallest unit of a genome (in nucleotides) addressable '
-                      'by a single task when computing coverage from exon '
-                      'differentials. Making this parameter too small '
-                      '(~hundreds of nucleotides) can bloat intermediate '
-                      'files, but making it too large '
-                      '(~the size of a chromosome) could compromise '
-                      'the scalability of the pipeline.')
-            )
-            advanced_group.add_argument(
-                '--max-readlet-size', type=int, required=False,
-                default=25,
-                help=('Maximum size of a given segment from a read that is 1) '
-                      'mapped to the genome using Bowtie 1 when searching for '
-                      'introns; and 2) mapped to a set of transcriptome '
-                      'elements using Bowtie 2 when finalizing spliced '
-                      'alignments. Decreasing the value of this parameter '
-                      'may increase recall of introns while compromising '
-                      'precision. For human-size genomes, values between '
-                      '20 and 25 are recommended.')
-            )
-            advanced_group.add_argument(
-                '--min-readlet-size', type=int, required=False,
-                default=15,
-                help=('Minimum size of a given "capping readlet" -- that is, '
-                      'a read segment whose end coincides with a read end '
-                      '-- that is a) mapped to the genome using Bowtie 1 '
-                      'when searching for introns; and 2) mapped to a set of '
-                      'transcriptome elements using Bowtie 2 when finalizing '
-                      'spliced alignments. Decreasing the value of this '
-                      'parameter may increase recall of rare introns '
-                      'overlapped towards the ends of a few reads in a sample '
-                      'while compromising precision.')
-            )
-            advanced_group.add_argument(
-                '--readlet-interval', type=int, required=False,
-                default=4,
-                help=('Distance (in nucleotides) between overlapping readlets '
-                      'mapped to genome and set of transcriptome elements. '
-                      'Decreasing this parameter may increase sensitivity '
-                      'while increasing the time the pipeline takes.')
-            )
-            advanced_group.add_argument(
-                '--cap-size-multiplier', type=float, required=False,
-                default=1.2,
-                help=('Successive capping readlets on a given end of a read '
-                      'are increased in size exponentially with this base.')
-            )
-            advanced_group.add_argument(
-                '--motif-search-window-size', type=int, required=False,
-                default=1000,
-                help=('Size of window in which to search for exons of size '
-                      '"--min-exon-size" capped by appropriate donor/acceptor '
-                      'motifs when inferring intron positions.')
-            )
-            advanced_group.add_argument(
-                '--motif-radius', type=int, required=False,
-                default=5,
-                help=('Number of nucleotides of ostensible intron ends within '
-                      'which to search for a donor/acceptor motif.')
-            )
 
     @staticmethod
     def protosteps(base, input_dir, cloud=False):
@@ -1563,13 +1597,14 @@ class RailRnaAlign:
         return [  
             {
                 'name' : 'Align reads to genome',
-                'run' : ('align.py --bowtie-idx={0} --bowtie2_idx={1}'
-                         '--bowtie2-exe={2}'
-                         '--exon-differentials --partition-length={3}'
-                         '--manifest={4} {5}').format(base.bowtie1_idx,
+                'run' : ('align_reads.py --bowtie-idx={0} --bowtie2-idx={1} '
+                         '--bowtie2-exe={2} '
+                         '--exon-differentials --partition-length={3} '
+                         '--manifest={4} {5} -- --local').format(
+                                                        base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
-                                                        base.partition_length,
+                                                base.genome_partition_length,
                                                         manifest,
                                                         verbose),
                 'inputs' : [input_dir],
@@ -1589,15 +1624,15 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Segment reads into readlets',
-                'run' : ('readletize.py --max_readlet_size={0} '
+                'run' : ('readletize.py --max-readlet-size={0} '
                          '--readlet-interval={1} '
                          '--capping-multiplier={2}').format(
                                     base.max_readlet_size,
                                     base.readlet_interval,
                                     base.cap_size_multiplier
                                 ),
-                'inputs' : [path_join(cloud, 'align_reads', 'readletize')],
-                'output' : 'combine_sequences',
+                'inputs' : ['combine_sequences'],
+                'output' : 'readletize',
                 'taskx' : 4,
                 'part' : 'k1,1',
                 'keys' : 1
@@ -1617,12 +1652,12 @@ class RailRnaAlign:
                          '--bowtie-exe={1} {2}'
                          '-- -t --sam-nohead --startverbose '
                          '-v 0 -a -m 80').format(
-                                    base.bowtie_idx,
-                                    base.bowtie_exe,
+                                    base.bowtie1_idx,
+                                    base.bowtie1_exe,
                                     verbose
                                 ),
-                'inputs' : [path_join(cloud, 'align_reads', 'readletize')],
-                'output' : 'combine_sequences',
+                'inputs' : ['combine_subsequences'],
+                'output' : 'align_readlets',
                 'taskx' : 4,
                 'part' : 'k1,1',
                 'keys' : 1
@@ -1630,11 +1665,11 @@ class RailRnaAlign:
             {
                 'name' : 'Search for introns using readlet alignments',
                 'run' : ('intron_search.py --bowtie-idx={0} '
-                         '--partition-length={1} --max-intron-size={2}'
-                         '--min-intron-size={3} --min-exon-size={4}'
+                         '--partition-length={1} --max-intron-size={2} '
+                         '--min-intron-size={3} --min-exon-size={4} '
                          '--search-window-size={5} '
                          '--motif-radius={6} {7}').format(base.bowtie1_idx,
-                                                        base.partition_length,
+                                                base.genome_partition_length,
                                                         base.max_intron_size,
                                                         base.min_intron_size,
                                                         base.min_exon_size,
@@ -1674,11 +1709,11 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Build index of transcriptome elements',
-                'run' : ('intron_index.py --bowtie-build-exe={0}'
+                'run' : ('intron_index.py --bowtie-build-exe={0} '
                          '--out={1} {2}').format(base.bowtie1_build_exe,
                                                  path_join(cloud,
-                                                            base.utput_dir,
-                                                            index),
+                                                            base.output_dir,
+                                                            'index'),
                                                  keep_alive),
                 'inputs' : ['intron_fasta'],
                 'output' : 'intron_index',
@@ -1695,8 +1730,8 @@ class RailRnaAlign:
                                                         if cloud else
                                                         path_join(cloud,
                                                             base.output_dir,
-                                                            index,
-                                                            intron),
+                                                            'index',
+                                                            'intron'),
                                                         base.bowtie1_exe,
                                                         verbose
                                                     ),
@@ -1718,16 +1753,29 @@ class RailRnaAlign:
                 'keys' : 1
             },
             {
+                'name' : 'Get transcriptome elements for read realignment',
+                'run' : ('cointron_fasta.py --bowtie-idx={0} {1}').format(
+                                                        base.bowtie1_idx,
+                                                        verbose
+                                                    ),
+                'inputs' : ['cointron_search'],
+                'output' : 'cointron_fasta',
+                'taskx' : 8,
+                'part' : 'k1,4',
+                'keys' : 4
+            },
+            {
                 'name' : 'Align reads to transcriptome elements',
                 'run' : ('realign_reads.py --original-idx={0} '
                          '--bowtie2-exe={1} --partition-length={2} '
                          '--exon-differentials --manifest={3} {4} '
                          '-- --end-to-end').format(base.bowtie1_idx,
                                                     base.bowtie2_exe,
-                                                    base.partition_length,
+                                                base.genome_partition_length,
                                                     manifest,
                                                     verbose),
-                'inputs' : ['cointron_fasta'],
+                'inputs' : [path_join(cloud, 'align_reads', 'unmapped'),
+                                'cointron_fasta'],
                 'output' : 'realign_reads',
                 'taskx' : 4,
                 'part' : 'k1,1',
@@ -1757,14 +1805,14 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Write bigbeds with exome coverage by sample',
-                'run' : ('coverage.py --bowtie-idx={0} --percentile={1}'
+                'run' : ('coverage.py --bowtie-idx={0} --percentile={1} '
                          '--out={2} --bigbed-exe={3} '
-                         '--manifest={4} {5}').format(base.bowtie_idx,
+                         '--manifest={4} {5}').format(base.bowtie1_idx,
                                                      base.normalize_percentile,
                                                      path_join(cloud,
                                                         base.output_dir,
                                                         'coverage'),
-                                                     base.bigbed_exe,
+                                                     base.bedtobigbed_exe,
                                                      manifest,
                                                      verbose),
                 'inputs' : [path_join(cloud, 'coverage_pre', 'coverage')],
@@ -1775,7 +1823,7 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Write normalization factors for sample coverages',
-                'run' : 'coverage_post --out={0} --manifest={1}'.format(
+                'run' : 'coverage_post.py --out={0} --manifest={1}'.format(
                                                         path_join(cloud,
                                                             base.output_dir,
                                                             'normalize'),
@@ -1803,7 +1851,7 @@ class RailRnaAlign:
                          '--manifest={2} --bed-basename={3}').format(
                                                         base.bowtie1_idx,
                                                         path_join(cloud,
-                                                            output_dir,
+                                                            base.output_dir,
                                                             'bed'),
                                                         manifest,
                                                         base.bed_basename
@@ -1818,13 +1866,17 @@ class RailRnaAlign:
                 'name' : 'Write bams with alignments by sample',
                 'run' : ('bam.py --out={0} --bowtie-idx={1} '
                          '--samtools-exe={2} --bam-basename={3} '
-                         '--manifest={4} {5}').format(
-                                        path_join(cloud, output_dir, 'bam'),
+                         '--manifest={4} {5} {6}').format(
+                                        path_join(cloud,
+                                                    base.output_dir, 'bam'),
                                         base.bowtie1_idx,
                                         base.samtools_exe,
                                         base.bam_basename,
                                         manifest,
-                                        keep_alive
+                                        keep_alive,
+                                        '--output-by-chromosome'
+                                        if not base.do_not_output_bam_by_chr
+                                        else ''
                                     ),
                 'inputs' : [path_join(cloud, 'align_reads', 'end_to_end_sam'),
                             path_join(cloud, 'realign_reads', 'splice_sam')],
@@ -1927,12 +1979,12 @@ class RailRnaLocalPreprocessJson:
         if base.errors:
             raise RuntimeError(
                     '\n'.join(
-                            ['%d) %s' % (i, error) for i, error in errors]
-                        )
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(base.errors)]
+                        ) if len(base.errors) > 1 else base.errors[0]
                 )
         self._json_serial = {}
-        step_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 
-                                                    'steps'))
+        os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
                 base.output_dir), '', '', step_dir, base.num_processes,
                 base.intermediate_dir, unix=False
@@ -1983,8 +2035,9 @@ class RailRnaCloudPreprocessJson:
         if base.errors:
             raise RuntimeError(
                     '\n'.join(
-                            ['%d) %s' % (i, error) for i, error in errors]
-                        )
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(base.errors)]
+                        ) if len(base.errors) > 1 else base.errors[0]
                 )
         self._json_serial = {}
         if base.core_instance_count > 0:
@@ -1995,7 +2048,8 @@ class RailRnaCloudPreprocessJson:
                 * base.instance_core_counts[base.core_instance_type]
         self._json_serial['Steps'] \
             = RailRnaCloud.hadoop_debugging_steps(base) + steps(
-                    RailRnaPreprocess.protosteps(base, base.output_dir),
+                    RailRnaPreprocess.protosteps(base, base.output_dir,
+                                                    cloud=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
@@ -2041,25 +2095,33 @@ class RailRnaLocalAlignJson:
             region=region, verbose=verbose)
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
             keep_intermediates=keep_intermediates)
-        RailRnaAlign(cloud=False, bowtie1_exe=None,
-            bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
-            bowtie2_build_exe=None, bowtie2_idx='genome',
-            bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
-            genome_partition_length=5000, max_readlet_size=25,
-            min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
-            max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-            motif_search_window_size=1000, motif_radius=5,
-            normalize_percentile=0.75, do_not_output_bam_by_chr=False,
-            output_sam=False, bam_basename='alignments', bed_basename='')
+        RailRnaAlign(base, cloud=False, bowtie1_exe=bowtie1_exe,
+            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
+            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
+            samtools_exe=samtools_exe, bedtobigbed_exe=bedtobigbed_exe,
+            genome_partition_length=genome_partition_length,
+            max_readlet_size=max_readlet_size,
+            min_readlet_size=min_readlet_size,
+            readlet_interval=readlet_interval,
+            cap_size_multiplier=cap_size_multiplier,
+            max_intron_size=max_intron_size,
+            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            motif_search_window_size=motif_search_window_size,
+            motif_radius=motif_radius,
+            normalize_percentile=normalize_percentile,
+            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            output_sam=output_sam, bam_basename=bam_basename,
+            bed_basename=bed_basename)
         if base.errors:
             raise RuntimeError(
                     '\n'.join(
-                            ['%d) %s' % (i, error) for i, error in errors]
-                        )
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(base.errors)]
+                        ) if len(base.errors) > 1 else base.errors[0]
                 )
         self._json_serial = {}
-        step_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 
-                                                    'steps'))
+        step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
                 base.output_dir, cloud=False), '', '', step_dir,
                 base.num_processes, base.intermediate_dir, unix=False
@@ -2114,23 +2176,32 @@ class RailRnaCloudAlignJson:
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected)
-        RailRnaAlign(cloud=True, bowtie1_exe=None,
-            bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
-            bowtie2_build_exe=None, bowtie2_idx='genome',
-            bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
-            genome_partition_length=5000, max_readlet_size=25,
-            min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
-            max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-            motif_search_window_size=1000, motif_radius=5,
-            normalize_percentile=0.75, do_not_output_bam_by_chr=False,
-            output_sam=False, bam_basename='alignments', bed_basename='',
+        RailRnaAlign(base, cloud=True, bowtie1_exe=bowtie1_exe,
+            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
+            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
+            samtools_exe=samtools_exe, bedtobigbed_exe=bedtobigbed_exe,
+            genome_partition_length=genome_partition_length,
+            max_readlet_size=max_readlet_size,
+            min_readlet_size=min_readlet_size,
+            readlet_interval=readlet_interval,
+            cap_size_multiplier=cap_size_multiplier,
+            max_intron_size=max_intron_size,
+            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            motif_search_window_size=motif_search_window_size,
+            motif_radius=motif_radius,
+            normalize_percentile=normalize_percentile,
+            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            output_sam=output_sam, bam_basename=bam_basename,
+            bed_basename=bed_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
                                         profile=base.profile))
         if base.errors:
             raise RuntimeError(
                     '\n'.join(
-                            ['%d) %s' % (i, error) for i, error in errors]
-                        )
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(errors)]
+                        ) if len(errors) > 1 else errors[0]
                 )
         self._json_serial = {}
         if base.core_instance_count > 0:
@@ -2190,33 +2261,44 @@ class RailRnaLocalAllJson:
             gzip_input=gzip_input)
         RailRnaLocal(base, check_manifest=True, num_processes=num_processes,
             keep_intermediates=keep_intermediates)
-        RailRnaAlign(cloud=False, bowtie1_exe=None,
-            bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
-            bowtie2_build_exe=None, bowtie2_idx='genome',
-            bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
-            genome_partition_length=5000, max_readlet_size=25,
-            min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
-            max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-            motif_search_window_size=1000, motif_radius=5,
-            normalize_percentile=0.75, do_not_output_bam_by_chr=False,
-            output_sam=False, bam_basename='alignments', bed_basename='')
+        RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
+            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
+            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
+            samtools_exe=samtools_exe, bedtobigbed_exe=bedtobigbed_exe,
+            genome_partition_length=genome_partition_length,
+            max_readlet_size=max_readlet_size,
+            min_readlet_size=min_readlet_size,
+            readlet_interval=readlet_interval,
+            cap_size_multiplier=cap_size_multiplier,
+            max_intron_size=max_intron_size,
+            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            motif_search_window_size=motif_search_window_size,
+            motif_radius=motif_radius,
+            normalize_percentile=normalize_percentile,
+            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            output_sam=output_sam, bam_basename=bam_basename,
+            bed_basename=bed_basename)
         if base.errors:
             raise RuntimeError(
                     '\n'.join(
-                            ['%d) %s' % (i, error) for i, error in errors]
-                        )
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(base.errors)]
+                        ) if len(base.errors) > 1 else base.errors[0]
                 )
         self._json_serial = {}
-        step_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 
-                                                    'steps'))
-        middle_dir = os.path.join(base.intermediate_dir, 'preprocess', 'push')
+        step_dir = os.path.join(base_path, 'rna', 'steps')
+        prep_dir = path_join(True, base.intermediate_dir,
+                                        'preprocess')
+        push_dir = path_join(True, base.intermediate_dir,
+                                        'preprocess', 'push')
         self._json_serial['Steps'] = \
             steps(RailRnaPreprocess.protosteps(base,
-                middle_dir), '', '', step_dir, base.num_processes,
+                prep_dir, cloud=False), '', '', step_dir, base.num_processes,
                 base.intermediate_dir, unix=False
             ) + \
             steps(RailRnaAlign.protosteps(base,
-                middle_dir, cloud=False), '', '', step_dir,
+                push_dir, cloud=False), '', '', step_dir,
                 base.num_processes, base.intermediate_dir, unix=False
             )
 
@@ -2271,23 +2353,32 @@ class RailRnaCloudAllJson:
             termination_protected=termination_protected)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
-        RailRnaAlign(cloud=True, bowtie1_exe=None,
-            bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
-            bowtie2_build_exe=None, bowtie2_idx='genome',
-            bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
-            genome_partition_length=5000, max_readlet_size=25,
-            min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
-            max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-            motif_search_window_size=1000, motif_radius=5,
-            normalize_percentile=0.75, do_not_output_bam_by_chr=False,
-            output_sam=False, bam_basename='alignments', bed_basename='',
+        RailRnaAlign(base, cloud=True, bowtie1_exe=bowtie1_exe,
+            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
+            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
+            samtools_exe=samtools_exe, bedtobigbed_exe=bedtobigbed_exe,
+            genome_partition_length=genome_partition_length,
+            max_readlet_size=max_readlet_size,
+            min_readlet_size=min_readlet_size,
+            readlet_interval=readlet_interval,
+            cap_size_multiplier=cap_size_multiplier,
+            max_intron_size=max_intron_size,
+            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            motif_search_window_size=motif_search_window_size,
+            motif_radius=motif_radius,
+            normalize_percentile=normalize_percentile,
+            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            output_sam=output_sam, bam_basename=bam_basename,
+            bed_basename=bed_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
                                         profile=base.profile))
         if base.errors:
             raise RuntimeError(
                     '\n'.join(
-                            ['%d) %s' % (i, error) for i, error in errors]
-                        )
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(base.errors)]
+                        ) if len(base.errors) > 1 else base.errors[0]
                 )
         self._json_serial = {}
         if base.core_instance_count > 0:
@@ -2296,18 +2387,21 @@ class RailRnaCloudAllJson:
         else:
             reducer_count = base.master_instance_count \
                 * base.instance_core_counts[base.core_instance_type]
-        middle_dir = path_join(True, base.intermediate_dir,
+        prep_dir = path_join(True, base.intermediate_dir,
+                                        'preprocess')
+        push_dir = path_join(True, base.intermediate_dir,
                                         'preprocess', 'push')
         self._json_serial['Steps'] \
             = RailRnaCloud.hadoop_debugging_steps(base) + \
                 steps(
-                    RailRnaPreprocess.protosteps(base, middle_dir),
+                    RailRnaPreprocess.protosteps(base, prep_dir,
+                                                    cloud=False),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
                 ) + \
                 steps(
-                    RailRnaAlign.protosteps(base, middle_dir, cloud=True),
+                    RailRnaAlign.protosteps(base, push_dir, cloud=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True

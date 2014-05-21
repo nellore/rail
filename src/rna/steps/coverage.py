@@ -201,7 +201,6 @@ for (sample_label,), xpartition in xstream(sys.stdin, 1):
     output_line_count += 1
     # Write bigBed
     assert os.path.exists(sizes_filename)
-    assert path.is_exe(args.bigbed_exe)
     bigbed_filename = ((args.bigbed_basename + '.') 
         if args.bigbed_basename != '' else '') + sample_label + '.bb'
     if output_url.is_local:

@@ -69,7 +69,7 @@ class FileMover:
             raise RuntimeError('Can\'t upload to http/ftp URLs.')
         elif url.is_local:
             try:
-                os.path.makedirs(url.to_url())
+                os.makedirs(url.to_url())
             except OSError:
                 # Directory exists
                 pass

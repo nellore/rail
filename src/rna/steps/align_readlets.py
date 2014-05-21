@@ -275,7 +275,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         with open(readlet_file, 'w') as readlet_stream:
             for _input_line_count, line in enumerate(input_stream):
                 tokens = line.rstrip().split('\t')
-                assert len(tokens) == 2
+                assert len(tokens) == 2, tokens
                 seq, qname = tokens
                 print >>readlet_stream, \
                     '\t'.join([str(_input_line_count), seq, 'I'*len(seq)])

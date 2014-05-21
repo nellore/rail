@@ -359,8 +359,12 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             try:
                 shutil.rmtree(steps[step]['output'])
             except OSError:
-                # Probably just a file then
-                os.remove(steps[step]['output'])
+                # May be a file then
+                try:
+                    os.remove(steps[step]['output'])
+                except OSError:
+                    # Just didn't exist
+                    pass
             try:
                 os.makedirs(steps[step]['output'])
             except OSError:
@@ -402,16 +406,34 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         )
             if step_data['mapper'] not in identity_mappers:
                 # Perform map step only if mapper isn't identity
-                if step_data['outputformat'] \
-                    == 'edu.jhu.cs.MultipleOutputFormat':
-                    multiple_outputs = True
-                else:
+                try:
+                    if step_data['outputformat'] \
+                        == 'edu.jhu.cs.MultipleOutputFormat':
+                        multiple_outputs = True
+                    else:
+                        multiple_outputs = False
+                except KeyError:
+                    # No multiple outputs
                     multiple_outputs = False
+                    pass
                 output_dir = step_data['output']
                 if step_data['reducer'] not in identity_mappers:
                     '''There's a reducer parameter, so input to reducer is
                     output of mapper. Change output directory.'''
                     output_dir = os.path.join(output_dir, 'dp.map')
+                    try:
+                        os.makedirs(output_dir)
+                    except OSError:
+                        if os.path.exists(output_dir):
+                            pass
+                        else:
+                            iface.fail(('Problem encountered trying to '
+                                        'create directory %s.') % output_dir,
+                                        steps=(job_flow[step_number:]
+                                                   if step_number != 0
+                                                   else None))
+                            failed = True
+                            raise
                     try:
                         if step_data['outputformat'] \
                             == 'edu.jhu.cs.MultipleOutputFormat':
@@ -466,6 +488,27 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     iface.status('    Tasks completed: %d/%d'
                                  % (len(return_values), input_file_count))
                     time.sleep(0.2)
+                try:
+                    max_tuple = max(map(len, return_values))
+                except ValueError:
+                    # return_values is empty
+                    max_tuple = -1
+                    pass
+                if max_tuple > 0:
+                    '''There are error tuples; could put error message
+                    directly in RuntimeError, but then it would be
+                    positioned after the Dooplicity message about
+                    resuming the job.'''
+                    errors = ['Streaming command "%s" failed: %s' % 
+                              (error[1], error[0]) for error
+                              in return_values if len(error) == 2]
+                    errors = [('%d) ' % (i + 1)) + error
+                                for i, error in enumerate(errors)]
+                    iface.fail('\n'.join(errors),
+                                steps=(job_flow[step_number:]
+                                        if step_number != 0 else None))
+                    failed = True
+                    raise RuntimeError
                 iface.step('    Completed %s.'
                            % dp_iface.inflected(input_file_count, 'task'))
                 # Adjust step inputs in case a reducer follows
@@ -530,6 +573,24 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     iface.status(('    Inputs partitioned: %d/%d\r')
                                  % (len(return_values), input_file_count))
                     time.sleep(0.2)
+                try:
+                    max_tuple = max(map(len, return_values))
+                except ValueError:
+                    # return_values is empty
+                    max_tuple = -1
+                    pass
+                if max_tuple > 0:
+                    # There are error tuples
+                    errors = ['Partitioning failed on input file %s. ' % 
+                               error for error in task_filenames
+                               if len(error) == 1]
+                    errors = [('%d) ' % (i + 1)) + error
+                                for i, error in enumerate(errors)]
+                    iface.fail('\n'.join(errors),
+                               (job_flow[step_number:]
+                                if step_number != 0 else None))
+                    failed = True
+                    raise RuntimeError
                 iface.step('    Partitioned %s into tasks.'
                             % dp_iface.inflected(input_file_count,
                                                  'input'))
@@ -582,6 +643,24 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     iface.status('    Tasks completed: %d/%d'
                                  % (len(return_values), input_file_count))
                     time.sleep(0.2)
+                try:
+                    max_tuple = max(map(len, return_values))
+                except ValueError:
+                    # return_values is empty
+                    max_tuple = -1
+                    pass
+                if max_tuple > 0:
+                    # There are error tuples
+                    errors = ['Streaming command "%s" failed: %s' % 
+                              (error[1], error[0]) for error 
+                              in return_values if len(error) == 2]
+                    errors = [('%d) ' % (i + 1)) + error
+                                for i, error in enumerate(errors)]
+                    iface.fail('\n'.join(errors),
+                               (job_flow[step_number:]
+                                if step_number != 0 else None))
+                    failed = True
+                    raise RuntimeError
                 iface.step('    Completed %s.'
                            % dp_iface.inflected(input_file_count, 'task'))
             step_number += 1
@@ -615,7 +694,7 @@ if __name__ == '__main__':
             help='Maximum amount of memory to use per UNIX sort instance.'
         )
     parser.add_argument(
-            '-n', '--num-processes', type=int, required=False, default=1,
+            '-p', '--num-processes', type=int, required=False, default=1,
             help='Number of subprocesses to open at once.'
         )
     parser.add_argument(
