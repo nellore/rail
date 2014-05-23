@@ -1822,7 +1822,7 @@ class RailRnaAlign:
                 'keys' : 2
             },
             {
-                'name' : 'Aggregate intron and index results by sample',
+                'name' : 'Aggregate intron and indel results by sample',
                 'run' : 'bed_pre.py',
                 'inputs' : [path_join(elastic, 'realign_reads', 'bed'),
                             path_join(elastic, 'align_reads', 'bed')],
