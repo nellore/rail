@@ -687,7 +687,7 @@ class RailRnaElastic:
         if not base.force and ansible.s3_ansible.is_dir(base.output_dir):
             base.errors.append(('Output directory {0} exists on S3, and '
                                 '--force was not invoked to permit '
-                                'overwriting it.').format(base_output_dir))
+                                'overwriting it.').format(base.output_dir))
         # Check manifest; download it if necessary
         manifest_url = ab.Url(base.manifest)
         if manifest_url.is_curlable \
