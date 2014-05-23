@@ -38,6 +38,7 @@ import tempfile
 import os
 import json
 import itertools
+import __main__ as main
 
 def add_args(parser):
     """ Adds relevant arguments to an object of class argparse.ArgumentParser.
@@ -122,7 +123,7 @@ class DooplicityInterface:
         if sys.stderr.isatty():
             self._write_streams = [sys.stderr]
         else:
-            self._write_streams = [sys.stderr, sys.stdout]
+            self._write_streams = [sys.stdout, sys.stderr]
         for output_stream in self._write_streams:
             print >>output_stream, opener.format(time=time.strftime(
                                     self._date_format,
@@ -228,17 +229,23 @@ class DooplicityInterface:
             except ValueError:
                 pass
             with open(temp_json_file, 'w') as json_stream:
-                json.dump(steps, json_stream)
+                steps_to_write = { 'Steps' : steps }
+                json.dump(steps_to_write, json_stream)
                 sys.argv[json_index+1] = temp_json_file
-                if '-f' not in sys.argv or '--force' not in sys.argv:
-                    extra_arg = '-f'
+                if os.path.abspath(main.__file__) \
+                    == os.path.abspath(sys.argv[0]):
+                    sys.argv = sys.argv[1:]
+                if not ('-f' in sys.argv or '--force' in sys.argv):
+                    extra_arg = ' -f'
                 else:
                     extra_arg = ''
                 for output_stream in self._write_streams:
                     print >>output_stream, 'To start this job flow from ' \
                                            'where it left off, run:'
-                    print >>output_stream, '%s %s %s %s' % (
+
+                    print >>output_stream, '%s %s -j %s %s%s' % (
                             sys.executable,
+                            os.path.abspath(main.__file__),
                             os.path.abspath(sys.argv[0]),
                             ' '.join(sys.argv[1:]),
                             extra_arg

@@ -1,5 +1,5 @@
 """
-rail-rna_config.py
+rna_config.py
 Part of Rail-RNA
 
 Contains classes that perform error checking and generate JSON configuration
@@ -10,8 +10,8 @@ Class structure is designed so only those arguments relevant to modes/job flows
 are included.
 
 The descriptions of command-line arguments contained here assume that a
-calling script has the command-line options "--local", "--cloud",
-"--preprocess", "--align", and "--all".
+calling script has the command-line options "prep", "align", "go", "local",
+and "elastic".
 """
 
 import os
@@ -28,8 +28,19 @@ import dooplicity.ansibles as ab
 import tempfile
 import shutil
 from dooplicity.tools import which, is_exe, path_join
-from argparse import SUPPRESS
 import sys
+from argparse import SUPPRESS
+
+'''These are placed here for convenience; their locations may change
+on EMR depending on bootstraps.'''
+_elastic_bowtie1_idx = '/mnt/index/genome'
+_elastic_bowtie2_idx = '/mnt/index/genome'
+_elastic_bedtobigbed_exe ='/mnt/bin/bedToBigBed'
+_elastic_samtools_exe = 'samtools'
+_elastic_bowtie1_exe = 'bowtie'
+_elastic_bowtie2_exe = 'bowtie2'
+_elastic_bowtie1_build_exe = 'bowtie-build'
+_elastic_bowtie2_build_exe = 'bowtie2-build'
 
 def step(name, inputs, output, mapper='cat', reducer='cat', 
     action_on_failure='TERMINATE_JOB_FLOW',
@@ -72,7 +83,7 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
                 '-D', 'stream.num.map.output.key.fields=%d' % key_fields
             ])
     if multiple_outputs:
-        # This only matters in cloud mode
+        # This only matters in elastic mode
         to_return['HadoopJarStep']['Args'].extend([
             '-libjars', '/mnt/lib/multiplefiles.jar'
         ])
@@ -210,6 +221,7 @@ class RailRnaErrors:
         self.checked_programs = set()
         self.curl_exe = curl_exe
         self.verbose = verbose
+        self.profile = profile
 
     def check_s3(self, reason=None):
         """ Checks for AWS CLI and configuration file.
@@ -226,26 +238,21 @@ class RailRnaErrors:
             No return value.
         """
         original_errors_size = len(self.errors)
-        if aws_exe is None:
+        if self.aws_exe is None:
             self.aws_exe = 'aws'
             if not which(self.aws_exe):
                 self.errors.append(('The AWS CLI executable '
                                     'was not found. Make sure that the '
                                     'executable is in PATH, or specify the '
                                     'location of the executable with '
-                                    '"--aws-exe".'))
-            else:
-                self.errors.append(('The AWS CLI executable ("--aws-exe") '
-                                    '"{0}" was not found. Make sure that '
-                                    'the file is present and is '
-                                    'executable.').format(aws_exe))
+                                    '--aws.'))
         elif not is_exe(self.aws_exe):
-            self.errors.append(('The AWS CLI executable ("--aws-exe") '
+            self.errors.append(('The AWS CLI executable (--aws) '
                                 '"{0}" is either not present or not '
                                 'executable.').format(aws_exe))
         self._aws_access_key_id = None
         self._aws_secret_access_key = None
-        if profile == 'default':
+        if self.profile == 'default':
             # Search environment variables for keys first if profile is default
             try:
                 self._aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
@@ -260,7 +267,7 @@ class RailRnaErrors:
             except KeyError:
                 pass
         else:
-            to_search = '[profile ' + profile + ']'
+            to_search = '[profile ' + self.profile + ']'
         # Now search AWS CLI config file for the right profile
         if to_search is not None:
             config_file = os.path.join(os.environ['HOME'], '.aws', 'config')
@@ -293,7 +300,7 @@ class RailRnaErrors:
                                     '"AWS_SECRET_ACCESS_KEY" are set to '
                                     'the desired AWS access key ID and '
                                     'secret access key, respectively, and '
-                                    'the profile ("--profile") is set to '
+                                    'the profile (--profile) is set to '
                                     '"default" (its default value).\n\n'
                                     'b) The file ".aws/config" exists in your '
                                     'home directory with a valid profile. '
@@ -305,7 +312,8 @@ class RailRnaErrors:
                 raise RuntimeError((('\n'.join(['%d) %s' % (i+1, error)
                                     for i, error
                                     in enumerate(self.errors)]) 
-                                    if len(errors) > 1 else errors[0]) + 
+                                    if len(self.errors) > 1
+                                    else self.errors[0]) + 
                                     '\n\nNote that the AWS CLI is needed '
                                     'because {0}. If all dependence on S3 in '
                                     'the pipeline is removed, the AWS CLI '
@@ -314,7 +322,8 @@ class RailRnaErrors:
                 raise RuntimeError((('\n'.join(['%d) %s' % (i+1, error)
                                     for i, error
                                     in enumerate(self.errors)])
-                                    if len(errors) > 1 else errors[0]) + 
+                                    if len(self.errors) > 1
+                                    else self.errors[0]) + 
                                     '\n\nIf all dependence on S3 in the '
                                     'pipeline is removed, the AWS CLI need '
                                     'not be installed.'))
@@ -329,7 +338,7 @@ class RailRnaErrors:
             exe: executable to search for
             program name: name of program
             parameter: corresponding command line parameter
-                (e.g., --bowtie-exe)
+                (e.g., --bowtie)
             entered_exe: None if the user didn't enter an executable; otherwise
                 whatever the user entered
             reason: FOR CURL ONLY: raise RuntimeError _immediately_ if Curl
@@ -345,14 +354,14 @@ class RailRnaErrors:
                          'in PATH or is not executable. Check that the '
                          'program is installed properly and executable; then '
                          'either add the executable to PATH or specify it '
-                         'directly with "{3}".').format(exe, program_name,
+                         'directly with {3}.').format(exe, program_name,
                                                             parameter)
                     )
             else:
                 to_return = exe
         elif not is_exe(entered_exe):
             self.errors.append(
-                    ('The executable "{0}" entered for {1} via "{2}" was '
+                    ('The executable "{0}" entered for {1} via {2} was '
                      'either not found or is not executable.').format(exe,
                                                                 program_name,
                                                                 parameter)
@@ -363,7 +372,7 @@ class RailRnaErrors:
             raise RuntimeError((('\n'.join(['%d) %s' % (i+1, error)
                                 for i, error
                                 in enumerate(self.errors)])
-                                if len(errors) > 1 else errors[0]) + 
+                                if len(self.errors) > 1 else self.errors[0]) + 
                                 '\n\nNote that Curl is needed because {0}.'
                                 ' If all dependence on web resources is '
                                 'removed from the pipeline, Curl need '
@@ -372,34 +381,36 @@ class RailRnaErrors:
         return to_return
 
     @staticmethod
-    def add_args(parser):
-        parser.add_argument(
-            '--aws-exe', type=str, required=False,
+    def add_args(general_parser, exec_parser, required_parser):
+        exec_parser.add_argument(
+            '--aws', type=str, required=False, metavar='<exe>',
             default=None,
-            help=('AWS CLI executable. If "aws" is in PATH, this parameter '
-                 'should be left unspecified. If it\'s not, the full path to '
-                 'the executable should be specified. If S3 is never used in '
-                 'a given job flow, this parameter is inconsequential.')
+            help='path to AWS CLI executable (def: aws)'
         )
-        parser.add_argument(
-            '--curl-exe', type=str, required=False,
+        exec_parser.add_argument(
+            '--curl', type=str, required=False, metavar='<exe>',
             default=None,
-            help=('Curl executable. If "curl" is in PATH, this parameter '
-                  'should be left unspecified. If it\'s not, the full path to '
-                  'the executable should be specified.')
+            help='path to Curl executable (def: curl)'
         )
-        parser.add_argument(
-            '--profile', type=str, required=False,
-            default=None,
-            help=('AWS CLI profile to use. Defaults to [default]; if, '
-                  'however, the environment variables "AWS_ACCESS_KEY_ID", '
-                  'and "AWS_SECRET_ACCESS_KEY" are set, these are used '
-                  'instead of [default].')
+        general_parser.add_argument(
+            '--profile', type=str, required=False, metavar='<str>',
+            default='default',
+            help='AWS CLI profile (def: env vars, then "default")'
         )
-        parser.add_argument(
+        general_parser.add_argument(
             '-f', '--force', action='store_const', const=True,
             default=False,
-            help='Overwrites output directory if it exists.'
+            help='overwrite output directory if it exists'
+        )
+        general_parser.add_argument(
+            '--verbose', action='store_const', const=True,
+            default=False,
+            help='write extra debugging statements to stderr'
+        )
+        required_parser.add_argument(
+            '-m', '--manifest', type=str, required=True, metavar='<file>',
+            help='Myrna-style manifest file; Google "Myrna manifest" for ' \
+                 'help'
         )
         '''--region's help looks different from mode to mode; don't include it
         here.'''
@@ -417,14 +428,14 @@ class RailRnaLocal:
         ansible = ab.Ansible()
         if not ab.Url(base.intermediate_dir).is_local:
             base.errors.append(('Intermediate directory must be local '
-                                'when running Rail-RNA in local ("--local") '
+                                'when running Rail-RNA in "local" '
                                 'mode, but {0} was entered.').format(
                                         base.intermediate_dir
                                     ))
         output_dir_url = ab.Url(base.output_dir)
         if output_dir_url.is_curlable:
             base.errors.append(('Output directory must be local or on S3 '
-                                'when running Rail-RNA in local ("--local") '
+                                'when running Rail-RNA in "local" '
                                 'mode, but {0} was entered.').format(
                                         base.output_dir
                                     ))
@@ -437,12 +448,12 @@ class RailRnaLocal:
             if output_dir_url.is_local \
                 and os.path.exists(output_dir_url.to_url()):
                 base.errors.append(('Output directory {0} exists, '
-                                    'and "--force" was not invoked to permit '
+                                    'and --force was not invoked to permit '
                                     'overwriting it.').format(base.output_dir))
             elif output_dir_url.is_s3 \
                 and ansible.s3_ansible.is_dir(base.output_dir):
                 base.errors.append(('Output directory {0} exists on S3, and '
-                                    '"--force" was not invoked to permit '
+                                    '--force was not invoked to permit '
                                     'overwriting it.').format(base_output_dir))
         # Check manifest; download it if necessary
         manifest_url = ab.Url(base.manifest)
@@ -453,12 +464,12 @@ class RailRnaLocal:
             ansible.profile = base.profile
         elif manifest_url.is_curlable \
             and 'Curl' not in base.checked_programs:
-            base.curl_exe = base.check_program('curl', 'Curl', '--curl_exe',
+            base.curl_exe = base.check_program('curl', 'Curl', '--curl',
                                     entered_exe=base.curl_exe,
                                     reason='the manifest file is on the web')
             ansible.curl_exe = base.curl_exe
         if not ansible.exists(manifest_url.to_url()):
-            base.errors.append(('Manifest file ("--manifest") {0} '
+            base.errors.append(('Manifest file (--manifest) {0} '
                                 'does not exist. Check the URL and '
                                 'try again.').format(base.manifest))
         else:
@@ -500,7 +511,7 @@ class RailRnaLocal:
                         elif filename_url.is_curlable \
                             and 'Curl' not in base.checked_programs:
                             base.curl_exe = base.check_program('curl', 'Curl',
-                                                '--curl_exe',
+                                                '--curl',
                                                 entered_exe=base.curl_exe,
                                                 reason=('at least one sample '
                                                   'FASTA/FASTQ from the '
@@ -516,7 +527,7 @@ class RailRnaLocal:
                                                         manifest_url.to_url()
                                                     ))
             else:
-                base.errors.append(('Manifest file ("--manifest") {0} '
+                base.errors.append(('Manifest file (--manifest) {0} '
                                     'has no valid lines.').format(
                                                         manifest_url.to_url()
                                                     ))
@@ -524,7 +535,7 @@ class RailRnaLocal:
         if num_processes:
             if not (isinstance(num_processes, int)
                                     and num_processes >= 1):
-                base.errors.append('Number of processes ("--num-processes") '
+                base.errors.append('Number of processes (--num-processes) '
                                    'must be an integer >= 1, '
                                    'but {0} was entered.'.format(
                                                     num_processes
@@ -543,64 +554,54 @@ class RailRnaLocal:
         self.keep_intermediates = keep_intermediates
 
     @staticmethod
-    def add_args(parser):
+    def add_args(required_parser, general_parser, output_parser, 
+                    prep=False, align=False):
         """ Adds parameter descriptions relevant to local mode to an object
             of class argparse.ArgumentParser.
 
+            prep: preprocess-only
+            align: align-only
+
             No return value.
         """
-        parser.add_argument(
-            '-m', '--manifest', type=str, required=True,
-            help='Myrna-style manifest file listing sample FASTAs and/or ' \
-                 'FASTQs to analyze. Each line of the file is ' \
-                 'is in one of two formats: ' \
-                 '\n\n(for unpaired input reads)\n' \
-                 '<URL><TAB><MD5 checksum or "0" if not included><TAB>' \
-                 '<sample label>' \
-                 '\n\n(for paired-end input reads)\n' \
-                 '<URL 1><TAB><MD5 checksum or "0" if not included><TAB>' \
-                 '<URL 2><TAB><MD5 checksum or "0" if not included><TAB>' \
-                 '<sample label>.'
-        )
-        parser.add_argument(
-            '-o', '--output', type=str, required=False,
-            default='./rail-rna_out',
-            help=('Output directory, which in local ("--local") mode must be '
-                  'on the local filesystem or on S3. This directory is not '
-                  'overwritten unless the force overwrite ("--force") '
-                  'parameter is also invoked.')
-        )
-        parser.add_argument(
-            '--intermediate', type=str, required=False,
+        if align:
+            required_parser.add_argument(
+                '-i', '--input', type=str, required=True, metavar='<dir>',
+                help='input directory with preprocessed reads; must be local'
+            )
+        if prep:
+            output_parser.add_argument(
+                '-o', '--output', type=str, required=False, metavar='<dir>',
+                default='./rail-rna_prep',
+                help='output directory; must be local or on S3'
+            )
+        else:
+            output_parser.add_argument(
+                '-o', '--output', type=str, required=False, metavar='<dir>',
+                default='./rail-rna_out',
+                help='output directory; must be local or on S3'
+            )
+        general_parser.add_argument(
+            '--intermediate', type=str, required=False, metavar='<dir>',
             default='./rail-rna_intermediate',
-            help='Directory in which to store intermediate files, which ' \
-                 'may be useful for debugging. Invoke ' \
-                 '"--keep-intermediates" to prevent deletion of ' \
-                 'intermediate files after a job flow is completed.'
+            help='directory for storing intermediate files'
         )
-        parser.add_argument(
-           '-p', '--num-processes', type=int, required=False,
+        general_parser.add_argument(
+           '-p', '--num-processes', type=int, required=False, metavar='<int>',
             default=None,
-            help=('Number of processes to run simultaneously. This defaults '
-                  'to the number of cores on the machine less 1 if more than '
-                  'one core is available, or simply 1 if the program could '
-                  'not determine the number of available cores.')
+            help='number of processes to run simultaneously (def: # cpus ' \
+                 '- 1 if # cpus > 1; else 1)'
         )
-        parser.add_argument(
+        general_parser.add_argument(
             '--keep-intermediates', action='store_const', const=True,
             default=False,
-            help='Keeps intermediate files after a job flow is completed.'
-        )
-        parser.add_argument(
-            '--verbose', action='store_const', const=True,
-            default=False,
-            help='Outputs extra debugging statements to stderr.'
+            help='keep intermediate files after job flow is complete'
         )
 
-class RailRnaCloud:
-    """ Checks cloud-mode input parameters and relevant programs.
+class RailRnaElastic:
+    """ Checks elastic-mode input parameters and relevant programs.
 
-        Subsumes only those parameters relevant to cloud mode. Adds errors
+        Subsumes only those parameters relevant to elastic mode. Adds errors
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
@@ -616,8 +617,8 @@ class RailRnaCloud:
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False):
 
-        # CLI is REQUIRED in cloud mode
-        base.check_s3(reason='Rail-RNA is running in cloud ("--cloud") mode')
+        # CLI is REQUIRED in elastic mode
+        base.check_s3(reason='Rail-RNA is running in "elastic" mode')
 
         # Initialize possible options
         base.instance_core_counts = {
@@ -662,45 +663,48 @@ class RailRnaCloud:
                                '"{0}" was entered.'.format(log_uri))
         base.log_uri = log_uri
         base.visible_to_all_users = visible_to_all_users
-        base.tags = str([tag.strip() for tag in tags.split(',')])
+        base.tags = [tag.strip() for tag in tags.split(',')]
+        if len(base.tags) == 1 and base.tags[0] == '':
+            base.tags = []
         base.name = name
+        base.ami_version = ami_version
 
         # Initialize ansible for easy checks
         ansible = ab.Ansible(aws_exe=base.aws_exe, profile=base.profile)
-        if ab.Url(base,intermediate_dir).is_local:
+        if ab.Url(base.intermediate_dir).is_local:
             base.errors.append(('Intermediate directory must be on HDFS or S3 '
-                                'when running Rail-RNA in cloud ("--cloud") '
+                                'when running Rail-RNA in "elastic" '
                                 'mode, but {0} was entered.').format(
                                         base.intermediate_dir
                                     ))
         output_dir_url = ab.Url(base.output_dir)
         if not output_dir_url.is_s3:
             base.errors.append(('Output directory must be on S3 '
-                                'when running Rail-RNA in cloud ("--cloud") '
+                                'when running Rail-RNA in "elastic" '
                                 'mode, but {0} was entered.').format(
                                         base.output_dir
                                     ))
         if not base.force and ansible.s3_ansible.is_dir(base.output_dir):
             base.errors.append(('Output directory {0} exists on S3, and '
-                                '"--force" was not invoked to permit '
+                                '--force was not invoked to permit '
                                 'overwriting it.').format(base_output_dir))
         # Check manifest; download it if necessary
         manifest_url = ab.Url(base.manifest)
         if manifest_url.is_curlable \
             and 'Curl' not in base.checked_programs:
-            base.curl_exe = base.check_program('curl', 'Curl', '--curl_exe',
+            base.curl_exe = base.check_program('curl', 'Curl', '--curl',
                                     entered_exe=base.curl_exe,
                                     reason='the manifest file is on the web')
             ansible.curl_exe = base.curl_exe
         if not ansible.exists(manifest_url.to_url()):
-            base.errors.append(('Manifest file ("--manifest") {0} '
+            base.errors.append(('Manifest file (--manifest) {0} '
                                 'does not exist. Check the URL and '
                                 'try again.').format(base.manifest))
         else:
             if not manifest_url.is_local:
                 temp_manifest_dir = tempfile.mkdtemp()
-                manifest = os.path.join(base.manifest_dir, 'MANIFEST')
-                ansible.get(manifest_url, destination=temp_manifest)
+                manifest = os.path.join(temp_manifest_dir, 'MANIFEST')
+                ansible.get(base.manifest, destination=manifest)
             else:
                 manifest = manifest_url.to_url()
             files_to_check = []
@@ -728,7 +732,7 @@ class RailRnaCloud:
                         if filename_url.is_curlable \
                             and 'Curl' not in base.checked_programs:
                             base.curl_exe = base.check_program('curl', 'Curl',
-                                                '--curl_exe',
+                                                '--curl',
                                                 entered_exe=base.curl_exe,
                                                 reason=('at least one sample '
                                                   'FASTA/FASTQ from the '
@@ -744,7 +748,7 @@ class RailRnaCloud:
                                                         manifest_url.to_url()
                                                     ))
             else:
-                base.errors.append(('Manifest file ("--manifest") {0} '
+                base.errors.append(('Manifest file (--manifest) {0} '
                                     'has no valid lines.').format(
                                                         manifest_url.to_url()
                                                     ))
@@ -762,7 +766,7 @@ class RailRnaCloud:
                     'TERMINATE_CLUSTER'])
 
         if action_on_failure not in actions_on_failure:
-            base.errors.append('Action on failure ("--action-on-failure") '
+            base.errors.append('Action on failure (--action-on-failure) '
                                'must be one of {"TERMINATE_JOB_FLOW", '
                                '"CANCEL_AND_WAIT", "CONTINUE", '
                                '"TERMINATE_CLUSTER"}, but '
@@ -771,23 +775,14 @@ class RailRnaCloud:
                                             ))
         base.action_on_failure = action_on_failure
         base.hadoop_jar = hadoop_jar
-        if not (isinstance(num_processes, int)
-                and num_processes >= 1):
-            base.errors.append('Number of processes ("--num-processes") must '
-                               'be an integer >= 1, '
-                               'but {0} was entered.'.format(
-                                                num_processes
-                                            ))
-        base.tasks_per_reducer = tasks_per_reducer
-        base.reducer_count = reducer_count
-        instance_type_message = ('Instance type ("--instance-type") must be '
+        instance_type_message = ('Instance type (--instance-type) must be '
                                  'in the set {"m1.small", "m1.large", '
                                  '"m1.xlarge", "c1.medium", "c1.xlarge", '
                                  '"m2.xlarge", "m2.2xlarge", "m2.4xlarge", '
                                  '"cc1.4xlarge"}, but {0} was entered.')
         if master_instance_type not in base.instance_core_counts:
             base.errors.append(('Master instance type '
-                               '("--master-instance-type") not valid. %s')
+                               '(--master-instance-type) not valid. %s')
                                 % instance_type_message.format(
                                                         master_instance_type
                                                     ))
@@ -797,7 +792,7 @@ class RailRnaCloud:
         else:
             if core_instance_type not in base.instance_core_counts:
                 base.errors.append(('Core instance type '
-                                    '("--core-instance-type") not valid. %s')
+                                    '(--core-instance-type) not valid. %s')
                                     % instance_type_message.format(
                                                         core_instance_type
                                                     ))
@@ -807,7 +802,7 @@ class RailRnaCloud:
         else:
             if task_instance_type not in base.instance_core_counts:
                 base.errors.append(('Task instance type '
-                                    '("--task-instance-type") not valid. %s')
+                                    '(--task-instance-type) not valid. %s')
                                     % instance_type_message.format(
                                                         task_instance_type
                                                     ))
@@ -823,7 +818,7 @@ class RailRnaCloud:
                                                     master_instance_bid_price
                                                 ))
             base.spot_master = True
-            base.master_instance_bid_price = master_instance_bid_price
+        base.master_instance_bid_price = master_instance_bid_price
         if core_instance_bid_price is None:
             base.spot_core = False
         else:
@@ -835,7 +830,7 @@ class RailRnaCloud:
                                                     core_instance_bid_price
                                                 ))
             base.spot_core = True
-            base.core_instance_bid_price = core_instance_bid_price
+        base.core_instance_bid_price = core_instance_bid_price
         if task_instance_bid_price is None:
             base.spot_task = False
         else:
@@ -847,19 +842,19 @@ class RailRnaCloud:
                                                     task_instance_bid_price
                                                 ))
             base.spot_task = True
-            base.task_instance_bid_price = task_instance_bid_price
+        base.task_instance_bid_price = task_instance_bid_price
         if not (isinstance(master_instance_count, int)
                 and master_instance_count >= 1):
             base.errors.append('Master instance count '
-                               '("--master-instance-count") must be an '
+                               '(--master-instance-count) must be an '
                                'integer >= 1, but {0} was entered.'.format(
                                                     master_instance_count
                                                 ))
         base.master_instance_count = master_instance_count
         if not (isinstance(core_instance_count, int)
-                and core_instance_count >= 0):
+                 and core_instance_count >= 1):
             base.errors.append('Core instance count '
-                               '("--core-instance-count") must be an '
+                               '(--core-instance-count) must be an '
                                'integer >= 1, but {0} was entered.'.format(
                                                     core_instance_count
                                                 ))
@@ -867,7 +862,7 @@ class RailRnaCloud:
         if not (isinstance(task_instance_count, int)
                 and task_instance_count >= 0):
             base.errors.append('Task instance count '
-                               '("--task-instance-count") must be an '
+                               '(--task-instance-count) must be an '
                                'integer >= 1, but {0} was entered.'.format(
                                                     task_instance_count
                                                 ))
@@ -883,132 +878,147 @@ class RailRnaCloud:
         base.termination_protected = termination_protected
 
     @staticmethod
-    def add_args(parser, usage=None):
-        """ usage: argparse.SUPPRESS if advanced options should be suppressed;
-                else None
-        """
-        parser.add_argument('--name', type=str, required=False,
+    def add_args(general_parser, required_parser, output_parser, 
+                    elastic_parser, prep=False, align=False):
+        if align:
+            required_parser.add_argument(
+                '-i', '--input', type=str, required=True, metavar='<s3_dir>',
+                help='input directory with preprocessed read; must begin ' \
+                     'with s3://'
+            )
+        if prep:
+            required_parser.add_argument(
+                '-o', '--output', type=str, required=True, metavar='<s3_dir>',
+                help='output directory; must begin with s3://'
+            )
+        else:
+            output_parser.add_argument(
+                '-o', '--output', type=str, required=True, metavar='<s3_dir>',
+                help='output directory; must begin with s3://'
+            )
+        general_parser.add_argument(
+            '--intermediate', type=str, required=False,
+            metavar='<s3_dir/hdfs_dir>',
+            default='hdfs:///rail-rna_intermediate',
+            help='directory for storing intermediate files; can begin with ' \
+                 'hdfs:// or s3://. use S3 to keep intermediates'
+        )
+        elastic_parser.add_argument('--name', type=str, required=False,
+            metavar='<str>',
             default='Rail-RNA Job Flow',
-            help='Name of job flow on Elastic MapReduce'
+            help='job flow name'
         )
-        parser.add_argument('--log-uri', type=str, required=False,
+        elastic_parser.add_argument('--log-uri', type=str, required=False,
+            metavar='<s3_dir>',
             default=None,
-            help=(('Directory on S3 in which to store Hadoop logs. Defaults '
-                  'to "logs" subdirectory of output directory.')
-                    if usage is None else SUPPRESS)
+            help=('Hadoop log directory on S3 (def: "logs" subdirectory of '
+                  'output directory)')
         )
-        parser.add_argument('--ami-version', type=str, required=False,
+        elastic_parser.add_argument('--ami-version', type=str, required=False,
+            metavar='<str>',
             default='2.4.2',
-            help=('Version of Amazon Linux AMI to use on EC2.'
-                    if usage is None else SUPPRESS)
+            help='Amazon Linux AMI to use'
         )
-        parser.add_argument('--visible-to-all-users', action='store_const',
+        elastic_parser.add_argument('--visible-to-all-users',
+            action='store_const',
             const=True,
             default=False,
-            help=('Makes EC2 cluster visible to all IAM users within the '
-                  'EMR CLI' if usage is None else SUPPRESS)
+            help='make EC2 cluster visible to all IAM users within EMR CLI'
         )
-        parser.add_argument('--action-on-failure', type=str, required=False,
+        elastic_parser.add_argument('--action-on-failure', type=str,
+            required=False,
+            metavar='<choice>',
             default='TERMINATE_JOB_FLOW',
-            help=('Specifies what action to take if a job flow fails on a '
-                  'given step. Options are {"TERMINATE_JOB_FLOW", ' 
-                  '"CANCEL_AND_WAIT", "CONTINUE", "TERMINATE_CLUSTER"}.'
-                    if usage is None else SUPPRESS)
+            help=('action to take if job flow fails on a given step. '
+                  '<choice> is in {"TERMINATE_JOB_FLOW", "CANCEL_AND_WAIT", '
+                  '"CONTINUE", "TERMINATE_CLUSTER"}')
         )
-        parser.add_argument('--hadoop-jar', type=str, required=False,
+        elastic_parser.add_argument('--hadoop-jar', type=str, required=False,
+            metavar='<jar>',
             default='/home/hadoop/contrib/streaming/' \
                     'hadoop-streaming-1.0.3.jar',
-            help=('Hadoop Streaming Java ARchive to use. Controls version '
-                  'of Hadoop Streaming.' if usage is None else SUPPRESS)
+            help=('Hadoop Streaming Java ARchive to use; controls version')
         )
-        parser.add_argument('--master-instance-count', type=str,
+        elastic_parser.add_argument('--master-instance-count', type=int,
+            metavar='<int>',
             required=False,
             default=1,
-            help=('Number of master instances. A master instance helps manage '
-                  'the cluster, tracking the status of each task.'
-                  if usage is None else SUPPRESS)
+            help=('number of master instances')
         )
-        parser.add_argument('-c', '--core-instance-count', type=str,
-            required=False,
-            default=1,
-            help=('Number of core instances. A core instance runs Hadoop '
-                  'maps and reduces and stores intermediate data.'
-                  if usage is None else SUPPRESS)
+        required_parser.add_argument('-c', '--core-instance-count', type=int,
+            metavar='<int>',
+            required=True,
+            help=('number of core instances')
         )
-        parser.add_argument('--task-instance-count', type=str,
+        elastic_parser.add_argument('--task-instance-count', type=int,
+            metavar='<int>',
             required=False,
             default=0,
-            help=('Number of task instances. A task instance runs Hadoop '
-                  'maps and reduces and but does not store any data. This is '
-                  'useful if running task instances as spot instances; if '
-                  'the user loses spot instances because her bid price '
-                  'fell below market value, her job flow will not fail.')
+            help=('number of task instances')
         )
-        parser.add_argument('--master-instance-bid-price', type=str,
+        elastic_parser.add_argument('--master-instance-bid-price', type=float,
+            metavar='<dec>',
             required=False,
             default=None,
-            help=('Bid price for master instances (in dollars/hour). Invoke '
-                  'only if running master instances as spot instances.'
-                  if usage is None else SUPPRESS)
+            help=('bid price (dollars/hr); invoke only if master instances '
+                  'should be spot')
         )
-        parser.add_argument('--core-instance-bid-price', type=str,
+        elastic_parser.add_argument('--core-instance-bid-price', type=float,
+            metavar='<dec>',
             required=False,
             default=None,
-            help=('Bid price for core instances (in dollars/hour). Invoke '
-                  'only if running core instances as spot instances.')
+            help=('bid price (dollars/hr); invoke only if core instances '
+                  'should be spot')
         )
-        parser.add_argument('--task-instance-bid-price', type=str,
+        elastic_parser.add_argument('--task-instance-bid-price', type=float,
+            metavar='<dec>',
             required=False,
             default=None,
-            help=('Bid price for each task instance (in dollars/hour). Invoke '
-                  'only if running task instances as spot instances.')
+            help=('bid price (dollars/hr); invoke only if task instances '
+                  'should be spot')
         )
-        parser.add_argument('--master-instance-type', type=str,
+        elastic_parser.add_argument('--master-instance-type', type=str,
+            metavar='<choice>',
             required=False,
             default='c1.xlarge',
-            help=('Master instance type. c1.xlarge is most cost-effective '
-                  'across the board for Rail-RNA.'
-                  if usage is None else SUPPRESS)
+            help=('master instance type')
         )
-        parser.add_argument('--core-instance-type', type=str,
+        elastic_parser.add_argument('--core-instance-type', type=str,
+            metavar='<choice>',
             required=False,
             default=None,
-            help=('Core instance type. c1.xlarge seems most cost-effective '
-                  'across the board for Rail-RNA. Defaults to master '
-                  'instance type if left unspecified.'
-                  if usage is None else SUPPRESS)
+            help=('core instance type')
         )
-        parser.add_argument('--task-instance-type', type=str,
+        elastic_parser.add_argument('--task-instance-type', type=str,
+            metavar='<choice>',
             required=False,
             default=None,
-            help=('Task instance type. c1.xlarge seems most cost-effective '
-                  'across the board for Rail-RNA. Defaults to master '
-                  'instance type if left unspecified.'
-                  if usage is None else SUPPRESS)
+            help=('task instance type')
         )
-        parser.add_argument('--ec2-key-name', type=str,
+        elastic_parser.add_argument('--ec2-key-name', type=str,
+            metavar='<str>',
             required=False,
             default=None,
-            help=('Name of key pair for connecting to EC2 instances via, '
-                  'for example, SSH. May be useful for debugging.'
-                  if usage is None else SUPPRESS)
+            help=('key pair name for SSHing to EC2 instances (def: '
+                  'unspecified, so SSHing is not permitted)')
         )
-        parser.add_argument('--keep-alive', type=str,
-            required=False,
+        elastic_parser.add_argument('--keep-alive', action='store_const',
+            const=True,
             default=False,
-            help=('Keeps EC2 cluster alive after job flow is completed.'
-                  if usage is None else SUPPRESS)
+            help=('keep cluster alive after job flow completes')
         )
-        parser.add_argument('--termination-protected', type=str,
-            required=False,
+        elastic_parser.add_argument('--termination-protected',
+            action='store_const',
+            const=True,
             default=False,
-            help=('Protects cluster from termination in case of job flow ' 
-                  'failure.' if usage is None else SUPPRESS)
+            help=('protect cluster from termination in case of step failure')
         )
-        parser.add_argument('--region', type=str,
+        elastic_parser.add_argument('--region', type=str,
+            metavar='<choice>',
             required=False,
             default='us-east-1',
-            help='Amazon data center in which to run Elastic MapReduce job.'
+            help=('Amazon data center in which to run job flow. Google '
+                  '"Elastic MapReduce regions" for recent list of centers ')
         )
 
     @staticmethod
@@ -1051,7 +1061,7 @@ class RailRnaCloud:
                 'Name' : 'Allocate swap space',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        base.swap_allocation
+                        '%d' % base.swap_allocation
                     ],
                     'Path' : 's3://elasticmapreduce/bootstrap-actions/add-swap'
                 }
@@ -1153,29 +1163,26 @@ class RailRnaPreprocess:
         base.gzip_input = gzip_input
 
     @staticmethod
-    def add_args(parser):
+    def add_args(output_parser):
         """ Adds parameter descriptions relevant to preprocess job flow to an
             object of class argparse.ArgumentParser.
 
             No return value.
         """
-        parser.add_argument(
+        output_parser.add_argument(
             '--nucleotides-per-input', type=int, required=False,
+            metavar='<int>',
             default=8000000,
-            help=('Maximum number of nucleotides from a given sample to '
-                  'assign to each task. Keep this value small enough that '
-                  'there are at least as many tasks as there are processor '
-                  'cores available.')
+            help='max nucleotides from input reads to assign to each task'
         )
-        parser.add_argument(
+        output_parser.add_argument(
             '--do-not-gzip-input', action='store_const', const=True,
             default=False,
-            help=('Leaves output of preprocess step uncompressed. This makes '
-                  'preprocessing faster but takes up more hard drive space.')
+            help=('leave preprocessed input reads uncompressed')
         )
 
     @staticmethod
-    def protosteps(base, output_dir, cloud=False):
+    def protosteps(base, output_dir, elastic=False):
         return [
             {
                 'name' : 'Preprocess input reads',
@@ -1184,11 +1191,11 @@ class RailRnaPreprocess:
                                                     base.nucleotides_per_input,
                                                     '--gzip-output' if
                                                     base.gzip_input else '',
-                                                    path_join(cloud,
+                                                    path_join(elastic,
                                                         output_dir,
                                                         'push'),
                                                     '--ignore-first-token' if
-                                                    cloud else ''
+                                                    elastic else ''
                                                 ),
                 'inputs' : [base.manifest],
                 'output' : output_dir,
@@ -1217,7 +1224,7 @@ class RailRnaPreprocess:
 
 class RailRnaAlign:
     """ Sets parameters relevant to just the "align" job flow. """
-    def __init__(self, base, input_dir=None, cloud=False,
+    def __init__(self, base, input_dir=None, elastic=False,
         bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
         bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
         bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
@@ -1228,14 +1235,14 @@ class RailRnaAlign:
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         assembly='hg19', s3_ansible=None):
-        if not cloud:
+        if not elastic:
             '''Programs and Bowtie indices should be checked only in local
             mode.'''
             base.bowtie1_exe = base.check_program('bowtie', 'Bowtie 1',
-                                '--bowtie1-exe', entered_exe=bowtie1_exe)
+                                '--bowtie1', entered_exe=bowtie1_exe)
             base.bowtie1_build_exe = base.check_program('bowtie-build',
                                             'Bowtie 1 Build',
-                                            '--bowtie1-build-exe',
+                                            '--bowtie1-build',
                                             entered_exe=bowtie1_build_exe)
             for extension in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', 
                                 '.rev.1.ebwt', '.rev.2.ebwt']:
@@ -1250,10 +1257,10 @@ class RailRnaAlign:
                                         'exist.').format(index_file))
             base.bowtie1_idx = bowtie1_idx
             base.bowtie2_exe = base.check_program('bowtie2', 'Bowtie 2',
-                                '--bowtie2-exe', entered_exe=bowtie2_exe)
+                                '--bowtie2', entered_exe=bowtie2_exe)
             base.bowtie2_build_exe = base.check_program('bowtie-build',
                                             'Bowtie 2 Build',
-                                            '--bowtie2-build-exe',
+                                            '--bowtie2-build',
                                             entered_exe=bowtie2_build_exe)
             for extension in ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', 
                                 '.rev.1.bt2', '.rev.2.bt2']:
@@ -1268,28 +1275,28 @@ class RailRnaAlign:
                                         'exist.').format(index_file))
             base.bowtie2_idx = bowtie2_idx
             base.samtools_exe = base.check_program('samtools', 'SAMTools',
-                                '--samtools-exe', entered_exe=samtools_exe)
+                                '--samtools', entered_exe=samtools_exe)
             base.bedtobigbed_exe = base.check_program('bedToBigBed', 
-                                    'BedToBigBed', '--bedtobigbed-exe',
+                                    'BedToBigBed', '--bedtobigbed',
                                     entered_exe=bedtobigbed_exe)
             # Check input dir
             if input_dir is not None:
                 if not os.path.exists(input_dir):
-                    base_errors.append(('Input directory ("--input-dir") '
+                    base_errors.append(('Input directory (--input) '
                                         '"{0}" does not exist').format(
                                                             input_dir
                                                         ))
                 else:
                     base.input_dir = input_dir
         else:
-            # Cloud mode; check S3 for genome if necessary
+            # Elastic mode; check S3 for genome if necessary
             assert s3_ansible is not None
             if assembly == 'hg19':
                 base.index_archive = 's3://rail-emr/index/hg19_UCSC.tar.gz'
             else:
                 if not Url(assembly).is_s3:
                     base.errors.append(('Bowtie index archive must be on S3'
-                                        ' in cloud ("--cloud") mode, but '
+                                        ' in "elastic" mode, but '
                                         '"{0}" was entered.').format(assembly))
                 elif not s3_ansible.exists(assembly):
                     base.errors.append('Bowtie index archive was not found '
@@ -1297,7 +1304,7 @@ class RailRnaAlign:
                 else:
                     base.index_archive = assembly
             if input_dir is not None:
-                if not Url(input_dir).is_s3:
+                if not ab.Url(input_dir).is_s3:
                     base.errors.append(('Input directory must be on S3, but '
                                         '"{0}" was entered.').format(
                                                                 input_dir
@@ -1307,15 +1314,15 @@ class RailRnaAlign:
                                         'on S3.').format(input_dir))
                 else:
                     base.input_dir = input_dir
-            # Set up cloud params
-            base.bowtie1_idx = '/mnt/index/genome'
-            base.bowtie2_idx = '/mnt/index/genome'
-            base.bedtobigbed_exe='/mnt/bin/bedToBigBed'
-            base.samtools_exe='samtools'
-            base.bowtie1_exe='bowtie'
-            base.bowtie2_exe='bowtie2'
-            base.bowtie1_build_exe='bowtie-build'
-            base.bowtie2_build_exe='bowtie2-build'
+            # Set up elastic params
+            base.bowtie1_idx = _elastic_bowtie1_idx
+            base.bowtie2_idx = _elastic_bowtie2_idx
+            base.bedtobigbed_exe = _elastic_bedtobigbed_exe
+            base.samtools_exe = _elastic_samtools_exe
+            base.bowtie1_exe = _elastic_bowtie1_exe
+            base.bowtie2_exe = _elastic_bowtie2_exe
+            base.bowtie1_build_exe = _elastic_bowtie1_build_exe
+            base.bowtie2_build_exe = _elastic_bowtie2_build_exe
 
         # Assume bowtie2 args are kosher for now
         base.bowtie2_args = bowtie2_args
@@ -1407,206 +1414,184 @@ class RailRnaAlign:
         base.bed_basename = bed_basename
 
     @staticmethod
-    def add_args(parser, usage=None, cloud=False):
+    def add_args(required_parser, exec_parser, output_parser, algo_parser, 
+                    elastic=False):
         """ usage: argparse.SUPPRESS if advanced options should be suppressed;
                 else None
         """
-        if not cloud:
-            parser.add_argument(
-                '--bowtie1-exe', type=str, required=False,
+        if not elastic:
+            exec_parser.add_argument(
+                '--bowtie1', type=str, required=False,
+                metavar='<exe>',
                 default=None,
-                help=('Path to Bowtie 1 executable. This can be left out if '
-                      '"bowtie" is in PATH and is executable.')
+                help=('path to Bowtie 1 executable (def: bowtie)')
             )
-            parser.add_argument(
-                '--bowtie1-build-exe', type=str, required=False,
+            exec_parser.add_argument(
+                '--bowtie1-build', type=str, required=False,
+                metavar='<exe>',
                 default=None,
-                help=('Path to Bowtie 1 Build executable. This can be left '
-                      'out if "bowtie-build" is in PATH and is executable.')
+                help=('path to Bowtie 1 Build executable (def: bowtie-build)')
             )
-            parser.add_argument(
+            required_parser.add_argument(
                 '-1', '--bowtie1-idx', type=str, required=True,
-                help='Path to Bowtie 1 index. Include basename.'
+                metavar='<idx_base>',
+                help='path to Bowtie 1 index; include basename'
             )
-            parser.add_argument(
-                '--bowtie2-exe', type=str, required=False,
+            exec_parser.add_argument(
+                '--bowtie2', type=str, required=False,
+                metavar='<exe>',
                 default=None,
-                help=('Path to Bowtie 2 executable. This can be left out if '
-                      '"bowtie2" is in PATH and is executable.')
+                help=('path to Bowtie 2 executable (def: bowtie2)')
             )
-            parser.add_argument(
-                '--bowtie2-build-exe', type=str, required=False,
+            exec_parser.add_argument(
+                '--bowtie2-build', type=str, required=False,
+                metavar='<exe>',
                 default=None,
-                help=('Path to Bowtie 2 Build executable. This can be left '
-                      'out if "bowtie2-build" is in PATH and is executable.')
+                help=('path to Bowtie 2 Build executable (def: bowtie2-build)')
             )
-            parser.add_argument(
+            required_parser.add_argument(
                 '-2', '--bowtie2-idx', type=str, required=True,
-                help='Path to Bowtie 2 index. Include basename.'
+                metavar='<idx_base>',
+                help='path to Bowtie 2 index; include basename'
             )
-            parser.add_argument(
-                '--bowtie2_args', type=str, required=False,
-                default='',
-                help=('Additional arguments to pass to Bowtie 2, which is '
-                      'used to obtain final end-to-end alignments and spliced '
-                      'alignments in output SAM/BAM files.')
-            )
-            parser.add_argument(
-                '--samtools-exe', type=str, required=False,
+            exec_parser.add_argument(
+                '--samtools', type=str, required=False,
+                metavar='<exe>',
                 default=None,
-                help=('Path to SAMTools executable. This can be left out if '
-                      '"samtools" is in PATH and is executable.')
+                help=('path to SAMTools executable (def: samtools)')
             )
-            parser.add_argument(
-                '--bedtobigbed-exe', type=str, required=False,
+            exec_parser.add_argument(
+                '--bedtobigbed', type=str, required=False,
+                metavar='<exe>',
                 default=None,
-                help=('Path to BedToBigBed executable. This can be left out '
-                      'if "bedToBigBed" is in PATH and is executable.')
+                help=('path to BedToBigBed executable (def: bedtobigbed)')
             )
         else:
-            parser.add_argument(
-                '--assembly', type=str, required=False,
-                default='hg19',
-                help=('One of the following:\n'
-                      '   a) An assembly identifier for a supported '
-                      'organism. Currently supported: {"hg19"}.\n'
-                      '   b) Accessible S3 path to a Rail archive. A Rail '
-                      'archive is a tar.gz composed a folder titled "index", '
-                      'that contains BOTH Bowtie 1 and Bowtie 2 index files '
-                      '(12 in total), all with the basename "genome".')
+            required_parser.add_argument(
+                '-a', '--assembly', type=str, required=True,
+                metavar='<choice/tgz>',
+                help=('assembly to use for alignment. <choice> can be in '
+                      '{"hg19"}. otherwise, specify path to tar.gz Rail '
+                      'archive on S3')
             )
-        parser.add_argument(
+        algo_parser.add_argument(
+                '--bowtie2-args', type=str, required=False,
+                default='',
+                metavar='<str>',
+                help=('arguments to pass to Bowtie 2. options '
+                      '"--end-to-end" and "--local" are managed by Rail-RNA '
+                      '(def: Bowtie 2 defaults)')
+            )
+        algo_parser.add_argument(
             '--genome-partition-length', type=int, required=False,
+            metavar='<int>',
             default=5000,
-            help=(('Smallest unit of a genome (in nucleotides) addressable by '
-                  'a single task when computing coverage from exon '
-                  'differentials. Making this parameter too small (~hundreds '
-                  'of nucleotides) can bloat intermediate files, but making '
-                  'it too large (~the size of a chromosome) could compromise '
-                  'the scalability of the pipeline.') if usage is None else
-                    SUPPRESS)
+            help=('smallest unit of genome addressable by single task when '
+                  'computing coverage')
         )
-        parser.add_argument(
+        algo_parser.add_argument(
             '--max-readlet-size', type=int, required=False,
+            metavar='<int>',
             default=25,
-            help=(('Maximum size of a given segment from a read that is 1) '
-                  'mapped to the genome using Bowtie 1 when searching for '
-                  'introns; and 2) mapped to a set of transcriptome elements '
-                  'using Bowtie 2 when finalizing spliced alignments.'
-                  'Decreasing the value of this parameter may increase recall '
-                  'of introns while compromising precision. For human-size '
-                  'genomes, values between 20 and 25 are recommended.')
-                    if usage is None else SUPPRESS)
+            help='max size of read segment to align when searching for introns'
         )
-        parser.add_argument(
+        algo_parser.add_argument(
             '--min-readlet-size', type=int, required=False,
+            metavar='<int>',
             default=15,
-            help=(('Minimum size of a given "capping readlet" -- that is, a '
-                  'read segment whose end coincides with a read end -- that '
-                  'is 1) mapped to the genome using Bowtie 1 when searching '
-                  'for introns; and 2) mapped to a set of transcriptome '
-                  'elements using Bowtie 2 when finalizing spliced '
-                  'alignments. Decreasing the value of this parameter may '
-                  'increase recall of rare introns overlapped towards the '
-                  'ends of a few reads in a sample while compromising '
-                  'precision.') if usage is None else SUPPRESS)
+            help='min size of read segment to align when searching for introns'
         )
-        parser.add_argument(
+        algo_parser.add_argument(
             '--readlet-interval', type=int, required=False,
+            metavar='<int>',
             default=4,
-            help=(('Distance (in nucleotides) between overlapping readlets '
-                  'mapped to genome and set of transcriptome elements. '
-                  'Decreasing this parameter may increase sensitivity while '
-                  'increasing the time the pipeline takes.')
-                    if usage is None else SUPPRESS)
+            help=('distance between start positions of successive overlapping '
+                  'read segments to align when searching for introns')
         )
-        parser.add_argument(
+        algo_parser.add_argument(
             '--cap-size-multiplier', type=float, required=False,
             default=1.2,
-            help=(('Successive capping readlets on a given end of a read are '
-                  'increased in size exponentially with this base.')
-                    if usage is None else SUPPRESS)
+            help=SUPPRESS
         )
-        parser.add_argument(
+        algo_parser.add_argument(
             '--max-intron-size', type=int, required=False,
+            metavar='<int>',
             default=500000,
-            help=('Introns spanning more than this many nucleotides are '
-                  'automatically filtered out.')
+            help=('filter out introns spanning more than <int> bases')
         )
-        parser.add_argument(
+        algo_parser.add_argument(
             '--min-intron-size', type=int, required=False,
+            metavar='<int>',
             default=10,
-            help=('Introns spanning fewer than this many nucleotides are '
-                  'automatically filtered out.')
+            help=('filter out introns spanning fewer than <int> bases')
         )
-        parser.add_argument(
+        algo_parser.add_argument(
             '--min-exon-size', type=int, required=False,
+            metavar='<int>',
             default=9,
-            help=('The aligner will not be sensitive to exons smaller than '
-                  'this size.')
+            help=('try to be sensitive to exons that span at least <int> '
+                  'bases')
         )
-        parser.add_argument(
+        algo_parser.add_argument(
             '--motif-search-window-size', type=int, required=False,
             default=1000,
-            help=(('Size of window in which to search for exons of size '
-                  '"--min-exon-size" capped by appropriate donor/acceptor '
-                  'motifs when inferring intron positions.')
-                    if usage is None else SUPPRESS)
+            help=SUPPRESS
         )
-        parser.add_argument(
+        algo_parser.add_argument(
             '--motif-radius', type=int, required=False,
             default=5,
-            help=(('Number of nucleotides of ostensible intron ends within '
-                  'which to search for a donor/acceptor motif.')
-                    if usage is None else SUPPRESS)
+            help=SUPPRESS
         )
-        parser.add_argument(
+        algo_parser.add_argument(
             '--normalize-percentile', type=float, required=False,
+            metavar='<dec>',
             default=0.75,
-            help=('Percentile used for computing normalization factors for '
-                  'sample coverage.')
+            help=('percentile to use when computing normalization factors for '
+                  'sample coverages')
         )
-        parser.add_argument(
+        output_parser.add_argument(
             '--do-not-output-bam-by-chr', action='store_const', const=True,
             default=False,
-            help=('Places alignments for all chromosomes in a single file '
-                  'rather than dividing them up by reference name.')
+            help=('place all of a sample\'s alignments in one file rather '
+                  'than dividing them up by chromosome')
         )
-        parser.add_argument(
+        output_parser.add_argument(
             '--output-sam', action='store_const', const=True,
             default=False,
-            help='Outputs SAM files rather than BAM files.'
+            help='output SAM instead of BAM'
         )
-        parser.add_argument(
+        output_parser.add_argument(
             '--bam-basename', type=str, required=False,
+            metavar='<str>',
             default='alignments',
-            help='Basename to use for BAM output files.'
+            help='basename for BAM output'
         )
-        parser.add_argument(
+        output_parser.add_argument(
             '--bed-basename', type=str, required=False,
+            metavar='<str>',
             default='',
-            help=('Basename to use for BED output files; there is an output '
-                  'for each of insertions, deletions, and introns.')
+            help='basename for BED output (def: *empty*)'
         )
 
     @staticmethod
-    def protosteps(base, input_dir, cloud=False):
-        manifest = ('/mnt/MANIFEST' if cloud else base.manifest)
+    def protosteps(base, input_dir, elastic=False):
+        manifest = ('/mnt/MANIFEST' if elastic else base.manifest)
         verbose = ('--verbose' if base.verbose else '')
-        keep_alive = ('--keep-alive' if cloud else '')
+        keep_alive = ('--keep-alive' if elastic else '')
         return [  
             {
                 'name' : 'Align reads to genome',
                 'run' : ('align_reads.py --bowtie-idx={0} --bowtie2-idx={1} '
                          '--bowtie2-exe={2} '
                          '--exon-differentials --partition-length={3} '
-                         '--manifest={4} {5} -- --local').format(
+                         '--manifest={4} {5} -- {6} --local').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
                                                 base.genome_partition_length,
                                                         manifest,
-                                                        verbose),
+                                                        verbose,
+                                                        base.bowtie2_args),
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
@@ -1616,7 +1601,7 @@ class RailRnaAlign:
             {
                 'name' : 'Aggregate duplicate read sequences',
                 'run' : 'sum.py --type 3 --value-count 2',
-                'inputs' : [path_join(cloud, 'align_reads', 'readletize')],
+                'inputs' : [path_join(elastic, 'align_reads', 'readletize')],
                 'output' : 'combine_sequences',
                 'taskx' : 4,
                 'part' : 'k1,1',
@@ -1711,7 +1696,7 @@ class RailRnaAlign:
                 'name' : 'Build index of transcriptome elements',
                 'run' : ('intron_index.py --bowtie-build-exe={0} '
                          '--out={1} {2}').format(base.bowtie1_build_exe,
-                                                 path_join(cloud,
+                                                 path_join(elastic,
                                                             base.output_dir,
                                                             'index'),
                                                  keep_alive),
@@ -1727,8 +1712,8 @@ class RailRnaAlign:
                          '--bowtie-exe={1} {2} -- -t --sam-nohead '
                          '--startverbose -v -a -m 80').format(
                                                         'intron/intron'
-                                                        if cloud else
-                                                        path_join(cloud,
+                                                        if elastic else
+                                                        path_join(elastic,
                                                             base.output_dir,
                                                             'index',
                                                             'intron'),
@@ -1769,12 +1754,13 @@ class RailRnaAlign:
                 'run' : ('realign_reads.py --original-idx={0} '
                          '--bowtie2-exe={1} --partition-length={2} '
                          '--exon-differentials --manifest={3} {4} '
-                         '-- --end-to-end').format(base.bowtie1_idx,
+                         '-- {5} --end-to-end').format(base.bowtie1_idx,
                                                     base.bowtie2_exe,
                                                 base.genome_partition_length,
                                                     manifest,
-                                                    verbose),
-                'inputs' : [path_join(cloud, 'align_reads', 'unmapped'),
+                                                    verbose,
+                                                    base.bowtie2_args),
+                'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
                                 'cointron_fasta'],
                 'output' : 'realign_reads',
                 'taskx' : 4,
@@ -1785,8 +1771,8 @@ class RailRnaAlign:
             {
                 'name' : 'Merge exon differentials at same genomic positions',
                 'run' : 'sum.py',
-                'inputs' : [path_join(cloud, 'align_reads', 'exon_diff'),
-                            path_join(cloud, 'realign_reads', 'exon_diff')],
+                'inputs' : [path_join(elastic, 'align_reads', 'exon_diff'),
+                            path_join(elastic, 'realign_reads', 'exon_diff')],
                 'output' : 'collapse',
                 'taskx' : 8,
                 'part' : 'k1,3',
@@ -1809,13 +1795,13 @@ class RailRnaAlign:
                          '--out={2} --bigbed-exe={3} '
                          '--manifest={4} {5}').format(base.bowtie1_idx,
                                                      base.normalize_percentile,
-                                                     path_join(cloud,
+                                                     path_join(elastic,
                                                         base.output_dir,
                                                         'coverage'),
                                                      base.bedtobigbed_exe,
                                                      manifest,
                                                      verbose),
-                'inputs' : [path_join(cloud, 'coverage_pre', 'coverage')],
+                'inputs' : [path_join(elastic, 'coverage_pre', 'coverage')],
                 'output' : 'coverage',
                 'taskx' : 1,
                 'part' : 'k1,1',
@@ -1824,7 +1810,7 @@ class RailRnaAlign:
             {
                 'name' : 'Write normalization factors for sample coverages',
                 'run' : 'coverage_post.py --out={0} --manifest={1}'.format(
-                                                        path_join(cloud,
+                                                        path_join(elastic,
                                                             base.output_dir,
                                                             'normalize'),
                                                         manifest
@@ -1838,8 +1824,8 @@ class RailRnaAlign:
             {
                 'name' : 'Aggregate intron and index results by sample',
                 'run' : 'bed_pre.py',
-                'inputs' : [path_join(cloud, 'realign_reads', 'bed'),
-                            path_join(cloud, 'align_reads', 'bed')],
+                'inputs' : [path_join(elastic, 'realign_reads', 'bed'),
+                            path_join(elastic, 'align_reads', 'bed')],
                 'output' : 'bed_pre',
                 'taskx' : 8,
                 'part' : 'k1,6',
@@ -1850,7 +1836,7 @@ class RailRnaAlign:
                 'run' : ('bed.py --bowtie-idx={0} --out={1} '
                          '--manifest={2} --bed-basename={3}').format(
                                                         base.bowtie1_idx,
-                                                        path_join(cloud,
+                                                        path_join(elastic,
                                                             base.output_dir,
                                                             'bed'),
                                                         manifest,
@@ -1867,7 +1853,7 @@ class RailRnaAlign:
                 'run' : ('bam.py --out={0} --bowtie-idx={1} '
                          '--samtools-exe={2} --bam-basename={3} '
                          '--manifest={4} {5} {6}').format(
-                                        path_join(cloud,
+                                        path_join(elastic,
                                                     base.output_dir, 'bam'),
                                         base.bowtie1_idx,
                                         base.samtools_exe,
@@ -1878,8 +1864,9 @@ class RailRnaAlign:
                                         if not base.do_not_output_bam_by_chr
                                         else ''
                                     ),
-                'inputs' : [path_join(cloud, 'align_reads', 'end_to_end_sam'),
-                            path_join(cloud, 'realign_reads', 'splice_sam')],
+                'inputs' : [path_join(elastic, 'align_reads', 
+                                'end_to_end_sam'),
+                            path_join(elastic, 'realign_reads', 'splice_sam')],
                 'output' : 'bam',
                 'taskx' : 1,
                 'part' : 'k1,1',
@@ -1944,7 +1931,7 @@ class RailRnaAlign:
                 'ScriptBootstrapAction' : {
                     'Args' : [
                         '/mnt',
-                        base.assembly
+                        base.index_archive
                     ],
                     'Path' : 's3://rail-emr/bootstrap/s3cmd_s3_tarball.sh'
                 }
@@ -1989,13 +1976,14 @@ class RailRnaLocalPreprocessJson:
                 base.output_dir), '', '', step_dir, base.num_processes,
                 base.intermediate_dir, unix=False
             )
+        self.base = base
     
     @property
     def json_serial(self):
         return self._json_serial
 
-class RailRnaCloudPreprocessJson:
-    """ Constructs JSON for cloud mode + preprocess job flow. """
+class RailRnaElasticPreprocessJson:
+    """ Constructs JSON for elastic mode + preprocess job flow. """
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
@@ -2014,7 +2002,7 @@ class RailRnaCloudPreprocessJson:
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
-        RailRnaCloud(base, check_manifest=True,
+        RailRnaElastic(base, check_manifest=True,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
             name=name,
@@ -2047,9 +2035,9 @@ class RailRnaCloudPreprocessJson:
             reducer_count = base.master_instance_count \
                 * base.instance_core_counts[base.core_instance_type]
         self._json_serial['Steps'] \
-            = RailRnaCloud.hadoop_debugging_steps(base) + steps(
+            = RailRnaElastic.hadoop_debugging_steps(base) + steps(
                     RailRnaPreprocess.protosteps(base, base.output_dir,
-                                                    cloud=True),
+                                                    elastic=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
@@ -2066,9 +2054,11 @@ class RailRnaCloudPreprocessJson:
         self._json_serial['VisibleToAllUsers'] = (
                 'true' if base.visible_to_all_users else 'false'
             )
-        self._json_serial['Instances'] = RailRnaCloud.instances(base)
+        self._json_serial['Instances'] = RailRnaElastic.instances(base)
         self._json_serial['BootstrapActions'] \
-            = RailRnaPreprocess.bootstrap(base) + RailRnaCloud.bootstrap(base)
+            = RailRnaPreprocess.bootstrap() \
+            + RailRnaElastic.bootstrap(base)
+        self.base = base
     
     @property
     def json_serial(self):
@@ -2076,7 +2066,8 @@ class RailRnaCloudPreprocessJson:
 
 class RailRnaLocalAlignJson:
     """ Constructs JSON for local mode + align job flow. """
-    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
+    def __init__(self, manifest, output_dir, input_dir,
+        intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, bowtie1_exe=None,
         bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
@@ -2095,7 +2086,8 @@ class RailRnaLocalAlignJson:
             region=region, verbose=verbose)
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
             keep_intermediates=keep_intermediates)
-        RailRnaAlign(base, cloud=False, bowtie1_exe=bowtie1_exe,
+        RailRnaAlign(base, input_dir=input_dir,
+            elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
             bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
@@ -2123,17 +2115,19 @@ class RailRnaLocalAlignJson:
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
-                base.output_dir, cloud=False), '', '', step_dir,
+                base.output_dir, elastic=False), '', '', step_dir,
                 base.num_processes, base.intermediate_dir, unix=False
             )
+        self.base = base
 
     @property
     def json_serial(self):
         return self._json_serial
 
-class RailRnaCloudAlignJson:
-    """ Constructs JSON for cloud mode + align job flow. """
-    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
+class RailRnaElasticAlignJson:
+    """ Constructs JSON for elastic mode + align job flow. """
+    def __init__(self, manifest, output_dir, input_dir, 
+        intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, bowtie1_exe=None, bowtie1_idx='genome',
         bowtie1_build_exe=None, bowtie2_exe=None,
@@ -2160,11 +2154,10 @@ class RailRnaCloudAlignJson:
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
-        RailRnaCloud(base, check_manifest=False,
+        RailRnaElastic(base, check_manifest=False,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
-            name=name,
-            action_on_failure=action_on_failure,
+            name=name, action_on_failure=action_on_failure,
             hadoop_jar=hadoop_jar, master_instance_count=master_instance_count,
             master_instance_type=master_instance_type,
             master_instance_bid_price=master_instance_bid_price,
@@ -2176,7 +2169,8 @@ class RailRnaCloudAlignJson:
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected)
-        RailRnaAlign(base, cloud=True, bowtie1_exe=bowtie1_exe,
+        RailRnaAlign(base, input_dir=input_dir,
+            elastic=True, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
             bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
@@ -2200,8 +2194,8 @@ class RailRnaCloudAlignJson:
             raise RuntimeError(
                     '\n'.join(
                             ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(errors)]
-                        ) if len(errors) > 1 else errors[0]
+                                in enumerate(base.errors)]
+                        ) if len(base.errors) > 1 else base.errors[0]
                 )
         self._json_serial = {}
         if base.core_instance_count > 0:
@@ -2211,9 +2205,10 @@ class RailRnaCloudAlignJson:
             reducer_count = base.master_instance_count \
                 * base.instance_core_counts[base.core_instance_type]
         self._json_serial['Steps'] \
-            = RailRnaCloud.hadoop_debugging_steps(base) + \
+            = RailRnaElastic.hadoop_debugging_steps(base) + \
                 steps(
-                    RailRnaAlign.protosteps(base, base.input_dir, cloud=True),
+                    RailRnaAlign.protosteps(base, base.input_dir,
+                                                        elastic=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
@@ -2230,9 +2225,11 @@ class RailRnaCloudAlignJson:
         self._json_serial['VisibleToAllUsers'] = (
                 'true' if base.visible_to_all_users else 'false'
             )
-        self._json_serial['Instances'] = RailRnaCloud.instances(base)
+        self._json_serial['Instances'] = RailRnaElastic.instances(base)
         self._json_serial['BootstrapActions'] \
-            = RailRnaPreprocess.bootstrap(base) + RailRnaCloud.bootstrap(base)
+            = RailRnaAlign.bootstrap(base) \
+            + RailRnaElastic.bootstrap(base)
+        self.base = base
     
     @property
     def json_serial(self):
@@ -2294,20 +2291,21 @@ class RailRnaLocalAllJson:
                                         'preprocess', 'push')
         self._json_serial['Steps'] = \
             steps(RailRnaPreprocess.protosteps(base,
-                prep_dir, cloud=False), '', '', step_dir, base.num_processes,
+                prep_dir, elastic=False), '', '', step_dir, base.num_processes,
                 base.intermediate_dir, unix=False
             ) + \
             steps(RailRnaAlign.protosteps(base,
-                push_dir, cloud=False), '', '', step_dir,
+                push_dir, elastic=False), '', '', step_dir,
                 base.num_processes, base.intermediate_dir, unix=False
             )
+        self.base = base
 
     @property
     def json_serial(self):
         return self._json_serial
 
-class RailRnaCloudAllJson:
-    """ Constructs JSON for cloud mode + preprocess+align job flow. """
+class RailRnaElasticAllJson:
+    """ Constructs JSON for elastic mode + preprocess+align job flow. """
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
@@ -2335,7 +2333,7 @@ class RailRnaCloudAllJson:
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
-        RailRnaCloud(base, check_manifest=True, 
+        RailRnaElastic(base, check_manifest=True, 
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
             name=name,
@@ -2353,7 +2351,7 @@ class RailRnaCloudAllJson:
             termination_protected=termination_protected)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
-        RailRnaAlign(base, cloud=True, bowtie1_exe=bowtie1_exe,
+        RailRnaAlign(base, elastic=True, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
             bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
@@ -2392,16 +2390,16 @@ class RailRnaCloudAllJson:
         push_dir = path_join(True, base.intermediate_dir,
                                         'preprocess', 'push')
         self._json_serial['Steps'] \
-            = RailRnaCloud.hadoop_debugging_steps(base) + \
+            = RailRnaElastic.hadoop_debugging_steps(base) + \
                 steps(
                     RailRnaPreprocess.protosteps(base, prep_dir,
-                                                    cloud=False),
+                                                    elastic=False),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
                 ) + \
                 steps(
-                    RailRnaAlign.protosteps(base, push_dir, cloud=True),
+                    RailRnaAlign.protosteps(base, push_dir, elastic=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
@@ -2418,9 +2416,11 @@ class RailRnaCloudAllJson:
         self._json_serial['VisibleToAllUsers'] = (
                 'true' if base.visible_to_all_users else 'false'
             )
-        self._json_serial['Instances'] = RailRnaCloud.instances(base)
+        self._json_serial['Instances'] = RailRnaElastic.instances(base)
         self._json_serial['BootstrapActions'] \
-            = RailRnaPreprocess.bootstrap(base) + RailRnaCloud.bootstrap(base)
+            = RailRnaAlign.bootstrap(base) \
+            + RailRnaElastic.bootstrap(base)
+        self.base = base
     
     @property
     def json_serial(self):

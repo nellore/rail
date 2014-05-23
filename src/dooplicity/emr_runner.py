@@ -173,7 +173,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
         for step in steps:
             if ab.Url(step_data['output']).is_s3:
                 s3_ansible.remove_dir(steps[step]['output'])
-            buckets.add(ab.bucket_from_url(steps[step]['output']))
+                buckets.add(ab.bucket_from_url(steps[step]['output']))
         for bucket in buckets:
             try:
                 s3_ansible.create_bucket(bucket)
@@ -181,10 +181,10 @@ def run_job_flow(branding, json_config, force, no_browser=False,
                 raise RuntimeError(('Bucket %s already exists on S3. Change '
                                     'affected output directories in job flow '
                                     'and try again. The more distinctive the '
-                                    'bucket name chosen, the less likely '
-                                    'it\'s already a bucket on S3. It may be '
+                                    'name chosen, the less likely it\'s '
+                                    'already a bucket on S3. It may be '
                                     'easier to create a bucket first on S3 '
-                                    'and use use its name + a subdirectory as '
+                                    'and use its name + a subdirectory as '
                                     'the output directory.') % bucket)
         iface.step('Set up output directories on S3.')
         job_flow_response = aws_ansible.post_request(full_payload)
