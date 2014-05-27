@@ -775,7 +775,7 @@ class RailRnaElastic:
                                                     ))
             if not manifest_url.is_s3 and output_dir_url.is_s3:
                 # Copy manifest file to S3 before job flow starts
-                base.manifest = path_join(True, base.output_dir,
+                base.manifest = path_join(True, base.output_dir + '.manifest',
                                                 'MANIFEST')
                 ansible.put(manifest, base.manifest)
             if not manifest_url.is_local:
@@ -926,12 +926,12 @@ class RailRnaElastic:
         elastic_parser.add_argument('--log-uri', type=str, required=False,
             metavar='<s3_dir>',
             default=None,
-            help=('Hadoop log directory on S3 (def: "logs" subdirectory of '
-                  'output directory)')
+            help=('Hadoop log directory on S3 (def: output directory + '
+                  '".logs")')
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='2.4.2',
+            default='2.4.5',
             help='Amazon Linux AMI to use'
         )
         elastic_parser.add_argument('--visible-to-all-users',
@@ -1214,33 +1214,46 @@ class RailRnaPreprocess:
                                                     base.nucleotides_per_input,
                                                     '--gzip-output' if
                                                     base.gzip_input else '',
-                                                    path_join(elastic,
+                                                    ab.Url(path_join(elastic,
                                                         output_dir,
-                                                        'push'),
+                                                        'push')).to_url(
+                                                            caps=True
+                                                        ),
                                                     '--ignore-first-token' if
                                                     elastic else ''
                                                 ),
                 'inputs' : [base.manifest],
+                'no_input_prefix' : True,
                 'output' : output_dir,
                 'no_output_prefix' : True,
                 'inputformat' : (
                         'org.apache.hadoop.mapred.lib.NLineInputFormat'
                     ),
                 'taskx' : 0
-            }
+            },
         ]
 
     @staticmethod
     def bootstrap():
         return [
             {
-                'Name' : 'PyPy',
+                'Name' : 'Install PyPy',
                 'ScriptBootstrapAction' : {
                     'Args' : [
                         ('s3://rail-emr/bin/'
                          'pypy-2.2.1-linux_x86_64-portable.tar.bz2')
                     ],  
                     'Path' : 's3://rail-emr/bootstrap/install-pypy.sh'
+                }
+            },
+            {
+                'Name' : 'Install Rail-RNA',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        's3://rail-emr/bin/rail-rna-0.1.0.tar.gz',
+                        '/mnt'
+                    ],
+                    'Path' : 's3://rail-emr/bootstrap/install-rail.sh'
                 }
             }
         ]
@@ -2083,8 +2096,7 @@ class RailRnaElasticPreprocessJson:
         if base.log_uri is not None:
             self._json_serial['LogUri'] = base.log_uri
         else:
-            self._json_serial['LogUri'] = path_join(True, base.output_dir,
-                                                        'logs')
+            self._json_serial['LogUri'] = base.output_dir + '.logs'
         self._json_serial['Name'] = base.name
         self._json_serial['NewSupportedProducts'] = []
         self._json_serial['Tags'] = base.tags
@@ -2254,8 +2266,7 @@ class RailRnaElasticAlignJson:
         if base.log_uri is not None:
             self._json_serial['LogUri'] = base.log_uri
         else:
-            self._json_serial['LogUri'] = path_join(True, base.output_dir,
-                                                        'logs')
+            self._json_serial['LogUri'] = base.output_dir + '.logs'
         self._json_serial['Name'] = base.name
         self._json_serial['NewSupportedProducts'] = []
         self._json_serial['Tags'] = base.tags
@@ -2445,8 +2456,7 @@ class RailRnaElasticAllJson:
         if base.log_uri is not None:
             self._json_serial['LogUri'] = base.log_uri
         else:
-            self._json_serial['LogUri'] = path_join(True, base.output_dir,
-                                                        'logs')
+            self._json_serial['LogUri'] = base.output_dir + '.logs'
         self._json_serial['Name'] = base.name
         self._json_serial['NewSupportedProducts'] = []
         self._json_serial['Tags'] = base.tags

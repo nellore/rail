@@ -162,7 +162,8 @@ class FileMover:
             if curl_thread.process_return > 0:
                 raise RuntimeError(('Nonzero exitlevel %d from curl command '
                                     '"%s"') 
-                                        % (curl_thread.exit_level, command))
+                                        % (curl_thread.process_return,
+                                            command))
         elif url.is_local:
             command_list = ['cp', url.to_url(), dest]
         else:

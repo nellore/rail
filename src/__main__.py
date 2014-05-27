@@ -550,7 +550,7 @@ if __name__ == '__main__':
                 keep_alive=args.keep_alive,
                 termination_protected=args.termination_protected
             )
-    elif args.job_flow == 'preprocess' and args.prep_mode == 'elastic':
+    elif args.job_flow == 'prep' and args.prep_mode == 'elastic':
         mode = 'elastic'
         json_creator = RailRnaElasticPreprocessJson(
                 args.manifest, args.output,
@@ -588,7 +588,7 @@ if __name__ == '__main__':
                                             else None
                                         ),
                                         region=args.region)
-    except ValueError:
+    except AttributeError:
         launcher = Launcher(force=json_creator.base.force,
                                         num_processes=(
                                             json_creator.base.num_processes

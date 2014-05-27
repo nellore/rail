@@ -6,6 +6,8 @@
 
 set -e
 
+sudo apt-get --yes install s3cmd || { echo 'apt-get failed' ; exit 1; }
+
 AWS_ACCESS_ID=`grep 'fs.s3.awsAccessKeyId' $HOME/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
 AWS_ACCESS_KEY=`grep 'fs.s3.awsSecretAccessKey' $HOME/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
 
