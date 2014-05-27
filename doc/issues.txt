@@ -10,3 +10,7 @@ Here are some relevant Hadoop/EMR issues that we should keep track of:
    and reducers.  However, it could be that once this JIRA is addressed, we can
    re-enable it.  Note that this is only a problem when the align step is
    writing its output directly to S3.
+
+Found another thread where this issue is discussed:
+
+ - https://forums.aws.amazon.com/thread.jspa?threadID=149518
