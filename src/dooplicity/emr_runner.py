@@ -42,7 +42,7 @@ import ansibles as ab
 _aws_regions = set(['us-east-1', 'us-west-2', 'us-west-1', 'eu-west-1',
                     'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1',
                     'sa-east-1', 'us-gov-west-1'])
-_emr_url = ('https://console.aws.amazon.com/elasticmapreduce/'
+_emr_url = ('https://console.aws.amazon.com/elasticmapreduce/?region={region}'
             '#cluster-details:{job_flow_id}')
 
 def run_job_flow(branding, json_config, force, no_browser=False,
@@ -199,9 +199,11 @@ def run_job_flow(branding, json_config, force, no_browser=False,
             iface.step(('Submitted job flow.\n'
                         '*****Job flow ID is %s .*****\n' % job_flow_id) + 
                         ('*****Submission can be monitored at %s .*****' %
-                            _emr_url.format(job_flow_id=job_flow_id)))
+                            _emr_url.format(region=aws_ansible.region,
+                                            job_flow_id=job_flow_id)))
             if not no_browser:
-                webbrowser.open(_emr_url.format(job_flow_id=job_flow_id),
+                webbrowser.open(_emr_url.format(region=aws_ansible.region,
+                                                job_flow_id=job_flow_id),
                                     new=2) # Open in new tab
                 iface.step('Opening URL in default browser.')
         iface.done(closer=('Finished job flow submission script '

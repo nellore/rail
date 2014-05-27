@@ -26,19 +26,21 @@ from argparse import SUPPRESS
 _usage_message = \
 """rail-rna <job flow> <mode> <[args]>
 
-  <job flow>       {prep, align, go}
+  <job flow>       {{prep, align, go}}
                      prep: preprocess reads listed in a required manifest
                        file (specified with --manifest)
                      align: align preprocessed reads (specified with --input)
                      go: perform prep and align in succession
-  <mode>           {local, elastic}
+  <mode>           {{local, elastic}}
                      local: run Rail-RNA on this computer
                      elastic: run Rail-RNA on Amazon Elastic MapReduce.
                        Requires that the user sign up for Amazon Web Services
 
+=x= Rail-RNA v{0} by Abhi Nellore (anellore@jhu.edu; www.github.com/buci)
+
 Rail-RNA is a scalable MapReduce pipeline that can analyze many RNA-seq
 datasets at once. To view help for a given combination of <job flow> and
-<mode>, specify both, then add -h/--help."""
+<mode>, specify both, then add -h/--help.""".format(version_number)
 _help_set = set(['--help', '-h'])
 _argv_set = set(sys.argv)
 
@@ -95,9 +97,10 @@ class RailHelpFormatter(argparse.HelpFormatter):
 class Launcher:
     """ Facilitates replacing the current process with a Dooplicity runner. """
 
-    def __init__(self, force=False, num_processes=1):
+    def __init__(self, force=False, num_processes=1, region='us-east-1'):
         self.force = force
         self.num_processes = num_processes
+        self.region = region
 
     def run(self, mode, payload):
         """ Replaces current process, using PyPy if it's available.
@@ -164,6 +167,8 @@ class Launcher:
                                     'rna', 'driver', 'rail-rna.txt')]
             if self.force:
                 runner_args.append('-f')
+            if self.region != 'us-east-1':
+                runner_args.extend(['-r', self.region])
         os.write(write_pipe, payload)
         os.close(write_pipe)
         os.dup2(read_pipe, sys.stdin.fileno())
@@ -347,21 +352,25 @@ if __name__ == '__main__':
                             general_parser=go_elastic_general,
                             output_parser=go_elastic_output,
                             elastic_parser=go_elastic_details,
-                            prep=False, align=False)
+                            align=False)
     RailRnaElastic.add_args(required_parser=align_elastic_required,
                             general_parser=align_elastic_general,
                             output_parser=align_elastic_output,
                             elastic_parser=align_elastic_details,
-                            prep=False, align=True)
+                            align=True)
     RailRnaElastic.add_args(required_parser=prep_elastic_required,
                             general_parser=prep_elastic_general,
                             output_parser=prep_elastic_output,
                             elastic_parser=prep_elastic_details,
-                            prep=True, align=False)
-    RailRnaPreprocess.add_args(prep_elastic_output)
-    RailRnaPreprocess.add_args(prep_local_output)
-    RailRnaPreprocess.add_args(go_elastic_general)
-    RailRnaPreprocess.add_args(go_local_general)
+                            align=False)
+    RailRnaPreprocess.add_args(general_parser=prep_elastic_general,
+                               output_parser=prep_elastic_output)
+    RailRnaPreprocess.add_args(general_parser=prep_local_general,
+                               output_parser=prep_local_output)
+    RailRnaPreprocess.add_args(general_parser=go_elastic_general,
+                               output_parser=go_elastic_general)
+    RailRnaPreprocess.add_args(general_parser=go_local_general,
+                               output_parser=go_local_general)
     RailRnaAlign.add_args(required_parser=align_local_required,
                           exec_parser=align_local_exec,
                           output_parser=align_local_output,
@@ -410,7 +419,8 @@ if __name__ == '__main__':
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
                 bed_basename=args.bed_basename,
                 num_processes=args.num_processes,
-                keep_intermediates=args.keep_intermediates
+                keep_intermediates=args.keep_intermediates,
+                check_manifest=(not args.do_not_check_manifest)
             )
     elif args.job_flow == 'align' and args.align_mode == 'local':
         mode = 'local'
@@ -464,7 +474,7 @@ if __name__ == '__main__':
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 region=args.region, verbose=args.verbose,
                 nucleotides_per_input=args.nucleotides_per_input,
-                gzip_input=args.gzip_input,
+                gzip_input=(not args.do_not_gzip_input),
                 bowtie2_args=args.bowtie2_args,
                 genome_partition_length=args.genome_partition_length,
                 max_readlet_size=args.max_readlet_size,
@@ -478,7 +488,7 @@ if __name__ == '__main__':
                 motif_radius=args.motif_radius,
                 normalize_percentile=args.normalize_percentile,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
-                output_sam=args.ouput_sam, bam_basename=args.bam_basename,
+                output_sam=args.output_sam, bam_basename=args.bam_basename,
                 bed_basename=args.bed_basename, log_uri=args.log_uri,
                 ami_version=args.ami_version,
                 visible_to_all_users=args.visible_to_all_users,
@@ -496,7 +506,8 @@ if __name__ == '__main__':
                 task_instance_bid_price=args.task_instance_bid_price,
                 ec2_key_name=args.ec2_key_name,
                 keep_alive=args.keep_alive,
-                termination_protected=args.termination_protected
+                termination_protected=args.termination_protected,
+                check_manifest=(not args.do_not_check_manifest)
             )
     elif args.job_flow == 'align' and args.align_mode == 'elastic':
         mode = 'elastic'
@@ -547,7 +558,7 @@ if __name__ == '__main__':
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 region=args.region, verbose=args.verbose,
                 nucleotides_per_input=args.nucleotides_per_input,
-                gzip_input=args.gzip_input,
+                gzip_input=(not args.do_not_gzip_input),
                 log_uri=args.log_uri,
                 ami_version=args.ami_version,
                 visible_to_all_users=args.visible_to_all_users,
@@ -565,13 +576,23 @@ if __name__ == '__main__':
                 task_instance_bid_price=args.task_instance_bid_price,
                 ec2_key_name=args.ec2_key_name,
                 keep_alive=args.keep_alive,
-                termination_protected=args.termination_protected
+                termination_protected=args.termination_protected,
+                check_manifest=(not args.do_not_check_manifest)
             )
     # Launch
-    launcher = Launcher(force=json_creator.base.force,
-                                    num_processes=(
-                                        json_creator.base.num_processes
-                                        if mode == 'local'
-                                        else None
-                                    ))
+    try:
+        launcher = Launcher(force=json_creator.base.force,
+                                        num_processes=(
+                                            json_creator.base.num_processes
+                                            if mode == 'local'
+                                            else None
+                                        ),
+                                        region=args.region)
+    except ValueError:
+        launcher = Launcher(force=json_creator.base.force,
+                                        num_processes=(
+                                            json_creator.base.num_processes
+                                            if mode == 'local'
+                                            else None
+                                        ))
     launcher.run(mode, json.dumps(json_creator.json_serial))

@@ -68,6 +68,7 @@ import manifest
 # Define string version_number
 import version
 import filemover
+import threading
 from dooplicity.ansibles import Url
 
 # Print file's docstring if -h is invoked
@@ -125,6 +126,8 @@ sorted_rnames = [reference_index.string_to_rname['%012d' % i]
 # For mapping sample indices back to original sample labels
 manifest_object = manifest.LabelsAndIndices(args.manifest)
 
+keep_alive_interval = 60
+keep_alive_next = time.time() + keep_alive_interval
 (output_path, output_filename, output_stream, output_url,
     last_rname, last_sample_label) = [None]*6
 if args.out is not None:
@@ -142,14 +145,14 @@ input_line_count = 0
 move_temporary_file = False # True when temporary file should be uploaded
 while True:
     line = sys.stdin.readline()
-    if args.keep_alive:
+    time_now = time.time()
+    if time_now > keep_alive_next:
         print >>sys.stderr, 'reporter:status:alive'
-    print >>sys.stderr, input_line_count
+        keep_alive_next += keep_alive_interval
     if not line:
         if output_stream is not None:
             output_stream.close()
             if not args.output_sam:
-                print >>sys.stderr, 'samtools returning'
                 samtools_return = samtools_process.wait()
                 if samtools_return:
                     raise RuntimeError('samtools returned exitlevel %d' 
@@ -165,7 +168,6 @@ while True:
         rname = reference_index.string_to_rname[rname]
     if move_temporary_file and last_sample_label is not None \
         and not output_url.is_local:
-        print >>sys.stderr, 'movin'
         mover.put(last_output_path, 
             output_url.plus(last_output_filename))
         os.remove(last_output_path)
@@ -215,7 +217,6 @@ while True:
         if not args.output_sam:
             # Start samtools and reroute output_stream to subprocess stdin
             subprocess_stdout = output_stream
-            print >>sys.stderr, 'starting samtools process'
             samtools_process = \
                 subprocess.Popen([args.samtools_exe, 'view', '-bS', '-'],
                                     stdin=subprocess.PIPE,

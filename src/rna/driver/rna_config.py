@@ -42,11 +42,13 @@ _elastic_bowtie2_exe = 'bowtie2'
 _elastic_bowtie1_build_exe = 'bowtie-build'
 _elastic_bowtie2_build_exe = 'bowtie2-build'
 
-def step(name, inputs, output, mapper='cat', reducer='cat', 
+def step(name, inputs, output,
+    mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
+    reducer='org.apache.hadoop.mapred.lib.IdentityReducer', 
     action_on_failure='TERMINATE_JOB_FLOW',
     jar='/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar',
     tasks=0, partitioner_options=None, key_fields=None, archives=None,
-    multiple_outputs=False, inputformat=None):
+    multiple_outputs=False, inputformat=None, extra_args=[]):
     """ Outputs JSON for a given step.
 
         name: name of step
@@ -61,6 +63,7 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
         archives: -archives option
         multiple_outputs: True iff there are multiple outputs; else False
         inputformat: -inputformat option
+        extra_args: extra '-D' args
 
         Return value: step dictionary
     """
@@ -82,6 +85,10 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
                             % partitioner_options,
                 '-D', 'stream.num.map.output.key.fields=%d' % key_fields
             ])
+    for extra_arg in extra_args:
+        to_return['HadoopJarStep']['Args'].extend(
+            ['-D', extra_arg]
+        )
     if multiple_outputs:
         # This only matters in elastic mode
         to_return['HadoopJarStep']['Args'].extend([
@@ -115,7 +122,7 @@ def step(name, inputs, output, mapper='cat', reducer='cat',
 
 # TODO: Flesh out specification of protostep and migrate to Dooplicity
 def steps(protosteps, action_on_failure, jar, step_dir, 
-            reducer_count, intermediate_dir, unix=False):
+            reducer_count, intermediate_dir, extra_args=[], unix=False):
     """ Turns list with "protosteps" into well-formed StepConfig list.
 
         A protostep looks like this:
@@ -138,6 +145,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                 'archives' : archives parameter; present only if necessary
                 'multiple_outputs' : key that's present iff there are multiple
                     outputs
+                'extra_args' : list of '-D' args
             }
 
         protosteps: array of protosteps
@@ -192,7 +200,9 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                                     in protostep else False
                                 ),
                             inputformat=(protostep['inputformat']
-                                if 'inputformat' in protostep else None)
+                                if 'inputformat' in protostep else None),
+                            extra_args=(protostep['extra_args']
+                                if 'extra_args' in protostep else [])
                         )
                     )
     return true_steps
@@ -605,7 +615,7 @@ class RailRnaElastic:
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-        log_uri=None, ami_version='2.4.2',
+        log_uri=None, ami_version='3.1.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -726,8 +736,14 @@ class RailRnaElastic:
                                                 ))
             if files_to_check:
                 if check_manifest:
+                    file_count = len(files_to_check)
                     # Check files in manifest only if in preprocess job flow
-                    for filename in files_to_check:
+                    for k, filename in enumerate(files_to_check):
+                        sys.stdout.write(
+                                '\r\x1b[KChecking that file %d/%d from '
+                                'manifest file exists....' % (k+1, file_count)
+                            )
+                        sys.stdout.flush()
                         filename_url = ab.Url(filename)
                         if filename_url.is_curlable \
                             and 'Curl' not in base.checked_programs:
@@ -739,14 +755,19 @@ class RailRnaElastic:
                                                   'manifest file is on '
                                                   'the web'))
                             ansible.curl_exe = base.curl_exe
-                        if not ansible.exists(filename_url):
+                        if not ansible.exists(filename_url.to_url()):
                             base.errors.append(('The file {0} from the '
                                                 'manifest file {1} does not '
-                                                'exist the URL and try '
+                                                'exist; check the URL and try '
                                                 'again.').format(
                                                         filename,
                                                         manifest_url.to_url()
                                                     ))
+                    sys.stdout.write(
+                            '\r\x1b[KChecked all files listed in manifest '
+                            'file.\n'
+                        )
+                    sys.stdout.flush()
             else:
                 base.errors.append(('Manifest file (--manifest) {0} '
                                     'has no valid lines.').format(
@@ -755,7 +776,7 @@ class RailRnaElastic:
             if not manifest_url.is_s3 and output_dir_url.is_s3:
                 # Copy manifest file to S3 before job flow starts
                 base.manifest = path_join(True, base.output_dir,
-                                                manifest)
+                                                'MANIFEST')
                 ansible.put(manifest, base.manifest)
             if not manifest_url.is_local:
                 # Clean up
@@ -879,23 +900,17 @@ class RailRnaElastic:
 
     @staticmethod
     def add_args(general_parser, required_parser, output_parser, 
-                    elastic_parser, prep=False, align=False):
+                    elastic_parser, align=False):
         if align:
             required_parser.add_argument(
                 '-i', '--input', type=str, required=True, metavar='<s3_dir>',
                 help='input directory with preprocessed read; must begin ' \
                      'with s3://'
             )
-        if prep:
-            required_parser.add_argument(
-                '-o', '--output', type=str, required=True, metavar='<s3_dir>',
-                help='output directory; must begin with s3://'
-            )
-        else:
-            output_parser.add_argument(
-                '-o', '--output', type=str, required=True, metavar='<s3_dir>',
-                help='output directory; must begin with s3://'
-            )
+        required_parser.add_argument(
+            '-o', '--output', type=str, required=True, metavar='<s3_dir>',
+            help='output directory; must begin with s3://'
+        )
         general_parser.add_argument(
             '--intermediate', type=str, required=False,
             metavar='<s3_dir/hdfs_dir>',
@@ -1070,11 +1085,11 @@ class RailRnaElastic:
                 'Name' : 'Configure Hadoop',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        '-s',
+                        '-m',
                         'mapred.job.reuse.jvm.num.tasks=1',
-                        '-s',
+                        '-m',
                         'mapred.tasktracker.reduce.tasks.maximum=8',
-                        '-s',
+                        '-m',
                         'mapred.tasktracker.map.tasks.maximum=8',
                         '-m',
                         'mapred.map.tasks.speculative.execution=false',
@@ -1100,7 +1115,8 @@ class RailRnaElastic:
                     'Name' : 'Master Instance Group'
                 }
             ],
-            'KeepJobFlowAliveWhenNoSteps': 'false',
+            'KeepJobFlowAliveWhenNoSteps': ('true' if base.keep_alive
+                                               else 'false'),
             'TerminationProtected': ('true' if base.termination_protected
                                         else 'false')
         }
@@ -1146,6 +1162,8 @@ class RailRnaElastic:
             else:
                 to_return['InstanceGroups'][1]['Market'] \
                     = 'ON_DEMAND'
+        if base.ec2_key_name is not None:
+            to_return['Ec2KeyName'] = base.ec2_key_name
         return to_return
 
 class RailRnaPreprocess:
@@ -1163,7 +1181,7 @@ class RailRnaPreprocess:
         base.gzip_input = gzip_input
 
     @staticmethod
-    def add_args(output_parser):
+    def add_args(general_parser, output_parser):
         """ Adds parameter descriptions relevant to preprocess job flow to an
             object of class argparse.ArgumentParser.
 
@@ -1179,6 +1197,11 @@ class RailRnaPreprocess:
             '--do-not-gzip-input', action='store_const', const=True,
             default=False,
             help=('leave preprocessed input reads uncompressed')
+        )
+        general_parser.add_argument(
+            '--do-not-check-manifest', action='store_const', const=True,
+            default=False,
+            help='do not check that files listed in manifest file exist'
         )
 
     @staticmethod
@@ -1434,7 +1457,7 @@ class RailRnaAlign:
             )
             required_parser.add_argument(
                 '-1', '--bowtie1-idx', type=str, required=True,
-                metavar='<idx_base>',
+                metavar='<idx>',
                 help='path to Bowtie 1 index; include basename'
             )
             exec_parser.add_argument(
@@ -1451,7 +1474,7 @@ class RailRnaAlign:
             )
             required_parser.add_argument(
                 '-2', '--bowtie2-idx', type=str, required=True,
-                metavar='<idx_base>',
+                metavar='<idx>',
                 help='path to Bowtie 2 index; include basename'
             )
             exec_parser.add_argument(
@@ -1696,9 +1719,11 @@ class RailRnaAlign:
                 'name' : 'Build index of transcriptome elements',
                 'run' : ('intron_index.py --bowtie-build-exe={0} '
                          '--out={1} {2}').format(base.bowtie1_build_exe,
-                                                 path_join(elastic,
-                                                            base.output_dir,
-                                                            'index'),
+                                                 ab.Url(
+                                                    path_join(elastic,
+                                                        base.output_dir,
+                                                        'index')
+                                                    ).to_url(caps=True),
                                                  keep_alive),
                 'inputs' : ['intron_fasta'],
                 'output' : 'intron_index',
@@ -1723,8 +1748,10 @@ class RailRnaAlign:
                 'inputs' : ['combine_subsequences'],
                 'output' : 'realign_readlets',
                 'taskx' : 4,
-                'archives' : ('s3n://rail-experiments/geuvadis_again/index/'
-                              'intron.tar.gz#intron'),
+                'archives' : ab.Url(path_join(elastic,
+                                    base.output_dir,
+                                    'index',
+                                    'intron.tar.gz#intron')).to_native_url(),
                 'part' : 'k1,1',
                 'keys' : 1,
             },
@@ -1795,9 +1822,11 @@ class RailRnaAlign:
                          '--out={2} --bigbed-exe={3} '
                          '--manifest={4} {5}').format(base.bowtie1_idx,
                                                      base.normalize_percentile,
-                                                     path_join(elastic,
+                                                     ab.Url(
+                                                        path_join(elastic,
                                                         base.output_dir,
-                                                        'coverage'),
+                                                        'coverage')
+                                                     ).to_url(caps=True),
                                                      base.bedtobigbed_exe,
                                                      manifest,
                                                      verbose),
@@ -1810,9 +1839,11 @@ class RailRnaAlign:
             {
                 'name' : 'Write normalization factors for sample coverages',
                 'run' : 'coverage_post.py --out={0} --manifest={1}'.format(
-                                                        path_join(elastic,
+                                                        ab.Url(
+                                                            path_join(elastic,
                                                             base.output_dir,
-                                                            'normalize'),
+                                                            'normalize')
+                                                        ).to_url(caps=True),
                                                         manifest
                                                     ),
                 'inputs' : ['coverage'],
@@ -1836,9 +1867,11 @@ class RailRnaAlign:
                 'run' : ('bed.py --bowtie-idx={0} --out={1} '
                          '--manifest={2} --bed-basename={3}').format(
                                                         base.bowtie1_idx,
-                                                        path_join(elastic,
+                                                        ab.Url(
+                                                            path_join(elastic,
                                                             base.output_dir,
-                                                            'bed'),
+                                                            'bed')
+                                                         ).to_url(caps=True),
                                                         manifest,
                                                         base.bed_basename
                                                     ),
@@ -1853,8 +1886,10 @@ class RailRnaAlign:
                 'run' : ('bam.py --out={0} --bowtie-idx={1} '
                          '--samtools-exe={2} --bam-basename={3} '
                          '--manifest={4} {5} {6}').format(
-                                        path_join(elastic,
-                                                    base.output_dir, 'bam'),
+                                        ab.Url(
+                                            path_join(elastic,
+                                            base.output_dir, 'bam')
+                                        ).to_url(caps=True),
                                         base.bowtie1_idx,
                                         base.samtools_exe,
                                         base.bam_basename,
@@ -1869,8 +1904,10 @@ class RailRnaAlign:
                             path_join(elastic, 'realign_reads', 'splice_sam')],
                 'output' : 'bam',
                 'taskx' : 1,
-                'part' : 'k1,1',
-                'keys' : 3
+                'part' : ('k1,1' if base.do_not_output_bam_by_chr else 'k1,2'),
+                'keys' : 3,
+                'extra_args' : ['mapred.job.shuffle.input.buffer.percent=0.4',
+                                'mapred.job.shuffle.merge.percent=0.4']
             }]
 
     @staticmethod
@@ -1933,7 +1970,7 @@ class RailRnaAlign:
                         '/mnt',
                         base.index_archive
                     ],
-                    'Path' : 's3://rail-emr/bootstrap/s3cmd_s3_tarball.sh'
+                    'Path' : 's3://rail-emr/bootstrap/install-index.sh'
                 }
             },
             {
@@ -1954,13 +1991,13 @@ class RailRnaLocalPreprocessJson:
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        num_processes=1, keep_intermediates=False):
+        num_processes=1, keep_intermediates=False, check_manifest=True):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
-        RailRnaLocal(base, check_manifest=True, num_processes=num_processes,
-            keep_intermediates=keep_intermediates)
+        RailRnaLocal(base, check_manifest=check_manifest,
+            num_processes=num_processes, keep_intermediates=keep_intermediates)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
         if base.errors:
@@ -1987,7 +2024,7 @@ class RailRnaElasticPreprocessJson:
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        log_uri=None, ami_version='2.4.2',
+        log_uri=None, ami_version='3.1.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -1997,12 +2034,12 @@ class RailRnaElasticPreprocessJson:
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False):
+        termination_protected=False, check_manifest=True):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
-        RailRnaElastic(base, check_manifest=True,
+        RailRnaElastic(base, check_manifest=check_manifest,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
             name=name,
@@ -2139,7 +2176,7 @@ class RailRnaElasticAlignJson:
         motif_search_window_size=1000, motif_radius=5,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
-        log_uri=None, ami_version='2.4.2',
+        log_uri=None, ami_version='3.1.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2249,15 +2286,15 @@ class RailRnaLocalAllJson:
         motif_search_window_size=1000, motif_radius=5,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
-        num_processes=1, keep_intermediates=False):
+        num_processes=1, keep_intermediates=False, check_manifest=True):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
-        RailRnaLocal(base, check_manifest=True, num_processes=num_processes,
-            keep_intermediates=keep_intermediates)
+        RailRnaLocal(base, check_manifest=check_manifest,
+            num_processes=num_processes, keep_intermediates=keep_intermediates)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
@@ -2318,7 +2355,7 @@ class RailRnaElasticAllJson:
         motif_search_window_size=1000, motif_radius=5,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
-        log_uri=None, ami_version='2.4.2',
+        log_uri=None, ami_version='3.1.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2328,12 +2365,12 @@ class RailRnaElasticAllJson:
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False):
+        termination_protected=False, check_manifest=True):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
-        RailRnaElastic(base, check_manifest=True, 
+        RailRnaElastic(base, check_manifest=check_manifest, 
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
             name=name,

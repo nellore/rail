@@ -44,6 +44,7 @@ from functools import wraps
 from shutil import copyfile
 import threading
 import sys
+import socket
 
 def clean_url(url):
     """ Tacks an s3:// onto the beginning of a URL if necessary. 
@@ -389,6 +390,7 @@ def retry(ExceptionToCheck, tries=4, delay=3, backoff=2, logger=None):
         return f_retry  # true decorator
     return deco_retry
 
+@retry(socket.error, tries=4, delay=3, backoff=2)
 @retry(urllib2.URLError, tries=4, delay=3, backoff=2)
 def urlopen_with_retry(request):
     """ Facilitates retries when opening URLs.
@@ -588,7 +590,7 @@ class Url:
             if prefix[:3] == 's3n':
                 self.type = 's3n'
             elif prefix[:2] == 's3':
-                self.type = "s3"
+                self.type = 's3'
             elif prefix[:4] == 'hdfs':
                 self.type = 'hdfs'
             elif prefix[:4] == 'http':
@@ -608,7 +610,7 @@ class Url:
         self.is_curlable = self.type in ['ftp', 'http', 'https']
         self.is_local = self.type == 'local'
 
-    def to_url(self):
+    def to_url(self, caps=False):
         """ Returns URL string: an absolute path if local or an URL.
 
             Return value: URL string
@@ -617,6 +619,8 @@ class Url:
             absolute_path = os.path.abspath(self.suffix)
             return (absolute_path + '/') if self.suffix[-1] == '/' \
                 else absolute_path
+        elif self.type[:2] == 's3' and caps:
+            return self.type.upper() + ':' + self.suffix
         else:
             return self.type + ':' + self.suffix
 
@@ -652,9 +656,9 @@ class Url:
             Return value: converted URL
         """
         if self.type[:2] == 's3':
-            return 's3:' + self.rest
+            return 's3:' + self.suffix
         else:
-            return self.type + ':' + self.rest
+            return self.type + ':' + self.suffix
 
     def to_native_url(self):
         """ Converts s3:// URLs to s3n:// URLs 
