@@ -425,11 +425,10 @@ if __name__ == '__main__':
     elif args.job_flow == 'align' and args.align_mode == 'local':
         mode = 'local'
         json_creator = RailRnaLocalAlignJson(
-                args.manifest, args.output,
+                args.manifest, args.output, args.input,
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 verbose=args.verbose,
-                input_dir=args.input,
                 bowtie1_idx=args.bowtie1_idx, bowtie2_idx=args.bowtie2_idx,
                 bowtie1_exe=args.bowtie1, bowtie2_exe=args.bowtie2,
                 bowtie1_build_exe=args.bowtie1_build,

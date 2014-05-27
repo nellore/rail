@@ -2164,7 +2164,7 @@ class RailRnaLocalAlignJson:
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
-                base.output_dir, elastic=False), '', '', step_dir,
+                base.input_dir, elastic=False), '', '', step_dir,
                 base.num_processes, base.intermediate_dir, unix=False
             )
         self.base = base
