@@ -30,6 +30,7 @@ import shutil
 from dooplicity.tools import which, is_exe, path_join
 import sys
 from argparse import SUPPRESS
+import subprocess
 
 '''These are placed here for convenience; their locations may change
 on EMR depending on bootstraps.'''
@@ -41,6 +42,40 @@ _elastic_bowtie1_exe = 'bowtie'
 _elastic_bowtie2_exe = 'bowtie2'
 _elastic_bowtie1_build_exe = 'bowtie-build'
 _elastic_bowtie2_build_exe = 'bowtie2-build'
+
+# Decide Python executable
+if 'pypy 2.' in sys.version.lower():
+    # Executable has the user's desired version of PyPy
+    _executable = sys.executable
+else:
+    _pypy_exe = which('pypy')
+    _print_warning = False
+    if _pypy_exe is not None:
+        try:
+            if 'pypy 2.' in \
+                subprocess.check_output(
+                        [_pypy_exe, '--version'],
+                        stderr=subprocess.STDOUT
+                    ).lower():
+                _executable = _pypy_exe
+            else:
+                _executable = sys.executable
+                _print_warning = True
+        except Exception as e:
+            _executable = sys.executable
+            _print_warning = True
+    else:
+        _print_warning = True
+    if _print_warning:
+        _warning_message = ('WARNING: PyPy 2.x not found. '
+            'Installation is recommended to optimize performance '
+            'of Rail-RNA in "local" mode. If it is installed, '
+            'make sure the "pypy" executable is in PATH, or use '
+            'it to execute Rail-RNA via "[path to \'pypy\'] '
+            '[path to \'rail-rna\']".')
+        _executable = sys.executable
+    else:
+        _warning_message = 'Launching Dooplicity with PyPy....'
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
@@ -174,13 +209,13 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                                     if 'no_output_prefix' not in
                                     protostep else protostep['output']),
                             mapper=' '.join(['pypy' if unix
-                                    else sys.executable, 
+                                    else _executable, 
                                     path_join(unix, step_dir,
                                                     protostep['run'])])
                                     if 'keys' not in protostep
                                     else 'cat',
                             reducer=' '.join(['pypy' if unix
-                                    else sys.executable, 
+                                    else _executable, 
                                     path_join(unix, step_dir,
                                                     protostep['run'])]) 
                                     if 'keys' in protostep

@@ -585,7 +585,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         failed = True
                         raise RuntimeError
                     iface.status(('    Inputs partitioned: %d/%d\r')
-                                 % (len(return_values), input_file_count))
+                                 % (len(return_values),
+                                        input_file_group_count))
                     time.sleep(0.2)
                 try:
                     max_tuple = max(map(len, return_values))
@@ -604,7 +605,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     failed = True
                     raise RuntimeError
                 iface.step('    Partitioned %s into tasks.'
-                            % dp_iface.inflected(input_file_count,
+                            % dp_iface.inflected(input_file_group_count,
                                                  'input'))
                 return_values = []
                 input_files = [os.path.join(output_dir, '%d.*' % i) 

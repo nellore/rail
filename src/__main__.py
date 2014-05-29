@@ -15,6 +15,7 @@ import site
 site.addsitedir(driver_path)
 site.addsitedir(base_path)
 from rna_config import *
+from rna_config import _warning_message, _executable
 from dooplicity.tools import which
 from version import version_number
 import argparse
@@ -115,43 +116,11 @@ class Launcher:
         """
         read_pipe, write_pipe = os.pipe()
         if mode == 'local':
-            if 'pypy 2.' in sys.version.lower():
-                # Executable has the user's desired version of PyPy
-                executable = sys.executable
-            else:
-                pypy_exe = which('pypy')
-                print_warning = False
-                if pypy_exe is not None:
-                    try:
-                        if 'pypy 2.' in \
-                            subprocess.check_output(
-                                    [pypy_exe, '--version'],
-                                    stderr=subprocess.STDOUT
-                                ).lower():
-                            executable = pypy_exe
-                        else:
-                            executable = sys.executable
-                            print_warning = True
-                    except Exception:
-                        executable = sys.executable
-                        print_warning = True
-                else:
-                    print_warning = True
-                if print_warning:
-                    warning_message = ('WARNING: PyPy 2.x not found. '
-                        'Installation is recommended to optimize performance '
-                        'of Rail-RNA in "local" mode. If it is installed, '
-                        'make sure the "pypy" executable is in PATH, or use '
-                        'it to execute Rail-RNA via "[path to \'pypy\'] '
-                        '[path to \'rail-rna\']".')
-                    executable = sys.executable
-                else:
-                    warning_message = 'Launching Dooplicity with PyPy....'
-                print >>sys.stderr, warning_message
-                if not sys.stderr.isatty():
-                    # So the user sees it too
-                    print warning_message
-            runner_args = [executable, os.path.join(base_path, 'dooplicity',
+            print >>sys.stderr, _warning_message
+            if not sys.stderr.isatty():
+                # So the user sees it too
+                print _warning_message
+            runner_args = [_executable, os.path.join(base_path, 'dooplicity',
                                     'hadoop_simulator.py'),
                             '-p', str(self.num_processes),
                             '-b', os.path.join(base_path, 
@@ -159,9 +128,7 @@ class Launcher:
             if self.force:
                 runner_args.append('-f')
         else:
-            # Just run Python; who cares?
-            executable = sys.executable
-            runner_args = [executable, os.path.join(base_path, 'dooplicity',
+            runner_args = [_executable, os.path.join(base_path, 'dooplicity',
                                     'emr_runner.py'),
                             '-b', os.path.join(base_path, 
                                     'rna', 'driver', 'rail-rna.txt')]
@@ -172,9 +139,8 @@ class Launcher:
         os.write(write_pipe, payload)
         os.close(write_pipe)
         os.dup2(read_pipe, sys.stdin.fileno())
-        os.execv(executable, runner_args)
+        os.execv(_executable, runner_args)
         ###SCRIPT TERMINATES HERE###
-
 
 def rail_help_wrapper(prog):
     """ So formatter_class's max_help_position can be changed. """

@@ -133,6 +133,7 @@ import partition
 import manifest
 from cigar_parse import indels_introns_and_exons
 from dooplicity.tools import xstream
+import gc
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
@@ -612,6 +613,7 @@ if __name__ == '__main__' and not args.test:
         exon_intervals=args.exon_intervals,
         end_to_end_sam=args.end_to_end_sam,
         report_multiplier=args.report_multiplier)
+    gc.collect()
     print >>sys.stderr, 'DONE with align_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)
