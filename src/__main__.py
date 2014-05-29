@@ -151,6 +151,7 @@ class Launcher:
                 if not sys.stderr.isatty():
                     # So the user sees it too
                     print warning_message
+            executable = '/Users/anellore/Downloads/pypy-2.3-osx64/bin/pypy'
             runner_args = [executable, os.path.join(base_path, 'dooplicity',
                                     'hadoop_simulator.py'),
                             '-p', str(self.num_processes),

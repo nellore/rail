@@ -48,6 +48,7 @@ import subprocess
 import json
 import interface as dp_iface
 import signal
+import gc
 
 def init_worker():
     """ Prevents KeyboardInterrupt from reaching a pool's workers.
@@ -60,7 +61,7 @@ def init_worker():
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-def presorted_tasks(input_file, process_id, sort_options, output_dir,
+def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, task_count, memcap):
     """ Partitions input data into tasks and presorts them.
 
@@ -72,7 +73,7 @@ def presorted_tasks(input_file, process_id, sort_options, output_dir,
         Formula for computing task assignment: 
             int(hashlib.md5(key).hexdigest(), 16) % (task_count)
 
-        input_file: file on which to operate.
+        input_files: list of files on which to operate.
         process_id: unique identifier for current process.
         sort_options: options to use when presorting.
         output_dir: directory in which to write output files.
@@ -84,25 +85,26 @@ def presorted_tasks(input_file, process_id, sort_options, output_dir,
             ignored if sort is None.
 
         Return value: Empty tuple if no errors encountered; otherwise
-            (input_file,).
+            (input_files,).
     """
     try:
         task_streams = {}
-        with open(input_file) as input_stream:
-            for line in input_stream:
-                key = separator.join(
-                            line.strip().split(separator)[:key_fields]
-                        )
-                task = int(hashlib.md5(key).hexdigest(), 16) % task_count
-                try:
-                    task_streams[task].write(line)
-                except KeyError:
-                    # Task file doesn't exist yet; create it
-                    task_file = os.path.join(output_dir, str(task) + '.'
-                                                         + str(process_id)
-                                                         + '.unsorted')
-                    task_streams[task] = open(task_file, 'w')
-                    task_streams[task].write(line)
+        for input_file in input_files:
+            with open(input_file) as input_stream:
+                for line in input_stream:
+                    key = separator.join(
+                                line.strip().split(separator)[:key_fields]
+                            )
+                    task = int(hashlib.md5(key).hexdigest(), 16) % task_count
+                    try:
+                        task_streams[task].write(line)
+                    except KeyError:
+                        # Task file doesn't exist yet; create it
+                        task_file = os.path.join(output_dir, str(task) + '.'
+                                                             + str(process_id)
+                                                             + '.unsorted')
+                        task_streams[task] = open(task_file, 'w')
+                        task_streams[task].write(line)
         for task in task_streams:
             task_streams[task].close()
         # Presort task files
@@ -116,12 +118,16 @@ def presorted_tasks(input_file, process_id, sort_options, output_dir,
                                                         unsorted_file[:-9])
             sort_return = subprocess.call(sort_command, shell=True, bufsize=-1)
             if sort_return != 0:
-                return (input_file,)
+                return ('Error encountered sorting input file %s.' %
+                            input_file,)
             os.remove(unsorted_file)
         return tuple()
     except Exception as e:
         # Uncaught miscellaneous exception
-        return (input_file,)
+        return ('Error "%s" encountered partitioning input files '
+                '[%s] into tasks.'
+                        % (e.message, (('%s, '* (len(input_files) - 1) 
+                                       + '%s') % tuple(input_files))),)
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
@@ -528,30 +534,40 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     'create directory %s.') % output_dir,
                                     steps=(job_flow[step_number:]
                                                if step_number != 0 else None))
-                        failed=True
+                        failed = True
                         raise
                 return_values = []
                 input_files = [input_file for input_file in step_inputs
                                 if os.path.isfile(input_file)]
                 input_file_count = len(input_files)
+                if input_file_count > num_processes:
+                    file_count_per_group = input_file_count / num_processes
+                    input_file_groups = [
+                            input_files[k:k+file_count_per_group]
+                            for k in
+                            xrange(0, input_file_count, file_count_per_group)
+                        ]
+                else:
+                    input_file_groups = [[input_file]
+                                            for input_file in input_files]
+                input_file_group_count = len(input_file_groups)
                 pool = multiprocessing.Pool(num_processes, init_worker)
-                for i, input_file in enumerate(input_files):
-                    if os.path.isfile(input_file):
-                        pool.apply_async(
-                                            presorted_tasks,
-                                            args=(input_file, i,
-                                                step_data['sort_options'],
-                                                output_dir,
-                                                step_data['key_fields'],
-                                                separator,
-                                                step_data['task_count'],
-                                                memcap),
-                                            callback=return_values.append
-                                        )
+                for i, input_file_group in enumerate(input_file_groups):
+                    pool.apply_async(
+                                        presorted_tasks,
+                                        args=(input_file_group, i,
+                                            step_data['sort_options'],
+                                            output_dir,
+                                            step_data['key_fields'],
+                                            separator,
+                                            step_data['task_count'],
+                                            memcap),
+                                        callback=return_values.append
+                                    )
                 pool.close()
                 iface.step('Step %d/%d: %s'
                              % (step_number + 1, total_steps, step))
-                while len(return_values) != input_file_count:
+                while len(return_values) != input_file_group_count:
                     try:
                         max_tuple = max(map(len, return_values))
                     except ValueError:
@@ -560,9 +576,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         pass
                     if max_tuple > 0:
                         # There are error tuples
-                        errors = ['Partitioning failed on input file %s. ' % 
-                                   error for error in task_filenames
-                                   if len(error) == 1]
+                        errors = [error[0] for error in return_values if error]
                         errors = [('%d) ' % (i + 1)) + error
                                     for i, error in enumerate(errors)]
                         iface.fail('\n'.join(errors),
@@ -581,9 +595,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     pass
                 if max_tuple > 0:
                     # There are error tuples
-                    errors = ['Partitioning failed on input file %s. ' % 
-                               error for error in task_filenames
-                               if len(error) == 1]
+                    errors = [error[0] for error in return_values if error]
                     errors = [('%d) ' % (i + 1)) + error
                                 for i, error in enumerate(errors)]
                     iface.fail('\n'.join(errors),
@@ -664,6 +676,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 iface.step('    Completed %s.'
                            % dp_iface.inflected(input_file_count, 'task'))
             step_number += 1
+            # Really close open file handles in PyPy
+            gc.collect()
         iface.done()
     except Exception, GeneratorExit:
         # GeneratorExit added just in case this happens on modifying code
