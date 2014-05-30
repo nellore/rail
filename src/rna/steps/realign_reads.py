@@ -706,7 +706,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     manifest_object = manifest.LabelsAndIndices(manifest_file)
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
-        '-t --no-hd --mm', bowtie2_index_base, '--12', reads_file])
+        '-t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file])
     print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1, shell=True,
         stdout=subprocess.PIPE, stderr=sys.stderr)
