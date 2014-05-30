@@ -402,8 +402,7 @@ class RailRnaErrors:
                          'directly with {2}.').format(exe, program_name,
                                                             parameter)
                     )
-            else:
-                to_return = exe
+            to_return = exe
         elif not is_exe(entered_exe):
             self.errors.append(
                     ('The executable "{0}" entered for {1} via {2} was '
@@ -411,7 +410,6 @@ class RailRnaErrors:
                                                                 program_name,
                                                                 parameter)
                 )
-        else:
             to_return = entered_exe
         if original_errors_size != len(self.errors) and reason:
             raise RuntimeError((('\n'.join(['%d) %s' % (i+1, error)
