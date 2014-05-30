@@ -399,7 +399,7 @@ class RailRnaErrors:
                          'in PATH or is not executable. Check that the '
                          'program is installed properly and executable; then '
                          'either add the executable to PATH or specify it '
-                         'directly with {3}.').format(exe, program_name,
+                         'directly with {2}.').format(exe, program_name,
                                                             parameter)
                     )
             else:
@@ -675,7 +675,8 @@ class RailRnaElastic:
             "m2.xlarge"   : 2,
             "m2.2xlarge"  : 4,
             "m2.4xlarge"  : 8,
-            "cc1.4xlarge" : 8
+            "cc1.4xlarge" : 8,
+            "c3.2xlarge" : 8
         }
 
         base.instance_swap_allocations = {
@@ -687,7 +688,8 @@ class RailRnaElastic:
             "m2.xlarge"   : (16*1024), # 17.1 GB
             "m2.2xlarge"  : (16*1024), # 34.2 GB
             "m2.4xlarge"  : (16*1024), # 68.4 GB
-            "cc1.4xlarge" : (16*1024)  # 23.0 GB
+            "cc1.4xlarge" : (16*1024), # 23.0 GB
+            "c3.2xlarge" : (16*1024) # 15.0 GB
         }
 
         '''Not currently in use, but may become important if there are
