@@ -1246,7 +1246,7 @@ class RailRnaPreprocess:
         return [
             {
                 'name' : 'Preprocess input reads',
-                'run' : ('preprocess.py --keep --nucs-per-file={0} {1} '
+                'run' : ('preprocess.py --nucs-per-file={0} {1} '
                          '--push={2} {3}').format(
                                                     base.nucleotides_per_input,
                                                     '--gzip-output' if
