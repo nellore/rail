@@ -475,6 +475,7 @@ class RailRnaLocal:
                                 'mode, but {0} was entered.').format(
                                         base.intermediate_dir
                                     ))
+
         output_dir_url = ab.Url(base.output_dir)
         if output_dir_url.is_curlable:
             base.errors.append(('Output directory must be local or on S3 '
@@ -625,9 +626,9 @@ class RailRnaLocal:
                 help='output directory; must be local or on S3'
             )
         general_parser.add_argument(
-            '--intermediate', type=str, required=False, metavar='<dir>',
-            default='./rail-rna_intermediate',
-            help='directory for storing intermediate files'
+            '--log', type=str, required=False, metavar='<dir>',
+            default='./rail-rna_logs',
+            help='directory for storing intermediate files and logs'
         )
         general_parser.add_argument(
            '-p', '--num-processes', type=int, required=False, metavar='<int>',
@@ -638,7 +639,8 @@ class RailRnaLocal:
         general_parser.add_argument(
             '--keep-intermediates', action='store_const', const=True,
             default=False,
-            help='keep intermediate files after job flow is complete'
+            help='keep intermediate files in log directory after job flow ' \
+                 'is complete'
         )
 
 class RailRnaElastic:

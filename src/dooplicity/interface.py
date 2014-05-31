@@ -64,6 +64,11 @@ def add_args(parser):
             help='Erase all existing directories when writing ' \
                   'intermediates.'
         )
+    parser.add_argument(
+            '-l', '--log', type=str, required=False, default=None,
+            help='Log file for storing messages written to stderr; ' \
+                 'not required.'
+        )
 
 def inflected(number, word, es=False):
     """ Returns string with word in appropriate form.
@@ -108,7 +113,8 @@ class UpdateThread(threading.Thread):
 class DooplicityInterface:
     """ Encapsulates methods for writing status updates to console. """
 
-    def __init__(self, branding=None, opener='Started job flow on {time}.'):
+    def __init__(self, branding=None, log_stream=None,
+                    opener='Started job flow on {time}.'):
         # Disable line-wrapping
         sys.stdout.write('\n')
         sys.stdout.flush()
@@ -120,10 +126,13 @@ class DooplicityInterface:
             print 'Dooplicity v%s' % _version
         self._start_time = time.time()
         self._date_format = '%A, %b %d, %Y at %I:%M:%S %p %Z'
+        self._write_streams = []
+        if log_stream is not None:
+            self._write_streams.append(log_stream)
         if sys.stderr.isatty():
-            self._write_streams = [sys.stderr]
+            self._write_streams.append(sys.stderr)
         else:
-            self._write_streams = [sys.stdout, sys.stderr]
+            self._write_streams.extend([sys.stdout, sys.stderr])
         for output_stream in self._write_streams:
             print >>output_stream, opener.format(time=time.strftime(
                                     self._date_format,

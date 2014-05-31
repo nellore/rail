@@ -5,7 +5,6 @@ from operator import itemgetter
 from collections import defaultdict
 from bisect import bisect_right
 
-
 class BowtieIndexReference(object):
     """
     Given prefix of a Bowtie index, parses the reference names, parses the

@@ -177,7 +177,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         else:
             # Reducer. Merge sort the input glob.
             prefix = 'sort -S %d %s -m %s' % (memcap, sort_options, input_glob)
-        err_file = os.path.join(err_dir, '%d.err' % task_id)
+        err_file = os.path.join(err_dir, '%d.log' % task_id)
         new_env = os.environ.copy()
         new_env['mapred_task_partition'] = str(task_id)
         if multiple_outputs:
@@ -240,7 +240,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                 % (e.message, input_file), command_to_run)
 
 def run_simulation(branding, json_config, force, memcap, num_processes,
-                    separator, keep_intermediates):
+                    separator, keep_intermediates, keep_last_output,
+                    log):
     """ Runs Hadoop Streaming simulation.
 
         FUNCTIONALITY IS IDIOSYNCRATIC; it is currently confined to those
@@ -260,10 +261,24 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         separator: separator between successive fields in inputs and 
             intermediates.
         keep_intermediates: keeps all intermediate output.
+        keep_last_output: keeps outputs that are unused as inputs by steps.
+        log: name of file in which to store messages written to stderr
 
         No return value.
     """
-    iface = dp_iface.DooplicityInterface(branding)
+    if log is not None:
+        try:
+            os.makedirs(os.path.dirname(log))
+        except OSError:
+            pass
+        try:
+            log_stream = open(log, 'a')
+        except Exception as e:
+            log_stream = None
+    else:
+        log_stream = None
+    iface = dp_iface.DooplicityInterface(branding=branding,
+                                         log_stream=log_stream)
     failed = False
     try:
         # Serialize JSON configuration
@@ -322,7 +337,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         and for whether outputs are writable.'''
         missing_data = defaultdict(list)
         bad_output_data = []
-        identity_steps = []
         required_data = set(['input', 'output', 'mapper', 'reducer'])
         identity_mappers \
             = set(['cat', 'org.apache.hadoop.mapred.lib.IdentityMapper'])
@@ -336,10 +350,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 elif not force and required_parameter == 'output' \
                     and os.path.exists(step_data['output']):
                     bad_output_data.append(step)
-            if 'mapper' in steps[step] and 'reducer' in step_data \
-                and step_data['mapper'] in identity_mappers \
-                and step_data['reducer'] in identity_reducers:
-                identity_steps.append(step)
         errors = []
         if missing_data:
             errors.extend(['Step "%s" is missing required parameter(s) "%s".' % 
@@ -351,15 +361,28 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                            'not invoked to permit overwriting it.' 
                            % (steps[step]['output'], step)
                            for step in bad_output_data])
-        if identity_steps:
-            errors.extend([('Step "%s" has both an identity mapper and an '
-                            'identity reducer, which is redundant. Remove the '
-                            'step before trying again.') % step])
         if errors:
             iface.fail('\n'.join([('%d) ' % (i+1)) + error
                                     for i, error in enumerate(errors)]))
             failed = True
             raise RuntimeError
+        if not keep_intermediates:
+            # Create schedule for deleting intermediates
+            marked_intermediates = set()
+            post_step_cleanups = defaultdict(list)
+            '''Traverse steps in reverse order to obtain when an intermediate
+            directory is last used. DON'T MESS WITH FIRST INPUT.'''
+            for i, step in enumerate(
+                                OrderedDict(reversed(steps.items()[1:]))
+                            ):
+                step_inputs = [os.path.abspath(step_input) for step_input in
+                                steps[step]['input'].split(',')]
+                for step_input in step_inputs:
+                    if step_input not in marked_intermediates:
+                        post_step_cleanups[step_count - i - 1].append(
+                                step_input
+                            )
+                        marked_intermediates.add(step_input)
         # Create intermediate directories
         for step in steps:
             try:
@@ -378,7 +401,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             'directory %s.') % steps[step]['output'])
                 failed = True
                 raise
-            map_err_dir = os.path.join(steps[step]['output'], 'dp.map.err')
+            map_err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
             try:
                 os.makedirs(map_err_dir)
             except OSError:
@@ -387,7 +410,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 failed = True
                 raise
             reduce_err_dir = os.path.join(steps[step]['output'],
-                                            'dp.reduce.err')
+                                            'dp.reduce.log')
             try:
                 os.makedirs(reduce_err_dir)
             except OSError:
@@ -453,7 +476,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 input_files = [input_file for input_file in step_inputs
                                 if os.path.isfile(input_file)]
                 input_file_count = len(input_files)
-                err_dir = os.path.join(steps[step]['output'], 'dp.map.err')
+                err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
                 for i, input_file in enumerate(input_files):
                     if os.path.isfile(input_file):
                         pool.apply_async(
@@ -620,7 +643,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                         == 'edu.jhu.cs.MultipleOutputFormat')
                 except KeyError:
                     multiple_outputs = False
-                err_dir = os.path.join(steps[step]['output'], 'dp.reduce.err')
+                err_dir = os.path.join(steps[step]['output'], 'dp.reduce.log')
                 output_dir = step_data['output']
                 for i, input_file in enumerate(input_files):
                     pool.apply_async(
@@ -676,9 +699,71 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     raise RuntimeError
                 iface.step('    Completed %s.'
                            % dp_iface.inflected(input_file_count, 'task'))
-            step_number += 1
             # Really close open file handles in PyPy
             gc.collect()
+            if not keep_intermediates:
+                iface.status('    Deleting temporary files....')
+                try:
+                    # Intermediate map output should be deleted if it exists
+                    shutil.rmtree(
+                                os.path.join(
+                                        step_data['output'], 'dp.map'
+                                    )
+                            )
+                except OSError:
+                    pass
+                try:
+                    # Remove dp.tasks directory
+                    shutil.rmtree(
+                            os.path.join(step_data['output'], 'dp.tasks')
+                        )
+                except OSError:
+                    pass
+                for to_remove in post_step_cleanups[step_number]:
+                    if os.path.isfile(to_remove):
+                        try:
+                            os.remove(to_remove)
+                        except OSError:
+                            pass
+                    elif os.path.isdir(to_remove):
+                        for detritus in glob.iglob(
+                                            os.path.join(to_remove, '*')
+                                        ):
+                            if detritus[-4:] != '.log':
+                                try:
+                                    os.remove(detritus)
+                                except OSError:
+                                    try:
+                                        shutil.rmtree(detritus)
+                                    except OSError:
+                                        pass
+                        if not os.listdir(to_remove):
+                            try:
+                                os.rmdir(to_remove)
+                            except OSError:
+                                pass
+                iface.step('    Deleted temporary files.')
+            step_number += 1
+        if not keep_last_output:
+            for step in steps:
+                step_data = steps[step]
+                try:
+                    os.remove(step_data['output'])
+                except OSError:
+                    # Not a file; treat as dir
+                    for detritus in glob.iglob(
+                                    os.path.join(step_data['output'], '*')
+                                ):
+                        if detritus[-4:] != '.log':
+                            try:
+                                os.remove(detritus)
+                            except OSError:
+                                # Not a file
+                                try:
+                                    shutil.rmtree(detritus)
+                                except OSError:
+                                    # Phantom; maybe user deleted it
+                                    pass
         iface.done()
     except Exception, GeneratorExit:
         # GeneratorExit added just in case this happens on modifying code
@@ -722,8 +807,15 @@ if __name__ == '__main__':
             default=False,
             help='Keeps all intermediate output.'
         )
+    parser.add_argument(
+            '--keep-last-output', action='store_const', const=True,
+            default=False,
+            help='If --keep-intermediates is False, keeps outputs that are ' \
+                 'unused as inputs by steps.'
+        )
     dp_iface.add_args(parser)
     args = parser.parse_args(sys.argv[1:])
     run_simulation(args.branding, args.json_config, args.force,
                     args.memcap, args.num_processes, args.separator,
-                    args.keep_intermediates)
+                    args.keep_intermediates, args.keep_last_output,
+                    args.log)

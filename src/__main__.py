@@ -23,6 +23,7 @@ import sys
 import json
 import subprocess
 from argparse import SUPPRESS
+import datetime
 
 _usage_message = \
 """rail-rna <job flow> <mode> <[args]>
@@ -98,10 +99,13 @@ class RailHelpFormatter(argparse.HelpFormatter):
 class Launcher:
     """ Facilitates replacing the current process with a Dooplicity runner. """
 
-    def __init__(self, force=False, num_processes=1, region='us-east-1'):
+    def __init__(self, force=False, num_processes=1, keep_intermediates=False,
+                    region='us-east-1', log=None):
         self.force = force
         self.num_processes = num_processes
+        self.keep_intermediates = keep_intermediates
         self.region = region
+        self.log = log
 
     def run(self, mode, payload):
         """ Replaces current process, using PyPy if it's available.
@@ -127,6 +131,10 @@ class Launcher:
                                     'rna', 'driver', 'rail-rna.txt')]
             if self.force:
                 runner_args.append('-f')
+            if self.keep_intermediates:
+                runner_args.append('--keep-intermediates')
+            if self.log:
+                runner_args.extend(['-l', self.log])
         else:
             runner_args = [_executable, os.path.join(base_path, 'dooplicity',
                                     'emr_runner.py'),
@@ -358,7 +366,7 @@ if __name__ == '__main__':
         mode = 'local'
         json_creator = RailRnaLocalAllJson(
                 args.manifest, args.output,
-                intermediate_dir=args.intermediate,
+                intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 verbose=args.verbose,
                 nucleotides_per_input=args.nucleotides_per_input,
@@ -392,7 +400,7 @@ if __name__ == '__main__':
         mode = 'local'
         json_creator = RailRnaLocalAlignJson(
                 args.manifest, args.output, args.input,
-                intermediate_dir=args.intermediate,
+                intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 verbose=args.verbose,
                 bowtie1_idx=args.bowtie1_idx, bowtie2_idx=args.bowtie2_idx,
@@ -423,7 +431,7 @@ if __name__ == '__main__':
         mode = 'local'
         json_creator = RailRnaLocalPreprocessJson(
                 args.manifest, args.output,
-                intermediate_dir=args.intermediate,
+                intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 verbose=args.verbose,
                 nucleotides_per_input=args.nucleotides_per_input,
@@ -545,11 +553,24 @@ if __name__ == '__main__':
                 check_manifest=(not args.do_not_check_manifest)
             )
     # Launch
+    log_file = os.path.join(
+                        args.log, 
+                        'flow.%s.log' % datetime.datetime.now().isoformat()
+                    )
     try:
         launcher = Launcher(force=json_creator.base.force,
                                         num_processes=(
                                             json_creator.base.num_processes
                                             if mode == 'local'
+                                            else None
+                                        ),
+                                        keep_intermediates=(
+                                           args.keep_intermediates
+                                           if mode == 'local'
+                                           else False
+                                        ),
+                                        log=(
+                                            log_file if mode == 'local'
                                             else None
                                         ),
                                         region=args.region)
@@ -559,5 +580,15 @@ if __name__ == '__main__':
                                             json_creator.base.num_processes
                                             if mode == 'local'
                                             else None
-                                        ))
+                                        ),
+                                        keep_intermediates=(
+                                           args.keep_intermediates
+                                           if mode == 'local'
+                                           else False
+                                        ),
+                                        log=(
+                                            log_file if mode == 'local'
+                                            else None
+                                        )
+                                    )
     launcher.run(mode, json.dumps(json_creator.json_serial))
