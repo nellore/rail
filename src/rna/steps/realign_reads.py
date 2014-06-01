@@ -137,7 +137,6 @@ import bowtie_index
 import sample
 import partition
 from cigar_parse import indels_introns_and_exons
-import gc
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
@@ -728,7 +727,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     output_thread.join()
     #bowtie_process.wait()
     output_stream.flush()
-    gc.collect()
     print >> sys.stderr, 'DONE with realign_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)
