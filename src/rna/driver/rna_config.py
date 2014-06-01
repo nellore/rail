@@ -660,7 +660,7 @@ class RailRnaElastic:
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False):
+        termination_protected=False, intermediate_lifetime=4):
 
         # CLI is REQUIRED in elastic mode
         base.check_s3(reason='Rail-RNA is running in "elastic" mode')
@@ -706,7 +706,7 @@ class RailRnaElastic:
         }'''
 
         if log_uri is not None and not Url(log_uri).is_s3:
-            base.errors.append('Log URI ("--log-uri") must be on S3, but '
+            base.errors.append('Log URI (--log-uri) must be on S3, but '
                                '"{0}" was entered.'.format(log_uri))
         base.log_uri = log_uri
         base.visible_to_all_users = visible_to_all_users
@@ -718,15 +718,32 @@ class RailRnaElastic:
 
         # Initialize ansible for easy checks
         ansible = ab.Ansible(aws_exe=base.aws_exe, profile=base.profile)
-        if ab.Url(base.intermediate_dir).is_local:
-            base.errors.append(('Intermediate directory must be on HDFS or S3 '
-                                'when running Rail-RNA in "elastic" '
-                                'mode, but {0} was entered.').format(
+        intermediate_dir_url = ab.Url(base.intermediate_dir)
+        if intermediate_dir_url.is_local:
+            base.errors.append(('Intermediate directory (--intermediate) '
+                                'must be on HDFS or S3 when running Rail-RNA '
+                                'in "elastic" mode, '
+                                'but {0} was entered.').format(
                                         base.intermediate_dir
                                     ))
+        elif intermediate_dir_url.is_s3:
+            if not (isinstance(intermediate_lifetime, int) and
+                        intermediate_lifetime != 0):
+                base.errors.append(('Intermediate lifetime '
+                                    '(--intermediate-lifetime) must be '
+                                    '-1 or > 0, but {0} was entered.').format(
+                                            intermediate_lifetime
+                                        ))
+            else:
+                # Set up rule on S3 for deleting intermediate dir
+                final_intermediate_dir = intermediate_dir_url.to_url() + '/'
+                while final_intermediate_dir[-2] == '/':
+                    final_intermediate_dir = final_intermediate_dir[:-1]
+                ansible.s3_ansible.expire_prefix(final_intermediate_dir,
+                                                    days=intermediate_lifetime)
         output_dir_url = ab.Url(base.output_dir)
         if not output_dir_url.is_s3:
-            base.errors.append(('Output directory must be on S3 '
+            base.errors.append(('Output directory (--output) must be on S3 '
                                 'when running Rail-RNA in "elastic" '
                                 'mode, but {0} was entered.').format(
                                         base.output_dir
@@ -951,9 +968,17 @@ class RailRnaElastic:
         general_parser.add_argument(
             '--intermediate', type=str, required=False,
             metavar='<s3_dir/hdfs_dir>',
-            default='hdfs:///rail-rna_intermediate',
+            default='s3://rail-rna_intermediate',
             help='directory for storing intermediate files; can begin with ' \
-                 'hdfs:// or s3://. use S3 to keep intermediates'
+                 'hdfs:// or s3://. use S3 and set --intermediate-lifetime ' \
+                 'to -1 to keep intermediates'
+        )
+        elastic_parser.add_argument(
+            '--intermediate-lifetime', type=int, required=False,
+            metavar='<int>',
+            default=4,
+            help='create rule for deleting intermediate files on S3 in ' \
+                 'specified number of days; use -1 to keep intermediates'
         )
         elastic_parser.add_argument('--name', type=str, required=False,
             metavar='<str>',
@@ -1032,7 +1057,7 @@ class RailRnaElastic:
         elastic_parser.add_argument('--master-instance-type', type=str,
             metavar='<choice>',
             required=False,
-            default='c1.xlarge',
+            default='c3.2xlarge',
             help=('master instance type')
         )
         elastic_parser.add_argument('--core-instance-type', type=str,
@@ -2084,7 +2109,8 @@ class RailRnaElasticPreprocessJson:
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False, check_manifest=True):
+        termination_protected=False, check_manifest=True,
+        intermediate_lifetime=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -2104,7 +2130,8 @@ class RailRnaElasticPreprocessJson:
             task_instance_type=task_instance_type,
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
-            termination_protected=termination_protected)
+            termination_protected=termination_protected,
+            intermediate_lifetime=intermediate_lifetime)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
         if base.errors:
@@ -2235,7 +2262,8 @@ class RailRnaElasticAlignJson:
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False):
+        termination_protected=False,
+        intermediate_lifetime=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -2254,7 +2282,8 @@ class RailRnaElasticAlignJson:
             task_instance_type=task_instance_type,
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
-            termination_protected=termination_protected)
+            termination_protected=termination_protected,
+            intermediate_lifetime=intermediate_lifetime)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=True, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -2413,7 +2442,8 @@ class RailRnaElasticAllJson:
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False, check_manifest=True):
+        termination_protected=False, check_manifest=True,
+        intermediate_lifetime=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -2433,7 +2463,8 @@ class RailRnaElasticAllJson:
             task_instance_type=task_instance_type,
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
-            termination_protected=termination_protected)
+            termination_protected=termination_protected,
+            intermediate_lifetime=intermediate_lifetime)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
         RailRnaAlign(base, elastic=True, bowtie1_exe=bowtie1_exe,

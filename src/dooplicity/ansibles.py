@@ -277,7 +277,7 @@ class S3Ansible:
             source: file from S3
             destination: destination on local filesystem
 
-            No return value
+            No return value.
         """
         aws_command = ' '.join([self.aws, '--profile', self.profile,
                                     's3 cp', clean_url(source),
@@ -286,6 +286,57 @@ class S3Ansible:
                                     stdout=self._osdevnull,
                                     stderr=sys.stderr,
                                     shell=True)
+
+    def expire_prefix(self, prefix, days=4):
+        """ Expires object prefix after specified number of days.
+
+            Rule is added iff no other rule exists for prefix.
+
+            prefix: prefix to expire, including bucket name
+            days: number of days
+
+            No return value.
+        """
+        cleaned_prefix = clean_url(prefix)
+        bucket = bucket_from_url(cleaned_prefix)
+        # Remove bucket name from prefix
+        prefix = cleaned_prefix[cleaned_prefix[6:].index('/')+7:]
+        aws_command = ' '.join([self.aws, '--profile', self.profile,
+                                    's3api get-bucket-lifecycle --bucket',
+                                    bucket])
+        rules = json.loads(
+                            subprocess.check_output(aws_command, 
+                                                    bufsize=-1,
+                                                    stderr=sys.stderr,
+                                                    shell=True)
+                        )['Rules']
+        add_rule = True
+        for rule in rules:
+            try:
+                if rule['Prefix'] == prefix:
+                    add_rule = False
+            except KeyError:
+                pass
+        if add_rule:
+            rules.append(
+                    {
+                        'Expiration' : {'Days' : days},
+                        'Status' : 'Enabled',
+                        'Prefix' : prefix
+                    }
+                )
+            aws_command = ' '.join([self.aws, '--profile', self.profile,
+                                        's3api put-bucket-lifecycle --bucket',
+                                        bucket, '--lifecycle-configuration',
+                                                '"{\\"Rules\\":%s}"'
+                                                % json.dumps(rules).replace(
+                                                        '"', '\\"'
+                                                    )
+                                            ])
+            subprocess.check_call(aws_command, bufsize=-1,
+                                        stdout=self._osdevnull,
+                                        stderr=sys.stderr,
+                                        shell=True)
 
 def aws_params_from_json(json_object, prefix=''):
     """ Parses JSON object to generate AWS query string params.
@@ -402,7 +453,7 @@ def urlopen_with_retry(request):
     """
     return urllib2.urlopen(request)
 
-class AWSAnsible:
+class AWSAnsible(object):
     """ Interacts with AWS via POST requests (so far). See AWS API
         documentation. GET requests are cheaper, and if ever a GET request
         need be implemented, the function aws_params_from_json() in this file

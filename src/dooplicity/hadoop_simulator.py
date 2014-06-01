@@ -9,10 +9,6 @@ mirrors that of StepConfig list from JSON sent to EMR via RunJobsFlow. Any
 files input to a mapper can be gzip'd, but inputs to a reducer currently cannot
 be.
 
-TODO: Implement -k option: Kill intermediates when they're no longer necessary.
-This requires checking rest of steps to see if an intermediate directory
-appears.
-
 Licensed under the MIT License:
 
 Copyright (c) 2014 Abhi Nellore and Ben Langmead.

@@ -480,7 +480,8 @@ if __name__ == '__main__':
                 ec2_key_name=args.ec2_key_name,
                 keep_alive=args.keep_alive,
                 termination_protected=args.termination_protected,
-                check_manifest=(not args.do_not_check_manifest)
+                check_manifest=(not args.do_not_check_manifest),
+                intermediate_lifetime=args.intermediate_lifetime
             )
     elif args.job_flow == 'align' and args.align_mode == 'elastic':
         mode = 'elastic'
@@ -521,7 +522,8 @@ if __name__ == '__main__':
                 task_instance_bid_price=args.task_instance_bid_price,
                 ec2_key_name=args.ec2_key_name,
                 keep_alive=args.keep_alive,
-                termination_protected=args.termination_protected
+                termination_protected=args.termination_protected,
+                intermediate_lifetime=args.intermediate_lifetime
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'elastic':
         mode = 'elastic'
@@ -550,13 +552,17 @@ if __name__ == '__main__':
                 ec2_key_name=args.ec2_key_name,
                 keep_alive=args.keep_alive,
                 termination_protected=args.termination_protected,
-                check_manifest=(not args.do_not_check_manifest)
+                check_manifest=(not args.do_not_check_manifest),
+                intermediate_lifetime=args.intermediate_lifetime
             )
     # Launch
-    log_file = os.path.join(
-                        args.log, 
-                        'flow.%s.log' % datetime.datetime.now().isoformat()
-                    )
+    try:
+        log_file = os.path.join(
+                            args.log, 
+                            'flow.%s.log' % datetime.datetime.now().isoformat()
+                        )
+    except AttributeError:
+        log_file = None
     try:
         launcher = Launcher(force=json_creator.base.force,
                                         num_processes=(
