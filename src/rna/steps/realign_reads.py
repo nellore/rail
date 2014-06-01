@@ -725,7 +725,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     # Join thread to pause execution in main thread
     if verbose: print >>sys.stderr, 'Joining thread...'
     output_thread.join()
-    #bowtie_process.wait()
+    bowtie_process.wait()
     output_stream.flush()
     print >> sys.stderr, 'DONE with realign_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,

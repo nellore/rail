@@ -581,6 +581,7 @@ if __name__ == '__main__':
                                         ),
                                         region=args.region)
     except AttributeError:
+        # No region specified
         launcher = Launcher(force=json_creator.base.force,
                                         num_processes=(
                                             json_creator.base.num_processes

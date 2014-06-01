@@ -543,6 +543,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     # Join thread to pause execution in main thread
     if verbose: print >>sys.stderr, 'Joining thread...'
     output_thread.join()
+    bowtie_process.wait()
     output_stream.flush()
 
 if __name__ == '__main__':

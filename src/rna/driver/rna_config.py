@@ -1797,7 +1797,7 @@ class RailRnaAlign:
                                                  ab.Url(
                                                     path_join(elastic,
                                                         base.output_dir,
-                                                        'index')
+                                                        'transcript_index')
                                                     ).to_url(caps=True),
                                                  keep_alive),
                 'inputs' : ['intron_fasta'],
@@ -1815,7 +1815,7 @@ class RailRnaAlign:
                                                         if elastic else
                                                         path_join(elastic,
                                                             base.output_dir,
-                                                            'index',
+                                                            'transcript_index',
                                                             'intron'),
                                                         base.bowtie1_exe,
                                                         verbose
@@ -1825,7 +1825,7 @@ class RailRnaAlign:
                 'taskx' : 4,
                 'archives' : ab.Url(path_join(elastic,
                                     base.output_dir,
-                                    'index',
+                                    'transcript_index',
                                     'intron.tar.gz#intron')).to_native_url(),
                 'part' : 'k1,1',
                 'keys' : 1,
@@ -1900,7 +1900,7 @@ class RailRnaAlign:
                                                      ab.Url(
                                                         path_join(elastic,
                                                         base.output_dir,
-                                                        'coverage')
+                                                        'coverage_bigbeds')
                                                      ).to_url(caps=True),
                                                      base.bedtobigbed_exe,
                                                      manifest,
@@ -1917,7 +1917,7 @@ class RailRnaAlign:
                                                         ab.Url(
                                                             path_join(elastic,
                                                             base.output_dir,
-                                                            'normalize')
+                                                    'normalization_factors')
                                                         ).to_url(caps=True),
                                                         manifest
                                                     ),
@@ -1945,7 +1945,7 @@ class RailRnaAlign:
                                                         ab.Url(
                                                             path_join(elastic,
                                                             base.output_dir,
-                                                            'bed')
+                                                        'introns_and_indels')
                                                          ).to_url(caps=True),
                                                         manifest,
                                                         base.bed_basename
@@ -1963,7 +1963,7 @@ class RailRnaAlign:
                          '--manifest={4} {5} {6}').format(
                                         ab.Url(
                                             path_join(elastic,
-                                            base.output_dir, 'bam')
+                                            base.output_dir, 'alignments')
                                         ).to_url(caps=True),
                                         base.bowtie1_idx,
                                         base.samtools_exe,
