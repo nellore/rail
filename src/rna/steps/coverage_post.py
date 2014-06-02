@@ -75,7 +75,7 @@ if args.verbose:
 
 '''Get the set of all labels by parsing the manifest file, given on the
 filesystem or in the Hadoop file cache.'''
-sample_labels = manifest.labels(args)
+sample_labels = manifest.LabelsAndIndices(args.manifest).label_to_index.keys()
 sample_labels.sort()
 
 input_line_count = 0

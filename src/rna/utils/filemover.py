@@ -32,7 +32,10 @@ class CommandThread(threading.Thread):
         self.process_return = None
     def run(self):
         self.process_return \
-            = subprocess.Popen(self.command_list, stdout=sys.stderr).wait()
+            = subprocess.Popen(' '.join(self.command_list),
+                                    bufsize=-1,
+                                    stdout=sys.stderr,
+                                    shell=True).wait()
 
 class FileMover:
     """ Responsible for details on how to move files to and from URLs. """
@@ -147,15 +150,16 @@ class FileMover:
                 curl_thread = CommandThread(command_list)
                 curl_thread.start()
                 while curl_thread.is_alive():
-                    print >>sys.stderr, 'reporter:status:alive'
+                    print >>sys.stderr, '\nreporter:status:alive'
                     sys.stderr.flush()
                     time.sleep(60)
-                if curl_thread.process_return > 89:
+                if curl_thread.process_return > 89 \
+                    or curl_thread.process_return == 56:
                     '''If the exit code is greater than the highest-documented
                     curl exit code, there was a timeout.'''
                     print >>sys.stderr, 'Too many simultaneous connections; ' \
                                         'restarting in 10 s.'
-                    time.sleep(10)
+                    time.sleep(30)
                 else:
                     break
             os.chdir(oldp)

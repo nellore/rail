@@ -64,7 +64,6 @@ site.addsitedir(base_path)
 
 import bowtie
 import bowtie_index
-import sample
 import partition
 from collections import deque
 

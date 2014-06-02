@@ -26,7 +26,7 @@ from argparse import SUPPRESS
 import datetime
 
 _usage_message = \
-"""rail-rna <job flow> <mode> <[args]>
+u"""rail-rna <job flow> <mode> <[args]>
 
   <job flow>       {{prep, align, go}}
                      prep: preprocess reads listed in a required manifest
@@ -38,11 +38,11 @@ _usage_message = \
                      elastic: run Rail-RNA on Amazon Elastic MapReduce.
                        Requires that the user sign up for Amazon Web Services
 
-=x= Rail-RNA v{0} by Abhi Nellore (anellore@jhu.edu; www.github.com/buci)
+{0} Rail-RNA v{1} by Abhi Nellore (anellore@jhu.edu; www.github.com/buci)
 
 Rail-RNA is a scalable MapReduce pipeline that can analyze many RNA-seq
 datasets at once. To view help for a given combination of <job flow> and
-<mode>, specify both, then add -h/--help.""".format(version_number)
+<mode>, specify both, then add -h/--help.""".format(u'\u2200', version_number)
 _help_set = set(['--help', '-h'])
 _argv_set = set(sys.argv)
 
@@ -562,6 +562,7 @@ if __name__ == '__main__':
                             'flow.%s.log' % datetime.datetime.now().isoformat()
                         )
     except AttributeError:
+        # No log file
         log_file = None
     try:
         launcher = Launcher(force=json_creator.base.force,

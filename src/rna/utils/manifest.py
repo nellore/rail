@@ -15,33 +15,6 @@ def add_args(parser):
         '--manifest', metavar='PATH', type=str, required=False,
         help='Manifest file')
 
-def labels(args):
-    """ Parse the manifest file and return a list of all the labels in the
-        file.
-
-        args: command-line arguments
-
-        Return value: list of all labels in file.
-    """
-    labs = []
-    if not os.path.isfile(args.manifest):
-        raise RuntimeError("No such --manifest file '%s'" % args.manifest)
-    with open(args.manifest, 'r') as fh:
-        for line in fh:
-            line = line.strip()
-            if len(line) == 0 or line[0] == '#':
-                continue
-            toks = line.split('\t')
-            if len(toks) == 3:
-                _, _, lab = toks
-                labs.append(lab)
-            elif len(toks) == 5:
-                _, _, _, _, lab = toks
-                labs.append(lab)
-            else:
-                raise RuntimeError('Wrong number of tokens in line: ' + line)
-    return labs
-
 class LabelsAndIndices:
     """ Parses the manifest file to create manifest dictionary. """
     def __init__(self, manifest_file):

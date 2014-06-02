@@ -134,7 +134,6 @@ from dooplicity.tools import xstream
 import manifest
 import bowtie
 import bowtie_index
-import sample
 import partition
 from cigar_parse import indels_introns_and_exons
 
@@ -415,13 +414,13 @@ class BowtieOutputThread(threading.Thread):
                 print >>self.output_stream, 'splice_sam\t' \
                      + '\t'.join(
                             list((self.manifest_object.label_to_index[
-                                    sample.parse_label(qname[:-2])
+                                    qname.rpartition('\x1d')[2]
                                 ],
                                 self.reference_index.rname_to_string[
                                         rest_of_line[1]
                                     ], '%012d' % 
                                 int(rest_of_line[2]),
-                                qname[:-2],
+                                qname.partition('\x1d')[0],
                                 rest_of_line[0]) + rest_of_line[3:])
                         )
             else:
@@ -431,7 +430,7 @@ class BowtieOutputThread(threading.Thread):
                                             multiread, self.stranded
                                         )
                 sample_label = self.manifest_object.label_to_index[
-                                    sample.parse_label(multiread[0][0][:-2])
+                                    multiread[0][0].rpartition('\x1d')[2]
                                     ]
                 for alignment in corrected_multiread:
                     print >>self.output_stream, 'splice_sam\t' \
@@ -440,7 +439,7 @@ class BowtieOutputThread(threading.Thread):
                                 self.reference_index.rname_to_string[
                                         alignment[2]
                                     ], '%012d' % int(alignment[3]),
-                                alignment[0][:-2],
+                                alignment[0].partition('\x1d')[0],
                                 alignment[1]) + alignment[4:]
                         )
                     _output_line_count += 1
@@ -703,11 +702,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         bowtie2_index_base)
     reference_index = bowtie_index.BowtieIndexReference(reference_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
-    bowtie_command = ' '.join([bowtie2_exe,
+    bowtie_command = [bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
-        '-t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file])
-    print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
-    bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1, shell=True,
+        '-t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file]
+    print >>sys.stderr, 'Starting Bowtie2 with command: ' \
+         + ' '.join(bowtie_command)
+    bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
         stdout=subprocess.PIPE, stderr=sys.stderr)
     output_thread = BowtieOutputThread(
                         bowtie_process.stdout,

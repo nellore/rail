@@ -1272,7 +1272,7 @@ class RailRnaPreprocess:
             {
                 'name' : 'Preprocess input reads',
                 'run' : ('preprocess.py --nucs-per-file={0} {1} '
-                         '--push={2} {3}').format(
+                         '--push={2}').format(
                                                     base.nucleotides_per_input,
                                                     '--gzip-output' if
                                                     base.gzip_input else '',
@@ -1280,9 +1280,7 @@ class RailRnaPreprocess:
                                                         output_dir,
                                                         'push')).to_url(
                                                             caps=True
-                                                        ),
-                                                    '--ignore-first-token' if
-                                                    elastic else ''
+                                                        )
                                                 ),
                 'inputs' : [base.manifest],
                 'no_input_prefix' : True,

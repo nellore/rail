@@ -128,7 +128,6 @@ site.addsitedir(base_path)
 
 import bowtie
 import bowtie_index
-import sample
 import partition
 import manifest
 from cigar_parse import indels_introns_and_exons
@@ -180,10 +179,6 @@ def write_reads(output_stream, input_stream=sys.stdin, verbose=False,
             raise RuntimeError('The following line has an invalid number of '
                 'tab-separated tokens:\n%sA valid line has 3, 5, or 6 such '
                 'tokens.' % line)
-        # Check that a properly formed label is embedded in the read name
-        if not sample.has_label(tokens[0]):
-            raise RuntimeError('QNAME %s is missing sample label.'
-                                % tokens[0])
         if len(tokens) == 3:
             to_write = '%s\t%s\t%s' \
                 % (tokens[0], tokens[1], tokens[2])
@@ -192,6 +187,8 @@ def write_reads(output_stream, input_stream=sys.stdin, verbose=False,
                 % (tokens[0], tokens[1], tokens[2],
                     (tokens[0] if len(tokens) == 5 else tokens[3]),
                         tokens[-2], tokens[-1])
+            assert len(tokens[1]) == len(tokens[2])
+            assert len(tokens[-2]) == len(tokens[-1])
         print >>output_stream, to_write
         if verbose and next_report_line == i:
             print >>sys.stderr, 'Read(s) %d: %s' % (i, to_write)
@@ -256,7 +253,7 @@ class BowtieOutputThread(threading.Thread):
             # While labeled multiread, this list may end up simply a uniread
             multiread = []
             sample_label = self.manifest_object.label_to_index[
-                        sample.parse_label(qname)
+                        qname.rpartition('\x1d')[2]
                     ]
             for rest_of_line in xpartition:
                 i += 1
@@ -304,7 +301,7 @@ class BowtieOutputThread(threading.Thread):
                                     alignment[2]
                                 ],
                             int(alignment[3]),
-                            alignment[0][:-2],
+                            alignment[0].partition('\x1d')[0],
                             alignment[1])) 
                         + '\t'.join(alignment[4:])
                         + ('\tNH:i:%d' % len(multiread)))
@@ -523,11 +520,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             read_stream, input_stream=input_stream, verbose=verbose,
             report_multiplier=report_multiplier
         )
-    bowtie_command = ' '.join([bowtie2_exe,
+    bowtie_command = [bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
-        '-t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file])
-    print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
-    bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1, shell=True,
+        '-t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file]
+    print >>sys.stderr, 'Starting Bowtie2 with command: ' \
+         + ' '.join(bowtie_command)
+    bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
         stdout=subprocess.PIPE, stderr=sys.stderr)
     output_thread = BowtieOutputThread(
             bowtie_process.stdout, reference_index, manifest_object,

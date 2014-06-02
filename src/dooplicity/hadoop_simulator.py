@@ -45,6 +45,7 @@ import json
 import interface as dp_iface
 import signal
 import gc
+import tempfile
 
 def init_worker():
     """ Prevents KeyboardInterrupt from reaching a pool's workers.
@@ -321,7 +322,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         step_args[step['HadoopJarStep']['Args'][j][1:]] \
                             = step['HadoopJarStep']['Args'][j+1].strip()
                 steps[step['Name']] = step_args
-        except KeyError, IndexError:
+        except (KeyError, IndexError):
             iface.fail(
                     'JSON file not in proper format. Ensure '
                     'that each step object has a HadoopJarStep '
@@ -338,6 +339,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             = set(['cat', 'org.apache.hadoop.mapred.lib.IdentityMapper'])
         identity_reducers \
             = set(['cat', 'org.apache.hadoop.mapred.lib.IdentityReducer'])
+        errors = []
         for step in steps:
             step_data = steps[step]
             for required_parameter in required_data:
@@ -346,7 +348,18 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 elif not force and required_parameter == 'output' \
                     and os.path.exists(step_data['output']):
                     bad_output_data.append(step)
-        errors = []
+            try:
+                if step_data['inputformat'] \
+                    == 'org.apache.hadoop.mapred.lib.NLineInputFormat' \
+                    and not os.path.isfile(step_data['input']):
+                    errors.append(('In step "%s", input should be a single '
+                                   'file if using NLineFormat, but '
+                                   '"%s" was specified.') % (
+                                                        step,
+                                                        step_data['input']
+                                                    ))
+            except KeyError:
+                pass
         if missing_data:
             errors.extend(['Step "%s" is missing required parameter(s) "%s".' % 
                                 (step, ', '.join(missing_data[step]))
@@ -441,6 +454,15 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     # No multiple outputs
                     multiple_outputs = False
                     pass
+                try:
+                    if step_data['inputformat'] \
+                        == 'org.apache.hadoop.mapred.lib.NLineInputFormat':
+                        nline_input = True
+                    else:
+                        nline_input = False
+                except KeyError:
+                    # Don't assign one line per mapper
+                    nline_input = False
                 output_dir = step_data['output']
                 if step_data['reducer'] not in identity_mappers:
                     '''There's a reducer parameter, so input to reducer is
@@ -469,8 +491,22 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         pass
                 return_values = []
                 pool = multiprocessing.Pool(num_processes, init_worker)
-                input_files = [input_file for input_file in step_inputs
-                                if os.path.isfile(input_file)]
+                if nline_input:
+                    # Create temporary input files
+                    split_input_dir = tempfile.mkdtemp()
+                    input_files = []
+                    with open(step_inputs[0]) as nline_stream:
+                        for i, line in enumerate(nline_stream):
+                            offset = str(i)
+                            input_files.append(os.path.join(split_input_dir,
+                                                                offset))
+                            with open(input_files[-1], 'w') as output_stream:
+                                print >>output_stream, separator.join([
+                                                            offset, line
+                                                        ])
+                else:
+                    input_files = [input_file for input_file in step_inputs
+                                    if os.path.isfile(input_file)]
                 input_file_count = len(input_files)
                 err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
                 for i, input_file in enumerate(input_files):
@@ -699,6 +735,11 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             gc.collect()
             if not keep_intermediates:
                 iface.status('    Deleting temporary files....')
+                # Kill NLineInput files if they're there
+                try:
+                    shutil.rmtree(split_input_dir)
+                except (NameError, OSError):
+                    pass
                 try:
                     # Intermediate map output should be deleted if it exists
                     shutil.rmtree(
@@ -761,7 +802,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     # Phantom; maybe user deleted it
                                     pass
         iface.done()
-    except Exception, GeneratorExit:
+    except (Exception, GeneratorExit):
         # GeneratorExit added just in case this happens on modifying code
         if not failed:
             time.sleep(0.2)
@@ -770,8 +811,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             if step_number != 0 else None))
             else:
                 iface.fail()
+        #if 'split_input_dir' in locals():
+        #    try:
+        #        shutil.rmtree(split_input_dir)
+        #    except OSError:
+        #        pass
         raise
-    except KeyboardInterrupt, SystemExit:
+    except (KeyboardInterrupt, SystemExit):
         if 'step_number' in locals():
             iface.fail(steps=(job_flow[step_number:]
                         if step_number != 0 else None),
@@ -781,6 +827,11 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         if 'pool' in locals():
             pool.terminate()
             pool.join()
+        #if 'split_input_dir' in locals():
+        #    try:
+        #        shutil.rmtree(split_input_dir)
+        #    except OSError:
+        #        pass
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, 

@@ -116,7 +116,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
                         step_args[step['HadoopJarStep']['Args'][j][1:]] \
                             = step['HadoopJarStep']['Args'][j+1].strip()
                 steps[step['Name']] = step_args
-        except KeyError, IndexError:
+        except (KeyError, IndexError):
             iface.fail(
                     'JSON file not in proper format. Ensure '
                     'that each StepConfig object has a HadoopJarStep '
@@ -209,11 +209,11 @@ def run_job_flow(branding, json_config, force, no_browser=False,
         iface.done(closer=('Finished job flow submission script '
                            'on {date}. Run time was {length} seconds.')
                 )
-    except Exception, GeneratorExit:
+    except (Exception, GeneratorExit):
          # GeneratorExit added just in case this happens on modifying code
         iface.fail()
         raise
-    except KeyboardInterrupt, SystemExit:
+    except (KeyboardInterrupt, SystemExit):
         if 'job_flow_id' not in locals():
             iface.fail(opener='*****Terminated without submitting job.*****',
                         middler=('End time was {date}. '
