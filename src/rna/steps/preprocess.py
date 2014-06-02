@@ -183,165 +183,185 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         loop.'''
         if len(sources) == 1:
             sources.append(os.devnull)
-        '''Name files using Hadoop task environment property
-        mapred.task.partition.'''
-        if gzip_output:
-            output_file = os.path.join(
-                        destination, 
-                        '.'.join([
-                            os.environ['mapred_task_partition'],
-                            str(k), 'gz'
-                        ])
-                    )
-            open_args = [output_file, 'w', gzip_level]
-        else:
-            output_file = os.path.join(
-                        destination, 
-                        '.'.join([
-                            os.environ['mapred_task_partition'],
-                            str(k)
-                        ])
-                    )
-            open_args = [output_file, 'w']
-        try:
-            os.makedirs(os.path.dirname(output_file))
-        except OSError:
-            pass
-        # Use xopen to handle compressed streams and normal streams generally
-        with xopen(gzip_output, *open_args) as output_stream:
-            with open(sources[0]) as source_stream_1, \
-                open(sources[1]) as source_stream_2:
-                source_streams = [source_stream_1, source_stream_2]
-                line_numbers = [0, 0]
-                read_next_line = True
-                while True:
-                    if read_next_line:
-                        # Read next line only if FASTA mode didn't already
-                        lines = []
-                        for source_stream in source_streams:
-                            lines.append(source_stream.readline())
+        with open(sources[0]) as source_stream_1, \
+            open(sources[1]) as source_stream_2:
+            source_streams = [source_stream_1, source_stream_2]
+            file_number = 0
+            break_outer_loop = False
+            while True:
+                '''Name files using Hadoop task environment property
+                mapred.task.partition.'''
+                if gzip_output:
+                    output_file = os.path.join(
+                                destination, 
+                                '.'.join([
+                                    os.environ['mapred_task_partition'],
+                                    str(k), str(file_number), 'gz'
+                                ])
+                            )
+                    open_args = [output_file, 'w', gzip_level]
+                else:
+                    output_file = os.path.join(
+                                destination, 
+                                '.'.join([
+                                    os.environ['mapred_task_partition'],
+                                    str(k), str(file_number)
+                                ])
+                            )
+                    open_args = [output_file, 'w']
+                try:
+                    os.makedirs(os.path.dirname(output_file))
+                except OSError:
+                    pass
+                '''Use xopen to handle compressed streams and normal streams
+                generally.'''
+                with xopen(gzip_output, *open_args) as output_stream:
+                    line_numbers = [0, 0]
                     read_next_line = True
-                    if not lines[0]: break
-                    line_numbers = [i + 1 for i in line_numbers]
-                    lines = [line.strip() for line in lines]
-                    if lines[0][0] in fastq_cues:
-                        seqs = [source_stream.readline().strip()
-                                    for source_stream in source_streams]
+                    nucs_read = 0
+                    while True:
+                        if read_next_line:
+                            # Read next line only if FASTA mode didn't already
+                            lines = []
+                            for source_stream in source_streams:
+                                lines.append(source_stream.readline())
+                        read_next_line = True
+                        if not lines[0]:
+                            break_outer_loop = True
+                            break
                         line_numbers = [i + 1 for i in line_numbers]
-                        plus_lines = [source_stream.readline().strip()
+                        lines = [line.strip() for line in lines]
+                        if lines[0][0] in fastq_cues:
+                            seqs = [source_stream.readline().strip()
                                         for source_stream in source_streams]
-                        line_numbers = [i + 1 for i in line_numbers]
-                        assert plus_lines[0][0] == '+', (
-                                'Malformed read "%s" at line %d of '
-                                'file "%s".'
-                            ) % (lines[0], line_numbers[0], sources[0])
-                        if plus_lines[1]:
-                            assert plus_lines[1][0] == '+', (
+                            line_numbers = [i + 1 for i in line_numbers]
+                            plus_lines = [source_stream.readline().strip()
+                                            for source_stream
+                                            in source_streams]
+                            line_numbers = [i + 1 for i in line_numbers]
+                            assert plus_lines[0][0] == '+', (
                                     'Malformed read "%s" at line %d of '
                                     'file "%s".'
-                                ) % (lines[1], line_numbers[1], sources[1])
-                        try:
-                            # Kill spaces in name
-                            original_qnames = [line[1:].replace(' ', '_')
-                                                for line in lines]
-                        except IndexError:
-                            print >>sys.stderr, 'Error finding QNAME at ' \
-                                ('line %d of either %s or %s' % (
-                                        sources[0],
-                                        sources[1]
-                                    ))
-                            raise
-                        quals = [source_stream.readline().strip()
-                                    for source_stream in source_streams]
-                        line_numbers = [i + 1 for i in line_numbers]
-                        for i in xrange(2):
-                            assert len(seqs[i]) == len(quals[i]), (
-                                    'Length of read sequence does not match '
-                                    'length of quality string at line %d of '
-                                    'file "%s".'
-                                ) % (line_numbers[i], sources[i])
-                    elif lines[0][0] in fasta_cues:
-                        original_qnames, seqs, quals, lines = [], [], [], []
-                        for i, source_stream in enumerate(source_streams):
-                            next_line = source_stream.readline()
-                            if not next_line: break
-                            line_numbers[i] += 1
-                            while next_line[0] == ';':
-                                # Skip comment lines
-                                next_line = source_stream.readline()
-                                line_numbers[i] += 1
+                                ) % (lines[0], line_numbers[0], sources[0])
+                            if plus_lines[1]:
+                                assert plus_lines[1][0] == '+', (
+                                        'Malformed read "%s" at line %d of '
+                                        'file "%s".'
+                                    ) % (lines[1], line_numbers[1], sources[1])
                             try:
                                 # Kill spaces in name
-                                original_qnames.append(
-                                        line[1:].replace(' ', '_')
-                                    )
+                                original_qnames = [line[1:].replace(' ', '_')
+                                                    for line in lines]
                             except IndexError:
-                                raise RuntimeError(
-                                        ('No QNAME for read '
-                                         'above line %d in file "%s".') % (
+                                print >>sys.stderr, 'Error finding QNAME at ' \
+                                    ('line %d of either %s or %s' % (
+                                            sources[0],
+                                            sources[1]
+                                        ))
+                                raise
+                            quals = [source_stream.readline().strip()
+                                        for source_stream in source_streams]
+                            line_numbers = [i + 1 for i in line_numbers]
+                            for i in xrange(2):
+                                assert len(seqs[i]) == len(quals[i]), (
+                                        'Length of read sequence does not '
+                                        'match length of quality string at '
+                                        'line %d of file "%s".'
+                                    ) % (line_numbers[i], sources[i])
+                        elif lines[0][0] in fasta_cues:
+                            original_qnames, seqs, quals, lines = []*4
+                            for i, source_stream in enumerate(source_streams):
+                                next_line = source_stream.readline()
+                                if not next_line: break
+                                line_numbers[i] += 1
+                                while next_line[0] == ';':
+                                    # Skip comment lines
+                                    next_line = source_stream.readline()
+                                    line_numbers[i] += 1
+                                try:
+                                    # Kill spaces in name
+                                    original_qnames.append(
+                                            line[1:].replace(' ', '_')
+                                        )
+                                except IndexError:
+                                    raise RuntimeError(
+                                            ('No QNAME for read '
+                                             'above line %d in file "%s".') % (
                                                             line_numbers[i],
                                                             sources[i]
                                                         ) 
+                                        )
+                                assert next_line not in fasta_cues, (
+                                        'No read sequence for read named "%s" '
+                                        'above line %d in file "%s".'
+                                    ) % (
+                                        original_qnames[i],
+                                        line_numbers[i],
+                                        sources[i]
                                     )
-                            assert next_line not in fasta_cues, (
-                                    'No read sequence for read named "%s" '
-                                    'above line %d in file "%s".'
-                                ) % (
-                                    original_qnames[i],
-                                    line_numbers[i],
-                                    sources[i]
-                                )
-                            read_lines = []
-                            while next_line[0] not in fasta_cues:
-                                read_lines.append(next_line.strip())
-                                next_line = source_stream.readline()
-                                line_numbers[i] += 1
-                            seqs.append(''.join(read_lines))
-                            quals.append('I'*len(read_lines))
-                            lines.append(next_line)
-                            read_next_line = False
-                    if len(original_qnames) == 2 and original_qnames[1]:
-                        # Paired-end write
-                        if original_qnames[0] == original_qnames[1]:
-                            # Add paired-end identifiers
-                            original_qnames[0] += '/1'
-                            original_qnames[1] += '/2'
-                        assert seqs[1]
-                        assert quals[1]
-                        print >>output_stream, '\t'.join(
-                                    [qname_from_read(
-                                            original_qnames[0],
-                                            seqs[0] + quals[0], 
-                                            sample_label
-                                        ),
-                                    seqs[0],
-                                    quals[0],
-                                    qname_from_read(
-                                            original_qnames[1],
-                                            seqs[1] + quals[1], 
-                                            sample_label
-                                        ),
-                                    seqs[1],
-                                    quals[1]]
-                                )
-                    else:
-                        # Single-end write
-                        print >>output_stream, '\t'.join(
-                                    [qname_from_read(
-                                            original_qnames[0],
-                                            seqs[0] + quals[0], 
-                                            sample_label
-                                        ),
-                                    seqs[0],
-                                    quals[0]]
-                                )
-                    _output_line_count += 1
-                    output_stream.flush()
-        if push_url.is_s3:
-            mover.put(output_file, push_url)
+                                read_lines = []
+                                while next_line[0] not in fasta_cues:
+                                    read_lines.append(next_line.strip())
+                                    next_line = source_stream.readline()
+                                    line_numbers[i] += 1
+                                seqs.append(''.join(read_lines))
+                                quals.append('I'*len(read_lines))
+                                lines.append(next_line)
+                                read_next_line = False
+                        if len(original_qnames) == 2 and original_qnames[1]:
+                            # Paired-end write
+                            if original_qnames[0] == original_qnames[1]:
+                                # Add paired-end identifiers
+                                original_qnames[0] += '/1'
+                                original_qnames[1] += '/2'
+                            assert seqs[1]
+                            assert quals[1]
+                            print >>output_stream, '\t'.join(
+                                        [qname_from_read(
+                                                original_qnames[0],
+                                                seqs[0] + quals[0], 
+                                                sample_label
+                                            ),
+                                        seqs[0],
+                                        quals[0],
+                                        qname_from_read(
+                                                original_qnames[1],
+                                                seqs[1] + quals[1], 
+                                                sample_label
+                                            ),
+                                        seqs[1],
+                                        quals[1]]
+                                    )
+                        else:
+                            # Single-end write
+                            print >>output_stream, '\t'.join(
+                                        [qname_from_read(
+                                                original_qnames[0],
+                                                seqs[0] + quals[0], 
+                                                sample_label
+                                            ),
+                                        seqs[0],
+                                        quals[0]]
+                                    )
+                        _output_line_count += 1
+                        for seq in seqs:
+                            nucs_read += len(seq)
+                        if nucs_read > nucleotides_per_input:
+                            break
+                if push_url.is_s3:
+                    mover.put(output_file, push_url)
+                    try:
+                        os.remove(output_file)
+                    except OSError:
+                        pass
+                if break_outer_loop: break
+                file_number += 1
         # Clear temporary directory
         for input_file in os.listdir(temp_dir):
-            os.remove(os.path.join(temp_dir, input_file))
+            try:
+                os.remove(os.path.join(temp_dir, input_file))
+            except OSError:
+                pass
 
 if __name__ == '__main__':
     import argparse
@@ -350,7 +370,8 @@ if __name__ == '__main__':
                 formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--nucs-per-file', type=int, required=False,
         default=8000000,
-        help='Allow a max of this many nucleotides per output file')
+        help='Write to next file if more than this many nucleotides are ' \
+             'found to have been written to given output file')
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
