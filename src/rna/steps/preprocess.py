@@ -144,9 +144,9 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     token_lengths = set([3, 5])
     push_url = Url(push)
     if push_url.is_local:
-        upload = False
+        destination = push
     elif push_url.is_s3:
-        upload = True
+        destination = temp_dir
     else:
         raise RuntimeError('Push destination must be S3 or local.')
     fastq_cues = set(['@'])
@@ -187,7 +187,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         mapred.task.partition.'''
         if gzip_output:
             output_file = os.path.join(
-                        push, 
+                        destination, 
                         '.'.join([
                             os.environ['mapred_task_partition'],
                             str(k), 'gz'
@@ -196,7 +196,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             open_args = [output_file, 'w', gzip_level]
         else:
             output_file = os.path.join(
-                        push, 
+                        destination, 
                         '.'.join([
                             os.environ['mapred_task_partition'],
                             str(k)
@@ -337,6 +337,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 )
                     _output_line_count += 1
                     output_stream.flush()
+        if push_url.is_s3:
+            mover.put(output_file, push_url)
         # Clear temporary directory
         for input_file in os.listdir(temp_dir):
             os.remove(os.path.join(temp_dir, input_file))

@@ -134,7 +134,7 @@ class Launcher:
             if self.keep_intermediates:
                 runner_args.append('--keep-intermediates')
             if self.log:
-                runner_args.extend(['-l', self.log])
+                runner_args.extend(['-l', os.path.abspath(self.log)])
         else:
             runner_args = [_executable, os.path.join(base_path, 'dooplicity',
                                     'emr_runner.py'),

@@ -1269,7 +1269,7 @@ class RailRnaPreprocess:
         )
 
     @staticmethod
-    def protosteps(base, output_dir, elastic=False):
+    def protosteps(base, prep_dir, push_dir):
         return [
             {
                 'name' : 'Preprocess input reads',
@@ -1278,15 +1278,13 @@ class RailRnaPreprocess:
                                                     base.nucleotides_per_input,
                                                     '--gzip-output' if
                                                     base.gzip_input else '',
-                                                    ab.Url(path_join(elastic,
-                                                        output_dir,
-                                                        'push')).to_url(
+                                                    ab.Url(push_dir).to_url(
                                                             caps=True
                                                         )
                                                 ),
                 'inputs' : [base.manifest],
                 'no_input_prefix' : True,
-                'output' : output_dir,
+                'output' : prep_dir,
                 'no_output_prefix' : True,
                 'inputformat' : (
                         'org.apache.hadoop.mapred.lib.NLineInputFormat'
@@ -2085,7 +2083,10 @@ class RailRnaLocalPreprocessJson:
         self._json_serial = {}
         os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
-                base.output_dir), '', '', step_dir, base.num_processes,
+                os.path.join(base.intermediate_dir, 'preprocess'),
+                base.output_dir),
+                '', '', step_dir,
+                base.num_processes,
                 base.intermediate_dir, unix=False
             )
         self.base = base
@@ -2150,8 +2151,9 @@ class RailRnaElasticPreprocessJson:
                 * base.instance_core_counts[base.core_instance_type]
         self._json_serial['Steps'] \
             = RailRnaElastic.hadoop_debugging_steps(base) + steps(
-                    RailRnaPreprocess.protosteps(base, base.output_dir,
-                                                    elastic=True),
+                    RailRnaPreprocess.protosteps(base,
+                        path_join(True, base.intermediate_dir, 'preprocess'),
+                        base.output_dir),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
@@ -2399,13 +2401,13 @@ class RailRnaLocalAllJson:
                 )
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
-        prep_dir = path_join(True, base.intermediate_dir,
+        prep_dir = path_join(False, base.intermediate_dir,
                                         'preprocess')
-        push_dir = path_join(True, base.intermediate_dir,
+        push_dir = path_join(False, base.intermediate_dir,
                                         'preprocess', 'push')
         self._json_serial['Steps'] = \
             steps(RailRnaPreprocess.protosteps(base,
-                prep_dir, elastic=False), '', '', step_dir, base.num_processes,
+                prep_dir, push_dir), '', '', step_dir, base.num_processes,
                 base.intermediate_dir, unix=False
             ) + \
             steps(RailRnaAlign.protosteps(base,
@@ -2501,15 +2503,14 @@ class RailRnaElasticAllJson:
         else:
             reducer_count = base.master_instance_count \
                 * base.instance_core_counts[base.core_instance_type]
-        prep_dir = path_join(True, base.intermediate_dir,
+        push_dir = path_join(True, base.intermediate_dir,
                                         'preprocess')
         push_dir = path_join(True, base.intermediate_dir,
                                         'preprocess', 'push')
         self._json_serial['Steps'] \
             = RailRnaElastic.hadoop_debugging_steps(base) + \
                 steps(
-                    RailRnaPreprocess.protosteps(base, prep_dir,
-                                                    elastic=False),
+                    RailRnaPreprocess.protosteps(base, prep_dir, push_dir),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
