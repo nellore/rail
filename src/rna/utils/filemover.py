@@ -34,7 +34,7 @@ class CommandThread(threading.Thread):
         self.process_return \
             = subprocess.Popen(' '.join(self.command_list),
                                     bufsize=-1,
-                                    stdout=open(os.devnull, 'w'),
+                                    stdout=sys.stderr,
                                     stderr=sys.stderr,
                                     shell=True).wait()
 
@@ -144,16 +144,20 @@ class FileMover:
         elif url.is_curlable:
             oldp = os.getcwd()
             os.chdir(dest)
-            command_list = ['curl', '-O', '--connect-timeout', '60']
+            command_list = ['curl', '-s', '-O', '--connect-timeout', '60']
             command_list.append(url.to_url())
             command = ' '.join(command_list)
             while True:
                 curl_thread = CommandThread(command_list)
                 curl_thread.start()
+                last_print_time = time.time()
                 while curl_thread.is_alive():
-                    print >>sys.stderr, '\nreporter:status:alive'
-                    sys.stderr.flush()
-                    time.sleep(60)
+                    now_time = time.time()
+                    if now_time - last_print_time > 60:
+                        print >>sys.stderr, '\nreporter:status:alive'
+                        sys.stderr.flush()
+                        last_print_time = now_time
+                    time.sleep(1)
                 if curl_thread.process_return > 89 \
                     or curl_thread.process_return == 56 \
                     or curl_thread.process_return == 28:
@@ -161,7 +165,7 @@ class FileMover:
                     curl exit code, there was a timeout.'''
                     print >>sys.stderr, 'Too many simultaneous connections; ' \
                                         'restarting in 10 s.'
-                    time.sleep(30)
+                    time.sleep(5)
                 else:
                     break
             os.chdir(oldp)
