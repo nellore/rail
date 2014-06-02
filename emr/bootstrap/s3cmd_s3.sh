@@ -27,5 +27,5 @@ cd ${2}
 fn=`basename ${1}`
 s3cmd get ${1} . || { echo 's3cmd get failed' ; exit 1; }
 if [ -n "${3}" ] ; then
-	mv $fn ${3}
+	mv $fn ${3} || true
 fi
