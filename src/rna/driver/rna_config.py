@@ -715,9 +715,17 @@ class RailRnaElastic:
             base.tags = []
         base.name = name
         base.ami_version = ami_version
-
         # Initialize ansible for easy checks
         ansible = ab.Ansible(aws_exe=base.aws_exe, profile=base.profile)
+        output_dir_url = ab.Url(base.output_dir)
+        if not output_dir_url.is_s3:
+            base.errors.append(('Output directory (--output) must be on S3 '
+                                'when running Rail-RNA in "elastic" '
+                                'mode, but {0} was entered.').format(
+                                        base.output_dir
+                                    ))
+        if base.intermediate_dir is None:
+            base.intermediate_dir = base.output_dir + '.intermediate'
         intermediate_dir_url = ab.Url(base.intermediate_dir)
         if intermediate_dir_url.is_local:
             base.errors.append(('Intermediate directory (--intermediate) '
@@ -741,13 +749,6 @@ class RailRnaElastic:
                     final_intermediate_dir = final_intermediate_dir[:-1]
                 ansible.s3_ansible.expire_prefix(final_intermediate_dir,
                                                     days=intermediate_lifetime)
-        output_dir_url = ab.Url(base.output_dir)
-        if not output_dir_url.is_s3:
-            base.errors.append(('Output directory (--output) must be on S3 '
-                                'when running Rail-RNA in "elastic" '
-                                'mode, but {0} was entered.').format(
-                                        base.output_dir
-                                    ))
         if not base.force and ansible.s3_ansible.is_dir(base.output_dir):
             base.errors.append(('Output directory {0} exists on S3, and '
                                 '--force was not invoked to permit '
@@ -968,10 +969,11 @@ class RailRnaElastic:
         general_parser.add_argument(
             '--intermediate', type=str, required=False,
             metavar='<s3_dir/hdfs_dir>',
-            default='s3://rail-rna_intermediate',
+            default=None,
             help='directory for storing intermediate files; can begin with ' \
-                 'hdfs:// or s3://. use S3 and set --intermediate-lifetime ' \
-                 'to -1 to keep intermediates'
+                 'hdfs:// or s3://; use S3 and set --intermediate-lifetime ' \
+                 'to -1 to keep intermediates (def: output directory + ' \
+                 '".intermediate")'
         )
         elastic_parser.add_argument(
             '--intermediate-lifetime', type=int, required=False,
