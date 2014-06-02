@@ -488,17 +488,22 @@ class RailRnaLocal:
             # Change ansible params
             ansible.aws_exe = base.aws_exe
             ansible.profile = base.profile
-        if not base.force:
-            if output_dir_url.is_local \
-                and os.path.exists(output_dir_url.to_url()):
+        if output_dir_url.is_local \
+            and os.path.exists(output_dir_url.to_url()):
+            if not base.force:
                 base.errors.append(('Output directory {0} exists, '
                                     'and --force was not invoked to permit '
                                     'overwriting it.').format(base.output_dir))
-            elif output_dir_url.is_s3 \
-                and ansible.s3_ansible.is_dir(base.output_dir):
+            else:
+                shutil.rmtree(base.output_dir)
+        elif output_dir_url.is_s3 \
+            and ansible.s3_ansible.is_dir(base.output_dir):
+            if not base.force:
                 base.errors.append(('Output directory {0} exists on S3, and '
                                     '--force was not invoked to permit '
                                     'overwriting it.').format(base_output_dir))
+            else:
+                ansible.s3ansible.remove_dir(base.output_dir)
         # Check manifest; download it if necessary
         manifest_url = ab.Url(base.manifest)
         if manifest_url.is_s3 and 'AWS CLI' not in base.checked_programs:
@@ -541,7 +546,13 @@ class RailRnaLocal:
             if files_to_check:
                 if check_manifest:
                     # Check files in manifest only if in preprocess job flow
-                    for filename in files_to_check:
+                    file_count = len(files_to_check)
+                    for k, filename in enumerate(files_to_check):
+                        sys.stdout.write(
+                                '\r\x1b[KChecking that file %d/%d from '
+                                'manifest file exists....' % (k+1, file_count)
+                            )
+                        sys.stdout.flush()
                         filename_url = ab.Url(filename)
                         if filename_url.is_s3 \
                             and 'AWS CLI' not in base.checked_programs:
@@ -570,6 +581,11 @@ class RailRnaLocal:
                                                         filename,
                                                         manifest_url.to_url()
                                                     ))
+                    sys.stdout.write(
+                            '\r\x1b[KChecked all files listed in manifest '
+                            'file.\n'
+                        )
+                    sys.stdout.flush()
             else:
                 base.errors.append(('Manifest file (--manifest) {0} '
                                     'has no valid lines.').format(
@@ -749,10 +765,13 @@ class RailRnaElastic:
                     final_intermediate_dir = final_intermediate_dir[:-1]
                 ansible.s3_ansible.expire_prefix(final_intermediate_dir,
                                                     days=intermediate_lifetime)
-        if not base.force and ansible.s3_ansible.is_dir(base.output_dir):
-            base.errors.append(('Output directory {0} exists on S3, and '
-                                '--force was not invoked to permit '
-                                'overwriting it.').format(base.output_dir))
+        if ansible.s3_ansible.is_dir(base.output_dir):
+            if not base.force:
+                base.errors.append(('Output directory {0} exists on S3, and '
+                                    '--force was not invoked to permit '
+                                    'overwriting it.').format(base.output_dir))
+            else:
+                ansible.s3_ansible.remove_dir(base.output_dir)
         # Check manifest; download it if necessary
         manifest_url = ab.Url(base.manifest)
         if manifest_url.is_curlable \
@@ -2081,7 +2100,7 @@ class RailRnaLocalPreprocessJson:
                         ) if len(base.errors) > 1 else base.errors[0]
                 )
         self._json_serial = {}
-        os.path.join(base_path, 'rna', 'steps')
+        step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
                 os.path.join(base.intermediate_dir, 'preprocess'),
                 base.output_dir),

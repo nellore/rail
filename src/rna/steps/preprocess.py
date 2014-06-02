@@ -175,8 +175,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 mover.get(source_url, temp_dir)
                 downloaded = list(
                         set(os.listdir(temp_dir)).difference(downloaded)
-                    )[0]
-                sources.append(os.path.join(temp_dir, downloaded))
+                    )
+                sources.append(os.path.join(temp_dir, list(downloaded)[0]))
             else:
                 sources.append(source_url.to_url())
         '''Use os.devnull so single- and paired-end data can be handled in one
