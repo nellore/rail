@@ -529,6 +529,7 @@ class RailRnaLocal:
             files_to_check = []
             with open(base.manifest) as manifest_stream:
                 for line in manifest_stream:
+                    if line[0] == '#' or not line.strip(): continue
                     tokens = line.strip().split('\t')
                     if len(tokens) == 5:
                         files_to_check.extend([tokens[0], tokens[2]])
@@ -794,6 +795,7 @@ class RailRnaElastic:
             files_to_check = []
             with open(manifest) as manifest_stream:
                 for line in manifest_stream:
+                    if line[0] == '#' or not line.strip(): continue
                     tokens = line.strip().split('\t')
                     if len(tokens) == 5:
                         files_to_check.extend([tokens[0], tokens[2]])
