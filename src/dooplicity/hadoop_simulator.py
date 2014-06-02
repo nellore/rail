@@ -811,11 +811,11 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             if step_number != 0 else None))
             else:
                 iface.fail()
-        #if 'split_input_dir' in locals():
-        #    try:
-        #        shutil.rmtree(split_input_dir)
-        #    except OSError:
-        #        pass
+        if 'split_input_dir' in locals():
+            try:
+                shutil.rmtree(split_input_dir)
+            except OSError:
+                pass
         raise
     except (KeyboardInterrupt, SystemExit):
         if 'step_number' in locals():
@@ -827,11 +827,11 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         if 'pool' in locals():
             pool.terminate()
             pool.join()
-        #if 'split_input_dir' in locals():
-        #    try:
-        #        shutil.rmtree(split_input_dir)
-        #    except OSError:
-        #        pass
+        if 'split_input_dir' in locals():
+            try:
+                shutil.rmtree(split_input_dir)
+            except OSError:
+                pass
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, 
