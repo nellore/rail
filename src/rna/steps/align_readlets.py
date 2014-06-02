@@ -271,6 +271,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     atexit.register(handle_temporary_directory, temp_dir)
     qname_file = os.path.join(temp_dir, 'qnames.temp')
     readlet_file = os.path.join(temp_dir, 'readlets.temp')
+    output_file = os.path.join(temp_dir, 'out.sam')
     with open(qname_file, 'w') as qname_stream:
         with open(readlet_file, 'w') as readlet_stream:
             for _input_line_count, line in enumerate(input_stream):
@@ -282,13 +283,15 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
                 print >>qname_stream, qname
     bowtie_command = ' '.join([bowtie_exe,
         bowtie_args,
-        '-S -t --sam-nohead --mm', bowtie_index_base, '--12', readlet_file])
+        '-S -t --sam-nohead --mm', bowtie_index_base, '--12', readlet_file,
+        output_file])
     print >>sys.stderr, 'Starting Bowtie with command: ' + bowtie_command
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1, shell=True,
         stdout=subprocess.PIPE, stderr=sys.stderr)
+    bowtie_process.wait()
     with open(qname_file) as qname_stream:
         output_thread = BowtieOutputThread(
-                bowtie_process.stdout,
+                open(output_file),
                 qname_stream,
                 verbose=verbose, 
                 output_stream=output_stream,

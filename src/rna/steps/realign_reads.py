@@ -702,15 +702,18 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         bowtie2_index_base)
     reference_index = bowtie_index.BowtieIndexReference(reference_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
+    output_file = os.path.join(temp_dir_path, 'out.sam')
     bowtie_command = [bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
-        '-t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file]
+        '-t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file,
+        '-S', output_file]
     print >>sys.stderr, 'Starting Bowtie2 with command: ' \
          + ' '.join(bowtie_command)
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
         stdout=subprocess.PIPE, stderr=sys.stderr)
+    bowtie_process.wait()
     output_thread = BowtieOutputThread(
-                        bowtie_process.stdout,
+                        open(output_file),
                         reference_index=reference_index,
                         manifest_object=manifest_object,
                         exon_differentials=exon_differentials, 
@@ -725,8 +728,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     # Join thread to pause execution in main thread
     if verbose: print >>sys.stderr, 'Joining thread...'
     output_thread.join()
-    bowtie_process.wait()
-    output_stream.flush()
     print >> sys.stderr, 'DONE with realign_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)
