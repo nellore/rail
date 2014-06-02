@@ -94,16 +94,24 @@ def path_join(unix, *args):
 def xopen(gzipped, *args):
     """ Passes args on to the appropriate opener, gzip or regular.
 
-        gzipped: True iff gzip.open() should be used to open rather than open()
+        gzipped: True iff gzip.open() should be used to open rather than
+            open(); False iff open() should be used; None if input should be
+            read and guessed
         *args: unnamed arguments to pass
 
         Return value: file object
     """
     import gzip
+    if gzipped is None:
+        with open(args[0], 'rb') as binary_input_stream:
+            # Check for magic number
+            if binary_input_stream.read(2) == '\x1f\x8b':
+                gzipped = True
+            else:
+                gzipped = False
     if gzipped:
         return gzip.open(*args)
-    else:
-        return open(*args)
+    return open(*args)
 
 class xstream:
     """ Permits Pythonic iteration through partitioned/sorted input streams.

@@ -90,7 +90,7 @@ def qname_from_read(original_qname, seq, sample_label):
                     '\x1d', sample_label])
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
-        push='.', verbose=False, mover=filemover.FileMover()):
+        push='.', mover=filemover.FileMover()):
     """ Runs Rail-RNA-preprocess
 
         Input (read from stdin)
@@ -139,6 +139,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     """
     global _input_line_count, _output_line_count
     temp_dir = tempfile.mkdtemp()
+    print >>sys.stderr, 'Created local destination directory "%s".' % temp_dir
     atexit.register(remove_temporary_directories, [temp_dir])
     input_line_count, output_line_count = 0, 0
     token_lengths = set([3, 5])
@@ -148,7 +149,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     elif push_url.is_s3:
         destination = temp_dir
     else:
-        raise RuntimeError('Push destination must be S3 or local.')
+        raise RuntimeError('Push destination must be on S3 or local.')
     fastq_cues = set(['@'])
     fasta_cues = set(['>', ';'])
     for k, line in enumerate(sys.stdin):
@@ -172,6 +173,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         for source_url in source_urls:
             if not source_url.is_local:
                 # Download
+                print >>sys.stderr, 'Retrieving URL "%s"...' \
+                    % source_url.to_url()
                 mover.get(source_url, temp_dir)
                 downloaded = list(
                         set(os.listdir(temp_dir)).difference(downloaded)
@@ -183,8 +186,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         loop.'''
         if len(sources) == 1:
             sources.append(os.devnull)
-        with open(sources[0]) as source_stream_1, \
-            open(sources[1]) as source_stream_2:
+        with xopen(None, sources[0]) as source_stream_1, \
+            xopen(None, sources[1]) as source_stream_2:
             source_streams = [source_stream_1, source_stream_2]
             file_number = 0
             break_outer_loop = False
@@ -349,6 +352,10 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                         if nucs_read > nucleotides_per_input:
                             break
                 if push_url.is_s3:
+                    print >>sys.stderr, 'Pushing "%s" to "%s" ...' % (
+                                                            output_file,
+                                                            push_url.to_url()
+                                                        )
                     mover.put(output_file, push_url)
                     try:
                         os.remove(output_file)
@@ -372,9 +379,6 @@ if __name__ == '__main__':
         default=8000000,
         help='Write to next file if more than this many nucleotides are ' \
              'found to have been written to given output file')
-    parser.add_argument('--verbose', action='store_const', const=True,
-        default=False,
-        help='Print out extra debugging statements')
     parser.add_argument('--gzip-output', action='store_const', const=True,
         default=False,
         help='Compress output files with gzip')
@@ -392,7 +396,6 @@ if __name__ == '__main__':
     start_time = time.time()
     mover = filemover.FileMover(args=args)
     go(nucleotides_per_input=args.nucs_per_file,
-        verbose=args.verbose,
         gzip_output=args.gzip_output,
         gzip_level=args.gzip_level,
         push=args.push,

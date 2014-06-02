@@ -34,7 +34,8 @@ class CommandThread(threading.Thread):
         self.process_return \
             = subprocess.Popen(' '.join(self.command_list),
                                     bufsize=-1,
-                                    stdout=sys.stderr,
+                                    stdout=open(os.devnull, 'w'),
+                                    stderr=sys.stderr,
                                     shell=True).wait()
 
 class FileMover:
@@ -154,7 +155,8 @@ class FileMover:
                     sys.stderr.flush()
                     time.sleep(60)
                 if curl_thread.process_return > 89 \
-                    or curl_thread.process_return == 56:
+                    or curl_thread.process_return == 56 \
+                    or curl_thread.process_return == 28:
                     '''If the exit code is greater than the highest-documented
                     curl exit code, there was a timeout.'''
                     print >>sys.stderr, 'Too many simultaneous connections; ' \
