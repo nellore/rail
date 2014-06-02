@@ -750,11 +750,11 @@ class WebAnsible:
     def exists(self, path):
         curl_process = subprocess.Popen(' '.join(['curl', '--head', path]),
                                 shell=True, bufsize=-1,
-                                stderr=subprocess.PIPE,
-                                stdout=self._osdevnull)
-        curl_err = curl_process.stderr.read()
+                                stdout=subprocess.PIPE,
+                                stderr=self._osdevnull)
+        curl_err = curl_process.stdout.read()
         curl_process.wait()
-        if 'resolve host' in curl_err:
+        if 'resolve host' in curl_err or 'Not Found' in curl_err:
             return False
         return True
 
