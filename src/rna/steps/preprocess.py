@@ -356,7 +356,9 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                                             output_file,
                                                             push_url.to_url()
                                                         )
-                    mover.put(output_file, push_url)
+                    mover.put(output_file, push_url.plus(os.path.basename(
+                                                                output_file
+                                                            )))
                     try:
                         os.remove(output_file)
                     except OSError:

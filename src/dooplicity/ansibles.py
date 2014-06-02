@@ -41,6 +41,7 @@ import subprocess
 import json
 from version import version as _version
 from functools import wraps
+from tools import path_join
 from shutil import copyfile
 import threading
 import sys
@@ -683,7 +684,10 @@ class Url:
             Return value: Url object with file_or_directory tacked on
         """
         original_url = self.to_url()
-        return Url(os.path.join(original_url, file_or_subdirectory))
+        if self.is_local:
+            return Url(os.path.join(original_url, file_or_subdirectory))
+        else:
+            return Url(path_join(True, original_url, file_or_subdirectory))
 
     def upper_url(self):
         """ Uppercases an URL's prefix or gives a local URL's absolute path.
