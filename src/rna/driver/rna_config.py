@@ -1275,7 +1275,7 @@ class RailRnaPreprocess:
         output_parser.add_argument(
             '--nucleotides-per-input', type=int, required=False,
             metavar='<int>',
-            default=8000000,
+            default=24000000,
             help='max nucleotides from input reads to assign to each task'
         )
         output_parser.add_argument(
@@ -1701,13 +1701,14 @@ class RailRnaAlign:
                 'run' : ('align_reads.py --bowtie-idx={0} --bowtie2-idx={1} '
                          '--bowtie2-exe={2} '
                          '--exon-differentials --partition-length={3} '
-                         '--manifest={4} {5} -- {6} --local').format(
+                         '--manifest={4} {5} {6} -- {7} --local').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
                                                 base.genome_partition_length,
                                                         manifest,
                                                         verbose,
+                                                        keep_alive,
                                                         base.bowtie2_args),
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,

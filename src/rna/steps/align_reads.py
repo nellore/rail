@@ -116,6 +116,7 @@ import string
 import shutil
 import tempfile
 import atexit
+import time
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -383,7 +384,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 
     manifest_file='manifest', bowtie2_args=None, bin_size=10000, verbose=False,
     exon_differentials=True, exon_intervals=False, end_to_end_sam=True,
-    report_multiplier=1.2):
+    report_multiplier=1.2, keep_alive=False):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -507,6 +508,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         report_multiplier: if verbose is True, the line number of an alignment
             or read written to stderr increases exponentially with base
             report_multiplier.
+        keep_alive: True iff "reporter:status:alive" should be printed to
+            stderr periodically to keep job alive while Bowtie is running
 
         No return value.
     """
@@ -530,7 +533,16 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     # Because of problems with buffering, write output to file
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
         stdout=subprocess.PIPE, stderr=sys.stderr)
-    bowtie_process.wait()
+    if keep_alive:
+        period_start = time.time()
+        while bowtie_process.poll() is None:
+            now = time.time()
+            if now - period_start > 60:
+                print >>sys.stderr, '\nreporter:status:alive'
+                period_start = now
+            time.sleep(.2)
+    else:
+        bowtie_process.wait()
     output_thread = BowtieOutputThread(
             open(output_file), reference_index, manifest_object,
             exon_differentials=exon_differentials, 
@@ -559,6 +571,10 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
+    parser.add_argument('--keep-alive', action='store_const', const=True,
+        default=False,
+        help='Periodically print Hadoop status messages to stderr to keep ' \
+             'job alive')
     parser.add_argument('--exon-differentials', action='store_const',
         const=True,
         default=True, 
@@ -600,7 +616,6 @@ if __name__ == '__main__':
     args = parser.parse_args(argv[1:])
 
 if __name__ == '__main__' and not args.test:
-    import time
     start_time = time.time()
     go(bowtie2_exe=args.bowtie2_exe,
         bowtie_index_base=args.bowtie_idx,
@@ -612,7 +627,8 @@ if __name__ == '__main__' and not args.test:
         exon_differentials=args.exon_differentials,
         exon_intervals=args.exon_intervals,
         end_to_end_sam=args.end_to_end_sam,
-        report_multiplier=args.report_multiplier)
+        report_multiplier=args.report_multiplier,
+        keep_alive=args.keep_alive)
     print >>sys.stderr, 'DONE with align_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)
