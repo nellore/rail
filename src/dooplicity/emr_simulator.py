@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-hadoop_simulator.py
+emr_simulator.py
 Part of Dooplicity framework
 
 Runs JSON-encoded Hadoop Streaming job flow. FUNCTIONALITY IS IDIOSYNCRATIC;

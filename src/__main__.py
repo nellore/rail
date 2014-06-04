@@ -113,7 +113,7 @@ class Launcher:
             Transferring control allows Dooplicity to handle errors from here
             on out.
 
-            mode: 'local' or 'elastic'; launches hadoop_simulator.py or 
+            mode: 'local' or 'elastic'; launches emr_simulator.py or 
                 emr_runner.py, respectively
             payload: string with json payload to copy to stdin
                 of replacement process
@@ -125,7 +125,7 @@ class Launcher:
                 # So the user sees it too
                 print _warning_message
             runner_args = [_executable, os.path.join(base_path, 'dooplicity',
-                                    'hadoop_simulator.py'),
+                                    'emr_simulator.py'),
                             '-p', str(self.num_processes),
                             '-b', os.path.join(base_path, 
                                     'rna', 'driver', 'rail-rna.txt')]

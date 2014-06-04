@@ -4,7 +4,7 @@ Part of Rail-RNA
 
 Contains classes that perform error checking and generate JSON configuration
 output for Rail-RNA. These configurations are parsable by Dooplicity's
-hadoop_simulator.py and emr_runner.py.
+emr_simulator.py and emr_runner.py.
 
 Class structure is designed so only those arguments relevant to modes/job flows
 are included.

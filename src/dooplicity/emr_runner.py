@@ -4,8 +4,8 @@ emr_runner.py
 Part of Dooplicity framework
 
 Runs JSON-encoded Hadoop Streaming job flow on Elastic MapReduce. Interface
-should eventually match that of hadoop_simulator.py as closely as possible.
-Uses s3cmd to talk to S3.
+should eventually match that of emr_simulator.py as closely as possible.
+Uses AWS CLI to talk to S3.
 
 Licensed under the MIT License:
 
