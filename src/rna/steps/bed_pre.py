@@ -51,8 +51,11 @@ Tab-delimited output tuple columns:
     between the 3' end of the read and the 3' end of the intron.
 8. MAX number of nucleotides between 3' end of intron and 3' end of read from
     which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
+9. MAXIMIN (number of nucleotides between 5' end of intron and 5' end of read,
+            number of nucleotides between 3' end of intron and 3' end of read);
+   min is between the args above; max is across reads.
 --------------------------------------------------------------------
-9. SUMMED number of instances of intron, insertion, or deletion in sample
+10. SUMMED number of instances of intron, insertion, or deletion in sample
 
 OUTPUT COORDINATES ARE 0-INDEXED.
 """
@@ -86,19 +89,29 @@ for (line_type, sample_label, rname,
     if line_type == 'N':
         coverage_sum = 0
         max_left_displacement, max_right_displacement = None, None
+        maximin_displacement = None
         for left_displacement, right_displacement, coverage in xpartition:
             input_line_count += 1
-            max_left_displacement = max(int(left_displacement),
+            left_displacement = int(left_displacement)
+            right_displacement = int(right_displacement)
+            max_left_displacement = max(left_displacement,
                                         max_left_displacement)
-            max_right_displacement = max(int(right_displacement),
+            max_right_displacement = max(right_displacement,
                                          max_right_displacement)
+            maximin_displacement = max(
+                    min(left_displacement, right_displacement),
+                    maximin_displacement
+                )
             coverage_sum += int(coverage)
         assert max_left_displacement is not None
         assert max_right_displacement is not None
-        print >>sys.stdout, 'N\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d' \
+        assert maximin_displacement is not None
+        print >>sys.stdout, 'N\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d' \
                             % (sample_label, rname, pos, end_pos,
                                 strand_or_seq, max_left_displacement,
-                                max_right_displacement, coverage_sum)
+                                max_right_displacement, 
+                                maximin_displacement,
+                                coverage_sum)
         output_line_count += 1
     else:
         assert line_type in 'ID'
@@ -107,7 +120,7 @@ for (line_type, sample_label, rname,
             input_line_count += 1
             coverage_sum += int(coverage)
         print >>sys.stdout, '%s\t%s\t%s\t%s\t%s\t%s\t' \
-                            '\x1c\t\x1c\t%d' \
+                            '\x1c\t\x1c\t\x1c\t%d' \
                             % (line_type, sample_label, rname, pos,
                                 end_pos, strand_or_seq, coverage_sum)
         output_line_count += 1

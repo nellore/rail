@@ -444,7 +444,7 @@ class BowtieOutputThread(threading.Thread):
                         )
                     _output_line_count += 1
                 if len(corrected_multiread) == 1:
-                    '''Output exonic chunks and introns only if there is
+                    '''Output exonic chunks/introns/indels only if there is
                     exactly one alignment.'''
                     alignment = list(corrected_multiread)[0]
                     cigar = alignment[5]

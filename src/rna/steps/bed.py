@@ -37,7 +37,7 @@ None.
 
 Other output (written to directory specified by command-line parameter --out)
 ----------------------------
-TopHat-like junctions.bed, insertions.bed, and deletions.bed
+TopHat-like junctions.bed, insertions.bed, and deletions.bed.
 """
 
 import os
@@ -128,21 +128,25 @@ for (line_type, sample_label), xpartition in xstream(sys.stdin, 2):
                                                          sample_label)
         if line_type == 'N':
             for i, (rname, pos, end_pos, reverse_strand_string,
-                    max_left_overhang, max_right_overhang, coverage) \
+                    max_left_overhang, max_right_overhang, 
+                    maximin_overhang, coverage) \
                 in enumerate(xpartition):
                 pos, end_pos = int(pos) - 1, int(end_pos) - 1
                 max_left_overhang, max_right_overhang \
                     = int(max_left_overhang), int(max_right_overhang)
                 start_position = pos - max_left_overhang
                 end_position = end_pos + max_right_overhang
-                print >>output_stream, '%s\t%d\t%d\tJUNC%08d\t' \
+                print >>output_stream, '%s\t%d\t%d\tJUNC%08d' \
+                                       ';maximin_overhang=%s\t' \
                                        '%s\t%s\t%d\t%d\t227,29,118\t2\t' \
                                        '%d,%d\t0,%d' % (
                                             reference_index.string_to_rname[
                                                     rname
                                                 ],
                                             start_position,
-                                            end_position, i+1, coverage,
+                                            end_position, i+1,
+                                            maximin_overhang,
+                                            coverage,
                                             reverse_strand_string,
                                             start_position, end_position,
                                             max_left_overhang,
@@ -151,7 +155,7 @@ for (line_type, sample_label), xpartition in xstream(sys.stdin, 2):
                                         )
             input_line_count += i
         else:
-            for i, (rname, pos, end_pos, seq, _, _, coverage) \
+            for i, (rname, pos, end_pos, seq, _, _, _, coverage) \
                 in enumerate(xpartition):
                 pos, end_pos = int(pos) - 1, int(end_pos) - 1
                 print >>output_stream, '%s\t%d\t%d\t%s\t%s' \
