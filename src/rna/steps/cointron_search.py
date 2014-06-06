@@ -545,10 +545,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 multireadlets,
                                 seed=seq
                             )
-            if len(clusters):
+            if clusters:
                 for selected_introns in clusters:
                     max_cliques = list(maximal_cliques(selected_introns))
                     if len(max_cliques) == 1:
+                        alignments = max_cliques[0]
                         # Get stats on alignment with smallest start position
                         (_, _, left_pos,
                             _, _, left_readlet_size,
