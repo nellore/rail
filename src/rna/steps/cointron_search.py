@@ -421,8 +421,8 @@ def selected_introns_by_clustering(multireadlets, seed=0):
         if cluster_size == largest_cluster_size:
             largest_clusters.append(clustered_alignments[i])
     multimap_count = len(largest_clusters)
-    if multimap_count:
-        # Return ALL largest clusters
+    if multimap_count == 1:
+        # Return largest cluster only if it's unique
         return [set([alignment[:-1] for alignment in largest_clusters[i]
                     if alignment[1] is not None])
                 for i in xrange(multimap_count)]
