@@ -662,6 +662,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 iface.step('    Partitioned %s into tasks.'
                             % dp_iface.inflected(input_file_group_count,
                                                  'input'))
+                iface.status('    Starting step runner....')
                 return_values = []
                 input_files = [os.path.join(output_dir, '%d.*' % i) 
                                for i in xrange(step_data['task_count'])]

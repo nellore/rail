@@ -547,7 +547,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             )
             if len(clusters):
                 for selected_introns in clusters:
-                    for alignments in maximal_cliques(selected_introns):
+                    max_cliques = list(maximal_cliques(selected_introns))
+                    if len(max_cliques) == 1:
                         # Get stats on alignment with smallest start position
                         (_, _, left_pos,
                             _, _, left_readlet_size,
