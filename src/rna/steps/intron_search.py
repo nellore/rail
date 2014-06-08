@@ -917,10 +917,6 @@ def introns_from_clique(clique, read_seq, reference_index,
                         '''Only need to compute alignment score once; it's the
                         same for all small exons found since only exact
                         matches are admitted.'''
-                        intron_reverse_strand = (
-                                True if product_motifs[i] in
-                                _reverse_strand_motifs else False
-                            )
                         left_stretch = reference_index.get_stretch(
                                                         rname,
                                                         left_pos - 1,
@@ -995,7 +991,11 @@ def introns_from_clique(clique, read_seq, reference_index,
                                         <= max_intron_size:
                                         candidate_introns.append(
                                                 (rname,
-                                                  intron_reverse_strand,
+                                                  True if
+                                                  (product_motifs[i][0],
+                                                   cap_combo[0])
+                                                  in _reverse_strand_motifs
+                                                  else False,
                                                   intron_pos,
                                                   first_intron_end_pos,
                                                   alignment_score)
@@ -1005,7 +1005,11 @@ def introns_from_clique(clique, read_seq, reference_index,
                                         <= max_intron_size:
                                         candidate_introns.append(
                                                 (rname,
-                                                  intron_reverse_strand,
+                                                  True if
+                                                  (cap_combo[1],
+                                                   product_motifs[i][1])
+                                                  in _reverse_strand_motifs
+                                                  else False,
                                                   second_intron_pos,
                                                   intron_end_pos,
                                                   alignment_score)

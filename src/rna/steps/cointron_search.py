@@ -375,26 +375,44 @@ def selected_introns_by_clustering(multireadlets, seed=0):
     alignments = [alignment + (i,)
                     for i, multireadlet in enumerate(multireadlets)
                     for alignment in multireadlet]
+    unclustered_intron_alignments = [j for j, alignment
+                                        in enumerate(alignments)
+                                        if alignment[4] is not None]
+    if not unclustered_intron_alignments:
+        return []
     unclustered_alignments = range(len(alignments))
     clustered_alignments = []
-    while unclustered_alignments:
-        pivot = i = random.choice(unclustered_alignments)
+    while unclustered_intron_alignments:
+        pivot = i = random.choice(unclustered_intron_alignments)
         new_unclustered_alignments = []
+        new_unclustered_intron_alignments = []
         alignment_cluster = defaultdict(list)
         for j in unclustered_alignments:
             if j == pivot: continue
-            if not (alignments[i][-1] == alignments[j][-1] or
-                alignments[i][0] != alignments[j][0] or
-                (alignments[i][1] is not None and alignments[j][1] is not None
-                 and alignments[i][1] != alignments[j][1]) or
-                alignments[i][-3] != alignments[j][-3] or
-                (alignments[i][-2] == alignments[j][-2] and
-                   alignments[i][2] != alignments[j][2]) or
-                ((alignments[i][-2] < alignments[j][-2]) !=
-                    (alignments[i][2] < alignments[j][2]))):
-                alignment_cluster[alignments[j][-1]].append(j)
+            pivot_rname, compared_rname = alignments[i][0], alignments[j][0]
+            pivot_sense, compared_sense = alignments[i][1], alignments[j][1]
+            pivot_start, compared_start = alignments[i][2], alignments[j][2]
+            pivot_end, compared_end = alignments[i][3], alignments[j][3]
+            pivot_introns, compared_introns \
+                = alignments[i][4], alignments[j][4]
+            pivot_sign, compared_sign = alignments[i][8], alignments[j][8]
+            pivot_displacement, compared_displacement \
+                = alignments[i][9], alignments[j][9]
+            pivot_group, compared_group = alignments[i][10], alignments[j][10]
+            if (pivot_group != compared_group and
+                pivot_rname == compared_rname and
+                (pivot_sense is None or compared_sense is None or
+                    pivot_sense == compared_sense) and
+                ((pivot_start == compared_start
+                    and pivot_displacement == compared_displacement) or
+                 (pivot_start < compared_start)
+                    == (pivot_displacement < compared_displacement)) and
+                pivot_sign == compared_sign):
+                alignment_cluster[compared_group].append(j)
             else:
                 new_unclustered_alignments.append(j)
+                if alignments[j][4] is not None:
+                    new_unclustered_intron_alignments.append(j)
         # Choose alignments closest to pivot in each multireadlet group
         alignment_cluster_list = [pivot]
         for group in alignment_cluster:
@@ -413,6 +431,7 @@ def selected_introns_by_clustering(multireadlets, seed=0):
                 [alignments[j] for j in alignment_cluster_list]
             )
         unclustered_alignments = new_unclustered_alignments
+        unclustered_intron_alignments = new_unclustered_intron_alignments
     cluster_sizes = [len(set([alignment[-1] for alignment in cluster]))
                         for cluster in clustered_alignments]
     largest_cluster_size = max(cluster_sizes)
@@ -516,7 +535,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 [int(pos) for pos in value[-1].split('\x1f')]
                             )
                         )
-        if len(collected_readlets):
+        if collected_readlets:
             assert seq_info_captured, 'Sequence info is not in a collected ' \
                                       'readlet'
             '''Each multireadlet is a list of tuples representing readlet
@@ -547,9 +566,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             )
             if clusters:
                 for selected_introns in clusters:
-                    max_cliques = list(maximal_cliques(selected_introns))
-                    if len(max_cliques) == 1:
-                        alignments = max_cliques[0]
+                    for alignments in maximal_cliques(selected_introns):
                         # Get stats on alignment with smallest start position
                         (_, _, left_pos,
                             _, _, left_readlet_size,
@@ -617,8 +634,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             right_size = min(right_extend_size + fudge,
                                              right_intron_distance)
                         print >>output_stream, '%s\t%d\t%s\t%s' \
-                                '\t%d\t%d\t%s' % (alignments[0][0] + ('+' if 
-                                                    alignments[0][1] else '-'),
+                                '\t%d\t%d\t%s' % (alignments[0][0] + ('-' if 
+                                                    alignments[0][1] else '+'),
                                 left_intron_pos,
                                 ','.join(map(str,
                                                 intron_starts_and_ends[0][1:]))

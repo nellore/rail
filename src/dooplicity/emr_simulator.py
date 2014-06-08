@@ -783,6 +783,24 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 iface.step('    Deleted temporary files.')
             step_number += 1
         if not keep_last_output:
+            try:
+                os.remove(step_data['output'])
+            except OSError:
+                # Not a file; treat as dir
+                for detritus in glob.iglob(
+                                os.path.join(step_data['output'], '*')
+                            ):
+                    if detritus[-4:] != '.log':
+                        try:
+                            os.remove(detritus)
+                        except OSError:
+                            # Not a file
+                            try:
+                                shutil.rmtree(detritus)
+                            except OSError:
+                                # Phantom; maybe user deleted it
+                                pass
+        if not keep_intermediates:
             for step in steps:
                 step_data = steps[step]
                 try:
@@ -813,10 +831,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             else:
                 iface.fail()
         if 'split_input_dir' in locals():
-            try:
+            '''raise below refers to last exception, so can't try-except
+            OSError here'''
+            if os.path.isdir(split_input_dir):
                 shutil.rmtree(split_input_dir)
-            except OSError:
-                pass
         raise
     except (KeyboardInterrupt, SystemExit):
         if 'step_number' in locals():

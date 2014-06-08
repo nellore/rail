@@ -108,7 +108,8 @@ if __name__ == '__main__':
         false_positive_count += \
             len(retrieved_introns[chrom] - true_introns.get(chrom, set()))
         print >>sys.stderr, chrom
-        print >>sys.stderr, list(retrieved_introns[chrom] - true_introns.get(chrom, set()))
+        print >>sys.stderr, \
+            list(retrieved_introns[chrom] - true_introns.get(chrom, set()))
     true_positive_count = retrieved_intron_count - false_positive_count
     precision = float(true_positive_count) / retrieved_intron_count
     recall = float(true_positive_count) / true_intron_count

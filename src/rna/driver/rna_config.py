@@ -46,6 +46,7 @@ _elastic_bowtie2_build_exe = 'bowtie2-build'
 # Decide Python executable
 if 'pypy 2.' in sys.version.lower():
     # Executable has the user's desired version of PyPy
+    _warning_message = 'Launching Dooplicity with PyPy....'
     _executable = sys.executable
 else:
     _pypy_exe = which('pypy')
