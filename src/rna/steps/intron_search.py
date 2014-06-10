@@ -355,106 +355,6 @@ def maximal_suffix_match(query_seq, search_window,
         # No suffixes found
         return None
 
-def selected_readlet_alignments_by_clustering(readlets):
-    """ Selects multireadlet alignment via a correlation clustering algorithm.
-    
-        Consider a list "readlets" whose items {R_i} correspond to the aligned
-        readlets from a given read. Each R_i is itself a list of the possible
-        alignments {R_ij} of a readlet. Each R_ij is a tuple
-        (rname, reverse_strand, pos, end_pos, displacement), where rname is the
-        SAM-format rname (typically a chromosome), reverse_strand is True iff
-        the readlet's reversed complement aligns to the reference, and 
-        displacement is the number of bases between the 5' (3')end of the
-        readlet, which aligns to the forward (reverse) strand, and the 5' (3')
-        end of the read. Let K_i be the number of alignments {R_ij} of a given
-        readlet R_i.
-
-        The algorithm first constructs a complete signed graph where each node
-        represents a different R_ij. A '+' edge is placed between each pair
-        of nodes (R_ij, R_kl) iff R_ij and R_kl are alignments to the same
-        strand, i != k (that is, if the alignments don't correspond to the same
-        multireadlet), and R_ij and R_kl are "order-distance-consistent." Order
-        -distance consistency demands the following:
-            1) If the displacement of R_kl is greater than the displacement of
-            R_ij along the read, R_kl must occur at a position greater than
-            R_ij along the reference, and vice versa.
-            2) If the displacements of R_kl and R_ij are the same, the
-            positions of R_kl and R_ij along the reference must also be the
-            same.
-            3) There are no R_ip or R_kp for any p between the start positions
-            of R_ij and R_kl along the reference.
-        Otherwise, there is a '-' edge between R_ij and R_kl. The stipulation
-        3) guarantees that an alignment never has more than one '+' edge
-        between it and any set of alignments corresponding to the same
-        multireadlet. For multireadlets R_i and R_k, order-distance consistency
-        associates the closest pair (R_ij, R_kl) (in reference space) for which
-        the orders of R_ij and R_kl in both read and reference space agree;
-        if no such pair exists, no association is made.
-
-        After the graph is constructed, correlation clustering is performed
-        using QuickClust, a simple 3-approximation algorithm. (See Ailon,
-        Nir, and Charikar. "Aggregating inconsistent information: ranking and
-        clustering." STOC 2005: Proceedings of the thirty-seventh annual
-        ACM symposium on Theory of Computing. pp. 684-693.) At each iteration,
-        a pivot node is chosen from unclustered nodes at random. The nodes to
-        which this pivot is connected by a '+' edge are placed in the same
-        cluster as the pivot, while the remaining nodes are considered
-        unclustered. Because a given pivot is associated with no more than one
-        alignment from the same multireadlet, each cluster contains at most one
-        alignment from the same multireadlet. Alignments from the largest
-        cluster are returned. If more than one cluster is largest, no
-        alignments are returned; this scenario is analogous to having full
-        reads map to multiple locations in the genome.
-
-        readlets: a list whose items {R_i} correspond to the aligned readlets
-            from a given read. Each R_i is itself a list of the possible
-            alignments {R_ij} of a readlet. Each R_ij is a tuple
-            (rname, reverse_strand, pos, end_pos, displacement).
-            See above for a detailed explanation.
-
-        Return value: a list of selected alignment tuples
-            (rname, reverse_strand, pos, end_pos, displacement).
-    """
-    alignments = [alignment + (i,) for i, multireadlet
-                                        in enumerate(readlets)
-                                        for alignment in multireadlet]
-    '''Sort alignments so closest multireadlet from given group can be found
-    easily.'''
-    alignments.sort()
-    multireadlet_groups = [alignment[-1] for alignment in alignments]
-    unclustered_alignments = range(len(alignments))
-    clustered_alignments = []
-    while unclustered_alignments:
-        pivot = i = random.choice(unclustered_alignments)
-        new_unclustered_alignments = []
-        alignment_cluster = [pivot]
-        for j in unclustered_alignments:
-            if j == pivot: continue
-            intervening_multireadlets = (multireadlet_groups[i+1:j] if i < j 
-                                            else multireadlet_groups[j+1:i])
-            if not (alignments[i][-1] == alignments[j][-1] or \
-                alignments[i][:2] != alignments[j][:2] or \
-                (alignments[i][4] == alignments[j][4] and
-                   alignments[i][2] != alignments[j][2]) or \
-                ((alignments[i][4] < alignments[j][4]) != \
-                    (alignments[i][2] < alignments[j][2])) or \
-                (alignments[i][-1] in intervening_multireadlets or
-                    alignments[j][-1] in intervening_multireadlets)):
-                alignment_cluster.append(j)
-            else:
-                new_unclustered_alignments.append(j)
-        clustered_alignments.append(
-                [alignments[j][:-1] for j in alignment_cluster]
-            )
-        unclustered_alignments = new_unclustered_alignments
-    largest_cluster_size = max(map(len, clustered_alignments))
-    largest_clusters = [cluster for cluster in clustered_alignments
-                            if len(cluster) == largest_cluster_size]
-    if len(largest_clusters) == 1:
-        return largest_clusters[0]
-    else:
-        return []
-
 def alignment_adjacencies(alignments):
     """ Generates adjacency matrix for graph described below.
 
@@ -489,8 +389,8 @@ def alignment_adjacencies(alignments):
                                             == (compared_alignment[4]
                                                 < alignment[4]))))])
 
-def largest_maximal_clique(cluster):
-    """ Finds maximal cliques of graph of multireadlet alignment cluster.
+def maximum_clique(cluster):
+    """ Finds maximum clique of graph of multireadlet alignment cluster.
 
         Consider an undirected graph where each node corresponds to
         an alignment of a distinct multireadlet. Place an edge between two
@@ -552,7 +452,7 @@ def largest_maximal_clique(cluster):
             (rname, reverse_strand, pos, end_pos, displacement), each
             corresponding to a distinct readlet
         
-        Return value: largest maximal clique -- a list of alignments.
+        Return value: maximum clique -- a list of alignments.
     """
     clique_time = time.time()
     cliques = []
@@ -651,6 +551,108 @@ def largest_maximal_clique(cluster):
     if largest_clique_count == 1:
         return largest_cliques[0]
     return random.choice(largest_cliques)
+
+def selected_readlet_alignments_by_clustering(readlets):
+    """ Selects multireadlet alignment via a correlation clustering algorithm.
+    
+        Consider a list "readlets" whose items {R_i} correspond to the aligned
+        readlets from a given read. Each R_i is itself a list of the possible
+        alignments {R_ij} of a readlet. Each R_ij is a tuple
+        (rname, reverse_strand, pos, end_pos, displacement), where rname is the
+        SAM-format rname (typically a chromosome), reverse_strand is True iff
+        the readlet's reversed complement aligns to the reference, and 
+        displacement is the number of bases between the 5' (3')end of the
+        readlet, which aligns to the forward (reverse) strand, and the 5' (3')
+        end of the read. Let K_i be the number of alignments {R_ij} of a given
+        readlet R_i.
+
+        The algorithm first constructs a complete signed graph where each node
+        represents a different R_ij. A '+' edge is placed between each pair
+        of nodes (R_ij, R_kl) iff R_ij and R_kl are alignments to the same
+        strand, i != k (that is, if the alignments don't correspond to the same
+        multireadlet), and R_ij and R_kl are "order-distance-consistent." Order
+        -distance consistency demands the following:
+            1) If the displacement of R_kl is greater than the displacement of
+            R_ij along the read, R_kl must occur at a position greater than
+            R_ij along the reference, and vice versa.
+            2) If the displacements of R_kl and R_ij are the same, the
+            positions of R_kl and R_ij along the reference must also be the
+            same.
+            3) There are no R_ip or R_kp for any p between the start positions
+            of R_ij and R_kl along the reference.
+        Otherwise, there is a '-' edge between R_ij and R_kl. The stipulation
+        3) guarantees that an alignment never has more than one '+' edge
+        between it and any set of alignments corresponding to the same
+        multireadlet. For multireadlets R_i and R_k, order-distance consistency
+        associates the closest pair (R_ij, R_kl) (in reference space) for which
+        the orders of R_ij and R_kl in both read and reference space agree;
+        if no such pair exists, no association is made.
+
+        After the graph is constructed, correlation clustering is performed
+        using QuickClust, a simple 3-approximation algorithm. (See Ailon,
+        Nir, and Charikar. "Aggregating inconsistent information: ranking and
+        clustering." STOC 2005: Proceedings of the thirty-seventh annual
+        ACM symposium on Theory of Computing. pp. 684-693.) At each iteration,
+        a pivot node is chosen from unclustered nodes at random. The nodes to
+        which this pivot is connected by a '+' edge are placed in the same
+        cluster as the pivot, while the remaining nodes are considered
+        unclustered. Because a given pivot is associated with no more than one
+        alignment from the same multireadlet, each cluster contains at most one
+        alignment from the same multireadlet. The cluster with the largest
+        maximum clique (as described is returned. If there is a tie, no clique
+        is returned.
+
+        readlets: a list whose items {R_i} correspond to the aligned readlets
+            from a given read. Each R_i is itself a list of the possible
+            alignments {R_ij} of a readlet. Each R_ij is a tuple
+            (rname, reverse_strand, pos, end_pos, displacement).
+            See above for a detailed explanation.
+
+        Return value: a list of selected alignment tuples
+            (rname, reverse_strand, pos, end_pos, displacement).
+    """
+    alignments = [alignment + (i,) for i, multireadlet
+                                        in enumerate(readlets)
+                                        for alignment in multireadlet]
+    '''Sort alignments so closest multireadlet from given group can be found
+    easily.'''
+    alignments.sort()
+    multireadlet_groups = [alignment[-1] for alignment in alignments]
+    unclustered_alignments = range(len(alignments))
+    clustered_alignments = []
+    while unclustered_alignments:
+        pivot = i = random.choice(unclustered_alignments)
+        new_unclustered_alignments = []
+        alignment_cluster = [pivot]
+        for j in unclustered_alignments:
+            if j == pivot: continue
+            intervening_multireadlets = (multireadlet_groups[i+1:j] if i < j 
+                                            else multireadlet_groups[j+1:i])
+            if not (alignments[i][-1] == alignments[j][-1] or \
+                alignments[i][:2] != alignments[j][:2] or \
+                (alignments[i][4] == alignments[j][4] and
+                   alignments[i][2] != alignments[j][2]) or \
+                ((alignments[i][4] < alignments[j][4]) != \
+                    (alignments[i][2] < alignments[j][2])) or \
+                (alignments[i][-1] in intervening_multireadlets or
+                    alignments[j][-1] in intervening_multireadlets)):
+                alignment_cluster.append(j)
+            else:
+                new_unclustered_alignments.append(j)
+        clustered_alignments.append(
+                [alignments[j][:-1] for j in alignment_cluster]
+            )
+        unclustered_alignments = new_unclustered_alignments
+    maximum_cliques = []
+    for cluster in clustered_alignments:
+        maximum_cliques.append(maximum_clique(cluster))
+    largest_maximum_clique_size = max(map(len, maximum_cliques))
+    largest_maximum_cliques = [clique for clique in maximum_cliques
+                               if len(clique) == largest_maximum_clique_size]
+    if len(largest_maximum_cliques) == 1:
+        return largest_maximum_cliques[0]
+    else:
+        return []
 
 def pairwise(iterable):
     """ Iterates through iterable in pairs.
@@ -1186,11 +1188,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
             if stranded:
                 if sample_labels:
                     introns = list(introns_from_clique(
-                            largest_maximal_clique(
                                     selected_readlet_alignments_by_clustering(
                                             multireadlets
-                                        )
-                                ),
+                                        ),
                             seq,
                             reference_index,
                             min_exon_size=min_exon_size,
@@ -1216,11 +1216,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             _output_line_count += 1
                 if reversed_complement_sample_labels:
                     introns = introns_from_clique(
-                            largest_maximal_clique(
                                     selected_readlet_alignments_by_clustering(
                                             multireadlets
-                                        )
-                                ),
+                                        ),
                             seq,
                             reference_index,
                             min_exon_size=min_exon_size,
@@ -1246,11 +1244,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             _output_line_count += 1
             else:
                 introns = introns_from_clique(
-                        largest_maximal_clique(
                                 selected_readlet_alignments_by_clustering(
                                         multireadlets
-                                    )
-                            ),
+                                    ),
                         seq,
                         reference_index,
                         min_exon_size=min_exon_size,
