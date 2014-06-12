@@ -32,6 +32,41 @@ def parsed_md(md):
         md_to_parse.append(''.join(md_group))
     return [char for char in md_to_parse if char != '0']
 
+def reference_from_seq(cigar, md, seq):
+    """ Recovers reference sequence from read sequence and MD string.
+
+        md: an MD string (example: 33A^CC)
+        cigar: CIGAR string; used to extract initial soft clip
+
+        Return value: reference sequence
+    """
+    md = parsed_md(md)
+    cigar = re.split(r'([MINDS])', cigar)[:-1]
+    if cigar[1] == 'S':
+        read_index = int(cigar[0])
+    else:
+        read_index = 0
+    md_index = 0
+    md_size = len(md)
+    reference_seq = []
+    while md_index != md_size:
+        try:
+            bases_to_cover = int(md[md_index])
+            reference_seq.append(seq[read_index:read_index+bases_to_cover])
+            read_index += bases_to_cover
+            md_index += 1
+        except ValueError:
+            if md[md_index] == '^':
+                # Deletion from reference
+                reference_seq.append(md[md_index+1])
+                md_index += 2
+            else:
+                # Substitution
+                reference_seq.append(md[md_index])
+                md_index += 1
+                read_index += 1
+    return ''.join(reference_seq)
+
 def indels_introns_and_exons(cigar, md, pos, seq):
     """ Computes indels, introns, and exons from CIGAR, MD string,
         and POS of a given alignment.

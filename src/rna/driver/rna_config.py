@@ -1596,9 +1596,8 @@ class RailRnaAlign:
                 '--bowtie2-args', type=str, required=False,
                 default='',
                 metavar='<str>',
-                help=('arguments to pass to Bowtie 2. options '
-                      '"--end-to-end" and "--local" are managed by Rail-RNA '
-                      '(def: Bowtie 2 defaults)')
+                help=('arguments to pass to Bowtie 2, which is always run in '
+                      '"--local" mode (def: Bowtie 2 defaults)')
             )
         algo_parser.add_argument(
             '--genome-partition-length', type=int, required=False,
@@ -1877,14 +1876,17 @@ class RailRnaAlign:
                 'run' : ('realign_reads.py --original-idx={0} '
                          '--bowtie2-exe={1} --partition-length={2} '
                          '--exon-differentials --manifest={3} {4} '
-                         '-- {5} --end-to-end').format(base.bowtie1_idx,
-                                                    base.bowtie2_exe,
+                         '-- {5} --local').format(
+                                                base.bowtie1_idx,
+                                                base.bowtie2_exe,
                                                 base.genome_partition_length,
-                                                    manifest,
-                                                    verbose,
-                                                    base.bowtie2_args),
+                                                manifest,
+                                                verbose,
+                                                base.bowtie2_args
+                                            ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
-                                'cointron_fasta'],
+                                'cointron_fasta',
+                                path_join(elastic, 'align_reads', 'fasta')],
                 'output' : 'realign_reads',
                 'taskx' : 4,
                 'part' : 'k1,1',

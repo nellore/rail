@@ -258,13 +258,18 @@ def running_sum(iterable):
 def multiread_with_introns(multiread, stranded=False):
     """ Modifies read alignments to correct CIGARs and reference positions.
 
-        An alignment takes the form of a line of SAM.
+        An alignment takes the form of a line of SAM. PRIMARY ALIGNMENT IS
+        ASSUMED TO BE FIRST.
         Introns are encoded in a multiread's RNAME as follows:
 
         original RNAME + '+' or '-' indicating which strand is the sense
         strand + ';' + start position of sequence + ';' + comma-separated
         list of subsequence sizes framing introns + ';' + comma-separated
         list of intron sizes.
+
+        If there are no introns present, the multiread's RNAME takes the
+        following form:
+        original RNAME + ';' + start position of sequence + ';;'
 
         More than one alignment output by Bowtie may correspond to the same
         alignment in reference space because at least two reference names in
@@ -285,12 +290,31 @@ def multiread_with_introns(multiread, stranded=False):
             a list of tuples, each of whose elements are the tokens from a line
             of SAM representing an alignment.
     """
-    new_multiread = set()
+    if not multiread:
+        return []
+    new_multiread = []
+    identical_alignment_test = []
     for alignment in multiread:
         tokens = alignment[2].split(';')
         offset = int(alignment[3]) - 1
         cigar = re.split(r'([MINDS])', alignment[5])[:-1]
         flag = int(alignment[1])
+        if not tokens[-1]:
+            # No introns can be found
+            pos = offset + int(tokens[1])
+            rname = tokens[0]
+            new_multiread.append(
+                    (alignment[0], alignment[1], rname, str(pos),
+                        alignment[4], alignment[5])
+                    + tuple(alignment[6:])
+                )
+            identical_alignment_test.append((alignment[0],
+                                            (flag & 16 != 0),
+                                            rname,
+                                            pos, alignment[5],
+                                            [field for field in alignment
+                                             if field[:5] == 'MD:Z:'][0][5:]))
+            continue
         reverse_strand_string = tokens[0][-1]
         assert reverse_strand_string in '+-'
         reverse_strand = (True if reverse_strand_string == '-' else False)
@@ -332,15 +356,29 @@ def multiread_with_introns(multiread, stranded=False):
             else:
                 raise RuntimeError('Bowtie2 CIGAR chars are expected to be '
                                    'in set (DIMS).')
-        new_multiread.add(
+        new_cigar = ''.join(new_cigar)
+        new_multiread.append(
                     (alignment[0], alignment[1], rname, str(pos),
-                        alignment[4], ''.join(new_cigar))
+                        alignment[4], new_cigar)
                     + tuple(alignment[6:])
-                    + ('XS:A:' + reverse_strand_string,)
+                    + (('XS:A:' + reverse_strand_string,)
+                        if 'N' in new_cigar else tuple())
                 )
-    NH_field = 'NH:i:' + str(len(new_multiread))
+        identical_alignment_test.append((alignment[0],
+                                            (flag & 16 != 0),
+                                            rname,
+                                            pos, new_cigar,
+                                            [field for field in alignment
+                                             if field[:5] == 'MD:Z:'][0][5:]))
+    multiread_to_return = [new_multiread[0]]
+    for i in xrange(1, len(identical_alignment_test)):
+        if identical_alignment_test[i] == identical_alignment_test[i-1]:
+            continue
+        multiread_to_return.append(new_multiread[i])
+    NH_field = 'NH:i:' + str(len(multiread_to_return))
     multiread_to_return = [alignment + (NH_field,) for alignment in
-                            new_multiread]
+                            multiread_to_return]
+    print >>sys.stderr, multiread_to_return
     return multiread_to_return
 
 class BowtieOutputThread(threading.Thread):
@@ -443,104 +481,103 @@ class BowtieOutputThread(threading.Thread):
                                 alignment[1]) + alignment[4:]
                         )
                     _output_line_count += 1
-                if len(corrected_multiread) == 1:
-                    '''Output exonic chunks/introns/indels only if there is
-                    exactly one alignment.'''
-                    alignment = list(corrected_multiread)[0]
-                    cigar = alignment[5]
-                    rname = alignment[2]
-                    pos = int(alignment[3])
-                    seq = alignment[9]
-                    md = [field for field in alignment
-                                if field[:5] == 'MD:Z:'][0][5:]
-                    insertions, deletions, introns, exons \
-                                                = indels_introns_and_exons(
+                '''Output exonic chunks/introns/indels only for primary
+                alignment, which occurs first.'''
+                alignment = corrected_multiread[0]
+                cigar = alignment[5]
+                rname = alignment[2]
+                pos = int(alignment[3])
+                seq = alignment[9]
+                md = [field for field in alignment
+                            if field[:5] == 'MD:Z:'][0][5:]
+                insertions, deletions, introns, exons \
+                                            = indels_introns_and_exons(
                                                     cigar, md, pos, seq
                                                 )
-                    # Output indels
-                    for insert_pos, insert_seq in insertions:
-                        print >>self.output_stream, (
-                               ('bed\tI\t%s\t%s\t%012d\t%012d\t%s'
-                                '\t\x1c\t\x1c\t1')
-                                % (sample_label, self.reference_index.\
-                                    rname_to_string[rname],
-                                    insert_pos, insert_pos,
-                                    insert_seq)
-                            )
-                        _output_line_count += 1
-                    for del_pos, del_seq in deletions:
-                        print >>self.output_stream, (
-                               ('bed\tD\t%s\t%s\t%012d\t%012d\t%s'
-                                '\t\x1c\t\x1c\t1')
-                                % (sample_label, self.reference_index.\
-                                    rname_to_string[rname],
-                                    del_pos, del_pos + len(del_seq),
-                                    del_seq)
-                            )
-                        _output_line_count += 1
-                    # Output exonic chunks
-                    if self.exon_intervals:
-                        for exon_pos, exon_end_pos in exons:
-                            partitions = partition.partition(
-                                    rname, exon_pos, exon_end_pos,
-                                    self.bin_size)
-                            for partition_id, _, _ in partitions:
-                                print >>self.output_stream, \
-                                    'exon_ival\t%s\t%012d\t' \
-                                    '%012d\t%s' \
-                                    % (partition_id,
-                                        exon_pos, exon_end_pos, 
-                                        sample_label)
-                                _output_line_count += 1
-                    if self.exon_differentials:
-                        for exon_pos, exon_end_pos in exons:
-                            partitions = partition.partition(
+                # Output indels
+                for insert_pos, insert_seq in insertions:
+                    print >>self.output_stream, (
+                           ('bed\tI\t%s\t%s\t%012d\t%012d\t%s'
+                            '\t\x1c\t\x1c\t1')
+                            % (sample_label, self.reference_index.\
+                                rname_to_string[rname],
+                                insert_pos, insert_pos,
+                                insert_seq)
+                        )
+                    _output_line_count += 1
+                for del_pos, del_seq in deletions:
+                    print >>self.output_stream, (
+                           ('bed\tD\t%s\t%s\t%012d\t%012d\t%s'
+                            '\t\x1c\t\x1c\t1')
+                            % (sample_label, self.reference_index.\
+                                rname_to_string[rname],
+                                del_pos, del_pos + len(del_seq),
+                                del_seq)
+                        )
+                    _output_line_count += 1
+                # Output exonic chunks
+                if self.exon_intervals:
+                    for exon_pos, exon_end_pos in exons:
+                        partitions = partition.partition(
                                 rname, exon_pos, exon_end_pos,
                                 self.bin_size)
-                            for (partition_id, partition_start, 
-                                    partition_end) in partitions:
-                                assert exon_pos < partition_end
-                                # Print increment at interval start
+                        for partition_id, _, _ in partitions:
+                            print >>self.output_stream, \
+                                'exon_ival\t%s\t%012d\t' \
+                                '%012d\t%s' \
+                                % (partition_id,
+                                    exon_pos, exon_end_pos, 
+                                    sample_label)
+                            _output_line_count += 1
+                if self.exon_differentials:
+                    for exon_pos, exon_end_pos in exons:
+                        partitions = partition.partition(
+                            rname, exon_pos, exon_end_pos,
+                            self.bin_size)
+                        for (partition_id, partition_start, 
+                                partition_end) in partitions:
+                            assert exon_pos < partition_end
+                            # Print increment at interval start
+                            print >>self.output_stream, \
+                                'exon_diff\t%s\t%s\t%012d\t1' \
+                                % (partition_id,
+                                    sample_label,
+                                    max(partition_start, exon_pos))
+                            _output_line_count += 1
+                            assert exon_end_pos > partition_start
+                            if exon_end_pos < partition_end:
+                                '''Print decrement at interval end 
+                                iff exon ends before partition
+                                ends.'''
                                 print >>self.output_stream, \
-                                    'exon_diff\t%s\t%s\t%012d\t1' \
-                                    % (partition_id,
+                                    'exon_diff\t%s\t%s\t' \
+                                    '%012d\t-1' \
+                                    % (partition_id, 
                                         sample_label,
-                                        max(partition_start, exon_pos))
+                                        exon_end_pos)
                                 _output_line_count += 1
-                                assert exon_end_pos > partition_start
-                                if exon_end_pos < partition_end:
-                                    '''Print decrement at interval end 
-                                    iff exon ends before partition
-                                    ends.'''
-                                    print >>self.output_stream, \
-                                        'exon_diff\t%s\t%s\t' \
-                                        '%012d\t-1' \
-                                        % (partition_id, 
-                                            sample_label,
-                                            exon_end_pos)
-                                    _output_line_count += 1
-                    try:
-                        reverse_strand_string = [field for field in alignment
-                                        if field[:5] == 'XS:A:'][0][5:]
-                    except IndexError:
-                        # No introns
-                        continue
-                    # Output introns
-                    for (intron_pos, intron_end_pos,
-                            left_displacement, right_displacement) \
-                        in introns:
-                        print >>self.output_stream, (
-                                ('bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
-                                 '%d\t%d\t1')
-                                 % (sample_label, 
-                                    self.reference_index.\
-                                    rname_to_string[rname],
-                                    intron_pos, intron_end_pos,
-                                    reverse_strand_string,
-                                    left_displacement,
-                                    right_displacement)
-                            )
-                        _output_line_count += 1
+                try:
+                    reverse_strand_string = [field for field in alignment
+                                    if field[:5] == 'XS:A:'][0][5:]
+                except IndexError:
+                    # No introns
+                    continue
+                # Output introns
+                for (intron_pos, intron_end_pos,
+                        left_displacement, right_displacement) \
+                    in introns:
+                    print >>self.output_stream, (
+                            ('bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
+                             '%d\t%d\t1')
+                             % (sample_label, 
+                                self.reference_index.\
+                                rname_to_string[rname],
+                                intron_pos, intron_end_pos,
+                                reverse_strand_string,
+                                left_displacement,
+                                right_displacement)
+                        )
+                    _output_line_count += 1
 
 def handle_temporary_directory(archive, temp_dir_path):
     """ Archives or deletes temporary directory.

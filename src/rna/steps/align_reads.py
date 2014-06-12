@@ -92,7 +92,7 @@ Introns/insertions/deletions
 9. Number of instances of insertion or deletion in sample; this is
     always +1 before bed_pre combiner/reducer
 
-Reads with no end-to-end alignments
+Read whose primary alignment is not end-to-end
 
 Tab-delimited output tuple columns (unmapped):
 1. SEQ
@@ -104,6 +104,12 @@ Tab-delimited output tuple columns (readletize)
 2. The sample label if field 1 is the read sequence; else '\x1c'
 3. The sample label if field 1 is the read sequence's reversed complement;
     else '\x1c'
+
+Tab-delimited tuple columns (fasta):
+1. Read sequence
+2. '\x1c' + FASTA reference name including '>'. The following format is used:
+    original RNAME + ';' + start position of sequence + ';;'
+3. FASTA sequence
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -131,7 +137,7 @@ import bowtie
 import bowtie_index
 import partition
 import manifest
-from cigar_parse import indels_introns_and_exons
+from cigar_parse import indels_introns_and_exons, reference_from_seq
 from dooplicity.tools import xstream
 
 # Initialize global variables for tracking number of input/output lines
@@ -256,30 +262,31 @@ class BowtieOutputThread(threading.Thread):
             sample_label = self.manifest_object.label_to_index[
                         qname.rpartition('\x1d')[2]
                     ]
+            # Handle primary alignment
+            rest_of_line = xpartition.next()
+            i += 1
+            flag = int(rest_of_line[0])
+            cigar = rest_of_line[4]
+            rname = rest_of_line[1]
+            pos = int(rest_of_line[2])
+            seq, qual = rest_of_line[8], rest_of_line[9]
+            if self.verbose and next_report_line == i:
+                print >>sys.stderr, \
+                    'SAM output record %d: rdname="%s", flag=%d' \
+                    % (i, qname, flag)
+                next_report_line = max(int(next_report_line
+                    * self.report_multiplier), next_report_line + 1)
+            multiread.append((qname,) + rest_of_line)
             for rest_of_line in xpartition:
-                i += 1
-                flag = int(rest_of_line[0])
-                cigar = rest_of_line[4]
-                rname = rest_of_line[1]
-                pos = int(rest_of_line[2])
-                seq, qual = rest_of_line[8], rest_of_line[9]
-                if self.verbose and next_report_line == i:
-                    print >>sys.stderr, \
-                        'SAM output record %d: rdname="%s", flag=%d' \
-                        % (i, qname, flag)
-                    next_report_line = max(int(next_report_line
-                        * self.report_multiplier), next_report_line + 1)
                 multiread.append((qname,) + rest_of_line)
             if flag & 4 or 'S' in cigar:
-                '''Write unmapped/soft-clipped reads for realignment in
-                a reduce step.'''
+                '''Write unmapped/soft-clipped primary alignments for
+                realignment in a reduce step.'''
                 print >>self.output_stream, '%s\t%s\t%s\t%s' % ('unmapped',
                     seq, qname, qual)
                 _output_line_count += 1
-                '''Write unmapped sequences for readletizing and
-                inferring introns. To reduce alignment burden, find
-                reversed complement and only write sequence that comes
-                first in lexicographic order.'''
+                '''To reduce alignment burden, find reversed complement and
+                only write sequence that comes first in lexicographic order.'''
                 seq = seq.upper()
                 reversed_complement_seq = seq[::-1].translate(
                         _reversed_complement_translation_table
@@ -291,25 +298,39 @@ class BowtieOutputThread(threading.Thread):
                     print >>self.output_stream, \
                         'readletize\t%s\t\x1c\t%s' \
                         % (reversed_complement_seq, sample_label)
-            elif self.end_to_end_sam:
-                '''End-to-end SAM is output for every line with at least one
-                possible alignment.'''
+                _output_line_count += 1
+                '''Write fasta lines for realignment; they will be combined
+                with fasta lines for transcriptome elements obtained in later
+                reduce step.'''
                 for alignment in multiread:
-                    print >>self.output_stream, (
-                        ('%s\t%s\t%s\t%012d\t%s\t%s\t'
-                            % ('end_to_end_sam', sample_label, 
-                                self.reference_index.rname_to_string[
-                                    alignment[2]
-                                ],
-                            int(alignment[3]),
-                            alignment[0].partition('\x1d')[0],
-                            alignment[1])) 
-                        + '\t'.join(alignment[4:])
-                        + ('\tNH:i:%d' % len(multiread)))
-                    _output_line_count += 1
-            if not (flag & 4) and len(multiread) == 1:
-                '''Output exonic chunks and indels only if there is exactly one
-                alignment.'''
+                    try:
+                        md = [field for field in alignment
+                            if field[:5] == 'MD:Z:'][0][5:]
+                    except IndexError:
+                        # Unmapped read
+                        break
+                    print >>self.output_stream, \
+                        'fasta\t%s\t\x1c>%s;%s;;\t%s' \
+                        % (alignment[9], alignment[2], alignment[3],
+                            reference_from_seq(alignment[5], md, alignment[9]))
+            else:
+                if self.end_to_end_sam:
+                    '''End-to-end SAM is output for every line with at least
+                    one possible alignment.'''
+                    for alignment in multiread:
+                        print >>self.output_stream, (
+                            ('%s\t%s\t%s\t%012d\t%s\t%s\t'
+                                % ('end_to_end_sam', sample_label, 
+                                    self.reference_index.rname_to_string[
+                                        alignment[2]
+                                    ],
+                                int(alignment[3]),
+                                alignment[0].partition('\x1d')[0],
+                                alignment[1])) 
+                            + '\t'.join(alignment[4:])
+                            + ('\tNH:i:%d' % len(multiread)))
+                        _output_line_count += 1
+                # Output exonic chunks and indels for primary alignment
                 alignment = multiread[0]
                 md = [field for field in alignment
                             if field[:5] == 'MD:Z:'][0][5:]
@@ -460,11 +481,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         12. QUAL
         ... + optional fields
 
-        Reads with no end-to-end alignments
+        Read whose primary alignment is not end-to-end
 
         Tab-delimited output tuple columns (unmapped):
-        1. QNAME
-        2. SEQ
+        1. SEQ
+        2. QNAME
         3. QUAL
 
         Tab-delimited output tuple columns (readletize)
@@ -474,15 +495,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         3. The sample label if field 1 is the read sequence's reversed
             complement; else '\x1c'
 
-        Maximum read lengths found
-
-        Tab-delimited output tuple columns (max_len):
-        1. RNAME + ('-' or '+'; all combinations are included)
-        2. Sample label
-        3. The character 'a', which places it before 'i' in 
-            lexicograhic sort order for reading in Rail-RNA-intron_config
-        4. Maximum read length found
-        5. The character '-'.
+        Tab-delimited tuple columns (fasta):
+        1. Read sequence
+        2. '\x1c' + FASTA reference name including '>'. The following format is
+            used: original RNAME + ';' + start position of sequence + ';;'
+        3. FASTA sequence
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
