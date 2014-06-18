@@ -212,9 +212,9 @@ if __name__ == '__main__':
     go_elastic_parser = go_parsers.add_parser(
                                     'elastic',
                                     usage=general_usage('go elastic',
-                                        '-m <file> -i <s3_dir> -a '
-                                        '<choice/s3_dir> \r\n       '
-                                        '-o <s3_dir> '),
+                                        '-m <file> -o <s3_dir> '
+                                        '-a <choice/tgz> \r\n       '
+                                        '-c <int> '),
                                     formatter_class=rail_help_wrapper,
                                     add_help=False
                                 )

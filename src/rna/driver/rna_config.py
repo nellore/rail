@@ -2528,7 +2528,7 @@ class RailRnaElasticAllJson:
         else:
             reducer_count = base.master_instance_count \
                 * base.instance_core_counts[base.core_instance_type]
-        push_dir = path_join(True, base.intermediate_dir,
+        prep_dir = path_join(True, base.intermediate_dir,
                                         'preprocess')
         push_dir = path_join(True, base.intermediate_dir,
                                         'preprocess', 'push')

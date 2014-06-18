@@ -378,14 +378,16 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         if not keep_intermediates:
             # Create schedule for deleting intermediates
             marked_intermediates = set()
+            all_outputs = set()
             post_step_cleanups = defaultdict(list)
             '''Traverse steps in reverse order to obtain when an intermediate
-            directory is last used. DON'T MESS WITH FIRST INPUT.'''
+            directory is last used.'''
             for i, step in enumerate(
                                 OrderedDict(reversed(steps.items()[1:]))
                             ):
                 step_inputs = [os.path.abspath(step_input) for step_input in
                                 steps[step]['input'].split(',')]
+                all_outputs.add(os.path.abspath(steps[step]['output']))
                 for step_input in step_inputs:
                     if step_input not in marked_intermediates:
                         post_step_cleanups[step_count - i - 1].append(
@@ -758,6 +760,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 except OSError:
                     pass
                 for to_remove in post_step_cleanups[step_number]:
+                    if to_remove not in all_outputs:
+                        '''Remove directory only if it's an -output of some
+                        step and an -input of another step.'''
+                        continue
                     if os.path.isfile(to_remove):
                         try:
                             os.remove(to_remove)

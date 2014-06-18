@@ -108,7 +108,9 @@ Tab-delimited output tuple columns (readletize)
 Tab-delimited tuple columns (fasta):
 1. Read sequence
 2. '\x1c' + FASTA reference name including '>'. The following format is used:
-    original RNAME + ';' + start position of sequence + ';;'
+    original RNAME + ';' + start position of sequence + ';;;' + 'p' if derived
+    from primary alignment to genome; 's' if derived from secondary alignment
+    to genome; 'i' if derived from cointron search
 3. FASTA sequence
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
@@ -302,17 +304,32 @@ class BowtieOutputThread(threading.Thread):
                 '''Write fasta lines for realignment; they will be combined
                 with fasta lines for transcriptome elements obtained in later
                 reduce step.'''
-                for alignment in multiread:
-                    try:
-                        md = [field for field in alignment
-                            if field[:5] == 'MD:Z:'][0][5:]
-                    except IndexError:
-                        # Unmapped read
-                        break
-                    print >>self.output_stream, \
-                        'fasta\t%s\t\x1c>%s;%s;;\t%s' \
-                        % (alignment[9], alignment[2], alignment[3],
-                            reference_from_seq(alignment[5], md, alignment[9]))
+                try:
+                    md = [field for field in multiread[0]
+                          if field[:5] == 'MD:Z:'][0][5:]
+                except IndexError:
+                    # Unmapped read
+                    continue
+                print >>self.output_stream, \
+                    'fasta\t%s\t\x1c>%s;%s;;;p\t%s' \
+                    % (multiread[0][9], multiread[0][2], multiread[0][3],
+                        reference_from_seq(multiread[0][5],
+                                            md, multiread[0][9]))
+                try:
+                    for alignment in multiread[1:]:
+                        try:
+                            md = [field for field in alignment
+                                if field[:5] == 'MD:Z:'][0][5:]
+                        except IndexError:
+                            # Unmapped read
+                            break
+                        print >>self.output_stream, \
+                            'fasta\t%s\t\x1c>%s;%s;;;s\t%s' \
+                            % (alignment[9], alignment[2], alignment[3],
+                                reference_from_seq(alignment[5], md,
+                                alignment[9]))
+                except IndexError:
+                    pass
             else:
                 if self.end_to_end_sam:
                     '''End-to-end SAM is output for every line with at least

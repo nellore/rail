@@ -34,6 +34,7 @@ Tab-delimited tuple columns, one for each read sequence:
     subsequence sizes framing introns + ';' + comma-separated list of intron
     sizes)
 3. FASTA sequence
+4. 'i' to indicate base string overlaps introns
 """
 import sys
 import time
@@ -157,7 +158,7 @@ for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
                      + ','.join([str(intron_end_pos - intron_pos)
                                   for intron_pos, intron_end_pos
                                   in intron_combo])
-                     + '\t' + ''.join(subseqs))
+                     + ';i\t' + ''.join(subseqs))
         for read_seq in final_combos[combo][2]:
             print read_seq + '\t' + fasta_info
             reversed_complement_read_seq = read_seq[::-1].translate(

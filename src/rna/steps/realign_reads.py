@@ -22,7 +22,9 @@ Type 1:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + ';' + start position of sequence + ';' + comma-separated list of
     subsequence sizes framing introns + ';' + comma-separated list of intron
-    sizes)
+    sizes) + ';' + 'p' if derived from primary alignment to genome; 's' if
+    derived from secondary alignment to genome; 'i' if derived from cointron
+    search
 3. FASTA sequence
 
 Type 2:
@@ -162,17 +164,29 @@ def input_files_from_input_stream(input_stream,
     with open(prefasta_filename, 'w') as fasta_stream:
         with open(reads_filename, 'w') as read_stream:
             for read_seq, xpartition in xstream(input_stream, 1):
+                values = []
+                primary = None
                 for value in xpartition:
                     _input_line_count += 1
                     if value[0][0] == '\x1c':
-                        # Add to FASTA reference
-                        print >>fasta_stream, '\t'.join([value[0][1:],
-                                                         value[1]])
+                        if value[0][-1] == 'p':
+                            primary = [value[0][1:-2], value[1]]
+                        else:
+                            values.append([value[0][1:-2], value[1]])
                     else:
                         # Add to reads
                         print >>read_stream, '\t'.join([value[0],
                                                         read_seq[0],
                                                         value[1]])
+                # Add values to FASTA reference iff primary string appears
+                if primary is None:
+                    for value in values:
+                        print >>fasta_stream, '\t'.join(value)
+                else:
+                    print >>fasta_stream, '\t'.join(primary)
+                    for value in values:
+                        if primary[1] in value[1]:
+                            print >>fasta_stream, '\t'.join(value)
     if verbose:
         print >>sys.stderr, 'Done! Sorting and deduplicating prefasta...'
     # Sort prefasta and eliminate duplicate lines
