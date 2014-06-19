@@ -179,14 +179,20 @@ def input_files_from_input_stream(input_stream,
                                                         read_seq[0],
                                                         value[1]])
                 # Add values to FASTA reference iff primary string appears
-                if primary is None:
+                '''if primary is None:
                     for value in values:
                         print >>fasta_stream, '\t'.join(value)
                 else:
                     print >>fasta_stream, '\t'.join(primary)
                     for value in values:
                         if primary[1] in value[1]:
-                            print >>fasta_stream, '\t'.join(value)
+                            print >>fasta_stream, '\t'.join(value)'''
+                '''Code above is restrictive; always add values to FASTA
+                reference.'''
+                if primary is not None:
+                    print >>fasta_stream, '\t'.join(primary)
+                for value in values:
+                    print >>fasta_stream, '\t'.join(value)
     if verbose:
         print >>sys.stderr, 'Done! Sorting and deduplicating prefasta...'
     # Sort prefasta and eliminate duplicate lines
