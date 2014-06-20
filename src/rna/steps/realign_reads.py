@@ -398,7 +398,6 @@ def multiread_with_introns(multiread, stranded=False):
     NH_field = 'NH:i:' + str(len(multiread_to_return))
     multiread_to_return = [alignment + (NH_field,) for alignment in
                             multiread_to_return]
-    print >>sys.stderr, multiread_to_return
     return multiread_to_return
 
 class BowtieOutputThread(threading.Thread):

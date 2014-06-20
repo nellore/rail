@@ -551,13 +551,25 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 in multireadlet])
                                 for displacement, multireadlet
                                 in collected_readlets.items()]
+            '''Kill "intron" alignments for which the readlet already has
+            alignments to genome. May want to get savvier about this in
+            correlation clustering directly.'''
+            filtered_multireadlets = []
+            for multireadlet in multireadlets:
+                if None in [alignment[1] for alignment in multireadlet]:
+                    filtered_multireadlets.append(
+                            [alignment for alignment in multireadlet
+                                if alignment[1] is None]
+                        )
+                else:
+                    filtered_multireadlets.append(multireadlet)
             if False not in [alignment[1] is None 
-                                for multireadlet in multireadlets
+                                for multireadlet in filtered_multireadlets
                                 for alignment in multireadlet]:
                 # No introns to see here
                 continue
             clusters = selected_introns_by_clustering(
-                                multireadlets,
+                                filtered_multireadlets,
                                 seed=seq
                             )
             if clusters:
