@@ -445,7 +445,7 @@ def selected_introns_by_clustering(multireadlets, seed=0):
             for i in xrange(multimap_count)]
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, 
-        verbose=False, stranded=False, fudge=10):
+        verbose=False, stranded=False, fudge=10, min_readlet_size=25):
     """ Runs Rail-RNA-intron_search.
 
         Reduce step in MapReduce pipelines that builds a map of introns
@@ -496,6 +496,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         stranded: True iff input reads are strand-specific; this affects
             whether an output partition has a terminal '+' or '-' indicating
             the sense strand.
+        fudge: permits a sum of exonic bases for an intron combo to be within 
+            the specified number of bases of a read sequence\'s size;
+            this allows for indels with respect to the reference.
+        min_readlet_size: filters out alignments of readlets smaller than
+            this size.
 
         No return value.
     """
@@ -553,16 +558,21 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 in collected_readlets.items()]
             '''Kill "intron" alignments for which the readlet already has
             alignments to genome. May want to get savvier about this in
-            correlation clustering directly.'''
+            correlation clustering directly. Also kill readlets less than
+            max_readlet_size.'''
             filtered_multireadlets = []
             for multireadlet in multireadlets:
                 if None in [alignment[1] for alignment in multireadlet]:
                     filtered_multireadlets.append(
                             [alignment for alignment in multireadlet
-                                if alignment[1] is None]
+                                if alignment[1] is None
+                                    and alignment[5] >= min_readlet_size]
                         )
                 else:
-                    filtered_multireadlets.append(multireadlet)
+                    filtered_multireadlets.append(
+                            [alignment for alignment in multireadlet
+                                if alignment[5] >= min_readlet_size]
+                        )
             if False not in [alignment[1] is None 
                                 for multireadlet in filtered_multireadlets
                                 for alignment in multireadlet]:
@@ -677,13 +687,18 @@ if __name__ == '__main__':
         help='Permits a sum of exonic bases for an intron combo to be within '
              'the specified number of bases of a read sequence\'s size; '
              'this allows for indels with respect to the reference')
+    parser.add_argument('--min-readlet-size', type=int, required=False,
+        default=25,
+        help='Minimum size of readlet alignments to admit when performing '
+             'correlation clustering')
 
     args = parser.parse_args(sys.argv[1:])
 
 if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
-    go(verbose=args.verbose, stranded=args.stranded, fudge=args.fudge)
+    go(verbose=args.verbose, stranded=args.stranded, fudge=args.fudge,
+        min_readlet_size=args.min_readlet_size)
     print >> sys.stderr, 'DONE with cointron_search.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)

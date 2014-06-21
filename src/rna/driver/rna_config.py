@@ -1852,7 +1852,11 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Finalize intron cooccurrences on reads',
-                'run' : ('cointron_search.py {0}').format(verbose),
+                'run' : ('cointron_search.py {0} '
+                         '--min-readlet-size {1}').format(
+                                                    verbose,
+                                                    base.max_readlet_size
+                                                ),
                 'inputs' : ['realign_readlets', 'align_readlets'],
                 'output' : 'cointron_search',
                 'taskx' : 4,
