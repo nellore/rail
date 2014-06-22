@@ -375,17 +375,11 @@ def selected_introns_by_clustering(multireadlets, seed=0):
     alignments = [alignment + (i,)
                     for i, multireadlet in enumerate(multireadlets)
                     for alignment in multireadlet]
-    unclustered_intron_alignments = [j for j, alignment
-                                        in enumerate(alignments)
-                                        if alignment[4] is not None]
-    if not unclustered_intron_alignments:
-        return []
     unclustered_alignments = range(len(alignments))
     clustered_alignments = []
-    while unclustered_intron_alignments:
-        pivot = i = random.choice(unclustered_intron_alignments)
+    while unclustered_alignments:
+        pivot = i = random.choice(unclustered_alignments)
         new_unclustered_alignments = []
-        new_unclustered_intron_alignments = []
         alignment_cluster = defaultdict(list)
         for j in unclustered_alignments:
             if j == pivot: continue
@@ -411,8 +405,6 @@ def selected_introns_by_clustering(multireadlets, seed=0):
                 alignment_cluster[compared_group].append(j)
             else:
                 new_unclustered_alignments.append(j)
-                if alignments[j][4] is not None:
-                    new_unclustered_intron_alignments.append(j)
         # Choose alignments closest to pivot in each multireadlet group
         alignment_cluster_list = [pivot]
         for group in alignment_cluster:
@@ -427,11 +419,27 @@ def selected_introns_by_clustering(multireadlets, seed=0):
                     new_unclustered_alignments.append(
                             alignment_cluster[group][j]
                         )
-        clustered_alignments.append(
-                [alignments[j] for j in alignment_cluster_list]
-            )
+        '''Divide cluster in two: each contains all exonic alignments, and
+        one has all forward-sense-strand intronic alignments while the other
+        has all reverse-sense-strand exonic alignments. If there are no exonic
+        alignments in the cluster, forget it.'''
+        exon_alignments = [alignments[j] for j in alignment_cluster_list
+                            if alignments[j][1] is None]
+        forward_intron_alignments = \
+            [alignments[j] for j in alignment_cluster_list
+                if alignments[j][1] == False]
+        reverse_intron_alignments = \
+            [alignments[j] for j in alignment_cluster_list
+                if alignments[j][1] == True]
+        if forward_intron_alignments:
+            clustered_alignments.append(
+                    forward_intron_alignments + exon_alignments
+                )
+        if reverse_intron_alignments:
+            clustered_alignments.append(
+                    reverse_intron_alignments + exon_alignments
+                )
         unclustered_alignments = new_unclustered_alignments
-        unclustered_intron_alignments = new_unclustered_intron_alignments
     cluster_sizes = [len(set([alignment[-1] for alignment in cluster]))
                         for cluster in clustered_alignments]
     largest_cluster_size = max(cluster_sizes)
