@@ -82,3 +82,5 @@ with open(args.bed) as bed_stream:
                         fastq_output_streams[k].write(
                                 fastq_lines[l][m]
                             )
+                bed_lines = []
+                fastq_lines = []

@@ -70,9 +70,9 @@ def qname_from_read(original_qname, seq, sample_label):
     """ Returns QNAME including sample label and ID formed from hash.
 
         New QNAME takes the form:
-            NM:<original_qname>;
-            ID:<short hash of original_qname + seq + sample label>;
-            LB:<sample_label>
+            <original_qname> + '\x1d' + 
+            <short hash of original_qname + seq + sample label> + '\x1d' +
+            <sample_label>
 
         The purpose of the ID is to distinguish reads with the same name in
         the original FASTA/FASTQ. This should never happen in well-formed

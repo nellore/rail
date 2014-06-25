@@ -1830,7 +1830,7 @@ class RailRnaAlign:
                 'name' : 'Align readlets to transcriptome elements',
                 'run' : ('align_readlets.py --bowtie-idx={0} '
                          '--bowtie-exe={1} {2} -- -t --sam-nohead '
-                         '--startverbose -v 0 -a').format(
+                         '--startverbose -v 0 -m 80').format(
                                                         'intron/intron'
                                                         if elastic else
                                                         path_join(elastic,
@@ -1880,7 +1880,7 @@ class RailRnaAlign:
                 'run' : ('realign_reads.py --original-idx={0} '
                          '--bowtie2-exe={1} --partition-length={2} '
                          '--exon-differentials --manifest={3} {4} '
-                         '-- {5} --local').format(
+                         '-- {5} --local -a').format(
                                                 base.bowtie1_idx,
                                                 base.bowtie2_exe,
                                                 base.genome_partition_length,

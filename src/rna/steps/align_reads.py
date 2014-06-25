@@ -108,9 +108,9 @@ Tab-delimited output tuple columns (readletize)
 Tab-delimited tuple columns (fasta):
 1. Read sequence
 2. '\x1c' + FASTA reference name including '>'. The following format is used:
-    original RNAME + ';' + start position of sequence + ';;;' + 'p' if derived
-    from primary alignment to genome; 's' if derived from secondary alignment
-    to genome; 'i' if derived from cointron search
+    original RNAME + '\x1d' + start position of sequence + '\x1d\x1d\x1d' + 'p'
+    if derived from primary alignment to genome; 's' if derived from secondary
+    alignment to genome; 'i' if derived from cointron search
 3. FASTA sequence
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
@@ -311,7 +311,7 @@ class BowtieOutputThread(threading.Thread):
                     # Unmapped read
                     continue
                 print >>self.output_stream, \
-                    'fasta\t%s\t\x1c>%s;%s;;;p\t%s' \
+                    'fasta\t%s\t\x1c>%s\x1d%s\x1d\x1d\x1dp\t%s' \
                     % (multiread[0][9], multiread[0][2], multiread[0][3],
                         reference_from_seq(multiread[0][5],
                                             md, multiread[0][9]))
@@ -324,7 +324,7 @@ class BowtieOutputThread(threading.Thread):
                             # Unmapped read
                             break
                         print >>self.output_stream, \
-                            'fasta\t%s\t\x1c>%s;%s;;;s\t%s' \
+                            'fasta\t%s\t\x1c>%s\x1d%s\x1d\x1d\x1ds\t%s' \
                             % (alignment[9], alignment[2], alignment[3],
                                 reference_from_seq(alignment[5], md,
                                 alignment[9]))
@@ -515,7 +515,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         Tab-delimited tuple columns (fasta):
         1. Read sequence
         2. '\x1c' + FASTA reference name including '>'. The following format is
-            used: original RNAME + ';' + start position of sequence + ';;'
+            used:
+            original RNAME + '\x1d' + start position of sequence
+            + '\x1d\x1d\x1d' + 'p' if derived from primary alignment to genome;
+            's' if derived from secondary alignment to genome; 'i' if derived
+            from cointron search
         3. FASTA sequence
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
@@ -558,15 +562,15 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             report_multiplier=report_multiplier
         )
     output_file = os.path.join(temp_dir, 'out.sam')
-    bowtie_command = [bowtie2_exe,
+    bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         '-t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file,
-        '-S', output_file]
+        '-S', output_file])
     print >>sys.stderr, 'Starting Bowtie2 with command: ' \
-         + ' '.join(bowtie_command)
+         + bowtie_command
     # Because of problems with buffering, write output to file
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
-        stdout=subprocess.PIPE, stderr=sys.stderr)
+        stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
     if keep_alive:
         period_start = time.time()
         while bowtie_process.poll() is None:

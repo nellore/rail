@@ -13,9 +13,10 @@ Tab-delimited tuple columns:
 1. '-' to enforce that all lines end up in the same partition
 2. FASTA reference name including '>'. The following format is used:
     original RNAME + '+' or '-' indicating which strand is the sense strand
-    + ';' + start position of sequence + ';' + comma-separated list of
-    subsequence sizes framing introns + ';' + comma-separated list of intron
-    sizes
+    + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
+    subsequence sizes framing introns + '\x1d' + comma-separated list of intron
+    sizes + '\x1d' + base-36-encoded integer A such that A & sample index != 0
+    iff sample contains intron combo
 3. Sequence
 
 Input is partitioned by the first column and needs no sort.
@@ -31,8 +32,8 @@ unmapped reads from Rail-RNA-align.
 
 A given reference name in the index is in the following format:    
     original RNAME + '+' or '-' indicating which strand is the sense
-    strand + ';' + start position of sequence + ';' + comma-separated
-    list of subsequence sizes framing introns + ';' + comma-separated
+    strand + '\x1d' + start position of sequence + '\x1d' + comma-separated
+    list of subsequence sizes framing introns + '\x1d' + comma-separated
     list of intron sizes.
 """
 import os
@@ -119,15 +120,16 @@ fasta_file = os.path.join(temp_dir_path, 'temp.fa')
 print >>sys.stderr, 'Opened %s for writing....' % fasta_file
 with open(fasta_file, 'w') as fasta_stream:
     for input_line_count, line in enumerate(sys.stdin):
-        if args.keep_alive: print >>sys.stderr, 'reporter:status:alive'
+        if args.keep_alive and not (input_line_count % 1000):
+            print >>sys.stderr, 'reporter:status:alive'
         tokens = line.rstrip().split('\t')
         assert len(tokens) == 3
         rname, seq = tokens[1:]
         '''A given reference name in the index will be in the following
         format:
         original RNAME + '+' or '-' indicating which strand is the
-        sense strand + ';' + start position of sequence + ';' +
-        comma-separated list of subsequence sizes framing introns + ';'
+        sense strand + '\x1d' + start position of sequence + '\x1d' +
+        comma-separated list of subsequence sizes framing introns + '\x1d'
         + comma-separated list of intron sizes.'''
         print >>fasta_stream, rname
         fasta_stream.write(
