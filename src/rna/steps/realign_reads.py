@@ -412,7 +412,7 @@ def multiread_with_introns(multiread, sample_index, stranded=False):
             be ignored.'''
             continue
         # XP:A:Y if intron combo was found in current sample; else XP:A:N
-        if sample_index & sample_indexes:
+        if (2**sample_index) & sample_indexes:
             XP_field = 'XP:A:Y'
         else:
             XP_field = 'XP:A:N'
