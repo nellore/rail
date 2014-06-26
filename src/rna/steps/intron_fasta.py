@@ -78,7 +78,7 @@ for key, xpartition in xstream(sys.stdin, 3, skip_duplicates=True):
     left_size, right_size = None, None
     sample_indexes = set()
     for value in xpartition:
-        assert len(value) == 4
+        assert len(value) == 5
         input_line_count += 1
         left_extend_size = max(left_extend_size, int(value[-5]))
         right_extend_size = max(right_extend_size, int(value[-4]))

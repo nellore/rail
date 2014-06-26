@@ -1701,7 +1701,7 @@ class RailRnaAlign:
                 'run' : ('align_reads.py --bowtie-idx={0} --bowtie2-idx={1} '
                          '--bowtie2-exe={2} '
                          '--exon-differentials --partition-length={3} '
-                         '--manifest={4} {5} {6} -- {7} --local').format(
+                         '--manifest={4} {5} {6} -- {7}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
@@ -1880,14 +1880,14 @@ class RailRnaAlign:
                 'run' : ('realign_reads.py --original-idx={0} '
                          '--bowtie2-exe={1} --partition-length={2} '
                          '--exon-differentials --manifest={3} {4} '
-                         '-- {5} --local -a').format(
-                                                base.bowtie1_idx,
-                                                base.bowtie2_exe,
-                                                base.genome_partition_length,
-                                                manifest,
-                                                verbose,
-                                                base.bowtie2_args
-                                            ),
+                         '-- {5}').format(
+                                        base.bowtie1_idx,
+                                        base.bowtie2_exe,
+                                        base.genome_partition_length,
+                                        manifest,
+                                        verbose,
+                                        base.bowtie2_args
+                                    ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
                                 'cointron_fasta',
                                 path_join(elastic, 'align_reads', 'fasta')],

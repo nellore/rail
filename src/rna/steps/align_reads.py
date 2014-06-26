@@ -562,15 +562,15 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             report_multiplier=report_multiplier
         )
     output_file = os.path.join(temp_dir, 'out.sam')
-    bowtie_command = ' '.join([bowtie2_exe,
+    bowtie_command = [bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
-        '-t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file,
-        '-S', output_file])
+        '--local -t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file,
+        '-S', output_file]
     print >>sys.stderr, 'Starting Bowtie2 with command: ' \
-         + bowtie_command
+         + ' '.join(bowtie_command)
     # Because of problems with buffering, write output to file
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
-        stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
+        stdout=subprocess.PIPE, stderr=sys.stderr)
     if keep_alive:
         period_start = time.time()
         while bowtie_process.poll() is None:

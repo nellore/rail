@@ -34,9 +34,7 @@ Tab-delimited tuple columns, one for each read sequence:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
     subsequence sizes framing introns + '\x1d' + comma-separated list of intron
-    sizes + '\x1d' + base 36-encoded integer A such that A & sample index != 0
-    iff sample contains intron combo + '\x1d' + 'i' to indicate base string
-    overlaps introns
+    sizes + '\x1d' + 'i' to indicate base string overlaps introns
 3. FASTA sequence
 4. Base 36-encoded integer A such that A & sample index != 0 iff sample
     contains intron combo purportedly overlapped by read sequence
@@ -80,7 +78,7 @@ for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
     first_start_position = int(key[1])
     seq_count = 0
     for value in xpartition:
-        assert len(value) == 5
+        assert len(value) == 6
         input_line_count += 1
         seq_count += 1
         try:
@@ -169,7 +167,7 @@ for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
                                   in intron_combo])
                      + '\x1di\t' + ''.join(subseqs))
         for read_seq, sample_indexes in final_combos[combo][2]:
-            print read_seq + '\t' + fasta_info + '\t' + sample_indexes
+            print read_seq + '\t' + fasta_info + '\x1d' + sample_indexes
             reversed_complement_read_seq = read_seq[::-1].translate(
                 reversed_complement_translation_table
             )

@@ -16,11 +16,11 @@ Tab-delimited tuple columns:
 
 1. Reference name (RNAME in SAM format) +
     '+' or '-' indicating which strand is the sense strand
-2. Sample label
+2. Sample index
 3. Intron start position (inclusive)
 4. Intron end position (exclusive)
 
-Input is partitioned by strand/sample label (fields 1-2) and sorted by the
+Input is partitioned by strand/sample index (fields 1-2) and sorted by the
 remaining fields. INPUT COORDINATES ARE ASSUMED TO BE 1-INDEXED.
 
 Hadoop output (written to stdout)
@@ -38,7 +38,7 @@ Tab-delimited tuple columns:
     or NA if beginning of strand
 7. By how many bases on the right side of an intron the reference COULD extend,
     or NA if end of strand
-8. Sample label index
+8. Sample index
 """
 
 import sys
@@ -102,11 +102,11 @@ def edges_from_input_stream(input_stream, readlet_size=20,
 
         1. Reference name (RNAME in SAM format) +
             '+' or '-' indicating which strand is the sense strand
-        2. Sample label
+        2. Sample index
         3. Intron start position (inclusive)
         4. Intron end position (exclusive)
 
-        The input is partitioned by strand/sample label (fields 1-2) and sorted
+        The input is partitioned by strand/sample index (fields 1-2) and sorted
         by the remaining fields. INPUT COORDINATES ARE ASSUMED TO BE 1-INDEXED.
 
         Introns are sorted by start position. To begin, the first set of
@@ -137,7 +137,7 @@ def edges_from_input_stream(input_stream, readlet_size=20,
             for them to be considered nonoverlapping.
 
         Yield value: An edge tuple (strand,
-                                    sample_label,
+                                    sample_index,
                                     (intron A start, intron A end),
                                     (intron B start, intron B end)) or None
                      at the beginning of a new partition.
@@ -294,7 +294,7 @@ def paths(graph, source, in_node, readlet_size, last_node, edge_span=2,
                     assert path[-1][1] is None
 
 def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
-    last_node, output_stream, sample_label, edge_span=2, min_edge_span_size=25,
+    last_node, output_stream, sample_index, edge_span=2, min_edge_span_size=25,
     full_graph=False):
     """ Consumes graph, printing intron combos that can be overlapped by reads.
 
@@ -350,8 +350,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
         last_node: child node from last edge added to graph. Used to
             determine of a source can be trashed.
         output_stream: where to write output
-        sample_label: the index of the sample label (or the sample label
-            itself)
+        sample_index: the index of the sample
         edge_span, min_edge_span_size: parameters used by paths() function.
             See its docstring for more information.
         full_graph: True iff there are no more nodes to stream on the graph.
@@ -404,7 +403,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
                         min(readlet_size - 1, right_size),
                         str(left_size) if path[0][0] is not None else 'NA',
                         str(right_size) if path[-1][1] is not None else 'NA',
-                        sample_label
+                        sample_index
                     )
                     _output_line_count += 1
                     sys.stdout.flush()
@@ -450,11 +449,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
 
         1. Reference name (RNAME in SAM format) + 
             '+' or '-' indicating which strand is the sense strand
-        2. Sample label
+        2. Sample index
         3. Intron start position (inclusive)
         4. Intron end position (exclusive)
 
-        Input is partitioned by strand+sample label (fields 1-2) and sorted by
+        Input is partitioned by strand+sample index (fields 1-2) and sorted by
         the remaining fields. INPUT COORDINATES ARE ASSUMED TO BE 1-INDEXED.
 
         Hadoop output (written to stdout)
@@ -472,7 +471,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
             extend, or NA if beginning of strand
         7. By how many bases on the right side of an intron the reference COULD
             extend, or NA if end of strand
-        8. Sample label index
+        8. Sample index
 
         input_stream: where to get input
         output_stream: where to write output
@@ -500,13 +499,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
                         min_overlap_exon_size=min_overlap_exon_size
                     ):
         try:
-            strand, sample_label, start_node, end_node = edge
+            strand, sample_index, start_node, end_node = edge
         except TypeError:
             try:
                 if verbose:
                     print >>sys.stderr, \
                         ('Consuming rest of graph on strand ' + strand +
-                         ' for sample ' + sample_label)
+                         ' for sample ' + sample_index)
                     print >>sys.stderr, 'Before consumption, DAG has %d ' \
                         'nodes, and reverse DAG has %d nodes.' \
                         % (len(DAG), len(reverse_DAG))
@@ -518,7 +517,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
                         strand,
                         end_node,
                         output_stream,
-                        sample_label,
+                        sample_index,
                         edge_span=edge_span,
                         min_edge_span_size=min_edge_span_size,
                         full_graph=True
@@ -543,7 +542,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
             if verbose:
                 print >>sys.stderr, \
                     'Consuming graph up to end node', end_node, 'on ' \
-                    'strand', strand, 'for sample', sample_label
+                    'strand', strand, 'for sample', sample_index
                 print >>sys.stderr, 'Before consumption, DAG has %d ' \
                     'nodes, and reverse DAG has %d nodes.' \
                         % (len(DAG), len(reverse_DAG))
@@ -555,7 +554,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
                         strand,
                         end_node,
                         output_stream,
-                        sample_label
+                        sample_index,
                         edge_span=edge_span,
                         min_edge_span_size=min_edge_span_size,
                     )
@@ -571,7 +570,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
         if verbose:
             print >>sys.stderr, \
                 ('Consuming rest of graph on strand ' + strand +
-                 ' for sample ' + sample_label)
+                 ' for sample ' + sample_index)
             print >>sys.stderr, 'Before consumption, DAG has %d ' \
                 'nodes, and reverse DAG has %d nodes.' \
                 % (len(DAG), len(reverse_DAG))
@@ -582,7 +581,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
                 strand,
                 end_node,
                 output_stream,
-                sample_label,
+                sample_index,
                 edge_span=edge_span,
                 min_edge_span_size=min_edge_span_size,
                 full_graph=True
