@@ -462,17 +462,24 @@ def multiread_with_introns(multiread, sample_index, stranded=False):
                             if token[:5] == 'AS:i:'][0]
                             for alignment in multiread_to_return]
     existing_XS_scores = [[int(token[5:]) for token in alignment
-                            if token[:5] == 'XS:i:'][0]
+                            if token[:5] == 'XS:i:']
                             for alignment in multiread_to_return]
-    sorted_alignment_scores = sorted(alignment_scores)
-    # Remove top alignment score if it's there
+    existing_XS_scores = [score[0] for score in existing_XS_scores
+                            if score]
+    sorted_alignment_scores = sorted(alignment_scores, reverse=True)
+    # Remove top alignment score from XS's if it's there
     existing_XS_scores = [score for score in existing_XS_scores if
                             score != sorted_alignment_scores[0]]
-    existing_XS_scores.sort()
+    try:
+        max_XS_score = max(existing_XS_scores)
+    except ValueError:
+        max_XS_score = None
+    '''Now max_XS_score is the top XS besides the known top alignment
+    score; it's important to record this in case the second-best score is
+    attained by an alignment that was previously suppressed.'''
     top_XS_field = 'XS:i:%d' % sorted_alignment_scores[0]
     second_XS_field = 'XS:i:%d' % (sorted_alignment_scores[1]
-        if sorted_alignment_scores[1] > existing_XS_scores[0]
-        else existing_XS_scores[0])
+        if sorted_alignment_scores[1] > max_XS_score else max_XS_score)
     for i in xrange(len(multiread_to_return)):
         for j in xrange(len(multiread_to_return[i])):
             if multiread_to_return[i][j][:5] == 'XS:i:':
@@ -1030,16 +1037,15 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     reference_index = bowtie_index.BowtieIndexReference(reference_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
     output_file = os.path.join(temp_dir_path, 'out.sam')
-    bowtie_command = [bowtie2_exe,
+    bowtie_command = ' ' .join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         '--local -a -t --no-hd --mm -x', bowtie2_index_base, '--12',
-        reads_file, '-S', output_file]
+        reads_file, '-S', output_file])
     alignment_count_to_report, bowtie_seed, non_deterministic \
         = parsed_bowtie_args(bowtie2_args)
-    print >>sys.stderr, 'Starting Bowtie2 with command: ' \
-        + ' '.join(bowtie_command)
+    print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
-        stdout=subprocess.PIPE, stderr=sys.stderr)
+        stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
     bowtie_process.wait()
     output_thread = BowtieOutputThread(
                         open(output_file),
