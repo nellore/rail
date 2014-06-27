@@ -332,8 +332,12 @@ def multiread_with_introns(multiread, sample_index, stranded=False):
         associated_rname = None
         for rname_info in qname_and_sample_indexes[1:]:
             if not rname_info: continue
-            candidate_associated_rname, sample_index_set \
-                = rname_info.split('\x1f')
+            try:
+                candidate_associated_rname, sample_index_set \
+                    = rname_info.split('\x1f')
+            except:
+                print >>sys.stderr, qname_and_sample_indexes
+                raise
             if candidate_associated_rname != alignment[2]: continue
             sample_indexes = int(sample_index_set, 36)
             associated_rname = candidate_associated_rname
