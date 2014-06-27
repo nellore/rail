@@ -234,8 +234,9 @@ while True:
                                         ' '.join(sys.argv))
     '''Recall that pos has leading 0's so it is sorted properly; remove them
     below.'''
-    print >>output_stream, ((('%s\t'*4) % (qname, flag, rname, str(int(pos))))
-                                + '\t'.join(tokens[5:]))
+    print >>output_stream, ((('%s\t'*4) % (qname[:254], flag, rname,
+                                            str(int(pos))))
+                                            + '\t'.join(tokens[5:]))
     last_rname = rname
     last_sample_label = sample_label
     input_line_count += 1
