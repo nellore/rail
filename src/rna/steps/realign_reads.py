@@ -11,6 +11,10 @@ which Bowtie2 did not report alignments in Rail-RNA-align. Reference names in
 the index encode intron sizes and locations in the (presmably) exonic
 sequences it records. Infers exonic chunks and introns from alignments.
 
+THIS CODE ASSUMES THAT BOWTIE RUNS ON JUST ONE THREAD; it exploits that Bowtie
+returns reads in the order in which they were sent, which is guaranteed only
+when on a single thread.
+
 Input (read from stdin)
 ----------------------------
 Tab-delimited input tuple columns:
@@ -163,48 +167,52 @@ def input_files_from_input_stream(input_stream,
     deduped_fasta_filename = os.path.join(temp_dir_path, 'temp.deduped.prefa')
     final_fasta_filename = os.path.join(temp_dir_path, 'temp.fa')
     reads_filename = os.path.join(temp_dir_path, 'reads.temp')
+    qname_filename = os.path.join(temp_dir_path, 'qnames.temp')
     if verbose:
         print >>sys.stderr, 'Writing prefasta and input reads...'
+    read_count = 0
     with open(prefasta_filename, 'w') as fasta_stream:
         with open(reads_filename, 'w') as read_stream:
-            for read_seq, xpartition in xstream(input_stream, 1):
-                qnames_and_sample_indexes = []
-                '''Number of reads might get excessive, so use dlist, which
-                spills to disk if a list gets too big.'''
-                seq_list = dlist()
-                for value in xpartition:
-                    _input_line_count += 1
-                    if value[0][0] == '\x1c':
-                        # Associate QNAMEs with samples
-                        try:
-                            fasta_line, sample_indexes = \
-                                value[1].split('\x1d')
-                        except ValueError:
-                            print >>fasta_stream, '\t'.join(
-                                    [value[0][1:-2], value[1]]
+            with open(qname_filename, 'w') as qname_stream:
+                for read_seq, xpartition in xstream(input_stream, 1):
+                    qnames_and_sample_indexes = []
+                    '''Number of reads might get excessive, so use dlist, which
+                    spills to disk if a list gets too big.'''
+                    seq_list = dlist()
+                    for value in xpartition:
+                        _input_line_count += 1
+                        if value[0][0] == '\x1c':
+                            # Associate QNAMEs with samples
+                            try:
+                                fasta_line, sample_indexes = \
+                                    value[1].split('\x1d')
+                            except ValueError:
+                                print >>fasta_stream, '\t'.join(
+                                        [value[0][1:-2], value[1]]
+                                    )
+                                continue
+                            qnames_and_sample_indexes.append(
+                                    '\x1f'.join(
+                                        [value[0][2:-2], sample_indexes]
+                                    )
                                 )
-                            continue
-                        qnames_and_sample_indexes.append(
-                                '\x1f'.join(
-                                    [value[0][2:-2], sample_indexes]
+                            print >>fasta_stream, '\t'.join([value[0][1:-2],
+                                                             fasta_line])
+                        else:
+                            # Add to temporary seq stream
+                            seq_list.append(
+                                    '\t'.join([value[0], read_seq[0], value[1]])
                                 )
-                            )
-                        print >>fasta_stream, '\t'.join([value[0][1:-2],
-                                                         fasta_line])
-                    else:
-                        # Add to temporary seq stream
-                        seq_list.append(
-                                '\t'.join([value[0], read_seq[0], value[1]])
-                            )
-                qnames_and_sample_indexes = '\x1e'.join(
-                        qnames_and_sample_indexes
-                    )
-                for line in seq_list:
-                    tokens = line.strip().split('\t')
-                    print >>read_stream, \
-                        '\t'.join([tokens[0] + '\x1e'
-                                    + qnames_and_sample_indexes] +
-                                    tokens[1:])
+                    qnames_and_sample_indexes = '\x1e'.join(
+                            qnames_and_sample_indexes
+                        )
+                    for line in seq_list:
+                        tokens = line.strip().split('\t')
+                        print >>read_stream, \
+                            '\t'.join([str(read_count)] + tokens[1:])
+                        print >>qname_stream, \
+                            tokens[0] + '\x1e' + qnames_and_sample_indexes
+                        read_count += 1
     if verbose:
         print >>sys.stderr, 'Done! Sorting and deduplicating prefasta...'
     # Sort prefasta and eliminate duplicate lines
@@ -226,7 +234,7 @@ def input_files_from_input_stream(input_stream,
                                 in xrange(0, len(seq), 80)])
                 )
                 output_stream.write('\n')
-    return final_fasta_filename, reads_filename
+    return final_fasta_filename, reads_filename, qname_filename
 
 def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
         index_basename, keep_alive=False):
@@ -634,8 +642,8 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
-    def __init__(self, input_stream, reference_index, manifest_object,
-        output_stream=sys.stdout, exon_differentials=True, 
+    def __init__(self, input_stream, qname_stream, reference_index,
+        manifest_object, output_stream=sys.stdout, exon_differentials=True, 
         exon_intervals=False, stranded=False, verbose=False, bin_size=10000,
         report_multiplier=1.2, alignment_count_to_report=1,
         bowtie_seed=0, non_deterministic=False):
@@ -643,6 +651,7 @@ class BowtieOutputThread(threading.Thread):
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
                 Bowtie process's stdout.
+            qname_stream: where to find long qnames
             reference_index: object of class BowtieIndexReference; for
                 outputing RNAME number strings to facilitate later sorting
             manifest_object: object of class LabelsAndIndices that maps indices
@@ -681,6 +690,7 @@ class BowtieOutputThread(threading.Thread):
         self.bowtie_seed = bowtie_seed
         self.non_deterministic = non_deterministic
         self.alignment_count_to_report = alignment_count_to_report
+        self.qname_stream = qname_stream
 
     def run(self):
         """ Prints SAM, exon_ivals, exon_diffs, and introns.
@@ -692,7 +702,8 @@ class BowtieOutputThread(threading.Thread):
         global _output_line_count
         next_report_line = 0
         i = 0
-        for (qname,), xpartition in xstream(self.input_stream, 1):
+        for _, xpartition in xstream(self.input_stream, 1):
+            qname = self.qname_stream.readline().rstrip()
             # While labeled multiread, this list may end up simply a uniread
             multiread = []
             for rest_of_line in xpartition:
@@ -893,6 +904,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         locations in the (presmably) exonic sequences it records. Infers exonic
         chunks and introns from alignments.
 
+        THIS CODE ASSUMES THAT BOWTIE RUNS ON JUST ONE THREAD; it exploits that
+        Bowtie returns reads in the order in which they were sent, which is
+        guaranteed only when on a single thread.
+
         Input (read from stdin)
         ----------------------------
         Tab-delimited input tuple columns:
@@ -1031,10 +1046,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         No return value.
     """
     start_time = time.time()
-    fasta_file, reads_file = input_files_from_input_stream(input_stream,
-                                        verbose=verbose,
-                                        temp_dir_path=temp_dir_path
-                                    )
+    fasta_file, reads_file, qname_file = input_files_from_input_stream(
+                                            input_stream,
+                                            verbose=verbose,
+                                            temp_dir_path=temp_dir_path
+                                        )
     bowtie2_index_base = os.path.join(temp_dir_path, 'tempidx')
     create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
         bowtie2_index_base)
@@ -1053,6 +1069,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_process.wait()
     output_thread = BowtieOutputThread(
                         open(output_file),
+                        open(qname_file),
                         reference_index=reference_index,
                         manifest_object=manifest_object,
                         exon_differentials=exon_differentials, 
@@ -1064,7 +1081,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         report_multiplier=report_multiplier,
                         alignment_count_to_report=alignment_count_to_report,
                         bowtie_seed=bowtie_seed,
-                        non_deterministic=non_deterministic
+                        non_deterministic=non_deterministic,
                     )
     output_thread.start()
     # Join thread to pause execution in main thread
