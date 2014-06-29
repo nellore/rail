@@ -105,6 +105,9 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream):
         if line[0] == '@': continue
         try:
             tokens = line.strip().split('\t')
+            flag = int(tokens[1])
+            if flag & 4:
+                continue
             name = tokens[0]
             rname = tokens[2]
             cigar = tokens[5]
