@@ -366,7 +366,8 @@ def maximal_cliques(intron_alignments):
         done=new_done
         smallcand = cand - pivotnbrs
 
-def selected_introns_by_clustering(multireadlets, seed=0):
+def selected_introns_by_clustering(multireadlets, seed=0,
+                                    tie_fudge_fraction=0.9):
     '''(rname, True if sense strand is forward strand or
                                 False if sense strand is reverse strand or
                                 None if not known, alignment_start_position,
@@ -385,10 +386,16 @@ def selected_introns_by_clustering(multireadlets, seed=0):
                     for i, multireadlet in enumerate(multireadlets)
                     for alignment in multireadlet]
     unclustered_alignments = range(len(alignments))
+    unclustered_intron_alignments = [j for j, alignment
+                                        in enumerate(alignments)
+                                        if alignment[4] is not None]
+    if not unclustered_intron_alignments:
+        return []
     clustered_alignments = []
-    while unclustered_alignments:
-        pivot = i = random.choice(unclustered_alignments)
+    while unclustered_intron_alignments:
+        pivot = i = random.choice(unclustered_intron_alignments)
         new_unclustered_alignments = []
+        new_unclustered_intron_alignments = []
         alignment_cluster = defaultdict(list)
         for j in unclustered_alignments:
             if j == pivot: continue
@@ -419,6 +426,8 @@ def selected_introns_by_clustering(multireadlets, seed=0):
                 alignment_cluster[compared_group].append(j)
             else:
                 new_unclustered_alignments.append(j)
+                if alignments[j][4] is not None:
+                    new_unclustered_intron_alignments.append(j)
         # Choose alignments closest to pivot in each multireadlet group
         alignment_cluster_list = [pivot]
         for group in alignment_cluster:
@@ -433,41 +442,25 @@ def selected_introns_by_clustering(multireadlets, seed=0):
                     new_unclustered_alignments.append(
                             alignment_cluster[group][j]
                         )
-        '''Divide cluster in two: each contains all exonic alignments, and
-        one has all forward-sense-strand intronic alignments while the other
-        has all reverse-sense-strand exonic alignments. If there are no exonic
-        alignments in the cluster, forget it.'''
-        exon_alignments = [alignments[j] for j in alignment_cluster_list
-                            if alignments[j][1] is None]
-        forward_intron_alignments = \
-            [alignments[j] for j in alignment_cluster_list
-                if alignments[j][1] == False]
-        reverse_intron_alignments = \
-            [alignments[j] for j in alignment_cluster_list
-                if alignments[j][1] == True]
-        if forward_intron_alignments:
-            clustered_alignments.append(
-                    forward_intron_alignments + exon_alignments
-                )
-        if reverse_intron_alignments:
-            clustered_alignments.append(
-                    reverse_intron_alignments + exon_alignments
-                )
+        clustered_alignments.append(
+                [alignments[j] for j in alignment_cluster_list]
+            )
         unclustered_alignments = new_unclustered_alignments
+        unclustered_intron_alignments = new_unclustered_intron_alignments
     cluster_sizes = [len(set([alignment[-1] for alignment in cluster]))
                         for cluster in clustered_alignments]
-    largest_cluster_size = max(cluster_sizes)
+    cluster_size_threshold = tie_fudge_fraction * max(cluster_sizes)
     largest_clusters = []
     for i, cluster_size in enumerate(cluster_sizes):
-        if cluster_size == largest_cluster_size:
+        if cluster_size >= cluster_size_threshold:
             largest_clusters.append(clustered_alignments[i])
-    multimap_count = len(largest_clusters)
     return [set([alignment[:-1] for alignment in largest_clusters[i]
                 if alignment[1] is not None])
-            for i in xrange(multimap_count)]
+            for i in xrange(len(largest_clusters))]
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, 
-        verbose=False, stranded=False, fudge=10, min_readlet_size=25):
+        verbose=False, stranded=False, fudge=10, min_readlet_size=25,
+        tie_fudge_fraction=0.9):
     """ Runs Rail-RNA-intron_search.
 
         Reduce step in MapReduce pipelines that builds a map of introns
@@ -519,10 +512,14 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
             whether an output partition has a terminal '+' or '-' indicating
             the sense strand.
         fudge: permits a sum of exonic bases for an intron combo to be within 
-            the specified number of bases of a read sequence\'s size;
+            the specified number of bases of a read sequence's size;
             this allows for indels with respect to the reference.
         min_readlet_size: filters out alignments of readlets smaller than
             this size.
+        tie_fudge_fraction: if a cluster's size is --tie-fudge-fraction * the
+            size of the largest cluster from correlation clustering, it is 
+            still considered tied with the largest cluster and returned for
+            finding intron combos
 
         No return value.
     """
@@ -604,7 +601,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                 continue
             clusters = selected_introns_by_clustering(
                                 filtered_multireadlets,
-                                seed=seq
+                                seed=seq,
+                                tie_fudge_fraction=0.9
                             )
             if clusters:
                 for selected_introns in clusters:
@@ -725,6 +723,12 @@ if __name__ == '__main__':
         default=25,
         help='Minimum size of readlet alignments to admit when performing '
              'correlation clustering')
+    parser.add_argument('--tie-fudge-fraction', type=float, required=False,
+        default=0.9,
+        help='If a cluster\'s size is --tie-fudge-fraction * the size of the '
+             'largest cluster from correlation clustering, it is still '
+             'considered tied with the largest cluster and returned for '
+             'finding intron combos')
 
     args = parser.parse_args(sys.argv[1:])
 
@@ -732,7 +736,8 @@ if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
     go(verbose=args.verbose, stranded=args.stranded, fudge=args.fudge,
-        min_readlet_size=args.min_readlet_size)
+        min_readlet_size=args.min_readlet_size,
+        tie_fudge_fraction=args.tie_fudge_fraction)
     print >> sys.stderr, 'DONE with cointron_search.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)

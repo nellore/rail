@@ -284,12 +284,19 @@ class BowtieOutputThread(threading.Thread):
             if flag & 4 or 'S' in cigar:
                 '''Write unmapped/soft-clipped primary alignments for
                 realignment in a reduce step.'''
+                seq = seq.upper()
+                if flag & 16:
+                    '''If it's reverse-complemented, write seq the way it was
+                    found.'''
+                    seq = seq[::-1].translate(
+                        _reversed_complement_translation_table
+                    )
+                    qual = qual[::-1]
                 print >>self.output_stream, '%s\t%s\t%s\t%s' % ('unmapped',
                     seq, qname, qual)
                 _output_line_count += 1
                 '''To reduce alignment burden, find reversed complement and
                 only write sequence that comes first in lexicographic order.'''
-                seq = seq.upper()
                 reversed_complement_seq = seq[::-1].translate(
                         _reversed_complement_translation_table
                     )

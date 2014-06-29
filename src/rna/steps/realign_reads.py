@@ -450,51 +450,25 @@ def multiread_with_introns(multiread, sample_index, stranded=False):
         if new_multiread[i][1] == new_multiread[i-1][1]:
             continue
         multiread_to_return.append(new_multiread[i][0])
-    NH_field = 'NH:i:' + str(len(multiread_to_return))
-    multiread_to_return = [alignment + [NH_field] for alignment in
-                            multiread_to_return]
     if not multiread_to_return:
         return []
     if len(multiread_to_return) == 1:
-        '''Only one alignment; remove XS:i field iff the alignment overlaps an
-        intron. (If the alignment does not overlap an intron, an existing XS:i
-        field refers to an alignment suppressed on first-pass Bowtie).'''
-        if 'N' in multiread_to_return[0][5]:
-            for i in xrange(len(multiread_to_return[0])):
-                if multiread_to_return[0][i][:5] == 'XS:i:':
-                    multiread_to_return[0].remove(multiread_to_return[0][i])
-                    break
+        '''Only one alignment; remove XS:i field if it's present.'''
+        for i in xrange(len(multiread_to_return[0])):
+            if multiread_to_return[0][i][:5] == 'XS:i:':
+                multiread_to_return[0].remove(multiread_to_return[0][i])
+                break
         return multiread_to_return
     # Correct XS:i fields
     alignment_scores = [[int(token[5:]) for token in alignment
                             if token[:5] == 'AS:i:'][0]
                             for alignment in multiread_to_return]
-    existing_XS_scores = [[int(token[5:]) for token in alignment
-                            if token[:5] == 'XS:i:']
-                            for alignment in multiread_to_return]
-    existing_XS_scores = [score[0] for score in existing_XS_scores
-                            if score]
     sorted_alignment_scores = sorted(alignment_scores, reverse=True)
-    # Remove top alignment score from XS's if it's there
-    existing_XS_scores = [score for score in existing_XS_scores if
-                            score != sorted_alignment_scores[0]]
-    try:
-        max_XS_score = max(existing_XS_scores)
-    except ValueError:
-        max_XS_score = None
-    '''Now max_XS_score is the top XS besides the known top alignment
-    score; it's important to record this in case the second-best score is
-    attained by an alignment that was previously suppressed.'''
-    top_XS_field = 'XS:i:%d' % sorted_alignment_scores[0]
-    second_XS_field = 'XS:i:%d' % (sorted_alignment_scores[1]
-        if sorted_alignment_scores[1] > max_XS_score else max_XS_score)
+    XS_field = 'XS:i:%d' % sorted_alignment_scores[1]
     for i in xrange(len(multiread_to_return)):
         for j in xrange(len(multiread_to_return[i])):
             if multiread_to_return[i][j][:5] == 'XS:i:':
-                if sorted_alignment_scores[0] == alignment_scores[i]:
-                    multiread_to_return[i][j] = second_XS_field
-                else:
-                    multiread_to_return[i][j] = top_XS_field
+                multiread_to_return[i][j] = XS_field
     return multiread_to_return
 
 def parsed_bowtie_args(bowtie2_args):
@@ -586,7 +560,9 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
             else:
                 out_sample_maxes.append(multiread[i])
         else:
-            non_maxes.append(multiread[i])
+            # Non-max must be a secondary alignment; set flag appropriately
+            multiread[i][1] = str(int(multiread[i][1]) | 256)
+            non_maxes.append((score, multiread[i]))
     # Decide primary alignment
     if in_sample_maxes:
         sample_max_count = len(in_sample_maxes)
@@ -601,39 +577,69 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
             flag = int(in_sample_maxes[primary_index][1]) & ~256
             in_sample_maxes[primary_index][1] = str(flag)
             multiread_to_return.append(in_sample_maxes[primary_index])
+            # Add other in-sample maxes as secondary alignments
             for i in xrange(len(in_sample_maxes)):
                 if i == primary_index: continue
-                # Set other maxes as secondary alignments
                 in_sample_maxes[i][1] = str(int(in_sample_maxes[i][1]) | 256)
                 multiread_to_return.append(
                         in_sample_maxes[i]
                     )
-    else:
-        assert out_sample_maxes
-        # Choose primary alignment at random from out-sample maxes
-        primary_index = random.randint(0, len(out_sample_maxes) - 1)
-        flag = int(out_sample_maxes[primary_index][1]) & ~256
-        out_sample_maxes[primary_index][1] = str(flag)
-        multiread_to_return.append(out_sample_maxes[primary_index])
-        # Add other out samples as secondary alignments
+        # Add out-sample maxes as secondary alignments
         for i in xrange(len(out_sample_maxes)):
-            if i == primary_index: continue
             out_sample_maxes[i][1] = str(int(out_sample_maxes[i][1]) | 256)
             multiread_to_return.append(
                     out_sample_maxes[i]
                 )
-    for i in xrange(len(non_maxes)):
-        non_maxes[i][1] = str(int(non_maxes[i][1]) | 256)
-    multiread_to_return.extend(non_maxes)
-    if alignment_count_to_report == -1:
-        # Return all alignments
-        return multiread_to_return
     else:
+        assert out_sample_maxes
+        sample_max_count = len(out_sample_maxes)
+        if sample_max_count == 1:
+            # If there's only one max in sample, make it the primary alignment
+            flag = int(out_sample_maxes[0][1]) & ~256
+            out_sample_maxes[0][1] = str(flag)
+            multiread_to_return.append(out_sample_maxes[0])
+        else:
+            # Choose primary alignment at random from out-sample maxes
+            primary_index = random.randint(0, len(out_sample_maxes) - 1)
+            flag = int(out_sample_maxes[primary_index][1]) & ~256
+            out_sample_maxes[primary_index][1] = str(flag)
+            multiread_to_return.append(out_sample_maxes[primary_index])
+            # Add other maxes as secondary alignments
+            for i in xrange(len(out_sample_maxes)):
+                if i == primary_index: continue
+                out_sample_maxes[i][1] = str(int(out_sample_maxes[i][1]) | 256)
+                multiread_to_return.append(
+                        out_sample_maxes[i]
+                    )
+    '''Choose highest-scoring alignments to report. If there's a tie, break
+    it at random.'''
+    if alignment_count_to_report != -1:
         assert alignment_count_to_report > 0, \
             'Bowtie2 option -k must be integer >= 1.'
-        return [multiread_to_return[0]] + \
-            random.sample(multiread_to_return[1:],
-                            alignment_count_to_report - 1)
+        non_maxes_to_include_count = alignment_count_to_report \
+                                        - len(multiread_to_return)
+        if non_maxes_to_include_count > 0:
+            non_maxes.sort(key=lambda non_max: non_max[0], reverse=True)
+            try:
+                min_score = non_maxes[non_maxes_to_include - 1][0]
+                min_scores = [non_max[1] for non_max in non_maxes
+                                if non_max[0] == min_score]
+                if len(min_scores) > 1:
+                    random.shuffle(min_scores)
+                non_maxes = [non_max[1] for non_max in non_maxes
+                                if non_max[0] > min_score] + min_scores
+            except IndexError:
+                # Not enough alignments to saturate -k value
+                non_maxes = [non_max[1] for non_max in non_maxes]
+        else:
+            non_maxes = []
+    else:
+        non_maxes = [non_max[1] for non_max in non_maxes]
+    multiread_to_return.extend(non_maxes)
+    if alignment_count_to_report != -1:
+        multiread_to_return = multiread_to_return[:alignment_count_to_report]
+    NH_field = 'NH:i:' + str(len(multiread_to_return))
+    return [alignment + [NH_field] for alignment in multiread_to_return]
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """

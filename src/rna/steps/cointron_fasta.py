@@ -169,8 +169,8 @@ for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
         for read_seq, sample_indexes in final_combos[combo][2]:
             print read_seq + '\t' + fasta_info + '\x1d' + sample_indexes
             reversed_complement_read_seq = read_seq[::-1].translate(
-                reversed_complement_translation_table
-            )
+                    reversed_complement_translation_table
+                )
             print reversed_complement_read_seq + '\t' + fasta_info + '\x1d' + \
                 sample_indexes
     if args.verbose:

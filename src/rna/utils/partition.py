@@ -8,6 +8,7 @@ Contains a generator for partitioning genome into bins.
 def add_args(parser):
     parser.add_argument(\
         '--partition-length', metavar='LEN', type=int, required=False,
+        default=5000,
         help='Length of a single genome partition')
 
 def partition(rname, pos, end_pos, bin_size):
