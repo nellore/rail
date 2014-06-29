@@ -103,20 +103,24 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream):
     """
     for line in sam_stream:
         if line[0] == '@': continue
-        tokens = line.strip().split('\t')
-        name = tokens[0]
-        rname = tokens[2]
-        cigar = tokens[5]
-        pos = int(tokens[3])
-        seq = tokens[9]
-        flag = int(tokens[1])
-        if 'N' not in cigar or flag & 256:
-            continue
-        md = [token[5:] for token in tokens if token[:5] == 'MD:Z:'][0]
-        _, _, introns, _ = indels_introns_and_exons(cigar, md, pos, seq)
-        introns = [intron[:2] for intron in introns]
-        print >>output_stream, '%s\t%s\t%s\tr' \
-            % (name, rname, sorted(introns))
+        try:
+            tokens = line.strip().split('\t')
+            name = tokens[0]
+            rname = tokens[2]
+            cigar = tokens[5]
+            pos = int(tokens[3])
+            seq = tokens[9]
+            flag = int(tokens[1])
+            if 'N' not in cigar or flag & 256:
+                continue
+            md = [token[5:] for token in tokens if token[:5] == 'MD:Z:'][0]
+            _, _, introns, _ = indels_introns_and_exons(cigar, md, pos, seq)
+            introns = [intron[:2] for intron in introns]
+            print >>output_stream, '%s\t%s\t%s\tr' \
+                % (name, rname, sorted(introns))
+        except IndexError:
+            print line
+            raise
 
 if __name__ == '__main__':
     import argparse
