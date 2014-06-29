@@ -38,7 +38,8 @@ site.addsitedir(src_path)
 from cigar_parse import indels_introns_and_exons
 from dooplicity.tools import xstream
 
-def write_read_introns_from_bed_stream(bed_stream, output_stream):
+def write_read_introns_from_bed_stream(bed_stream, output_stream,
+                                        generous=False):
     """ Writes output that maps QNAMES to introns overlapped.
 
         bed_stream: input stream containing lines of a BED file characterizing
@@ -46,6 +47,7 @@ def write_read_introns_from_bed_stream(bed_stream, output_stream):
         output_stream: where to write output. Each line takes the form:
             <read name><TAB>RNAME<TAB><sorted list of intron starts and ends>
             <TAB>['t' for 'true']
+        generous: True iff QNAMES should have the last two chars cut off
 
         No return value.
     """
@@ -89,7 +91,8 @@ def write_read_introns_from_bed_stream(bed_stream, output_stream):
             introns.add((junctions[2*i] + 1, junctions[2*i+1] + 1))
         if introns:
             print >>output_stream, '%s\t%s\t%s\tt' \
-                % (name, chrom, sorted(list(introns)))
+                % (name[:-2] if generous else name,
+                    chrom, sorted(list(introns)))
 
 def write_read_introns_from_sam_stream(sam_stream, output_stream):
     """ Writes output that maps QNAMES to introns overlapped.
@@ -132,6 +135,12 @@ if __name__ == '__main__':
             formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('-t', '--true-introns-bed', type=str, required=True, 
         help='Full path of BED file containing true introns')
+    parser.add_argument('-g', '--generous', action='store_const', const=True,
+        default=False,
+        help='TopHat cuts off /1s and /2s from read names, even in '
+             'unpaired mode. This loses information. In generous mode, '
+             'this script guesses /1 and /2 based on which gives a better '
+             'result.')
     args = parser.parse_args(sys.argv[1:])
     from tempdel import remove_temporary_directories
     import tempfile
@@ -142,7 +151,8 @@ if __name__ == '__main__':
     with open(combined_file, 'w') as combined_stream:
         with open(args.true_introns_bed) as true_introns_bed_stream:
             write_read_introns_from_bed_stream(true_introns_bed_stream,
-                                                combined_stream)
+                                                combined_stream,
+                                                generous=args.generous)
         write_read_introns_from_sam_stream(sys.stdin, combined_stream)
     import subprocess
     sorted_combined_file = os.path.join(temp_dir_path, 'combined.sorted.temp')
@@ -155,22 +165,37 @@ if __name__ == '__main__':
     with open(sorted_combined_file) as sorted_combined_stream:
         for (name,), xpartition in xstream(sorted_combined_stream, 1):
             relevant_and_retrieved_instances = list(xpartition)
-            if len(relevant_and_retrieved_instances) == 2:
-                relevant += 1
-                retrieved += 1
-                if relevant_and_retrieved_instances[0][:-1] \
-                    == relevant_and_retrieved_instances[1][:-1]:
-                    relevant_and_retrieved += 1
-                else:
-                    print >>sys.stderr, relevant_and_retrieved_instances
+            if args.generous:
+                instances = set([instance[:-1] for instance
+                                    in relevant_and_retrieved_instances])
+                ts = [instance[:-1] for instance 
+                        in relevant_and_retrieved_instances
+                        if instance[-1] == 't']
+                rs = [instance[:-1] for instance 
+                        in relevant_and_retrieved_instances
+                        if instance[-1] == 'r']
+                relevant += len(ts)
+                retrieved += len(rs)
+                for r in rs:
+                    if r in ts:
+                        relevant_and_retrieved += 1
             else:
-                assert len(relevant_and_retrieved_instances) == 1
-                print >>sys.stderr, relevant_and_retrieved_instances
-                if relevant_and_retrieved_instances[0][-1] == 't':
+                if len(relevant_and_retrieved_instances) == 2:
                     relevant += 1
-                else:
-                    assert relevant_and_retrieved_instances[0][-1] == 'r'
                     retrieved += 1
+                    if relevant_and_retrieved_instances[0][:-1] \
+                        == relevant_and_retrieved_instances[1][:-1]:
+                        relevant_and_retrieved += 1
+                    else:
+                        print >>sys.stderr, relevant_and_retrieved_instances
+                else:
+                    assert len(relevant_and_retrieved_instances) == 1
+                    print >>sys.stderr, relevant_and_retrieved_instances
+                    if relevant_and_retrieved_instances[0][-1] == 't':
+                        relevant += 1
+                    else:
+                        assert relevant_and_retrieved_instances[0][-1] == 'r'
+                        retrieved += 1
     precision = float(relevant_and_retrieved) / retrieved
     recall = float(relevant_and_retrieved) / relevant
     print 'relevant instances\t%d' % relevant
