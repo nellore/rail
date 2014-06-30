@@ -368,12 +368,11 @@ def multiread_with_introns(multiread, sample_index, stranded=False):
                         )
                 )
             continue
-        XC_field = 'XC:A:Q'
         if associated_rname is None:
             '''Alignment was not anticipated by correlation clustering/previous
             alignment to genome! This is a stray alignment to some other read's
             associated FASTA lines. Continue.'''
-            XC_field = 'XC:A:W'
+            continue
         reverse_strand_string = tokens[0][-1]
         assert reverse_strand_string in '+-'
         reverse_strand = (True if reverse_strand_string == '-' else False)
@@ -421,13 +420,12 @@ def multiread_with_introns(multiread, sample_index, stranded=False):
             be ignored.'''
             continue
         # XP:A:Y if intron combo was found in current sample; else XP:A:N
-        #if (2**sample_index) & sample_indexes:
-        #    XP_field = 'XP:A:Y'
-        #else:
-        #    XP_field = 'XP:A:N'
-        XP_field = 'XP:A:D'
+        if (2**sample_index) & sample_indexes:
+            XP_field = 'XP:A:Y'
+        else:
+            XP_field = 'XP:A:N'
         # Count number of samples in which intron combo was initially detected
-        #XC_field = 'XC:i:%d' % '{0:b}'.format(sample_indexes).count('1')
+        XC_field = 'XC:i:%d' % '{0:b}'.format(sample_indexes).count('1')
         '''Use second field in each element of new_multiread to store which
         items should be tested to find whether two alignments are
         "identical".'''
