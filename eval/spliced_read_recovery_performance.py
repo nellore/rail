@@ -25,6 +25,7 @@ recall
 import sys
 import site
 import os
+import re
 
 base_path = os.path.dirname(os.path.dirname(
                         os.path.realpath(__file__))
@@ -37,6 +38,41 @@ site.addsitedir(src_path)
 
 from cigar_parse import indels_introns_and_exons
 from dooplicity.tools import xstream
+
+def dummy_md_index(cigar):
+    """ Creates dummy MD string from CIGAR in case of missing MD.
+
+        cigar: cigar string
+
+        Return value: dummy MD string
+    """
+    cigar = re.split(r'([MINDS])', cigar)[:-1]
+    cigar_index = 0
+    max_cigar_index = len(cigar)
+    md = []
+    while cigar_index != max_cigar_index:
+        if cigar[cigar_index] == 0:
+            cigar_index += 2
+            continue
+        if cigar[cigar_index+1] == 'M':
+            try:
+                if type(md[-1]) is int:
+                    md[-1] += int(cigar[cigar_index])
+                else:
+                    md.append(int(cigar[cigar_index]))
+            except IndexError:
+                md.append(int(cigar[cigar_index]))
+            cigar_index += 2
+        elif cigar[cigar_index+1] in 'SIN':
+            cigar_index += 2
+        elif cigar[cigar_index+1] == 'D':
+            md.extend(['^', 'A'*int(cigar[cigar_index])])
+            cigar_index += 2
+        else:
+            raise RuntimeError(
+                        'Accepted CIGAR characters are only in [MINDS].'
+                    )
+    return ''.join(str(el) for el in md)
 
 def write_read_introns_from_bed_stream(bed_stream, output_stream,
                                         generous=False):
@@ -119,8 +155,9 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream):
             flag = int(tokens[1])
             if 'N' not in cigar or flag & 256:
                 continue
-            md = [token[5:] for token in tokens if token[:5] == 'MD:Z:'][0]
-            _, _, introns, _ = indels_introns_and_exons(cigar, md, pos, seq)
+            #md = [token[5:] for token in tokens if token[:5] == 'MD:Z:'][0]
+            _, _, introns, _ = indels_introns_and_exons(cigar,
+                                        dummy_md_index(cigar), pos, seq)
             introns = [intron[:2] for intron in introns]
             print >>output_stream, '%s\t%s\t%s\tr' \
                 % (name, rname, sorted(introns))

@@ -108,7 +108,10 @@ def indels_introns_and_exons(cigar, md, pos, seq):
                         md_index += 1
                 except ValueError:
                     # Not an int, but should not have reached a deletion
-                    assert md[md_index] != '^'
+                    assert md[md_index] != '^', '\n'.join(
+                                                ['cigar and md:',
+                                                 ''.join(cigar), ''.join(md)]
+                                            )
                     if aligned_bases + len(md[md_index]) > aligned_base_cap:
                         md[md_index] = md[md_index][
                                             :aligned_base_cap-aligned_bases
@@ -141,7 +144,10 @@ def indels_introns_and_exons(cigar, md, pos, seq):
                 )
             seq_index += insert_size
         elif cigar[cigar_index+1] == 'D':
-            assert md[md_index] == '^'
+            assert md[md_index] == '^', '\n'.join(
+                                                ['cigar and md:',
+                                                 ''.join(cigar), ''.join(md)]
+                                            )
             # Deletion
             delete_size = int(cigar[cigar_index])
             md_delete_size = len(md[md_index+1])
