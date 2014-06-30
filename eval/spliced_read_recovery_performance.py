@@ -8,6 +8,9 @@ file Y with the aligner's spliced alignments (read from stdin). Only reads that
 overlap introns in the relevant (true) and retrieved (aligner result) datasets
 are considered. Secondary alignments from the SAM input are ignored.
 
+If a coverage threshold is specified with -c, only reads that overlap at least
+one intron whose TRUE coverage is <= -c are considered.
+
 THIS FILE DEPENDS ON DOOPLICITY AND RAIL; don't move it in the Rail repo.
 
 Output (written to stdout)
