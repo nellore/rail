@@ -1855,7 +1855,7 @@ class RailRnaAlign:
                 'run' : ('cointron_search.py {0} '
                          '--min-readlet-size {1}').format(
                                                     verbose,
-                                                    max_readlet_size
+                                                    base.max_readlet_size
                                                 ),
                 'inputs' : ['realign_readlets', 'align_readlets'],
                 'output' : 'cointron_search',
