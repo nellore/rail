@@ -119,36 +119,47 @@ class Launcher:
                 of replacement process
         """
         read_pipe, write_pipe = os.pipe()
-        if mode == 'local':
-            print >>sys.stderr, _warning_message
-            if not sys.stderr.isatty():
-                # So the user sees it too
-                print _warning_message
-            runner_args = [_executable, os.path.join(base_path, 'dooplicity',
-                                    'emr_simulator.py'),
-                            '-p', str(self.num_processes),
-                            '-b', os.path.join(base_path, 
-                                    'rna', 'driver', 'rail-rna.txt')]
-            if self.force:
-                runner_args.append('-f')
-            if self.keep_intermediates:
-                runner_args.append('--keep-intermediates')
-            if self.log:
-                runner_args.extend(['-l', os.path.abspath(self.log)])
+        if os.fork() != 0:
+            # Parent process; read from child after determining executable
+            if mode == 'local':
+                print >>sys.stderr, _warning_message
+                if not sys.stderr.isatty():
+                    # So the user sees it too
+                    print _warning_message
+                runner_args = [_executable, os.path.join(
+                                                    base_path,
+                                                    'dooplicity',
+                                                    'emr_simulator.py'
+                                                ),
+                                '-p', str(self.num_processes),
+                                '-b', os.path.join(base_path, 
+                                        'rna', 'driver', 'rail-rna.txt')]
+                if self.force:
+                    runner_args.append('-f')
+                if self.keep_intermediates:
+                    runner_args.append('--keep-intermediates')
+                if self.log:
+                    runner_args.extend(['-l', os.path.abspath(self.log)])
+            else:
+                runner_args = [_executable, os.path.join(
+                                                    base_path,
+                                                    'dooplicity',
+                                                    'emr_runner.py'
+                                                ),
+                                '-b', os.path.join(base_path, 
+                                        'rna', 'driver', 'rail-rna.txt')]
+                if self.force:
+                    runner_args.append('-f')
+                if self.region != 'us-east-1':
+                    runner_args.extend(['-r', self.region])
+            os.dup2(read_pipe, sys.stdin.fileno())
+            os.close(read_pipe)
+            os.close(write_pipe)
+            os.execv(_executable, runner_args)
         else:
-            runner_args = [_executable, os.path.join(base_path, 'dooplicity',
-                                    'emr_runner.py'),
-                            '-b', os.path.join(base_path, 
-                                    'rna', 'driver', 'rail-rna.txt')]
-            if self.force:
-                runner_args.append('-f')
-            if self.region != 'us-east-1':
-                runner_args.extend(['-r', self.region])
-        os.write(write_pipe, payload)
-        os.close(write_pipe)
-        os.dup2(read_pipe, sys.stdin.fileno())
-        os.execv(_executable, runner_args)
-        ###SCRIPT TERMINATES HERE###
+            os.write(write_pipe, payload)
+            os.close(write_pipe)
+            ###SCRIPT TERMINATES HERE###
 
 def rail_help_wrapper(prog):
     """ So formatter_class's max_help_position can be changed. """
