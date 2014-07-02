@@ -371,9 +371,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                            % (steps[step]['output'], step)
                            for step in bad_output_data])
         if errors:
-            iface.fail('\n'.join([('%d) ' % (i+1)) + error
-                                    for i, error in enumerate(errors)
-                                    if len(errors) > 1 else errors[0]]))
+            iface.fail('\n'.join([(('%d) ' % (i+1)) + error)
+                                    if len(errors) > 1 else errors[0]
+                                    for i, error in enumerate(errors)]))
             failed = True
             raise RuntimeError
         if not keep_intermediates:
@@ -542,9 +542,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         errors = ['Streaming command "%s" failed: %s' % 
                                   (error[1], error[0]) for error
                                   in return_values if len(error) == 2]
-                        errors = [('%d) ' % (i + 1)) + error
-                                    for i, error in enumerate(errors)
-                                    if len(errors) > 1 else errors[0]]
+                        errors = [(('%d) ' % (i + 1)) + error)
+                                    if len(errors) > 1 else errors[0]
+                                    for i, error in enumerate(errors)]
                         iface.fail('\n'.join(errors),
                                     steps=(job_flow[step_number:]
                                             if step_number != 0 else None))
@@ -567,9 +567,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     errors = ['Streaming command "%s" failed: %s' % 
                               (error[1], error[0]) for error
                               in return_values if len(error) == 2]
-                    errors = [('%d) ' % (i + 1)) + error
-                                for i, error in enumerate(errors)
-                                if len(errors) > 1 else errors[0]]
+                    errors = [(('%d) ' % (i + 1)) + error)
+                                if len(errors) > 1 else errors[0]
+                                for i, error in enumerate(errors)]
                     iface.fail('\n'.join(errors),
                                 steps=(job_flow[step_number:]
                                         if step_number != 0 else None))
@@ -637,9 +637,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     if max_tuple > 0:
                         # There are error tuples
                         errors = [error[0] for error in return_values if error]
-                        errors = [('%d) ' % (i + 1)) + error
-                                    for i, error in enumerate(errors)
-                                    if len(errors) > 1 else errors[0]]
+                        errors = [(('%d) ' % (i + 1)) + error)
+                                    if len(errors) > 1 else errors[0]
+                                    for i, error in enumerate(errors)]
                         iface.fail('\n'.join(errors),
                                    (job_flow[step_number:]
                                     if step_number != 0 else None))
@@ -658,9 +658,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 if max_tuple > 0:
                     # There are error tuples
                     errors = [error[0] for error in return_values if error]
-                    errors = [('%d) ' % (i + 1)) + error
-                                for i, error in enumerate(errors)
-                                if len(errors) > 1 else errors[0]]
+                    errors = [(('%d) ' % (i + 1)) + error)
+                                if len(errors) > 1 else errors[0]
+                                for i, error in enumerate(errors)]
                     iface.fail('\n'.join(errors),
                                (job_flow[step_number:]
                                 if step_number != 0 else None))
@@ -709,9 +709,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         errors = ['Streaming command "%s" failed: %s' % 
                                   (error[1], error[0]) for error 
                                   in return_values if len(error) == 2]
-                        errors = [('%d) ' % (i + 1)) + error
-                                    for i, error in enumerate(errors)
-                                    if len(errors) > 1 else errors[0]]
+                        errors = [(('%d) ' % (i + 1)) + error)
+                                    if len(errors) > 1 else errors[0]
+                                    for i, error in enumerate(errors)]
                         iface.fail('\n'.join(errors),
                                    (job_flow[step_number:]
                                     if step_number != 0 else None))
@@ -731,9 +731,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     errors = ['Streaming command "%s" failed: %s' % 
                               (error[1], error[0]) for error 
                               in return_values if len(error) == 2]
-                    errors = [('%d) ' % (i + 1)) + error
-                                for i, error in enumerate(errors)
-                                if len(errors) > 1 else errors[0]]
+                    errors = [(('%d) ' % (i + 1)) + error)
+                                if len(errors) > 1 else errors[0]
+                                for i, error in enumerate(errors)]
                     iface.fail('\n'.join(errors),
                                (job_flow[step_number:]
                                 if step_number != 0 else None))
