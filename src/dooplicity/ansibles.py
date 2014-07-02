@@ -511,7 +511,13 @@ class AWSAnsible(object):
             to_search = '[profile ' + profile + ']'
         # Now search AWS CLI config file for the right profile
         if to_search is not None:
-            config_file = os.path.join(os.environ['HOME'], '.aws', 'config')
+            cred_file = os.path.join(os.environ['HOME'], '.aws', 'credentials')
+            if os.path.exists(cred_file):
+                # "credentials" file takes precedence over "config" file
+                config_file = cred_file
+            else:
+                config_file = os.path.join(os.environ['HOME'], '.aws',
+                                            'config')
             try:
                 with open(config_file) as config_stream:
                     for line in config_stream:

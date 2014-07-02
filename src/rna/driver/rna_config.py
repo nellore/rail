@@ -316,7 +316,13 @@ class RailRnaErrors:
             to_search = '[profile ' + self.profile + ']'
         # Now search AWS CLI config file for the right profile
         if to_search is not None:
-            config_file = os.path.join(os.environ['HOME'], '.aws', 'config')
+            cred_file = os.path.join(os.environ['HOME'], '.aws', 'cred')
+            if os.path.exists(cred_file):
+                # "credentials" file takes precedence over "config" file
+                config_file = cred_file
+            else:
+                config_file = os.path.join(os.environ['HOME'], '.aws',
+                                            'config')
             try:
                 with open(config_file) as config_stream:
                     for line in config_stream:
@@ -1830,7 +1836,7 @@ class RailRnaAlign:
                 'name' : 'Align readlets to transcriptome elements',
                 'run' : ('align_readlets.py --bowtie-idx={0} '
                          '--bowtie-exe={1} {2} -- -t --sam-nohead '
-                         '--startverbose -v 1 -a -m 110').format(
+                         '--startverbose -v 0 -a -m 6').format(
                                                         'intron/intron'
                                                         if elastic else
                                                         path_join(elastic,
@@ -1853,9 +1859,8 @@ class RailRnaAlign:
             {
                 'name' : 'Finalize intron cooccurrences on reads',
                 'run' : ('cointron_search.py {0} '
-                         '--min-readlet-size {1}').format(
-                                                    verbose,
-                                                    base.max_readlet_size
+                         '--min-readlet-size 0').format(
+                                                    verbose
                                                 ),
                 'inputs' : ['realign_readlets', 'align_readlets'],
                 'output' : 'cointron_search',
