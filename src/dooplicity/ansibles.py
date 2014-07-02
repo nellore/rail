@@ -540,17 +540,18 @@ class AWSAnsible(object):
                 raise RuntimeError(('No valid AWS CLI configuration found. '
                                     'Make sure the AWS CLI is installed '
                                     'properly and that one of the following '
-                                    'is true:\n1) The environment variables '
+                                    'is true:\n\na) The environment variables '
                                     '"AWS_ACCESS_KEY_ID" and '
                                     '"AWS_SECRET_ACCESS_KEY" are set to '
                                     'the desired AWS access key ID and '
-                                    'secret access key, respectively, or\n'
-                                    '2) A file ".aws/config" exists in your '
-                                    'home directory with the right settings '
-                                    'for the profile specified (or for '
-                                    '[default] if no profile was specified). '
+                                    'secret access key, respectively, and '
+                                    'the profile (--profile) is set to '
+                                    '"default" (its default value).\n\n'
+                                    'b) The file ".aws/config" or '
+                                    '".aws/credentials" exists in your '
+                                    'home directory with a valid profile. '
                                     'To set this file up, run "aws --config" '
-                                    'after installing the CLI.'))
+                                    'after installing the AWS CLI.'))
         if region is not None:
             # Always override region
             self.region = region

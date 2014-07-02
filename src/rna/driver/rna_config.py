@@ -354,7 +354,8 @@ class RailRnaErrors:
                                     'secret access key, respectively, and '
                                     'the profile (--profile) is set to '
                                     '"default" (its default value).\n\n'
-                                    'b) The file ".aws/config" exists in your '
+                                    'b) The file ".aws/config" or '
+                                    '".aws/credentials" exists in your '
                                     'home directory with a valid profile. '
                                     'To set this file up, run "aws --config" '
                                     'after installing the AWS CLI.')
