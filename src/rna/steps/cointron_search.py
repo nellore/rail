@@ -366,8 +366,7 @@ def maximal_cliques(intron_alignments):
         done=new_done
         smallcand = cand - pivotnbrs
 
-def selected_introns_by_clustering(multireadlets, seed=0,
-                                    tie_fudge_fraction=0.9):
+def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
     '''(rname, True if sense strand is forward strand or
                                 False if sense strand is reverse strand or
                                 None if not known, alignment_start_position,
@@ -381,23 +380,19 @@ def selected_introns_by_clustering(multireadlets, seed=0,
                 iff sample contains intron combo,
                 True if alignment is to forward strand else False, displacement
                 of readlet from 5' end of read)'''
-    random.seed(seed)
     alignments = [alignment + (i,)
                     for i, multireadlet in enumerate(multireadlets)
                     for alignment in multireadlet]
-    unclustered_alignments = range(len(alignments))
-    unclustered_intron_alignments = [j for j, alignment
-                                        in enumerate(alignments)
-                                        if alignment[4] is not None]
-    if not unclustered_intron_alignments:
+    intron_alignments = [j for j, alignment in enumerate(alignments)
+                            if alignment[4] is not None]
+    if not intron_alignments:
         return []
-    clustered_alignments = []
-    while unclustered_intron_alignments:
-        pivot = i = random.choice(unclustered_intron_alignments)
-        new_unclustered_alignments = []
-        new_unclustered_intron_alignments = []
-        alignment_cluster = defaultdict(list)
-        for j in unclustered_alignments:
+    alignment_count = len(alignments)
+    clusters = []
+    for pivot in intron_alignments:
+        i = pivot
+        precluster = defaultdict(list)
+        for j in xrange(alignment_count):
             if j == pivot: continue
             pivot_rname, compared_rname = alignments[i][0], alignments[j][0]
             pivot_sense, compared_sense = alignments[i][1], alignments[j][1]
@@ -423,40 +418,30 @@ def selected_introns_by_clustering(multireadlets, seed=0,
                 (pivot_sample_indexes is None
                     or compared_sample_indexes is None or 
                     pivot_sample_indexes & compared_sample_indexes)):
-                alignment_cluster[compared_group].append(j)
-            else:
-                new_unclustered_alignments.append(j)
-                if alignments[j][4] is not None:
-                    new_unclustered_intron_alignments.append(j)
+                precluster[compared_group].append(j)
         # Choose alignments closest to pivot in each multireadlet group
-        alignment_cluster_list = [pivot]
-        for group in alignment_cluster:
+        cluster = [pivot]
+        for group in precluster:
             overlap_distances = [max(alignments[i][2], alignments[j][2])
                                     - min(alignments[i][3], alignments[j][3])
-                                    for j in alignment_cluster[group]]
+                                    for j in precluster[group]]
             min_overlap_distance = min(overlap_distances)
             for j in xrange(len(overlap_distances)):
                 if overlap_distances[j] == min_overlap_distance:
-                    alignment_cluster_list.append(alignment_cluster[group][j])
-                else:
-                    new_unclustered_alignments.append(
-                            alignment_cluster[group][j]
-                        )
-        clustered_alignments.append(
-                [alignments[j] for j in alignment_cluster_list]
+                    cluster.append(precluster[group][j])
+        clusters.append(
+                [alignments[j] for j in cluster]
             )
-        unclustered_alignments = new_unclustered_alignments
-        unclustered_intron_alignments = new_unclustered_intron_alignments
     cluster_sizes = [len(set([alignment[-1] for alignment in cluster]))
-                        for cluster in clustered_alignments]
+                        for cluster in clusters]
     cluster_size_threshold = tie_fudge_fraction * max(cluster_sizes)
     largest_clusters = []
     for i, cluster_size in enumerate(cluster_sizes):
         if cluster_size >= cluster_size_threshold:
-            largest_clusters.append(clustered_alignments[i])
-    return [set([alignment[:-1] for alignment in largest_clusters[i]
+            largest_clusters.append(clusters[i])
+    return set([frozenset([alignment[:-1] for alignment in largest_clusters[i]
                 if alignment[1] is not None])
-            for i in xrange(len(largest_clusters))]
+            for i in xrange(len(largest_clusters))])
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, 
         verbose=False, stranded=False, fudge=10, min_readlet_size=25,
@@ -601,7 +586,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                 continue
             clusters = selected_introns_by_clustering(
                                 filtered_multireadlets,
-                                seed=seq,
                                 tie_fudge_fraction=0.9
                             )
             if clusters:
