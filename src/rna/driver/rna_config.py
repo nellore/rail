@@ -1357,6 +1357,8 @@ class RailRnaAlign:
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
         motif_search_window_size=1000, motif_radius=5,
+        genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         assembly='hg19', s3_ansible=None):
@@ -1525,6 +1527,8 @@ class RailRnaAlign:
                                                     motif_radius
                                                 ))
         base.motif_radius = motif_radius
+        base.genome_bowtie1_args = genome_bowtie1_args
+        base.transcriptome_bowtie1_args = transcriptome_bowtie1_args
         if not (isinstance(normalize_percentile, float) and
                     0 <= normalize_percentile <= 1):
             base.errors.append('Normalization percentile '
@@ -1667,6 +1671,16 @@ class RailRnaAlign:
             help=SUPPRESS
         )
         algo_parser.add_argument(
+            '--genome-bowtie1-args', type=str, required=False,
+            default='-v 0 -a -m 80',
+            help=SUPPRESS
+        )
+        algo_parser.add_argument(
+            '--transcriptome-bowtie1-args', type=str, required=False,
+            default='-v 1 -a -m 8',
+            help=SUPPRESS
+        )
+        algo_parser.add_argument(
             '--normalize-percentile', type=float, required=False,
             metavar='<dec>',
             default=0.75,
@@ -1760,12 +1774,12 @@ class RailRnaAlign:
                 'name' : 'Align unique readlets to genome',
                 'run' : ('align_readlets.py --bowtie-idx={0} '
                          '--bowtie-exe={1} {2}'
-                         '-- -t --sam-nohead --startverbose '
-                         '-v 0 -a -m 80').format(
-                                    base.bowtie1_idx,
-                                    base.bowtie1_exe,
-                                    verbose
-                                ),
+                         '-- -t --sam-nohead --startverbose {3}').format(
+                                                    base.bowtie1_idx,
+                                                    base.bowtie1_exe,
+                                                    verbose,
+                                                    base.genome_bowtie1_args,
+                                                ),
                 'inputs' : ['combine_subsequences'],
                 'output' : 'align_readlets',
                 'taskx' : 4,
@@ -1778,14 +1792,16 @@ class RailRnaAlign:
                          '--partition-length={1} --max-intron-size={2} '
                          '--min-intron-size={3} --min-exon-size={4} '
                          '--search-window-size={5} '
-                         '--motif-radius={6} {7}').format(base.bowtie1_idx,
+                         '--motif-radius={6} {7}').format(
+                                                base.bowtie1_idx,
                                                 base.genome_partition_length,
-                                                        base.max_intron_size,
-                                                        base.min_intron_size,
-                                                        base.min_exon_size,
+                                                base.max_intron_size,
+                                                base.min_intron_size,
+                                                base.min_exon_size,
                                                 base.motif_search_window_size,
-                                                        base.motif_radius,
-                                                        verbose),
+                                                base.motif_radius,
+                                                verbose
+                                            ),
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
                 'taskx' : 4,
@@ -1837,16 +1853,17 @@ class RailRnaAlign:
                 'name' : 'Align readlets to transcriptome elements',
                 'run' : ('align_readlets.py --bowtie-idx={0} '
                          '--bowtie-exe={1} {2} -- -t --sam-nohead '
-                         '--startverbose -v 1 -a -m 7').format(
-                                                        'intron/intron'
-                                                        if elastic else
-                                                        path_join(elastic,
-                                                            base.output_dir,
-                                                            'transcript_index',
-                                                            'intron'),
-                                                        base.bowtie1_exe,
-                                                        verbose
-                                                    ),
+                         '--startverbose {3}').format(
+                                                'intron/intron'
+                                                if elastic else
+                                                path_join(elastic,
+                                                    base.output_dir,
+                                                    'transcript_index',
+                                                    'intron'),
+                                                base.bowtie1_exe,
+                                                verbose,
+                                                base.transcriptome_bowtie1_args
+                                            ),
                 'inputs' : ['combine_subsequences'],
                 'output' : 'realign_readlets',
                 'taskx' : 4,
@@ -2227,6 +2244,8 @@ class RailRnaLocalAlignJson:
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
         motif_search_window_size=1000, motif_radius=5,
+        genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, keep_intermediates=False):
@@ -2251,6 +2270,8 @@ class RailRnaLocalAlignJson:
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
             motif_search_window_size=motif_search_window_size,
             motif_radius=motif_radius,
+            genome_bowtie1_args=genome_bowtie1_args,
+            transcriptome_bowtie1_args=transcriptome_bowtie1_args,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -2287,6 +2308,8 @@ class RailRnaElasticAlignJson:
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
         motif_search_window_size=1000, motif_radius=5,
+        genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         log_uri=None, ami_version='3.1.0',
@@ -2336,6 +2359,8 @@ class RailRnaElasticAlignJson:
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
             motif_search_window_size=motif_search_window_size,
             motif_radius=motif_radius,
+            genome_bowtie1_args=genome_bowtie1_args,
+            transcriptome_bowtie1_args=transcriptome_bowtie1_args,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -2398,6 +2423,8 @@ class RailRnaLocalAllJson:
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
         motif_search_window_size=1000, motif_radius=5,
+        genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, keep_intermediates=False, check_manifest=True):
@@ -2423,6 +2450,8 @@ class RailRnaLocalAllJson:
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
             motif_search_window_size=motif_search_window_size,
             motif_radius=motif_radius,
+            genome_bowtie1_args=genome_bowtie1_args,
+            transcriptome_bowtie1_args=transcriptome_bowtie1_args,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -2467,6 +2496,8 @@ class RailRnaElasticAllJson:
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
         motif_search_window_size=1000, motif_radius=5,
+        genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         log_uri=None, ami_version='3.1.0',
@@ -2518,6 +2549,8 @@ class RailRnaElasticAllJson:
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
             motif_search_window_size=motif_search_window_size,
             motif_radius=motif_radius,
+            genome_bowtie1_args=genome_bowtie1_args,
+            transcriptome_bowtie1_args=transcriptome_bowtie1_args,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,

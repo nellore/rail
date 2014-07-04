@@ -303,6 +303,17 @@ if __name__ == '__main__':
                     action='help', default=SUPPRESS,
                     help='show this help message and exit'
                 )
+        subparser.add_argument(
+                    '-v', '--version',
+                    action='version',
+                    version=('Rail-RNA v{0}'.format(version_number)),
+                    help='show version information and exit'
+                )
+    parser.add_argument(
+            '-v', '--version',
+            action='version',
+            version=('Rail-RNA v{0}'.format(version_number))
+        )
     RailRnaErrors.add_args(general_parser=go_elastic_general,
                             exec_parser=go_elastic_exec,
                             required_parser=go_elastic_required)
@@ -399,6 +410,8 @@ if __name__ == '__main__':
                 min_exon_size=args.min_exon_size,
                 motif_search_window_size=args.motif_search_window_size,
                 motif_radius=args.motif_radius,
+                genome_bowtie1_args=args.genome_bowtie1_args,
+                transcriptome_bowtie1_args=args.transcriptome_bowtie1_args,
                 normalize_percentile=args.normalize_percentile,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
@@ -431,6 +444,8 @@ if __name__ == '__main__':
                 min_exon_size=args.min_exon_size,
                 motif_search_window_size=args.motif_search_window_size,
                 motif_radius=args.motif_radius,
+                genome_bowtie1_args=args.genome_bowtie1_args,
+                transcriptome_bowtie1_args=args.transcriptome_bowtie1_args,
                 normalize_percentile=args.normalize_percentile,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
@@ -471,6 +486,8 @@ if __name__ == '__main__':
                 min_exon_size=args.min_exon_size,
                 motif_search_window_size=args.motif_search_window_size,
                 motif_radius=args.motif_radius,
+                genome_bowtie1_args=args.genome_bowtie1_args,
+                transcriptome_bowtie1_args=args.transcriptome_bowtie1_args,
                 normalize_percentile=args.normalize_percentile,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
@@ -514,6 +531,8 @@ if __name__ == '__main__':
                 min_exon_size=args.min_exon_size,
                 motif_search_window_size=args.motif_search_window_size,
                 motif_radius=args.motif_radius,
+                genome_bowtie1_args=args.genome_bowtie1_args,
+                transcriptome_bowtie1_args=args.transcriptome_bowtie1_args,
                 normalize_percentile=args.normalize_percentile,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
