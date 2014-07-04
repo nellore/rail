@@ -20,13 +20,17 @@ class LabelsAndIndices:
         self.label_to_index = {}
         self.index_to_label = {}
         with open(manifest_file) as manifest_stream:
-            for i, line in enumerate(manifest_stream):
-                tokens = line.rstrip().split('\t')
+            i = 0
+            for line in manifest_stream:
+                line = line.strip()
+                if line[0] == '#' or not line: continue
+                tokens = line.split('\t')
                 assert len(tokens) <= 5, ('Manifest file has invalid line: %s' 
                                           % line)
                 index_string = str(i)
                 self.label_to_index[tokens[-1]] = index_string
                 self.index_to_label[index_string] = tokens[-1]
+                i += 1
 
 _charset = '0123456789abcdefghijklmnopqrstuvwxyz'
 
