@@ -367,19 +367,59 @@ def maximal_cliques(intron_alignments):
         smallcand = cand - pivotnbrs
 
 def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
-    '''(rname, True if sense strand is forward strand or
-                                False if sense strand is reverse strand or
-                                None if not known, alignment_start_position,
-                                alignment_end_position, 
-                                tuple of tuples (pos, end_pos) of start
-                                and end positions of introns OR None if 
-                                no introns are overlapped, readlet_size,
-                                distance to previous intron or None if
-        beginning of strand, distance to next intron or None if end of
-        strand, integer A such that A & sample index != 0
-                iff sample contains intron combo,
-                True if alignment is to forward strand else False, displacement
-                of readlet from 5' end of read)'''
+    """ Returns cointrons for largest clusters of compatible alignments.
+
+        A cointron is a set of introns that cooccur on the same read.
+        Consider a list "readlets" whose items {R_i} correspond to the aligned
+        readlets from a given read. Each R_i is itself a list of the possible
+        alignments {R_ij} of a readlet. If an R_ij overlaps introns, it 
+        takes the form (rname, True if sense strand is forward strand or
+        False if sense strand is reverse strand, alignment_start_position,
+        alignment_end_position, tuple of tuples (pos, end_pos) of start
+        and end positions of introns, readlet_size, distance to previous intron
+        or None if beginning of strand, distance to next intron or None
+        if end of strand, integer A such that A & sample index != 0 iff sample
+        contains intron combo, True if alignment is to forward strand else
+        False, displacement of readlet from 5' end of read). If an R_ij does
+        not overlap introns, it takes the form (rname, None,
+        alignment_start_position, alignment_end_position, None, readlet_size,
+        None, None, None, True if alignment is to forward strand else False,
+        displacement of readlet from 5' end of read). rname is the
+        SAM-format rname (typically a chromosome), reverse_strand is True iff
+        the readlet's reversed complement aligns to the reference, and 
+        displacement is the number of bases between the 5' (3')end of the
+        readlet, which aligns to the forward (reverse) strand, and the 5' (3')
+        end of the read. Let K_i be the number of alignments {R_ij} of a given
+        readlet R_i.
+
+        For each R_ij that overlaps introns, form a cluster by finding every
+        "compatible" alignment R_kl. R_kl is compatible with R_ij if and only
+        if:
+            1) R_ij and R_kl are alignments to the same strand
+            2) i != k (that is, if the alignments don't correspond to the same
+            multireadlet),
+            3) If the displacement of R_kl is greater than the displacement of
+            R_ij along the read, R_kl must occur at a position greater than
+            R_ij along the reference, and vice versa.
+            4) If the displacements of R_kl and R_ij are the same, the
+            positions of R_kl and R_ij along the reference must also be the
+            same.
+            5) There are no R_ip or R_kp for any p between the start positions
+            of R_ij and R_kl along the reference.
+                    ---AND, if and only if R_kl also overlaps introns---
+            6) The cointrons represented by R_ij and R_kl were detected
+            together in at least one sample in intron_config.py.
+            7) The sense strands (as obtained by motif detection)
+            of R_ij and R_kl are the same.
+
+        From clusters that have at least tie_fudge_fraction * (size of largest
+        cluster) alignments, cull only those alignments that overlap introns
+        and return them.
+
+        Return value: set of frozensets, each of which is a cluster of
+            readlet alignments overlapping introns. Each frozenset contains
+            alignment tuples characterized above.
+    """
     alignments = [alignment + (i,)
                     for i, multireadlet in enumerate(multireadlets)
                     for alignment in multireadlet]
