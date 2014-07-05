@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 rna_config.py
 Part of Rail-RNA
@@ -1638,7 +1639,7 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--cap-size-multiplier', type=float, required=False,
-            default=1.2,
+            default=1.1,
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -1672,12 +1673,12 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--genome-bowtie1-args', type=str, required=False,
-            default='-v 0 -a -m 80',
+            default='-v 0 -a -m 10',
             help=SUPPRESS
         )
         algo_parser.add_argument(
             '--transcriptome-bowtie1-args', type=str, required=False,
-            default='-v 1 -a -m 8',
+            default='-v 1 -a -m 6',
             help=SUPPRESS
         )
         algo_parser.add_argument(
