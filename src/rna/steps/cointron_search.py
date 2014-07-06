@@ -425,7 +425,7 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
                     for alignment in multireadlet]
     intron_alignment_pool = [j for j, alignment in enumerate(alignments)
                              if alignment[4] is not None]
-    if not intron_alignments_pool:
+    if not intron_alignment_pool:
         # No introns
         return set()
     exon_alignments = [j for j, alignment in enumerate(alignments)
@@ -433,21 +433,27 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
     # Divide up intron alignments by common samples
     intron_alignment_groups = defaultdict(set)
     for i in intron_alignment_pool:
-        for common_indexes in intron_alignment_groups:
-            intron_alignment_groups[common_indexes & alignments[i][8]].add(i)
-        intron_alignment_groups[alignment[8]].add(i)
+        for common_indexes in intron_alignment_groups.keys():
+            intersect_indexes = common_indexes & alignments[i][8]
+            if intersect_indexes:
+                if intersect_indexes != common_indexes:
+                    for j in intron_alignment_groups[common_indexes]:
+                        intron_alignment_groups[intersect_indexes].add(j)
+                intron_alignment_groups[intersect_indexes].add(i)
+        intron_alignment_groups[alignments[i][8]].add(i)
     final_intron_alignment_groups = set()
     for common_indexes in intron_alignment_groups:
         final_intron_alignment_groups.add(
                 frozenset(intron_alignment_groups[common_indexes])
             )
+    del intron_alignment_groups
     clusters = []
     to_return = set()
     for intron_alignments in final_intron_alignment_groups:
         for pivot in intron_alignments:
             i = pivot
             precluster = defaultdict(list)
-            for j in (intron_alignments + exon_alignments):
+            for j in (list(intron_alignments) + exon_alignments):
                 if j == pivot: continue
                 pivot_rname, compared_rname \
                     = alignments[i][0], alignments[j][0]

@@ -382,6 +382,24 @@ def multiread_with_introns(multiread, sample_index, manifest_object,
             alignment to genome! This is a stray alignment to some other read's
             associated FASTA lines. Continue.'''
             continue
+        assert sample_indexes is not None
+        # XP:A:Y if intron combo was found in current sample; else XP:A:N
+        if (2**sample_index) & sample_indexes:
+            XP_field = 'XP:A:Y'
+        else:
+            if not big_data:
+                # Sample-by-sample analysis; ignore alignments outside sample
+                continue
+            elif manifest_object.grouped and not (
+                    sample_indexes & manifest_object.group_to_indices[
+                                            manifest_object.index_to_group[
+                                                    sample_index
+                                                ]
+                                        ]
+                ):
+                # No sample groups in common
+                continue
+            XP_field = 'XP:A:N'
         reverse_strand_string = tokens[0][-1]
         assert reverse_strand_string in '+-'
         reverse_strand = (True if reverse_strand_string == '-' else False)
@@ -428,23 +446,6 @@ def multiread_with_introns(multiread, sample_index, manifest_object,
             '''Alignment to transcriptome was purely exonic; this case should
             be ignored.'''
             continue
-        # XP:A:Y if intron combo was found in current sample; else XP:A:N
-        if (2**sample_index) & sample_indexes:
-            XP_field = 'XP:A:Y'
-        else:
-            if not big_data:
-                # Sample-by-sample analysis; ignore alignments outside sample
-                continue
-            elif manifest_object.grouped and not (
-                    sample_indexes & manifest_object.group_to_indices[
-                                            manifest_object.index_to_group[
-                                                    sample_index
-                                                ]
-                                        ]
-                ):
-                # No sample groups in common
-                continue
-            XP_field = 'XP:A:N'
         # Count number of samples in which intron combo was initially detected
         XC_field = 'XC:i:%d' % '{0:b}'.format(sample_indexes).count('1')
         '''Use second field in each element of new_multiread to store which
@@ -774,7 +775,7 @@ class BowtieOutputThread(threading.Thread):
                 corrected_multiread = multiread_with_introns(
                                             multiread,
                                             int(sample_index),
-                                            manifest_object,
+                                            self.manifest_object,
                                             big_data=self.big_data,
                                             stranded=self.stranded
                                         )
@@ -1236,7 +1237,7 @@ if __name__ == '__main__' and not args.test:
         stranded=args.stranded,
         report_multiplier=args.report_multiplier,
         keep_alive=args.keep_alive,
-        big_data=big_data)
+        big_data=args.big_data)
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
