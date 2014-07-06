@@ -392,9 +392,9 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
         end of the read. Let K_i be the number of alignments {R_ij} of a given
         readlet R_i.
 
-        For each R_ij that overlaps introns, form a cluster by finding every
-        "compatible" alignment R_kl. R_kl is compatible with R_ij if and only
-        if:
+        For each R_ij DERIVED FROM THE SAME SAMPLE that overlaps introns, form
+        a cluster by finding every "compatible" alignment R_kl. R_kl is
+        compatible with R_ij if and only if:
             1) R_ij and R_kl are alignments to the same strand
             2) i != k (that is, if the alignments don't correspond to the same
             multireadlet),
@@ -423,65 +423,84 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
     alignments = [alignment + (i,)
                     for i, multireadlet in enumerate(multireadlets)
                     for alignment in multireadlet]
-    intron_alignments = [j for j, alignment in enumerate(alignments)
-                            if alignment[4] is not None]
-    if not intron_alignments:
-        return []
-    alignment_count = len(alignments)
-    clusters = []
-    for pivot in intron_alignments:
-        i = pivot
-        precluster = defaultdict(list)
-        for j in xrange(alignment_count):
-            if j == pivot: continue
-            pivot_rname, compared_rname = alignments[i][0], alignments[j][0]
-            pivot_sense, compared_sense = alignments[i][1], alignments[j][1]
-            pivot_start, compared_start = alignments[i][2], alignments[j][2]
-            pivot_end, compared_end = alignments[i][3], alignments[j][3]
-            pivot_introns, compared_introns \
-                = alignments[i][4], alignments[j][4]
-            pivot_sample_indexes, compared_sample_indexes \
-                = alignments[i][8], alignments[j][8]
-            pivot_sign, compared_sign = alignments[i][9], alignments[j][9]
-            pivot_displacement, compared_displacement \
-                = alignments[i][10], alignments[j][10]
-            pivot_group, compared_group = alignments[i][11], alignments[j][11]
-            if (pivot_group != compared_group and
-                pivot_rname == compared_rname and
-                (pivot_sense is None or compared_sense is None or
-                    pivot_sense == compared_sense) and
-                ((pivot_start == compared_start
-                    and pivot_displacement == compared_displacement) or
-                 (pivot_start < compared_start)
-                    == (pivot_displacement < compared_displacement)) and
-                pivot_sign == compared_sign and
-                (pivot_sample_indexes is None
-                    or compared_sample_indexes is None or 
-                    pivot_sample_indexes & compared_sample_indexes)):
-                precluster[compared_group].append(j)
-        # Choose alignments closest to pivot in each multireadlet group
-        cluster = [pivot]
-        for group in precluster:
-            overlap_distances = [max(alignments[i][2], alignments[j][2])
-                                    - min(alignments[i][3], alignments[j][3])
-                                    for j in precluster[group]]
-            min_overlap_distance = min(overlap_distances)
-            for j in xrange(len(overlap_distances)):
-                if overlap_distances[j] == min_overlap_distance:
-                    cluster.append(precluster[group][j])
-        clusters.append(
-                [alignments[j] for j in cluster]
+    intron_alignment_pool = [j for j, alignment in enumerate(alignments)
+                             if alignment[4] is not None]
+    if not intron_alignments_pool:
+        # No introns
+        return set()
+    exon_alignments = [j for j, alignment in enumerate(alignments)
+                       if alignment[4] is None]
+    # Divide up intron alignments by common samples
+    intron_alignment_groups = defaultdict(set)
+    for i in intron_alignment_pool:
+        for common_indexes in intron_alignment_groups:
+            intron_alignment_groups[common_indexes & alignments[i][8]].add(i)
+        intron_alignment_groups[alignment[8]].add(i)
+    final_intron_alignment_groups = set()
+    for common_indexes in intron_alignment_groups:
+        final_intron_alignment_groups.add(
+                frozenset(intron_alignment_groups[common_indexes])
             )
-    cluster_sizes = [len(set([alignment[-1] for alignment in cluster]))
-                        for cluster in clusters]
-    cluster_size_threshold = tie_fudge_fraction * max(cluster_sizes)
-    largest_clusters = []
-    for i, cluster_size in enumerate(cluster_sizes):
-        if cluster_size >= cluster_size_threshold:
-            largest_clusters.append(clusters[i])
-    return set([frozenset([alignment[:-1] for alignment in largest_clusters[i]
-                if alignment[1] is not None])
-            for i in xrange(len(largest_clusters))])
+    clusters = []
+    to_return = set()
+    for intron_alignments in final_intron_alignment_groups:
+        for pivot in intron_alignments:
+            i = pivot
+            precluster = defaultdict(list)
+            for j in (intron_alignments + exon_alignments):
+                if j == pivot: continue
+                pivot_rname, compared_rname \
+                    = alignments[i][0], alignments[j][0]
+                pivot_sense, compared_sense \
+                    = alignments[i][1], alignments[j][1]
+                pivot_start, compared_start \
+                    = alignments[i][2], alignments[j][2]
+                pivot_end, compared_end \
+                    = alignments[i][3], alignments[j][3]
+                pivot_introns, compared_introns \
+                    = alignments[i][4], alignments[j][4]
+                pivot_sign, compared_sign = alignments[i][9], alignments[j][9]
+                pivot_displacement, compared_displacement \
+                    = alignments[i][10], alignments[j][10]
+                pivot_group, compared_group \
+                    = alignments[i][11], alignments[j][11]
+                if (pivot_group != compared_group and
+                    pivot_rname == compared_rname and
+                    (pivot_sense is None or compared_sense is None or
+                        pivot_sense == compared_sense) and
+                    ((pivot_start == compared_start
+                        and pivot_displacement == compared_displacement) or
+                     (pivot_start < compared_start)
+                        == (pivot_displacement < compared_displacement)) and
+                    pivot_sign == compared_sign):
+                    precluster[compared_group].append(j)
+            # Choose alignments closest to pivot in each multireadlet group
+            cluster = [pivot]
+            for group in precluster:
+                overlap_distances = [max(alignments[i][2], alignments[j][2])
+                                     - min(alignments[i][3], alignments[j][3])
+                                     for j in precluster[group]]
+                min_overlap_distance = min(overlap_distances)
+                for j in xrange(len(overlap_distances)):
+                    if overlap_distances[j] == min_overlap_distance:
+                        cluster.append(precluster[group][j])
+            clusters.append(
+                    [alignments[j] for j in cluster]
+                )
+        cluster_sizes = [len(set([alignment[-1] for alignment in cluster]))
+                            for cluster in clusters]
+        cluster_size_threshold = tie_fudge_fraction * max(cluster_sizes)
+        largest_clusters = []
+        for i, cluster_size in enumerate(cluster_sizes):
+            if cluster_size >= cluster_size_threshold:
+                largest_clusters.append(clusters[i])
+        for i in xrange(len(largest_clusters)):
+            to_return.add(
+                    frozenset([alignment[:-1]
+                               for alignment in largest_clusters[i]
+                               if alignment[1] is not None])
+                )
+    return to_return
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, 
         verbose=False, stranded=False, fudge=10, min_readlet_size=25,
