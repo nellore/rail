@@ -806,15 +806,29 @@ class RailRnaElastic:
                 for line in manifest_stream:
                     if line[0] == '#' or not line.strip(): continue
                     tokens = line.strip().split('\t')
+                    check_sample_label = True
                     if len(tokens) == 5:
                         files_to_check.extend([tokens[0], tokens[2]])
                     elif len(tokens) == 3:
                         files_to_check.append(tokens[0])
                     else:
+                        check_sample_label = False
                         base.errors.append(('The following line from the '
                                             'manifest file {0} '
                                             'has an invalid number of '
                                             'tokens:\n{1}'
+                                            ).format(
+                                                    manifest_url.to_url(),
+                                                    line
+                                                ))
+                    if check_sample_label and tokens[-1].count('-') != 2:
+                        base.errors.append(('The following line from the '
+                                            'manifest file {0} '
+                                            'has an invalid sample label: '
+                                            '\n{1}\nA valid sample label '
+                                            'takes the following form:\n'
+                                            '<Group ID>-<BioRep ID>-'
+                                            '<TechRep ID>'
                                             ).format(
                                                     manifest_url.to_url(),
                                                     line
@@ -1360,7 +1374,7 @@ class RailRnaAlign:
         motif_search_window_size=1000, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie1_args='-v 1 -a -m 8',
-        normalize_percentile=0.75, big_data=False,
+        normalize_percentile=0.75, by='job',
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', assembly='hg19',
         s3_ansible=None):
@@ -1540,7 +1554,12 @@ class RailRnaAlign:
                                                 ))
         base.normalize_percentile = normalize_percentile
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
-        base.big_data = big_data
+        bys = set(['job', 'group', 'biorep', 'techrep'])
+        if by not in bys:
+            base.errors.append('By (--by) must be one of '
+                               '{"job", "group", "biorep", "techrep"}, but '
+                               '{0} was entered.'.format(by))
+        base.by = by
         base.output_sam = output_sam
         base.bam_basename = bam_basename
         base.bed_basename = bed_basename
@@ -1607,11 +1626,15 @@ class RailRnaAlign:
                       'archive on S3')
             )
         algo_parser.add_argument(
-                '-b', '--big-data', action='store_const', const=True,
-                default=False,
-                help=('use information across samples (or only within sample '
-                      'groups, if they are specified in manifest file) to '
-                      'augment spliced alignment')
+                '-b', '--by', type=str,
+                required=False,
+                metavar='<choice>',
+                default='job',
+                help=('use information obtained across reads in the same '
+                      '<choice> as a given read to help improve alignment '
+                      'of that read. <choice> is in {"job", "group", '
+                      '"biorep", "techrep"} (def: job, which includes '
+                      'all reads)')
             )
         algo_parser.add_argument(
                 '--bowtie2-args', type=str, required=False,
@@ -1687,7 +1710,7 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--transcriptome-bowtie1-args', type=str, required=False,
-            default='-v 0 -a',
+            default='-v 0 -a -m 80',
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -1912,15 +1935,14 @@ class RailRnaAlign:
                 'name' : 'Align reads to transcriptome elements',
                 'run' : ('realign_reads.py --original-idx={0} '
                          '--bowtie2-exe={1} --partition-length={2} '
-                         '--exon-differentials --manifest={3} {4} {5}'
-                         '-- {5}').format(
+                         '--exon-differentials --manifest={3} {4} '
+                         '--by {5} -- {6}').format(
                                         base.bowtie1_idx,
                                         base.bowtie2_exe,
                                         base.genome_partition_length,
                                         manifest,
                                         verbose,
-                                        '--big-data' if base.big_data else
-                                        '',
+                                        base.by,
                                         base.bowtie2_args
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
@@ -2259,7 +2281,7 @@ class RailRnaLocalAlignJson:
         genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
-        big_data=False, output_sam=False, bam_basename='alignments',
+        by='job', output_sam=False, bam_basename='alignments',
         bed_basename='', num_processes=1, keep_intermediates=False):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
@@ -2285,7 +2307,7 @@ class RailRnaLocalAlignJson:
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
             normalize_percentile=normalize_percentile,
-            big_data=big_data,
+            by='job',
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
@@ -2324,7 +2346,7 @@ class RailRnaElasticAlignJson:
         genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
-        big_data=False, output_sam=False, bam_basename='alignments',
+        by='job', output_sam=False, bam_basename='alignments',
         bed_basename='', log_uri=None, ami_version='3.1.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
@@ -2374,8 +2396,7 @@ class RailRnaElasticAlignJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
-            normalize_percentile=normalize_percentile,
-            big_data=big_data,
+            normalize_percentile=normalize_percentile, by='job',
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename,
@@ -2439,7 +2460,7 @@ class RailRnaLocalAllJson:
         motif_search_window_size=1000, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie1_args='-v 1 -a -m 8',
-        normalize_percentile=0.75, big_data=False,
+        normalize_percentile=0.75, by='job',
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, keep_intermediates=False, check_manifest=True):
@@ -2467,8 +2488,7 @@ class RailRnaLocalAllJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
-            normalize_percentile=normalize_percentile,
-            big_data=big_data,
+            normalize_percentile=normalize_percentile, by='job',
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
@@ -2514,7 +2534,7 @@ class RailRnaElasticAllJson:
         motif_search_window_size=1000, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie1_args='-v 1 -a -m 8',
-        normalize_percentile=0.75, big_data=False,
+        normalize_percentile=0.75, by='job',
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         log_uri=None, ami_version='3.1.0',
@@ -2568,8 +2588,7 @@ class RailRnaElasticAllJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
-            normalize_percentile=normalize_percentile,
-            big_data=big_data,
+            normalize_percentile=normalize_percentile, by='job',
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename,

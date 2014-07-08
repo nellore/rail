@@ -431,25 +431,27 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
     exon_alignments = [j for j, alignment in enumerate(alignments)
                        if alignment[4] is None]
     # Divide up intron alignments by common samples
-    intron_alignment_groups = defaultdict(set)
-    for i in intron_alignment_pool:
-        for common_indexes in intron_alignment_groups.keys():
-            intersect_indexes = common_indexes & alignments[i][8]
-            if intersect_indexes:
-                if intersect_indexes != common_indexes:
-                    for j in intron_alignment_groups[common_indexes]:
-                        intron_alignment_groups[intersect_indexes].add(j)
-                intron_alignment_groups[intersect_indexes].add(i)
-        intron_alignment_groups[alignments[i][8]].add(i)
-    final_intron_alignment_groups = set()
-    for common_indexes in intron_alignment_groups:
-        final_intron_alignment_groups.add(
-                frozenset(intron_alignment_groups[common_indexes])
-            )
-    del intron_alignment_groups
-    clusters = []
+    intron_alignment_groups = set()
+    all_sample_indexes = reduce(lambda x,y : x | y, 
+                                [alignments[j][8] for j
+                                 in intron_alignment_pool])
+    for i, bit in enumerate('{0:b}'.format(all_sample_indexes)[::-1]):
+        if bit == '1':
+            sample_bit = 2**i
+            intron_alignment_group = set()
+            for j in intron_alignment_pool:
+                if alignments[j][8] & sample_bit:
+                    intron_alignment_group.add(j)
+            intron_alignment_groups.add(frozenset(intron_alignment_group))
+            if sample_bit == 1:
+                print >>sys.stderr, sorted(
+                                        list(
+                            [alignments[j] for j in intron_alignment_group]
+                        )
+                    )
     to_return = set()
-    for intron_alignments in final_intron_alignment_groups:
+    for intron_alignments in intron_alignment_groups:
+        clusters = []
         for pivot in intron_alignments:
             i = pivot
             precluster = defaultdict(list)

@@ -296,7 +296,7 @@ def running_sum(iterable):
         yield total
 
 def multiread_with_introns(multiread, sample_index, manifest_object,
-                            big_data=False, stranded=False):
+                            by='job', stranded=False):
     """ Modifies read alignments to fix CIGARs/positions/primary alignments.
 
         An alignment takes the form of a line of SAM.
@@ -323,14 +323,10 @@ def multiread_with_introns(multiread, sample_index, manifest_object,
         multiread: a list of lists, each of whose elements are the tokens
             from a line of SAM representing an alignment.
         sample_index: index of sample -- an int
-        manifest_object: object of type LabelsAndIndicesWithGroups
-        big_data: if True and sample group names are available (that is, hashes
-            are present in all sample labels), permit only spliced alignments
-            overlapping intron combinations uncovered within the same sample
-            group as the read. If True and sample group names are not
-            available, permit all spliced alignments found. If False, permit
-            only spliced alignments overlapping intron combinations found
-            within the same sample as the read.
+        manifest_object: object of type LabelsAndIndicesWithClusters
+        by: uses information obtained across reads in the same "by" as a 
+            given read to help improve alignment of that read. possible values
+            are in {"job", "group", "biorep", "techrep"}
         stranded: if input reads are stranded, an alignment is returned only
             if the strand of any introns agrees with the strand of the 
             alignment.
@@ -387,17 +383,17 @@ def multiread_with_introns(multiread, sample_index, manifest_object,
         if (2**sample_index) & sample_indexes:
             XP_field = 'XP:A:Y'
         else:
-            if not big_data:
-                # Sample-by-sample analysis; ignore alignments outside sample
+            if by == 'techrep':
+                # Techrep analysis; ignore alignments outside techrep
                 continue
-            elif manifest_object.grouped and not (
-                    sample_indexes & manifest_object.group_to_indices[
-                                            manifest_object.index_to_group[
+            elif not (by == 'job' or
+                        sample_indexes & manifest_object.cluster_to_indices[
+                                            manifest_object.index_to_cluster[
                                                     sample_index
                                                 ]
                                         ]
                 ):
-                # No sample groups in common
+                # No sample clusters in common
                 continue
             XP_field = 'XP:A:N'
         reverse_strand_string = tokens[0][-1]
@@ -670,7 +666,7 @@ class BowtieOutputThread(threading.Thread):
         manifest_object, output_stream=sys.stdout, exon_differentials=True, 
         exon_intervals=False, stranded=False, verbose=False, bin_size=10000,
         report_multiplier=1.2, alignment_count_to_report=1,
-        bowtie_seed=0, non_deterministic=False, big_data=False):
+        bowtie_seed=0, non_deterministic=False, by='job'):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -678,7 +674,7 @@ class BowtieOutputThread(threading.Thread):
             qname_stream: where to find long qnames
             reference_index: object of class BowtieIndexReference; for
                 outputing RNAME number strings to facilitate later sorting
-            manifest_object: object of class LabelsAndIndicesWithGroups that
+            manifest_object: object of class LabelsAndIndicesWithClusters that
                 maps indices to labels and back; used to shorten intermediate
                 output and decide whether to keep alignmetns based on
                 sample group.
@@ -700,13 +696,9 @@ class BowtieOutputThread(threading.Thread):
                 per read
             bowtie_seed: Bowtie2's random seed (--seed)
             non_deterministic: Bowtie2's --non-deterministic option
-            big_data: if True and sample group names are available (that is,
-                hashes are present in all sample labels), permit only spliced
-                alignments overlapping intron combinations uncovered within the
-                same sample group as the read. If True and sample group names
-                are not available, permit all spliced alignments found. If
-                False, permit only spliced alignments overlapping intron
-                combinations found within the same sample as the read.
+            by: uses information obtained across reads in the same "by" as a 
+                given read to help improve alignment of that read. Possible
+                values are in {"job", "group", "biorep", "techrep"}
         """
         super(BowtieOutputThread, self).__init__()
         self.daemon = True
@@ -724,7 +716,7 @@ class BowtieOutputThread(threading.Thread):
         self.non_deterministic = non_deterministic
         self.alignment_count_to_report = alignment_count_to_report
         self.qname_stream = qname_stream
-        self.big_data = big_data
+        self.by = by
 
     def run(self):
         """ Prints SAM, exon_ivals, exon_diffs, and introns.
@@ -776,7 +768,7 @@ class BowtieOutputThread(threading.Thread):
                                             multiread,
                                             int(sample_index),
                                             self.manifest_object,
-                                            big_data=self.big_data,
+                                            by=self.by,
                                             stranded=self.stranded
                                         )
                 if not corrected_multiread:
@@ -932,7 +924,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_args=None, temp_dir_path=tempfile.mkdtemp(), bin_size=10000,
     manifest_file='manifest', verbose=False, exon_differentials=True,
     exon_intervals=False, stranded=False, report_multiplier=1.2,
-    keep_alive=False, big_data=False):
+    keep_alive=False, by='job'):
     """ Runs Rail-RNA-realign.
 
         Uses Bowtie index including only sequences framing introns to align
@@ -1079,13 +1071,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             exponentially with base report_multiplier.
         keep_alive: prints reporter:status:alive messages to stderr to keep EMR 
             task alive.
-        big_data: if True and sample group names are available (that is, hashes
-            are present in all sample labels), permit only spliced alignments
-            overlapping intron combinations uncovered within the same sample
-            group as the read. If True and sample group names are not
-            available, permit all spliced alignments found. If False, permit
-            only spliced alignments overlapping intron combinations found
-            within the same sample as the read.
+        by: uses information obtained across reads in the same "by" as a 
+            given read to help improve alignment of that read. Possible values
+            are in {"job", "group", "biorep", "techrep"}
 
         No return value.
     """
@@ -1099,10 +1087,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
         bowtie2_index_base)
     reference_index = bowtie_index.BowtieIndexReference(reference_index_base)
-    if big_data:
-        manifest_object = manifest.LabelsAndIndicesWithGroups(manifest_file)
+    if by not in ['job', 'techrep']:
+        assert by in ['group', 'biorep']
+        manifest_object = manifest.LabelsAndIndicesWithClusters(manifest_file,
+                                                                 by=by)
     else:
-        # Don't need group information if not in big-data mode
+        # Don't need cluster information if in 'job' or 'techrep' mode
         manifest_object = manifest.LabelsAndIndices(manifest_file)
     output_file = os.path.join(temp_dir_path, 'out.sam')
     bowtie_command = ' ' .join([bowtie2_exe,
@@ -1130,7 +1120,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         alignment_count_to_report=alignment_count_to_report,
                         bowtie_seed=bowtie_seed,
                         non_deterministic=non_deterministic,
-                        big_data=big_data
+                        by=by
                     )
     output_thread.start()
     # Join thread to pause execution in main thread
@@ -1185,15 +1175,12 @@ if __name__ == '__main__':
         default=None,
         help='Save output and Bowtie command to a subdirectory (named using ' 
              'this process\'s PID) of PATH')
-    parser.add_argument('--big-data', action='store_const', const=True,
-        default=False,
-        help='If True and sample group names are available (that is, hashes '
-             'are present in all sample labels), permit only spliced '
-             'alignments overlapping intron combinations uncovered within '
-             'the same sample group as the read. If True and sample group '
-             'names are not available, permit all spliced alignments found. '
-             'If False, permit only spliced alignments overlapping intron '
-             'combinations found within the same sample as the read')
+    parser.add_argument('--by', type=str, required=False,
+        default='job',
+        help='Use information obtained across reads in the same <choice> as a '
+             'given read to help improve alignment of that read. <choice> is '
+             'in {"job", "group", "biorep", "techrep"} (def: job, which '
+             'includes all reads)')
 
     # Add command-line arguments for dependencies
     partition.add_args(parser)
@@ -1237,7 +1224,7 @@ if __name__ == '__main__' and not args.test:
         stranded=args.stranded,
         report_multiplier=args.report_multiplier,
         keep_alive=args.keep_alive,
-        big_data=args.big_data)
+        by=args.by)
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters

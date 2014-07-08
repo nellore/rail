@@ -66,6 +66,7 @@ import bowtie
 import bowtie_index
 import partition
 from collections import deque
+from dooplicity.tools import xstream
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -698,7 +699,7 @@ def introns_from_clique(clique, read_seq, reference_index,
         global_alignment: object of class GlobalAlignment used for fast
             realignment to reference
         max_gaps_mismatches: maximum number of (gaps + mismatches) to permit
-            in realignments to reference minus intron
+            in realignments to reference minus intron or None if unlimited
     """
     if not clique:
         return
@@ -1018,7 +1019,8 @@ def introns_from_clique(clique, read_seq, reference_index,
                                             )
         try:
             max_score = max([intron[-1] for intron in candidate_introns])
-            if max_score >= -max_gaps_mismatches:
+            if max_gaps_mismatches is None \
+                or max_score >= -max_gaps_mismatches:
                 '''Filter out alignments with more than max_gap_mismatches
                 gaps or mismatches.'''
                 for (rname, intron_reverse_strand,
@@ -1114,7 +1116,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         global_alignment: instance of GlobalAlignment class used for fast
                 realignment via Weave or Pypy.
         max_gaps_mismatches: maximum number of gaps/mismatches to permit in
-            a realignment to reference without intron
+            a realignment to reference without intron or None if unlimited
         report_multiplier: if verbose is True, the line number of an alignment,
             read, or first readlet of a read written to stderr increases
             exponentially with base report_multiplier.
@@ -1124,51 +1126,39 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
     global _input_line_count, _output_line_count
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     '''Input is readletized, and readlets must be composed.'''
-    readlet_displacements, collected_readlets = [], []
-    seq_info_captured = False
-    line = input_stream.readline()
-    if not line:
-        # Empty input
-        return
-    tokens = line.rstrip().split('\t')
-    assert len(tokens) == 5
-    seq_id = tokens[0]
-    while True:
-        seq_info = tokens[1].split('\x1e')
-        seq_info_size = len(seq_info)
-        assert seq_info_size >= 2
-        if seq_info_size > 2:
-            assert seq_info_size == 7
-            seq = seq_info[2]
-            seq_size = len(seq)
-            seq_count = int(seq_info[3])
-            reversed_complement_seq_count = int(seq_info[4])
-            sample_labels = seq_info[5]
-            reversed_complement_sample_labels = seq_info[6]
-            seq_info_captured = True
-        if tokens[-1] != '\x1c':
-            # If there are alignments, add them to collected_readlets
-            collected_readlets.append(
-                    zip(
-                            tokens[-3].split('\x1f'),
-                            [(int(flag) & 16) != 0
-                                for flag in tokens[-2].split('\x1f')],
-                            [int(pos) for pos in tokens[-1].split('\x1f')]
-                        )
-                )
-            readlet_displacements.append(
-                (int(seq_info[0]), int(seq_info[1]))
-            )
-        line = input_stream.readline()
-        if line:
-            tokens = line.rstrip().split('\t')
-            assert len(tokens) == 5
+    for (seq_id,), xpartition in xstream(input_stream, 1):
+        readlet_displacements, collected_readlets = [], []
+        seq_info_captured = False
+        for seq_info, rnames, flags, poses in xpartition:
             _input_line_count += 1
-            next_seq_id = tokens[0]
-        if (not line or seq_id != next_seq_id) \
-            and len(collected_readlets):
-            assert seq_info_captured, \
-                'Sequence info was not in a collected readlet'
+            seq_info = seq_info.split('\x1e')
+            seq_info_size = len(seq_info)
+            assert seq_info_size >= 2
+            if seq_info_size > 2:
+                assert seq_info_size == 7
+                seq = seq_info[2]
+                seq_size = len(seq)
+                seq_count = int(seq_info[3])
+                reversed_complement_seq_count = int(seq_info[4])
+                sample_labels = seq_info[5]
+                reversed_complement_sample_labels = seq_info[6]
+                seq_info_captured = True
+            if poses != '\x1c':
+                # If there are alignments, add them to collected_readlets
+                collected_readlets.append(
+                        zip(
+                                rnames.split('\x1f'),
+                                [(int(flag) & 16) != 0
+                                    for flag in flags.split('\x1f')],
+                                [int(pos) for pos in poses.split('\x1f')]
+                            )
+                    )
+                readlet_displacements.append(
+                    (int(seq_info[0]), int(seq_info[1]))
+                )
+        assert seq_info_captured, \
+            'Sequence info was not in a collected readlet'
+        if collected_readlets:
             multireadlets = [[(rname, reverse_strand, pos, pos + seq_size
                                 - readlet_displacements[i][1]
                                 - readlet_displacements[i][0],
@@ -1203,9 +1193,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             global_alignment=global_alignment,
                             max_gaps_mismatches=max_gaps_mismatches
                         ))
-                    for sample_label in sample_labels:
-                        for (intron_rname, intron_reverse_strand,
-                             intron_pos, intron_end_pos) in introns:
+                    for (intron_rname, intron_reverse_strand,
+                            intron_pos, intron_end_pos) in introns:
+                        for sample_label in sample_labels:
                             print '%s%s\t%s\t%012d\t%012d' % (
                                     intron_rname,
                                     '-' if intron_reverse_strand else '+',
@@ -1231,9 +1221,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             global_alignment=global_alignment,
                             max_gaps_mismatches=max_gaps_mismatches
                         )
-                    for sample_label in reversed_complement_sample_labels:
-                        for (intron_rname, intron_reverse_strand,
+                    for (intron_rname, intron_reverse_strand,
                              intron_pos, intron_end_pos) in introns:
+                        for sample_label in reversed_complement_sample_labels:
                             print '%s%s\t%s\t%012d\t%012d' % (
                                     intron_rname,
                                     '-' if intron_reverse_strand else '+',
@@ -1258,10 +1248,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         global_alignment=global_alignment,
                         max_gaps_mismatches=max_gaps_mismatches
                     )
-                for sample_label in (sample_labels
-                                        | reversed_complement_sample_labels):
-                    for (intron_rname, intron_reverse_strand,
-                             intron_pos, intron_end_pos) in introns:
+                for (intron_rname, intron_reverse_strand,
+                        intron_pos, intron_end_pos) in introns:
+                    for sample_label in (sample_labels
+                                          | reversed_complement_sample_labels):
                         print '%s%s\t%s\t%012d\t%012d' % (
                                 intron_rname,
                                 '-' if intron_reverse_strand else '+',
@@ -1270,11 +1260,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 intron_end_pos
                             )
                         _output_line_count += 1
-            seq_info_captured = False
-            collected_readlets = []
-            readlet_displacements = []
-        if not line: break
-        seq_id = next_seq_id
 
 if __name__ == '__main__':
     import argparse

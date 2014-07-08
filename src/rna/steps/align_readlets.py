@@ -71,6 +71,7 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 import bowtie
+from dooplicity.tools import xstream
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
@@ -123,82 +124,61 @@ class BowtieOutputThread(threading.Thread):
             No return value.
         """
         global _output_line_count
-        next_report_line = 0
-        import random
-        '''Next readlet must be known to tell if a readlet mapped to multiple
-        locations, so always work with previous read.'''
-        while True:
-            line = self.input_stream.readline()
-            if not line:
-                return # Bowtie output nothing
-            # Skip header line
-            if line[0] == '@': continue
-            last_tokens = line.rstrip().split('\t')
-            (last_qname, last_flag, last_rname, last_pos, last_mapq,
-                last_cigar, last_rnext, last_pnext,
-                last_tlen, last_seq, last_qual) = last_tokens[:11]
-            last_flag = int(last_flag)
-            break
-        # While labeled multireadlet, this list may end up simply a unireadlet
-        multireadlet = []
-        while True:
-            line = self.input_stream.readline()
-            if line:
-                tokens = line.rstrip().split('\t')
-                (qname, flag, rname, pos, mapq, cigar, rnext,
-                    pnext, tlen, seq, qual) = tokens[:11]
+        next_report_line, i = 0, 0
+        for (qname,), xpartition in xstream(self.input_stream, 1):
+            '''While labeled multireadlet, this list may end up simply a
+            unireadlet.'''
+            multireadlet = []
+            for tokens in xpartition:
+                (flag, rname, pos, mapq, cigar,
+                    rnext, pnext, tlen, seq, qual) = tokens[:10]
                 flag = int(flag)
-            if self.verbose and next_report_line == i:
-                print >>sys.stderr, \
-                    'SAM output record %d: rdname="%s", flag=%d' % (i,
-                                                                    last_qname,
-                                                                    last_flag)
-                next_report_line = int((next_report_line + 1)
-                    * self.report_multiplier + 1) - 1
-            multireadlet.append((last_rname, last_flag, last_pos))
-            if not line or qname != last_qname:
-                '''If the next qname doesn't match the last qname or there are
-                no more lines, all of a multireadlet's alignments have been
-                collected.'''
-                reads = self.qname_stream.readline().rstrip().split('\x1d')
-                if not (last_flag & 4):
-                    '''Last readlet has at least one alignment; print all
-                    alignments for each read from which readlet sequence is
-                    derived.'''
-                    rnames, flags, poses = zip(*multireadlet)
-                    reverse_flags = [a_flag ^ 16 for a_flag in flags]
-                    flags = '\x1f'.join([str(a_flag) for a_flag in flags])
-                    reverse_flags = '\x1f'.join(
-                                            [str(a_flag) for a_flag
-                                                in reverse_flags]
-                                        )
-                    rnames = '\x1f'.join(rnames)
-                    poses = '\x1f'.join(poses)
-                    for read in reads:
-                        read_id, _, read_rest = read.partition('\x1e')
-                        if read_id[-1] == '-':
-                            current_flags = reverse_flags
-                        else:
-                            current_flags = flags
-                        print >>self.output_stream, '%s\t%s\t%s\t%s\t%s' % \
-                            (read_id[:-1], read_rest, rnames,
-                                current_flags, poses)
-                        _output_line_count += 1
-                else:
-                    '''Readlet had no reported alignments; print ONLY when 
-                    readlet contains general info about read.'''
-                    for read in reads:
-                        read_id, _, read_rest = read.partition('\x1e')
-                        if len(read_rest.split('\x1e')) > 2:
-                            print >>self.output_stream, \
-                                '%s\t%s\t\x1c\t\x1c\t\x1c' % (read_id[:-1],
-                                                                read_rest)
-                        _output_line_count += 1
-                multireadlet = []
-            if not line: break
-            last_tokens = tokens
-            (last_qname, last_flag, last_rname, last_pos) = (qname, flag,
-                rname, pos)
+                multireadlet.append((rname, flag, pos))
+                if self.verbose and next_report_line == i:
+                    print >>sys.stderr, \
+                        'SAM output record %d: rdname="%s", flag=%d' % (i,
+                                                                        qname,
+                                                                        flag)
+                    next_report_line = int((next_report_line + 1)
+                                            * self.report_multiplier + 1) - 1
+                i += 1
+            '''If the next qname doesn't match the last qname or there are no
+            more lines, all of a multireadlet's alignments have been
+            collected.'''
+            reads = self.qname_stream.readline().rstrip().split('\x1d')
+            if not flag & 4:
+                '''Last readlet has at least one alignment; print all
+                alignments for each read from which readlet sequence is
+                derived.'''
+                rnames, flags, poses = zip(*multireadlet)
+                reverse_flags = [a_flag ^ 16 for a_flag in flags]
+                flags = '\x1f'.join([str(a_flag) for a_flag in flags])
+                reverse_flags = '\x1f'.join(
+                                        [str(a_flag) for a_flag
+                                            in reverse_flags]
+                                    )
+                rnames = '\x1f'.join(rnames)
+                poses = '\x1f'.join(poses)
+                for read in reads:
+                    read_id, _, read_rest = read.partition('\x1e')
+                    if read_id[-1] == '-':
+                        current_flags = reverse_flags
+                    else:
+                        current_flags = flags
+                    print >>self.output_stream, '%s\t%s\t%s\t%s\t%s' % \
+                        (read_id[:-1], read_rest, rnames,
+                            current_flags, poses)
+                    _output_line_count += 1
+            else:
+                '''Readlet had no reported alignments; print ONLY when readlet
+                contains general info about read.'''
+                for read in reads:
+                    read_id, _, read_rest = read.partition('\x1e')
+                    if len(read_rest.split('\x1e')) > 2:
+                        print >>self.output_stream, \
+                            '%s\t%s\t\x1c\t\x1c\t\x1c' % (read_id[:-1],
+                                                            read_rest)
+                    _output_line_count += 1
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     bowtie_index_base='genome', bowtie_args='', verbose=False,

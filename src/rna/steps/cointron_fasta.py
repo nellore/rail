@@ -46,6 +46,7 @@ import site
 import argparse
 import copy
 import string
+from collections import defaultdict
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -59,6 +60,7 @@ site.addsitedir(base_path)
 import bowtie
 import bowtie_index
 from dooplicity.tools import xstream
+from manifest import string_from_int
 
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -90,7 +92,10 @@ for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
         end_positions = tuple(map(int, value[1].split(',')))
         if (start_positions, end_positions) not in combos:
             combos[(start_positions, end_positions)] = \
-                [int(value[2]), int(value[3]), set([(value[4], value[5])])]
+                [int(value[2]), int(value[3])]
+            combos[(start_positions, end_positions)].append(defaultdict(int))
+            combos[(start_positions, end_positions)][2][value[4]] \
+                = int(value[5], 36)
         else:
             combos[(start_positions, end_positions)][0] = \
                 max(int(value[2]), combos[(start_positions,
@@ -98,14 +103,15 @@ for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
             combos[(start_positions, end_positions)][1] = \
                 max(int(value[3]), combos[(start_positions,
                                                 end_positions)][1])
-            combos[(start_positions, end_positions)][2].add(
-                    (value[4], value[5])
-                )
+            combos[(start_positions, end_positions)][2][value[4]] \
+                |= int(value[5], 36)
     rname = key[0]
     reverse_strand_string = rname[-1]
     rname = rname[:-1]
-    # Greedily assign subsumed combos to larger combos
-    final_combos = {}
+    '''The code below greedily assigns subsumed combos to larger combos, but
+    so sample indexes are associated only with particular intron combos in
+    sample mode, this step is skipped.'''
+    '''final_combos = {}
     for combo in sorted(combos.keys(), key=len, reverse=True):
         subsumed = False
         intron_count = len(combo[0])
@@ -117,19 +123,18 @@ for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
                         - compared_combo[1][intron_count-1]
                         >= combos[combo][1]):
                 # Subsume by adding sequences
-                for seq_to_add, sample_indexes in combos[combo][2]:
-                    final_combos[compared_combo][2].add(
-                            (seq_to_add, sample_indexes)
-                        )
+                for seq_to_add, sample_indexes in combos[combo][2].items():
+                    final_combos[compared_combo][2][seq_to_add] |= \
+                        sample_indexes
                 subsumed = True
                 break
         if not subsumed:
             # Add as final combo
-            final_combos[combo] = copy.deepcopy(combos[combo])
-    for combo in final_combos:
+            final_combos[combo] = copy.deepcopy(combos[combo])'''
+    for combo in combos:
         intron_combo = zip(combo[0], combo[1])
-        left_extend_size = final_combos[combo][0]
-        right_extend_size = final_combos[combo][1]
+        left_extend_size = combos[combo][0]
+        right_extend_size = combos[combo][1]
         reference_length = reference_index.length[rname]
         subseqs = []
         left_start = max(intron_combo[0][0] - left_extend_size, 1)
@@ -166,17 +171,18 @@ for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
                                   for intron_pos, intron_end_pos
                                   in intron_combo])
                      + '\x1di\t' + ''.join(subseqs))
-        for read_seq, sample_indexes in final_combos[combo][2]:
+        for read_seq, sample_indexes in combos[combo][2].items():
+            sample_indexes = string_from_int(sample_indexes)
             print read_seq + '\t' + fasta_info + '\x1d' + sample_indexes
             reversed_complement_read_seq = read_seq[::-1].translate(
                     reversed_complement_translation_table
                 )
             print reversed_complement_read_seq + '\t' + fasta_info + '\x1d' + \
                 sample_indexes
-    if args.verbose:
+    '''if args.verbose:
         print >>sys.stderr, '%d potential FASTA reference sequences ' \
                             'condensed to %d' % (seq_count, len(final_combos))
-
+    '''
 print >>sys.stderr, 'DONE with cointron_fasta.py; in=%d; ' \
                     'time=%0.3f s' % (input_line_count,
                                         time.time() - start_time)

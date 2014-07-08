@@ -142,7 +142,6 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     print >>sys.stderr, 'Created local destination directory "%s".' % temp_dir
     atexit.register(remove_temporary_directories, [temp_dir])
     input_line_count, output_line_count = 0, 0
-    token_lengths = set([3, 5])
     push_url = Url(push)
     if push_url.is_local:
         destination = push
@@ -160,11 +159,11 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         # Kill offset from start of manifest file
         tokens = line.strip().split('\t')[1:]
         token_count = len(tokens)
-        assert token_count in token_lengths
         if token_count == 3:
             # Single-end reads
             source_urls = [Url(tokens[0])]
         else:
+            assert token_count == 5
             # token_count == 5
             source_urls = [Url(tokens[0]), Url(tokens[2])]
         sample_label = tokens[-1]
