@@ -540,6 +540,7 @@ class RailRnaLocal:
                 for line in manifest_stream:
                     if line[0] == '#' or not line.strip(): continue
                     tokens = line.strip().split('\t')
+                    check_sample_label = True
                     if len(tokens) == 5:
                         files_to_check.extend([tokens[0], tokens[2]])
                     elif len(tokens) == 3:
@@ -549,6 +550,20 @@ class RailRnaLocal:
                                             'manifest file {0} '
                                             'has an invalid number of '
                                             'tokens:\n{1}'
+                                            ).format(
+                                                    manifest_url.to_url(),
+                                                    line
+                                                ))
+                        check_sample_label = False
+                    if check_sample_label and tokens[-1].count('-') != 2:
+                        print >>sys.stderr, 'hi'
+                        base.errors.append(('The following line from the '
+                                            'manifest file {0} '
+                                            'has an invalid sample label: '
+                                            '\n{1}A valid sample label '
+                                            'takes the following form:\n'
+                                            '<Group ID>-<BioRep ID>-'
+                                            '<TechRep ID>'
                                             ).format(
                                                     manifest_url.to_url(),
                                                     line
@@ -822,10 +837,11 @@ class RailRnaElastic:
                                                     line
                                                 ))
                     if check_sample_label and tokens[-1].count('-') != 2:
+                        print >>sys.stderr, 'hi'
                         base.errors.append(('The following line from the '
                                             'manifest file {0} '
                                             'has an invalid sample label: '
-                                            '\n{1}\nA valid sample label '
+                                            '\n{1}A valid sample label '
                                             'takes the following form:\n'
                                             '<Group ID>-<BioRep ID>-'
                                             '<TechRep ID>'
@@ -887,19 +903,19 @@ class RailRnaElastic:
 
         if action_on_failure not in actions_on_failure:
             base.errors.append('Action on failure (--action-on-failure) '
-                               'must be one of {"TERMINATE_JOB_FLOW", '
+                               'must be one of {{"TERMINATE_JOB_FLOW", '
                                '"CANCEL_AND_WAIT", "CONTINUE", '
-                               '"TERMINATE_CLUSTER"}, but '
+                               '"TERMINATE_CLUSTER"}}, but '
                                '{0} was entered.'.format(
                                                 action_on_failure
                                             ))
         base.action_on_failure = action_on_failure
         base.hadoop_jar = hadoop_jar
         instance_type_message = ('Instance type (--instance-type) must be '
-                                 'in the set {"m1.small", "m1.large", '
+                                 'in the set {{"m1.small", "m1.large", '
                                  '"m1.xlarge", "c1.medium", "c1.xlarge", '
                                  '"m2.xlarge", "m2.2xlarge", "m2.4xlarge", '
-                                 '"cc1.4xlarge"}, but {0} was entered.')
+                                 '"cc1.4xlarge"}}, but {0} was entered.')
         if master_instance_type not in base.instance_core_counts:
             base.errors.append(('Master instance type '
                                '(--master-instance-type) not valid. %s')
@@ -1557,7 +1573,7 @@ class RailRnaAlign:
         bys = set(['job', 'group', 'biorep', 'techrep'])
         if by not in bys:
             base.errors.append('By (--by) must be one of '
-                               '{"job", "group", "biorep", "techrep"}, but '
+                               '{{"job", "group", "biorep", "techrep"}}, but '
                                '{0} was entered.'.format(by))
         base.by = by
         base.output_sam = output_sam
@@ -2307,7 +2323,7 @@ class RailRnaLocalAlignJson:
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
             normalize_percentile=normalize_percentile,
-            by='job',
+            by=by,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
@@ -2396,7 +2412,7 @@ class RailRnaElasticAlignJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
-            normalize_percentile=normalize_percentile, by='job',
+            normalize_percentile=normalize_percentile, by=by,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename,
@@ -2488,7 +2504,7 @@ class RailRnaLocalAllJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
-            normalize_percentile=normalize_percentile, by='job',
+            normalize_percentile=normalize_percentile, by=by,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
@@ -2588,7 +2604,7 @@ class RailRnaElasticAllJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
-            normalize_percentile=normalize_percentile, by='job',
+            normalize_percentile=normalize_percentile, by=by,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename,
