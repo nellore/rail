@@ -324,12 +324,8 @@ class BowtieOutputThread(threading.Thread):
                                             md, multiread[0][9]))
                 try:
                     for alignment in multiread[1:]:
-                        try:
-                            md = [field for field in alignment
-                                if field[:5] == 'MD:Z:'][0][5:]
-                        except IndexError:
-                            # Unmapped read
-                            break
+                        md = [field for field in alignment
+                              if field[:5] == 'MD:Z:'][0][5:]
                         print >>self.output_stream, \
                             'fasta\t%s\t\x1c>%s\x1d%s\x1d\x1d\x1ds\t%s' \
                             % (alignment[9], alignment[2], alignment[3],

@@ -201,7 +201,8 @@ def input_files_from_input_stream(input_stream,
                         else:
                             # Add to temporary seq stream
                             seq_list.append(
-                                    '\t'.join([value[0], read_seq[0], value[1]])
+                                    '\t'.join([value[0], read_seq[0],
+                                                value[1]])
                                 )
                     qnames_and_sample_indexes = '\x1e'.join(
                             qnames_and_sample_indexes

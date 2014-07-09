@@ -39,6 +39,7 @@ import os
 import json
 import itertools
 import __main__ as main
+import argparse
 
 def add_args(parser):
     """ Adds relevant arguments to an object of class argparse.ArgumentParser.
@@ -138,7 +139,7 @@ class DooplicityInterface:
                                     self._date_format,
                                     time.localtime(self._start_time)
                                 ))
-        print '\n~.oOo.~\n'
+        print '\n~.oOo.>\n'
         sys.stdout.flush()
         self._update_thread = UpdateThread(self._start_time)
 
@@ -229,37 +230,26 @@ class DooplicityInterface:
         if steps:
             temp_dir = tempfile.mkdtemp()
             temp_json_file = os.path.join(temp_dir, 'temp.json')
-            try:
-                json_index = sys.argv.index('--json')
-            except ValueError:
-                json_index = -1
-            try:
-                json_index = max(sys.argv.index('-j'), json_index)
-            except ValueError:
-                pass
             with open(temp_json_file, 'w') as json_stream:
                 steps_to_write = { 'Steps' : steps }
                 json.dump(steps_to_write, json_stream)
-                sys.argv[json_index+1] = temp_json_file
-                if os.path.abspath(main.__file__) \
-                    == os.path.abspath(sys.argv[0]):
-                    sys.argv = sys.argv[1:]
-                if not ('-f' in sys.argv or '--force' in sys.argv):
-                    extra_arg = ' -f'
-                else:
-                    extra_arg = ''
-                for output_stream in self._write_streams:
-                    print >>output_stream, 'To start this job flow from ' \
-                                           'where it left off, run:'
-
-                    print >>output_stream, '%s %s -j %s %s%s' % (
-                            sys.executable,
-                            os.path.abspath(main.__file__),
-                            os.path.abspath(sys.argv[0]),
-                            ' '.join(sys.argv[1:]),
-                            extra_arg
-                        )
-                    output_stream.flush()
+            print_parser = argparse.ArgumentParser()
+            add_args(print_parser)
+            print_args = print_parser.parse_known_args()[0]
+            arg_dir = dir(print_args)
+            for output_stream in self._write_streams:
+                print >>output_stream, 'To start this job flow from ' \
+                                       'where it left off, run:'
+                print >>output_stream, '%s %s -j %s%s%s -f' % (
+                        sys.executable,
+                        os.path.abspath(main.__file__),
+                        os.path.abspath(temp_json_file),
+                        ' -b {0}'.format(os.path.abspath(print_args.branding))
+                        if 'branding' in arg_dir else '',
+                        ' -l {0}'.format(os.path.abspath(print_args.log))
+                        if 'log' in arg_dir else ''
+                    )
+                output_stream.flush()
 
     def done(self, message='', closer=('Finished job flow on {date}. '
                                        'Run time was {length} seconds.')):
@@ -283,7 +273,7 @@ class DooplicityInterface:
             for output_stream in self._write_streams:
                 print >>output_stream, message
         end_time = time.time()
-        print '\n~.oOo.~\n'
+        print '\n<.oOo.~\n'
         sys.stdout.flush()
         for output_stream in self._write_streams:
             print >>output_stream, closer.format(

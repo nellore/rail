@@ -431,31 +431,19 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
     exon_alignments = [j for j, alignment in enumerate(alignments)
                        if alignment[4] is None]
     # Divide up intron alignments by common samples
-    intron_alignment_groups = set()
-    all_sample_indexes = reduce(lambda x,y : x | y, 
-                                [alignments[j][8] for j
-                                 in intron_alignment_pool])
-    for i, bit in enumerate('{0:b}'.format(all_sample_indexes)[::-1]):
-        if bit == '1':
-            sample_bit = 2**i
-            intron_alignment_group = set()
-            for j in intron_alignment_pool:
-                if alignments[j][8] & sample_bit:
-                    intron_alignment_group.add(j)
-            intron_alignment_groups.add(frozenset(intron_alignment_group))
-            if sample_bit == 1:
-                print >>sys.stderr, sorted(
-                                        list(
-                            [alignments[j] for j in intron_alignment_group]
-                        )
-                    )
     to_return = set()
-    for intron_alignments in intron_alignment_groups:
+    for intron_alignments in set(zip(*[list(bin(alignments[k][8])[2:]) 
+                                        for k in intron_alignment_pool])):
+        intron_alignments = [intron_alignment_pool[i] for i, bit 
+                             in enumerate(intron_alignments)
+                             if bit == '1']
+        if not intron_alignments: continue
+        current_alignments = intron_alignments + exon_alignments
         clusters = []
         for pivot in intron_alignments:
             i = pivot
             precluster = defaultdict(list)
-            for j in (list(intron_alignments) + exon_alignments):
+            for j in current_alignments:
                 if j == pivot: continue
                 pivot_rname, compared_rname \
                     = alignments[i][0], alignments[j][0]

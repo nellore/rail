@@ -114,7 +114,7 @@ def xopen(gzipped, *args):
     return open(*args)
 
 class dlist:
-    """ List data type that spills over to disk if a memlimit is reached.
+    """ List data type that spills to disk if a memlimit is reached.
 
         Keeping memory usage low can be important in Hadoop, so this class
         is included in Dooplicity.

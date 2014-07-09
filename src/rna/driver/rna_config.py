@@ -47,7 +47,7 @@ _elastic_bowtie2_build_exe = 'bowtie2-build'
 # Decide Python executable
 if 'pypy 2.' in sys.version.lower():
     # Executable has the user's desired version of PyPy
-    _warning_message = 'Launching Dooplicity with PyPy....'
+    _warning_message = 'Launching Dooplicity runner with PyPy...'
     _executable = sys.executable
 else:
     _pypy_exe = which('pypy')
@@ -77,7 +77,7 @@ else:
             '[path to \'rail-rna\']".')
         _executable = sys.executable
     else:
-        _warning_message = 'Launching Dooplicity with PyPy....'
+        _warning_message = 'Launching Dooplicity runner with PyPy...'
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
@@ -556,11 +556,11 @@ class RailRnaLocal:
                                                 ))
                         check_sample_label = False
                     if check_sample_label and tokens[-1].count('-') != 2:
-                        print >>sys.stderr, 'hi'
+                        line = line.strip()
                         base.errors.append(('The following line from the '
                                             'manifest file {0} '
                                             'has an invalid sample label: '
-                                            '\n{1}A valid sample label '
+                                            '\n{1}\nA valid sample label '
                                             'takes the following form:\n'
                                             '<Group ID>-<BioRep ID>-'
                                             '<TechRep ID>'
@@ -837,11 +837,10 @@ class RailRnaElastic:
                                                     line
                                                 ))
                     if check_sample_label and tokens[-1].count('-') != 2:
-                        print >>sys.stderr, 'hi'
                         base.errors.append(('The following line from the '
                                             'manifest file {0} '
                                             'has an invalid sample label: '
-                                            '\n{1}A valid sample label '
+                                            '\n{1}\nA valid sample label '
                                             'takes the following form:\n'
                                             '<Group ID>-<BioRep ID>-'
                                             '<TechRep ID>'
@@ -1399,6 +1398,19 @@ class RailRnaAlign:
             mode.'''
             base.bowtie1_exe = base.check_program('bowtie', 'Bowtie 1',
                                 '--bowtie1', entered_exe=bowtie1_exe)
+            bowtie1_version_command = [base.bowtie1_exe, '--version']
+            try:
+                base.bowtie1_version = subprocess.check_output(
+                        bowtie1_version_command
+                    ).split('\n', 1)[0].split(' ')[-1]
+            except subprocess.CalledProcessError as e:
+                base.errors.append(('Error "{0}" encountered attempting to '
+                                    'execute "{1}".').format(
+                                                        e.message,
+                                                        ' '.join(
+                                                        bowtie1_version_command
+                                                       )
+                                                    ))
             base.bowtie1_build_exe = base.check_program('bowtie-build',
                                             'Bowtie 1 Build',
                                             '--bowtie1-build',
@@ -1417,6 +1429,19 @@ class RailRnaAlign:
             base.bowtie1_idx = bowtie1_idx
             base.bowtie2_exe = base.check_program('bowtie2', 'Bowtie 2',
                                 '--bowtie2', entered_exe=bowtie2_exe)
+            bowtie2_version_command = [base.bowtie2_exe, '--version']
+            try:
+                base.bowtie2_version = subprocess.check_output(
+                        bowtie2_version_command
+                    ).split('\n', 1)[0].split(' ')[-1]
+            except subprocess.CalledProcessError as e:
+                base.errors.append(('Error "{0}" encountered attempting to '
+                                    'execute "{1}".').format(
+                                                        e.message,
+                                                        ' '.join(
+                                                        bowtie2_version_command
+                                                       )
+                                                    ))
             base.bowtie2_build_exe = base.check_program('bowtie-build',
                                             'Bowtie 2 Build',
                                             '--bowtie2-build',
@@ -1435,6 +1460,19 @@ class RailRnaAlign:
             base.bowtie2_idx = bowtie2_idx
             base.samtools_exe = base.check_program('samtools', 'SAMTools',
                                 '--samtools', entered_exe=samtools_exe)
+            samtools_process = subprocess.Popen(
+                    [base.samtools_exe], stderr=subprocess.PIPE
+                )
+            base.samtools_version = '<unknown>'
+            for line in samtools_process.stderr:
+                if 'Version:' in line:
+                    base.samtools_version = line.rpartition(' ')[-1].strip()
+            base.detect_message =('Detected Bowtie 1 v{0}, Bowtie 2 v{1}, '
+                                  'and SAMTools v{2}.').format(
+                                               base.bowtie1_version,
+                                               base.bowtie2_version,
+                                               base.samtools_version
+                                            )
             base.bedtobigbed_exe = base.check_program('bedToBigBed', 
                                     'BedToBigBed', '--bedtobigbed',
                                     entered_exe=bedtobigbed_exe)
@@ -1822,7 +1860,7 @@ class RailRnaAlign:
             {
                 'name' : 'Align unique readlets to genome',
                 'run' : ('align_readlets.py --bowtie-idx={0} '
-                         '--bowtie-exe={1} {2}'
+                         '--bowtie-exe={1} {2} '
                          '-- -t --sam-nohead --startverbose {3}').format(
                                                     base.bowtie1_idx,
                                                     base.bowtie1_exe,
@@ -2334,6 +2372,10 @@ class RailRnaLocalAlignJson:
                                 in enumerate(base.errors)]
                         ) if len(base.errors) > 1 else base.errors[0]
                 )
+        print >>sys.stderr, base.detect_message
+        if not sys.stderr.isatty():
+            # So the user sees it too
+            print base.detect_message
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
@@ -2515,6 +2557,10 @@ class RailRnaLocalAllJson:
                                 in enumerate(base.errors)]
                         ) if len(base.errors) > 1 else base.errors[0]
                 )
+        print >>sys.stderr, base.detect_message
+        if not sys.stderr.isatty():
+            # So the user sees it too
+            print base.detect_message
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         prep_dir = path_join(False, base.intermediate_dir,

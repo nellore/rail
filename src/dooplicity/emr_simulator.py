@@ -669,7 +669,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 iface.step('    Partitioned %s into tasks.'
                             % dp_iface.inflected(input_file_group_count,
                                                  'input'))
-                iface.status('    Starting step runner....')
+                iface.status('    Starting step runner...')
                 return_values = []
                 input_files = [os.path.join(output_dir, '%d.*' % i) 
                                for i in xrange(step_data['task_count'])]
@@ -744,7 +744,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             # Really close open file handles in PyPy
             gc.collect()
             if not keep_intermediates:
-                iface.status('    Deleting temporary files....')
+                iface.status('    Deleting temporary files...')
                 # Kill NLineInput files if they're there
                 try:
                     shutil.rmtree(split_input_dir)
