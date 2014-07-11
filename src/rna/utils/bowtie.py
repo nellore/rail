@@ -3,7 +3,8 @@
 bowtie.py
 Part of Rail-RNA
 
-Contains Bowtie-related command-line parameters common to steps.
+Contains Bowtie-related command-line parameters common to steps. Also has
+a workaround for a Bowtie 2 bug.
 """
 
 def add_args(parser):

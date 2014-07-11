@@ -416,9 +416,11 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
         cluster) alignments, cull only those alignments that overlap introns
         and return them.
 
-        Return value: set of frozensets, each of which is a cluster of
-            readlet alignments overlapping introns. Each frozenset contains
-            alignment tuples characterized above.
+        Return value: defaultdict of (frozenset, integer) pairs.
+            key: frozenset of cluster of readlet alignments overlapping
+                introns. Each frozenset contains alignment tuples characterized
+                above.
+            value: integer encoding samples to which the cluster corresponds
     """
     alignments = [alignment + (i,)
                     for i, multireadlet in enumerate(multireadlets)
@@ -431,13 +433,25 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
     exon_alignments = [j for j, alignment in enumerate(alignments)
                        if alignment[4] is None]
     # Divide up intron alignments by common samples
-    to_return = set()
-    for intron_alignments in set(zip(*[list(bin(alignments[k][8])[2:]) 
-                                        for k in intron_alignment_pool])):
+    to_return = defaultdict(int)
+    # So binary strings of samples to which alignment applies line up
+    pad_count = len(bin(max([alignments[j][8]
+                             for j in intron_alignment_pool]))) - 2
+    samples_intron_alignments = zip(*[list('{0:0{1}b}'.format(
+                                                            alignments[k][8],
+                                                            pad_count
+                                                        )) 
+                                        for k in intron_alignment_pool])
+    intron_alignment_groups = set(samples_intron_alignments)
+    for intron_alignments in intron_alignment_groups:
+        if '1' not in intron_alignments: continue
+        samples = int(''.join(
+              [('1' if intron_alignments == sample_intron_alignments else '0') 
+                for sample_intron_alignments in samples_intron_alignments]
+            ), 2)
         intron_alignments = [intron_alignment_pool[i] for i, bit 
                              in enumerate(intron_alignments)
                              if bit == '1']
-        if not intron_alignments: continue
         current_alignments = intron_alignments + exon_alignments
         clusters = []
         for pivot in intron_alignments:
@@ -491,11 +505,9 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
             if cluster_size >= cluster_size_threshold:
                 largest_clusters.append(clusters[i])
         for i in xrange(len(largest_clusters)):
-            to_return.add(
-                    frozenset([alignment[:-1]
-                               for alignment in largest_clusters[i]
-                               if alignment[1] is not None])
-                )
+            to_return[frozenset([alignment[:-1]
+                                 for alignment in largest_clusters[i]
+                                 if alignment[1] is not None])] |= samples
     return to_return
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, 
@@ -580,8 +592,19 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                 seq_size = len(seq)
                 seq_count = int(seq_info[3])
                 reversed_complement_seq_count = int(seq_info[4])
-                sample_labels = seq_info[5]
-                reversed_complement_sample_labels = seq_info[6]
+                decoded_sample_indexes = \
+                    set([int(sample_index) for sample_index
+                            in seq_info[5].split('\x1f')
+                            if sample_index != '']) | \
+                    set([int(sample_index) for sample_index
+                            in seq_info[6].split('\x1f')
+                            if sample_index != ''])
+                applicable_sample_indexes = ['0'] \
+                    * (max(decoded_sample_indexes) + 1)
+                for sample_index in decoded_sample_indexes:
+                    applicable_sample_indexes[-(sample_index + 1)] = '1'
+                applicable_sample_indexes = \
+                    int(''.join(applicable_sample_indexes), base=2)
                 seq_info_captured = True
             if value[-1] != '\x1c':
                 # If there are alignments, add them to collected_readlets
@@ -645,6 +668,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             )
             if clusters:
                 for selected_introns in clusters:
+                    sample_indexes = string_from_int(
+                                            clusters[selected_introns]
+                                            & applicable_sample_indexes
+                                        )
                     for alignments in maximal_cliques(selected_introns):
                         # Get stats on alignment with smallest start position
                         (_, _, left_pos,
@@ -659,14 +686,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             _, right_intron_distance, _, 
                             _, right_displacement) = max(alignments,
                                 key=lambda alignment: alignment[3]
-                            )
-                        '''Sample indexes are bitwise and of sample index
-                        INTs for all alignments that contain introns. This
-                        enumerates all sample indexes that are in common
-                        among the introns overlapped.'''
-                        sample_indexes = string_from_int(
-                                reduce(lambda x,y : x & y, 
-                                    [alignment[8] for alignment in alignments])
                             )
                         introns_to_add = set()
                         for alignment in alignments:

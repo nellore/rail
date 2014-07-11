@@ -62,12 +62,12 @@ def add_args(parser):
     parser.add_argument(
             '-f', '--force', action='store_const', const=True,
             default=False,
-            help='Erase all existing directories when writing ' \
-                  'intermediates.'
+            help='Erase all existing directories when writing '
+                 'intermediates.'
         )
     parser.add_argument(
             '-l', '--log', type=str, required=False, default=None,
-            help='Log file for storing messages written to stderr; ' \
+            help='Log file for storing messages written to stderr; '
                  'not required.'
         )
 
@@ -235,20 +235,43 @@ class DooplicityInterface:
                 json.dump(steps_to_write, json_stream)
             print_parser = argparse.ArgumentParser()
             add_args(print_parser)
+            # Capture relevant arguments for simulator/submitter
+            from emr_simulator import add_args as sim_add_args
+            from emr_runner import add_args as run_add_args
+            sim_add_args(print_parser)
+            run_add_args(print_parser)
+            managed = set(['branding', 'log', 'json_config', 'force'])
             print_args = print_parser.parse_known_args()[0]
-            arg_dir = dir(print_args)
+            arg_dir = [argument for argument in dir(print_args)
+                       if argument[0] != '_']
+            terminal_args = []
+            for argument in arg_dir:
+                exec('dontprint = print_parser.get_default(argument) '
+                     '== print_args.{0}'.format(argument))
+                if dontprint or argument in managed: continue
+                exec('is_bool = isinstance(print_args.{0}, bool)'.format(
+                                                                    argument
+                                                                ))
+                if is_bool:
+                    terminal_args.append('--' + argument.replace('_', '-'))
+                else:
+                    exec('terminal_args.extend('
+                         '["--" + argument.replace("_", "-"),'
+                         'str(print_args.{0})])'.format(argument))
+            to_print = '%s %s -j %s%s%s -f %s' % (
+                    sys.executable,
+                    os.path.abspath(main.__file__),
+                    os.path.abspath(temp_json_file),
+                    ' -b {0}'.format(os.path.abspath(print_args.branding))
+                    if 'branding' in arg_dir else '',
+                    ' -l {0}'.format(os.path.abspath(print_args.log))
+                    if 'log' in arg_dir else '',
+                    ' '.join(terminal_args)
+                )
             for output_stream in self._write_streams:
                 print >>output_stream, 'To start this job flow from ' \
                                        'where it left off, run:'
-                print >>output_stream, '%s %s -j %s%s%s -f' % (
-                        sys.executable,
-                        os.path.abspath(main.__file__),
-                        os.path.abspath(temp_json_file),
-                        ' -b {0}'.format(os.path.abspath(print_args.branding))
-                        if 'branding' in arg_dir else '',
-                        ' -l {0}'.format(os.path.abspath(print_args.log))
-                        if 'log' in arg_dir else ''
-                    )
+                print >>output_stream, to_print
                 output_stream.flush()
 
     def done(self, message='', closer=('Finished job flow on {date}. '

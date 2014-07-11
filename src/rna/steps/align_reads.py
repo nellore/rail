@@ -320,8 +320,10 @@ class BowtieOutputThread(threading.Thread):
                 print >>self.output_stream, \
                     'fasta\t%s\t\x1c>%s\x1d%s\x1d\x1d\x1dp\t%s' \
                     % (multiread[0][9], multiread[0][2], multiread[0][3],
-                        reference_from_seq(multiread[0][5],
-                                            md, multiread[0][9]))
+                        reference_from_seq(
+                                            multiread[0][5],
+                                            md, multiread[0][9]
+                                        ))
                 try:
                     for alignment in multiread[1:]:
                         md = [field for field in alignment
@@ -329,9 +331,12 @@ class BowtieOutputThread(threading.Thread):
                         print >>self.output_stream, \
                             'fasta\t%s\t\x1c>%s\x1d%s\x1d\x1d\x1ds\t%s' \
                             % (alignment[9], alignment[2], alignment[3],
-                                reference_from_seq(alignment[5], md,
-                                alignment[9]))
+                                reference_from_seq(
+                                            alignment[5],
+                                            md, alignment[9]
+                                        ))
                 except IndexError:
+                    # No secondary alignments
                     pass
             else:
                 if self.end_to_end_sam:

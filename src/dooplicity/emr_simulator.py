@@ -47,6 +47,38 @@ import signal
 import gc
 import tempfile
 
+def add_args(parser):
+    """ Adds args relevant to EMR simulator.
+
+        parser: object of type parser.ArgumentParser
+
+        No return value.
+    """
+    parser.add_argument(
+            '-m', '--memcap', type=int, required=False, default=(1024*300),
+            help='Maximum amount of memory to use per UNIX sort instance.'
+        )
+    parser.add_argument(
+            '-p', '--num-processes', type=int, required=False, default=1,
+            help='Number of subprocesses to open at once.'
+        )
+    parser.add_argument(
+            '-s', '--separator', type=str, required=False, default='\t',
+            help='Separator between successive fields in inputs and '
+                 'intermediates.'
+        )
+    parser.add_argument(
+            '-k', '--keep-intermediates', action='store_const', const=True,
+            default=False,
+            help='Keeps all intermediate output.'
+        )
+    parser.add_argument(
+            '--keep-last-output', action='store_const', const=True,
+            default=False,
+            help='If --keep-intermediates is False, keeps outputs that are ' \
+                 'unused as inputs by steps.'
+        )
+
 def init_worker():
     """ Prevents KeyboardInterrupt from reaching a pool's workers.
 
@@ -868,30 +900,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, 
                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(
-            '-m', '--memcap', type=int, required=False, default=(1024*300),
-            help='Maximum amount of memory to use per UNIX sort instance.'
-        )
-    parser.add_argument(
-            '-p', '--num-processes', type=int, required=False, default=1,
-            help='Number of subprocesses to open at once.'
-        )
-    parser.add_argument(
-            '-s', '--separator', type=str, required=False, default='\t',
-            help='Separator between successive fields in inputs and '
-                 'intermediates.'
-        )
-    parser.add_argument(
-            '-k', '--keep-intermediates', action='store_const', const=True,
-            default=False,
-            help='Keeps all intermediate output.'
-        )
-    parser.add_argument(
-            '--keep-last-output', action='store_const', const=True,
-            default=False,
-            help='If --keep-intermediates is False, keeps outputs that are ' \
-                 'unused as inputs by steps.'
-        )
+    add_args(parser)
     dp_iface.add_args(parser)
     args = parser.parse_args(sys.argv[1:])
     run_simulation(args.branding, args.json_config, args.force,

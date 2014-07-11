@@ -45,6 +45,37 @@ _aws_regions = set(['us-east-1', 'us-west-2', 'us-west-1', 'eu-west-1',
 _emr_url = ('https://console.aws.amazon.com/elasticmapreduce/?region={region}'
             '#cluster-details:{job_flow_id}')
 
+def add_args(parser):
+    """ Adds args relevant to EMR job submission.
+
+        parser: object of type parser.ArgumentParser
+
+        No return value.
+    """
+    parser.add_argument(
+            '-x', '--aws-exe', type=str, required=False, default='aws',
+            help='Path to AWS CLI executable. Specifying this should be '
+                 'unnecessary on all platforms if the AWS CLI is installed '
+                 'properly, but the user may want to select a different '
+                 'executable if multiple versions are installed on her '
+                 'system.'
+        )
+    parser.add_argument(
+            '-r', '--region', type=str, required=False, default=None,
+            help='Amazon data center in which to run job flow. Defaults to ' \
+                 'region from AWS CLI; specifying the region here overrides ' \
+                 'any region in environment variables and from "--profile".'
+        )
+    parser.add_argument(
+            '-i', '--profile', type=str, required=False, default='default',
+            help='Name of AWS CLI profile from which to grab AWS access key ' \
+                 'ID and secret access key. Defaults to "default" profile.'
+        )
+    parser.add_argument('-n', '--no-browser', action='store_const', const=True,
+            default=False,
+            help='Do not automatically open browser after job flow ' \
+                 'submission.')
+
 def run_job_flow(branding, json_config, force, no_browser=False,
                     aws_exe='aws', profile='default', region=None):
     """ Submits job flow to EMR. Should eventually monitor it.
@@ -227,29 +258,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, 
                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(
-            '-x', '--aws-exe', type=str, required=False, default='aws',
-            help='Path to AWS CLI executable. Specifying this should be '
-                 'unnecessary on all platforms if the AWS CLI is installed '
-                 'properly, but the user may want to select a different '
-                 'executable if multiple versions are installed on her '
-                 'system.'
-        )
-    parser.add_argument(
-            '-r', '--region', type=str, required=False, default=None,
-            help='Amazon data center in which to run job flow. Defaults to ' \
-                 'region from AWS CLI; specifying the region here overrides ' \
-                 'any region in environment variables and from "--profile".'
-        )
-    parser.add_argument(
-            '-p', '--profile', type=str, required=False, default='default',
-            help='Name of AWS CLI profile from which to grab AWS access key ' \
-                 'ID and secret access key. Defaults to "default" profile.'
-        )
-    parser.add_argument('-n', '--no-browser', action='store_const', const=True,
-            default=False,
-            help='Do not automatically open browser after job flow ' \
-                 'submission.')
+    add_args(parser)
     dp_iface.add_args(parser)
     args = parser.parse_args(sys.argv[1:])
     run_job_flow(args.branding, args.json_config, args.force, args.no_browser,
