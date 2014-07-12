@@ -151,6 +151,8 @@ import random
 _input_line_count = 0
 _output_line_count = 0
 
+_reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
+
 def input_files_from_input_stream(input_stream,
                                     temp_dir_path=tempfile.mkdtemp(),
                                     verbose=False):
@@ -163,6 +165,7 @@ def input_files_from_input_stream(input_stream,
         Return value: tuple (path to FASTA reference file, path to read file)
     """
     global _input_line_count
+    verbose=True
     prefasta_filename = os.path.join(temp_dir_path, 'temp.prefa')
     deduped_fasta_filename = os.path.join(temp_dir_path, 'temp.deduped.prefa')
     final_fasta_filename = os.path.join(temp_dir_path, 'temp.fa')
@@ -363,8 +366,9 @@ def multiread_with_introns(multiread, sample_index, manifest_object,
             items should be tested to find whether two alignments are
             "identical".'''
             new_multiread.append(
-                    ([alignment[0], alignment[1], rname, str(pos),
-                        alignment[4], alignment[5]] + list(alignment[6:]),
+                    ([alignment[0].partition('\x1d')[0], alignment[1], rname,
+                        str(pos), alignment[4],
+                        alignment[5]] + list(alignment[6:]),
                     (alignment[0],
                         (flag & 16 != 0),
                         rname,
@@ -449,15 +453,15 @@ def multiread_with_introns(multiread, sample_index, manifest_object,
         items should be tested to find whether two alignments are
         "identical".'''
         new_multiread.append(
-                    ([alignment[0], alignment[1], rname, str(pos),
-                        alignment[4], new_cigar]
+                    ([alignment[0].partition('\x1d')[0], alignment[1], rname,
+                        str(pos), alignment[4], new_cigar]
                      + list(alignment[6:])
                      + ['XS:A:' + reverse_strand_string, XP_field, XC_field],
                      (alignment[0],
                         (flag & 16 != 0),
                         rname,
                         pos, new_cigar,
-                        [field for field in alignment
+                        [field for field in alignment[::-1]
                          if field[:5] == 'MD:Z:'][0][5:]))
                 )
     if not new_multiread:
@@ -469,23 +473,21 @@ def multiread_with_introns(multiread, sample_index, manifest_object,
         if new_multiread[i][1] == new_multiread[i-1][1]:
             continue
         multiread_to_return.append(new_multiread[i][0])
-    if not multiread_to_return:
-        return []
     if len(multiread_to_return) == 1:
         '''Only one alignment; remove XS:i field if it's present.'''
-        for i in xrange(len(multiread_to_return[0])):
+        for i in xrange(10, len(multiread_to_return[0])):
             if multiread_to_return[0][i][:5] == 'XS:i:':
                 multiread_to_return[0].remove(multiread_to_return[0][i])
                 break
         return multiread_to_return
     # Correct XS:i fields
-    alignment_scores = [[int(token[5:]) for token in alignment
+    alignment_scores = [[int(token[5:]) for token in alignment[::-1]
                             if token[:5] == 'AS:i:'][0]
                             for alignment in multiread_to_return]
     sorted_alignment_scores = sorted(alignment_scores, reverse=True)
     XS_field = 'XS:i:%d' % sorted_alignment_scores[1]
     for i in xrange(len(multiread_to_return)):
-        for j in xrange(len(multiread_to_return[i])):
+        for j in xrange(10, len(multiread_to_return[i])):
             if multiread_to_return[i][j][:5] == 'XS:i:':
                 multiread_to_return[i][j] = XS_field
     return multiread_to_return
@@ -549,6 +551,8 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
     """
     if not multiread:
         return []
+    multiread.sort(key=lambda alignment: 
+                    (alignment[2], alignment[3], alignment[5]))
     # Set random seed
     if non_deterministic:
         # Use system time to set seed, as in Bowtie2
@@ -559,11 +563,11 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
         random.seed(multiread[0][0] + multiread[0][9] + multiread[0][10]
                      + str(seed))
     # Decide primary alignment
-    alignment_scores = [[int(token[5:]) for token in alignment
+    alignment_scores = [[int(token[5:]) for token in alignment[::-1]
                             if token[:5] == 'AS:i:'][0]
                             for alignment in multiread]
     sample_statuses = [[True if token[5:] == 'Y' else False for token
-                            in alignment if token[:5] == 'XP:A:']
+                            in alignment[::-1] if token[:5] == 'XP:A:']
                             for alignment in multiread]
     sample_statuses = [True if (not status or status[0]) else False for
                         status in sample_statuses]
@@ -778,6 +782,11 @@ class BowtieOutputThread(threading.Thread):
                     FLAG YT:Z:UU IS HARD-CODED; MUST UPDATE IF PAIRED-END
                     ALIGNMENT IS EVER PERFORMED.'''
                     qname = qname.split('\x1e')[0]
+                    if (int(multiread[0][1]) & 16):
+                        multiread[0][9] = multiread[0][9][::-1].translate(
+                                        _reversed_complement_translation_table
+                                    )
+                        multiread[0][10] = multiread[0][10][::-1]
                     print >>self.output_stream, (
                             'splice_sam\t%s\t%s\t%012d\t%s\t4\t0\t*\t*\t0\t0'
                             '\t%s\t%s\tYT:Z:UU'
@@ -799,8 +808,7 @@ class BowtieOutputThread(threading.Thread):
                                 self.reference_index.rname_to_string[
                                         alignment[2]
                                     ], '%012d' % int(alignment[3]),
-                                alignment[0].partition('\x1d')[0],
-                                alignment[1]] + alignment[4:]
+                                alignment[0], alignment[1]] + alignment[4:]
                         )
                     _output_line_count += 1
                 '''Output exonic chunks/introns/indels only for primary
@@ -1208,7 +1216,7 @@ if __name__ == '__main__' and not args.test:
     archive = os.path.join(args.archive,
         str(os.getpid())) if args.archive is not None else None
     # Handle temporary directory if CTRL+C'd
-    atexit.register(handle_temporary_directory, archive, temp_dir_path)
+    #atexit.register(handle_temporary_directory, archive, temp_dir_path)
     if args.verbose:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path

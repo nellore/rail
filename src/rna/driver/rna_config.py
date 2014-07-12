@@ -420,6 +420,8 @@ class RailRnaErrors:
                                                                 parameter)
                 )
             to_return = entered_exe
+        else:
+            to_return = entered_exe
         if original_errors_size != len(self.errors) and reason:
             raise RuntimeError((('\n'.join(['%d) %s' % (i+1, error)
                                 for i, error

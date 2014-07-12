@@ -311,30 +311,34 @@ class BowtieOutputThread(threading.Thread):
                 '''Write fasta lines for realignment; they will be combined
                 with fasta lines for transcriptome elements obtained in later
                 reduce step.'''
-                try:
-                    md = [field for field in multiread[0]
-                          if field[:5] == 'MD:Z:'][0][5:]
-                except IndexError:
-                    # Unmapped read
-                    continue
+                if flag & 4: continue
+                new_pos, ref = reference_from_seq(
+                                            cigar,
+                                            seq,
+                                            self.reference_index,
+                                            rname,
+                                            pos
+                                        )
                 print >>self.output_stream, \
-                    'fasta\t%s\t\x1c>%s\x1d%s\x1d\x1d\x1dp\t%s' \
-                    % (multiread[0][9], multiread[0][2], multiread[0][3],
-                        reference_from_seq(
-                                            multiread[0][5],
-                                            md, multiread[0][9]
-                                        ))
+                    'fasta\t%s\t\x1c>%s\x1d%d\x1d\x1d\x1dp\t%s' \
+                    % (seq, rname, new_pos, ref)
                 try:
                     for alignment in multiread[1:]:
-                        md = [field for field in alignment
-                              if field[:5] == 'MD:Z:'][0][5:]
-                        print >>self.output_stream, \
-                            'fasta\t%s\t\x1c>%s\x1d%s\x1d\x1d\x1ds\t%s' \
-                            % (alignment[9], alignment[2], alignment[3],
-                                reference_from_seq(
+                        if int(alignment[1]) & 16:
+                            # Reverse-complement
+                            alignment[9] = alignment[9][::-1].translate(
+                                _reversed_complement_translation_table
+                            )
+                        new_pos, ref = reference_from_seq(
                                             alignment[5],
-                                            md, alignment[9]
-                                        ))
+                                            alignment[9],
+                                            self.reference_index,
+                                            alignment[2],
+                                            int(alignment[3])
+                                        )
+                        print >>self.output_stream, \
+                            'fasta\t%s\t\x1c>%s\x1d%d\x1d\x1d\x1ds\t%s' \
+                            % (alignment[9], alignment[2], new_pos, ref)
                 except IndexError:
                     # No secondary alignments
                     pass
