@@ -26,6 +26,9 @@ on the web to grab them and what parameters are used in the paper.
 REQUIRES PANDAS. Download the Anaconda distribution of Python to simplify
 getting it.
 
+NOTE that expressed fractions (column 5 of pro files) are incorrect, but they
+are never used by Flux Simulator.
+
 Run this file from desired output directory if not entering output dir with -o.
 """
 
@@ -51,51 +54,56 @@ def kill_dir(path_to_dir):
         shutil.rmtree(path_to_dir)
     except: pass
 
-def write_par_and_pro(args):
+def write_par_and_pro(par_template, pro_template, basename,
+                      seed, rpkms, sample):
     """ Writes PAR and PRO file for a given sample.
 
         args: ordered tuple whose components are:
-                1) PAR template file
-                2) PRO template file
-                3) Destination PAR/PRO basename
-                4) Random seed to put in PAR (integer)
-                5) Pandas dataframe encoding transcript RPKMs across samples
-                6) Sample name
+        par_template: PAR template file
+        pro_template: PRO template file
+        basename: Destination PAR/PRO basename
+        seed: Random seed to put in PAR (integer)
+        rpkms: Pandas dataframe encoding transcript RPKMs across samples
+        sample: Sample name
 
         Return value: 0.
     """
-    par_template, pro_template, basename, seed, rpkms, sample = args
     with open(basename + '.pro', 'w') as write_stream:
         with open(pro_template) as read_stream:
             for line in read_stream:
                 tokens = line.strip().split('\t')
-                transcript_label = tokens[0]
-                transcript_length_in_kb = float(tokens[4]) / 1000
+                transcript_label = tokens[1]
+                transcript_length_in_kb = float(tokens[3]) / 1000
                 try:
-                    rpkm = rpkms.loc(transcript_label)[sample]
+                    rpkm = rpkms.loc[transcript_label][sample]
                 except KeyError:
                     # Not expressed; kill it
-                    rpkm = 0
-                tokens[5] = str(transcript_length_in_kb * rpkm * 2)
+                    rpkm = 0.0
+                tokens[5] = transcript_length_in_kb * rpkm * 2
+                remaining = tokens[5] - int(tokens[5])
+                if remaining > 0.5:
+                    tokens[5] = int(tokens[5]) + 1
+                else:
+                    tokens[5] = int(tokens[5])
+                tokens[5] = str(tokens[5])
                 print >>write_stream, '\t'.join(tokens)
     # Write distinct seed for sample
     with open(basename + '.par', 'w') as write_stream:
         with open(par_template) as read_stream:
-            print >>write_stream, read_stream.read()
+            print >>write_stream, \
+                '\n'.join(read_stream.read().strip().split('\n')[:-1])
             print >>write_stream, 'SEED\t%d' % seed
     return 0
 
-def run_flux(args):
+def run_flux(par, flux):
     """ Runs Flux pipeline after creation of PRO file.
 
-        args: ordered tuple whose components are:
-                par: PAR file; there must be a corresponding PRO file in the
-                    same directory
-                flux: flux executable
+        par: PAR file; there must be a corresponding PRO file in the
+            same directory
+        flux: flux executable
 
         Return value: Flux exitlevel.
     """
-    par, flux = args
     with open(par + '.log', 'w') as log_stream:
         return subprocess.call([flux, '-l', '-s', '-p', par],
                                     stderr=log_stream,
@@ -115,7 +123,7 @@ if __name__ == '__main__':
               'gencode.v12.annotation.gtf.gz')
         )
     parser.add_argument('-o', '--output', type=str,
-    	default='./'
+    	default='./',
         help='Where to put simulation FASTAs and BEDs')
     parser.add_argument('-f', '--flux', type=str,
         default=('/scratch0/langmead-fs1/shared/flux-simulator-1.2.1/bin/'
@@ -170,6 +178,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    print >>sys.stderr, 'Reading RPKMs...'
     rpkms = pd.DataFrame.from_csv(args.rpkm, sep='\t')
     relevant_samples = args.samples.strip().split(',')
 
@@ -205,8 +214,8 @@ if __name__ == '__main__':
     with open(expression_par, 'w') as par_stream:
         print >>par_stream, '\n'.join(['\t'.join(parameter)
                                        for parameter in par_template])
-    # Make reproducible by specifying random seed
-    print >>par_stream, 'SEED\t0'
+        # Make reproducible by specifying random seed
+        print >>par_stream, 'SEED\t0'
     print >>sys.stderr, 'Creating PRO template with Flux Simulator...'
     flux_expression_return = subprocess.call(
                                     [args.flux, '--force', '-x', '-p',
@@ -224,12 +233,13 @@ if __name__ == '__main__':
     print >>sys.stderr, 'Creating PAR and PRO files for bioreplicate sims...'
     pool = multiprocessing.Pool(args.num_processes)
     return_values = []
-    pool.map_async(write_par_and_pro,
-                    [(expression_par, expression_pro,
-                        os.path.join(args.output, sample + '_sim'),
-                        i, rpkms, sample) for i, sample
-                        in enumerate(relevant_samples)],
-                    callback=return_values.extend)
+    for i, sample in enumerate(relevant_samples):
+        pool.apply_async(write_par_and_pro,
+                       (expression_par, expression_pro,
+                            os.path.join(args.output, sample + '_sim'),
+                            i, rpkms, sample),
+                       callback=return_values.extend)
+    pool.close()
     relevant_count = len(relevant_samples)
     while len(return_values) != relevant_count:
         sys.stdout.write('Created %d/%d PAR/PRO pairs.\r' \
@@ -240,11 +250,13 @@ if __name__ == '__main__':
     print >>sys.stderr, 'Running sims...'
     pool = multiprocessing.Pool(args.num_processes)
     return_values = []
-    pool.map_async(run_flux,
-                    [(sample + '_sim.par', args.flux)
-                        for sample in relevant_samples])
+    for sample in relevant_samples:
+        pool.apply_async(run_flux,
+                         (os.path.join(args.output, sample + '_sim.par'),
+                          args.flux))
+    pool.close()
     while len(return_values) != relevant_count:
-        print 'Completed %d/%d sims.' \
+        print 'Completed %d/%d sims.\r' \
             % (len(return_values), relevant_count)
         time.sleep(.2)
     print >>sys.stderr, 'Done.'
