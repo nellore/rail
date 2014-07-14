@@ -32,7 +32,7 @@ if __name__ == '__main__':
     # Add command-line arguments
     parser.add_argument('-g', '--gtf', type=str,
         default=('/scratch0/langmead-fs1/geuvadis_sim/'
-                 'gencode.v12.annotation.gtf')
+                 'gencode.v12.annotation.gtf'),
         help=('Transcript annotation to pass to Flux; for Rail paper, this is '
               'the Gencode v12 GTF/GFF3 file obtainable at '
               'ftp://ftp.sanger.ac.uk/pub/gencode/release_12/'
