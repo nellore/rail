@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 generate_bioreps.py
 Abhi Nellore / July 14, 2014
@@ -30,48 +31,53 @@ if __name__ == '__main__':
                 formatter_class=argparse.RawDescriptionHelpFormatter)
     # Add command-line arguments
     parser.add_argument('-g', '--gtf', type=str,
-        default='/scratch0/langmead-fs1/geuvadis_sim/'
-                'gencode.v12.annotation.gtf'
-        help='Transcript annotation to pass to Flux; for Rail paper, this is '
-             'the Gencode v12 GTF/GFF3 file obtainable at '
-             'ftp://ftp.sanger.ac.uk/pub/gencode/release_12/'
-             'gencode.v12.annotation.gtf.gz')
+        default=('/scratch0/langmead-fs1/geuvadis_sim/'
+                 'gencode.v12.annotation.gtf')
+        help=('Transcript annotation to pass to Flux; for Rail paper, this is '
+              'the Gencode v12 GTF/GFF3 file obtainable at '
+              'ftp://ftp.sanger.ac.uk/pub/gencode/release_12/'
+              'gencode.v12.annotation.gtf.gz')
+        )
     parser.add_argument('-f', '--flux', type=str,
-        default='/scratch0/langmead-fs1/shared/flux-simulator-1.2.1/bin/'
-                'flux-simulator'
-        help='Flux Simulator executable. v1.2.1 is used for paper and is '
-             'obtainable at '
-             'http://sammeth.net/artifactory/barna/barna/barna.simulator/'
-             '1.2.1/flux-simulator-1.2.1.tgz')
+        default=('/scratch0/langmead-fs1/shared/flux-simulator-1.2.1/bin/'
+                 'flux-simulator')
+        help=('Flux Simulator executable. v1.2.1 is used for paper and is '
+              'obtainable at '
+              'http://sammeth.net/artifactory/barna/barna/barna.simulator/'
+              '1.2.1/flux-simulator-1.2.1.tgz')
+        )
     parser.add_argument('-r', '--rpkm', type=str,
         default='/scratch0/langmead-fs1/geuvadis_sim/GD660.TrQuantRPKM.txt',
-        help='RPKM file with transcript labels (rows) and sample labels '
-             '(columns). File is obtainable at '
-             'http://www.ebi.ac.uk/arrayexpress/experiments/E-GEUV-3/files/'
-             'analysis_results/GD660.TrQuantRPKM.txt')
+        help=('RPKM file with transcript labels (rows) and sample labels '
+              '(columns). File is obtainable at '
+              'http://www.ebi.ac.uk/arrayexpress/experiments/E-GEUV-3/files/'
+              'analysis_results/GD660.TrQuantRPKM.txt')
+        )
     parser.add_argument('-p', '--num-processes', type=int,
         default=5,
-        help='Number of instances of Flux Simulator to run simultaneously; '
-             'set this to below 10 so it doesn\'t choke.')
+        help=('Number of instances of Flux Simulator to run simultaneously; '
+              'set this to below 10 so it doesn\'t choke.')
+        )
     parser.add_argument('-s', '--samples', type=str,
-        default='NA18508.1.M_111124_1,NA18510.3.M_120202_7,'
-                'NA18511.1.M_120209_1,NA18517.1.M_120209_7,'
-                'NA18519.1.M_111124_3,NA18520.1.M_111124_1,'
-                'NA18858.1.M_120209_7,NA18861.1.M_120209_2,'
-                'NA18907.1.M_120209_1,NA18908.7.M_120219_7,'
-                'NA18909.1.M_120209_8,NA18910.1.M_120209_5,'
-                'NA18912.1.M_120209_5,NA18916.1.M_120209_7,'
-                'NA18917.1.M_111124_5,NA18923.2.M_111216_5,'
-                'NA18933.1.M_111124_2,NA18934.1.M_120209_3,'
-                'NA19092.1.M_111124_3,NA19093.7.M_120219_7'
-        help='Comma-separated list of sample names from RPKM file whose '
-             'expression profiles are to be mimicked. Defaults to list of '
-             'sample names used in Rail paper (some YRIs) and determines '
-             'number of simulations to perform. Be sure to exclude samples '
-             'mentioned at http://geuvadiswiki.crg.es/index.php/'
-             'QC_sample_info. Sample information is available at '
-             'http://www.ebi.ac.uk/arrayexpress/experiments/E-GEUV-1/'
-             'samples/.')
+        default=('NA18508.1.M_111124_1,NA18510.3.M_120202_7,'
+                 'NA18511.1.M_120209_1,NA18517.1.M_120209_7,'
+                 'NA18519.1.M_111124_3,NA18520.1.M_111124_1,'
+                 'NA18858.1.M_120209_7,NA18861.1.M_120209_2,'
+                 'NA18907.1.M_120209_1,NA18908.7.M_120219_7,'
+                 'NA18909.1.M_120209_8,NA18910.1.M_120209_5,'
+                 'NA18912.1.M_120209_5,NA18916.1.M_120209_7,'
+                 'NA18917.1.M_111124_5,NA18923.2.M_111216_5,'
+                 'NA18933.1.M_111124_2,NA18934.1.M_120209_3,'
+                 'NA19092.1.M_111124_3,NA19093.7.M_120219_7')
+        help=('Comma-separated list of sample names from RPKM file whose '
+              'expression profiles are to be mimicked. Defaults to list of '
+              'sample names used in Rail paper (some YRIs) and determines '
+              'number of simulations to perform. Be sure to exclude samples '
+              'mentioned at http://geuvadiswiki.crg.es/index.php/'
+              'QC_sample_info. Sample information is available at '
+              'http://www.ebi.ac.uk/arrayexpress/experiments/E-GEUV-1/'
+              'samples/.')
+        )
     parser.add_argument('-c', '--read-count', type=int,
             default=40000000,
             help='Number of reads to generate per sample')
