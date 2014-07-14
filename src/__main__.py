@@ -166,7 +166,7 @@ def rail_help_wrapper(prog):
     return RailHelpFormatter(prog, max_help_position=37)
 
 if __name__ == '__main__':
-    print '\nLoading...\n'
+    print '\nLoading...'
     parser = RailParser(
             usage=_usage_message,
             add_help=False

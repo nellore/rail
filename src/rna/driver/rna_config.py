@@ -1766,7 +1766,7 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--transcriptome-bowtie1-args', type=str, required=False,
-            default='-v 0 -a -m 80',
+            default='-v 1 -a -m 10',
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -2005,7 +2005,7 @@ class RailRnaAlign:
                                 'cointron_fasta',
                                 path_join(elastic, 'align_reads', 'fasta')],
                 'output' : 'realign_reads',
-                'taskx' : 4,
+                'taskx' : 8,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True
