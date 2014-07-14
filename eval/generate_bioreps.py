@@ -40,7 +40,7 @@ if __name__ == '__main__':
         )
     parser.add_argument('-f', '--flux', type=str,
         default=('/scratch0/langmead-fs1/shared/flux-simulator-1.2.1/bin/'
-                 'flux-simulator')
+                 'flux-simulator'),
         help=('Flux Simulator executable. v1.2.1 is used for paper and is '
               'obtainable at '
               'http://sammeth.net/artifactory/barna/barna/barna.simulator/'
@@ -68,7 +68,7 @@ if __name__ == '__main__':
                  'NA18912.1.M_120209_5,NA18916.1.M_120209_7,'
                  'NA18917.1.M_111124_5,NA18923.2.M_111216_5,'
                  'NA18933.1.M_111124_2,NA18934.1.M_120209_3,'
-                 'NA19092.1.M_111124_3,NA19093.7.M_120219_7')
+                 'NA19092.1.M_111124_3,NA19093.7.M_120219_7'),
         help=('Comma-separated list of sample names from RPKM file whose '
               'expression profiles are to be mimicked. Defaults to list of '
               'sample names used in Rail paper (some YRIs) and determines '
@@ -87,15 +87,5 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    pd.DataFrame.from_csv(args.rpkm, sep=',')
-    with open(args.rpkm) as rpkm_stream:
-        sample_list = rpkm_stream.readline().strip().split('\t')[4:]
-        samples = defaultdict(int)
-        relevant_samples = set(args.samples.strip().split(','))
-        # Store column index of each relevant sample
-        for i, sample in enumerate(sample_list):
-            if sample in relevant_samples:
-                samples[sample] = i + 4
-        # For storing row indexes of transcripts
-        transcript_to_row = defaultdict(int)
-        for i, line in enumerate(rpkm_stream):
+    samples = pd.DataFrame.from_csv(args.rpkm, sep=',')
+    print samples
