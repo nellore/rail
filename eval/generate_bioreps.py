@@ -145,6 +145,9 @@ if __name__ == '__main__':
         help=('Number of instances of Flux Simulator to run simultaneously; '
               'set this to below 10 so it doesn\'t choke.')
         )
+    parser.add_argument('--fasta', type=str,
+        default='/scratch0/langmead-fs1/shared/references/hg19/fasta',
+        help='Where to find reference FASTAs for chrs. Use GRCh37.')
     parser.add_argument('-s', '--samples', type=str,
         default=('NA18508.1.M_111124_1,NA18510.3.M_120202_7,'
                  'NA18511.1.M_120209_1,NA18517.1.M_120209_7,'
@@ -188,7 +191,7 @@ if __name__ == '__main__':
     par_template = [
         ('NB_MOLECULES', '5000000'),
         ('REF_FILE_NAME', args.gtf),
-        ('GEN_DIR', temp_dir),
+        ('GEN_DIR', args.fasta),
         ('LOAD_NONCODING', 'NO'),
         ('TSS_MEAN', '50'),
         ('POLYA_SCALE', 'NaN'),
