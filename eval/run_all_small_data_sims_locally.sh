@@ -44,7 +44,7 @@ ANNOTATION=/scratch0/langmead-fs1/geuvadis_sim/gencode.v12.annotation.gtf
 ## STAR requires its own annotation format that lists introns directly; conversion is done by get_junctions.py
 # Build STAR junction index from GTF
 STARANNOTATION=$OUTPUT/junctions_for_star.txt
-echo 'Building annotation from GTF for STAR...'
+echo 'Building annotation for STAR from GTF...'
 cat $ANNOTATION | $PYTHON $RAILHOME/eval/get_junctions.py >$STARANNOTATION
 
 ## Where Feb 2009 hg19 chromosome files are located; download them at http://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips/chromFa.tar.gz
@@ -76,26 +76,26 @@ for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
 	OUTPUT=$MAINOUTPUT/$SAMPLE
 	echo 'Running TopHat on sample $SAMPLE with no annotation and in single-end mode...'
-	echo '#$SAMPLE TopHat noann single' >>$TIMELOG
+	echo '#'$SAMPLE' TopHat noann single' >>$TIMELOG
 	time ($TOPHAT -o $OUTPUT/tophat/noann_single -p $CORES $BOWTIE2IDX $DATADIR/$SAMPLE_sim.fastq) 2>>$TIMELOG
 	echo 'Running TopHat on sample $SAMPLE with no annotation and in paired-end mode...'
-	echo '#$SAMPLE TopHat noann paired' >>$TIMELOG
+	echo '#'$SAMPLE' TopHat noann paired' >>$TIMELOG
 	time ($TOPHAT -o $OUTPUT/tophat/noann_paired -p $CORES $BOWTIE2IDX $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq) 2>>$TIMELOG
 	echo 'Running TopHat on sample $SAMPLE with annotation and in single-end mode...'
-	echo '#$SAMPLE TopHat ann single' >>$TIMELOG
+	echo '#'$SAMPLE' TopHat ann single' >>$TIMELOG
 	time ($TOPHAT -o $OUTPUT/tophat/ann_single -G $ANNOTATION -p $CORES $BOWTIE2IDX $DATADIR/$SAMPLE_sim.fastq) 2>>$TIMELOG
 	echo 'Running TopHat on sample $SAMPLE with annotation and in paired-end mode...'
-	echo '#$SAMPLE TopHat ann paired' >>$TIMELOG
+	echo '#'$SAMPLE' TopHat ann paired' >>$TIMELOG
 	time ($TOPHAT -o $OUTPUT/tophat/ann_paired -G $ANNOTATION -p $CORES $BOWTIE2IDX $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq) 2>>$TIMELOG
 	# STAR protocols for execution are described on pp. 43-44 of the supplement of the RGASP spliced alignment paper
 	# (http://www.nature.com/nmeth/journal/v10/n12/extref/nmeth.2722-S1.pdf)
 	echo 'Running STAR on sample $SAMPLE with no annotation and in single-end mode...'
-	echo '#$SAMPLE STAR 1-pass noann single' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 1-pass noann single' >>$TIMELOG
 	mkdir -p $OUTPUT/star/noann_single_1pass
 	cd $OUTPUT/star/noann_single_1pass
 	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/$SAMPLE_sim.fastq --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Running STAR on sample $SAMPLE with no annotation and in paired-end mode...'
-	echo '#$SAMPLE STAR 1-pass noann paired' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 1-pass noann paired' >>$TIMELOG
 	mkdir -p $OUTPUT/star/noann_paired_1pass
 	cd $OUTPUT/star/noann_paired_1pass
 	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq --runThreadN $CORES) 2>>$TIMELOG
@@ -107,61 +107,61 @@ do
 	time ($STAR --runMode genomeGenerate --genomeDir $STARANNIDX --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--runThreadN $CORES --sjdbFileChrStartEnd $STARANNOTATION --sjdbOverhang $OVERHANG) 2>>$TIMELOG
 	echo 'Running STAR on sample $SAMPLE with annotation and in single-end mode...'
-	echo '#$SAMPLE STAR 1-pass ann single' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 1-pass ann single' >>$TIMELOG
 	mkdir -p $OUTPUT/star/ann_single_1pass
 	cd $OUTPUT/star/ann_single_1pass
 	time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/$SAMPLE_sim.fastq --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Running STAR on sample $SAMPLE with annotation and in paired-end mode...'
-	echo '#$SAMPLE STAR 1-pass ann paired' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 1-pass ann paired' >>$TIMELOG
 	mkdir -p $OUTPUT/star/ann_paired_1pass
 	cd $OUTPUT/star/ann_paired_1pass
 	time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Creating new STAR index for sample $SAMPLE with no annotation and in single-end mode...'
-	echo '#$SAMPLE STAR 1-pass noann single index' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 1-pass noann single index' >>$TIMELOG
 	STARIDXNOANNSINGLE=$OUTPUT/star/noann_single_idx
 	mkdir -p $STARIDXNOANNSINGLE
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXNOANNSINGLE --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--sjdbFileChrStartEnd $OUTPUT/star/noann_single_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Creating new STAR index for sample $SAMPLE with no annotation and in paired-end mode...'
-	echo '#$SAMPLE STAR 1-pass noann paired index' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 1-pass noann paired index' >>$TIMELOG
 	STARIDXNOANNPAIRED=$OUTPUT/star/noann_paired_idx
 	mkdir -p $STARIDXNOANNPAIRED
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXNOANNPAIRED --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--sjdbFileChrStartEnd $OUTPUT/star/noann_paired_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Creating new STAR index for sample $SAMPLE with annotation and in single-end mode...'
-	echo '#$SAMPLE STAR 1-pass noann single index' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 1-pass noann single index' >>$TIMELOG
 	STARIDXANNSINGLE=$OUTPUT/star/ann_single_idx
 	mkdir -p $STARIDXANNSINGLE
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXANNSINGLE --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--sjdbFileChrStartEnd $OUTPUT/star/ann_single_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Creating new STAR index for sample $SAMPLE with annotation and in paired-end mode...'
-	echo '#$SAMPLE STAR 1-pass noann paired index' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 1-pass noann paired index' >>$TIMELOG
 	STARIDXANNPAIRED=$OUTPUT/star/ann_paired_idx
 	mkdir -p $STARIDXANNPAIRED
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXANNPAIRED --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--sjdbFileChrStartEnd $OUTPUT/star/ann_paired_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Running second pass of STAR on sample $SAMPLE with no annotation and in single-end mode...'
-	echo '#$SAMPLE STAR 2-pass noann single' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 2-pass noann single' >>$TIMELOG
 	mkdir -p $OUTPUT/star/noann_single_2pass
 	cd $OUTPUT/star/noann_single_2pass
 	time ($STAR --genomeDir $STARIDXNOANNSINGLE --readFilesIn $DATADIR/$SAMPLE_sim.fastq --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Running second pass of STAR on sample $SAMPLE with no annotation and in paired-end mode...'
-	echo '#$SAMPLE STAR 2-pass noann paired' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 2-pass noann paired' >>$TIMELOG
 	mkdir -p $OUTPUT/star/noann_paired_2pass
 	cd $OUTPUT/star/noann_paired_2pass
 	time ($STAR --genomeDir $STARIDXNOANNPAIRED --readFilesIn $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Running second pass of STAR on sample $SAMPLE with annotation and in single-end mode...'
-	echo '#$SAMPLE STAR 2-pass ann single' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 2-pass ann single' >>$TIMELOG
 	mkdir -p $OUTPUT/star/ann_single_2pass
 	cd $OUTPUT/star/ann_single_2pass
 	time ($STAR --genomeDir $STARIDXANNSINGLE --readFilesIn $DATADIR/$SAMPLE_sim.fastq --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Running second pass of STAR on sample $SAMPLE with annotation and in paired-end mode...'
-	echo '#$SAMPLE STAR 2-pass ann paired' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 2-pass ann paired' >>$TIMELOG
 	mkdir -p $OUTPUT/star/ann_paired_2pass
 	cd $OUTPUT/star/ann_paired_2pass
 	time ($STAR --genomeDir $STARIDXANNPAIRED --readFilesIn $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Running Rail-RNA on sample $SAMPLE...'
-	echo '#$SAMPLE Rail-RNA'
+	echo '#'$SAMPLE' Rail-RNA'
 	# Write manifest file
 	echo -e $DATADIR/$SAMPLE_sim.fastq'\t0\t'$SAMPLE'-0-0' >$MAINOUTPUT/$SAMPLE.manifest
 	time ($RAILRNA go local -m $MAINOUTPUT/$SAMPLE.manifest -o -1 $BOWTIE1IDX -2 $BOWTIE2IDX) 2>>$TIMELOG
