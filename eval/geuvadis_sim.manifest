@@ -1,0 +1,22 @@
+# Simulated datasets listed here generated with generate_bioreps.py in Rail repo
+# They were then copied to S3
+s3://rail-experiments/geuvadis_sim/NA18508.1.M_111124_1_sim.fastq	0	YRI-0-0
+s3://rail-experiments/geuvadis_sim/NA18510.3.M_120202_7_sim.fastq	0	YRI-1-0
+s3://rail-experiments/geuvadis_sim/NA18511.1.M_120209_1_sim.fastq	0	YRI-2-0
+s3://rail-experiments/geuvadis_sim/NA18517.1.M_120209_7_sim.fastq	0	YRI-3-0
+s3://rail-experiments/geuvadis_sim/NA18519.1.M_111124_3_sim.fastq	0	YRI-4-0
+s3://rail-experiments/geuvadis_sim/NA18520.1.M_111124_1_sim.fastq	0	YRI-5-0
+s3://rail-experiments/geuvadis_sim/NA18858.1.M_120209_7_sim.fastq	0	YRI-6-0
+s3://rail-experiments/geuvadis_sim/NA18861.1.M_120209_2_sim.fastq	0	YRI-7-0
+s3://rail-experiments/geuvadis_sim/NA18907.1.M_120209_1_sim.fastq	0	YRI-8-0
+s3://rail-experiments/geuvadis_sim/NA18908.7.M_120219_7_sim.fastq	0	YRI-9-0
+s3://rail-experiments/geuvadis_sim/NA18909.1.M_120209_8_sim.fastq	0	YRI-10-0
+s3://rail-experiments/geuvadis_sim/NA18910.1.M_120209_5_sim.fastq	0	YRI-11-0
+s3://rail-experiments/geuvadis_sim/NA18912.1.M_120209_5_sim.fastq	0	YRI-12-0
+s3://rail-experiments/geuvadis_sim/NA18916.1.M_120209_7_sim.fastq	0	YRI-13-0
+s3://rail-experiments/geuvadis_sim/NA18917.1.M_111124_5_sim.fastq	0	YRI-14-0
+s3://rail-experiments/geuvadis_sim/NA18923.2.M_111216_5_sim.fastq	0	YRI-15-0
+s3://rail-experiments/geuvadis_sim/NA18933.1.M_111124_2_sim.fastq	0	YRI-16-0
+s3://rail-experiments/geuvadis_sim/NA18934.1.M_120209_3_sim.fastq	0	YRI-17-0
+s3://rail-experiments/geuvadis_sim/NA19092.1.M_111124_3_sim.fastq	0	YRI-18-0
+s3://rail-experiments/geuvadis_sim/NA19093.7.M_120219_7_sim.fastq	0	YRI-19-0
