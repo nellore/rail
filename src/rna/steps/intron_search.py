@@ -699,7 +699,8 @@ def introns_from_clique(clique, read_seq, reference_index,
         global_alignment: object of class GlobalAlignment used for fast
             realignment to reference
         max_gaps_mismatches: maximum number of (gaps + mismatches) to permit
-            in realignments to reference minus intron or None if unlimited
+            in realignments to reference minus intron per 100 bp or None if
+            unlimited
     """
     if not clique:
         return
@@ -1020,9 +1021,9 @@ def introns_from_clique(clique, read_seq, reference_index,
         try:
             max_score = max([intron[-1] for intron in candidate_introns])
             if max_gaps_mismatches is None \
-                or max_score >= -max_gaps_mismatches:
+                or max_score >= -max_gaps_mismatches * read_seq_size / 100.:
                 '''Filter out alignments with more than max_gap_mismatches
-                gaps or mismatches.'''
+                gaps or mismatches per 100 bp.'''
                 for (rname, intron_reverse_strand,
                         pos, end_pos, alignment_score) in candidate_introns:
                     if alignment_score == max_score:
@@ -1116,7 +1117,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         global_alignment: instance of GlobalAlignment class used for fast
                 realignment via Weave or Pypy.
         max_gaps_mismatches: maximum number of gaps/mismatches to permit in
-            a realignment to reference without intron or None if unlimited
+            a realignment to reference without intron per 100 bp
+            or None if unlimited
         report_multiplier: if verbose is True, the line number of an alignment,
             read, or first readlet of a read written to stderr increases
             exponentially with base report_multiplier.
@@ -1292,9 +1294,9 @@ if __name__ == '__main__':
         help='Size of window (in bp) in which to search for exons between '
              'anchoring alignments')
     parser.add_argument('--max-gaps-mismatches', type=int, required=False,
-        default=None,
+        default=3,
         help='Maximum number of (gaps + mismatches) to permit in a '
-             'realignment to reference without intron')
+             'realignment to reference without intron per 100 bp')
     parser.add_argument('--motif-radius', type=int, required=False,
         default=1,
         help='Number of bases to tack on to either end of an unmapped region '

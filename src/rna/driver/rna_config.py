@@ -1388,7 +1388,7 @@ class RailRnaAlign:
         genome_partition_length=5000, max_readlet_size=25,
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-        motif_search_window_size=1000, motif_radius=5,
+        motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, by='job',
@@ -1588,10 +1588,18 @@ class RailRnaAlign:
                     motif_search_window_size >= 0):
             base.errors.append('Motif search window size '
                                '(--motif-search-window-size) must be an '
-                               'integer > 0, but {0} was entered.'.format(
+                               'integer >= 0, but {0} was entered.'.format(
                                                     motif_search_window_size
                                                 ))
         base.motif_search_window_size = motif_search_window_size
+        if not (isinstance(max_gaps_mismatches, int) and 
+                    max_gaps_mismatches >= 0):
+            base.errors.append('Max gaps and mismatches '
+                               '(--max-gaps-mismatches) must be an '
+                               'integer >= 0, but {0} was entered.'.format(
+                                                    max_gaps_mismatches
+                                                ))
+        base.max_gaps_mismatches = max_gaps_mismatches
         if not (isinstance(motif_radius, int) and
                     motif_radius >= 0):
             base.errors.append('Motif radius (--motif-radius) must be an '
@@ -1755,6 +1763,11 @@ class RailRnaAlign:
             help=SUPPRESS
         )
         algo_parser.add_argument(
+            '--max-gaps-mismatches', type=int, required=False,
+            default=3,
+            help=SUPPRESS
+        )
+        algo_parser.add_argument(
             '--motif-radius', type=int, required=False,
             default=5,
             help=SUPPRESS
@@ -1766,7 +1779,7 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--transcriptome-bowtie1-args', type=str, required=False,
-            default='-v 1 -a -m 10',
+            default='-v 1 -a -m 80 --best --strata',
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -1881,13 +1894,15 @@ class RailRnaAlign:
                          '--partition-length={1} --max-intron-size={2} '
                          '--min-intron-size={3} --min-exon-size={4} '
                          '--search-window-size={5} '
-                         '--motif-radius={6} {7}').format(
+                         '--max-gaps-mismatches={6} '
+                         '--motif-radius={7} {8}').format(
                                                 base.bowtie1_idx,
                                                 base.genome_partition_length,
                                                 base.max_intron_size,
                                                 base.min_intron_size,
                                                 base.min_exon_size,
                                                 base.motif_search_window_size,
+                                                base.max_gaps_mismatches,
                                                 base.motif_radius,
                                                 verbose
                                             ),
@@ -2333,7 +2348,7 @@ class RailRnaLocalAlignJson:
         genome_partition_length=5000, max_readlet_size=25,
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-        motif_search_window_size=1000, motif_radius=5,
+        motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
@@ -2359,6 +2374,7 @@ class RailRnaLocalAlignJson:
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
             motif_search_window_size=motif_search_window_size,
+            max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
@@ -2402,7 +2418,7 @@ class RailRnaElasticAlignJson:
         genome_partition_length=5000, max_readlet_size=25,
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-        motif_search_window_size=1000, motif_radius=5,
+        motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
@@ -2453,6 +2469,7 @@ class RailRnaElasticAlignJson:
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
             motif_search_window_size=motif_search_window_size,
+            max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
@@ -2517,7 +2534,7 @@ class RailRnaLocalAllJson:
         genome_partition_length=5000, max_readlet_size=25,
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-        motif_search_window_size=1000, motif_radius=5,
+        motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, by='job',
@@ -2545,6 +2562,7 @@ class RailRnaLocalAllJson:
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
             motif_search_window_size=motif_search_window_size,
+            max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
@@ -2595,7 +2613,7 @@ class RailRnaElasticAllJson:
         genome_partition_length=5000, max_readlet_size=25,
         min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-        motif_search_window_size=1000, motif_radius=5,
+        motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie1_args='-v 1 -a -m 8',
         normalize_percentile=0.75, by='job',
@@ -2649,6 +2667,7 @@ class RailRnaElasticAllJson:
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
             motif_search_window_size=motif_search_window_size,
+            max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie1_args=transcriptome_bowtie1_args,
