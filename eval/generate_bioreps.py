@@ -27,11 +27,15 @@ REQUIRES PANDAS. Download the Anaconda distribution of Python to simplify
 getting it.
 
 NOTE that expressed fractions (column 5 of pro files) are incorrect, but they
-are never used by Flux Simulator. Also note that the script "assumes" a direct
-proportionality between read counts per transcript and number of RNA molecules
--- this isn't even true in simulation. In fact, the simulated correlation
-appears to be between 80 and 90 percent. (To reproduce this, compute the
-correlation between the 6th and 10th columns of a given pro file. awk code:
+are never used by Flux Simulator. Also note that final coverage distribution
+of a simulated bioreplicate (recorded as something proportional to read counts
+per transcript in the PRO file; column 6) is different from that of the
+original bioreplicate (recorded as number of simulated reads originating from a
+given transcript in the PRO file; column 10). The correlation between the two
+is between 80 and 90 percent. The reason for the discrepancy is the models that
+go into Flux's RNA-seq sim after generating expression. See
+http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3488205/ for a description.
+(To reproduce the correlation values, use the following awk code:
 
 cat X.pro | awk '{print $6 "\t" $10}' 
 | awk '{ xy+=($1*$2); x+=$1; y+=$2; x2+=($1*$1); y2+=($2*$2); } 
@@ -44,7 +48,7 @@ based on http://awk.info/?doc/tools/correlate.html .)
 
 The intent here, however, is to create a relatively
 realistic coverage distribution and capture something like the variation
-observed in what users might regard as a set of bioreplicates. The variation
+observed in what users may regard as a set of bioreplicates. The variation
 observed across the simulated bioreplicates is very likely greater than that
 observed across the originals, but demonstrating that Rail's methods are
 robust to permissive definitions of bioreplicates -- and even do well across
