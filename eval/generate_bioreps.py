@@ -256,7 +256,7 @@ if __name__ == '__main__':
     for sample in relevant_samples:
         pool.apply_async(run_flux,
                          (os.path.join(args.output, sample + '_sim.par'),
-                          args.flux)m
+                          args.flux),
                          callback=return_values.append)
     pool.close()
     while len(return_values) != relevant_count:
