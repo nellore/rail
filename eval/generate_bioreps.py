@@ -27,13 +27,13 @@ REQUIRES PANDAS. Download the Anaconda distribution of Python to simplify
 getting it.
 
 NOTE that expressed fractions (column 5 of pro files) are incorrect, but they
-are never used by Flux Simulator. Also note that final coverage distribution
-of a simulated bioreplicate (recorded as something proportional to read counts
-per transcript in the PRO file; column 6) is different from that of the
-original bioreplicate (recorded as number of simulated reads originating from a
-given transcript in the PRO file; column 10). The correlation between the two
-is between 80 and 90 percent. The reason for the discrepancy is the models that
-go into Flux's RNA-seq sim after generating expression. See
+are never used by Flux Simulator. Also note that the final coverage
+distribution of a simulated bioreplicate (recorded as something proportional to
+read counts per transcript in the PRO file; column 6) is different from that of
+the original bioreplicate (recorded as number of simulated reads originating
+from a given transcript in the PRO file; column 10). The correlation between
+the two is between 80 and 90 percent. The reason for the discrepancy is the
+models that go into Flux's RNA-seq sim after generating expression. See
 http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3488205/ for a description.
 (To reproduce the correlation values, use the following awk code:
 
@@ -46,10 +46,10 @@ print "r=" r; }'.)
 
 based on http://awk.info/?doc/tools/correlate.html .)
 
-The intent here, however, is to create a relatively
-realistic coverage distribution and capture something like the variation
-observed in what users may regard as a set of bioreplicates. The variation
-observed across the simulated bioreplicates is very likely greater than that
+The intent here, however, is to create a relatively realistic coverage
+distribution and capture something like the variation observed in what users
+may regard as a set of bioreplicates. The variation observed across the
+simulated bioreplicates is very likely greater than that
 observed across the originals, but demonstrating that Rail's methods are
 robust to permissive definitions of bioreplicates -- and even do well across
 vastly different datasets -- is desirable.
