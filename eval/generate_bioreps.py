@@ -13,7 +13,7 @@ Generates 20 bioreps for Rail paper using Flux Simulator by:
     of P has the absolute number of RNA molecules associated with each
     transcript. To recompute this value, an RPKM for a given transcript from
     (2) is multiplied by transcript length (column 4 of P) in kb
-    and subsequently doubled. This gives ~10^6-10^7 nb_molecules for a given
+    and subsequently multiplied by 10. This gives ~5e6 nb_molecules for a given
     Flux simulation, which is close to that for the human example on the Flux
     website and apparently makes for adequate library yield.
 4) restarting Flux, now for each PRO file, generating bioreps. FASTAs are named
@@ -79,7 +79,7 @@ def write_par_and_pro(par_template, pro_template, basename,
                 except KeyError:
                     # Not expressed; kill it
                     rpkm = 0.0
-                tokens[5] = transcript_length_in_kb * rpkm * 2
+                tokens[5] = transcript_length_in_kb * rpkm * 10
                 remaining = tokens[5] - int(tokens[5])
                 if remaining > 0.5:
                     tokens[5] = int(tokens[5]) + 1
