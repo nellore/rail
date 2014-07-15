@@ -90,8 +90,18 @@ def write_par_and_pro(par_template, pro_template, basename,
     # Write distinct seed for sample
     with open(basename + '.par', 'w') as write_stream:
         with open(par_template) as read_stream:
+            # Next-to-last param is REF_FILE_NAME; last is SEED
+            all_parameters = read_stream.read().strip().split('\n')
+            ref_file_name = all_parameters[-2].split('\t')
+            assert ref_file_name[0] == 'REF_FILE_NAME'
+            sorted_name = ref_file_name[1][:-4] + '_sorted.gtf'
+            if os.path.exists(sorted_name):
+                name_to_write = sorted_name
+            else:
+                name_to_write = ref_file_name[1]
             print >>write_stream, \
-                '\n'.join(read_stream.read().strip().split('\n')[:-1])
+                '\n'.join(all_parameters[:-2])
+            print >>write_stream, 'REF_FILE_NAME\t%s' % name_to_write
             print >>write_stream, 'SEED\t%d' % seed
     return 0
 
@@ -105,9 +115,10 @@ def run_flux(par, flux):
         Return value: Flux exitlevel.
     """
     with open(par + '.log', 'w') as log_stream:
-        return subprocess.call([flux, '-l', '-s', '-p', par],
-                                    stderr=log_stream,
-                                    stdout=open(os.devnull, 'w'))
+        return_value = subprocess.call([flux, '-l', '-s', '-p', par],
+                                        stderr=log_stream,
+                                        stdout=open(os.devnull, 'w'))
+    return return_value
 
 if __name__ == '__main__':
     # Print file's docstring if -h is invoked
@@ -190,9 +201,7 @@ if __name__ == '__main__':
     expression_par = os.path.join(temp_dir, 'sim.par')
     par_template = [
         ('NB_MOLECULES', '5000000'),
-        ('REF_FILE_NAME', args.gtf),
-        ('GEN_DIR', args.fasta),
-        ('LOAD_NONCODING', 'NO'),
+        ('LOAD_NONCODING', 'YES'),
         ('TSS_MEAN', '50'),
         ('POLYA_SCALE', 'NaN'),
         ('POLYA_SHAPE', 'NaN'),
@@ -213,7 +222,9 @@ if __name__ == '__main__':
         ('PAIRED_END', 'NO' if args.single_end else 'YES'),
         ('ERR_FILE', '76'),
         ('FASTA', 'YES'),
-        ('UNIQUE_IDS', 'YES')]
+        ('UNIQUE_IDS', 'YES'),
+        ('GEN_DIR', args.fasta),
+        ('REF_FILE_NAME', args.gtf)]
     with open(expression_par, 'w') as par_stream:
         print >>par_stream, '\n'.join(['\t'.join(parameter)
                                        for parameter in par_template])
