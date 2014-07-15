@@ -141,7 +141,7 @@ if __name__ == '__main__':
               'analysis_results/GD660.TrQuantRPKM.txt')
         )
     parser.add_argument('-p', '--num-processes', type=int,
-        default=5,
+        default=7,
         help=('Number of instances of Flux Simulator to run simultaneously; '
               'set this to below 10 so it doesn\'t choke.')
         )
@@ -241,7 +241,7 @@ if __name__ == '__main__':
                        (expression_par, expression_pro,
                             os.path.join(args.output, sample + '_sim'),
                             i, rpkms, sample),
-                       callback=return_values.extend)
+                       callback=return_values.append)
     pool.close()
     relevant_count = len(relevant_samples)
     while len(return_values) != relevant_count:
@@ -256,7 +256,8 @@ if __name__ == '__main__':
     for sample in relevant_samples:
         pool.apply_async(run_flux,
                          (os.path.join(args.output, sample + '_sim.par'),
-                          args.flux))
+                          args.flux)m
+                         callback=return_values.append)
     pool.close()
     while len(return_values) != relevant_count:
         print 'Completed %d/%d sims.\r' \
