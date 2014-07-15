@@ -27,7 +27,23 @@ REQUIRES PANDAS. Download the Anaconda distribution of Python to simplify
 getting it.
 
 NOTE that expressed fractions (column 5 of pro files) are incorrect, but they
-are never used by Flux Simulator.
+are never used by Flux Simulator. Also note that the script "assumes" a direct
+proportionality between RPKMs*read length and number of RNA molecules -- this
+isn't even true in simulation. In fact, the simulated correlation appears to be
+between 80 and 90 percent. (To reproduce this, compute the correlation between
+the 6th and 10th columns of a given pro file. awk code:
+
+cat X.pro | awk '{print $6 "\t" $10}' 
+| awk '{ xy+=($1*$2); x+=$1; y+=$2; x2+=($1*$1); y2+=($2*$2); } 
+END { print "NR=" NR; ssx=x2-((x*x)/NR); 
+print "ssx=" ssx; ssy=y2-((y*y)/NR); print "ssy=" ssy; 
+ssxy = xy - ((x*y)/NR); print "ssxy=" ssxy; r=ssxy/sqrt(ssx*ssy); 
+print "r=" r; }'.)
+
+based on http://awk.info/?doc/tools/correlate.html .)
+The intent here, however, is to create a relatively
+realistic coverage distribution and capture something like the variation
+observed in what users might regard as a set of bioreplicates.
 
 Run this file from desired output directory if not entering output dir with -o.
 """
