@@ -42,8 +42,8 @@ OVERHANG=75
 echo 'Splitting Flux FASTQs...'
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
-	awk 'NR % 8 < 4' $DATADIR/$SAMPLE_sim.fastq >$DATADIR/$SAMPLE_sim_left.fastq
-	awk 'NR % 8 >= 4' $DATADIR/$SAMPLE_sim.fastq >$DATADIR/$SAMPLE_sim_right.fastq
+	awk 'NR % 8 < 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_left.fastq
+	awk 'NR % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_right.fastq
 done
 
 ## Specify location of annotation
@@ -72,8 +72,8 @@ time ($STAR --runMode genomeGenerate --genomeDir $STARANNIDX --genomeFastaFiles 
 cd $MAINOUTPUT
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
-	mkdir -p $SAMPLE
-	cd $SAMPLE
+	mkdir -p ${SAMPLE}
+	cd ${SAMPLE}
 	mkdir -p tophat
 	mkdir -p star
 	mkdir -p rail
@@ -83,88 +83,88 @@ done
 # Run simulations
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
-	OUTPUT=$MAINOUTPUT/$SAMPLE
-	echo 'Running TopHat on sample '$SAMPLE' with no annotation and in single-end mode...'
-	echo '#'$SAMPLE' TopHat noann single' >>$TIMELOG
-	time ($TOPHAT -o $OUTPUT/tophat/noann_single -p $CORES $BOWTIE2IDX $DATADIR/$SAMPLE_sim.fastq 2>&1) 2>>$TIMELOG
-	echo 'Running TopHat on sample '$SAMPLE' with no annotation and in paired-end mode...'
-	echo '#'$SAMPLE' TopHat noann paired' >>$TIMELOG
-	time ($TOPHAT -o $OUTPUT/tophat/noann_paired -p $CORES $BOWTIE2IDX $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq 2>&1) 2>>$TIMELOG
-	echo 'Running TopHat on sample '$SAMPLE' with annotation and in single-end mode...'
-	echo '#'$SAMPLE' TopHat ann single' >>$TIMELOG
-	time ($TOPHAT -o $OUTPUT/tophat/ann_single -G $ANNOTATION -p $CORES $BOWTIE2IDX $DATADIR/$SAMPLE_sim.fastq 2>&1) 2>>$TIMELOG
-	echo 'Running TopHat on sample '$SAMPLE' with annotation and in paired-end mode...'
-	echo '#'$SAMPLE' TopHat ann paired' >>$TIMELOG
-	time ($TOPHAT -o $OUTPUT/tophat/ann_paired -G $ANNOTATION -p $CORES $BOWTIE2IDX $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq 2>&1) 2>>$TIMELOG
+	OUTPUT=$MAINOUTPUT/${SAMPLE}
+	echo 'Running TopHat on sample '${SAMPLE}' with no annotation and in single-end mode...'
+	echo '#'${SAMPLE}' TopHat noann single' >>$TIMELOG
+	time ($TOPHAT -o $OUTPUT/tophat/noann_single -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim.fastq 2>&1) 2>>$TIMELOG
+	echo 'Running TopHat on sample '${SAMPLE}' with no annotation and in paired-end mode...'
+	echo '#'${SAMPLE}' TopHat noann paired' >>$TIMELOG
+	time ($TOPHAT -o $OUTPUT/tophat/noann_paired -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq 2>&1) 2>>$TIMELOG
+	echo 'Running TopHat on sample '${SAMPLE}' with annotation and in single-end mode...'
+	echo '#'${SAMPLE}' TopHat ann single' >>$TIMELOG
+	time ($TOPHAT -o $OUTPUT/tophat/ann_single -G $ANNOTATION -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim.fastq 2>&1) 2>>$TIMELOG
+	echo 'Running TopHat on sample '${SAMPLE}' with annotation and in paired-end mode...'
+	echo '#'${SAMPLE}' TopHat ann paired' >>$TIMELOG
+	time ($TOPHAT -o $OUTPUT/tophat/ann_paired -G $ANNOTATION -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq 2>&1) 2>>$TIMELOG
 	# STAR protocols for execution are described on pp. 43-44 of the supplement of the RGASP spliced alignment paper
 	# (http://www.nature.com/nmeth/journal/v10/n12/extref/nmeth.2722-S1.pdf)
-	echo 'Running STAR on sample '$SAMPLE' with no annotation and in single-end mode...'
-	echo '#'$SAMPLE' STAR 1-pass noann single' >>$TIMELOG
+	echo 'Running STAR on sample '${SAMPLE}' with no annotation and in single-end mode...'
+	echo '#'${SAMPLE}' STAR 1-pass noann single' >>$TIMELOG
 	mkdir -p $OUTPUT/star/noann_single_1pass
 	cd $OUTPUT/star/noann_single_1pass
-	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/$SAMPLE_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Running STAR on sample '$SAMPLE' with no annotation and in paired-end mode...'
-	echo '#'$SAMPLE' STAR 1-pass noann paired' >>$TIMELOG
+	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+	echo 'Running STAR on sample '${SAMPLE}' with no annotation and in paired-end mode...'
+	echo '#'${SAMPLE}' STAR 1-pass noann paired' >>$TIMELOG
 	mkdir -p $OUTPUT/star/noann_paired_1pass
 	cd $OUTPUT/star/noann_paired_1pass
-	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Running STAR on sample '$SAMPLE' with annotation and in single-end mode...'
-	echo '#'$SAMPLE' STAR 1-pass ann single' >>$TIMELOG
+	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+	echo 'Running STAR on sample '${SAMPLE}' with annotation and in single-end mode...'
+	echo '#'${SAMPLE}' STAR 1-pass ann single' >>$TIMELOG
 	mkdir -p $OUTPUT/star/ann_single_1pass
 	cd $OUTPUT/star/ann_single_1pass
-	time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/$SAMPLE_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Running STAR on sample '$SAMPLE' with annotation and in paired-end mode...'
-	echo '#'$SAMPLE' STAR 1-pass ann paired' >>$TIMELOG
+	time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+	echo 'Running STAR on sample '${SAMPLE}' with annotation and in paired-end mode...'
+	echo '#'${SAMPLE}' STAR 1-pass ann paired' >>$TIMELOG
 	mkdir -p $OUTPUT/star/ann_paired_1pass
 	cd $OUTPUT/star/ann_paired_1pass
-	time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Creating new STAR index for sample '$SAMPLE' with no annotation and in single-end mode...'
-	echo '#'$SAMPLE' STAR 1-pass noann single index' >>$TIMELOG
+	time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+	echo 'Creating new STAR index for sample '${SAMPLE}' with no annotation and in single-end mode...'
+	echo '#'${SAMPLE}' STAR 1-pass noann single index' >>$TIMELOG
 	STARIDXNOANNSINGLE=$OUTPUT/star/noann_single_idx
 	mkdir -p $STARIDXNOANNSINGLE
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXNOANNSINGLE --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--sjdbFileChrStartEnd $OUTPUT/star/noann_single_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Creating new STAR index for sample '$SAMPLE' with no annotation and in paired-end mode...'
-	echo '#'$SAMPLE' STAR 1-pass noann paired index' >>$TIMELOG
+	echo 'Creating new STAR index for sample '${SAMPLE}' with no annotation and in paired-end mode...'
+	echo '#'${SAMPLE}' STAR 1-pass noann paired index' >>$TIMELOG
 	STARIDXNOANNPAIRED=$OUTPUT/star/noann_paired_idx
 	mkdir -p $STARIDXNOANNPAIRED
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXNOANNPAIRED --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--sjdbFileChrStartEnd $OUTPUT/star/noann_paired_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Creating new STAR index for sample '$SAMPLE' with annotation and in single-end mode...'
-	echo '#'$SAMPLE' STAR 1-pass ann single index' >>$TIMELOG
+	echo 'Creating new STAR index for sample '${SAMPLE}' with annotation and in single-end mode...'
+	echo '#'${SAMPLE}' STAR 1-pass ann single index' >>$TIMELOG
 	STARIDXANNSINGLE=$OUTPUT/star/ann_single_idx
 	mkdir -p $STARIDXANNSINGLE
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXANNSINGLE --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--sjdbFileChrStartEnd $OUTPUT/star/ann_single_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Creating new STAR index for sample '$SAMPLE' with annotation and in paired-end mode...'
-	echo '#'$SAMPLE' STAR 1-pass ann paired index' >>$TIMELOG
+	echo 'Creating new STAR index for sample '${SAMPLE}' with annotation and in paired-end mode...'
+	echo '#'${SAMPLE}' STAR 1-pass ann paired index' >>$TIMELOG
 	STARIDXANNPAIRED=$OUTPUT/star/ann_paired_idx
 	mkdir -p $STARIDXANNPAIRED
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXANNPAIRED --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--sjdbFileChrStartEnd $OUTPUT/star/ann_paired_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Running second pass of STAR on sample '$SAMPLE' with no annotation and in single-end mode...'
-	echo '#'$SAMPLE' STAR 2-pass noann single' >>$TIMELOG
+	echo 'Running second pass of STAR on sample '${SAMPLE}' with no annotation and in single-end mode...'
+	echo '#'${SAMPLE}' STAR 2-pass noann single' >>$TIMELOG
 	mkdir -p $OUTPUT/star/noann_single_2pass
 	cd $OUTPUT/star/noann_single_2pass
-	time ($STAR --genomeDir $STARIDXNOANNSINGLE --readFilesIn $DATADIR/$SAMPLE_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Running second pass of STAR on sample '$SAMPLE' with no annotation and in paired-end mode...'
-	echo '#'$SAMPLE' STAR 2-pass noann paired' >>$TIMELOG
+	time ($STAR --genomeDir $STARIDXNOANNSINGLE --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+	echo 'Running second pass of STAR on sample '${SAMPLE}' with no annotation and in paired-end mode...'
+	echo '#'${SAMPLE}' STAR 2-pass noann paired' >>$TIMELOG
 	mkdir -p $OUTPUT/star/noann_paired_2pass
 	cd $OUTPUT/star/noann_paired_2pass
-	time ($STAR --genomeDir $STARIDXNOANNPAIRED --readFilesIn $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Running second pass of STAR on sample '$SAMPLE' with annotation and in single-end mode...'
-	echo '#'$SAMPLE' STAR 2-pass ann single' >>$TIMELOG
+	time ($STAR --genomeDir $STARIDXNOANNPAIRED --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+	echo 'Running second pass of STAR on sample '${SAMPLE}' with annotation and in single-end mode...'
+	echo '#'${SAMPLE}' STAR 2-pass ann single' >>$TIMELOG
 	mkdir -p $OUTPUT/star/ann_single_2pass
 	cd $OUTPUT/star/ann_single_2pass
-	time ($STAR --genomeDir $STARIDXANNSINGLE --readFilesIn $DATADIR/$SAMPLE_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Running second pass of STAR on sample '$SAMPLE' with annotation and in paired-end mode...'
-	echo '#'$SAMPLE' STAR 2-pass ann paired' >>$TIMELOG
+	time ($STAR --genomeDir $STARIDXANNSINGLE --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+	echo 'Running second pass of STAR on sample '${SAMPLE}' with annotation and in paired-end mode...'
+	echo '#'${SAMPLE}' STAR 2-pass ann paired' >>$TIMELOG
 	mkdir -p $OUTPUT/star/ann_paired_2pass
 	cd $OUTPUT/star/ann_paired_2pass
-	time ($STAR --genomeDir $STARIDXANNPAIRED --readFilesIn $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Running Rail-RNA on sample '$SAMPLE'...'
-	echo '#'$SAMPLE' Rail-RNA'
+	time ($STAR --genomeDir $STARIDXANNPAIRED --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+	echo 'Running Rail-RNA on sample '${SAMPLE}'...'
+	echo '#'${SAMPLE}' Rail-RNA'
 	# Write manifest file
-	echo -e $DATADIR/$SAMPLE_sim.fastq'\t0\t'$SAMPLE'-0-0' >$MAINOUTPUT/$SAMPLE.manifest
-	time ($RAILRNA go local -m $MAINOUTPUT/$SAMPLE.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -1 $BOWTIE1IDX -2 $BOWTIE2IDX -f 2>&1) 2>>$TIMELOG
+	echo -e $DATADIR/${SAMPLE}_sim.fastq'\t0\t'${SAMPLE}'-0-0' >$MAINOUTPUT/${SAMPLE}.manifest
+	time ($RAILRNA go local -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -1 $BOWTIE1IDX -2 $BOWTIE2IDX -f 2>&1) 2>>$TIMELOG
 done
