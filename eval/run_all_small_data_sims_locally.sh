@@ -60,16 +60,13 @@ mkdir -p $STARANNIDX
 # Use --sjdbOverhang 75 because reads are 76 bases long! See p. 3 of STAR manual for details.
 time ($STAR --runMode genomeGenerate --genomeDir $STARANNIDX --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 		--runThreadN $CORES --sjdbFileChrStartEnd $STARANNOTATION --sjdbOverhang $OVERHANG 2>&1) 2>>$TIMELOG
-wait
 
 # Flux outputs paired-end reads in one file; split files here
 echo 'Splitting Flux FASTQs...'
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
-	awk 'NR % 8 < 4' $DATADIR/$SAMPLE_sim.fastq >$DATADIR/$SAMPLE_sim_left.fastq &
-	wait
-	awk 'NR % 8 >= 4' $DATADIR/$SAMPLE_sim.fastq >$DATADIR/$SAMPLE_sim_right.fastq &
-	wait
+	awk 'NR % 8 < 4' $DATADIR/$SAMPLE_sim.fastq >$DATADIR/$SAMPLE_sim_left.fastq
+	awk 'NR % 8 >= 4' $DATADIR/$SAMPLE_sim.fastq >$DATADIR/$SAMPLE_sim_right.fastq
 done
 
 cd $MAINOUTPUT
@@ -82,7 +79,6 @@ do
 	mkdir -p rail
 	cd ..
 done
-wait
 
 # Run simulations
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
