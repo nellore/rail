@@ -18,6 +18,6 @@ cd $FADIR
 cat chr{1..22}.fa chr{X,Y,M}.fa >$REFDIR/genome.fa
 cd $REFDIR
 mkdir -p $REFDIR/star
-$STAR --runMode genomeGenerate --genomeDir $REFDIR/star --genomeFastaFiles hg19.fa --runThreadN $CORES
+$STAR --runMode genomeGenerate --genomeDir $REFDIR/star --genomeFastaFiles genome.fa --runThreadN $CORES
 $BOWTIEBUILD genome.fa genome || { echo 'Problem encountered building Bowtie 1 index'; exit 1; }
 $BOWTIE2BUILD genome.fa genome || { echo 'Problem encountered building Bowtie 2 index'; exit 1; }
