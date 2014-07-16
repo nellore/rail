@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Log stdout
-exec >  >(tee -a local.log)
 
 # Select two sample names for analysis. See generate_bioreps.py for how sample data was generated.
 SAMPLE1=NA18861.1.M_120209_2
