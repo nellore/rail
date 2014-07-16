@@ -15,9 +15,9 @@ CORES=32
 
 mkdir -p $REFDIR
 cd $FADIR
-cat chr{1..22}.fa chr{X,Y,M}.fa >$REFDIR/hg19.fa
+cat chr{1..22}.fa chr{X,Y,M}.fa >$REFDIR/genome.fa
 cd $REFDIR
 mkdir -p $REFDIR/star
 $STAR --runMode genomeGenerate --genomeDir $REFDIR/star --genomeFastaFiles hg19.fa --runThreadN $CORES
-$BOWTIEBUILD hg19.fa genome || { echo 'Problem encountered building Bowtie 1 index'; exit 1; }
-$BOWTIE2BUILD hg19.fa genome || { echo 'Problem encountered building Bowtie 2 index'; exit 1; }
+$BOWTIEBUILD genome.fa genome || { echo 'Problem encountered building Bowtie 1 index'; exit 1; }
+$BOWTIE2BUILD genome.fa genome || { echo 'Problem encountered building Bowtie 2 index'; exit 1; }
