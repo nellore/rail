@@ -42,8 +42,8 @@ OVERHANG=75
 echo 'Splitting Flux FASTQs...'
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
-	awk 'NR % 8 < 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_left.fastq
-	awk 'NR % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_right.fastq
+	awk '(NR-1) % 8 < 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_left.fastq
+	awk '(NR-1) % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_right.fastq
 done
 
 ## Specify location of annotation
