@@ -130,26 +130,45 @@ class FileMover:
         if url.is_s3:
             command_list = ['s3cmd']
             if self.s3cred is not None:
-                command_list.append("-c")
+                command_list.append('-c')
                 command_list.append(self.s3cred)
-            command_list.append("get")
+            command_list.append('get')
             command_list.append(url.to_nonnative_url())
-            command_list.append(dest)
+            command_list.extend([dest, '--force'])
             command = ' '.join(command_list)
-            s3cmd_process \
-                = subprocess.Popen(command_list, stdout=sys.stderr)
-            time.sleep(1)
-            last_print_time = time.time()
-            while s3cmd_process.poll() is None:
-                now_time = time.time()
-                if now_time - last_print_time > 60:
-                    print >>sys.stderr, '\nreporter:status:alive'
-                    sys.stderr.flush()
-                    last_print_time = now_time
-                    time.sleep(1)
-            if s3cmd_process.poll() > 0:
-                raise RuntimeError('Non-zero exitlevel %d from s3cmd '
-                                   'get command "%s"' % (exit_level, command))
+            filename = dest.rpartition('/')[2]
+            tries = 0
+            while tries < 30:
+                break_outer_loop = False
+                s3cmd_process \
+                    = subprocess.Popen(command_list, stdout=sys.stderr)
+                time.sleep(1)
+                last_print_time = time.time()
+                last_size = os.path.getsize(filename)
+                while s3cmd_process.poll() is None:
+                    now_time = time.time()
+                    if now_time - last_print_time > 160:
+                        print >>sys.stderr, '\nreporter:status:alive'
+                        sys.stderr.flush()
+                        new_size = os.path.getsize(filename)
+                        if new_size == last_size:
+                            # Download stalled
+                            break_outer_loop = True
+                            break
+                        else:
+                            last_size = new_size
+                        last_print_time = now_time
+                        time.sleep(1)
+                if break_outer_loop:
+                    tries += 1
+                    s3cmd_process.terminate()
+                    time.sleep(2)
+                    continue
+                if s3cmd_process.poll() > 0:
+                    raise RuntimeError('Non-zero exitlevel %d from s3cmd '
+                                       'get command "%s"' % (exit_level,
+                                                                command))
+                break
         elif url.is_curlable:
             oldp = os.getcwd()
             os.chdir(dest)

@@ -221,65 +221,57 @@ if __name__ == '__main__':
     subprocess.check_call(' '.join(['sort -k1,1', combined_file, 
                                     '>', sorted_combined_file]),
                             bufsize=-1, shell=True)
-    relevant = 0
-    retrieved = 0
-    relevant_and_retrieved = 0
+    relevant = defaultdict(int)
+    retrieved = defaultdict(int)
+    relevant_and_retrieved = defaultdict(int)
     with open(sorted_combined_file) as sorted_combined_stream:
         for (name,), xpartition in xstream(sorted_combined_stream, 1):
             relevant_and_retrieved_instances = list(xpartition)
-            if args.generous:
-                ts = [instance[:-1] for instance 
-                        in relevant_and_retrieved_instances
-                        if instance[-1] == 't'
-                        and (args.coverage_threshold is None
-                             or any(
-                        [intron_counts[intron] <= args.coverage_threshold
-                         for intron in instance[:-1]]
-                         ))]
-                rs = [instance[:-1] for instance 
-                        in relevant_and_retrieved_instances
-                        if instance[-1] == 'r'
-                        and (args.coverage_threshold is None
-                             or any(
-                        [intron_counts[intron] <= args.coverage_threshold
-                         for intron in instance[:-1]]
-                         ))]
-                relevant += len(ts)
-                retrieved += len(rs)
-                for r in rs:
-                    if r in ts:
-                        relevant_and_retrieved += 1
-            else:
-                relevant_and_retrieved_instances = [
-                        instance for instance
-                        in relevant_and_retrieved_instances
-                        if (args.coverage_threshold is None
-                             or any(
-                           [intron_counts[intron] <= args.coverage_threshold
-                            for intron in instance[:-1]]
-                         ))
-                    ]
-                relevant_and_retrieved_instance_count = \
-                    len(relevant_and_retrieved_instances)
-                if relevant_and_retrieved_instance_count == 2:
-                    relevant += 1
-                    retrieved += 1
-                    if relevant_and_retrieved_instances[0][:-1] \
-                        == relevant_and_retrieved_instances[1][:-1]:
-                        relevant_and_retrieved += 1
-                    else:
-                        print >>sys.stderr, relevant_and_retrieved_instances
-                elif relevant_and_retrieved_instance_count == 1:
-                    print >>sys.stderr, relevant_and_retrieved_instances
-                    if relevant_and_retrieved_instances[0][-1] == 't':
-                        relevant += 1
-                    else:
-                        assert relevant_and_retrieved_instances[0][-1] == 'r'
-                        retrieved += 1
+            ts = [instance[:-1] for instance 
+                    in relevant_and_retrieved_instances
+                    if instance[-1] == 't'
+                    and (args.coverage_threshold is None
+                         or any(
+                    [intron_counts[intron] <= args.coverage_threshold
+                     for intron in instance[:-1]]
+                     ))]
+            rs = [instance[:-1] for instance 
+                    in relevant_and_retrieved_instances
+                    if instance[-1] == 'r'
+                    and (args.coverage_threshold is None
+                         or any(
+                    [intron_counts[intron] <= args.coverage_threshold
+                     for intron in instance[:-1]]
+                     ))]
+            relevant_count = len(ts)
+            retrieved_count = len(rs)
+            relevant += relevant_count
+            retrieved += retrieved_count
+            assert relevant_count in [1, 2]
+            assert retrieved_count <= relevant_count
+            if retrieved_count == 2:
+                '''For paired-end read output from TopHat and STAR, /1 and /2's
+                are cut off from QNAMEs, so we must find the best assignment of
+                retrieved alignments to relevant alignments.'''
+                aligned = [ts[0] == rs[0], ts[1] == rs[1]]
+                switched = [ts[0] == rs[1], rs[0] == ts[1]]
+                if aligned.count(True) >= switched.count(True):
+                    matches = [(ts[0], rs[0]), (ts[1], rs[1])]
                 else:
-                    assert relevant_and_retrieved_instance_count == 0
+                    matches = [(ts[0], rs[1]), (ts[1], rs[0])]
+                for match in matches:
+                    if match[0] == match[1]:
+                        relevant_and_retrieved += 1
+                        if match[0]
+            for i in xrange(len(ts)):
+                for j in xrange(i, len(rs)):
+
+            for r in rs:
+                if r in ts:
+                    relevant_and_retrieved += 1
     precision = float(relevant_and_retrieved) / retrieved
     recall = float(relevant_and_retrieved) / relevant
+    print '#spliced read performance'
     print 'relevant instances\t%d' % relevant
     print 'retrieved instances\t%d' % retrieved
     print 'intersection\t%d' % relevant_and_retrieved
