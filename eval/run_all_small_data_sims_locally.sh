@@ -8,11 +8,11 @@ SAMPLE2=NA18508.1.M_111124_1
 DATADIR=/scratch0/langmead-fs1/geuvadis_sim
 
 ## Specify locations of executables
-# Use version 2.0.12 of TopHat; wrapped version 2.2.2 of Bowtie2
+# Used version 2.0.12 of TopHat; wrapped version 2.2.2 of Bowtie2
 TOPHAT=/scratch0/langmead-fs1/shared/tophat-2.0.12.Linux_x86_64/tophat2
-# Use version 2.3.0e of STAR
+# Used version 2.3.0e of STAR
 STAR=/scratch0/langmead-fs1/shared/STAR_2.3.0e.Linux_x86_64/STAR
-# Use version 0.1.0 of Rail-RNA; wrapped version 2.2.2 of Bowtie2
+# Used version 0.1.0 of Rail-RNA; wrapped version 2.2.2 of Bowtie2
 # Specify Python executable/loc of get_junctions.py; PyPy 2.2.1 was used
 PYTHON=pypy
 RAILHOME=/scratch0/langmead-fs1/rail
@@ -24,7 +24,7 @@ CORES=32
 # Specify output directory
 MAINOUTPUT=/scratch0/langmead-fs1/geuvadis_sim/local_out
 
-# Specify log file for recording times
+# Specify log filename for recording times
 TIMELOG=$MAINOUTPUT/small_data_times.log
 
 ## Specify locations of reference-related files
@@ -34,7 +34,7 @@ BOWTIE1IDX=/scratch0/langmead-fs1/indexes_for_paper/genome
 BOWTIE2IDX=/scratch0/langmead-fs1/indexes_for_paper/genome
 # STAR index
 STARIDX=/scratch0/langmead-fs1/indexes_for_paper/star
-# Overhang length for STAR; this should be max read length - 1
+# Overhang length for STAR; this should ideally be max read length - 1
 OVERHANG=75
 
 ## Specify location of annotation
@@ -48,8 +48,17 @@ echo 'Building annotation for STAR from GTF...'
 cat $ANNOTATION | $PYTHON $RAILHOME/eval/get_junctions.py >$STARANNOTATION
 
 ## Where Feb 2009 hg19 chromosome files are located; download them at http://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips/chromFa.tar.gz
-# These are here because it's necessary to build a new STAR index for its annotation protocols
+# These are here because it's necessary to build a new STAR index for its 2-pass and annotation protocols
 FADIR=/scratch0/langmead-fs1/shared/references/hg19/fasta
+
+# Create STAR index including annotation
+echo 'Creating new STAR index for sample $SAMPLE including splice junctions...'
+echo '#STAR index pre-1-pass ann' 2>>$TIMELOG
+STARANNIDX=$MAINOUTPUT/starannidx
+mkdir -p $STARANNIDX
+# Use --sjdbOverhang 75 because reads are 76 bases long! See p. 3 of STAR manual for details.
+time ($STAR --runMode genomeGenerate --genomeDir $STARANNIDX --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
+		--runThreadN $CORES --sjdbFileChrStartEnd $STARANNOTATION --sjdbOverhang $OVERHANG) 2>>$TIMELOG
 
 # Flux outputs paired-end reads in one file; split files here
 echo 'Splitting Flux FASTQs...'
@@ -99,13 +108,6 @@ do
 	mkdir -p $OUTPUT/star/noann_paired_1pass
 	cd $OUTPUT/star/noann_paired_1pass
 	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/$SAMPLE_sim_left.fastq $DATADIR/$SAMPLE_sim_right.fastq --runThreadN $CORES) 2>>$TIMELOG
-	echo 'Creating new STAR index for sample $SAMPLE including splice junctions...'
-	echo '##SAMPLE STAR index pre-1-pass ann' 2>>$TIMELOG
-	STARANNIDX=$OUTPUT/star/new_idx
-	mkdir -p $STARANNIDX
-	# Use --sjdbOverhang 75 because reads are 76 bases long! See p. 3 of STAR manual for details.
-	time ($STAR --runMode genomeGenerate --genomeDir $STARANNIDX --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
-			--runThreadN $CORES --sjdbFileChrStartEnd $STARANNOTATION --sjdbOverhang $OVERHANG) 2>>$TIMELOG
 	echo 'Running STAR on sample $SAMPLE with annotation and in single-end mode...'
 	echo '#'$SAMPLE' STAR 1-pass ann single' >>$TIMELOG
 	mkdir -p $OUTPUT/star/ann_single_1pass
@@ -129,13 +131,13 @@ do
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXNOANNPAIRED --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--sjdbFileChrStartEnd $OUTPUT/star/noann_paired_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Creating new STAR index for sample $SAMPLE with annotation and in single-end mode...'
-	echo '#'$SAMPLE' STAR 1-pass noann single index' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 1-pass ann single index' >>$TIMELOG
 	STARIDXANNSINGLE=$OUTPUT/star/ann_single_idx
 	mkdir -p $STARIDXANNSINGLE
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXANNSINGLE --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 			--sjdbFileChrStartEnd $OUTPUT/star/ann_single_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES) 2>>$TIMELOG
 	echo 'Creating new STAR index for sample $SAMPLE with annotation and in paired-end mode...'
-	echo '#'$SAMPLE' STAR 1-pass noann paired index' >>$TIMELOG
+	echo '#'$SAMPLE' STAR 1-pass ann paired index' >>$TIMELOG
 	STARIDXANNPAIRED=$OUTPUT/star/ann_paired_idx
 	mkdir -p $STARIDXANNPAIRED
 	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXANNPAIRED --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
@@ -164,5 +166,5 @@ do
 	echo '#'$SAMPLE' Rail-RNA'
 	# Write manifest file
 	echo -e $DATADIR/$SAMPLE_sim.fastq'\t0\t'$SAMPLE'-0-0' >$MAINOUTPUT/$SAMPLE.manifest
-	time ($RAILRNA go local -m $MAINOUTPUT/$SAMPLE.manifest -o -1 $BOWTIE1IDX -2 $BOWTIE2IDX) 2>>$TIMELOG
+	time ($RAILRNA go local -m $MAINOUTPUT/$SAMPLE.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -1 $BOWTIE1IDX -2 $BOWTIE2IDX -f) 2>>$TIMELOG
 done
