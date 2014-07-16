@@ -76,10 +76,11 @@ cd $MAINOUTPUT
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
 	mkdir -p $SAMPLE
-	cd $MAINOUTPUT/$SAMPLE
+	cd $SAMPLE
 	mkdir -p tophat
 	mkdir -p star
 	mkdir -p rail
+	cd ..
 done
 wait
 
