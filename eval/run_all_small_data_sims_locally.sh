@@ -52,8 +52,8 @@ cat $ANNOTATION | $PYTHON $RAILHOME/eval/get_junctions.py >$STARANNOTATION
 FADIR=/scratch0/langmead-fs1/shared/references/hg19/fasta
 
 # Create STAR index including annotation
-echo 'Creating new STAR index for sample $SAMPLE including splice junctions...'
-echo '#STAR index pre-1-pass ann' 2>>$TIMELOG
+echo 'Creating new STAR index including splice junctions...'
+echo '#STAR index pre-1-pass ann' >>$TIMELOG
 STARANNIDX=$MAINOUTPUT/starannidx
 mkdir -p $STARANNIDX
 # Use --sjdbOverhang 75 because reads are 76 bases long! See p. 3 of STAR manual for details.
