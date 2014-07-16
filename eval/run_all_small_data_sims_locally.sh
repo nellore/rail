@@ -38,6 +38,14 @@ STARIDX=/scratch0/langmead-fs1/indexes_for_paper/star
 # Overhang length for STAR; this should ideally be max read length - 1
 OVERHANG=75
 
+# Flux outputs paired-end reads in one file; split files here
+echo 'Splitting Flux FASTQs...'
+for SAMPLE in {$SAMPLE1,$SAMPLE2}
+do
+	awk 'NR % 8 < 4' $DATADIR/$SAMPLE_sim.fastq >$DATADIR/$SAMPLE_sim_left.fastq
+	awk 'NR % 8 >= 4' $DATADIR/$SAMPLE_sim.fastq >$DATADIR/$SAMPLE_sim_right.fastq
+done
+
 ## Specify location of annotation
 # This is Gencode v12, which may be obtained at ftp://ftp.sanger.ac.uk/pub/gencode/release_12/gencode.v12.annotation.gtf.gz
 ANNOTATION=/scratch0/langmead-fs1/geuvadis_sim/gencode.v12.annotation.gtf
@@ -60,14 +68,6 @@ mkdir -p $STARANNIDX
 # Use --sjdbOverhang 75 because reads are 76 bases long! See p. 3 of STAR manual for details.
 time ($STAR --runMode genomeGenerate --genomeDir $STARANNIDX --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
 		--runThreadN $CORES --sjdbFileChrStartEnd $STARANNOTATION --sjdbOverhang $OVERHANG 2>&1) 2>>$TIMELOG
-
-# Flux outputs paired-end reads in one file; split files here
-echo 'Splitting Flux FASTQs...'
-for SAMPLE in {$SAMPLE1,$SAMPLE2}
-do
-	awk 'NR % 8 < 4' $DATADIR/$SAMPLE_sim.fastq >$DATADIR/$SAMPLE_sim_left.fastq
-	awk 'NR % 8 >= 4' $DATADIR/$SAMPLE_sim.fastq >$DATADIR/$SAMPLE_sim_right.fastq
-done
 
 cd $MAINOUTPUT
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
