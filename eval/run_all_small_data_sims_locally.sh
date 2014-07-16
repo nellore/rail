@@ -23,6 +23,7 @@ CORES=32
 
 # Specify output directory
 MAINOUTPUT=/scratch0/langmead-fs1/geuvadis_sim/local_out
+mkdir -p $MAINOUTPUT
 
 # Specify log filename for recording times
 TIMELOG=$MAINOUTPUT/small_data_times.log
@@ -71,8 +72,6 @@ do
 	wait
 done
 
-# Create output directories
-mkdir -p $MAINOUTPUT
 cd $MAINOUTPUT
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
