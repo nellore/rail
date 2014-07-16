@@ -162,10 +162,12 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         if token_count == 3:
             # Single-end reads
             source_urls = [Url(tokens[0])]
-        else:
-            assert token_count == 5
+        elif token_count == 5:
             # token_count == 5
             source_urls = [Url(tokens[0]), Url(tokens[2])]
+        else:
+            # Not a valid line, but continue for robustness
+            continue
         sample_label = tokens[-1]
         downloaded = set()
         sources = []
