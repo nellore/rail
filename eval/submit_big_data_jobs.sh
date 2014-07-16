@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Set location of Rail repo here
-RAIL_HOME=/scratch0/langmead-fs1/rail
+RAIL_HOME=~/railclones/rail
 
 # Set base location of output on S3 here
 OUT_BASENAME=s3://rail-experiments/geuvadis_sim
