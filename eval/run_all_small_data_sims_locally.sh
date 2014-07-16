@@ -21,7 +21,7 @@ RAILRNA=$PYTHON\ $RAILHOME/src
 # Specify number of parallel processes for each program
 CORES=32
 
-# Specify output directory
+# Specify FULL PATH to output directory
 MAINOUTPUT=/scratch0/langmead-fs1/geuvadis_sim/local_out
 mkdir -p $MAINOUTPUT
 
@@ -76,7 +76,7 @@ cd $MAINOUTPUT
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
 	mkdir -p $SAMPLE
-	cd $SAMPLE
+	cd $MAINOUTPUT/$SAMPLE
 	mkdir -p tophat
 	mkdir -p star
 	mkdir -p rail
