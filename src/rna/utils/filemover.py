@@ -136,9 +136,18 @@ class FileMover:
             command_list.append(url.to_nonnative_url())
             command_list.append(dest)
             command = ' '.join(command_list)
-            exit_level \
-                = subprocess.Popen(command_list, stdout=sys.stderr).wait()
-            if exit_level > 0:
+            s3cmd_process \
+                = subprocess.Popen(command_list, stdout=sys.stderr)
+            time.sleep(1)
+            last_print_time = time.time()
+            while s3cmd_process.poll() is None:
+                now_time = time.time()
+                if now_time - last_print_time > 60:
+                    print >>sys.stderr, '\nreporter:status:alive'
+                    sys.stderr.flush()
+                    last_print_time = now_time
+                    time.sleep(1)
+            if s3cmd_process.poll() > 0:
                 raise RuntimeError('Non-zero exitlevel %d from s3cmd '
                                    'get command "%s"' % (exit_level, command))
         elif url.is_curlable:
