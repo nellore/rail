@@ -15,6 +15,14 @@ THIS FILE DEPENDS ON DOOPLICITY AND RAIL; don't move it in the Rail repo.
 
 Output (written to stdout)
 ----------------------------
+Tab-delimited columns, where each row characterizes a distinct read alignment
+    1. 1 if relevant else 0
+    2. 1 if retrieved else 0
+    3. comma-separated list of coverages
+    4. max coverage
+    5. min coverage
+
+(to stderr)
 Two columns delimited by tabs, where the first column characterizes the numbers
 in the second column. The first column is given below.
 
@@ -162,7 +170,7 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream):
             flag = int(tokens[1])
             if flag & 4:
                 continue
-            name = tokens[0]
+            name = tokens[0][:-2]
             rname = tokens[2]
             cigar = tokens[5]
             pos = int(tokens[3])
@@ -183,6 +191,45 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream):
         except IndexError:
             print >>sys.stderr, ('Error found on line: ' + line)
             raise
+
+def print_instance(code, introns, intron_counts):
+    """ Prints information about intron coverage in an instance to stdout.
+
+        An instance is a (read name, alignment) pair that appears in either or
+        both of the original simulated data or the aligned data. A read that
+        appears in the original data is relevant; a read that appears in the
+        aligned data is retrieved. Here, "coverage" means the number of reads
+        that overlap an intron in the simulated dataset.
+
+        code: 'rel' if relevant but not retrieved
+              'ret' if retrieved but not relevant
+              'relret' if relevant and retrieved
+        introns: list introns overlapped by instance
+        intron_counts: maps elements of "introns" to their coverages
+
+        Printed information is in the following format:
+        1 if relevant else 0<TAB>1 if retrieved else 0<TAB>comma-separated
+        list of coverages<TAB>max coverage<TAB>min coverage
+
+        No return value.
+    """
+    if code == 'rel':
+        relevant = True
+        retrieved = False
+    elif code == 'ret':
+        relevant = False
+        retrieved = True
+    elif code == 'relret':
+        relevant = True
+        retrieved = True
+    coverages = [intron_counts[intron] for intron in introns]
+    print '%d\t%d\t%s\t%d\t%d' % (
+            1 if relevant else 0,
+            1 if retrieved else 0,
+            ','.join([str(coverage) for coverage in coverages]),
+            max(coverages),
+            min(coverages)
+        )
 
 if __name__ == '__main__':
     import argparse
@@ -221,9 +268,9 @@ if __name__ == '__main__':
     subprocess.check_call(' '.join(['sort -k1,1', combined_file, 
                                     '>', sorted_combined_file]),
                             bufsize=-1, shell=True)
-    relevant = defaultdict(int)
-    retrieved = defaultdict(int)
-    relevant_and_retrieved = defaultdict(int)
+    relevant = 0
+    retrieved = 0
+    relevant_and_retrieved = 0
     with open(sorted_combined_file) as sorted_combined_stream:
         for (name,), xpartition in xstream(sorted_combined_stream, 1):
             relevant_and_retrieved_instances = list(xpartition)
@@ -245,35 +292,66 @@ if __name__ == '__main__':
                      ))]
             relevant_count = len(ts)
             retrieved_count = len(rs)
+            assert relevant_count in [0, 1, 2]
+            assert retrieved_count in [0, 1, 2]
             relevant += relevant_count
             retrieved += retrieved_count
-            assert relevant_count in [1, 2]
-            assert retrieved_count <= relevant_count
             if retrieved_count == 2:
                 '''For paired-end read output from TopHat and STAR, /1 and /2's
                 are cut off from QNAMEs, so we must find the best assignment of
                 retrieved alignments to relevant alignments.'''
-                aligned = [ts[0] == rs[0], ts[1] == rs[1]]
-                switched = [ts[0] == rs[1], rs[0] == ts[1]]
-                if aligned.count(True) >= switched.count(True):
-                    matches = [(ts[0], rs[0]), (ts[1], rs[1])]
-                else:
-                    matches = [(ts[0], rs[1]), (ts[1], rs[0])]
-                for match in matches:
-                    if match[0] == match[1]:
+                if relevant_count == 2:
+                    aligned = [ts[0] == rs[0], ts[1] == rs[1]]
+                    switched = [ts[0] == rs[1], rs[0] == ts[1]]
+                    if aligned.count(True) >= switched.count(True):
+                        matches = [(ts[0], rs[0]), (ts[1], rs[1])]
+                    else:
+                        matches = [(ts[0], rs[1]), (ts[1], rs[0])]
+                    for match in matches:
+                        if match[0] == match[1]:
+                            relevant_and_retrieved += 1
+                            print_instance('relret', match[0], intron_counts)
+                        else:
+                            print_instance('rel', match[0], intron_counts)
+                            print_instance('ret', match[1], intron_counts)
+                elif relevant_count == 1:
+                    if ts[0] in rs:
                         relevant_and_retrieved += 1
-                        if match[0]
-            for i in xrange(len(ts)):
-                for j in xrange(i, len(rs)):
-
-            for r in rs:
-                if r in ts:
+                        for r in rs:
+                            if ts[0] == r:
+                                print_instance('relret', r, intron_counts)
+                            else:
+                                print_instance('ret', r, intron_counts)
+                    else:
+                        for r in rs:
+                            print_instance('ret', r, intron_counts)
+                        print_instance('rel', ts[0], intron_counts)
+                else:
+                    # relevant_count == 0
+                    for r in rs:
+                        print_instance('ret', r, intron_counts)
+            elif retrieved_count == 1:
+                try:
+                    r_index = ts.index(rs[0])
+                    for i, t in enumerate(ts):
+                        if i == r_index:
+                            print_instance('relret', t, intron_counts)
+                        else:
+                            print_instance('rel', t, intron_counts)
                     relevant_and_retrieved += 1
+                except ValueError:
+                    # Retrieved alignment not found
+                    for t in ts:
+                        print_instance('rel', t, intron_counts)
+                    print_instance('ret', rs[0], intron_counts)
+            else:
+                # No retrieved alignments
+                for t in ts:
+                    print_instance('rel', t, intron_counts)
     precision = float(relevant_and_retrieved) / retrieved
     recall = float(relevant_and_retrieved) / relevant
-    print '#spliced read performance'
-    print 'relevant instances\t%d' % relevant
-    print 'retrieved instances\t%d' % retrieved
-    print 'intersection\t%d' % relevant_and_retrieved
-    print 'precision\t%.9f' % precision
-    print 'recall\t%.9f' % recall
+    print >>sys.stderr, 'relevant instances\t%d' % relevant
+    print >>sys.stderr, 'retrieved instances\t%d' % retrieved
+    print >>sys.stderr, 'intersection\t%d' % relevant_and_retrieved
+    print >>sys.stderr, 'precision\t%.9f' % precision
+    print >>sys.stderr, 'recall\t%.9f' % recall

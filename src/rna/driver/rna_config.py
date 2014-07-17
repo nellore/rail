@@ -1779,7 +1779,7 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--transcriptome-bowtie1-args', type=str, required=False,
-            default='-v 1 -a -m 80 --best --strata',
+            default='-v 1 -a -m 80',
             help=SUPPRESS
         )
         algo_parser.add_argument(

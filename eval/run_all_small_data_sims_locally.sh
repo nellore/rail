@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-
+# RUN WITH TASKSET to limit CPU usage on multicore system for benchmarking!
+# Ex: taskset -c 0,1,2,3 sh run_all_small_data_sims_locally.sh
 # Select two sample names for analysis. See generate_bioreps.py for how sample data was generated.
 SAMPLE1=NA18861.1.M_120209_2
 SAMPLE2=NA18508.1.M_111124_1
@@ -17,12 +18,14 @@ STAR=/scratch0/langmead-fs1/shared/STAR_2.3.0e.Linux_x86_64/STAR
 PYTHON=pypy
 RAILHOME=/scratch0/langmead-fs1/rail
 RAILRNA=$PYTHON\ $RAILHOME/src
+# Samtools v0.1.19-44428cd was used
+SAMTOOLS=samtools
 
 # Specify number of parallel processes for each program
-CORES=32
+CORES=4
 
 # Specify FULL PATH to output directory
-MAINOUTPUT=/scratch0/langmead-fs1/geuvadis_sim/local_out
+MAINOUTPUT=/scratch0/langmead-fs1/geuvadis_sim/4cpus
 mkdir -p $MAINOUTPUT
 
 # Specify log filename for recording times
@@ -163,8 +166,8 @@ do
 	cd $OUTPUT/star/ann_paired_2pass
 	time ($STAR --genomeDir $STARIDXANNPAIRED --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
 	echo 'Running Rail-RNA on sample '${SAMPLE}'...'
-	echo '#'${SAMPLE}' Rail-RNA'
+	echo '#'${SAMPLE}' Rail-RNA' >>$TIMELOG
 	# Write manifest file
 	echo -e $DATADIR/${SAMPLE}_sim.fastq'\t0\t'${SAMPLE}'-0-0' >$MAINOUTPUT/${SAMPLE}.manifest
-	time ($RAILRNA go local -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -1 $BOWTIE1IDX -2 $BOWTIE2IDX -f >/dev/null 2>/dev/null) 2>>$TIMELOG
+	time ($RAILRNA go local -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -1 $BOWTIE1IDX -2 $BOWTIE2IDX -f >/dev/null 2>&1) 2>>$TIMELOG
 done
