@@ -23,7 +23,7 @@ RAILRNA=$PYTHON\ $RAILHOME/src
 SAMTOOLS=samtools
 
 # Specify number of parallel processes for each program
-CORES=4
+CORES=8
 
 # Specify FULL PATH to output directory
 MAINOUTPUT=/scratch0/langmead-fs1/geuvadis_sim/4cpus
