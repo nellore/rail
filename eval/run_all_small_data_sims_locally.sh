@@ -2,7 +2,6 @@
 # RUN WITH TASKSET to limit CPU usage on multicore system for benchmarking!
 # $1: number of cores
 # $2: output directory
-# $3: 'noannsplit' if Flux fastqs have already been split / STAR annotation has already been created
 # Ex: taskset -c 0,1,2,3 sh run_all_small_data_sims_locally.sh 4 ./myoutput
 # Select two sample names for analysis. See generate_bioreps.py for how sample data was generated.
 SAMPLE1=NA18861.1.M_120209_2
@@ -58,17 +57,14 @@ ANNOTATION=/scratch0/langmead-fs1/geuvadis_sim/gencode.v12.annotation.gtf
 STARANNOTATION=$MAINOUTPUT/junctions_for_star.txt
 
 # Flux outputs paired-end reads in one file; split files here
-if [$3 -neq 'noannsplit']
-	then
-	echo 'Building annotation for STAR from GTF...'
-	cat $ANNOTATION | $PYTHON $RAILHOME/eval/get_junctions.py >$STARANNOTATION
-	echo 'Splitting Flux FASTQs...'
-	for SAMPLE in {$SAMPLE1,$SAMPLE2}
-	do
-		awk '(NR-1) % 8 < 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_left.fastq
-		awk '(NR-1) % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_right.fastq
-	done
-fi
+echo 'Building annotation for STAR from GTF...'
+cat $ANNOTATION | $PYTHON $RAILHOME/eval/get_junctions.py >$STARANNOTATION
+echo 'Splitting Flux FASTQs...'
+for SAMPLE in {$SAMPLE1,$SAMPLE2}
+do
+	awk '(NR-1) % 8 < 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_left.fastq
+	awk '(NR-1) % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_right.fastq
+done
 
 ## Where Feb 2009 hg19 chromosome files are located; download them at http://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips/chromFa.tar.gz
 # These are here because it's necessary to build a new STAR index for its 2-pass and annotation protocols
