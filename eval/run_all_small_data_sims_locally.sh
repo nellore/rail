@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # RUN WITH TASKSET to limit CPU usage on multicore system for benchmarking!
-# Ex: taskset -c 0,1,2,3 sh run_all_small_data_sims_locally.sh
+# $1: number of cores
+# $2: output directory
+# Ex: taskset -c 0,1,2,3 sh run_all_small_data_sims_locally.sh 4 ./myoutput
 # Select two sample names for analysis. See generate_bioreps.py for how sample data was generated.
 SAMPLE1=NA18861.1.M_120209_2
 SAMPLE2=NA18508.1.M_111124_1
@@ -23,10 +25,10 @@ RAILRNA=$PYTHON\ $RAILHOME/src
 SAMTOOLS=samtools
 
 # Specify number of parallel processes for each program
-CORES=8
+CORES=$1
 
 # Specify FULL PATH to output directory
-MAINOUTPUT=/scratch0/langmead-fs1/geuvadis_sim/8cpus
+MAINOUTPUT=$2
 mkdir -p $MAINOUTPUT
 
 # Specify log filename for recording times
