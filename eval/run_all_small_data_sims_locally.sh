@@ -2,6 +2,7 @@
 # RUN WITH TASKSET to limit CPU usage on multicore system for benchmarking!
 # $1: number of cores
 # $2: output directory
+# $3: 'nosplit' if Flux fastqs have already been split
 # Ex: taskset -c 0,1,2,3 sh run_all_small_data_sims_locally.sh 4 ./myoutput
 # Select two sample names for analysis. See generate_bioreps.py for how sample data was generated.
 SAMPLE1=NA18861.1.M_120209_2
@@ -49,12 +50,15 @@ OVERHANG=75
 PERFORMANCE=perform
 
 # Flux outputs paired-end reads in one file; split files here
-echo 'Splitting Flux FASTQs...'
-for SAMPLE in {$SAMPLE1,$SAMPLE2}
-do
-	awk '(NR-1) % 8 < 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_left.fastq
-	awk '(NR-1) % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_right.fastq
-done
+if [$3 -neq 'nosplit']
+	then
+	echo 'Splitting Flux FASTQs...'
+	for SAMPLE in {$SAMPLE1,$SAMPLE2}
+	do
+		awk '(NR-1) % 8 < 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_left.fastq
+		awk '(NR-1) % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >$DATADIR/${SAMPLE}_sim_right.fastq
+	done
+fi
 
 ## Specify location of annotation
 # This is Gencode v12, which may be obtained at ftp://ftp.sanger.ac.uk/pub/gencode/release_12/gencode.v12.annotation.gtf.gz
