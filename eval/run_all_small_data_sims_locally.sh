@@ -26,7 +26,7 @@ SAMTOOLS=samtools
 CORES=8
 
 # Specify FULL PATH to output directory
-MAINOUTPUT=/scratch0/langmead-fs1/geuvadis_sim/4cpus
+MAINOUTPUT=/scratch0/langmead-fs1/geuvadis_sim/8cpus
 mkdir -p $MAINOUTPUT
 
 # Specify log filename for recording times
