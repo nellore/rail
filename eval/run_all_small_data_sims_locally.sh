@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # RUN WITH TASKSET to limit CPU usage on multicore system for benchmarking!
 # $1: number of cores
-# $2: output directory
+# $2: output directory -- SPECIFY FULL PATH
 # Ex: taskset -c 0,1,2,3 sh run_all_small_data_sims_locally.sh 4 ./myoutput
 # Select two sample names for analysis. See generate_bioreps.py for how sample data was generated.
 SAMPLE1=NA18861.1.M_120209_2
