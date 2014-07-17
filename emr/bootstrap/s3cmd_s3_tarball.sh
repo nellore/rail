@@ -21,6 +21,10 @@ cat >$HOME/.s3cfg <<EOF
 [default]
 access_key = $AWS_ACCESS_ID
 secret_key = $AWS_ACCESS_KEY
+socket_timeout = 300
+multipart_chunk_size_mb = 15
+reduced_redundancy = False
+send_chunk = 4096
 EOF
 
 mkdir -p $1
