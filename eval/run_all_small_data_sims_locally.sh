@@ -15,7 +15,7 @@ DATADIR=/scratch0/langmead-fs1/geuvadis_sim
 # Used version 2.0.12 of TopHat; wrapped version 2.2.2 of Bowtie2
 TOPHAT=/scratch0/langmead-fs1/shared/tophat-2.0.12.Linux_x86_64/tophat2
 # Used version 2.3.0e of STAR
-STAR=/scratch0/langmead-fs1/shared/STAR_2.3.0e.Linux_x86_64/STAR
+STAR=/scratch0/langmead-fs1/shared/STAR_2.3.0e.Linux_x86_64_static/STAR
 # Used version 0.1.0 of Rail-RNA; wrapped version 2.2.2 of Bowtie2
 # Specify Python executable/loc of get_junctions.py; PyPy 2.2.1 was used
 PYTHON=pypy
