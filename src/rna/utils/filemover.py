@@ -136,9 +136,6 @@ class FileMover:
             command_list.append(url.to_nonnative_url())
             command_list.extend([dest, '--force'])
             command = ' '.join(command_list)
-            s3cmd_process \
-                = subprocess.Popen(command_list, stdout=sys.stderr)
-            time.sleep(1)
             filename = os.path.join(dest, url.to_url().rpartition('/')[2])
             tries = 0
             while tries < 5:
@@ -150,7 +147,7 @@ class FileMover:
                 last_size = os.path.getsize(filename)
                 while s3cmd_process.poll() is None:
                     now_time = time.time()
-                    if now_time - last_print_time > 160:
+                    if now_time - last_print_time > 120:
                         print >>sys.stderr, '\nreporter:status:alive'
                         sys.stderr.flush()
                         new_size = os.path.getsize(filename)
@@ -164,7 +161,8 @@ class FileMover:
                         time.sleep(1)
                 if break_outer_loop:
                     tries += 1
-                    s3cmd_process.terminate()
+                    s3cmd_process.kill()
+                    os.remove(filename)
                     time.sleep(2)
                     continue
                 if s3cmd_process.poll() > 0:
