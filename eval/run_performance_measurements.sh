@@ -18,6 +18,12 @@ MAINOUTPUT=$1
 # Performance is computed with spliced_read_recovery_performance.py; refer to that file for details
 PERFORMANCE=perform
 
+# Specify data directory; fastqs should be of the form [SAMPLE NAME]_sim.fastq; Flux beds should be
+# of form [SAMPLE_NAME]_sim.bed
+DATADIR=/scratch0/langmead-fs1/geuvadis_sim
+
+RAILHOME=/scratch0/langmead-fs1/rail
+
 # Measure performances
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
