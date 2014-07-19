@@ -46,6 +46,6 @@ do
 			for (i = 1; i <='$RETRIEVEDTHRESHOLD'; i++) {
 				printf "%d\t%d\t%d\t%d\n",i,rel[i],ret[i],relret[i]
 			}
-		}' $perform >${perform}_retrieved & >$OUTPUT/$(basename "$perform")_true &
+		}' $perform >$OUTPUT/$(basename "$perform")_retrieved &
 done
 wait
