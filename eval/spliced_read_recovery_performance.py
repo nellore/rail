@@ -172,7 +172,7 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream,
             flag = int(tokens[1])
             if flag & 4:
                 continue
-            name = tokens[0][:-2]
+            name = tokens[0]
             rname = tokens[2]
             cigar = tokens[5]
             pos = int(tokens[3])
