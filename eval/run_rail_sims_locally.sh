@@ -30,7 +30,7 @@ MAINOUTPUT=$2
 mkdir -p $MAINOUTPUT
 
 # Specify log filename for recording times
-TIMELOG=$MAINOUTPUT/small_data_times.log
+TIMELOG=$MAINOUTPUT/rail_times.log
 
 ## Specify locations of reference-related files
 ## See create_indexes.sh for index creation script
@@ -59,8 +59,8 @@ do
 	echo '#'${SAMPLE}' Rail-RNA' >>$TIMELOG
 	# Write manifest file
 	echo -e $DATADIR/${SAMPLE}_sim.fastq'\t0\t'${SAMPLE}'-0-0' >$MAINOUTPUT/${SAMPLE}.manifest
-	time ($RAILRNA go local -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -1 $BOWTIE1IDX -2 $BOWTIE2IDX -f >/dev/null 2>&1) 2>>$TIMELOG
+	time ($RAILRNA go local -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail2 --log $OUTPUT/rail2.log -1 $BOWTIE1IDX -2 $BOWTIE2IDX -f >/dev/null 2>&1) 2>>$TIMELOG
 	echo 'Computing precision and recall...'
 	$SAMTOOLS merge - $OUTPUT/rail/alignments/*.bam | $SAMTOOLS view - | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py \
-		-t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail/$PERFORMANCE 2>$OUTPUT/rail/${PERFORMANCE}_summary
+		-t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail2/$PERFORMANCE 2>$OUTPUT/rail2/${PERFORMANCE}_summary
 done
