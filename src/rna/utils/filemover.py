@@ -191,7 +191,7 @@ class FileMover:
                         last_print_time = now_time
                     time.sleep(1)
                 if curl_thread.process_return > 89 \
-                    or curl_thread.process_return in [7, 56]:
+                    or curl_thread.process_return == 56:
                     '''If the exit code is greater than the highest-documented
                     curl exit code, there was a timeout.'''
                     print >>sys.stderr, 'Too many simultaneous connections; ' \
