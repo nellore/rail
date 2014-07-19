@@ -14,13 +14,35 @@ INPUT=/scratch0/langmead-fs1/geuvadis_sim/performance # where to find output of 
 
 for perform in $INPUT/*
 do
-	awk ('{for (i = 1; i <= '$TRUETHRESHOLD'; i++){ if ($5 == i) {rel[i] += $1;' \
-		'ret[i] += $2; if ($1 == $2) {relret[i] += $1}}}} END {for (i = 1; i <= ' \
-		$TRUETHRESHOLD'; i++) {printf "%d\t%d\t%d\t%d\n",i,rel[i],ret[i],relret[i]}}') \
-		$perform >${perform}_true &
-	awk ('{for (i = 1; i <= '$RETRIEVEDTHRESHOLD'; i++){ if ($8 >= i) {rel[i] += $1;' \
-		'ret[i] += $2; if ($1 == $2) {relret[i] += $1}}}} END {for (i = 1; i <= ' \
-		$RETRIEVEDTHRESHOLD'; i++) {printf "$d\t%d\t%d\t%d\n",i,rel[i],ret[i],relret[i]}}') \
-		$perform >${perform}_retrieved &
+	awk '{ 
+			for (i = 1; i <= '$TRUETHRESHOLD'; i++) {
+				if ($5 == i) {
+					rel[i] += $1;
+					ret[i] += $2;
+					if ($1 == $2) {
+						relret[i] += $1
+					}
+				}
+			}
+		} END {
+			for (i = 1; i <='$TRUETHRESHOLD'; i++) {
+				printf "%d\t%d\t%d\t%d\n",i,rel[i],ret[i],relret[i]
+			}
+		}' $perform >${perform}_true &
+	awk '{ 
+			for (i = 1; i <= '$RETRIEVEDTHRESHOLD'; i++) {
+				if ($8 >= i) {
+					rel[i] += $1;
+					ret[i] += $2;
+					if ($1 == $2) {
+						relret[i] += $1
+					}
+				}
+			}
+		} END {
+			for (i = 1; i <='$RETRIEVEDTHRESHOLD'; i++) {
+				printf "%d\t%d\t%d\t%d\n",i,rel[i],ret[i],relret[i]
+			}
+		}' $perform >${perform}_retrieved & $perform >${perform}_retrieved &
 done
 wait
