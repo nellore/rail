@@ -41,10 +41,10 @@ do
 	$SAMTOOLS view $OUTPUT/tophat/ann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py \
 		-t $DATADIR/${SAMPLE}_sim.bed -g >$OUTPUT/tophat/ann_paired/$PERFORMANCE 2>$OUTPUT/tophat/ann_paired/${PERFORMANCE}_summary &
 	cd $OUTPUT/star/noann_single_1pass
-	echo 'Computing precision and recall for STAR on sample '${SAMPLE}' with no annotation and in single-end mode......'
+	echo 'Computing precision and recall for STAR on sample '${SAMPLE}' with no annotation and in single-end mode...'
 	cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary &
 	cd $OUTPUT/star/noann_paired_1pass
-	echo 'Computing precision and recall for STAR on sample '${SAMPLE}' with no annotation and in paired-end mode......'
+	echo 'Computing precision and recall for STAR on sample '${SAMPLE}' with no annotation and in paired-end mode...'
 	cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary &
 	cd $OUTPUT/star/ann_single_1pass
 	echo 'Computing precision and recall for STAR on sample '${SAMPLE}' with annotation and in single-end mode...'
