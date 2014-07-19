@@ -11,6 +11,9 @@ TRUETHRESHOLD=100 # max number of rows in matrix 1
 RETRIEVEDTHRESHOLD=100 # max number of rows in matrix 2
 
 INPUT=/scratch0/langmead-fs1/geuvadis_sim/performance # where to find output of harvest_spliced_read_performance.py
+OUTPUT=$INPUT/harvest
+
+mkdir -p $OUTPUT
 
 for perform in $INPUT/*
 do
@@ -28,7 +31,7 @@ do
 			for (i = 1; i <='$TRUETHRESHOLD'; i++) {
 				printf "%d\t%d\t%d\t%d\n",i,rel[i],ret[i],relret[i]
 			}
-		}' $perform >${perform}_true &
+		}' $perform >$OUTPUT/$(basename "$perform")_true &
 	awk '{ 
 			for (i = 1; i <= '$RETRIEVEDTHRESHOLD'; i++) {
 				if ($8 >= i) {
@@ -43,6 +46,6 @@ do
 			for (i = 1; i <='$RETRIEVEDTHRESHOLD'; i++) {
 				printf "%d\t%d\t%d\t%d\n",i,rel[i],ret[i],relret[i]
 			}
-		}' $perform >${perform}_retrieved & $perform >${perform}_retrieved &
+		}' $perform >${perform}_retrieved & >$OUTPUT/$(basename "$perform")_true &
 done
 wait
