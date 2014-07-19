@@ -4,6 +4,6 @@
 RAILHOME=~/railclones/rail
 
 # Set output directory here -- must be on S3!
-OUTPUT=s3://rail-experiments/ALLOFGEUVADIS
+OUTPUT=s3://rail-experiments/GEUVADIS
 
-python $RAILHOME/src prep elastic -m GEUVADIS_all_samples.manifest -c 50 -o $OUTPUT
+python $RAILHOME/src prep elastic -m GEUVADIS_all_samples.manifest -c 50 -o $OUTPUT --do-not-check-manifest

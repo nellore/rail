@@ -59,7 +59,7 @@ do
 	echo '#'${SAMPLE}' Rail-RNA' >>$TIMELOG
 	# Write manifest file
 	echo -e $DATADIR/${SAMPLE}_sim.fastq'\t0\t'${SAMPLE}'-0-0' >$MAINOUTPUT/${SAMPLE}.manifest
-	time ($RAILRNA go local -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail2 --log $OUTPUT/rail2.log -1 $BOWTIE1IDX -2 $BOWTIE2IDX -f >/dev/null 2>&1) 2>>$TIMELOG
+	time ($RAILRNA go local -p $CORES -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail2 --log $OUTPUT/rail2.log -1 $BOWTIE1IDX -2 $BOWTIE2IDX -f >/dev/null 2>&1) 2>>$TIMELOG
 	echo 'Computing precision and recall...'
 	$SAMTOOLS merge - $OUTPUT/rail/alignments/*.bam | $SAMTOOLS view - | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py \
 		-t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail2/$PERFORMANCE 2>$OUTPUT/rail2/${PERFORMANCE}_summary
