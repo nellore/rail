@@ -47,7 +47,7 @@ for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
 	mkdir -p ${SAMPLE}
 	cd ${SAMPLE}
-	mkdir -p rail
+	mkdir -p rail2
 	cd ..
 done
 

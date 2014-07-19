@@ -764,8 +764,11 @@ class WebAnsible:
                                 stdout=subprocess.PIPE,
                                 stderr=self._osdevnull)
         curl_err = curl_process.stdout.read()
-        curl_process.wait()
-        if 'resolve host' in curl_err or 'Not Found' in curl_err:
+        return_code = curl_process.wait()
+        curl_err = curl_err.lower()
+        if 'resolve host' in curl_err or 'not found' in curl_err \
+            or return_code in [19, 6]:
+            # 19 is file doesn't exist; 6 is couldn't resolve host
             return False
         return True
 
