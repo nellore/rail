@@ -18,9 +18,12 @@ Output (written to stdout)
 Tab-delimited columns, where each row characterizes a distinct read alignment
     1. 1 if relevant else 0
     2. 1 if retrieved else 0
-    3. comma-separated list of coverages
-    4. max coverage
-    5. min coverage
+    3. comma-separated list of true coverages
+    4. max true coverage
+    5. min true coverage
+    6. comma-separated list of retrieved coverages
+    7. max retrieved coverage
+    8. min retrieved coverage
 
 (to stderr)
 Two columns delimited by tabs, where the first column characterizes the numbers
@@ -96,8 +99,8 @@ def write_read_introns_from_bed_stream(bed_stream, output_stream,
         output_stream: where to write output. Each line takes the form:
             <read name><TAB><sorted list of intron starts and ends>
             <TAB>['t' for 'true']
-        intron_counts: defaultdict(int) that counts number of reads overlapping
-            intron
+        intron_counts: defaultdict(int) that counts number of simulated
+            alignments overlapping intron
         generous: True iff QNAMES should have the last two chars cut off
 
         No return value.
@@ -141,25 +144,24 @@ def write_read_introns_from_bed_stream(bed_stream, output_stream,
         for i in xrange(len(junctions)/2):
             introns.add((junctions[2*i] + 1, junctions[2*i+1] + 1))
         if introns:
-            print >>output_stream, '%s\t%s\tt' \
-                % (name[:-2] if generous else name,
-                    '\t'.join(
-                            [chrom + ';'.join(['']
+            introns = [chrom + ';'.join(['']
                                 + [str(bound) for bound in intron])
                              for intron in sorted(list(introns))]
-                         ))
+            print >>output_stream, '%s\t%s\tt' \
+                % (name[:-2] if generous else name, '\t'.join(introns))
         for intron in introns:
-            intron_counts[chrom
-                    + ';'.join([''] + [str(bound) for bound in intron])
-                ] += 1
+            intron_counts[intron] += 1
 
-def write_read_introns_from_sam_stream(sam_stream, output_stream):
+def write_read_introns_from_sam_stream(sam_stream, output_stream,
+                                        retrieved_intron_counts):
     """ Writes output that maps QNAMES to introns overlapped.
 
         sam_stream: where to find retrieved alignments in SAM form
         output_stream: where to write output. Each line takes the form:
             <read name><TAB>RNAME<TAB><sorted list of intron starts and ends>
             <TAB>['r' for 'retrieved']
+        retrieved_intron_counts: defaultdict(int) that counts number of
+            retrieved alignments overlapping intron
 
         No return value.
     """
@@ -170,7 +172,7 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream):
             flag = int(tokens[1])
             if flag & 4:
                 continue
-            name = tokens[0]
+            name = tokens[0][:-2]
             rname = tokens[2]
             cigar = tokens[5]
             pos = int(tokens[3])
@@ -182,30 +184,32 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream):
             _, _, introns, _ = indels_introns_and_exons(cigar,
                                         dummy_md_index(cigar), pos, seq)
             introns = [intron[:2] for intron in introns]
-            print >>output_stream, '%s\t%s\tr' \
-                % (name, '\t'.join(
-                        [rname 
+            introns = [rname 
                           + ';'.join([''] + [str(bound) for bound in intron])
                           for intron in sorted(list(introns))]
-                    ))
+            for intron in introns:
+                retrieved_intron_counts[intron] += 1
+            print >>output_stream, '%s\t%s\tr' % (name, '\t'.join(introns))
         except IndexError:
             print >>sys.stderr, ('Error found on line: ' + line)
             raise
 
-def print_instance(code, introns, intron_counts):
+def print_instance(code, introns, intron_counts, retrieved_intron_counts):
     """ Prints information about intron coverage in an instance to stdout.
 
         An instance is a (read name, alignment) pair that appears in either or
         both of the original simulated data or the aligned data. A read that
         appears in the original data is relevant; a read that appears in the
         aligned data is retrieved. Here, "coverage" means the number of reads
-        that overlap an intron in the simulated dataset.
+        that overlap an intron in the simulated or retrieved dataset.
 
         code: 'rel' if relevant but not retrieved
               'ret' if retrieved but not relevant
               'relret' if relevant and retrieved
         introns: list introns overlapped by instance
-        intron_counts: maps elements of "introns" to their coverages
+        intron_counts: maps elements of "introns" to their simulated coverages
+        retrieved_intron_counts: maps elements of "introns" to their retrieved
+            coverages
 
         Printed information is in the following format:
         1 if relevant else 0<TAB>1 if retrieved else 0<TAB>comma-separated
@@ -223,12 +227,18 @@ def print_instance(code, introns, intron_counts):
         relevant = True
         retrieved = True
     coverages = [intron_counts[intron] for intron in introns]
-    print '%d\t%d\t%s\t%d\t%d' % (
+    retrieved_coverages = [retrieved_intron_counts[intron]
+                            for intron in introns]
+    print '%d\t%d\t%s\t%d\t%d\t%s\t%d\t%d' % (
             1 if relevant else 0,
             1 if retrieved else 0,
             ','.join([str(coverage) for coverage in coverages]),
             max(coverages),
-            min(coverages)
+            min(coverages),
+            ','.join([str(retrieved_coverage) for retrieved_coverage
+                        in retrieved_coverages]),
+            max(retrieved_coverages),
+            min(retrieved_coverages)
         )
 
 if __name__ == '__main__':
@@ -255,14 +265,15 @@ if __name__ == '__main__':
     temp_dir_path = tempfile.mkdtemp()
     atexit.register(remove_temporary_directories, [temp_dir_path])
     combined_file = os.path.join(temp_dir_path, 'combined.temp')
-    intron_counts = defaultdict(int)
+    intron_counts, retrieved_intron_counts = defaultdict(int), defaultdict(int)
     with open(combined_file, 'w') as combined_stream:
         with open(args.true_introns_bed) as true_introns_bed_stream:
             write_read_introns_from_bed_stream(true_introns_bed_stream,
                                                 combined_stream,
                                                 intron_counts,
                                                 generous=args.generous)
-        write_read_introns_from_sam_stream(sys.stdin, combined_stream)
+        write_read_introns_from_sam_stream(sys.stdin, combined_stream,
+                                            retrieved_intron_counts)
     import subprocess
     sorted_combined_file = os.path.join(temp_dir_path, 'combined.sorted.temp')
     subprocess.check_call(' '.join(['sort -k1,1', combined_file, 
@@ -310,44 +321,59 @@ if __name__ == '__main__':
                     for match in matches:
                         if match[0] == match[1]:
                             relevant_and_retrieved += 1
-                            print_instance('relret', match[0], intron_counts)
+                            print_instance('relret', match[0], intron_counts,
+                                            retrieved_intron_counts)
                         else:
-                            print_instance('rel', match[0], intron_counts)
-                            print_instance('ret', match[1], intron_counts)
+                            print_instance('rel', match[0], intron_counts,
+                                            retrieved_intron_counts)
+                            print_instance('ret', match[1], intron_counts,
+                                            retrieved_intron_counts)
                 elif relevant_count == 1:
-                    if ts[0] in rs:
-                        relevant_and_retrieved += 1
-                        for r in rs:
-                            if ts[0] == r:
-                                print_instance('relret', r, intron_counts)
+                    try:
+                        t_index = rs.index(ts[0])
+                        for i, r in enumerate(rs):
+                            if i == t_index:
+                                print_instance('relret', r, intron_counts,
+                                                retrieved_intron_counts)
                             else:
-                                print_instance('ret', r, intron_counts)
-                    else:
+                                print_instance('ret', r, intron_counts,
+                                                retrieved_intron_counts)
+                        relevant_and_retrieved += 1
+                    except ValueError:
+                        # Relevant alignment not found
                         for r in rs:
-                            print_instance('ret', r, intron_counts)
-                        print_instance('rel', ts[0], intron_counts)
+                            print_instance('ret', r, intron_counts,
+                                            retrieved_intron_counts)
+                        print_instance('rel', ts[0], intron_counts,
+                                        retrieved_intron_counts)
                 else:
                     # relevant_count == 0
                     for r in rs:
-                        print_instance('ret', r, intron_counts)
+                        print_instance('ret', r, intron_counts,
+                                        retrieved_intron_counts)
             elif retrieved_count == 1:
                 try:
                     r_index = ts.index(rs[0])
                     for i, t in enumerate(ts):
                         if i == r_index:
-                            print_instance('relret', t, intron_counts)
+                            print_instance('relret', t, intron_counts,
+                                            retrieved_intron_counts)
                         else:
-                            print_instance('rel', t, intron_counts)
+                            print_instance('rel', t, intron_counts,
+                                            retrieved_intron_counts)
                     relevant_and_retrieved += 1
                 except ValueError:
                     # Retrieved alignment not found
                     for t in ts:
-                        print_instance('rel', t, intron_counts)
-                    print_instance('ret', rs[0], intron_counts)
+                        print_instance('rel', t, intron_counts,
+                                        retrieved_intron_counts)
+                    print_instance('ret', rs[0], intron_counts,
+                                    retrieved_intron_counts)
             else:
                 # No retrieved alignments
                 for t in ts:
-                    print_instance('rel', t, intron_counts)
+                    print_instance('rel', t, intron_counts,
+                                    retrieved_intron_counts)
     precision = float(relevant_and_retrieved) / retrieved
     recall = float(relevant_and_retrieved) / relevant
     print >>sys.stderr, 'relevant instances\t%d' % relevant
