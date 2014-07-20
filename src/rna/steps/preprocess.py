@@ -152,12 +152,15 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     fastq_cues = set(['@'])
     fasta_cues = set(['>', ';'])
     for k, line in enumerate(sys.stdin):
-        if line[0] == '#' or not line.strip():
-            # Allow comments and blank lines
-            continue
         _input_line_count += 1
         # Kill offset from start of manifest file
         tokens = line.strip().split('\t')[1:]
+        try:
+            stripped = tokens[0].strip()
+            if stripped[0] == '#' or not stripped:
+                continue
+        except IndexError:
+            continue
         token_count = len(tokens)
         if token_count == 3:
             # Single-end reads
