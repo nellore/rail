@@ -6,6 +6,7 @@
 # Saw 667 SRRs
 # Saw 667 groups (2 names unp, 666 names paired)
 #
+# The line ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188328/ERR188328.fastq.gz	0	PRJEB3366_ERP001942_ERS185395_ERX162982_ERR188328-1-1 did not exist on the server
 
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188021/ERR188021_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188021/ERR188021_2.fastq.gz	0	PRJEB3366_ERP001942_ERS185362_ERX163159_ERR188021-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188022/ERR188022_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188022/ERR188022_2.fastq.gz	0	PRJEB3366_ERP001942_ERS185103_ERX162912_ERR188022-1-1
@@ -314,7 +315,6 @@ ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188324/ERR188324_1.fastq.gz	0	ftp:/
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188325/ERR188325_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188325/ERR188325_2.fastq.gz	0	PRJEB3366_ERP001942_ERS185153_ERX163013_ERR188325-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188326/ERR188326_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188326/ERR188326_2.fastq.gz	0	PRJEB3366_ERP001942_ERS185467_ERX163110_ERR188326-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188327/ERR188327_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188327/ERR188327_2.fastq.gz	0	PRJEB3366_ERP001942_ERS185170_ERX162831_ERR188327-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188328/ERR188328.fastq.gz	0	PRJEB3366_ERP001942_ERS185395_ERX162982_ERR188328-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188329/ERR188329_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188329/ERR188329_2.fastq.gz	0	PRJEB3366_ERP001942_ERS185048_ERX163009_ERR188329-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188330/ERR188330_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188330/ERR188330_2.fastq.gz	0	PRJEB3366_ERP001942_ERS185414_ERX163136_ERR188330-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188331/ERR188331_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188331/ERR188331_2.fastq.gz	0	PRJEB3366_ERP001942_ERS185323_ERX163040_ERR188331-1-1

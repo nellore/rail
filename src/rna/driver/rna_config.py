@@ -1735,7 +1735,7 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--cap-size-multiplier', type=float, required=False,
-            default=1.1,
+            default=1.05,
             help=SUPPRESS
         )
         algo_parser.add_argument(
