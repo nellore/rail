@@ -1717,7 +1717,7 @@ class RailRnaAlign:
         algo_parser.add_argument(
             '--max-readlet-size', type=int, required=False,
             metavar='<int>',
-            default=20,
+            default=22,
             help='max size of read segment to align when searching for introns'
         )
         algo_parser.add_argument(
