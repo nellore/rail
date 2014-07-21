@@ -733,7 +733,7 @@ def introns_from_clique(clique, read_seq, reference_index,
     _, _, prefix_pos, prefix_end_pos, prefix_displacement = clique[0]
     _, _, suffix_pos, suffix_end_pos, suffix_displacement = clique[-1]
     new_prefix, new_suffix = [], []
-    if clique[0][-1] >= min_exon_size:
+    if clique[0][-1] >= min_exon_size and search_window_size:
         # Find possible maximal matching prefixes
         search_pos = max(0, prefix_pos - 1 - search_window_size)
         search_window = reference_index.get_stretch(
@@ -762,7 +762,7 @@ def introns_from_clique(clique, read_seq, reference_index,
         > reference_index.length[rname]:
         # Skip this part if too close to edge of reference
         unmapped_base_count = 0
-    if unmapped_base_count >= min_exon_size:
+    if unmapped_base_count >= min_exon_size and search_window_size:
         search_pos = suffix_end_pos - 1
         search_window = reference_index.get_stretch(
                 rname,
@@ -895,7 +895,8 @@ def introns_from_clique(clique, read_seq, reference_index,
                                     alignment_score
                                 )
                             )
-                    elif small_exon_size >= min_exon_size:
+                    elif small_exon_size >= min_exon_size \
+                        and search_window_size:
                         '''Search only within 1000 bases of either end of the
                         intron to find where to split it. Enumerate possible
                         motif ends and starts, and match small exon. Its bases
@@ -1104,14 +1105,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         intron_partition_overlap: number of bases to subtract from
             reference start position of intron when determining genome
             partition it is in.
-        search_for_caps: True iff reference should be searched for the segment
-            of a read (a cap) that precedes the first EC and the segment of a
-            read that follows the last EC. Such segments are subsequently added
-            as an ECs themselves, and introns may be called between them.
-        min_cap_size: the reference is not searched for a cap smaller
+        min_exon_size: the reference is not searched for an exon smaller
             than this size.
-        cap_search_window_size: the size (in bp) of the reference subsequence
-            in which to search for a cap.
+        search_window_size: the size (in bp) of the reference subsequence
+            in which to search for an exon.
         max_cap_count: maximum number of possible caps of size
             min_cap_size to consider when searching for caps.
         global_alignment: instance of GlobalAlignment class used for fast
