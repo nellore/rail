@@ -1759,7 +1759,7 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--motif-search-window-size', type=int, required=False,
-            default=1000,
+            default=10000,
             help=SUPPRESS
         )
         algo_parser.add_argument(
