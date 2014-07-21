@@ -3,8 +3,8 @@
 # after enhancements were made
 # $1: output directory -- SPECIFY FULL PATH
 # Select two sample names for analysis. Should match those in script run_all_small_data_sims_locally
-SAMPLE1=NA18861.1.M_120209_2
-SAMPLE2=NA18508.1.M_111124_1
+SAMPLE1=NA18858.1.M_120209_7
+SAMPLE2=NA18519.1.M_111124_3
 
 # Specify Python executable/loc of get_junctions.py; PyPy 2.2.1 was used
 PYTHON=pypy
