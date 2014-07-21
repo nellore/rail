@@ -510,6 +510,39 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
                                  if alignment[1] is not None])] |= samples
     return to_return
 
+def split_collections(alignment_collections, separation):
+    """ Splits alignments up if successive introns are separated by > seq_size
+
+        Two cointrons overlapped by readlet alignments may be on the same 
+        strand but much further apart than a read can overlap. This function
+        splits up alignments if successive introns are separated by more
+        than separation.
+
+        alignment_collections: list of readlet alignments overlapping introns.
+            Alignments take the form (rname, True if sense strand is
+            forward strand or False if sense strand is reverse strand,
+            alignment_start_position, alignment_end_position, tuple of tuples
+            (pos, end_pos) of start and end positions of introns, readlet_size,
+            distance to previous intron or None if beginning of strand,
+            distance to next intron or None if end of strand, True if alignment
+            is to forward strand else False, displacement of readlet from 5'
+            end of read)
+        separation: number of bases at or above which alignment collections are
+            separated.
+
+        Return value: List of lists of readlet alignments.
+    """
+    if not alignment_collections: return []
+    alignment_collections.sort(key=lambda alignment: alignment[4][0])
+    to_return = [[alignment_collections[0]]]
+    for i in xrange(1, len(alignment_collections)):
+        if alignment_collections[i][4][0][0] - to_return[-1][-1][4][-1][1] \
+            >= separation:
+            to_return.append([alignment_collections[i]])
+        else:
+            to_return[-1].append(alignment_collections[i])
+    return to_return
+
 def go(input_stream=sys.stdin, output_stream=sys.stdout, 
         verbose=False, stranded=False, fudge=10, min_readlet_size=25,
         tie_fudge_fraction=0.9):
@@ -672,89 +705,98 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                             clusters[selected_introns]
                                             & applicable_sample_indexes
                                         )
-                    for alignments in maximal_cliques(selected_introns):
-                        # Get stats on alignment with smallest start position
-                        (_, _, left_pos,
-                            _, _, left_readlet_size,
-                            left_intron_distance, _, _, 
-                            _, left_displacement) = min(alignments,
-                                key=lambda alignment: alignment[2]
-                            )
-                        # Get stats on alignment with largest end position
-                        (_, _, _,
-                            right_end_pos, _, right_readlet_size,
-                            _, right_intron_distance, _, 
-                            _, right_displacement) = max(alignments,
-                                key=lambda alignment: alignment[3]
-                            )
-                        introns_to_add = set()
-                        for alignment in alignments:
-                            for intron in alignment[4]:
-                                introns_to_add.add(intron)
-                        intron_starts_and_ends = zip(*sorted(
-                                                          list(introns_to_add))
-                                                        )
-                        # Find start position of first intron
-                        left_intron_pos = intron_starts_and_ends[0][0]
-                        # Find end position of last intron
-                        right_intron_end_pos = intron_starts_and_ends[1][-1]
-                        '''Compute distances to ends of read from first and
-                        last introns.'''
-                        left_extend_size = (left_intron_pos - left_pos
-                                             + left_displacement)
-                        right_extend_size = (seq_size - right_displacement
-                                                - right_readlet_size
-                                                + right_end_pos
-                                                - right_intron_end_pos)
-                        intron_starts_and_ends = zip(*sorted(
-                                                          list(introns_to_add))
-                                                        )
-                        '''Ensure number of exonic bases is within fudge of
-                        read size.'''
-                        if abs(seq_size 
-                                - sum([intron_starts_and_ends[0][i+1] 
-                                        - intron_starts_and_ends[1][i]
-                                        for i 
-                                        in xrange(
-                                            len(intron_starts_and_ends[0])
-                                                        - 1)])
-                                - left_extend_size
-                                - right_extend_size) > fudge:
-                            if verbose:
-                                print >>sys.stderr, 'Killing intron combo', \
-                                    intron_starts_and_ends, 'because its ' \
-                                    'exonic base sum was not within ' \
-                                    'fudge=%d bases of the sequence ' \
-                                    'size=%d' % (fudge, seq_size)
-                            continue
-                        '''Determine by how much reference should be extended
-                        on either side of intron.'''
-                        if left_extend_size > left_intron_distance:
-                            left_size = left_extend_size
-                        else:
-                            left_size = min(left_extend_size + fudge,
-                                            left_intron_distance)
-                        if right_extend_size > right_intron_distance:
-                            right_size = right_extend_size
-                        else:
-                            right_size = min(right_extend_size + fudge,
-                                             right_intron_distance)
-                        print >>output_stream, '%s\t%d\t%s\t%s' \
-                                '\t%d\t%d\t%s\t%s' % (
-                                alignments[0][0] + ('-' if 
-                                                    alignments[0][1] else '+'),
-                                left_intron_pos,
-                                ','.join(map(str,
-                                                intron_starts_and_ends[0][1:]))
-                                if len(intron_starts_and_ends[0][1:]) \
-                                    else '\x1c',
-                                ','.join(map(str, intron_starts_and_ends[1])),
-                                left_size,
-                                right_size,
-                                seq,
-                                sample_indexes
-                            )
-                        _output_line_count += 1
+                    for alignment_collections in maximal_cliques(
+                                                        selected_introns
+                                                    ):
+                        for alignments in split_collections(
+                                            alignment_collections,
+                                            seq_size + fudge
+                                        ):
+                            '''Get stats on alignment with smallest start
+                            position.'''
+                            (_, _, left_pos,
+                                _, _, left_readlet_size,
+                                left_intron_distance, _, _, 
+                                _, left_displacement) = min(alignments,
+                                    key=lambda alignment: alignment[2]
+                                )
+                            # Get stats on alignment with largest end position
+                            (_, _, _,
+                                right_end_pos, _, right_readlet_size,
+                                _, right_intron_distance, _, 
+                                _, right_displacement) = max(alignments,
+                                    key=lambda alignment: alignment[3]
+                                )
+                            introns_to_add = set()
+                            for alignment in alignments:
+                                for intron in alignment[4]:
+                                    introns_to_add.add(intron)
+                            intron_starts_and_ends = zip(*sorted(
+                                                        list(introns_to_add))
+                                                    )
+                            # Find start position of first intron
+                            left_intron_pos = intron_starts_and_ends[0][0]
+                            # Find end position of last intron
+                            right_intron_end_pos \
+                                = intron_starts_and_ends[1][-1]
+                            '''Compute distances to ends of read from first and
+                            last introns.'''
+                            left_extend_size = (left_intron_pos - left_pos
+                                                 + left_displacement)
+                            right_extend_size = (seq_size - right_displacement
+                                                    - right_readlet_size
+                                                    + right_end_pos
+                                                    - right_intron_end_pos)
+                            intron_starts_and_ends = zip(*sorted(
+                                                        list(introns_to_add))
+                                                    )
+                            '''Ensure number of exonic bases is within fudge of
+                            read size.'''
+                            if abs(seq_size 
+                                    - sum([intron_starts_and_ends[0][i+1] 
+                                            - intron_starts_and_ends[1][i]
+                                            for i in xrange(
+                                                len(intron_starts_and_ends[0])
+                                                            - 1)])
+                                    - left_extend_size
+                                    - right_extend_size) > fudge:
+                                if verbose:
+                                    print >>sys.stderr, 'Killing intron ' \
+                                        'combo', \
+                                        intron_starts_and_ends, 'because ' \
+                                        'its exonic base sum was not within ' \
+                                        'fudge=%d bases of the sequence ' \
+                                        'size=%d' % (fudge, seq_size)
+                                continue
+                            '''Determine by how much reference should be
+                            extended on either side of intron.'''
+                            if left_extend_size > left_intron_distance:
+                                left_size = left_extend_size
+                            else:
+                                left_size = min(left_extend_size + fudge,
+                                                left_intron_distance)
+                            if right_extend_size > right_intron_distance:
+                                right_size = right_extend_size
+                            else:
+                                right_size = min(right_extend_size + fudge,
+                                                 right_intron_distance)
+                            print >>output_stream, '%s\t%d\t%s\t%s' \
+                                    '\t%d\t%d\t%s\t%s' % (
+                                    alignments[0][0] + ('-' if 
+                                    alignments[0][1] else '+'),
+                                    left_intron_pos,
+                                    ','.join(map(str,
+                                        intron_starts_and_ends[0][1:]))
+                                    if len(intron_starts_and_ends[0][1:]) \
+                                        else '\x1c',
+                                    ','.join(map(str,
+                                                intron_starts_and_ends[1])),
+                                    left_size,
+                                    right_size,
+                                    seq,
+                                    sample_indexes
+                                )
+                            _output_line_count += 1
 
 if __name__ == '__main__':
     # Print file's docstring if -h is invoked
