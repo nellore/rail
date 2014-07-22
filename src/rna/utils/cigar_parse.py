@@ -67,7 +67,10 @@ def reference_from_seq(cigar, seq, reference_index, rname, pos):
     j = -1
     while reference_seq[j] == 'N':
         j -= 1
-    return (new_pos + i, reference_seq[i:j+1])
+    if j == -1:
+        return (new_pos + i, reference_seq[i:])
+    else:
+        return (new_pos + i, reference_seq[i:j+1])
 
 def indels_introns_and_exons(cigar, md, pos, seq):
     """ Computes indels, introns, and exons from CIGAR, MD string,
