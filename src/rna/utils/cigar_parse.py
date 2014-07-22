@@ -60,7 +60,14 @@ def reference_from_seq(cigar, seq, reference_index, rname, pos):
     new_pos = pos - preclip
     reference_seq = reference_index.get_stretch(rname, new_pos - 1,
                                                 base_count)
-    return new_pos, reference_seq
+    # Clip Ns from ends of reference sequence; workaround for BT2 bug
+    i = 0
+    while reference_seq[i] == 'N':
+        i += 1
+    j = -1
+    while reference_seq[j] == 'N':
+        j -= 1
+    return (new_pos + i, reference_seq[i:j+1])
 
 def indels_introns_and_exons(cigar, md, pos, seq):
     """ Computes indels, introns, and exons from CIGAR, MD string,
