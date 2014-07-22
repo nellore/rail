@@ -132,7 +132,11 @@ start_time = time.time()
 
 # For storing BED files before conversion to bigBed
 import tempfile
+from tempdel import remove_temporary_directories
+import atexit
 temp_dir_path = tempfile.mkdtemp()
+# Clean up after script
+atexit.register(remove_temporary_directories, [temp_dir_path])
 bed_filename = os.path.join(temp_dir_path, 'temp.bed')
 if args.verbose:
     print >>sys.stderr, 'Writing to temporary bed %s .' % bed_filename

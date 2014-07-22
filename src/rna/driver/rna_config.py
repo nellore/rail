@@ -535,6 +535,10 @@ class RailRnaLocal:
         else:
             if not manifest_url.is_local:
                 base.manifest_dir = tempfile.mkdtemp()
+                import atexit
+                from tempdel import remove_temporary_directories
+                atexit.register(remove_temporary_directories,
+                                    [base.manifest_dir])
                 base.manifest = os.path.join(base.manifest_dir, 'MANIFEST')
                 ansible.get(manifest_url, destination=base.manifest)
             files_to_check = []
@@ -814,6 +818,10 @@ class RailRnaElastic:
         else:
             if not manifest_url.is_local:
                 temp_manifest_dir = tempfile.mkdtemp()
+                import atexit
+                from tempdel import remove_temporary_directories
+                atexit.register(remove_temporary_directories,
+                                    [temp_manifest_dir])
                 manifest = os.path.join(temp_manifest_dir, 'MANIFEST')
                 ansible.get(base.manifest, destination=manifest)
             else:
