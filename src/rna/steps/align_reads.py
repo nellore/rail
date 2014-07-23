@@ -210,7 +210,7 @@ class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
     def __init__(self, input_stream, reference_index, manifest_object, 
-        output_stream=sys.stdout, exon_differentials=True,
+        return_set, output_stream=sys.stdout, exon_differentials=True,
         exon_intervals=False, end_to_end_sam=True, verbose=False,
         bin_size=10000, report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
@@ -221,6 +221,8 @@ class BowtieOutputThread(threading.Thread):
                 that permits access to reference
             manifest_object: object of class LabelsAndIndices that maps indices
                 to labels and back; used to shorten intermediate output.
+            return_set: 0 is added to the set if a process completes
+                successfully; else nothing is added
             output_stream: where to emit exon and intron tuples; typically,
                 this is sys.stdout.
             exon_differentials: True iff EC differentials are to be emitted.
@@ -247,6 +249,7 @@ class BowtieOutputThread(threading.Thread):
         self.exon_intervals = exon_intervals
         self.end_to_end_sam = end_to_end_sam
         self.manifest_object = manifest_object
+        self.return_set = return_set
 
     def run(self):
         """ Prints exons for end-to-end alignments.
@@ -429,6 +432,7 @@ class BowtieOutputThread(threading.Thread):
                                         sample_label,
                                         exon_end_pos)
                                 _output_line_count += 1
+        self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 
@@ -592,8 +596,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             time.sleep(.2)
     else:
         bowtie_process.wait()
+    return_set = set()
     output_thread = BowtieOutputThread(
-            open(output_file), reference_index, manifest_object,
+            open(output_file), reference_index, manifest_object, return_set,
             exon_differentials=exon_differentials, 
             exon_intervals=exon_intervals, 
             bin_size=bin_size,
@@ -606,6 +611,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     # Join thread to pause execution in main thread
     if verbose: print >>sys.stderr, 'Joining thread...'
     output_thread.join()
+    if not return_set:
+        raise RuntimeError('Error occurred in BowtieOutputThread.')
 
 if __name__ == '__main__':
     import argparse

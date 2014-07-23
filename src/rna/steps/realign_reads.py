@@ -668,10 +668,11 @@ class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
     def __init__(self, input_stream, qname_stream, reference_index,
-        manifest_object, output_stream=sys.stdout, exon_differentials=True, 
-        exon_intervals=False, stranded=False, verbose=False, bin_size=10000,
-        report_multiplier=1.2, alignment_count_to_report=1,
-        bowtie_seed=0, non_deterministic=False, by='job'):
+        manifest_object, return_set, output_stream=sys.stdout,
+        exon_differentials=True, exon_intervals=False, stranded=False,
+        verbose=False, bin_size=10000, report_multiplier=1.2,
+        alignment_count_to_report=1, bowtie_seed=0, non_deterministic=False,
+        by='job'):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -683,6 +684,8 @@ class BowtieOutputThread(threading.Thread):
                 maps indices to labels and back; used to shorten intermediate
                 output and decide whether to keep alignmetns based on
                 sample group.
+            return_set: 0 is added to this set if the thread finishes
+                successfully
             output_stream: where to emit exon and intron tuples; typically,
                 this is sys.stdout.
             exon_differentials: True iff EC differentials are to be emitted.
@@ -722,6 +725,7 @@ class BowtieOutputThread(threading.Thread):
         self.alignment_count_to_report = alignment_count_to_report
         self.qname_stream = qname_stream
         self.by = by
+        self.return_set = return_set
 
     def run(self):
         """ Prints SAM, exon_ivals, exon_diffs, and introns.
@@ -908,6 +912,7 @@ class BowtieOutputThread(threading.Thread):
                                 right_displacement)
                         )
                     _output_line_count += 1
+        self.return_set.add(0)
 
 def handle_temporary_directory(archive, temp_dir_path):
     """ Archives or deletes temporary directory.
@@ -1114,11 +1119,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
         stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
     bowtie_process.wait()
+    return_set = set()
     output_thread = BowtieOutputThread(
                         open(output_file),
                         open(qname_file),
                         reference_index=reference_index,
                         manifest_object=manifest_object,
+                        return_set=return_set,
                         exon_differentials=exon_differentials, 
                         exon_intervals=exon_intervals, 
                         bin_size=bin_size,
@@ -1135,6 +1142,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     # Join thread to pause execution in main thread
     if verbose: print >>sys.stderr, 'Joining thread...'
     output_thread.join()
+    if not return_set:
+        raise RuntimeError('Error occurred in BowtieOutputThread.')
     print >> sys.stderr, 'DONE with realign_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)

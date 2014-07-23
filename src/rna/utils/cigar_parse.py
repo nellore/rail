@@ -58,6 +58,8 @@ def reference_from_seq(cigar, seq, reference_index, rname, pos):
         preclip = 0
     base_count = len(seq) - insert_count + del_count
     new_pos = pos - preclip
+    if new_pos < 1:
+        new_pos = 1
     reference_seq = reference_index.get_stretch(rname, new_pos - 1,
                                                 base_count)
     # Clip Ns from ends of reference sequence; workaround for BT2 bug

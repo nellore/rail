@@ -90,8 +90,8 @@ def handle_temporary_directory(temp_dir_path):
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
-    def __init__(self, input_stream, qname_stream, output_stream=sys.stdout,
-        verbose=False, report_multiplier=1.2):
+    def __init__(self, input_stream, qname_stream, return_set,
+        output_stream=sys.stdout, verbose=False, report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -100,6 +100,8 @@ class BowtieOutputThread(threading.Thread):
                 this is sys.stdout.
             qname_stream: where to find long names containing read information
                 associated with readlets
+            return_set: 0 is added to this set if a thread finishes
+                successfully
             verbose: True if alignments should occasionally be written 
                 to stderr.
             bin_size: genome is partitioned in units of bin_size for later load
@@ -115,6 +117,7 @@ class BowtieOutputThread(threading.Thread):
         self.verbose = verbose
         self.report_multiplier = report_multiplier
         self.qname_stream = qname_stream
+        self.return_set = return_set
 
     def run(self):
         """ Prints exons for end-to-end alignments.
@@ -179,6 +182,7 @@ class BowtieOutputThread(threading.Thread):
                             '%s\t%s\t\x1c\t\x1c\t\x1c' % (read_id[:-1],
                                                             read_rest)
                     _output_line_count += 1
+        self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     bowtie_index_base='genome', bowtie_args='', verbose=False,
@@ -269,10 +273,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1, shell=True,
         stdout=subprocess.PIPE, stderr=sys.stderr)
     bowtie_process.wait()
+    return_set = set()
     with open(qname_file) as qname_stream:
         output_thread = BowtieOutputThread(
                 open(output_file),
                 qname_stream,
+                return_set,
                 verbose=verbose, 
                 output_stream=output_stream,
                 report_multiplier=report_multiplier
@@ -281,6 +287,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         # Join thread to pause execution in main thread
         if verbose: print >>sys.stderr, 'Joining thread...'
         output_thread.join()
+    if not return_set:
+        raise RuntimeError('Error occurred in BowtieOutputThread.')
 
 if __name__ == '__main__':
     import argparse
