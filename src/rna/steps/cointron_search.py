@@ -387,7 +387,7 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
         displacement of readlet from 5' end of read). rname is the
         SAM-format rname (typically a chromosome), reverse_strand is True iff
         the readlet's reversed complement aligns to the reference, and 
-        displacement is the number of bases between the 5' (3')end of the
+        displacement is the number of bases between the 5' (3') end of the
         readlet, which aligns to the forward (reverse) strand, and the 5' (3')
         end of the read. Let K_i be the number of alignments {R_ij} of a given
         readlet R_i.

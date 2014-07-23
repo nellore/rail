@@ -1782,12 +1782,12 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--genome-bowtie1-args', type=str, required=False,
-            default='-v 0 -a -m 80',
+            default='-v 0 -a -m 20',
             help=SUPPRESS
         )
         algo_parser.add_argument(
             '--transcriptome-bowtie1-args', type=str, required=False,
-            default='-v 1 -a -m 80',
+            default='-v 1 -a -m 20',
             help=SUPPRESS
         )
         algo_parser.add_argument(
