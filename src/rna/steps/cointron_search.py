@@ -544,8 +544,7 @@ def split_collections(alignment_collections, separation):
     return to_return
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, 
-        verbose=False, stranded=False, fudge=10, min_readlet_size=25,
-        tie_fudge_fraction=0.9):
+        verbose=False, stranded=False, fudge=10, tie_fudge_fraction=0.9):
     """ Runs Rail-RNA-intron_search.
 
         Reduce step in MapReduce pipelines that builds a map of introns
@@ -599,8 +598,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         fudge: permits a sum of exonic bases for an intron combo to be within 
             the specified number of bases of a read sequence's size;
             this allows for indels with respect to the reference.
-        min_readlet_size: filters out alignments of readlets smaller than
-            this size.
         tie_fudge_fraction: if a cluster's size is --tie-fudge-fraction * the
             size of the largest cluster from correlation clustering, it is 
             still considered tied with the largest cluster and returned for
@@ -673,33 +670,17 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 in multireadlet])
                                 for displacement, multireadlet
                                 in collected_readlets.items()]
-            '''Kill "intron" alignments for which the readlet already has
-            alignments to genome. May want to get savvier about this in
-            correlation clustering directly. Also kill readlets whose sizes are
-            less than max_readlet_size.'''
-            filtered_multireadlets = []
-            for multireadlet in multireadlets:
-                if None in [alignment[1] for alignment in multireadlet]:
-                    filtered_multireadlets.append(
-                            [alignment for alignment in multireadlet
-                                if alignment[1] is None
-                                    and alignment[5] >= min_readlet_size]
-                        )
-                else:
-                    filtered_multireadlets.append(
-                            [alignment for alignment in multireadlet
-                                if alignment[5] >= min_readlet_size]
-                        )
             if False not in [alignment[1] is None 
-                                for multireadlet in filtered_multireadlets
+                                for multireadlet in multireadlets
                                 for alignment in multireadlet]:
                 # No introns to see here
                 continue
             clusters = selected_introns_by_clustering(
-                                filtered_multireadlets,
+                                multireadlets,
                                 tie_fudge_fraction=0.9
                             )
             if clusters:
+                to_write = set()
                 for selected_introns in clusters:
                     sample_indexes = string_from_int(
                                             clusters[selected_introns]
@@ -780,8 +761,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             else:
                                 right_size = min(right_extend_size + fudge,
                                                  right_intron_distance)
-                            print >>output_stream, '%s\t%d\t%s\t%s' \
-                                    '\t%d\t%d\t%s\t%s' % (
+                            to_write.add('%s\t%d\t%s\t%s\t%d\t%d\t%s\t%s' % (
                                     alignments[0][0] + ('-' if 
                                     alignments[0][1] else '+'),
                                     left_intron_pos,
@@ -796,7 +776,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                     seq,
                                     sample_indexes
                                 )
-                            _output_line_count += 1
+                            )
+                for line_to_write in to_write:
+                    print >>output_stream, line_to_write
+                    _output_line_count += 1
 
 if __name__ == '__main__':
     # Print file's docstring if -h is invoked
@@ -819,10 +802,6 @@ if __name__ == '__main__':
         help='Permits a sum of exonic bases for an intron combo to be within '
              'the specified number of bases of a read sequence\'s size; '
              'this allows for indels with respect to the reference')
-    parser.add_argument('--min-readlet-size', type=int, required=False,
-        default=25,
-        help='Minimum size of readlet alignments to admit when performing '
-             'correlation clustering')
     parser.add_argument('--tie-fudge-fraction', type=float, required=False,
         default=0.9,
         help='If a cluster\'s size is --tie-fudge-fraction * the size of the '
@@ -836,7 +815,6 @@ if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
     go(verbose=args.verbose, stranded=args.stranded, fudge=args.fudge,
-        min_readlet_size=args.min_readlet_size,
         tie_fudge_fraction=args.tie_fudge_fraction)
     print >> sys.stderr, 'DONE with cointron_search.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,

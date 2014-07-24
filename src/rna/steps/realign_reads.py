@@ -1118,7 +1118,16 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
         stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
-    bowtie_process.wait()
+    if keep_alive:
+        period_start = time.time()
+        while bowtie_process.poll() is None:
+            now = time.time()
+            if now - period_start > 60:
+                print >>sys.stderr, '\nreporter:status:alive'
+                period_start = now
+            time.sleep(.2)
+    else:
+        bowtie_process.wait()
     return_set = set()
     output_thread = BowtieOutputThread(
                         open(output_file),

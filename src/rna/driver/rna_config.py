@@ -723,20 +723,24 @@ class RailRnaElastic:
             "m2.2xlarge"  : 4,
             "m2.4xlarge"  : 8,
             "cc1.4xlarge" : 8,
-            "c3.2xlarge" : 8
+            "c3.2xlarge" : 8,
+            "c3.4xlarge" : 16,
+            "c3.8xlarge" : 32
         }
 
         base.instance_swap_allocations = {
-            "m1.small"    : (2 *1024), #  1.7 GB
-            "m1.large"    : (8 *1024), #  7.5 GB
+            "m1.small"    : (2*1024), #  1.7 GB
+            "m1.large"    : (8*1024), #  7.5 GB
             "m1.xlarge"   : (16*1024), # 15.0 GB
-            "c1.medium"   : (2 *1024), #  1.7 GB
-            "c1.xlarge"   : (8 *1024), #  7.0 GB
+            "c1.medium"   : (2*1024), #  1.7 GB
+            "c1.xlarge"   : (8*1024), #  7.0 GB
             "m2.xlarge"   : (16*1024), # 17.1 GB
             "m2.2xlarge"  : (16*1024), # 34.2 GB
             "m2.4xlarge"  : (16*1024), # 68.4 GB
             "cc1.4xlarge" : (16*1024), # 23.0 GB
-            "c3.2xlarge" : (16*1024) # 15.0 GB
+            "c3.2xlarge" : (16*1024), # 15.0 GB
+            "c3.4xlarge" : (32*1024), # 32 GB
+            "c3.8xlarge" : (64*1024) # 64 GB
         }
 
         '''Not currently in use, but may become important if there are
@@ -1128,7 +1132,7 @@ class RailRnaElastic:
         elastic_parser.add_argument('--master-instance-type', type=str,
             metavar='<choice>',
             required=False,
-            default='c3.2xlarge',
+            default='c3.8xlarge',
             help=('master instance type')
         )
         elastic_parser.add_argument('--core-instance-type', type=str,
@@ -1221,9 +1225,15 @@ class RailRnaElastic:
                         '-m',
                         'mapred.job.reuse.jvm.num.tasks=1',
                         '-m',
-                        'mapred.tasktracker.reduce.tasks.maximum=8',
+                        ('mapred.tasktracker.reduce.tasks.maximum=%d'
+                            % (base.instance_core_counts[
+                                    base.core_instance_type
+                                ])),
                         '-m',
-                        'mapred.tasktracker.map.tasks.maximum=8',
+                        ('mapred.tasktracker.map.tasks.maximum=%d'
+                            % base.instance_core_counts[
+                                    base.core_instance_type
+                                ]),
                         '-m',
                         'mapred.map.tasks.speculative.execution=false',
                         '-m',
@@ -1600,8 +1610,10 @@ class RailRnaAlign:
                                                     motif_search_window_size
                                                 ))
         base.motif_search_window_size = motif_search_window_size
-        if not (isinstance(max_gaps_mismatches, int) and 
-                    max_gaps_mismatches >= 0):
+        if max_gaps_mismatches is not None and not (
+                isinstance(max_gaps_mismatches, int) and 
+                max_gaps_mismatches >= 0
+            ):
             base.errors.append('Max gaps and mismatches '
                                '(--max-gaps-mismatches) must be an '
                                'integer >= 0, but {0} was entered.'.format(
@@ -1767,12 +1779,12 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--motif-search-window-size', type=int, required=False,
-            default=1000,
+            default=0,
             help=SUPPRESS
         )
         algo_parser.add_argument(
             '--max-gaps-mismatches', type=int, required=False,
-            default=3,
+            default=None,
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -1883,11 +1895,12 @@ class RailRnaAlign:
             {
                 'name' : 'Align unique readlets to genome',
                 'run' : ('align_readlets.py --bowtie-idx={0} '
-                         '--bowtie-exe={1} {2} '
-                         '-- -t --sam-nohead --startverbose {3}').format(
+                         '--bowtie-exe={1} {2} {3} '
+                         '-- -t --sam-nohead --startverbose {4}').format(
                                                     base.bowtie1_idx,
                                                     base.bowtie1_exe,
                                                     verbose,
+                                                    keep_alive,
                                                     base.genome_bowtie1_args,
                                                 ),
                 'inputs' : ['combine_subsequences'],
@@ -1901,8 +1914,7 @@ class RailRnaAlign:
                 'run' : ('intron_search.py --bowtie-idx={0} '
                          '--partition-length={1} --max-intron-size={2} '
                          '--min-intron-size={3} --min-exon-size={4} '
-                         '--search-window-size={5} '
-                         '--max-gaps-mismatches={6} '
+                         '--search-window-size={5} {6} '
                          '--motif-radius={7} {8}').format(
                                                 base.bowtie1_idx,
                                                 base.genome_partition_length,
@@ -1910,7 +1922,10 @@ class RailRnaAlign:
                                                 base.min_intron_size,
                                                 base.min_exon_size,
                                                 base.motif_search_window_size,
-                                                base.max_gaps_mismatches,
+                                                ('--max-gaps-mismatches %d' %
+                                                 base.max_gaps_mismatches)
+                                                if base.max_gaps_mismatches
+                                                is not None else '',
                                                 base.motif_radius,
                                                 verbose
                                             ),
@@ -1964,8 +1979,8 @@ class RailRnaAlign:
             {
                 'name' : 'Align readlets to transcriptome elements',
                 'run' : ('align_readlets.py --bowtie-idx={0} '
-                         '--bowtie-exe={1} {2} -- -t --sam-nohead '
-                         '--startverbose {3}').format(
+                         '--bowtie-exe={1} {2} {3} -- -t --sam-nohead '
+                         '--startverbose {4}').format(
                                                 'intron/intron'
                                                 if elastic else
                                                 path_join(elastic,
@@ -1974,6 +1989,7 @@ class RailRnaAlign:
                                                     'intron'),
                                                 base.bowtie1_exe,
                                                 verbose,
+                                                keep_alive,
                                                 base.transcriptome_bowtie1_args
                                             ),
                 'inputs' : ['combine_subsequences'],
@@ -1988,8 +2004,7 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Finalize intron cooccurrences on reads',
-                'run' : ('cointron_search.py {0} '
-                         '--min-readlet-size 0').format(
+                'run' : 'cointron_search.py {0}'.format(
                                                     verbose
                                                 ),
                 'inputs' : ['realign_readlets', 'align_readlets'],
@@ -2015,13 +2030,14 @@ class RailRnaAlign:
                 'run' : ('realign_reads.py --original-idx={0} '
                          '--bowtie2-exe={1} --partition-length={2} '
                          '--exon-differentials --manifest={3} {4} '
-                         '--by {5} -- {6}').format(
+                         '--by {5} {6} -- {7}').format(
                                         base.bowtie1_idx,
                                         base.bowtie2_exe,
                                         base.genome_partition_length,
                                         manifest,
                                         verbose,
                                         base.by,
+                                        keep_alive,
                                         base.bowtie2_args
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),

@@ -186,7 +186,7 @@ class BowtieOutputThread(threading.Thread):
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     bowtie_index_base='genome', bowtie_args='', verbose=False,
-    report_multiplier=1.2):
+    report_multiplier=1.2, keep_alive=False):
     """ Runs Rail-RNA-align_readlets.
 
         Aligns input readlet sequences and writes a single output line per
@@ -245,7 +245,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             stderr.
         report_multiplier: if verbose is True, the line number of an alignment
             written to stderr increases exponentially with base
-            report_multiplier.
+            report_multiplier.    
+        keep_alive: True iff "reporter:status:alive" should be printed to
+            stderr periodically to keep job alive while Bowtie is running
 
         No return value.
     """
@@ -272,7 +274,16 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     print >>sys.stderr, 'Starting Bowtie with command: ' + bowtie_command
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1, shell=True,
         stdout=subprocess.PIPE, stderr=sys.stderr)
-    bowtie_process.wait()
+    if keep_alive:
+        period_start = time.time()
+        while bowtie_process.poll() is None:
+            now = time.time()
+            if now - period_start > 60:
+                print >>sys.stderr, '\nreporter:status:alive'
+                period_start = now
+            time.sleep(.2)
+    else:
+        bowtie_process.wait()
     return_set = set()
     with open(qname_file) as qname_stream:
         output_thread = BowtieOutputThread(
@@ -306,6 +317,10 @@ if __name__ == '__main__':
     parser.add_argument('--test', action='store_const', const=True,
         default=False,
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN')
+    parser.add_argument('--keep-alive', action='store_const', const=True,
+        default=False,
+        help='Periodically print Hadoop status messages to stderr to keep ' \
+             'job alive')
 
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
@@ -333,7 +348,8 @@ if __name__ == '__main__' and not args.test:
         bowtie_index_base=args.bowtie_idx,
         bowtie_args=bowtie_args, 
         verbose=args.verbose,
-        report_multiplier=args.report_multiplier)
+        report_multiplier=args.report_multiplier,
+        keep_alive=args.keep_alive)
     print >>sys.stderr, 'DONE with align_readlets.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)
