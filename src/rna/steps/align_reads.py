@@ -98,6 +98,7 @@ Tab-delimited output tuple columns (unmapped):
 1. SEQ
 2. QNAME
 3. QUAL
+4. '\x1c'
 
 Tab-delimited output tuple columns (readletize)
 1. SEQ or its reversed complement, whichever is first in alphabetical order
@@ -113,6 +114,8 @@ Tab-delimited tuple columns (fasta):
     alignment to genome; 'i' if derived from cointron search (does not apply
     here)
 3. FASTA sequence
+4. A random partition in which an exon belongs if a primary alignment; else
+    '\x1c'
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -126,6 +129,7 @@ import shutil
 import tempfile
 import atexit
 import time
+import random
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -285,10 +289,41 @@ class BowtieOutputThread(threading.Thread):
             multiread.append((qname,) + rest_of_line)
             for rest_of_line in xpartition:
                 multiread.append((qname,) + rest_of_line)
-            if flag & 4 or 'S' in cigar:
-                '''Write unmapped/soft-clipped primary alignments for
-                realignment in a reduce step.'''
+            if flag & 4:
+                '''Don't even try to readletize if local mode didn't pick up
+                a seed; just print an unmapped read. MUST BE CHANGED IF 
+                SWITCH IS MADE TO ACCOMMODATE PAIRED-END READS.'''
+                print >>self.output_stream, (
+                        'end_to_end_sam\t%s\t%s\t%012d\t%s\t4\t0\t*\t*\t0\t0'
+                        '\t%s\t%s\tYT:Z:UU'
+                    ) % (sample_label,
+                            self.reference_index.rname_to_string['*'],
+                            0, qname.partition('\x1d')[0], 
+                            multiread[0][9], multiread[0][10]
+                        )
+                _output_line_count += 1
+            elif 'S' in cigar:
+                '''Write soft-clipped primary alignments for realignment in a
+                reduce step. First, get exons from alignment for assignment
+                of read to a bin.'''
                 seq = seq.upper()
+                md = [field for field in multiread[0]
+                        if field[:5] == 'MD:Z:'][0][5:]
+                _, _, _, clip_exons = indels_introns_and_exons(
+                                                cigar, md, pos, seq
+                                            )
+                # Choose exon at random; seed with seq
+                random.seed(seq)
+                clip_exon_pos, clip_exon_end_pos = random.choice(clip_exons)
+                # Put in random partition from among partition IDs
+                clip_partition_id, _, _ = random.choice(
+                            list(partition.partition(
+                                rname,
+                                clip_exon_pos,
+                                clip_exon_end_pos,
+                                self.bin_size
+                        ))
+                    )
                 if flag & 16:
                     '''If it's reverse-complemented, write seq the way it was
                     found.'''
@@ -296,8 +331,12 @@ class BowtieOutputThread(threading.Thread):
                         _reversed_complement_translation_table
                     )
                     qual = qual[::-1]
-                print >>self.output_stream, '%s\t%s\t%s\t%s' % ('unmapped',
-                    seq, qname, qual)
+                print >>self.output_stream, '%s\t%s\t%s\t%s\t\x1c' % (
+                                                            'unmapped',
+                                                            seq,
+                                                            qname,
+                                                            qual
+                                                        )
                 _output_line_count += 1
                 '''To reduce alignment burden, find reversed complement and
                 only write sequence that comes first in lexicographic order.'''
@@ -315,7 +354,6 @@ class BowtieOutputThread(threading.Thread):
                 '''Write fasta lines for realignment; they will be combined
                 with fasta lines for transcriptome elements obtained in later
                 reduce step.'''
-                if flag & 4: continue
                 new_pos, ref = reference_from_seq(
                                             cigar,
                                             seq,
@@ -324,8 +362,8 @@ class BowtieOutputThread(threading.Thread):
                                             pos
                                         )
                 print >>self.output_stream, \
-                    'fasta\t%s\t\x1c>%s\x1d%d\x1d\x1d\x1dp\t%s' \
-                    % (seq, rname, new_pos, ref)
+                    'fasta\t%s\t\x1c>%s\x1d%d\x1d\x1d\x1dp\t%s\t%s' \
+                    % (seq, rname, new_pos, ref, clip_partition_id)
                 try:
                     for alignment in multiread[1:]:
                         if int(alignment[1]) & 16:
@@ -342,7 +380,7 @@ class BowtieOutputThread(threading.Thread):
                                             int(alignment[3])
                                         )
                         print >>self.output_stream, \
-                            'fasta\t%s\t\x1c>%s\x1d%d\x1d\x1d\x1ds\t%s' \
+                            'fasta\t%s\t\x1c>%s\x1d%d\x1d\x1d\x1ds\t%s\t\x1c' \
                             % (alignment[9], alignment[2], new_pos, ref)
                 except IndexError:
                     # No secondary alignments
@@ -539,6 +577,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             's' if derived from secondary alignment to genome; 'i' if derived
             from cointron search
         3. FASTA sequence
+        4. A random partition in which an exon belongs if a primary alignment;
+            else'\x1c'
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
@@ -598,23 +638,27 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             time.sleep(.2)
     else:
         bowtie_process.wait()
-    return_set = set()
-    output_thread = BowtieOutputThread(
-            open(output_file), reference_index, manifest_object, return_set,
-            exon_differentials=exon_differentials, 
-            exon_intervals=exon_intervals, 
-            bin_size=bin_size,
-            verbose=verbose, 
-            output_stream=output_stream,
-            end_to_end_sam=end_to_end_sam,
-            report_multiplier=report_multiplier
-        )
-    output_thread.start()
-    # Join thread to pause execution in main thread
-    if verbose: print >>sys.stderr, 'Joining thread...'
-    output_thread.join()
-    if not return_set:
-        raise RuntimeError('Error occurred in BowtieOutputThread.')
+    if os.path.exists(output_file):
+        return_set = set()
+        output_thread = BowtieOutputThread(
+                open(output_file),
+                reference_index,
+                manifest_object,
+                return_set,
+                exon_differentials=exon_differentials, 
+                exon_intervals=exon_intervals, 
+                bin_size=bin_size,
+                verbose=verbose, 
+                output_stream=output_stream,
+                end_to_end_sam=end_to_end_sam,
+                report_multiplier=report_multiplier
+            )
+        output_thread.start()
+        # Join thread to pause execution in main thread
+        if verbose: print >>sys.stderr, 'Joining thread...'
+        output_thread.join()
+        if not return_set:
+            raise RuntimeError('Error occurred in BowtieOutputThread.')
 
 if __name__ == '__main__':
     import argparse

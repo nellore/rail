@@ -34,6 +34,8 @@ Tab-delimited tuple columns, one for each read sequence:
     subsequence sizes framing introns + '\x1d' + comma-separated list of intron
     sizes + '\x1d' + 'i' to indicate base string overlaps introns
 3. FASTA sequence
+4. '\x1c'; this is where a partition ID from a soft-clipped alignment back
+    in align_reads would go
 """
 import sys
 import time
@@ -160,11 +162,11 @@ for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
                                   in intron_combo])
                      + '\x1di\t' + ''.join(subseqs))
         for read_seq in final_combos[combo][2]:
-            print read_seq + '\t' + fasta_info
+            print read_seq + '\t' + fasta_info + '\t\x1c'
             reversed_complement_read_seq = read_seq[::-1].translate(
                     reversed_complement_translation_table
                 )
-            print reversed_complement_read_seq + '\t' + fasta_info
+            print reversed_complement_read_seq + '\t' + fasta_info + '\t\x1c'
     if args.verbose:
         print >>sys.stderr, '%d potential FASTA reference sequences ' \
                             'condensed to %d' % (seq_count, len(final_combos))

@@ -1713,9 +1713,10 @@ class RailRnaAlign:
         algo_parser.add_argument(
             '--genome-partition-length', type=int, required=False,
             metavar='<int>',
-            default=5000,
+            default=30000,
             help=('smallest unit of genome addressable by single task when '
-                  'computing coverage')
+                  'computing coverage or assigning spliced reads to bins for '
+                  'realignment')
         )
         algo_parser.add_argument(
             '--max-readlet-size', type=int, required=False,
@@ -2009,6 +2010,17 @@ class RailRnaAlign:
                 'keys' : 4
             },
             {
+                'name' : 'Put reads in bins for building Bowtie 2 indexes',
+                'run' : 'bin_reads.py',
+                'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
+                                'cointron_fasta',
+                                path_join(elastic, 'align_reads', 'fasta')],
+                'output' : 'bin_reads',
+                'taskx' : 8,
+                'part' : 'k1,1',
+                'keys' : 1
+            },
+            {
                 'name' : 'Align reads to transcriptome elements',
                 'run' : ('realign_reads.py --original-idx={0} '
                          '--bowtie2-exe={1} --partition-length={2} '
@@ -2022,9 +2034,7 @@ class RailRnaAlign:
                                         keep_alive,
                                         base.bowtie2_args
                                     ),
-                'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
-                                'cointron_fasta',
-                                path_join(elastic, 'align_reads', 'fasta')],
+                'inputs' : ['bin_reads'],
                 'output' : 'realign_reads',
                 'taskx' : 8,
                 'part' : 'k1,1',

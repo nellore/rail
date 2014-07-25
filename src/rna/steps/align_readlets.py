@@ -284,22 +284,23 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             time.sleep(.2)
     else:
         bowtie_process.wait()
-    return_set = set()
-    with open(qname_file) as qname_stream:
-        output_thread = BowtieOutputThread(
-                open(output_file),
-                qname_stream,
-                return_set,
-                verbose=verbose, 
-                output_stream=output_stream,
-                report_multiplier=report_multiplier
-            )
-        output_thread.start()
-        # Join thread to pause execution in main thread
-        if verbose: print >>sys.stderr, 'Joining thread...'
-        output_thread.join()
-    if not return_set:
-        raise RuntimeError('Error occurred in BowtieOutputThread.')
+    if os.path.exists(output_file):
+        return_set = set()
+        with open(qname_file) as qname_stream:
+            output_thread = BowtieOutputThread(
+                    open(output_file),
+                    qname_stream,
+                    return_set,
+                    verbose=verbose, 
+                    output_stream=output_stream,
+                    report_multiplier=report_multiplier
+                )
+            output_thread.start()
+            # Join thread to pause execution in main thread
+            if verbose: print >>sys.stderr, 'Joining thread...'
+            output_thread.join()
+        if not return_set:
+            raise RuntimeError('Error occurred in BowtieOutputThread.')
 
 if __name__ == '__main__':
     import argparse

@@ -21,22 +21,22 @@ Tab-delimited input tuple columns:
 (two kinds)
 
 Type 1:
-1. Read sequence
-2. '\x1c' + FASTA reference name including '>'. The following format is used:
+1. Calculated (random) guess as to which partition some exon from read belongs
+2. '\x1c'
+3. '\x1c' + FASTA reference name including '>'. The following format is used:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
     subsequence sizes framing introns + '\x1d' + comma-separated list of intron
     sizes) + '\x1d' + 'p' if derived from primary alignment to genome; 's' if
     derived from secondary alignment to genome; 'i' if derived from cointron
     search
-3. FASTA sequence + '\x1d' + base 36-encoded integer A such that A & sample
-    index != 0 iff sample contains intron combo purportedly overlapped by read
-    sequence
+4. FASTA sequence
 
 Type 2:
-1. Read sequence
-2. QNAME
-3. Quality sequence
+1. Calculated (random) guess as to which partition some exon from read belongs
+2. Read sequence
+3. QNAME
+4. Quality sequence
 
 Type 1 corresponds to a FASTA line to index to which the read sequence is
 predicted to align. Type 2 corresponds to a distinct read. Input is partitioned
@@ -138,7 +138,7 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream, dlist
+from dooplicity.tools import xstream
 import manifest
 import bowtie
 import bowtie_index
@@ -174,17 +174,18 @@ def input_files_from_input_stream(input_stream,
         print >>sys.stderr, 'Writing prefasta and input reads...'
     with open(prefasta_filename, 'w') as fasta_stream:
         with open(reads_filename, 'w') as read_stream:
-            for (read_seq,), xpartition in xstream(input_stream, 1):
+            for (partition_id,), xpartition in xstream(input_stream, 1):
                 for value in xpartition:
+                    read_seq = value[0]
                     _input_line_count += 1
-                    if value[0][0] == '\x1c':
+                    if value[1][0] == '\x1c':
                         # Print FASTA line
-                        print >>fasta_stream, '\t'.join([value[0][1:-2],
-                                                         value[1]])
+                        print >>fasta_stream, '\t'.join([value[1][1:-2],
+                                                         value[2]])
                     else:
                         # Add to temporary seq stream
-                        print >>read_stream, '\t'.join([value[0], read_seq,
-                                                            value[1]])
+                        print >>read_stream, '\t'.join([value[1], read_seq,
+                                                            value[2]])
     if verbose:
         print >>sys.stderr, 'Done! Sorting and deduplicating prefasta...'
     # Sort prefasta and eliminate duplicate lines
@@ -216,7 +217,7 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
         fasta_file: Path to reference FASTA to index
         index_basename: Path to index basename to be created
 
-        No return value.
+        Return value: return value of bowtie-build process
     """
     if args.keep_alive:
         class BowtieBuildThread(threading.Thread):
@@ -237,10 +238,7 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
             print >>sys.stderr, 'reporter:status:alive'
             sys.stderr.flush()
             time.sleep(5)
-        if bowtie_build_thread.bowtie_build_process:
-            raise RuntimeError('Bowtie index construction failed '
-                               'w/ exitlevel %d.'
-                                % bowtie_build_thread.bowtie_build_process)
+        return bowtie_build_thread.bowtie_build_process
     else:
         bowtie_build_process = subprocess.Popen(
                                     [args.bowtie2_build_exe,
@@ -250,10 +248,7 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
                                     stdout=sys.stderr
                                 )
         bowtie_build_process.wait()
-        if bowtie_build_process.returncode:
-            raise RuntimeError('Bowtie index construction failed w/ '
-                               'exitlevel %d.'
-                               % bowtie_build_process.returncode)
+        return bowtie_build_process.returncode
 
 def running_sum(iterable):
     """ Generates a running sum of the numbers in an iterable
@@ -666,23 +661,25 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         (two kinds)
 
         Type 1:
-        1. Read sequence
-        2. '\x1c' + FASTA reference name including '>'. The following format is
-            used:
-            original RNAME + '+' or '-' indicating which strand is the sense
-            strand + '\x1d' + start position of sequence + '\x1d' +
-            comma-separated list of subsequence sizes framing introns + '\x1d'
-            + comma-separated list of intron sizes) + '\x1d' + 'p' if derived
-            from primary alignment to genome; 's' if derived from secondary
-            alignment to genome; 'i' if derived from cointron search
-        3. FASTA sequence + '\x1d' + base 36-encoded integer A such that
-            A & sample index != 0 iff sample contains intron combo purportedly
-            overlapped by read sequence
+        1. Calculated (random) guess as to which partition some exon from read
+            belongs
+        2. '\x1c'
+        3. '\x1c' + FASTA reference name including '>'. The following format is
+            used: original RNAME + '+' or '-' indicating which strand is the
+            sense strand + '\x1d' + start position of sequence + '\x1d'
+            + comma-separated list of subsequence sizes framing introns
+            + '\x1d' + comma-separated list of intron sizes) + '\x1d'
+            + 'p' if derived from primary alignment to genome; 's' if derived
+            from secondary alignment to genome; 'i' if derived from cointron
+            search
+        4. FASTA sequence
 
         Type 2:
-        1. Read sequence
-        2. QNAME
-        3. Quality sequence
+        1. Calculated (random) guess as to which partition some exon from read
+            belongs
+        2. Read sequence
+        3. QNAME
+        4. Quality sequence
 
         Type 1 corresponds to a FASTA line to index to which the read sequence
         is predicted to align. Type 2 corresponds to a distinct read. Input is
@@ -804,48 +801,60 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                             temp_dir_path=temp_dir_path
                                         )
     bowtie2_index_base = os.path.join(temp_dir_path, 'tempidx')
-    create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
-        bowtie2_index_base)
-    reference_index = bowtie_index.BowtieIndexReference(reference_index_base)
-    manifest_object = manifest.LabelsAndIndices(manifest_file)
-    output_file = os.path.join(temp_dir_path, 'out.sam')
-    bowtie_command = ' ' .join([bowtie2_exe,
-        bowtie2_args if bowtie2_args is not None else '',
-        '--local -t --no-hd --mm -x', bowtie2_index_base, '--12',
-        reads_file, '-S', output_file])
-    print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
-    bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
-        stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
-    if keep_alive:
-        period_start = time.time()
-        while bowtie_process.poll() is None:
-            now = time.time()
-            if now - period_start > 60:
-                print >>sys.stderr, '\nreporter:status:alive'
-                period_start = now
-            time.sleep(.2)
+    bowtie_build_return_code = create_index_from_reference_fasta(
+                                    bowtie2_build_exe,
+                                    fasta_file,
+                                    bowtie2_index_base)
+    if bowtie_build_return_code == 0:
+        reference_index = bowtie_index.BowtieIndexReference(
+                                                reference_index_base
+                                        )
+        manifest_object = manifest.LabelsAndIndices(manifest_file)
+        output_file = os.path.join(temp_dir_path, 'out.sam')
+        bowtie_command = ' ' .join([bowtie2_exe,
+            bowtie2_args if bowtie2_args is not None else '',
+            '--local -t --no-hd --mm -x', bowtie2_index_base, '--12',
+            reads_file, '-S', output_file])
+        print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
+        bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
+            stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
+        if keep_alive:
+            period_start = time.time()
+            while bowtie_process.poll() is None:
+                now = time.time()
+                if now - period_start > 60:
+                    print >>sys.stderr, '\nreporter:status:alive'
+                    period_start = now
+                time.sleep(.2)
+        else:
+            bowtie_process.wait()
+        if os.path.exists(output_file):
+            return_set = set()
+            output_thread = BowtieOutputThread(
+                                open(output_file),
+                                reference_index=reference_index,
+                                manifest_object=manifest_object,
+                                return_set=return_set,
+                                exon_differentials=exon_differentials, 
+                                exon_intervals=exon_intervals, 
+                                bin_size=bin_size,
+                                verbose=verbose, 
+                                output_stream=output_stream,
+                                stranded=stranded,
+                                report_multiplier=report_multiplier
+                            )
+            output_thread.start()
+            # Join thread to pause execution in main thread
+            if verbose: print >>sys.stderr, 'Joining thread...'
+            output_thread.join()
+            if not return_set:
+                raise RuntimeError('Error occurred in BowtieOutputThread.')
+    elif bowtie_build_return_code == 1:
+        print >>sys.stderr, ('Bowtie build failed, but probably because '
+                             'FASTA file was empty. Continuing...')
     else:
-        bowtie_process.wait()
-    return_set = set()
-    output_thread = BowtieOutputThread(
-                        open(output_file),
-                        reference_index=reference_index,
-                        manifest_object=manifest_object,
-                        return_set=return_set,
-                        exon_differentials=exon_differentials, 
-                        exon_intervals=exon_intervals, 
-                        bin_size=bin_size,
-                        verbose=verbose, 
-                        output_stream=output_stream,
-                        stranded=stranded,
-                        report_multiplier=report_multiplier
-                    )
-    output_thread.start()
-    # Join thread to pause execution in main thread
-    if verbose: print >>sys.stderr, 'Joining thread...'
-    output_thread.join()
-    if not return_set:
-        raise RuntimeError('Error occurred in BowtieOutputThread.')
+        raise RuntimeError('Bowtie build process failed with exitlevel %d.'
+                            % bowtie_build_return_code)
     print >> sys.stderr, 'DONE with realign_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                                 time.time() - start_time)
