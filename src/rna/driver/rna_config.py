@@ -581,7 +581,7 @@ class RailRnaLocal:
                     for k, filename in enumerate(files_to_check):
                         sys.stdout.write(
                                 '\r\x1b[KChecking that file %d/%d from '
-                                'manifest file exists....' % (k+1, file_count)
+                                'manifest file exists...' % (k+1, file_count)
                             )
                         sys.stdout.flush()
                         filename_url = ab.Url(filename)
@@ -869,7 +869,7 @@ class RailRnaElastic:
                     for k, filename in enumerate(files_to_check):
                         sys.stdout.write(
                                 '\r\x1b[KChecking that file %d/%d from '
-                                'manifest file exists....' % (k+1, file_count)
+                                'manifest file exists...' % (k+1, file_count)
                             )
                         sys.stdout.flush()
                         filename_url = ab.Url(filename)
