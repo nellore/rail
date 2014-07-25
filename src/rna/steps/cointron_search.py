@@ -435,7 +435,7 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
                 = alignments[i][3], alignments[j][3]
             pivot_introns, compared_introns \
                 = alignments[i][4], alignments[j][4]
-            pivot_sign, compared_sign = alignments[i][9], alignments[j][9]
+            pivot_sign, compared_sign = alignments[i][8], alignments[j][8]
             pivot_displacement, compared_displacement \
                 = alignments[i][9], alignments[j][9]
             pivot_group, compared_group \
@@ -583,19 +583,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                 seq_size = len(seq)
                 seq_count = int(seq_info[3])
                 reversed_complement_seq_count = int(seq_info[4])
-                decoded_sample_indexes = \
-                    set([int(sample_index) for sample_index
-                            in seq_info[5].split('\x1f')
-                            if sample_index != '']) | \
-                    set([int(sample_index) for sample_index
-                            in seq_info[6].split('\x1f')
-                            if sample_index != ''])
-                applicable_sample_indexes = ['0'] \
-                    * (max(decoded_sample_indexes) + 1)
-                for sample_index in decoded_sample_indexes:
-                    applicable_sample_indexes[-(sample_index + 1)] = '1'
-                applicable_sample_indexes = \
-                    int(''.join(applicable_sample_indexes), base=2)
                 seq_info_captured = True
             if value[-1] != '\x1c':
                 # If there are alignments, add them to collected_readlets
