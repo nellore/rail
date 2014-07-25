@@ -2010,7 +2010,7 @@ class RailRnaAlign:
                 'keys' : 4
             },
             {
-                'name' : 'Put reads in bins for building Bowtie 2 indexes',
+                'name' : 'Assign reads to genome partitions for realignment',
                 'run' : 'bin_reads.py',
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
                                 'cointron_fasta',

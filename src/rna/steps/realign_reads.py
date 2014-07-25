@@ -386,12 +386,16 @@ def multiread_with_introns(multiread, stranded=False):
     if not new_multiread:
         return []
     new_multiread.sort(key=lambda alignment: alignment[1])
-    # Eliminate duplicate alignments
+    # Eliminate duplicate alignments and set primary alignment
     multiread_to_return = [new_multiread[0][0]]
     for i in xrange(1, len(new_multiread)):
         if new_multiread[i][1] == new_multiread[i-1][1]:
+            if int(new_multiread[i][0][1]) & 256:
+                multiread_to_return[last_unique_index][1] = \
+                str(int(multiread_to_return[last_unique_index][1]) | 256)
             continue
         multiread_to_return.append(new_multiread[i][0])
+        last_unique_index = len(multiread_to_return) - 1
     NH_field = 'NH:i:%d' % len(multiread_to_return)
     return [alignment + [NH_field] for alignment in multiread_to_return]
 
