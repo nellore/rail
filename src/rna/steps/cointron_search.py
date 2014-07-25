@@ -41,7 +41,6 @@ Tab-delimited tuple columns:
 6. right_extend_size: by how many bases on the right side of an intron the
     reference should extend
 7. Read sequence
-8. Integer A such that A & sample index != 0 iff sample contains intron combo
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -64,7 +63,6 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.tools import xstream
-from manifest import string_from_int
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
@@ -94,8 +92,7 @@ def rname_and_introns(rname, offset, readlet_size):
         list of subsequence sizes framing introns + '\x1d' + comma-separated
         list of intron sizes + '\x1d' + distance to previous intron or 'NA' if
         beginning of strand + '\x1d' + distance to next intron or 'NA' if end
-        of strand + '\x1d'  + base-36-encoded integer A such that A & sample
-        index != 0 iff sample contains intron combo.
+        of strand
 
         rname: RNAME from intron reference
         offset: offset from beginning of intron reference
@@ -112,22 +109,18 @@ def rname_and_introns(rname, offset, readlet_size):
                                 beginning of strand / not relevant (exonic
                                 alignment), distance to next intron or None if
                                 end of strand / not relevant
-                                (exonic alignment), integer A such that
-                                A & sample index != 0 iff sample contains
-                                intron combo); here,
+                                (exonic alignment)); here,
                             alignment_start_position and alignment_end_position
                             are the start and end positions of the 
                             alignment _along the original reference_
     """
     try:
-        (strand, original_pos, exon_sizes,
-            intron_sizes, left_size, right_size, sample_indexes) \
-        = rname.split('\x1d')
+        (strand, original_pos, exon_sizes, intron_sizes, left_size,
+            right_size) = rname.split('\x1d')
     except ValueError:
         # Exonic alignment
         return (rname, None, offset + 1,
-                offset + 1 + readlet_size, None, readlet_size,
-                None, None, None)
+                offset + 1 + readlet_size, None, readlet_size, None, None)
     try:
         left_size = int(left_size)
     except ValueError:
@@ -136,7 +129,6 @@ def rname_and_introns(rname, offset, readlet_size):
         right_size = int(right_size)
     except ValueError:
         right_size = None
-    sample_indexes = int(sample_indexes, 36)
     rname = strand[:-1]
     reverse_strand = True if strand[-1] == '-' else False
     exon_sizes = [int(exon_size) for exon_size in exon_sizes.split(',')]
@@ -168,8 +160,8 @@ def rname_and_introns(rname, offset, readlet_size):
     if introns:
         return (rname, reverse_strand, 
                     pos, end_pos, tuple(introns), readlet_size,
-                    left_size, right_size, sample_indexes)
-    return (rname, None, pos, end_pos, None, readlet_size, None, None, None)
+                    left_size, right_size)
+    return (rname, None, pos, end_pos, None, readlet_size, None, None)
 
 def different_introns_overlap(intron_iterable_1, intron_iterable_2):
     """ Test whether distinct introns in two iterables overlap.
@@ -378,8 +370,7 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
         alignment_end_position, tuple of tuples (pos, end_pos) of start
         and end positions of introns, readlet_size, distance to previous intron
         or None if beginning of strand, distance to next intron or None
-        if end of strand, integer A such that A & sample index != 0 iff sample
-        contains intron combo, True if alignment is to forward strand else
+        if end of strand, True if alignment is to forward strand else
         False, displacement of readlet from 5' end of read). If an R_ij does
         not overlap introns, it takes the form (rname, None,
         alignment_start_position, alignment_end_position, None, readlet_size,
@@ -416,99 +407,69 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
         cluster) alignments, cull only those alignments that overlap introns
         and return them.
 
-        Return value: defaultdict of (frozenset, integer) pairs.
-            key: frozenset of cluster of readlet alignments overlapping
-                introns. Each frozenset contains alignment tuples characterized
-                above.
-            value: integer encoding samples to which the cluster corresponds
+        Return value: list of lists, each of which is a cluster of readlet
+                alignments overlapping introns
     """
     alignments = [alignment + (i,)
                     for i, multireadlet in enumerate(multireadlets)
                     for alignment in multireadlet]
-    intron_alignment_pool = [j for j, alignment in enumerate(alignments)
+    alignment_count = len(alignments)
+    intron_alignments = [j for j, alignment in enumerate(alignments)
                              if alignment[4] is not None]
-    if not intron_alignment_pool:
+    if not intron_alignments:
         # No introns
-        return set()
-    exon_alignments = [j for j, alignment in enumerate(alignments)
-                       if alignment[4] is None]
-    # Divide up intron alignments by common samples
-    to_return = defaultdict(int)
-    # So binary strings of samples to which alignment applies line up
-    pad_count = len(bin(max([alignments[j][8]
-                             for j in intron_alignment_pool]))) - 2
-    samples_intron_alignments = zip(*[list('{0:0{1}b}'.format(
-                                                            alignments[k][8],
-                                                            pad_count
-                                                        )) 
-                                        for k in intron_alignment_pool])
-    intron_alignment_groups = set(samples_intron_alignments)
-    for intron_alignments in intron_alignment_groups:
-        if '1' not in intron_alignments: continue
-        samples = int(''.join(
-              [('1' if intron_alignments == sample_intron_alignments else '0') 
-                for sample_intron_alignments in samples_intron_alignments]
-            ), 2)
-        intron_alignments = [intron_alignment_pool[i] for i, bit 
-                             in enumerate(intron_alignments)
-                             if bit == '1']
-        current_alignments = intron_alignments + exon_alignments
-        clusters = []
-        for pivot in intron_alignments:
-            i = pivot
-            precluster = defaultdict(list)
-            for j in current_alignments:
-                if j == pivot: continue
-                pivot_rname, compared_rname \
-                    = alignments[i][0], alignments[j][0]
-                pivot_sense, compared_sense \
-                    = alignments[i][1], alignments[j][1]
-                pivot_start, compared_start \
-                    = alignments[i][2], alignments[j][2]
-                pivot_end, compared_end \
-                    = alignments[i][3], alignments[j][3]
-                pivot_introns, compared_introns \
-                    = alignments[i][4], alignments[j][4]
-                pivot_sign, compared_sign = alignments[i][9], alignments[j][9]
-                pivot_displacement, compared_displacement \
-                    = alignments[i][10], alignments[j][10]
-                pivot_group, compared_group \
-                    = alignments[i][11], alignments[j][11]
-                if (pivot_group != compared_group and
-                    pivot_rname == compared_rname and
-                    (pivot_sense is None or compared_sense is None or
-                        pivot_sense == compared_sense) and
-                    ((pivot_start == compared_start
-                        and pivot_displacement == compared_displacement) or
-                     (pivot_start < compared_start)
-                        == (pivot_displacement < compared_displacement)) and
-                    pivot_sign == compared_sign):
-                    precluster[compared_group].append(j)
-            # Choose alignments closest to pivot in each multireadlet group
-            cluster = [pivot]
-            for group in precluster:
-                overlap_distances = [max(alignments[i][2], alignments[j][2])
-                                     - min(alignments[i][3], alignments[j][3])
-                                     for j in precluster[group]]
-                min_overlap_distance = min(overlap_distances)
-                for j in xrange(len(overlap_distances)):
-                    if overlap_distances[j] == min_overlap_distance:
-                        cluster.append(precluster[group][j])
-            clusters.append(
-                    [alignments[j] for j in cluster]
-                )
-        cluster_sizes = [len(set([alignment[-1] for alignment in cluster]))
-                            for cluster in clusters]
-        cluster_size_threshold = tie_fudge_fraction * max(cluster_sizes)
-        largest_clusters = []
-        for i, cluster_size in enumerate(cluster_sizes):
-            if cluster_size >= cluster_size_threshold:
-                largest_clusters.append(clusters[i])
-        for i in xrange(len(largest_clusters)):
-            to_return[frozenset([alignment[:-1]
-                                 for alignment in largest_clusters[i]
-                                 if alignment[1] is not None])] |= samples
-    return to_return
+        return []
+    clusters = []
+    for pivot in intron_alignments:
+        i = pivot
+        precluster = defaultdict(list)
+        for j in xrange(alignment_count):
+            if j == pivot: continue
+            pivot_rname, compared_rname \
+                = alignments[i][0], alignments[j][0]
+            pivot_sense, compared_sense \
+                = alignments[i][1], alignments[j][1]
+            pivot_start, compared_start \
+                = alignments[i][2], alignments[j][2]
+            pivot_end, compared_end \
+                = alignments[i][3], alignments[j][3]
+            pivot_introns, compared_introns \
+                = alignments[i][4], alignments[j][4]
+            pivot_sign, compared_sign = alignments[i][9], alignments[j][9]
+            pivot_displacement, compared_displacement \
+                = alignments[i][9], alignments[j][9]
+            pivot_group, compared_group \
+                = alignments[i][10], alignments[j][10]
+            if (pivot_group != compared_group and
+                pivot_rname == compared_rname and
+                (pivot_sense is None or compared_sense is None or
+                    pivot_sense == compared_sense) and
+                ((pivot_start == compared_start
+                    and pivot_displacement == compared_displacement) or
+                 (pivot_start < compared_start)
+                    == (pivot_displacement < compared_displacement)) and
+                pivot_sign == compared_sign):
+                precluster[compared_group].append(j)
+        # Choose alignments closest to pivot in each multireadlet group
+        cluster = [pivot]
+        for group in precluster:
+            overlap_distances = [max(alignments[i][2], alignments[j][2])
+                                 - min(alignments[i][3], alignments[j][3])
+                                 for j in precluster[group]]
+            min_overlap_distance = min(overlap_distances)
+            for j in xrange(len(overlap_distances)):
+                if overlap_distances[j] == min_overlap_distance:
+                    cluster.append(precluster[group][j])
+        clusters.append([alignments[j] for j in cluster])
+    cluster_sizes = [len(set([alignment[-1] for alignment in cluster]))
+                        for cluster in clusters]
+    cluster_size_threshold = tie_fudge_fraction * max(cluster_sizes)
+    largest_clusters = []
+    for i, cluster_size in enumerate(cluster_sizes):
+        if cluster_size >= cluster_size_threshold:
+            largest_clusters.append(clusters[i])
+    return [[alignment[:-1] for alignment in cluster if alignment[4]
+                is not None] for cluster in largest_clusters]
 
 def split_collections(alignment_collections, separation):
     """ Splits alignments up if successive introns are separated by > seq_size
@@ -658,8 +619,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                 of alignment, tuple of intron tuples overlapped by alignment,
                 readlet size, distance to previous intron or None if
                 beginning of strand, distance to next intron or None if end of
-                strand, integer A such that A & sample index != 0
-                iff sample contains intron combo, True if alignment is to
+                strand, True if alignment is to
                 forward strand else False, displacement of readlet from 5' end
                 of read).'''
             multireadlets = [set([rname_and_introns(rname, pos - 1, seq_size
@@ -682,10 +642,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
             if clusters:
                 to_write = set()
                 for selected_introns in clusters:
-                    sample_indexes = string_from_int(
-                                            clusters[selected_introns]
-                                            & applicable_sample_indexes
-                                        )
                     for alignment_collections in maximal_cliques(
                                                         selected_introns
                                                     ):
@@ -698,14 +654,14 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             (_, _, left_pos,
                                 _, _, left_readlet_size,
                                 left_intron_distance, _, _, 
-                                _, left_displacement) = min(alignments,
+                                left_displacement) = min(alignments,
                                     key=lambda alignment: alignment[2]
                                 )
                             # Get stats on alignment with largest end position
                             (_, _, _,
                                 right_end_pos, _, right_readlet_size,
                                 _, right_intron_distance, _, 
-                                _, right_displacement) = max(alignments,
+                                right_displacement) = max(alignments,
                                     key=lambda alignment: alignment[3]
                                 )
                             introns_to_add = set()
@@ -761,7 +717,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             else:
                                 right_size = min(right_extend_size + fudge,
                                                  right_intron_distance)
-                            to_write.add('%s\t%d\t%s\t%s\t%d\t%d\t%s\t%s' % (
+                            to_write.add('%s\t%d\t%s\t%s\t%d\t%d\t%s' % (
                                     alignments[0][0] + ('-' if 
                                     alignments[0][1] else '+'),
                                     left_intron_pos,
@@ -773,8 +729,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                                 intron_starts_and_ends[1])),
                                     left_size,
                                     right_size,
-                                    seq,
-                                    sample_indexes
+                                    seq
                                 )
                             )
                 for line_to_write in to_write:

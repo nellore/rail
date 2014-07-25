@@ -38,7 +38,6 @@ Tab-delimited tuple columns:
     or NA if beginning of strand
 7. By how many bases on the right side of an intron the reference COULD extend,
     or NA if end of strand
-8. Sample index
 """
 
 import sys
@@ -294,7 +293,7 @@ def paths(graph, source, in_node, readlet_size, last_node, edge_span=2,
                     assert path[-1][1] is None
 
 def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
-    last_node, output_stream, sample_index, edge_span=2, min_edge_span_size=25,
+    last_node, output_stream, edge_span=2, min_edge_span_size=25,
     full_graph=False):
     """ Consumes graph, printing intron combos that can be overlapped by reads.
 
@@ -350,7 +349,6 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
         last_node: child node from last edge added to graph. Used to
             determine of a source can be trashed.
         output_stream: where to write output
-        sample_index: the index of the sample
         edge_span, min_edge_span_size: parameters used by paths() function.
             See its docstring for more information.
         full_graph: True iff there are no more nodes to stream on the graph.
@@ -393,7 +391,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
                     left_size = path[1][0] - path[0][1]
                     right_size = path[-1][0] - path[-2][1]
                     print >>output_stream, '%s\t%s\t%s\t%d' \
-                        '\t%d\t%s\t%s\t%s' % (
+                        '\t%d\t%s\t%s' % (
                         strand,
                         ','.join([str(path[k][0])
                                   for k in xrange(1, node_count - 1)]),
@@ -402,8 +400,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
                         min(readlet_size - 1, left_size),
                         min(readlet_size - 1, right_size),
                         str(left_size) if path[0][0] is not None else 'NA',
-                        str(right_size) if path[-1][1] is not None else 'NA',
-                        sample_index
+                        str(right_size) if path[-1][1] is not None else 'NA'
                     )
                     _output_line_count += 1
                     sys.stdout.flush()
@@ -471,7 +468,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
             extend, or NA if beginning of strand
         7. By how many bases on the right side of an intron the reference COULD
             extend, or NA if end of strand
-        8. Sample index
 
         input_stream: where to get input
         output_stream: where to write output
@@ -517,7 +513,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
                         strand,
                         end_node,
                         output_stream,
-                        sample_index,
                         edge_span=edge_span,
                         min_edge_span_size=min_edge_span_size,
                         full_graph=True
@@ -554,7 +549,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
                         strand,
                         end_node,
                         output_stream,
-                        sample_index,
                         edge_span=edge_span,
                         min_edge_span_size=min_edge_span_size,
                     )
@@ -581,7 +575,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
                 strand,
                 end_node,
                 output_stream,
-                sample_index,
                 edge_span=edge_span,
                 min_edge_span_size=min_edge_span_size,
                 full_graph=True

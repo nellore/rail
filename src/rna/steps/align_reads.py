@@ -110,7 +110,8 @@ Tab-delimited tuple columns (fasta):
 2. '\x1c' + FASTA reference name including '>'. The following format is used:
     original RNAME + '\x1d' + start position of sequence + '\x1d\x1d\x1d' + 'p'
     if derived from primary alignment to genome; 's' if derived from secondary
-    alignment to genome; 'i' if derived from cointron search
+    alignment to genome; 'i' if derived from cointron search (does not apply
+    here)
 3. FASTA sequence
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
