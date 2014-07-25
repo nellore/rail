@@ -330,12 +330,13 @@ class BowtieOutputThread(threading.Thread):
                     for alignment in multiread[1:]:
                         if int(alignment[1]) & 16:
                             # Reverse-complement
-                            alignment[9] = alignment[9][::-1].translate(
-                                _reversed_complement_translation_table
-                            )
+                            reversed_complement_seq \
+                                    = alignment[9][::-1].translate(
+                                    _reversed_complement_translation_table
+                                )
                         new_pos, ref = reference_from_seq(
                                             alignment[5],
-                                            alignment[9],
+                                            reversed_complement_seq,
                                             self.reference_index,
                                             alignment[2],
                                             int(alignment[3])

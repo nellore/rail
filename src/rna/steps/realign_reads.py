@@ -397,7 +397,8 @@ def multiread_with_introns(multiread, stranded=False):
         if new_multiread[i][1] == new_multiread[i-1][1]:
             continue
         multiread_to_return.append(new_multiread[i][0])
-    return multiread_to_return
+    NH_field = 'NH:i:%d' % len(multiread_to_return)
+    return [alignment + [NH_field] for alignment in multiread_to_return]
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
