@@ -28,7 +28,7 @@ RAILHOME=/scratch0/langmead-fs1/rail
 
 echo 'Computing precision and recall for Rail-RNA on sample NA18861.1.M_120209_2'
 (for i in $BAMDIR/*YRI-7-0*.bam; do $SAMTOOLS view $i; done) | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py \
-	-t $DATADIR/NA18861.1.M_120209_2_sim.bed >$MAINOUTPUT/$PERFORMANCE_NA18861.1.M_120209_2 2>$MAINOUTPUT/${PERFORMANCE}_NA18861.1.M_120209_2_summary &
+	-t $DATADIR/NA18861.1.M_120209_2_sim.bed >$MAINOUTPUT/${PERFORMANCE}_NA18861.1.M_120209_2 2>$MAINOUTPUT/${PERFORMANCE}_NA18861.1.M_120209_2_summary &
 echo 'Computing precision and recall for Rail-RNA on sample NA18508.1.M_111124_1'
 (for i in $BAMDIR/*YRI-0-0*.bam; do $SAMTOOLS view $i; done) | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py \
-	-t $DATADIR/NA18508.1.M_111124_1_sim.bed >$MAINOUTPUT/$PERFORMANCE_NA18508.1.M_111124_1 2>$MAINOUTPUT/${PERFORMANCE}_NA18508.1.M_111124_1_summary &
+	-t $DATADIR/NA18508.1.M_111124_1_sim.bed >$MAINOUTPUT/${PERFORMANCE}_NA18508.1.M_111124_1 2>$MAINOUTPUT/${PERFORMANCE}_NA18508.1.M_111124_1_summary &

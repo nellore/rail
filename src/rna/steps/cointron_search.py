@@ -407,23 +407,27 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
         cluster) alignments, cull only those alignments that overlap introns
         and return them.
 
-        Return value: list of lists, each of which is a cluster of readlet
+        Return value: set of frozensets, each of which is a cluster of readlet
                 alignments overlapping introns
     """
     alignments = [alignment + (i,)
                     for i, multireadlet in enumerate(multireadlets)
                     for alignment in multireadlet]
     alignment_count = len(alignments)
-    intron_alignments = [j for j, alignment in enumerate(alignments)
-                             if alignment[4] is not None]
-    if not intron_alignments:
+    unclustered_intron_alignments = [j for j, alignment
+                                        in enumerate(alignments)
+                                        if alignment[4] is not None]
+    if not unclustered_intron_alignments:
         # No introns
         return []
+    unclustered_alignments = range(len(alignments))
     clusters = []
-    for pivot in intron_alignments:
-        i = pivot
+    while unclustered_intron_alignments:
+        pivot = i = random.choice(unclustered_intron_alignments)
+        new_unclustered_alignments = []
+        new_unclustered_intron_alignments = []
         precluster = defaultdict(list)
-        for j in xrange(alignment_count):
+        for j in unclustered_alignments:
             if j == pivot: continue
             pivot_rname, compared_rname \
                 = alignments[i][0], alignments[j][0]
@@ -450,6 +454,10 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
                     == (pivot_displacement < compared_displacement)) and
                 pivot_sign == compared_sign):
                 precluster[compared_group].append(j)
+            else:
+                new_unclustered_alignments.append(j)
+                if alignments[j][4] is not None:
+                    new_unclustered_intron_alignments.append(j)
         # Choose alignments closest to pivot in each multireadlet group
         cluster = [pivot]
         for group in precluster:
@@ -461,15 +469,17 @@ def selected_introns_by_clustering(multireadlets, tie_fudge_fraction=0.9):
                 if overlap_distances[j] == min_overlap_distance:
                     cluster.append(precluster[group][j])
         clusters.append([alignments[j] for j in cluster])
+        unclustered_alignments = new_unclustered_alignments
+        unclustered_intron_alignments = new_unclustered_intron_alignments
     cluster_sizes = [len(set([alignment[-1] for alignment in cluster]))
                         for cluster in clusters]
-    cluster_size_threshold = tie_fudge_fraction * max(cluster_sizes)
+    cluster_size_threshold = tie_fudge_fraction * float(max(cluster_sizes))
     largest_clusters = []
     for i, cluster_size in enumerate(cluster_sizes):
         if cluster_size >= cluster_size_threshold:
             largest_clusters.append(clusters[i])
-    return [[alignment[:-1] for alignment in cluster if alignment[4]
-                is not None] for cluster in largest_clusters]
+    return set([frozenset([alignment[:-1] for alignment in cluster
+                if alignment[4] is not None]) for cluster in largest_clusters])
 
 def split_collections(alignment_collections, separation):
     """ Splits alignments up if successive introns are separated by > seq_size
@@ -622,6 +632,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 for alignment in multireadlet]:
                 # No introns to see here
                 continue
+            random.seed(seq)
             clusters = selected_introns_by_clustering(
                                 multireadlets,
                                 tie_fudge_fraction=0.9
@@ -745,7 +756,7 @@ if __name__ == '__main__':
              'the specified number of bases of a read sequence\'s size; '
              'this allows for indels with respect to the reference')
     parser.add_argument('--tie-fudge-fraction', type=float, required=False,
-        default=0.9,
+        default=0.95,
         help='If a cluster\'s size is --tie-fudge-fraction * the size of the '
              'largest cluster from correlation clustering, it is still '
              'considered tied with the largest cluster and returned for '
