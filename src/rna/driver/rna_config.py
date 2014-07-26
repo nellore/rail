@@ -1132,7 +1132,7 @@ class RailRnaElastic:
         elastic_parser.add_argument('--master-instance-type', type=str,
             metavar='<choice>',
             required=False,
-            default='c3.8xlarge',
+            default='c3.2xlarge',
             help=('master instance type')
         )
         elastic_parser.add_argument('--core-instance-type', type=str,
