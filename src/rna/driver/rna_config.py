@@ -1068,7 +1068,7 @@ class RailRnaElastic:
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='2.4.5',
+            default='2.4.6',
             help='Amazon Linux AMI to use'
         )
         elastic_parser.add_argument('--visible-to-all-users',
