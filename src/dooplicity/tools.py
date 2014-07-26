@@ -123,7 +123,7 @@ class dlist:
         be used by appending all elements, then iterating through them to
         read them.
     """
-    def __init__(self, limit=100000):
+    def __init__(self, limit=1000000):
         """
             limit: maximum number of elements allowed in list before
                 spilling to disk
