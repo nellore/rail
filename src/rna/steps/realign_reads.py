@@ -21,22 +21,20 @@ Tab-delimited input tuple columns:
 (two kinds)
 
 Type 1:
-1. Calculated (random) guess as to which partition some exon from read belongs
-2. '\x1c'
-3. '\x1c' + FASTA reference name including '>'. The following format is used:
+1. Read sequence
+2. '\x1c' + FASTA reference name including '>'. The following format is used:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
     subsequence sizes framing introns + '\x1d' + comma-separated list of intron
     sizes) + '\x1d' + 'p' if derived from primary alignment to genome; 's' if
     derived from secondary alignment to genome; 'i' if derived from cointron
     search
-4. FASTA sequence
+3. FASTA sequence
 
 Type 2:
-1. Calculated (random) guess as to which partition some exon from read belongs
-2. Read sequence
-3. QNAME
-4. Quality sequence
+1. Read sequence
+2. QNAME
+3. Quality sequence
 
 Type 1 corresponds to a FASTA line to index to which the read sequence is
 predicted to align. Type 2 corresponds to a distinct read. Input is partitioned
@@ -174,18 +172,17 @@ def input_files_from_input_stream(input_stream,
         print >>sys.stderr, 'Writing prefasta and input reads...'
     with open(prefasta_filename, 'w') as fasta_stream:
         with open(reads_filename, 'w') as read_stream:
-            for (partition_id,), xpartition in xstream(input_stream, 1):
+            for (read_seq,), xpartition in xstream(input_stream, 1):
                 for value in xpartition:
-                    read_seq = value[0]
                     _input_line_count += 1
-                    if value[1][0] == '\x1c':
+                    if value[0][0] == '\x1c':
                         # Print FASTA line
-                        print >>fasta_stream, '\t'.join([value[1][1:-2],
-                                                         value[2]])
+                        print >>fasta_stream, '\t'.join([value[0][1:-2],
+                                                         value[1]])
                     else:
                         # Add to temporary seq stream
-                        print >>read_stream, '\t'.join([value[1], read_seq,
-                                                            value[2]])
+                        print >>read_stream, '\t'.join([value[0], read_seq,
+                                                            value[1]])
     if verbose:
         print >>sys.stderr, 'Done! Sorting and deduplicating prefasta...'
     # Sort prefasta and eliminate duplicate lines
@@ -665,10 +662,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         (two kinds)
 
         Type 1:
-        1. Calculated (random) guess as to which partition some exon from read
-            belongs
-        2. '\x1c'
-        3. '\x1c' + FASTA reference name including '>'. The following format is
+        1. Read sequence
+        2. '\x1c' + FASTA reference name including '>'. The following format is
             used: original RNAME + '+' or '-' indicating which strand is the
             sense strand + '\x1d' + start position of sequence + '\x1d'
             + comma-separated list of subsequence sizes framing introns
@@ -676,14 +671,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             + 'p' if derived from primary alignment to genome; 's' if derived
             from secondary alignment to genome; 'i' if derived from cointron
             search
-        4. FASTA sequence
+        3. FASTA sequence
 
         Type 2:
-        1. Calculated (random) guess as to which partition some exon from read
-            belongs
-        2. Read sequence
-        3. QNAME
-        4. Quality sequence
+        1. Read sequence
+        2. QNAME
+        3. Quality sequence
 
         Type 1 corresponds to a FASTA line to index to which the read sequence
         is predicted to align. Type 2 corresponds to a distinct read. Input is
