@@ -7,8 +7,8 @@
 #	here, an instance is an alignment overlapping introns whose minimally covered intron has coverage = row coverage.
 # May break if too much memory is used. If that happens, remove the &s below and run sequentially, or "wait" in chunks.
 
-TRUETHRESHOLD=100 # max number of rows in matrix 1
-RETRIEVEDTHRESHOLD=100 # max number of rows in matrix 2
+TRUETHRESHOLD=500 # max number of rows in matrix 1
+RETRIEVEDTHRESHOLD=500 # max number of rows in matrix 2
 
 INPUT=/scratch0/langmead-fs1/geuvadis_sim/performance # where to find output of harvest_spliced_read_performance.py
 OUTPUT=$INPUT/harvest
