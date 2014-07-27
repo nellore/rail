@@ -10,7 +10,7 @@
 TRUETHRESHOLD=500 # max number of rows in matrix 1
 RETRIEVEDTHRESHOLD=500 # max number of rows in matrix 2
 
-INPUT=/scratch0/langmead-fs1/geuvadis_sim/performance # where to find output of harvest_spliced_read_performance.py
+INPUT=/scratch0/langmead-fs1/geuvadis_sim/performpres # where to find output of harvest_spliced_read_performance.py
 OUTPUT=$INPUT/harvest
 
 mkdir -p $OUTPUT
