@@ -165,7 +165,7 @@ if args.keep_alive:
                                 % bowtie_build_thread.bowtie_build_process)
 else:
     bowtie_build_process = subprocess.Popen(
-                                [args.bowtie_build_exe,
+                                [args.bowtie2_build_exe,
                                     fasta_file,
                                     index_basename],
                                 stderr=sys.stderr,

@@ -1408,7 +1408,7 @@ class RailRnaAlign:
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
         motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie1_args='-v 1 -a -m 8',
+        transcriptome_bowtie2_args='-v 1 -a -m 8',
         normalize_percentile=0.75,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', assembly='hg19',
@@ -1628,7 +1628,7 @@ class RailRnaAlign:
                                                 ))
         base.motif_radius = motif_radius
         base.genome_bowtie1_args = genome_bowtie1_args
-        base.transcriptome_bowtie1_args = transcriptome_bowtie1_args
+        base.transcriptome_bowtie2_args = transcriptome_bowtie2_args
         if not (isinstance(normalize_percentile, float) and
                     0 <= normalize_percentile <= 1):
             base.errors.append('Normalization percentile '
@@ -1781,8 +1781,8 @@ class RailRnaAlign:
             help=SUPPRESS
         )
         algo_parser.add_argument(
-            '--transcriptome-bowtie1-args', type=str, required=False,
-            default='-v 1 -a -m 20',
+            '--transcriptome-bowtie2-args', type=str, required=False,
+            default='-k 30',
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -1946,7 +1946,7 @@ class RailRnaAlign:
             {
                 'name' : 'Build index of transcriptome elements',
                 'run' : ('intron_index.py --bowtie-build-exe={0} '
-                         '--out={1} {2}').format(base.bowtie1_build_exe,
+                         '--out={1} {2}').format(base.bowtie2_build_exe,
                                                  ab.Url(
                                                     path_join(elastic,
                                                         base.output_dir,
@@ -1960,38 +1960,24 @@ class RailRnaAlign:
                 'keys' : 1
             },
             {
-                'name' : 'Align readlets to transcriptome elements',
-                'run' : ('align_readlets.py --bowtie-idx={0} '
-                         '--bowtie-exe={1} {2} {3} -- -t --sam-nohead '
-                         '--startverbose {4}').format(
-                                                'intron/intron'
-                                                if elastic else
-                                                path_join(elastic,
-                                                    base.output_dir,
-                                                    'transcript_index',
-                                                    'intron'),
-                                                base.bowtie1_exe,
-                                                verbose,
-                                                keep_alive,
-                                                base.transcriptome_bowtie1_args
-                                            ),
-                'inputs' : ['combine_subsequences'],
-                'output' : 'realign_readlets',
-                'taskx' : 4,
-                'archives' : ab.Url(path_join(elastic,
-                                    base.output_dir,
-                                    'transcript_index',
-                                    'intron.tar.gz#intron')).to_native_url(),
-                'part' : 'k1,1',
-                'keys' : 1,
-            },
-            {
                 'name' : 'Finalize intron cooccurrences on reads',
-                'run' : 'cointron_search.py {0}'.format(
-                                                    verbose
-                                                ),
-                'inputs' : ['realign_readlets', 'align_readlets'],
-                'output' : 'cointron_search',
+                'run' : ('cointron_enum.py --readlet-size {0} '
+                         '--bowtie2-idx={1} --bowtie2-exe={2} '
+                         '{3} {4} --').format(
+                                            base.max_readlet_size,
+                                            'intron/intron'
+                                            if elastic else
+                                            path_join(elastic,
+                                                base.output_dir,
+                                                'transcript_index',
+                                                'intron'),
+                                            base.bowtie2_exe,
+                                            verbose,
+                                            keep_alive,
+                                            base.transcriptome_bowtie2_args
+                                        ),
+                'inputs' : ['combine_sequences'],
+                'output' : 'cointron_enum',
                 'taskx' : 4,
                 'part' : 'k1,1',
                 'keys' : 1
@@ -2002,7 +1988,7 @@ class RailRnaAlign:
                                                         base.bowtie1_idx,
                                                         verbose
                                                     ),
-                'inputs' : ['cointron_search'],
+                'inputs' : ['cointron_enum'],
                 'output' : 'cointron_fasta',
                 'taskx' : 8,
                 'part' : 'k1,4',
@@ -2356,7 +2342,7 @@ class RailRnaLocalAlignJson:
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
         motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie1_args='-v 1 -a -m 8',
+        transcriptome_bowtie2_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', num_processes=1, keep_intermediates=False):
@@ -2383,7 +2369,7 @@ class RailRnaLocalAlignJson:
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            transcriptome_bowtie1_args=transcriptome_bowtie1_args,
+            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -2425,7 +2411,7 @@ class RailRnaElasticAlignJson:
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
         motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie1_args='-v 1 -a -m 8',
+        transcriptome_bowtie2_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', log_uri=None, ami_version='3.1.0',
@@ -2477,7 +2463,7 @@ class RailRnaElasticAlignJson:
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            transcriptome_bowtie1_args=transcriptome_bowtie1_args,
+            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -2541,7 +2527,7 @@ class RailRnaLocalAllJson:
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
         motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie1_args='-v 1 -a -m 8',
+        transcriptome_bowtie2_args='-v 1 -a -m 8',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, keep_intermediates=False, check_manifest=True):
@@ -2569,7 +2555,7 @@ class RailRnaLocalAllJson:
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            transcriptome_bowtie1_args=transcriptome_bowtie1_args,
+            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -2619,7 +2605,7 @@ class RailRnaElasticAllJson:
         max_intron_size=500000, min_intron_size=10, min_exon_size=9,
         motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
         genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie1_args='-v 1 -a -m 8',
+        transcriptome_bowtie2_args='-v 1 -a -m 8',
         normalize_percentile=0.75,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
@@ -2674,7 +2660,7 @@ class RailRnaElasticAllJson:
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            transcriptome_bowtie1_args=transcriptome_bowtie1_args,
+            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,

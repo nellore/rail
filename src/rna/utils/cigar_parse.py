@@ -4,9 +4,177 @@ cigar_parse.py
 Part of Rail-RNA
 
 Includes a function that outputs indels, introns, and exons from a genome
-position, CIGAR string, and MD string.
+position, CIGAR string, and MD string and a function that inserts introns
+in a CIGAR string.
 """
 import re
+import random
+
+def running_sum(iterable):
+    """ Generates a running sum of the numbers in an iterable
+
+        iterable: some iterable with numbers
+
+        Yield value: next value in running sum
+    """
+    total = 0
+    for number in iterable:
+        total += number
+        yield total
+
+def multiread_with_introns(multiread, stranded=False):
+    """ Modifies read alignments to fix CIGARs/positions/primary alignments.
+
+        An alignment takes the form of a line of SAM.
+        Introns are encoded in a multiread's RNAME as follows:
+
+        original RNAME + '+' or '-' indicating which strand is the sense
+        strand + '\x1d' + start position of sequence + '\x1d' + comma-separated
+        list of subsequence sizes framing introns + '\x1d' + comma-separated
+        list of intron sizes.
+
+        If there are no introns present, the multiread's RNAME takes the
+        following form:
+        original RNAME + '\x1d' + start position of sequence + '\x1d\x1d'
+
+        More than one alignment output by Bowtie may correspond to the same
+        alignment in reference space because at least two reference names in
+        the intron Bowtie index contained overlapping bases. In this case, the
+        alignments are collapsed into a single alignment. If an alignment is
+        found to overlap introns, the XS:A:('+' or '-') field is appended to
+        indicate which strand is the sense strand. An NH:i:(integer) field is
+        also added to each alignment to indicate the number of alignments.
+        These extra fields are used by Cufflinks.
+
+        multiread: a list of lists, each of whose elements are the tokens
+            from a line of SAM representing an alignment.
+        stranded: if input reads are stranded, an alignment is returned only
+            if the strand of any introns agrees with the strand of the 
+            alignment.
+
+        Return value: alignments modified according to the rules given above;
+            a list of tuples, each of whose elements are the tokens from a line
+            of SAM representing an alignment.
+    """
+    if not multiread:
+        return []
+    seq = multiread[0][9]
+    new_multiread = []
+    for alignment in multiread:
+        qname = alignment[0]
+        tokens = alignment[2].split('\x1d')
+        offset = int(alignment[3]) - 1
+        cigar = re.split(r'([MINDS])', alignment[5])[:-1]
+        flag = int(alignment[1])
+        if not tokens[-1]:
+            # No introns can be found
+            pos = offset + int(tokens[1])
+            rname = tokens[0]
+            '''Use second field in each element of new_multiread to store which
+            items should be tested to find whether two alignments are
+            "identical".'''
+            new_multiread.append(
+                    ([qname.partition('\x1d')[0], flag & ~256, rname,
+                        str(pos), alignment[4],
+                        alignment[5]] + list(alignment[6:]),
+                    (qname, (flag & 16 != 0),
+                        rname,
+                        pos, alignment[5],
+                        [field for field in alignment
+                         if field[:5] == 'MD:Z:'][0][5:])
+                        )
+                )
+            continue
+        reverse_strand_string = tokens[0][-1]
+        assert reverse_strand_string in '+-'
+        reverse_strand = (True if reverse_strand_string == '-' else False)
+        if stranded and (flag & 16 != 0) == reverse_strand:
+            # Strand of alignment doesn't agree with strand of intron
+            continue
+        rname = tokens[0][:-1]
+        exon_sizes = map(int, tokens[2].split(','))
+        intron_sizes = map(int, tokens[3].split(','))
+        for i, exon_sum in enumerate(running_sum(exon_sizes)):
+            if exon_sum > offset: break
+        # Compute start position of alignment
+        pos = offset + sum(intron_sizes[:i]) + int(tokens[1])
+        # Adjust exon/intron lists so they start where alignment starts
+        exon_sizes = exon_sizes[i:]
+        exon_sizes[0] = exon_sum - offset
+        intron_sizes = intron_sizes[i:]
+        new_cigar = []
+        for i in xrange(0, len(cigar), 2):
+            char_type = cigar[i+1]
+            base_count = int(cigar[i])
+            if char_type in 'MD':
+                for j, exon_sum in enumerate(running_sum(exon_sizes)):
+                    if exon_sum >= base_count: break
+                for k in xrange(j):
+                    new_cigar.extend(
+                            [(str(exon_sizes[k]) + char_type)
+                                if exon_sizes[k] != 0 else '',
+                             str(intron_sizes[k]), 'N']
+                        )
+                last_size = base_count - (exon_sum - exon_sizes[j])
+                new_cigar.extend([str(last_size), char_type])
+                new_size = exon_sum - base_count
+                exon_sizes = exon_sizes[j:]
+                exon_sizes[0] = new_size
+                intron_sizes = intron_sizes[j:]
+            elif char_type in 'IS':
+                new_cigar.extend([cigar[i], char_type])
+            else:
+                raise RuntimeError('Bowtie2 CIGAR chars are expected to be '
+                                   'in set (DIMS).')
+        new_cigar = ''.join(new_cigar)
+        if 'N' not in new_cigar:
+            '''Alignment to transcriptome was purely exonic; this case should
+            be ignored.'''
+            continue
+        # Count number of samples in which intron combo was initially detected
+        new_multiread.append(
+                    ([alignment[0].partition('\x1d')[0], flag & ~256,
+                        rname, str(pos), alignment[4], new_cigar]
+                     + list(alignment[6:])
+                     + ['XS:A:' + reverse_strand_string],
+                     (alignment[0],
+                        (flag & 16 != 0),
+                        rname,
+                        pos, new_cigar,
+                        [field for field in alignment[::-1]
+                         if field[:5] == 'MD:Z:'][0][5:]))
+                )
+    if not new_multiread:
+        return []
+    new_multiread.sort(key=lambda alignment: alignment[1])
+    # Eliminate duplicate alignments and set primary alignment
+    deduped_multiread = [new_multiread[0][0]]
+    for i in xrange(1, len(new_multiread)):
+        if new_multiread[i][1] == new_multiread[i-1][1]:
+            continue
+        deduped_multiread.append(new_multiread[i][0])
+    deduped_multiread = [(alignment,
+                             int([field for field in alignment
+                                    if str(field)[:5] == 'AS:i:'][0][5:]))
+                            for alignment in deduped_multiread]
+    deduped_multiread.sort(key=lambda alignment: alignment[1])
+    max_score = max([alignment[1] for alignment in deduped_multiread])
+    multiread_to_return = [alignment[0] for alignment in deduped_multiread
+                            if alignment[1] == max_score]
+    tie_count = len(multiread_to_return)
+    if tie_count > 1:
+        random.seed(seq)
+        to_primary = random.randint(0, tie_count - 1)
+        multiread_to_return[to_primary][1] &= 256
+    else:
+        multiread_to_return[0][1] &= 256
+    multiread_to_return += [alignment[0] for alignment in deduped_multiread
+                                if alignment[1] != max_score]
+    alignment_count = len(multiread_to_return)
+    for i in xrange(alignment_count):
+        multiread_to_return[i][1] = str(multiread_to_return[i][1])
+    NH_field = 'NH:i:%d' % alignment_count
+    return [alignment + [NH_field] for alignment in multiread_to_return]
 
 def parsed_md(md):
     """ Divides an MD string up by boundaries between ^, letters, and numbers
