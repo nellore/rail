@@ -445,7 +445,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12',
-        reads_file, '-S', output_file, '--score-min L,42,0', 
+        reads_file, '-S', output_file, '--score-min L,38,0', 
         '-D 24 -R 3 -N 1 -L 20 -i L,4,0'])
     print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
     # Because of problems with buffering, write output to file
