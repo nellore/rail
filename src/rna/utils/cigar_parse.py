@@ -159,15 +159,19 @@ def multiread_with_introns(multiread, stranded=False):
                             for alignment in deduped_multiread]
     deduped_multiread.sort(key=lambda alignment: alignment[1])
     max_score = max([alignment[1] for alignment in deduped_multiread])
-    multiread_to_return = [alignment[0] for alignment in deduped_multiread
+    ties = [alignment[0] for alignment in deduped_multiread
                             if alignment[1] == max_score]
-    tie_count = len(multiread_to_return)
+    tie_count = len(ties)
     if tie_count > 1:
         random.seed(seq)
         to_primary = random.randint(0, tie_count - 1)
-        multiread_to_return[to_primary][1] &= 256
+        ties[to_primary][1] &= 256
     else:
-        multiread_to_return[0][1] &= 256
+        to_primary = 0
+        ties[to_primary][1] &= 256
+    multiread_to_return = [ties[to_primary]] + [ties[i] 
+                                                for i in xrange(len(ties))
+                                                if i != to_primary]
     multiread_to_return += [alignment[0] for alignment in deduped_multiread
                                 if alignment[1] != max_score]
     alignment_count = len(multiread_to_return)
