@@ -59,6 +59,7 @@ def multiread_with_introns(multiread, stranded=False):
     if not multiread:
         return []
     seq = multiread[0][9]
+    qual = multiread[0][10]
     new_multiread = []
     for alignment in multiread:
         qname = alignment[0]
@@ -163,7 +164,7 @@ def multiread_with_introns(multiread, stranded=False):
                             if alignment[1] == max_score]
     tie_count = len(ties)
     if tie_count > 1:
-        random.seed(seq)
+        random.seed(qname + seq + qual)
         to_primary = random.randint(0, tie_count - 1)
         ties[to_primary][1] &= 256
     else:
