@@ -330,6 +330,7 @@ class BowtieOutputThread(threading.Thread):
                                     (intron[0], intron[1])
                                 ][1], intron[3])
                 for rname, sense in all_introns:
+                    to_write = set()
                     # Grab maximal cliques
                     for clique in \
                         maximal_cliques(all_introns[(rname, sense)].keys()):
@@ -346,7 +347,8 @@ class BowtieOutputThread(threading.Thread):
                                                      (cointrons[-1][0],
                                                         cointrons[-1][1])
                                                  ][1]
-                            print ('{rname}{sense}\t{start}\t{other_starts}'
+                            to_write.add(('{rname}{sense}\t{start}'
+                                   '\t{other_starts}'
                                    '\t{ends}\t{left_size}'
                                    '\t{right_size}\t{seq}').format(
                                         rname=rname,
@@ -367,13 +369,16 @@ class BowtieOutputThread(threading.Thread):
                                         right_size=(right_extend_size
                                                     + self.fudge),
                                         seq=seq
-                                   )
-                            _output_line_count += 1
+                                   ))
+                    for line_to_write in to_write:
+                        print line_to_write
+                        _output_line_count += 1
         self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base='genome', bowtie2_args='', verbose=False,
-    report_multiplier=1.2, keep_alive=False, stranded=False, fudge=5):
+    report_multiplier=1.2, keep_alive=False, stranded=False, fudge=5,
+    score_min=60):
     """ Runs Rail-RNA-cointron_enum 
 
         Alignment script for MapReduce pipelines that wraps Bowtie. Finds
@@ -426,6 +431,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             returned only if its strand agrees with the intron's strand.
         fudge: by how many bases to extend left and right extend sizes
                 to accommodate potential indels
+        score_min: Bowtie2 CONSTANT minimum alignment score
 
         No return value.
     """
@@ -445,7 +451,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12',
-        reads_file, '-S', output_file, '--score-min L,38,0', 
+        reads_file, '-S', output_file, '--score-min L,%d,0' % score_min, 
         '-D 24 -R 3 -N 1 -L 20 -i L,4,0'])
     print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
     # Because of problems with buffering, write output to file
@@ -504,10 +510,13 @@ if __name__ == '__main__':
         help='Permits a sum of exonic bases for an intron combo to be within '
              'the specified number of bases of a read sequence\'s size; '
              'this allows for indels with respect to the reference')
-    parser.add_argument(\
+    parser.add_argument(
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
              'in output have terminal + and - indicating sense strand')
+    parser.add_argument('--score-min', type=int, required=False,
+        default=64,
+        help='Bowtie2 minimum CONSTANT score to use')
 
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
@@ -538,7 +547,8 @@ if __name__ == '__main__' and not args.test:
         report_multiplier=args.report_multiplier,
         keep_alive=args.keep_alive,
         stranded=args.stranded,
-        fudge=args.fudge)
+        fudge=args.fudge,
+        score_min=args.score_min)
     print >>sys.stderr, 'DONE with cointron_enum.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)

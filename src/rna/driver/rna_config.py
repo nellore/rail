@@ -506,7 +506,13 @@ class RailRnaLocal:
                                     'and --force was not invoked to permit '
                                     'overwriting it.').format(base.output_dir))
             else:
-                shutil.rmtree(base.output_dir)
+                try:
+                    shutil.rmtree(base.output_dir)
+                except OSError:
+                    try:
+                        os.remove(base.output_dir)
+                    except OSError:
+                        pass
         elif output_dir_url.is_s3 \
             and ansible.s3_ansible.is_dir(base.output_dir):
             if not base.force:
