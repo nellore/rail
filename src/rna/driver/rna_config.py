@@ -37,7 +37,7 @@ import subprocess
 on EMR depending on bootstraps.'''
 _elastic_bowtie1_idx = '/mnt/index/genome'
 _elastic_bowtie2_idx = '/mnt/index/genome'
-_elastic_bedtobigbed_exe ='/mnt/bin/bedToBigBed'
+_elastic_bedgraphtobigwig_exe ='/mnt/bin/bedGraphToBigWig'
 _elastic_samtools_exe = 'samtools'
 _elastic_bowtie1_exe = 'bowtie'
 _elastic_bowtie2_exe = 'bowtie2'
@@ -1402,13 +1402,13 @@ class RailRnaAlign:
     def __init__(self, base, input_dir=None, elastic=False,
         bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
         bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
         genome_partition_length=5000, max_readlet_size=25,
-        min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
-        max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-        motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
-        genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-v 1 -a -m 8',
+        readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
+        cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
+        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie2_args='-k 30',
         normalize_percentile=0.75,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', assembly='hg19',
@@ -1493,9 +1493,9 @@ class RailRnaAlign:
                                                base.bowtie2_version,
                                                base.samtools_version
                                             )
-            base.bedtobigbed_exe = base.check_program('bedToBigBed', 
-                                    'BedToBigBed', '--bedtobigbed',
-                                    entered_exe=bedtobigbed_exe)
+            base.bedgraphtobigwig_exe = base.check_program('bedGraphToBigWig', 
+                                    'BedGraphToBigWig', '--bedgraphtobigwig',
+                                    entered_exe=bedgraphtobigwig_exe)
             # Check input dir
             if input_dir is not None:
                 if not os.path.exists(input_dir):
@@ -1534,7 +1534,7 @@ class RailRnaAlign:
             # Set up elastic params
             base.bowtie1_idx = _elastic_bowtie1_idx
             base.bowtie2_idx = _elastic_bowtie2_idx
-            base.bedtobigbed_exe = _elastic_bedtobigbed_exe
+            base.bedgraphtobigwig_exe = _elastic_bedgraphtobigwig_exe
             base.samtools_exe = _elastic_samtools_exe
             base.bowtie1_exe = _elastic_bowtie1_exe
             base.bowtie2_exe = _elastic_bowtie2_exe
@@ -1566,6 +1566,16 @@ class RailRnaAlign:
                                                     max_readlet_size
                                                 ))
         base.max_readlet_size = max_readlet_size
+        if not (isinstance(readlet_config_size, int) and readlet_config_size
+                >= max_readlet_size):
+            base.errors.append('Readlet config size (--readlet-config-size) '
+                               'must be an integer >= maximum readlet size '
+                               '(--max-readlet-size) = '
+                               '{0}, but {1} was entered.'.format(
+                                                    base.max_readlet_size,
+                                                    readlet_config_size
+                                                ))
+        base.readlet_config_size = readlet_config_size
         if not (isinstance(readlet_interval, int) and readlet_interval
                 > 0):
             base.errors.append('Readlet interval (--readlet-interval) '
@@ -1690,10 +1700,11 @@ class RailRnaAlign:
                 help=('path to SAMTools executable (def: samtools)')
             )
             exec_parser.add_argument(
-                '--bedtobigbed', type=str, required=False,
+                '--bedgraphtobigwig', type=str, required=False,
                 metavar='<exe>',
                 default=None,
-                help=('path to BedToBigBed executable (def: bedtobigbed)')
+                help=('path to BedGraphToBigWig executable '
+                      '(def: bedGraphToBigWig)')
             )
         else:
             required_parser.add_argument(
@@ -1720,8 +1731,15 @@ class RailRnaAlign:
         algo_parser.add_argument(
             '--max-readlet-size', type=int, required=False,
             metavar='<int>',
-            default=25,
+            default=23,
             help='max size of read segment to align when searching for introns'
+        )
+        algo_parser.add_argument(
+            '--readlet-config-size', type=int, required=False,
+            metavar='<int>',
+            default=35,
+            help=('max number of exonic bases spanned by a path enumerated in '
+                  'intron DAG')
         )
         algo_parser.add_argument(
             '--min-readlet-size', type=int, required=False,
@@ -1762,7 +1780,7 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--motif-search-window-size', type=int, required=False,
-            default=0,
+            default=1000,
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -1782,7 +1800,7 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--transcriptome-bowtie2-args', type=str, required=False,
-            default='-k 30',
+            default='-k 60',
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -1922,9 +1940,9 @@ class RailRnaAlign:
                 'name' : 'Enumerate possible intron cooccurrences on readlets',
                 'run' : ('intron_config.py '
                          '--readlet-size={0} {1}').format(
-                                                        base.max_readlet_size,
-                                                        verbose
-                                                    ),
+                                                    base.readlet_config_size,
+                                                    verbose
+                                                ),
                 'inputs' : ['intron_search'],
                 'output' : 'intron_config',
                 'taskx' : 1,
@@ -1961,10 +1979,8 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Finalize intron cooccurrences on reads',
-                'run' : ('cointron_enum.py --readlet-size {0} '
-                         '--bowtie2-idx={1} --bowtie2-exe={2} '
-                         '{3} {4} --').format(
-                                            base.max_readlet_size,
+                'run' : ('cointron_enum.py --bowtie2-idx={0} '
+                         '--bowtie2-exe={1} {2} {3} -- {4}').format(
                                             'intron/intron'
                                             if elastic else
                                             path_join(elastic,
@@ -2039,17 +2055,17 @@ class RailRnaAlign:
                 'multiple_outputs' : True
             },
             {
-                'name' : 'Write bigbeds with exome coverage by sample',
+                'name' : 'Write bigwigs with exome coverage by sample',
                 'run' : ('coverage.py --bowtie-idx={0} --percentile={1} '
-                         '--out={2} --bigbed-exe={3} '
+                         '--out={2} --bigwig-exe={3} '
                          '--manifest={4} {5}').format(base.bowtie1_idx,
                                                      base.normalize_percentile,
                                                      ab.Url(
                                                         path_join(elastic,
                                                         base.output_dir,
-                                                        'coverage_bigbeds')
+                                                        'coverage_bigwigs')
                                                      ).to_url(caps=True),
-                                                     base.bedtobigbed_exe,
+                                                     base.bedgraphtobigwig_exe,
                                                      manifest,
                                                      verbose),
                 'inputs' : [path_join(elastic, 'coverage_pre', 'coverage')],
@@ -2160,7 +2176,7 @@ class RailRnaAlign:
                 }
             },
             {
-                'Name' : 'Install BedToBigBed',
+                'Name' : 'Install bedGraphToBigWig',
                 'ScriptBootstrapAction' : {
                     'Args' : [
                         '/mnt/bin'
@@ -2336,13 +2352,13 @@ class RailRnaLocalAlignJson:
         verbose=False, bowtie1_exe=None,
         bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
         bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
         genome_partition_length=5000, max_readlet_size=25,
-        min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
-        max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-        motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
-        genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-v 1 -a -m 8',
+        readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
+        cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
+        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie2_args='-k 30',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', num_processes=1, keep_intermediates=False):
@@ -2357,9 +2373,11 @@ class RailRnaLocalAlignJson:
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
             bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe, bedtobigbed_exe=bedtobigbed_exe,
+            samtools_exe=samtools_exe,
+            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             genome_partition_length=genome_partition_length,
             max_readlet_size=max_readlet_size,
+            readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
             readlet_interval=readlet_interval,
             cap_size_multiplier=cap_size_multiplier,
@@ -2405,13 +2423,13 @@ class RailRnaElasticAlignJson:
         verbose=False, bowtie1_exe=None, bowtie1_idx='genome',
         bowtie1_build_exe=None, bowtie2_exe=None,
         bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
         genome_partition_length=5000, max_readlet_size=25,
-        min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
-        max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-        motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
-        genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-v 1 -a -m 8',
+        readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
+        cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
+        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie2_args='-k 30',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', log_uri=None, ami_version='3.1.0',
@@ -2451,9 +2469,11 @@ class RailRnaElasticAlignJson:
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
             bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe, bedtobigbed_exe=bedtobigbed_exe,
+            samtools_exe=samtools_exe,
+            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             genome_partition_length=genome_partition_length,
             max_readlet_size=max_readlet_size,
+            readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
             readlet_interval=readlet_interval,
             cap_size_multiplier=cap_size_multiplier,
@@ -2521,13 +2541,13 @@ class RailRnaLocalAllJson:
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
         bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
         genome_partition_length=5000, max_readlet_size=25,
-        min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
-        max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-        motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
-        genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-v 1 -a -m 8',
+        readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
+        cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
+        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie2_args='-k 30',
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, keep_intermediates=False, check_manifest=True):
@@ -2543,9 +2563,11 @@ class RailRnaLocalAllJson:
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
             bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe, bedtobigbed_exe=bedtobigbed_exe,
+            samtools_exe=samtools_exe,
+            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             genome_partition_length=genome_partition_length,
             max_readlet_size=max_readlet_size,
+            readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
             readlet_interval=readlet_interval,
             cap_size_multiplier=cap_size_multiplier,
@@ -2599,13 +2621,13 @@ class RailRnaElasticAllJson:
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
         bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedtobigbed_exe=None,
+        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
         genome_partition_length=5000, max_readlet_size=25,
-        min_readlet_size=15, readlet_interval=4, cap_size_multiplier=1.2,
-        max_intron_size=500000, min_intron_size=10, min_exon_size=9,
-        motif_search_window_size=1000, max_gaps_mismatches=3, motif_radius=5,
-        genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-v 1 -a -m 8',
+        readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
+        cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
+        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie2_args='-k 30',
         normalize_percentile=0.75,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
@@ -2648,9 +2670,11 @@ class RailRnaElasticAllJson:
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
             bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe, bedtobigbed_exe=bedtobigbed_exe,
+            samtools_exe=samtools_exe,
+            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             genome_partition_length=genome_partition_length,
             max_readlet_size=max_readlet_size,
+            readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
             readlet_interval=readlet_interval,
             cap_size_multiplier=cap_size_multiplier,

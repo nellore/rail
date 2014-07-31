@@ -213,6 +213,30 @@ def handle_temporary_directory(temp_dir_path):
     import shutil
     shutil.rmtree(temp_dir_path)
 
+def separated_introns(introns, separation):
+    """ Splits introns up if successive introns are separated by > separation
+
+        Two introns overlapped by readlet alignments may be on the same 
+        strand but much further apart than a read can overlap. This function
+        splits up alignments if successive introns are separated by more
+        than separation.
+
+        alignment_collections: list of intron tuples (pos, end pos)
+        separation: number of bases at or above which introns should be
+            separated
+
+        Return value: List of lists of introns.
+    """
+    if not introns: return []
+    introns.sort()
+    to_return = [[introns[0]]]
+    for i in xrange(1, len(introns)):
+        if introns[i][0] - to_return[-1][-1][1] >= separation:
+            to_return.append([introns[i]])
+        else:
+            to_return[-1].append(introns[i])
+    return to_return
+
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
@@ -280,6 +304,7 @@ class BowtieOutputThread(threading.Thread):
                         if field[:5] == 'MD:Z:'][0][5:]
                 pos = int(alignment[3])
                 seq = alignment[9]
+                seq_size = len(seq)
                 rname = alignment[2]
                 sense = [field for field in alignment
                             if field[:5] == 'XS:A:'][0][5:]
@@ -308,43 +333,47 @@ class BowtieOutputThread(threading.Thread):
                     # Grab maximal cliques
                     for clique in \
                         maximal_cliques(all_introns[(rname, sense)].keys()):
-                        clique.sort()
-                        if len(clique) > 1:
-                            print >>sys.stderr, clique
-                        left_extend_size = all_introns[(rname, sense)][
-                                                (clique[0][0], clique[0][1])
-                                            ][0]
-                        right_extend_size = all_introns[(rname, sense)][
-                                                 (clique[-1][0], clique[-1][1])
-                                             ][1]
-                        print ('{rname}{sense}\t{start}\t{other_starts}'
-                               '\t{ends}\t{left_size}'
-                               '\t{right_size}\t{seq}').format(
-                                    rname=rname,
-                                    sense=sense,
-                                    start=clique[0][0],
-                                    other_starts=(
-                                            ','.join(
-                                            [str(intron[0]) for intron
-                                                in clique[1:]]
-                                        ) if len(clique) > 1 else '\x1c'
-                                    ),
-                                    ends=','.join(
-                                            [str(intron[1])
-                                                for intron in clique]
+                        for cointrons in separated_introns(
+                                    clique,
+                                    separation=(seq_size + self.fudge)
+                                ):
+                            cointrons.sort()
+                            left_extend_size = all_introns[(rname, sense)][
+                                                    (cointrons[0][0],
+                                                        cointrons[0][1])
+                                                ][0]
+                            right_extend_size = all_introns[(rname, sense)][
+                                                     (cointrons[-1][0],
+                                                        cointrons[-1][1])
+                                                 ][1]
+                            print ('{rname}{sense}\t{start}\t{other_starts}'
+                                   '\t{ends}\t{left_size}'
+                                   '\t{right_size}\t{seq}').format(
+                                        rname=rname,
+                                        sense=sense,
+                                        start=cointrons[0][0],
+                                        other_starts=(
+                                                ','.join(
+                                                [str(intron[0]) for intron
+                                                    in cointrons[1:]]
+                                            ) if len(cointrons) > 1 else '\x1c'
                                         ),
-                                    left_size=(left_extend_size + self.fudge),
-                                    right_size=(right_extend_size
-                                                + self.fudge),
-                                    seq=seq
-                               )
-                        _output_line_count += 1
+                                        ends=','.join(
+                                                [str(intron[1])
+                                                    for intron in cointrons]
+                                            ),
+                                        left_size=(left_extend_size
+                                                    + self.fudge),
+                                        right_size=(right_extend_size
+                                                    + self.fudge),
+                                        seq=seq
+                                   )
+                            _output_line_count += 1
         self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base='genome', bowtie2_args='', verbose=False,
-    report_multiplier=1.2, keep_alive=False, stranded=False, fudge=5,
-    readlet_size=25):
+    report_multiplier=1.2, keep_alive=False, stranded=False, fudge=5):
     """ Runs Rail-RNA-cointron_enum 
 
         Alignment script for MapReduce pipelines that wraps Bowtie. Finds
@@ -397,8 +426,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             returned only if its strand agrees with the intron's strand.
         fudge: by how many bases to extend left and right extend sizes
                 to accommodate potential indels
-        readlet_size: determines score min threshold for Bowtie 2 by formula
-            readlet_size * 2 * .80
 
         No return value.
     """
@@ -417,9 +444,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                 '\t'.join([str(_input_line_count), seq, 'I'*len(seq)])
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
-        ' --local -a -t --no-hd --mm -x', bowtie2_index_base, '--12',
-        reads_file, '-S', output_file, '--score-min', 'L,20,0',
-        '-D 20 -R 3 -N 1 -L 25 -i L,4,0'])
+        ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12',
+        reads_file, '-S', output_file, '--score-min L,42,0', 
+        '-D 24 -R 3 -N 1 -L 20 -i L,4,0'])
     print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
     # Because of problems with buffering, write output to file
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
@@ -481,12 +508,6 @@ if __name__ == '__main__':
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
              'in output have terminal + and - indicating sense strand')
-    parser.add_argument(\
-        '--readlet-size', type=int, required=False,
-        default=25,
-        help=('Determines score min threshold for Bowtie 2 by formula'
-              'readlet-size * 2 * .80')
-        )
 
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
@@ -517,8 +538,7 @@ if __name__ == '__main__' and not args.test:
         report_multiplier=args.report_multiplier,
         keep_alive=args.keep_alive,
         stranded=args.stranded,
-        fudge=args.fudge,
-        readlet_size=args.readlet_size)
+        fudge=args.fudge)
     print >>sys.stderr, 'DONE with cointron_enum.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)

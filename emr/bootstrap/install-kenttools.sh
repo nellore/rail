@@ -33,5 +33,5 @@ if [ `uname -m` != "x86_64" ] ; then
 	exit 1
 fi
 
-s3cmd get s3://rail-emr/bin/bedToBigBed || { echo 's3cmd get failed' ; exit 1; }
-chmod a+x bedToBigBed
+s3cmd get s3://rail-emr/bin/bedGraphToBigWig || { echo 's3cmd get failed' ; exit 1; }
+chmod a+x bedGraphToBigWig
