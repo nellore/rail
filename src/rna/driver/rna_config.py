@@ -1995,6 +1995,10 @@ class RailRnaAlign:
                 'inputs' : ['combine_sequences'],
                 'output' : 'cointron_enum',
                 'taskx' : 4,
+                'archives' : ab.Url(path_join(elastic,
+                                    base.output_dir,
+                                    'transcript_index',
+                                    'intron.tar.gz#intron')).to_native_url(),
                 'part' : 'k1,1',
                 'keys' : 1
             },

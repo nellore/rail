@@ -75,7 +75,7 @@ def multiread_with_introns(multiread, stranded=False):
             items should be tested to find whether two alignments are
             "identical".'''
             new_multiread.append(
-                    ([qname.partition('\x1d')[0], flag & ~256, rname,
+                    ([qname.partition('\x1d')[0], flag | 256, rname,
                         str(pos), alignment[4],
                         alignment[5]] + list(alignment[6:]),
                     (qname, (flag & 16 != 0),
@@ -134,7 +134,7 @@ def multiread_with_introns(multiread, stranded=False):
             continue
         # Count number of samples in which intron combo was initially detected
         new_multiread.append(
-                    ([alignment[0].partition('\x1d')[0], flag & ~256,
+                    ([alignment[0].partition('\x1d')[0], flag | 256,
                         rname, str(pos), alignment[4], new_cigar]
                      + list(alignment[6:])
                      + ['XS:A:' + reverse_strand_string],
@@ -166,10 +166,9 @@ def multiread_with_introns(multiread, stranded=False):
     if tie_count > 1:
         random.seed(qname + seq + qual)
         to_primary = random.randint(0, tie_count - 1)
-        ties[to_primary][1] &= 256
     else:
         to_primary = 0
-        ties[to_primary][1] &= 256
+    ties[to_primary][1] &= ~256
     multiread_to_return = [ties[to_primary]] + [ties[i] 
                                                 for i in xrange(len(ties))
                                                 if i != to_primary]
