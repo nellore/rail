@@ -23,7 +23,7 @@ class LabelsAndIndices:
             i = 0
             for line in manifest_stream:
                 line = line.strip()
-                if line[0] == '#' or not line: continue
+                if (not line) or line[0] == '#': continue
                 tokens = line.split('\t')
                 assert len(tokens) <= 5, ('Manifest file has invalid line: %s' 
                                           % line)
