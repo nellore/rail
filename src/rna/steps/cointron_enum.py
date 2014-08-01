@@ -329,50 +329,50 @@ class BowtieOutputThread(threading.Thread):
                             ][1] = max(all_introns[(rname, sense)][
                                     (intron[0], intron[1])
                                 ][1], intron[3])
-                for rname, sense in all_introns:
-                    to_write = set()
-                    # Grab maximal cliques
-                    for clique in \
-                        maximal_cliques(all_introns[(rname, sense)].keys()):
-                        for cointrons in separated_introns(
-                                    clique,
-                                    separation=(seq_size + self.fudge)
-                                ):
-                            cointrons.sort()
-                            left_extend_size = all_introns[(rname, sense)][
-                                                    (cointrons[0][0],
-                                                        cointrons[0][1])
-                                                ][0]
-                            right_extend_size = all_introns[(rname, sense)][
-                                                     (cointrons[-1][0],
-                                                        cointrons[-1][1])
-                                                 ][1]
-                            to_write.add(('{rname}{sense}\t{start}'
-                                   '\t{other_starts}'
-                                   '\t{ends}\t{left_size}'
-                                   '\t{right_size}\t{seq}').format(
-                                        rname=rname,
-                                        sense=sense,
-                                        start=cointrons[0][0],
-                                        other_starts=(
-                                                ','.join(
-                                                [str(intron[0]) for intron
-                                                    in cointrons[1:]]
-                                            ) if len(cointrons) > 1 else '\x1c'
+            for rname, sense in all_introns:
+                to_write = set()
+                # Grab maximal cliques
+                for clique in \
+                    maximal_cliques(all_introns[(rname, sense)].keys()):
+                    for cointrons in separated_introns(
+                                clique,
+                                separation=(seq_size + self.fudge)
+                            ):
+                        cointrons.sort()
+                        left_extend_size = all_introns[(rname, sense)][
+                                                (cointrons[0][0],
+                                                    cointrons[0][1])
+                                            ][0]
+                        right_extend_size = all_introns[(rname, sense)][
+                                                 (cointrons[-1][0],
+                                                    cointrons[-1][1])
+                                             ][1]
+                        to_write.add(('{rname}{sense}\t{start}'
+                               '\t{other_starts}'
+                               '\t{ends}\t{left_size}'
+                               '\t{right_size}\t{seq}').format(
+                                    rname=rname,
+                                    sense=sense,
+                                    start=cointrons[0][0],
+                                    other_starts=(
+                                            ','.join(
+                                            [str(intron[0]) for intron
+                                                in cointrons[1:]]
+                                        ) if len(cointrons) > 1 else '\x1c'
+                                    ),
+                                    ends=','.join(
+                                            [str(intron[1])
+                                                for intron in cointrons]
                                         ),
-                                        ends=','.join(
-                                                [str(intron[1])
-                                                    for intron in cointrons]
-                                            ),
-                                        left_size=(left_extend_size
-                                                    + self.fudge),
-                                        right_size=(right_extend_size
-                                                    + self.fudge),
-                                        seq=seq
-                                   ))
-                    for line_to_write in to_write:
-                        print line_to_write
-                        _output_line_count += 1
+                                    left_size=(left_extend_size
+                                                + self.fudge),
+                                    right_size=(right_extend_size
+                                                + self.fudge),
+                                    seq=seq
+                               ))
+                for line_to_write in to_write:
+                    print line_to_write
+                    _output_line_count += 1
         self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
