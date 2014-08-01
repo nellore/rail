@@ -515,7 +515,7 @@ if __name__ == '__main__':
         help='Assume input reads come from the sense strand; then partitions '
              'in output have terminal + and - indicating sense strand')
     parser.add_argument('--score-min', type=int, required=False,
-        default=64,
+        default=46,
         help='Bowtie2 minimum CONSTANT score to use')
 
     # Add command-line arguments for dependencies
