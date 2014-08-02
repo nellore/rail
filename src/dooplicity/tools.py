@@ -3,7 +3,7 @@
 tools.py
 Part of Dooplicity framework
 
-Includes a class for iterating through streams easily and a couple other tools.
+Includes a class for iterating through streams easily and a few other tools.
 
 The functions which() and is_exe() was taken from
 http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
@@ -34,6 +34,27 @@ THE SOFTWARE.
 
 from itertools import groupby
 import os
+import threading
+
+class KeepAlive(threading.Thread):
+    """ Writes Hadoop status messages to avert task termination. """
+    def __init__(self, status_stream, period=120):
+        """
+            status_stream: where to write status messages
+            period: number of seconds between successive status messages
+        """
+        super(KeepAlive, self).__init__()
+        self.period = period
+        self.status_stream = status_stream
+        # Kills thread when script is finished
+        self.daemon = True
+
+    def run(self):
+        import time
+        while True:
+            self.status_stream.write('\nreporter:status:alive\n')
+            self.status_stream.flush()
+            time.sleep(self.period)
 
 def is_exe(fpath):
     """ Tests whether a file is executable.

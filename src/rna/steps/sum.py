@@ -72,9 +72,25 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+if args.keep_alive:
+    import site
+    import os
+
+    base_path = os.path.abspath(
+                        os.path.dirname(os.path.dirname(os.path.dirname(
+                            os.path.realpath(__file__)))
+                        )
+                    )
+    utils_path = os.path.join(base_path, 'rna', 'utils')
+    site.addsitedir(utils_path)
+    site.addsitedir(base_path)
+
+    from dooplicity.tools import KeepAlive
+    keep_alive_thread = KeepAlive(sys.stderr)
+    keep_alive_thread.start()
+
 input_line_count, output_line_count = 0, 0
 
-if args.keep_alive: last_time = time.time()
 if args.type == 1:
     last_key, totals, write_line = None, [0]*args.value_count, False
     while True:
@@ -101,11 +117,6 @@ if args.type == 1:
         for i in xrange(1, args.value_count+1):
             totals[-i] += int(tokens[-i])
         last_key = key
-        if args.keep_alive:
-            next_time = time.time()
-            if next_time - last_time > 120:
-                print >>sys.stderr, 'reporter:status:alive'
-                last_time = next_time
 elif args.type == 2:
     last_key, totals, write_line = None, [0.0]*args.value_count, False
     while True:
@@ -132,11 +143,6 @@ elif args.type == 2:
         for i in xrange(1, args.value_count+1):
             totals[-i] += float(tokens[-i])
         last_key = key
-        if args.keep_alive:
-            next_time = time.time()
-            if next_time - last_time > 120:
-                print >>sys.stderr, 'reporter:status:alive'
-                last_time = next_time
 else:
     last_key, totals, write_line \
         = None, [[] for i in xrange(args.value_count)], False
@@ -166,11 +172,6 @@ else:
             if tokens[-i] != '\x1c':
                 totals[-i].append(tokens[-i])
         last_key = key
-        if args.keep_alive:
-            next_time = time.time()
-            if next_time - last_time > 120:
-                print >>sys.stderr, 'reporter:status:alive'
-                last_time = next_time
 
 print >>sys.stderr, 'DONE with sum.py; in/out=%d/%d; time=%0.3f s' \
                         % (input_line_count, output_line_count, 
