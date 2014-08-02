@@ -48,6 +48,19 @@ is the "sum" of the values for all such keys from the input.
 import argparse
 import sys
 import time
+import site
+import os
+
+base_path = os.path.abspath(
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
+                )
+utils_path = os.path.join(base_path, 'rna', 'utils')
+site.addsitedir(utils_path)
+site.addsitedir(base_path)
+
+from dooplicity.tools import dlist
 
 start_time = time.time()
 
@@ -73,18 +86,6 @@ parser.add_argument(
 args = parser.parse_args()
 
 if args.keep_alive:
-    import site
-    import os
-
-    base_path = os.path.abspath(
-                        os.path.dirname(os.path.dirname(os.path.dirname(
-                            os.path.realpath(__file__)))
-                        )
-                    )
-    utils_path = os.path.join(base_path, 'rna', 'utils')
-    site.addsitedir(utils_path)
-    site.addsitedir(base_path)
-
     from dooplicity.tools import KeepAlive
     keep_alive_thread = KeepAlive(sys.stderr)
 
@@ -148,7 +149,7 @@ elif args.type == 2:
         line = sys.stdin.readline()
 else:
     last_key, totals, write_line \
-        = None, [[] for i in xrange(args.value_count)], False
+        = None, [dlist() for i in xrange(args.value_count)], False
     while True:
         if not line:
             if last_key is None:
@@ -164,17 +165,26 @@ else:
             if key != last_key and last_key is not None:
                 write_line = True
         if write_line:
-            print '\t'.join(last_key + ['\x1d'.join(totals[i])
-                                            if totals[i] != [] else '\x1c'
-                                            for i in xrange(len(totals))])
+            sys.stdout.write('\t'.join(last_key))
+            for total in totals:
+                sys.stdout.write('\t')
+                j = None
+                for j, item in enumerate(total):
+                    if j > 0: sys.stdout.write('\x1d')
+                    sys.stdout.write(item)
+                if j is None:
+                    sys.stdout.write('\x1c')
+            sys.stdout.write('\n')
             output_line_count += 1
-            totals, write_line = [[] for i in xrange(args.value_count)], False
+            totals, write_line = [dlist() for i in xrange(args.value_count)], \
+                False
         if not line: break
         for i in xrange(1, args.value_count+1):
             if tokens[-i] != '\x1c':
                 totals[-i].append(tokens[-i])
         last_key = key
         line = sys.stdin.readline()
+    sys.stdout.flush()
 
 print >>sys.stderr, 'DONE with sum.py; in/out=%d/%d; time=%0.3f s' \
                         % (input_line_count, output_line_count, 

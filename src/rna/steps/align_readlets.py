@@ -87,6 +87,25 @@ def handle_temporary_directory(temp_dir_path):
     import shutil
     shutil.rmtree(temp_dir_path)
 
+import re
+
+_exp = re.compile(re.escape('\x1d'))
+
+def itersplit(s, sep=None):
+    """ from
+    http://stackoverflow.com/questions/3862010/
+    is-there-a-generator-version-of-string-split-in-python """
+    pos = 0
+    while True:
+        m = _exp.search(s, pos)
+        if not m:
+            if pos < len(s) or sep is not None:
+                yield s[pos:]
+            break
+        if pos < m.start() or sep is not None:
+            yield s[pos:m.start()]
+        pos = m.end()
+
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
@@ -148,7 +167,8 @@ class BowtieOutputThread(threading.Thread):
             '''If the next qname doesn't match the last qname or there are no
             more lines, all of a multireadlet's alignments have been
             collected.'''
-            reads = self.qname_stream.readline().rstrip().split('\x1d')
+            reads = itersplit(self.qname_stream.readline().rstrip(),
+                                sep='\x1d')
             if not flag & 4:
                 '''Last readlet has at least one alignment; print all
                 alignments for each read from which readlet sequence is

@@ -144,7 +144,7 @@ class dlist:
         be used by appending all elements, then iterating through them to
         read them.
     """
-    def __init__(self, limit=1000000):
+    def __init__(self, limit=5000000):
         """
             limit: maximum number of elements allowed in list before
                 spilling to disk
@@ -159,14 +159,13 @@ class dlist:
             NOTE THAT seek to beginning of file is performed if some of the
             list is not in memory!
         """
+        for item in self.mem_list:
+            yield item
         if self.disk_stream is not None:
             self.disk_stream.flush()
             self.disk_stream.seek(0)
             for line in self.disk_stream:
                 yield line.strip()
-        else:
-            for item in self.mem_list:
-                yield item
 
     def append(self, item):
         """ Appends item to list. Only strings are permitted right now.
@@ -175,15 +174,14 @@ class dlist:
         """
         if type(item) is not str:
             raise TypeError('An item appended to a dlist must be a string.')
-        if self.mem_list is not None and len(self.mem_list) < self.limit:
-            self.mem_list.append(item)
-        elif self.disk_stream is None:
-            # Open new temporary file
-            import tempfile
-            self.disk_stream = tempfile.TemporaryFile()
-            print >>self.disk_stream, '\n'.join(self.mem_list)
-            self.mem_list = None
-            print >>self.disk_stream, item
+        if self.disk_stream is None:
+            if len(self.mem_list) < self.limit:
+                self.mem_list.append(item)
+            else:
+                # Open new temporary file
+                import tempfile
+                self.disk_stream = tempfile.TemporaryFile()
+                print >>self.disk_stream, item
         else:
             print >>self.disk_stream, item
 
