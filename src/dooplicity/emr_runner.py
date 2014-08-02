@@ -120,7 +120,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
                     'Input JSON not in proper format. Ensure that the JSON '
                     'object has a Steps key.'
                 )
-        step_count = len(job_flow)
+        """step_count = len(job_flow)
         steps = OrderedDict()
         # Check steps for requred data
         required_data = set(['input', 'output', 'mapper', 'reducer'])
@@ -217,7 +217,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
                                     'easier to create a bucket first on S3 '
                                     'and use its name + a subdirectory as '
                                     'the output directory.') % bucket)
-        iface.step('Set up output directories on S3.')
+        iface.step('Set up output directories on S3.')"""
         job_flow_response = aws_ansible.post_request(full_payload)
         json_response = json.load(job_flow_response)
         if 'JobFlowId' not in json_response:

@@ -63,11 +63,18 @@ parser.add_argument(\
         help='If 1, assume final fields are ints. If 2, assume final fields '
              'are floats. Otherwise, assume final fields are strings.'
     )
+parser.add_argument(
+        '--keep-alive', action='store_const', const=True,
+        default=False,
+        help='Periodically print Hadoop status messages to stderr to keep ' \
+             'job alive'
+    )
 
 args = parser.parse_args()
 
 input_line_count, output_line_count = 0, 0
 
+if args.keep_alive: last_time = time.time()
 if args.type == 1:
     last_key, totals, write_line = None, [0]*args.value_count, False
     while True:
@@ -94,6 +101,11 @@ if args.type == 1:
         for i in xrange(1, args.value_count+1):
             totals[-i] += int(tokens[-i])
         last_key = key
+        if args.keep_alive:
+            next_time = time.time()
+            if last_time - next_time > 120:
+                print >>sys.stderr, 'reporter:status:alive'
+                last_time = next_time
 elif args.type == 2:
     last_key, totals, write_line = None, [0.0]*args.value_count, False
     while True:
@@ -120,6 +132,11 @@ elif args.type == 2:
         for i in xrange(1, args.value_count+1):
             totals[-i] += float(tokens[-i])
         last_key = key
+        if args.keep_alive:
+            next_time = time.time()
+            if last_time - next_time > 120:
+                print >>sys.stderr, 'reporter:status:alive'
+                last_time = next_time
 else:
     last_key, totals, write_line \
         = None, [[] for i in xrange(args.value_count)], False
@@ -149,6 +166,11 @@ else:
             if tokens[-i] != '\x1c':
                 totals[-i].append(tokens[-i])
         last_key = key
+        if args.keep_alive:
+            next_time = time.time()
+            if last_time - next_time > 120:
+                print >>sys.stderr, 'reporter:status:alive'
+                last_time = next_time
 
 print >>sys.stderr, 'DONE with sum.py; in/out=%d/%d; time=%0.3f s' \
                         % (input_line_count, output_line_count, 

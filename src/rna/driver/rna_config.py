@@ -1868,7 +1868,9 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Aggregate duplicate read sequences',
-                'run' : 'sum.py --type 3 --value-count 2',
+                'run' : 'sum.py --type 3 --value-count 2 {0}'.format(
+                                                                keep_alive
+                                                            ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletize')],
                 'output' : 'combine_sequences',
                 'taskx' : 4,
@@ -1892,7 +1894,9 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Aggregate duplicate readlet sequences',
-                'run' : 'sum.py --type 3',
+                'run' : 'sum.py --type 3 {0}'.format(
+                                                keep_alive
+                                            ),
                 'inputs' : ['readletize'],
                 'output' : 'combine_subsequences',
                 'taskx' : 4,
@@ -1956,7 +1960,7 @@ class RailRnaAlign:
                 'keys' : 4
             },
             {
-                'name' : 'Get transcriptome elements for readlet realignment',
+                'name' : 'Get transcriptome elements for realignment',
                 'run' : ('intron_fasta.py --bowtie-idx={0} {1}').format(
                                                         base.bowtie1_idx,
                                                         verbose
@@ -2045,7 +2049,9 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Merge exon differentials at same genomic positions',
-                'run' : 'sum.py',
+                'run' : 'sum.py {0}'.format(
+                                        keep_alive
+                                    ),
                 'inputs' : [path_join(elastic, 'align_reads', 'exon_diff'),
                             path_join(elastic, 'realign_reads', 'exon_diff')],
                 'output' : 'collapse',
