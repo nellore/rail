@@ -87,14 +87,16 @@ if args.keep_alive:
 
     from dooplicity.tools import KeepAlive
     keep_alive_thread = KeepAlive(sys.stderr)
-    keep_alive_thread.start()
 
 input_line_count, output_line_count = 0, 0
+
+# Must consume a line of stdin before outputting status messages
+line = sys.stdin.readline()
+if args.keep_alive: keep_alive_thread.start()
 
 if args.type == 1:
     last_key, totals, write_line = None, [0]*args.value_count, False
     while True:
-        line = sys.stdin.readline()
         if not line:
             if last_key is None:
                 # Input is empty
@@ -117,10 +119,10 @@ if args.type == 1:
         for i in xrange(1, args.value_count+1):
             totals[-i] += int(tokens[-i])
         last_key = key
+        line = sys.stdin.readline()
 elif args.type == 2:
     last_key, totals, write_line = None, [0.0]*args.value_count, False
     while True:
-        line = sys.stdin.readline()
         if not line:
             if last_key is None:
                 # Input is empty
@@ -143,11 +145,11 @@ elif args.type == 2:
         for i in xrange(1, args.value_count+1):
             totals[-i] += float(tokens[-i])
         last_key = key
+        line = sys.stdin.readline()
 else:
     last_key, totals, write_line \
         = None, [[] for i in xrange(args.value_count)], False
     while True:
-        line = sys.stdin.readline()
         if not line:
             if last_key is None:
                 # Input is empty
@@ -172,6 +174,7 @@ else:
             if tokens[-i] != '\x1c':
                 totals[-i].append(tokens[-i])
         last_key = key
+        line = sys.stdin.readline()
 
 print >>sys.stderr, 'DONE with sum.py; in/out=%d/%d; time=%0.3f s' \
                         % (input_line_count, output_line_count, 
