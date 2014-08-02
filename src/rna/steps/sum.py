@@ -103,7 +103,7 @@ if args.type == 1:
         last_key = key
         if args.keep_alive:
             next_time = time.time()
-            if last_time - next_time > 120:
+            if next_time - last_time > 120:
                 print >>sys.stderr, 'reporter:status:alive'
                 last_time = next_time
 elif args.type == 2:
@@ -134,7 +134,7 @@ elif args.type == 2:
         last_key = key
         if args.keep_alive:
             next_time = time.time()
-            if last_time - next_time > 120:
+            if next_time - last_time > 120:
                 print >>sys.stderr, 'reporter:status:alive'
                 last_time = next_time
 else:
@@ -168,7 +168,7 @@ else:
         last_key = key
         if args.keep_alive:
             next_time = time.time()
-            if last_time - next_time > 120:
+            if next_time - last_time > 120:
                 print >>sys.stderr, 'reporter:status:alive'
                 last_time = next_time
 
