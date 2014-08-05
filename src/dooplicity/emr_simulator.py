@@ -499,7 +499,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     # Don't assign one line per mapper
                     nline_input = False
                 output_dir = step_data['output']
-                if step_data['reducer'] not in identity_mappers:
+                if step_data['reducer'] not in identity_reducers:
                     '''There's a reducer parameter, so input to reducer is
                     output of mapper. Change output directory.'''
                     output_dir = os.path.join(output_dir, 'dp.map')
@@ -613,7 +613,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 step_inputs = [input_file for input_file 
                                 in glob.glob(output_dir)
                                 if os.path.isfile(input_file)]
-            if step_data['reducer'] not in identity_mappers:
+            if step_data['reducer'] not in identity_reducers:
                 # Partition inputs into tasks, presorting
                 output_dir = os.path.join(step_data['output'], 'dp.tasks')
                 try:

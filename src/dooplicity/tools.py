@@ -153,6 +153,9 @@ class dlist:
         self.disk_stream = None
         self.limit = limit
 
+    def __enter__(self):
+        return self
+
     def __iter__(self):
         """ Iterates through list.
 
@@ -184,6 +187,13 @@ class dlist:
                 print >>self.disk_stream, item
         else:
             print >>self.disk_stream, item
+
+    def tear_down(self):
+        if self.disk_stream is not None:
+            self.disk_stream.close()
+
+    def __exit__(self, type, value, traceback):
+        self.tear_down()
 
 class xstream:
     """ Permits Pythonic iteration through partitioned/sorted input streams.

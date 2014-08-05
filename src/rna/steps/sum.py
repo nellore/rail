@@ -176,6 +176,8 @@ else:
                     sys.stdout.write('\x1c')
             sys.stdout.write('\n')
             output_line_count += 1
+            for a_list in totals:
+                a_list.tear_down()
             totals, write_line = [dlist() for i in xrange(args.value_count)], \
                 False
         if not line: break

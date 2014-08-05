@@ -6,4 +6,6 @@
 
 set -e
 
-sudo apt-get --yes install bowtie2 || { echo 'apt-get failed' ; exit 1; }
+wget http://downloads.sourceforge.net/project/bowtie-bio/bowtie2/2.2.3/bowtie2-2.2.3-linux-x86_64.zip || { echo 'wget failed' ; exit 1; }
+unzip bowtie2-2.2.3-linux-x86_64.zip || { echo 'unzip failed' ; exit 1; }
+export PATH=$PATH:~/bowtie2-2.2.3

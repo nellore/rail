@@ -6,4 +6,11 @@
 
 set -e
 
-sudo apt-get --yes install samtools || { echo 'apt-get failed' ; exit 1; }
+# samtools requires curses.h
+sudo yum -y install ncurses-devel ncurses || { echo 'curses installation failed' ; exit 1; }
+wget http://downloads.sourceforge.net/project/samtools/samtools/0.1.19/samtools-0.1.19.tar.bz2 || { echo 'wget failed' ; exit 1; }
+tar xvjf samtools-0.1.19.tar.bz2 || { echo 'unzip failed' ; exit 1; }
+cd samtools-0.1.19
+sudo make || { echo 'make failed'; exit 1; }
+cd ..
+export PATH=$PATH:~/samtools-0.1.19

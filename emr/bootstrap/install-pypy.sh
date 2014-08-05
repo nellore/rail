@@ -6,9 +6,8 @@
 
 set -e
 
-wget -O- -q http://s3tools.org/repo/deb-all/stable/s3tools.key | sudo apt-key add -
-sudo wget -O/etc/apt/sources.list.d/s3tools.list http://s3tools.org/repo/deb-all/stable/s3tools.list
-sudo apt-get update && sudo apt-get install s3cmd
+sudo wget -O/etc/yum.repos.d/s3tools.repo http://s3tools.org/repo/RHEL_6/s3tools.repo || { echo 'wget failed' ; exit 1; }
+sudo yum install s3cmd || { echo 's3cmd installation failed' ; exit 1; }
 
 AWS_ACCESS_ID=`grep 'fs.s3.awsAccessKeyId' $HOME/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
 AWS_ACCESS_KEY=`grep 'fs.s3.awsSecretAccessKey' $HOME/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
@@ -23,8 +22,7 @@ reduced_redundancy = False
 send_chunk = 4096
 EOF
 
-fn=`basename $1`
-s3cmd get ${1} . || { echo 's3cmd failed' ; exit 1; }
+s3cmd get s3://rail-emr/bin/pypy-2.2.1-linux_x86_64-portable.tar.bz2 || { echo 's3cmd failed' ; exit 1; }
 
 # wget --no-check-certificate -t 3 https://bitbucket.org/squeaky/portable-pypy/downloads/pypy-2.2.1-linux_x86_64-portable.tar.bz2 || { echo 'wget failed' ; exit 1; }
 tar xvjf pypy-2.2.1-linux_x86_64-portable.tar.bz2 || { echo 'unzipping failed' ; exit 1; }

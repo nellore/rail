@@ -83,7 +83,7 @@ def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
     reducer='org.apache.hadoop.mapred.lib.IdentityReducer', 
     action_on_failure='TERMINATE_JOB_FLOW',
-    jar='/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar',
+    jar='/home/hadoop/contrib/streaming/hadoop-streaming.jar',
     tasks=0, partitioner_options=None, key_fields=None, archives=None,
     multiple_outputs=False, inputformat=None, extra_args=[]):
     """ Outputs JSON for a given step.
@@ -200,48 +200,48 @@ def steps(protosteps, action_on_failure, jar, step_dir,
         assert ('keys' in protostep and 'part' in protostep) or \
                 ('keys' not in protostep and 'part' not in protostep)
         true_steps.append(step(
-                            name=protostep['name'],
-                            inputs=([path_join(unix, intermediate_dir,
-                                        an_input) for an_input in
-                                        protostep['inputs']]
-                                    if 'no_input_prefix' not in
-                                    protostep else protostep['inputs']),
-                            output=(path_join(unix, intermediate_dir,
-                                                    protostep['output'])
-                                    if 'no_output_prefix' not in
-                                    protostep else protostep['output']),
-                            mapper=' '.join(['pypy' if unix
-                                    else _executable, 
-                                    path_join(unix, step_dir,
-                                                    protostep['run'])])
-                                    if 'keys' not in protostep
-                                    else 'cat',
-                            reducer=' '.join(['pypy' if unix
-                                    else _executable, 
-                                    path_join(unix, step_dir,
-                                                    protostep['run'])]) 
-                                    if 'keys' in protostep
-                                    else 'cat',
-                            action_on_failure=action_on_failure,
-                            jar=jar,
-                            tasks=(reducer_count * protostep['taskx']
-                                    if protostep['taskx'] is not None
-                                    else 1),
-                            partitioner_options=(protostep['part']
-                                if 'part' in protostep else None),
-                            key_fields=(protostep['keys']
-                                if 'keys' in protostep else None),
-                            archives=(protostep['archives']
-                                if 'archives' in protostep else None),
-                            multiple_outputs=(True if 'multiple_outputs'
-                                    in protostep else False
-                                ),
-                            inputformat=(protostep['inputformat']
-                                if 'inputformat' in protostep else None),
-                            extra_args=(protostep['extra_args']
-                                if 'extra_args' in protostep else [])
-                        )
-                    )
+                name=protostep['name'],
+                inputs=([path_join(unix, intermediate_dir,
+                            an_input) for an_input in
+                            protostep['inputs']]
+                        if 'no_input_prefix' not in
+                        protostep else protostep['inputs']),
+                output=(path_join(unix, intermediate_dir,
+                                        protostep['output'])
+                        if 'no_output_prefix' not in
+                        protostep else protostep['output']),
+                mapper=' '.join(['pypy' if unix
+                        else _executable, 
+                        path_join(unix, step_dir,
+                                        protostep['run'])])
+                        if 'keys' not in protostep
+                        else 'org.apache.hadoop.mapred.lib.IdentityMapper',
+                reducer=' '.join(['pypy' if unix
+                        else _executable, 
+                        path_join(unix, step_dir,
+                                        protostep['run'])]) 
+                        if 'keys' in protostep
+                        else 'org.apache.hadoop.mapred.lib.IdentityReducer',
+                action_on_failure=action_on_failure,
+                jar=jar,
+                tasks=(reducer_count * protostep['taskx']
+                        if protostep['taskx'] is not None
+                        else 1),
+                partitioner_options=(protostep['part']
+                    if 'part' in protostep else None),
+                key_fields=(protostep['keys']
+                    if 'keys' in protostep else None),
+                archives=(protostep['archives']
+                    if 'archives' in protostep else None),
+                multiple_outputs=(True if 'multiple_outputs'
+                        in protostep else False
+                    ),
+                inputformat=(protostep['inputformat']
+                    if 'inputformat' in protostep else None),
+                extra_args=(protostep['extra_args']
+                    if 'extra_args' in protostep else [])
+            )
+        )
     return true_steps
 
 class RailRnaErrors:
@@ -707,7 +707,7 @@ class RailRnaElastic:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar',
+        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming.jar',
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -1074,7 +1074,7 @@ class RailRnaElastic:
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='2.4.6',
+            default='3.1.0',
             help='Amazon Linux AMI to use'
         )
         elastic_parser.add_argument('--visible-to-all-users',
@@ -1094,7 +1094,7 @@ class RailRnaElastic:
         elastic_parser.add_argument('--hadoop-jar', type=str, required=False,
             metavar='<jar>',
             default='/home/hadoop/contrib/streaming/' \
-                    'hadoop-streaming-1.0.3.jar',
+                    'hadoop-streaming.jar',
             help=('Hadoop Streaming Java ARchive to use; controls version')
         )
         elastic_parser.add_argument('--master-instance-count', type=int,
@@ -1255,7 +1255,7 @@ class RailRnaElastic:
     def instances(base):
         assert base.master_instance_count >= 1
         to_return = {
-            'HadoopVersion' : '1.0.3',
+            'HadoopVersion' : '2.4.0',
             'InstanceGroups' : [
                 {
                     'InstanceCount' : base.master_instance_count,
@@ -1468,7 +1468,7 @@ class RailRnaAlign:
                                                         bowtie2_version_command
                                                        )
                                                     ))
-            base.bowtie2_build_exe = base.check_program('bowtie-build',
+            base.bowtie2_build_exe = base.check_program('bowtie2-build',
                                             'Bowtie 2 Build',
                                             '--bowtie2-build',
                                             entered_exe=bowtie2_build_exe)
@@ -1806,7 +1806,7 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--transcriptome-bowtie2-args', type=str, required=False,
-            default='-k 25',
+            default='-k 30',
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -2170,10 +2170,7 @@ class RailRnaAlign:
             {
                 'Name' : 'Install PyPy',
                 'ScriptBootstrapAction' : {
-                    'Args' : [
-                        ('s3://rail-emr/bin/'
-                         'pypy-2.2.1-linux_x86_64-portable.tar.bz2')
-                    ],
+                    'Args' : [],
                     'Path' : 's3://rail-emr/bootstrap/install-pypy.sh'
                 }
             },
@@ -2285,7 +2282,7 @@ class RailRnaElasticPreprocessJson:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar',
+        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming.jar',
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -2452,7 +2449,7 @@ class RailRnaElasticAlignJson:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar',
+        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming.jar',
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -2651,7 +2648,7 @@ class RailRnaElasticAllJson:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming-1.0.3.jar',
+        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming.jar',
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,

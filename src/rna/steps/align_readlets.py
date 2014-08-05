@@ -88,23 +88,26 @@ def handle_temporary_directory(temp_dir_path):
     shutil.rmtree(temp_dir_path)
 
 import re
+_expression = re.compile('\x1d')
 
-_exp = re.compile(re.escape('\x1d'))
+def itersplit(a_string):
+    """ Generator for splitting a string between '\x1d's.
 
-def itersplit(s, sep=None):
-    """ from
-    http://stackoverflow.com/questions/3862010/
-    is-there-a-generator-version-of-string-split-in-python """
+        Based on http://stackoverflow.com/questions/3862010/
+        is-there-a-generator-version-of-string-split-in-python
+
+        a_string: string
+
+        Yield value: next part of string between \x1ds.
+    """
     pos = 0
     while True:
-        m = _exp.search(s, pos)
-        if not m:
-            if pos < len(s) or sep is not None:
-                yield s[pos:]
+        next = _expression.search(a_string, pos)
+        if not next:
+            yield a_string[pos:]
             break
-        if pos < m.start() or sep is not None:
-            yield s[pos:m.start()]
-        pos = m.end()
+        yield a_string[pos:next.start()]
+        pos = next.end()
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
@@ -167,8 +170,7 @@ class BowtieOutputThread(threading.Thread):
             '''If the next qname doesn't match the last qname or there are no
             more lines, all of a multireadlet's alignments have been
             collected.'''
-            reads = itersplit(self.qname_stream.readline().rstrip(),
-                                sep='\x1d')
+            reads = itersplit(self.qname_stream.readline().rstrip())
             if not flag & 4:
                 '''Last readlet has at least one alignment; print all
                 alignments for each read from which readlet sequence is
