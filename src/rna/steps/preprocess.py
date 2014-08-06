@@ -199,22 +199,44 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 '''Name files using Hadoop task environment property
                 mapred.task.partition.'''
                 if gzip_output:
-                    output_file = os.path.join(
-                                destination, 
-                                '.'.join([
-                                    os.environ['mapred_task_partition'],
-                                    str(k), str(file_number), 'gz'
-                                ])
-                            )
+                    try:
+                        output_file = os.path.join(
+                                    destination, 
+                                    '.'.join([
+                                        os.environ['mapred_task_partition'],
+                                        str(k), str(file_number), 'gz'
+                                    ])
+                                )
+                    except KeyError:
+                        '''Hadoop 2.x: mapreduce.task.partition; see 
+                        http://hadoop.apache.org/docs/r2.0.3-alpha/
+                        hadoop-project-dist/hadoop-common/
+                        DeprecatedProperties.html.'''
+                        output_file = os.path.join(
+                                    destination, 
+                                    '.'.join([
+                                        os.environ['mapreduce_task_partition'],
+                                        str(k), str(file_number), 'gz'
+                                    ])
+                                )
                     open_args = [output_file, 'w', gzip_level]
                 else:
-                    output_file = os.path.join(
-                                destination, 
-                                '.'.join([
-                                    os.environ['mapred_task_partition'],
-                                    str(k), str(file_number)
-                                ])
-                            )
+                    try:
+                        output_file = os.path.join(
+                                    destination, 
+                                    '.'.join([
+                                        os.environ['mapred_task_partition'],
+                                        str(k), str(file_number)
+                                    ])
+                                )
+                    except KeyError:
+                        output_file = os.path.join(
+                                    destination, 
+                                    '.'.join([
+                                        os.environ['mapreduce_task_partition'],
+                                        str(k), str(file_number)
+                                    ])
+                                )
                     open_args = [output_file, 'w']
                 try:
                     os.makedirs(os.path.dirname(output_file))

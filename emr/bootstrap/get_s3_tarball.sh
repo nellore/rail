@@ -11,6 +11,7 @@
 # 3. Local directory to expand archive in
 
 set -e
+export HOME=/home/hadoop
 fn=`basename $2`
 wget -S -T 10 -t 5 http://${1}.s3.amazonaws.com/${2} || { echo 'wget failed' ; exit 1; }
 mkdir -p ${3}

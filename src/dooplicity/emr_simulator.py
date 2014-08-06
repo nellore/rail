@@ -208,7 +208,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             prefix = 'sort -S %d %s -m %s' % (memcap, sort_options, input_glob)
         err_file = os.path.join(err_dir, '%d.log' % task_id)
         new_env = os.environ.copy()
-        new_env['mapred_task_partition'] = str(task_id)
+        new_env['mapreduce_task_partition'] \
+            = new_env['mapred_task_partition'] = str(task_id)
         if multiple_outputs:
             # Must grab each line of output and separate by directory
             command_to_run \

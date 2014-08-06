@@ -2,6 +2,8 @@
 
 set -e
 
+export HOME=/home/hadoop
+
 AWS_ACCESS_ID=`grep 'fs.s3.awsAccessKeyId' $HOME/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
 AWS_ACCESS_KEY=`grep 'fs.s3.awsSecretAccessKey' $HOME/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
 
@@ -10,7 +12,7 @@ unzip awscli-bundle.zip
 sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
 
 mkdir -p $HOME/.aws
-cat >$HOME/.aws/config <<EOF
+cat >~/.aws/config <<EOF
 [default]
 aws_access_key_id = $AWS_ACCESS_ID
 aws_secret_access_key = $AWS_ACCESS_KEY

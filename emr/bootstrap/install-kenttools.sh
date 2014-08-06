@@ -7,13 +7,14 @@
 
 set -e
 
+export HOME=/home/hadoop
 sudo wget -O/etc/yum.repos.d/s3tools.repo http://s3tools.org/repo/RHEL_6/s3tools.repo || { echo 'wget failed' ; exit 1; }
-sudo yum install s3cmd || { echo 's3cmd installation failed' ; exit 1; }
+sudo yum -y install s3cmd || { echo 's3cmd installation failed' ; exit 1; }
 
-AWS_ACCESS_ID=`grep 'fs.s3.awsAccessKeyId' $HOME/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
-AWS_ACCESS_KEY=`grep 'fs.s3.awsSecretAccessKey' $HOME/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
+AWS_ACCESS_ID=`grep 'fs.s3.awsAccessKeyId' ~/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
+AWS_ACCESS_KEY=`grep 'fs.s3.awsSecretAccessKey' ~/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
 
-cat >$HOME/.s3cfg <<EOF
+cat >~/.s3cfg <<EOF
 [default]
 access_key = $AWS_ACCESS_ID
 secret_key = $AWS_ACCESS_KEY
@@ -34,3 +35,4 @@ fi
 
 s3cmd get s3://rail-emr/bin/bedGraphToBigWig || { echo 's3cmd get failed' ; exit 1; }
 chmod a+x bedGraphToBigWig
+sudo ln -s /home/hadoop/bedGraphToBigWig /bin/bedGraphToBigWig

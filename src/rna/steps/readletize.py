@@ -115,8 +115,12 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
     try:
         task_partition = os.environ['mapred_task_partition']
     except KeyError:
-        # A unit test is being run
-        task_partition = '0'
+        # Hadoop 2.x?
+        try:
+            task_partition = os.environ['mapreduce_task_partition']
+        except KeyError:
+            # A unit test is being run
+            task_partition = '0'
     # Build list of capping readlet sizes
     cap_sizes = []
     cap_size = min_readlet_size

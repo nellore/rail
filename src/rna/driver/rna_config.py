@@ -2064,7 +2064,7 @@ class RailRnaAlign:
                 'run' : ('coverage_pre.py --bowtie-idx={0} '
                          '--partition-stats').format(base.bowtie1_idx),
                 'inputs' : ['collapse'],
-                'output' : 'coverage_pre',
+                'output' : 'precoverage',
                 'taskx' : 8,
                 'part' : 'k1,2',
                 'keys' : 3,
@@ -2084,7 +2084,7 @@ class RailRnaAlign:
                                                      base.bedgraphtobigwig_exe,
                                                      manifest,
                                                      verbose),
-                'inputs' : [path_join(elastic, 'coverage_pre', 'coverage')],
+                'inputs' : [path_join(elastic, 'precoverage', 'coverage')],
                 'output' : 'coverage',
                 'taskx' : 1,
                 'part' : 'k1,1',
@@ -2111,7 +2111,7 @@ class RailRnaAlign:
                 'run' : 'bed_pre.py',
                 'inputs' : [path_join(elastic, 'realign_reads', 'bed'),
                             path_join(elastic, 'align_reads', 'bed')],
-                'output' : 'bed_pre',
+                'output' : 'prebed',
                 'taskx' : 8,
                 'part' : 'k1,6',
                 'keys' : 6
@@ -2129,7 +2129,7 @@ class RailRnaAlign:
                                                         manifest,
                                                         base.bed_basename
                                                     ),
-                'inputs' : ['bed_pre'],
+                'inputs' : ['prebed'],
                 'output' : 'bed',
                 'taskx' : 1,
                 'part' : 'k1,2',
