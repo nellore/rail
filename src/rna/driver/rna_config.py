@@ -114,11 +114,11 @@ def step(name, inputs, output,
 
     }
     to_return['HadoopJarStep']['Args'].extend(
-            ['-D', 'mapred.reduce.tasks=%d' % tasks]
+            ['-D', 'mapreduce.job.reduces=%d' % tasks]
         )
     if partitioner_options is not None and key_fields is not None:
         to_return['HadoopJarStep']['Args'].extend([
-                '-D', 'mapred.text.key.partitioner.options=-%s'
+                '-D', 'mapreduce.partition.keypartitioner.options=-%s'
                             % partitioner_options,
                 '-D', 'stream.num.map.output.key.fields=%d' % key_fields
             ])
@@ -1229,21 +1229,21 @@ class RailRnaElastic:
                 'ScriptBootstrapAction' : {
                     'Args' : [
                         '-m',
-                        'mapred.job.reuse.jvm.num.tasks=1',
+                        'mapreduce.job.jvm.numtasks=1',
                         '-m',
-                        ('mapred.tasktracker.reduce.tasks.maximum=%d'
+                        ('mapreduce.tasktracker.reduce.tasks.maximum=%d'
                             % (base.instance_core_counts[
                                     base.core_instance_type
                                 ])),
                         '-m',
-                        ('mapred.tasktracker.map.tasks.maximum=%d'
+                        ('mapreduce.tasktracker.map.tasks.maximum=%d'
                             % base.instance_core_counts[
                                     base.core_instance_type
                                 ]),
                         '-m',
-                        'mapred.map.tasks.speculative.execution=false',
+                        'mapreduce.map.speculative=false',
                         '-m',
-                        'mapred.reduce.tasks.speculative.execution=false'
+                        'mapreduce.reduce.speculative=false'
                     ],
                     'Path' : ('s3://elasticmapreduce/bootstrap-actions/'
                               'configure-hadoop')
@@ -2160,8 +2160,10 @@ class RailRnaAlign:
                 'taskx' : 1,
                 'part' : ('k1,1' if base.do_not_output_bam_by_chr else 'k1,2'),
                 'keys' : 3,
-                'extra_args' : ['mapred.job.shuffle.input.buffer.percent=0.4',
-                                'mapred.job.shuffle.merge.percent=0.4']
+                'extra_args' : [
+                        'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
+                        'mapreduce.reduce.shuffle.merge.percent=0.4'
+                    ]
             }]
 
     @staticmethod
