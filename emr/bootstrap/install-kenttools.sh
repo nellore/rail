@@ -35,4 +35,4 @@ fi
 
 s3cmd get s3://rail-emr/bin/bedGraphToBigWig || { echo 's3cmd get failed' ; exit 1; }
 chmod a+x bedGraphToBigWig
-sudo ln -s /home/hadoop/bedGraphToBigWig /bin/bedGraphToBigWig
+sudo ln -s `pwd`/bedGraphToBigWig /usr/local/bin

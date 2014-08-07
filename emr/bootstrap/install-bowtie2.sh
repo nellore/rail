@@ -8,5 +8,5 @@ set -e
 
 wget http://downloads.sourceforge.net/project/bowtie-bio/bowtie2/2.2.3/bowtie2-2.2.3-linux-x86_64.zip || { echo 'wget failed' ; exit 1; }
 unzip bowtie2-2.2.3-linux-x86_64.zip || { echo 'unzip failed' ; exit 1; }
-sudo ln -s /home/hadoop/bowtie2-2.2.3/bowtie2 /bin/bowtie2
-sudo ln -s /home/hadoop/bowtie2-2.2.3/bowtie2-build /bin/bowtie2-build
+sudo ln -s `pwd`/bowtie2-2.2.3/bowtie2 /usr/local/bin
+sudo ln -s `pwd`/bowtie2-2.2.3/bowtie2-build /usr/local/bin

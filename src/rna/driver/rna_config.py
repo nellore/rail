@@ -734,7 +734,7 @@ class RailRnaElastic:
             "c3.8xlarge" : 32
         }
 
-        base.instance_swap_allocations = {
+        base.instance_mems = {
             "m1.small"    : (2*1024), #  1.7 GB
             "m1.large"    : (8*1024), #  7.5 GB
             "m1.xlarge"   : (16*1024), # 15.0 GB
@@ -744,9 +744,9 @@ class RailRnaElastic:
             "m2.2xlarge"  : (16*1024), # 34.2 GB
             "m2.4xlarge"  : (16*1024), # 68.4 GB
             "cc1.4xlarge" : (16*1024), # 23.0 GB
-            "c3.2xlarge" : (16*1024), # 15.0 GB
-            "c3.4xlarge" : (32*1024), # 32 GB
-            "c3.8xlarge" : (64*1024) # 64 GB
+            "c3.2xlarge" : (15*1024), # 15.0 GB
+            "c3.4xlarge" : (30*1024), # 30 GB
+            "c3.8xlarge" : (60*1024) # 60 GB
         }
 
         '''Not currently in use, but may become important if there are
@@ -1023,11 +1023,15 @@ class RailRnaElastic:
                                                 ))
         base.task_instance_count = task_instance_count
         if base.core_instance_count > 0:
-            base.swap_allocation \
-                = base.instance_swap_allocations[base.core_instance_type]
+            base.mem \
+                = base.instance_mems[base.core_instance_type]
+            base.max_tasks \
+                = base.instance_core_counts[base.core_instance_type] - 1
         else:
-            base.swap_allocation \
-                = base.instance_swap_allocations[base.master_instance_type]
+            base.mem \
+                = base.instance_mems[base.master_instance_type]
+            base.max_tasks \
+                = base.instance_core_counts[base.master_instance_type] - 1
         base.ec2_key_name = ec2_key_name
         base.keep_alive = keep_alive
         base.termination_protected = termination_protected
@@ -1219,7 +1223,7 @@ class RailRnaElastic:
                 'Name' : 'Allocate swap space',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        '%d' % base.swap_allocation
+                        '%d' % base.mem
                     ],
                     'Path' : 's3://elasticmapreduce/bootstrap-actions/add-swap'
                 }
@@ -1229,21 +1233,28 @@ class RailRnaElastic:
                 'ScriptBootstrapAction' : {
                     'Args' : [
                         '-m',
-                        'mapreduce.job.jvm.numtasks=1',
-                        '-m',
-                        ('mapreduce.tasktracker.reduce.tasks.maximum=%d'
-                            % (base.instance_core_counts[
-                                    base.core_instance_type
-                                ])),
-                        '-m',
-                        ('mapreduce.tasktracker.map.tasks.maximum=%d'
-                            % base.instance_core_counts[
-                                    base.core_instance_type
-                                ]),
-                        '-m',
                         'mapreduce.map.speculative=false',
                         '-m',
-                        'mapreduce.reduce.speculative=false'
+                        'mapreduce.reduce.speculative=false',
+                        '-y',
+                        'yarn.nodemanager.resource.memory-mb=%d'
+                        % (base.mem * 14 / 15),
+                        '-m',
+                        'mapreduce.map.memory.mb=%d'
+                        % (base.mem * 14 / 15 / base.max_tasks),
+                        '-m',
+                        'mapreduce.reduce.memory.mb=%d'
+                        % (base.mem * 14 / 15 / base.max_tasks),
+                        '-m',
+                        'mapreduce.map.java.opts=-Xmx%dm'
+                        % (base.mem * 14 / 15 / base.max_tasks * 4 / 5),
+                        '-m',
+                        'mapreduce.reduce.java.opts=-Xmx%dm'
+                        % (base.mem * 14 / 15 / base.max_tasks * 4 / 5),
+                        '-m',
+                        'mapreduce.map.cpu.vcores=1',
+                        '-m',
+                        'mapreduce.reduce.cpu.vcores=1'
                     ],
                     'Path' : ('s3://elasticmapreduce/bootstrap-actions/'
                               'configure-hadoop')

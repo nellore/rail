@@ -13,4 +13,4 @@ tar xvjf samtools-0.1.19.tar.bz2 || { echo 'unzip failed' ; exit 1; }
 cd samtools-0.1.19
 sudo make || { echo 'make failed'; exit 1; }
 cd ..
-sudo ln -s /home/hadoop/samtools-0.1.19/samtools /bin/samtools
+sudo ln -s `pwd`/samtools-0.1.19/samtools /usr/local/bin
