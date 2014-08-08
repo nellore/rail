@@ -214,14 +214,12 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                         else _executable, 
                         path_join(unix, step_dir,
                                         protostep['run'])])
-                        if 'keys' not in protostep
-                        else 'org.apache.hadoop.mapred.lib.IdentityMapper',
+                        if 'keys' not in protostep else 'cat',
                 reducer=' '.join(['pypy' if unix
                         else _executable, 
                         path_join(unix, step_dir,
                                         protostep['run'])]) 
-                        if 'keys' in protostep
-                        else 'org.apache.hadoop.mapred.lib.IdentityReducer',
+                        if 'keys' in protostep else 'cat',
                 action_on_failure=action_on_failure,
                 jar=jar,
                 tasks=(reducer_count * protostep['taskx']
@@ -1238,23 +1236,29 @@ class RailRnaElastic:
                         'mapreduce.reduce.speculative=false',
                         '-y',
                         'yarn.nodemanager.resource.memory-mb=%d'
-                        % (base.mem * 14 / 15),
+                        % (base.mem * 2 * 14 / 15),
                         '-m',
                         'mapreduce.map.memory.mb=%d'
-                        % (base.mem * 14 / 15 / base.max_tasks),
+                        % (base.mem * 2 * 14 / 15 / base.max_tasks * 2 / 3),
                         '-m',
                         'mapreduce.reduce.memory.mb=%d'
-                        % (base.mem * 14 / 15 / base.max_tasks),
+                        % (base.mem * 2 * 14 / 15 / base.max_tasks * 2 / 3),
                         '-m',
                         'mapreduce.map.java.opts=-Xmx%dm'
-                        % (base.mem * 14 / 15 / base.max_tasks * 4 / 5),
+                        % (base.mem * 2 * 14 / 15 / base.max_tasks * 3 / 4
+                            * 2 / 3),
                         '-m',
                         'mapreduce.reduce.java.opts=-Xmx%dm'
-                        % (base.mem * 14 / 15 / base.max_tasks * 4 / 5),
+                        % (base.mem * 2 * 14 / 15 / base.max_tasks * 3 / 4
+                            * 2 / 3),
                         '-m',
                         'mapreduce.map.cpu.vcores=1',
                         '-m',
-                        'mapreduce.reduce.cpu.vcores=1'
+                        'mapreduce.reduce.cpu.vcores=1',
+                        '-y',
+                        'yarn.nodemanager.pmem-check-enabled=false',
+                        '-y',
+                        'yarn.nodemanager.vmem-check-enabled=false'
                     ],
                     'Path' : ('s3://elasticmapreduce/bootstrap-actions/'
                               'configure-hadoop')
