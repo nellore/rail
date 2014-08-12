@@ -335,9 +335,12 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     arg_name = step['HadoopJarStep']['Args'][j][1:].strip()
                     if arg_name == 'D':
                         D_arg = step['HadoopJarStep']['Args'][j+1].split('=')
-                        if D_arg[0] == 'mapred.reduce.tasks':
+                        if D_arg[0] in ['mapred.reduce.tasks',
+                                        'mapreduce.job.reduces']:
                             step_args['task_count'] = int(D_arg[1])
-                        elif D_arg[0] == 'mapred.text.key.partitioner.options':
+                        elif D_arg[0] \
+                            in ['mapred.text.key.partitioner.options',
+                                'mapreduce.partition.keypartitioner.options']:
                             step_args['key_fields'] \
                                 = int(D_arg[1].split(',')[-1])
                         elif D_arg[0] == 'stream.num.map.output.key.fields':

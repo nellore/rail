@@ -7,4 +7,4 @@ RAILHOME=~/railclones/rail
 OUTBASENAME=s3://rail-experiments/geuvadis_sim
 
 # Run Rail-RNA on 20 simulated "bioreps", pooling info across them
-python $RAILHOME/src align elastic -a hg19 -m $RAILHOME/eval/geuvadis_sim.manifest -i s3://rail-experiments/testhadoop2.1.intermediate/preprocess/push -o s3://rail-experiments/testhadoop2onbioreps3 -c 50 --master-instance-bid-price 0.13 --core-instance-bid-price 0.13 --ec2-key-name rail --master-instance-type c3.2xlarge --core-instance-type c3.2xlarge --keep-alive --termination-protected -f
+python $RAILHOME/src go elastic -a hg19 -m $RAILHOME/eval/geuvadis_sim.manifest -o s3://rail-experiments/testhadoop2withcombinefileinputformat3 -c 20 --ec2-key-name rail --core-instance-bid-price 0.13 --master-instance-bid-price 0.13 --master-instance-type c3.2xlarge --core-instance-type c3.2xlarge -f

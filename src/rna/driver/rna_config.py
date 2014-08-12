@@ -128,9 +128,19 @@ def step(name, inputs, output,
         )
     if multiple_outputs:
         # This only matters in elastic mode
+        if inputformat == 'edu.jhu.cs.CombinedInputFormat':
+            to_return['HadoopJarStep']['Args'].extend([
+                '-libjars', '/mnt/lib/multiplefiles.jar,'
+                            '/mnt/lib/combined.jar'
+            ])
+        else:
+            to_return['HadoopJarStep']['Args'].extend([
+                '-libjars', '/mnt/lib/multiplefiles.jar'
+            ])
+    elif inputformat == 'edu.jhu.cs.CombinedInputFormat':
         to_return['HadoopJarStep']['Args'].extend([
-            '-libjars', '/mnt/lib/multiplefiles.jar'
-        ])
+                '-libjars', '/mnt/lib/combined.jar'
+            ])
     if archives is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-archives', archives
@@ -195,10 +205,18 @@ def steps(protosteps, action_on_failure, jar, step_dir,
 
         Return value: list of StepConfigs (see Elastic MapReduce API docs)
     """
+    '''CombineFileInputFormat outputs file offsets as keys; kill them here
+    in an "identity" mapper. This could also be done by overriding an
+    appropriate method from class in Java, but the overhead incurred doing
+    it this way should be small.'''
     true_steps = []
     for protostep in protosteps:
         assert ('keys' in protostep and 'part' in protostep) or \
                 ('keys' not in protostep and 'part' not in protostep)
+        identity_mapper = ('cut -f 2-' if (unix and 
+                           'inputformat' in protostep
+                           and protostep['inputformat']
+                           == 'edu.jhu.cs.CombinedInputFormat') else 'cat')
         true_steps.append(step(
                 name=protostep['name'],
                 inputs=([path_join(unix, intermediate_dir,
@@ -214,7 +232,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                         else _executable, 
                         path_join(unix, step_dir,
                                         protostep['run'])])
-                        if 'keys' not in protostep else 'cat',
+                        if 'keys' not in protostep else identity_mapper,
                 reducer=' '.join(['pypy' if unix
                         else _executable, 
                         path_join(unix, step_dir,
@@ -747,6 +765,23 @@ class RailRnaElastic:
             "c3.8xlarge" : (60*1024) # 60 GB
         }
 
+        # From http://docs.aws.amazon.com/ElasticMapReduce/latest/
+        # DeveloperGuide/TaskConfiguration_H2.html
+        base.nodemanager_mems = {
+            "m1.small"    : 1024,
+            "m1.large"    : 3072,
+            "m1.xlarge"   : 12288,
+            "c1.medium"   : 1024,
+            "c1.xlarge"   : 5120,
+            "m2.xlarge"   : 14336,
+            "m2.2xlarge"  : 30720,
+            "m2.4xlarge"  : 61440,
+            "cc1.4xlarge" : 20480,
+            "c3.2xlarge" : 11520,
+            "c3.4xlarge" : 23040,
+            "c3.8xlarge" : 53248
+        }
+
         '''Not currently in use, but may become important if there are
         32- vs. 64-bit issues: base.instance_bits = {
             "m1.small"    : 32,
@@ -1023,13 +1058,23 @@ class RailRnaElastic:
         if base.core_instance_count > 0:
             base.mem \
                 = base.instance_mems[base.core_instance_type]
+            base.nodemanager_mem \
+                = base.nodemanager_mems[base.core_instance_type]
             base.max_tasks \
-                = base.instance_core_counts[base.core_instance_type] - 1
+                = base.instance_core_counts[base.core_instance_type]
+            base.total_cores = (base.core_instance_count
+                * base.instance_core_counts[base.core_instance_type]
+                + base.task_instance_count
+                * base.instance_core_counts[base.task_instance_type])
         else:
             base.mem \
                 = base.instance_mems[base.master_instance_type]
+            base.nodemanager_mem \
+                = base.nodemanager_mems[base.master_instance_type]
             base.max_tasks \
-                = base.instance_core_counts[base.master_instance_type] - 1
+                = base.instance_core_counts[base.master_instance_type]
+            base.total_cores \
+                = base.instance_core_counts[base.master_instance_type]
         base.ec2_key_name = ec2_key_name
         base.keep_alive = keep_alive
         base.termination_protected = termination_protected
@@ -1230,35 +1275,47 @@ class RailRnaElastic:
                 'Name' : 'Configure Hadoop',
                 'ScriptBootstrapAction' : {
                     'Args' : [
+                        '-y',
+                        'yarn.nodemanager.pmem-check-enabled=false',
+                        '-y',
+                        'yarn.nodemanager.vmem-check-enabled=false',
+                        '-y',
+                        'yarn.nodemanager.resource.memory-mb=%d'
+                        % base.nodemanager_mem,
+                        '-y',
+                        'yarn.scheduler.minimum-allocation-mb=%d'
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
+                        '-y',
+                        'yarn.nodemanager.vmem-pmem-ratio=2.1',
+                        '-y',
+                        'yarn.nodemanager.container-manager.thread-count=1',
+                        '-y',
+                        'yarn.nodemanager.localizer.fetch.thread-count=1',
                         '-m',
                         'mapreduce.map.speculative=false',
                         '-m',
                         'mapreduce.reduce.speculative=false',
-                        '-y',
-                        'yarn.nodemanager.resource.memory-mb=%d'
-                        % (base.mem * 2 * 14 / 15),
                         '-m',
                         'mapreduce.map.memory.mb=%d'
-                        % (base.mem * 2 * 14 / 15 / base.max_tasks * 2 / 3),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-m',
                         'mapreduce.reduce.memory.mb=%d'
-                        % (base.mem * 2 * 14 / 15 / base.max_tasks * 2 / 3),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-m',
                         'mapreduce.map.java.opts=-Xmx%dm'
-                        % (base.mem * 2 * 14 / 15 / base.max_tasks * 3 / 4
-                            * 2 / 3),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-m',
                         'mapreduce.reduce.java.opts=-Xmx%dm'
-                        % (base.mem * 2 * 14 / 15 / base.max_tasks * 3 / 4
-                            * 2 / 3),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-m',
                         'mapreduce.map.cpu.vcores=1',
                         '-m',
                         'mapreduce.reduce.cpu.vcores=1',
-                        '-y',
-                        'yarn.nodemanager.pmem-check-enabled=false',
-                        '-y',
-                        'yarn.nodemanager.vmem-check-enabled=false'
+                        '-m',
+                        ('mapreduce.output.fileoutputformat.compress.codec='
+                         'org.apache.hadoop.io.compress.GzipCodec'),
+                        '-m',
+                        'mapreduce.job.maps=%d' % base.total_cores
                     ],
                     'Path' : ('s3://elasticmapreduce/bootstrap-actions/'
                               'configure-hadoop')
@@ -1354,7 +1411,7 @@ class RailRnaPreprocess:
         output_parser.add_argument(
             '--nucleotides-per-input', type=int, required=False,
             metavar='<int>',
-            default=24000000,
+            default=100000000,
             help='max nucleotides from input reads to assign to each task'
         )
         output_parser.add_argument(
@@ -1387,7 +1444,7 @@ class RailRnaPreprocess:
                 'output' : prep_dir,
                 'no_output_prefix' : True,
                 'inputformat' : (
-                        'org.apache.hadoop.mapred.lib.NLineInputFormat'
+                       'org.apache.hadoop.mapred.lib.NLineInputFormat'
                     ),
                 'taskx' : 0
             },
@@ -1890,7 +1947,12 @@ class RailRnaAlign:
                 'output' : 'combine_sequences',
                 'taskx' : 4,
                 'part' : 'k1,1',
-                'keys' : 1
+                'keys' : 1,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Segment reads into readlets',
@@ -1905,18 +1967,12 @@ class RailRnaAlign:
                 'output' : 'readletize',
                 'taskx' : 4,
                 'part' : 'k1,1',
-                'keys' : 1
-            },
-            {
-                'name' : 'Aggregate duplicate readlet sequences',
-                'run' : 'sum.py --type 3 {0}'.format(
-                                                keep_alive
-                                            ),
-                'inputs' : ['readletize'],
-                'output' : 'combine_subsequences',
-                'taskx' : 4,
-                'part' : 'k1,1',
-                'keys' : 1
+                'keys' : 1,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Align unique readlets to genome',
@@ -1929,11 +1985,16 @@ class RailRnaAlign:
                                                     keep_alive,
                                                     base.genome_bowtie1_args,
                                                 ),
-                'inputs' : ['combine_subsequences'],
+                'inputs' : ['readletize'],
                 'output' : 'align_readlets',
                 'taskx' : 4,
                 'part' : 'k1,1',
-                'keys' : 1
+                'keys' : 1,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Search for introns using readlet alignments',
@@ -1959,7 +2020,12 @@ class RailRnaAlign:
                 'output' : 'intron_search',
                 'taskx' : 4,
                 'part' : 'k1,1',
-                'keys' : 1
+                'keys' : 1,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Enumerate possible intron cooccurrences on readlets',
@@ -1972,7 +2038,12 @@ class RailRnaAlign:
                 'output' : 'intron_config',
                 'taskx' : 1,
                 'part' : 'k1,2',
-                'keys' : 4
+                'keys' : 4,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Get transcriptome elements for realignment',
@@ -1984,7 +2055,12 @@ class RailRnaAlign:
                 'output' : 'intron_fasta',
                 'taskx' : 8,
                 'part' : 'k1,4',
-                'keys' : 4
+                'keys' : 4,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Build index of transcriptome elements',
@@ -2000,7 +2076,12 @@ class RailRnaAlign:
                 'output' : 'intron_index',
                 'taskx' : None,
                 'part' : 'k1,1',
-                'keys' : 1
+                'keys' : 1,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Finalize intron cooccurrences on reads',
@@ -2025,7 +2106,12 @@ class RailRnaAlign:
                                     'transcript_index',
                                     'intron.tar.gz#intron')).to_native_url(),
                 'part' : 'k1,1',
-                'keys' : 1
+                'keys' : 1,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Get transcriptome elements for read realignment',
@@ -2037,7 +2123,12 @@ class RailRnaAlign:
                 'output' : 'cointron_fasta',
                 'taskx' : 8,
                 'part' : 'k1,4',
-                'keys' : 4
+                'keys' : 4,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Align reads to transcriptome elements',
@@ -2060,7 +2151,12 @@ class RailRnaAlign:
                 'taskx' : 8,
                 'part' : 'k1,1',
                 'keys' : 1,
-                'multiple_outputs' : True
+                'multiple_outputs' : True,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (40000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Merge exon differentials at same genomic positions',
@@ -2072,7 +2168,12 @@ class RailRnaAlign:
                 'output' : 'collapse',
                 'taskx' : 8,
                 'part' : 'k1,3',
-                'keys' : 3
+                'keys' : 3,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Compile sample coverages from exon differentials',
@@ -2083,7 +2184,12 @@ class RailRnaAlign:
                 'taskx' : 8,
                 'part' : 'k1,2',
                 'keys' : 3,
-                'multiple_outputs' : True
+                'multiple_outputs' : True,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Write bigwigs with exome coverage by sample',
@@ -2103,7 +2209,12 @@ class RailRnaAlign:
                 'output' : 'coverage',
                 'taskx' : 1,
                 'part' : 'k1,1',
-                'keys' : 3
+                'keys' : 3,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Write normalization factors for sample coverages',
@@ -2119,7 +2230,12 @@ class RailRnaAlign:
                 'output' : 'coverage_post',
                 'taskx' : None,
                 'part' : 'k1,1',
-                'keys' : 2
+                'keys' : 2,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Aggregate intron and indel results by sample',
@@ -2129,7 +2245,12 @@ class RailRnaAlign:
                 'output' : 'prebed',
                 'taskx' : 8,
                 'part' : 'k1,6',
-                'keys' : 6
+                'keys' : 6,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Write beds with intron and indel results by sample',
@@ -2149,6 +2270,11 @@ class RailRnaAlign:
                 'taskx' : 1,
                 'part' : 'k1,2',
                 'keys' : 4,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
+                    ]
             },
             {
                 'name' : 'Write bams with alignments by sample',
@@ -2175,9 +2301,12 @@ class RailRnaAlign:
                 'taskx' : 1,
                 'part' : ('k1,1' if base.do_not_output_bam_by_chr else 'k1,2'),
                 'keys' : 3,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
-                        'mapreduce.reduce.shuffle.merge.percent=0.4'
+                        'mapreduce.reduce.shuffle.merge.percent=0.4',
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (20000000000 / base.total_cores)
                     ]
             }]
 

@@ -2,7 +2,7 @@
 """
 Rail-RNA-readletize
 
-Follows Rail-RNA-align_reads (with an optional intermediate Rail-RNA-sum step)
+Follows Rail-RNA-align_reads (after an optional intermediate Rail-RNA-sum step)
 Precedes Rail-RNA-align_readlets (with an optional intermediate Rail-RNA-sum
     step)
 

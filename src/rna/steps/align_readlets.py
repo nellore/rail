@@ -282,13 +282,16 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     output_file = os.path.join(temp_dir, 'out.sam')
     with open(qname_file, 'w') as qname_stream:
         with open(readlet_file, 'w') as readlet_stream:
-            for _input_line_count, line in enumerate(input_stream):
-                tokens = line.rstrip().split('\t')
-                assert len(tokens) == 2, tokens
-                seq, qname = tokens
+            for (seq_count, ((seq,), xpartition)) \
+                in enumerate(xstream(input_stream, 1)):
                 print >>readlet_stream, \
-                    '\t'.join([str(_input_line_count), seq, 'I'*len(seq)])
-                print >>qname_stream, qname
+                    '\t'.join([str(seq_count), seq, 'I'*len(seq)])
+                qname_stream.write(next(iter(xpartition))[0])
+                for (qname,) in xpartition:
+                    _input_line_count += 1
+                    qname_stream.write('\x1d' + qname)
+                qname_stream.write('\n')
+                qname_stream.flush()
     bowtie_command = ' '.join([bowtie_exe,
         bowtie_args,
         '-S -t --sam-nohead --mm', bowtie_index_base, '--12', readlet_file,
