@@ -163,10 +163,12 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.tools import xstream
+import partition
 import manifest
 import bowtie
 import bowtie_index
-from alignment_handlers import multiread_with_introns, AlignmentPrinter
+from alignment_handlers \
+    import multiread_with_introns, AlignmentPrinter, multiread_to_report
 import argparse
 import random
 
@@ -212,23 +214,30 @@ def input_files_from_input_stream(input_stream,
     with open(prefasta_filename, 'w') as fasta_stream:
         with open(reads_filename, 'w') as read_stream:
             with open(rname_filename, 'w') as rname_stream:
-                for read_seq, xpartition in xstream(input_stream, 1):
+                for (read_seq,), xpartition in xstream(input_stream, 1):
                     rnames = []
+                    fasta_lines = []
                     read_count = 0
                     for value in xpartition:
                         _input_line_count += 1
                         if value[0][0] == '\x1c':
                             # Print FASTA line
-                            print >>fasta_stream, '\t'.join([value[0][1:-2],
-                                                             value[1]])
+                            fasta_lines.append('\t'.join([value[0][1:-2],
+                                                             value[1]]))
                             rnames.append(value[0][2:-2])
                         else:
                             # Add to temporary seq stream
                             print >>read_stream, '\t'.join([value[0], read_seq,
                                                                 value[1]])
                             read_count += 1
-                    rname_stream.write(str(read_count) + '\x1e')
-                    print >>rname_stream, '\x1e'.join(rnames)
+                    if read_count:
+                        # Print FASTA line iff there's a read to align it to
+                        rname_stream.write(str(read_count) + '\x1e')
+                        print >>rname_stream, '\x1e'.join(rnames)
+                        if fasta_lines:
+                            # Print FASTA line iff it exists
+                            print >>fasta_stream, '\n'.join(fasta_lines)
+
     if verbose:
         print >>sys.stderr, 'Done! Sorting and deduplicating prefasta...'
     # Sort prefasta and eliminate duplicate lines
@@ -361,19 +370,22 @@ class BowtieOutputThread(threading.Thread):
         global _output_line_count
         next_report_line = 0
         i = 0
-        tokens = rname_stream.readline().strip().split('\x1e')
-        qname_total, rnames = int(tokens[0]), set(tokens[1:])
-        qname_count = 0
         alignment_printer = AlignmentPrinter(
                 self.manifest_object,
                 self.reference_index,
+                bin_size=self.bin_size,
                 output_stream=sys.stdout,
-                exon_ivals=exon_intervals,
-                exon_diffs=exon_differentials
+                exon_ivals=self.exon_intervals,
+                exon_diffs=self.exon_differentials
             )
         alignment_count_to_report, seed, non_deterministic \
-            = bowtie.parsed_bowtie_args(bowtie2_args)
+            = bowtie.parsed_bowtie_args(self.bowtie2_args)
+        qname_count = 0
+        tokens = self.rname_stream.readline().strip().split('\x1e')
+        qname_total, rnames = int(tokens[0]), set(tokens[1:])
+        done = False
         for (qname,), xpartition in xstream(self.input_stream, 1):
+            assert not done
             # While labeled multiread, this list may end up simply a uniread
             multiread = []
             for rest_of_line in xpartition:
@@ -398,9 +410,6 @@ class BowtieOutputThread(threading.Thread):
             else:
                 '''Correct positions to match original reference's, correct
                 CIGARs, eliminate duplicates, and decide primary alignment.'''
-                sample_index = self.manifest_object.label_to_index[
-                                        multiread[0][0].rpartition('\x1d')[2]
-                                    ]
                 corrected_multiread = multiread_with_introns(
                                             multiread,
                                             stranded=self.stranded
@@ -408,16 +417,19 @@ class BowtieOutputThread(threading.Thread):
                 if not corrected_multiread:
                     '''This is effectively an unmapped read; write
                     corresponding SAM output.'''
-                    if (int(multiread[0][1]) & 16):
-                        multiread[0][9] = multiread[0][9][::-1].translate(
+                    if flag & 16:
+                        seq_to_write = rest_of_line[8][::-1].translate(
                                         _reversed_complement_translation_table
                                     )
-                        multiread[0][10] = multiread[0][10][::-1]
+                        qual_to_write = rest_of_line[9][::-1]
+                    else:
+                        seq_to_write = rest_of_line[8]
+                        qual_to_write = rest_of_line[0]
                     _output_line_count \
                         += alignment_printer.print_unmapped_read(
                                                         qname,
-                                                        multiread[0][9],
-                                                        multiread[0][10]
+                                                        seq_to_write,
+                                                        qual_to_write
                                                     )
                     continue
                 _output_line_count += alignment_printer.print_alignment_data(
@@ -431,9 +443,12 @@ class BowtieOutputThread(threading.Thread):
                 )
             qname_count += 1
             if qname_count == qname_total:
-                tokens = rname_stream.readline().strip().split('\x1e')
-                qname_total, rnames = int(tokens[0]), set(tokens[1:])
-                qname_count = 0
+                tokens = self.rname_stream.readline().strip().split('\x1e')
+                try:
+                    qname_total, rnames = int(tokens[0]), set(tokens[1:])
+                    qname_count = 0
+                except ValueError:
+                    done = True
         self.return_set.add(0)
 
 def handle_temporary_directory(archive, temp_dir_path):

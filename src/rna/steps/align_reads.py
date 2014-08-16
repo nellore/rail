@@ -140,7 +140,7 @@ import bowtie
 import bowtie_index
 import partition
 import manifest
-from alignment_handlers import indels_introns_and_exons, reference_from_seq
+from alignment_handlers import AlignmentPrinter, reference_from_seq
 from dooplicity.tools import xstream
 
 # Initialize global variables for tracking number of input/output lines
@@ -262,9 +262,10 @@ class BowtieOutputThread(threading.Thread):
         alignment_printer = AlignmentPrinter(
                 self.manifest_object,
                 self.reference_index,
-                output_stream=sys.stdout,
-                exon_ivals=exon_intervals,
-                exon_diffs=exon_differentials
+                bin_size=self.bin_size,
+                output_stream=self.output_stream,
+                exon_ivals=self.exon_intervals,
+                exon_diffs=self.exon_differentials
             )
         for (qname,), xpartition in xstream(self.input_stream, 1):
             # While labeled multiread, this list may end up simply a uniread
@@ -358,11 +359,10 @@ class BowtieOutputThread(threading.Thread):
                     pass
             else:
                 # Report all end-to-end alignments
-                NH_field = '\tNH:i:%d' % len(multiread)
+                NH_field = 'NH:i:%d' % len(multiread)
                 _output_line_count += alignment_printer.print_alignment_data(
-                            ([alignment + [NH_field] 
-                                for alignment in multiread],)
-                        )
+                        ([alignment + (NH_field,) for alignment in multiread],)
+                    )
         self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',

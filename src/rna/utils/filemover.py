@@ -81,7 +81,7 @@ class FileMover:
         else:
             parent_dir = os.path.dirname(filename)
             dir_chain = []
-            while parent_dir != 'hdfs:'
+            while parent_dir != 'hdfs:':
                 dir_chain.append(parent_dir)
                 parent_dir = os.path.dirname(filename)
             for dir_to_create in dir_chain[::-1]:

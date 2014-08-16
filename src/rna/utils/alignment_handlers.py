@@ -14,6 +14,7 @@ import re
 import random
 import sys
 import bisect
+import partition
 
 def running_sum(iterable):
     """ Generates a running sum of the numbers in an iterable
@@ -82,7 +83,7 @@ def multiread_with_introns(multiread, stranded=False):
             items should be tested to find whether two alignments are
             "identical".'''
             new_multiread.append(
-                    ([qname, flag | 256, rname,
+                    ([qname, str(flag | 256), rname,
                         str(pos), alignment[4],
                         alignment[5]] + list(alignment[6:]),
                     (qname, (flag & 16 != 0),
@@ -141,7 +142,7 @@ def multiread_with_introns(multiread, stranded=False):
             continue
         # Count number of samples in which intron combo was initially detected
         new_multiread.append(
-                    ([alignment[0], flag | 256,
+                    ([alignment[0], str(flag | 256),
                         rname, str(pos), alignment[4], new_cigar]
                      + list(alignment[6:])
                      + ['XS:A:' + reverse_strand_string],
@@ -167,7 +168,7 @@ def multiread_with_introns(multiread, stranded=False):
             if multiread_to_return[0][i][:5] == 'XS:i:':
                 multiread_to_return[0].remove(multiread_to_return[0][i])
                 break
-        return multiread_to_return
+        return [tuple(alignment) for alignment in multiread_to_return]
     # Correct XS:i fields
     alignment_scores = [[int(token[5:]) for token in alignment[::-1]
                             if token[:5] == 'AS:i:'][0]
@@ -178,7 +179,7 @@ def multiread_with_introns(multiread, stranded=False):
         for j in xrange(10, len(multiread_to_return[i])):
             if multiread_to_return[i][j][:5] == 'XS:i:':
                 multiread_to_return[i][j] = XS_field
-    return multiread_to_return
+    return [tuple(alignment) for alignment in multiread_to_return]
 
 def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
     non_deterministic=False, weights=[], tie_margin=6):
@@ -257,9 +258,9 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
         if tie_count == 1:
             # Primary alignment is resolved
             prereturn_multiread = (
-                [(alignments_and_scores[0][0],
-                    str(int(alignments_and_scores[0][1]) & ~256))
-                    + alignments_and_scores[0][2:]] +
+                [(alignments_and_scores[0][0][0],
+                    str(int(alignments_and_scores[0][0][1]) & ~256))
+                    + alignments_and_scores[0][0][2:]] +
                 [(alignment[0], str(int(alignment[1]) | 256))
                     + alignment[2:] for alignment, _
                     in alignments_and_scores[1:]]
@@ -296,14 +297,14 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
                    for alignment in prereturn_multiread[0]]
         try:
             min_permitted_score = scores[reports_to_retain_count - 1]
-            left_count = scores[:reports_to_retain_count].count(
+            left_count = scores[:reports_to_retain_count - 1].count(
                                 min_permitted_score
                             )
             min_permitted_count = scores.count(min_permitted_score)
             reports_to_return = prereturn_multiread[0][
                                     :reports_to_retain_count - left_count - 1
                                 ] + \
-                random.choice(prereturn_multiread[
+                random.sample(prereturn_multiread[0][
                     reports_to_retain_count - left_count - 1:
                     reports_to_retain_count - left_count - 1
                     + min_permitted_count
@@ -316,13 +317,13 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
         reports_to_return = prereturn_multiread[0]
     if prereturn_multiread_count == 1:
         NH_field = 'NH:i:' + str(len(reports_to_return))
-        return ([(alignment + [NH_field] if 'NH:i:' not in alignment[-1]
+        return ([(alignment + (NH_field,) if 'NH:i:' not in alignment[-1]
                   else alignment) for alignment in reports_to_return],)
     # prereturn_multiread's length is 2, meaning there are ties
     NH_field = 'NH:i:'+ str(len(reports_to_return)
                             + len(prereturn_multiread[1]))
-    return ([alignment + [NH_field] for alignment in reports_to_return],
-            [alignment + [NH_field] for alignment in prereturn_multiread[1]])
+    return ([alignment + (NH_field,) for alignment in reports_to_return],
+            [alignment + (NH_field,) for alignment in prereturn_multiread[1]])
 
 def parsed_md(md):
     """ Divides an MD string up by boundaries between ^, letters, and numbers
@@ -507,7 +508,8 @@ class AlignmentPrinter:
     """ Encapsulates methods for printing alignment information. """
 
     def __init__(self, manifest_object, reference_index,
-                 output_stream=sys.stdout, exon_ivals=False, exon_diffs=True):
+                 output_stream=sys.stdout,
+                 bin_size=5000, exon_ivals=False, exon_diffs=True):
         """
             manifest_object: object of type LabelsAndIndices; see manifest.py
             reference_index: object of type BowtieIndexReference; see bowtie.py
@@ -519,10 +521,10 @@ class AlignmentPrinter:
         self.reference_index = reference_index
         self.exon_ivals = exon_ivals
         self.exon_diffs = exon_diffs
+        self.bin_size = bin_size
         self.output_stream = output_stream
-        import partition
 
-    def print_unmapped_read(qname, seq, qual):
+    def print_unmapped_read(self, qname, seq, qual):
         """ Prints an unmapped read from a qname, qual, and seq.
 
             First field is "sam", as for reported alignments from the function
@@ -547,7 +549,7 @@ class AlignmentPrinter:
                     0, qname.partition('\x1d')[0], seq, qual)
         return 1
 
-    def print_alignment_data(multiread_reports_and_ties):
+    def print_alignment_data(self, multiread_reports_and_ties):
         """ Prints almost-SAM alignments, introns/indels, and exonic coverage.
 
             Descriptions of output:
@@ -679,15 +681,15 @@ class AlignmentPrinter:
             if not (primary_flag & 256):
                 '''First alignment to report is a primary, so output exons,
                 introns, and indels.'''
-                alignment = multiread_reports_and_ties[0]
+                alignment = multiread_reports_and_ties[0][0]
                 cigar = alignment[5]
                 rname = alignment[2]
                 pos = int(alignment[3])
                 seq = alignment[9]
                 md = [field for field in alignment
                             if field[:5] == 'MD:Z:'][0][5:]
-                introns, exons, insertions, deletions \
-                    = introns_indels_and_exons(cigar, md, pos, seq)
+                insertions, deletions, introns, exons \
+                    = indels_introns_and_exons(cigar, md, pos, seq)
                 # Output indels
                 for insert_pos, insert_seq in insertions:
                     print >>self.output_stream, (
@@ -753,35 +755,35 @@ class AlignmentPrinter:
                 try:
                     reverse_strand_string = [field for field in alignment
                                     if field[:5] == 'XS:A:'][0][5:]
+                    # Output introns
+                    for (intron_pos, intron_end_pos,
+                            left_displacement, right_displacement) \
+                        in introns:
+                        print >>self.output_stream, (
+                                ('intron_bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
+                                 '%d\t%d\t1')
+                                 % (sample_index, 
+                                    self.reference_index.\
+                                    rname_to_string[rname],
+                                    intron_pos, intron_end_pos,
+                                    reverse_strand_string,
+                                    left_displacement,
+                                    right_displacement)
+                            )
+                        output_line_count += 1
                 except IndexError:
                     # No introns
-                    continue
-                # Output introns
-                for (intron_pos, intron_end_pos,
-                        left_displacement, right_displacement) \
-                    in introns:
-                    print >>self.output_stream, (
-                            ('intron_bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
-                             '%d\t%d\t1')
-                             % (sample_index, 
-                                self.reference_index.\
-                                rname_to_string[rname],
-                                intron_pos, intron_end_pos,
-                                reverse_strand_string,
-                                left_displacement,
-                                right_displacement)
-                        )
-                    output_line_count += 1
+                    pass
             # Write SAM output
             for alignment in multiread_reports_and_ties[0]:
                 print >>self.output_stream, 'sam\t' \
                         + '\t'.join(
-                            [sample_index,
+                            (sample_index,
                                 self.reference_index.rname_to_string[
                                         alignment[2]
                                     ], '%012d' % int(alignment[3]),
                                 alignment[0].partition('\x1d')[0],
-                                alignment[1]] + alignment[4:]
+                                alignment[1]) + alignment[4:]
                         )
         except IndexError:
             # No alignments to report
@@ -796,15 +798,17 @@ class AlignmentPrinter:
                 seq = alignment[9]
                 md = [field for field in alignment
                             if field[:5] == 'MD:Z:'][0][5:]
-                introns, _, _, _= introns_indels_and_exons(cigar, md, pos, seq)
+                insertions, deletions, introns, exons \
+                    = indels_introns_and_exons(cigar, md, pos, seq)
                 sense = [field[5:] for field in alignment
                             if field[:5] == 'XS:A:'][0]
                 for intron in introns:
-                    print >>output_stream, (('N\t%s\t%s\t%d\t%d\t%s'
-                                            '\t%012d\t%s\t%s') % (
-                            manifest_object.label_to_index[
+                    print >>self.output_stream, (
+                                    ('sam_ties\tN\t%s\t%s\t%d\t%d\t%s'
+                                     '\t%012d\t%s\t%s') % (
+                            self.manifest_object.label_to_index[
                                 qname.rpartition('\x1d')[2]
-                            ], reference_index.rname_to_string[rname],
+                            ], self.reference_index.rname_to_string[rname],
                             intron[0], intron[1], sense, pos,
                             qname.partition('\x1d')[0], flag
                         )) + '\t'.join(alignment[4:])

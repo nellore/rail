@@ -147,15 +147,16 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
     if cap_size != max_readlet_size:
         # Always have a start or end read of length max_readlet_size
         cap_sizes.append(max_readlet_size)
-    for (seq,), xpartition in xstream(input_stream, 1):
+    for seq_count, ((seq,), xpartition) in enumerate(xstream(input_stream, 1)):
         print >>output_stream, 'unique\t%s' % seq
-        seq_id = task_partition + ':' + str(_input_line_count)
+        seq_id = task_partition + ':' + str(seq_count)
         if len(seq) < min_readlet_size:
             continue
         samples = set()
         reversed_complement_samples = set()
         sample_count, reversed_complement_sample_count = 0, 0
         for line_samples, line_reversed_complement_samples in xpartition:
+            _input_line_count += 1
             if line_samples != '\x1c':
                 samples_to_add = line_samples.split('\x1d')
                 sample_count += len(samples_to_add)

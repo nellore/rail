@@ -43,6 +43,7 @@ def parsed_bowtie_args(bowtie2_args):
             number of alignments to be reported, --seed parameter,
             --non-deterministic parameter)
     """
+    import argparse
     bowtie_parser = argparse.ArgumentParser()
     '''By default, report primary alignment; this is regarded as '-k 1'. Note
     that Bowtie2 does not guarantee that the best alignment is reported when

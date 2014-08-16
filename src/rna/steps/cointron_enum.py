@@ -440,8 +440,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     output_file = os.path.join(temp_dir, 'out.sam')
     with open(reads_file, 'w') as read_stream:
         for _input_line_count, line in enumerate(input_stream):
-            seq = line.rstrip().split('\t')
-            assert len(seq) == 1, seq
+            seq = line.strip()
             print >>read_stream, \
                 '\t'.join([str(_input_line_count), seq, 'I'*len(seq)])
     bowtie_command = ' '.join([bowtie2_exe,

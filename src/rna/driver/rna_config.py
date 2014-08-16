@@ -1892,11 +1892,12 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--tie-margin', type=int, required=False,
-            metavar='<int>'
+            metavar='<int>',
             default=6,
             help=('allowed score difference per 100 bases among ties in '
                   'max score. For example, 150 and 144 are tied alignment '
                   'scores for a 100-bp read when --tie-margin is 6')
+        )
         output_parser.add_argument(
             '--do-not-output-bam-by-chr', action='store_const', const=True,
             default=False,
