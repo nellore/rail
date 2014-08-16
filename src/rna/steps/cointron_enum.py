@@ -11,12 +11,9 @@ Bowtie 2.
 
 Input (read from stdin)
 ----------------------------
-Tab-delimited input tuple columns:
+Single input tuple column:
 1. SEQ or its reversed complement, whichever is first in alphabetical order
-2. Comma-separated list of sample labels if field 1 is the read sequence;
-    '\x1c' if empty
-3. Comma-separated list of sample labels if field 1 is the reversed complement
-    of the read sequence; '\x1c' if empty
+    --- should be unique for efficient processing, but this isn't required
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -55,7 +52,7 @@ site.addsitedir(base_path)
 
 import bowtie
 from dooplicity.tools import xstream
-from cigar_parse import multiread_with_introns, indels_introns_and_exons
+from alignment_handlers import multiread_with_introns, indels_introns_and_exons
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
@@ -443,9 +440,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     output_file = os.path.join(temp_dir, 'out.sam')
     with open(reads_file, 'w') as read_stream:
         for _input_line_count, line in enumerate(input_stream):
-            tokens = line.rstrip().split('\t')
-            assert len(tokens) == 3, tokens
-            seq, _, _ = tokens
+            seq = line.rstrip().split('\t')
+            assert len(seq) == 1, seq
             print >>read_stream, \
                 '\t'.join([str(_input_line_count), seq, 'I'*len(seq)])
     bowtie_command = ' '.join([bowtie2_exe,

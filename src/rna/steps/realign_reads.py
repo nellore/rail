@@ -65,7 +65,33 @@ Note that only unique alignments are currently output as ivals and/or diffs.
 
 Exonic chunks / introns
 
-Format 3 (splice_sam); tab-delimited output tuple columns:
+Format 3 (sam_ties) output only for ties in alignment score (which are within
+    some tie margin as decided by multiread_to_report);
+tab-delimited output tuple columns:
+Standard SAM output except fields are in different order -- and the first four
+fields include sample/intron information. If an alignment overlaps k introns, k
+lines are output.
+1. The character 'N' so the line can be matched up
+    with intron bed lines
+2. Sample index
+3. Number string representing RNAME; see BowtieIndexReference class
+    in bowtie_index for conversion information
+4. Intron start position or '\x1c' if no introns present
+5. Intron end position or '\x1c' if no introns present
+6. '+' or '-' indicating which strand is sense strand
+7. POS
+8. QNAME
+9. FLAG
+10. MAPQ
+11. CIGAR
+12. RNEXT
+13. PNEXT
+14. TLEN
+15. SEQ
+16. QUAL
+... + optional fields
+
+Format 4 (splice_sam); tab-delimited output tuple columns:
 Standard 11-column SAM output except fields are in different order, and the
 first field corresponds to sample label. (Fields are reordered to facilitate
 partitioning by sample name/RNAME and sorting by POS.) Each line corresponds to
@@ -88,9 +114,9 @@ The order of the fields is as follows.
 ... + optional fields, including -- for reads overlapping introns --:
 XS:A:'+' or '-' depending on which strand is the sense strand
 
-Introns/insertions/deletions
+Introns (intron_bed), insertions/deletions (indel_bed)
 
-Format 4 (bed); tab-delimited output tuple columns (bed):
+Format 5; tab-delimited output tuple columns:
 1. 'I', 'D', or 'N' for insertion, deletion, or intron line
 2. Sample label
 3. Number string representing RNAME
@@ -140,8 +166,7 @@ from dooplicity.tools import xstream
 import manifest
 import bowtie
 import bowtie_index
-import partition
-from cigar_parse import indels_introns_and_exons, multiread_with_introns
+from alignment_handlers import multiread_with_introns, AlignmentPrinter
 import argparse
 import random
 
@@ -154,7 +179,21 @@ _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 def input_files_from_input_stream(input_stream,
                                     temp_dir_path=tempfile.mkdtemp(),
                                     verbose=False):
-    """ Creates FASTA reference to index and separate file with reads.
+    """ Creates FASTA reference to index, rname file, and file with reads.
+
+        Each line of the read file is in the following format:
+
+        read number + TAB + SEQ + TAB + QUAL
+
+        Each line of the rname file is in the following format:
+
+        (number of qnames associated with rnames) + '\x1e'
+        + ('\x1e'-separated list of valid rnames) .
+
+        The RNAME file contains those RNAMEs to which a given sequence is
+        "allowed" to align. When Bowtie2 is run in -a mode and only these
+        alignments are permitted, this ensures the reproducibility of
+        results regardless of partitioning (and hence # cores).
 
         input_stream: where to find Hadoop input
         temp_dir_path: where to store files
@@ -163,26 +202,33 @@ def input_files_from_input_stream(input_stream,
         Return value: tuple (path to FASTA reference file, path to read file)
     """
     global _input_line_count
-    verbose=True
     prefasta_filename = os.path.join(temp_dir_path, 'temp.prefa')
     deduped_fasta_filename = os.path.join(temp_dir_path, 'temp.deduped.prefa')
     final_fasta_filename = os.path.join(temp_dir_path, 'temp.fa')
     reads_filename = os.path.join(temp_dir_path, 'reads.temp')
+    rname_filename = os.path.join(temp_dir_path, 'rnames.temp')
     if verbose:
         print >>sys.stderr, 'Writing prefasta and input reads...'
     with open(prefasta_filename, 'w') as fasta_stream:
         with open(reads_filename, 'w') as read_stream:
-            for (read_seq,), xpartition in xstream(input_stream, 1):
-                for value in xpartition:
-                    _input_line_count += 1
-                    if value[0][0] == '\x1c':
-                        # Print FASTA line
-                        print >>fasta_stream, '\t'.join([value[0][1:-2],
-                                                         value[1]])
-                    else:
-                        # Add to temporary seq stream
-                        print >>read_stream, '\t'.join([value[0], read_seq,
-                                                            value[1]])
+            with open(rname_filename, 'w') as rname_stream:
+                for read_seq, xpartition in xstream(input_stream, 1):
+                    rnames = []
+                    read_count = 0
+                    for value in xpartition:
+                        _input_line_count += 1
+                        if value[0][0] == '\x1c':
+                            # Print FASTA line
+                            print >>fasta_stream, '\t'.join([value[0][1:-2],
+                                                             value[1]])
+                            rnames.append(value[0][2:-2])
+                        else:
+                            # Add to temporary seq stream
+                            print >>read_stream, '\t'.join([value[0], read_seq,
+                                                                value[1]])
+                            read_count += 1
+                    rname_stream.write(str(read_count) + '\x1e')
+                    print >>rname_stream, '\x1e'.join(rnames)
     if verbose:
         print >>sys.stderr, 'Done! Sorting and deduplicating prefasta...'
     # Sort prefasta and eliminate duplicate lines
@@ -204,7 +250,7 @@ def input_files_from_input_stream(input_stream,
                                 in xrange(0, len(seq), 80)])
                 )
                 output_stream.write('\n')
-    return final_fasta_filename, reads_filename
+    return final_fasta_filename, reads_filename, rname_filename
 
 def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
         index_basename, keep_alive=False):
@@ -247,34 +293,30 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
         bowtie_build_process.wait()
         return bowtie_build_process.returncode
 
-def running_sum(iterable):
-    """ Generates a running sum of the numbers in an iterable
-
-        iterable: some iterable with numbers
-
-        Yield value: next value in running sum
-    """
-    total = 0
-    for number in iterable:
-        total += number
-        yield total
-
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
-    def __init__(self, input_stream, reference_index, manifest_object,
-        return_set, output_stream=sys.stdout,
-        exon_differentials=True, exon_intervals=False, stranded=False,
+    def __init__(self, input_stream, rname_stream, reference_index,
+        manifest_object, bowtie2_args, return_set, tie_margin=6,
+        output_stream=sys.stdout, exon_differentials=True,
+        exon_intervals=False, stranded=False,
         verbose=False, bin_size=10000, report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
                 Bowtie process's stdout.
+            rname_stream: where to retrieve RNAMES, each of which is in
+                the form (number of qnames associated with rnames) + '\x1e'
+                + ('\x1e'-separated list of valid rnames)
             reference_index: object of class BowtieIndexReference; for
                 outputing RNAME number strings to facilitate later sorting
             manifest_object: object of class LabelsAndIndicesWithClusters that
                 maps indices to labels and back; used to shorten intermediate
                 output
+            bowtie2_args: Bowtie 2 arguments to be parsed
+            tie_margin: allowed score difference per 100 bases among ties in
+                max score. For example, 150 and 144 are tied alignment scores
+                for a 100-bp read when tie_margin is 6.
             return_set: 0 is added to this set if the thread finishes
                 successfully
             output_stream: where to emit exon and intron tuples; typically,
@@ -295,6 +337,7 @@ class BowtieOutputThread(threading.Thread):
         super(BowtieOutputThread, self).__init__()
         self.daemon = True
         self.input_stream = input_stream
+        self.rname_stream = rname_stream
         self.reference_index = reference_index
         self.output_stream = output_stream
         self.verbose = verbose
@@ -305,6 +348,8 @@ class BowtieOutputThread(threading.Thread):
         self.exon_intervals = exon_intervals
         self.manifest_object = manifest_object
         self.return_set = return_set
+        self.bowtie2_args = bowtie2_args
+        self.tie_margin = tie_margin
 
     def run(self):
         """ Prints SAM, exon_ivals, exon_diffs, and introns.
@@ -316,6 +361,18 @@ class BowtieOutputThread(threading.Thread):
         global _output_line_count
         next_report_line = 0
         i = 0
+        tokens = rname_stream.readline().strip().split('\x1e')
+        qname_total, rnames = int(tokens[0]), set(tokens[1:])
+        qname_count = 0
+        alignment_printer = AlignmentPrinter(
+                self.manifest_object,
+                self.reference_index,
+                output_stream=sys.stdout,
+                exon_ivals=exon_intervals,
+                exon_diffs=exon_differentials
+            )
+        alignment_count_to_report, seed, non_deterministic \
+            = bowtie.parsed_bowtie_args(bowtie2_args)
         for (qname,), xpartition in xstream(self.input_stream, 1):
             # While labeled multiread, this list may end up simply a uniread
             multiread = []
@@ -328,21 +385,16 @@ class BowtieOutputThread(threading.Thread):
                         % (i, qname, flag)
                     next_report_line = max(int(next_report_line
                         * self.report_multiplier), next_report_line + 1)
-                multiread.append(list((qname,) + rest_of_line))
+                rname = rest_of_line[1]
+                if rname in rnames:
+                    multiread.append(list((qname,) + rest_of_line))
             if flag & 4:
                 # Write only the SAM output if the read was unmapped
-                print >>self.output_stream, 'splice_sam\t' \
-                     + '\t'.join(
-                            list((self.manifest_object.label_to_index[
-                                    qname.rpartition('\x1d')[2]
-                                ],
-                                self.reference_index.rname_to_string[
-                                        rest_of_line[1]
-                                    ], '%012d' % 
-                                int(rest_of_line[2]),
-                                qname.partition('\x1d')[0],
-                                rest_of_line[0]) + rest_of_line[3:])
-                        )
+                _output_line_count += alignment_printer.print_unmapped_read(
+                                                        qname,
+                                                        rest_of_line[8],
+                                                        rest_of_line[9]
+                                                    )
             else:
                 '''Correct positions to match original reference's, correct
                 CIGARs, eliminate duplicates, and decide primary alignment.'''
@@ -355,131 +407,33 @@ class BowtieOutputThread(threading.Thread):
                                         )
                 if not corrected_multiread:
                     '''This is effectively an unmapped read; write
-                    corresponding SAM output. NOTE THAT UNPAIRED READ
-                    FLAG YT:Z:UU IS HARD-CODED; MUST UPDATE IF PAIRED-END
-                    ALIGNMENT IS EVER PERFORMED.'''
+                    corresponding SAM output.'''
                     if (int(multiread[0][1]) & 16):
                         multiread[0][9] = multiread[0][9][::-1].translate(
                                         _reversed_complement_translation_table
                                     )
                         multiread[0][10] = multiread[0][10][::-1]
-                    print >>self.output_stream, (
-                            'splice_sam\t%s\t%s\t%012d\t%s\t4\t0\t*\t*\t0\t0'
-                            '\t%s\t%s\tYT:Z:UU'
-                        ) % (self.manifest_object.label_to_index[
-                                    qname.rpartition('\x1d')[2]
-                                ],
-                                self.reference_index.rname_to_string['*'],
-                                0, qname.partition('\x1d')[0], 
-                                multiread[0][9], multiread[0][10])
+                    _output_line_count \
+                        += alignment_printer.print_unmapped_read(
+                                                        qname,
+                                                        multiread[0][9],
+                                                        multiread[0][10]
+                                                    )
                     continue
-                for alignment in corrected_multiread:
-                    print >>self.output_stream, 'splice_sam\t' \
-                        + '\t'.join(
-                            [sample_index,
-                                self.reference_index.rname_to_string[
-                                        alignment[2]
-                                    ], '%012d' % int(alignment[3]),
-                                alignment[0], alignment[1]] + alignment[4:]
-                        )
-                    _output_line_count += 1
-                '''Output exonic chunks/introns/indels only for primary
-                alignment, which occurs first.'''
-                alignment = corrected_multiread[0]
-                cigar = alignment[5]
-                rname = alignment[2]
-                pos = int(alignment[3])
-                seq = alignment[9]
-                md = [field for field in alignment
-                            if field[:5] == 'MD:Z:'][0][5:]
-                insertions, deletions, introns, exons \
-                                            = indels_introns_and_exons(
-                                                    cigar, md, pos, seq
-                                                )
-                # Output indels
-                for insert_pos, insert_seq in insertions:
-                    print >>self.output_stream, (
-                           ('bed\tI\t%s\t%s\t%012d\t%012d\t%s'
-                            '\t\x1c\t\x1c\t1')
-                            % (sample_index, self.reference_index.\
-                                rname_to_string[rname],
-                                insert_pos, insert_pos,
-                                insert_seq)
-                        )
-                    _output_line_count += 1
-                for del_pos, del_seq in deletions:
-                    print >>self.output_stream, (
-                           ('bed\tD\t%s\t%s\t%012d\t%012d\t%s'
-                            '\t\x1c\t\x1c\t1')
-                            % (sample_index, self.reference_index.\
-                                rname_to_string[rname],
-                                del_pos, del_pos + len(del_seq),
-                                del_seq)
-                        )
-                    _output_line_count += 1
-                # Output exonic chunks
-                if self.exon_intervals:
-                    for exon_pos, exon_end_pos in exons:
-                        partitions = partition.partition(
-                                rname, exon_pos, exon_end_pos,
-                                self.bin_size)
-                        for partition_id, _, _ in partitions:
-                            print >>self.output_stream, \
-                                'exon_ival\t%s\t%012d\t' \
-                                '%012d\t%s' \
-                                % (partition_id,
-                                    exon_pos, exon_end_pos, 
-                                    sample_index)
-                            _output_line_count += 1
-                if self.exon_differentials:
-                    for exon_pos, exon_end_pos in exons:
-                        partitions = partition.partition(
-                            rname, exon_pos, exon_end_pos,
-                            self.bin_size)
-                        for (partition_id, partition_start, 
-                                partition_end) in partitions:
-                            assert exon_pos < partition_end
-                            # Print increment at interval start
-                            print >>self.output_stream, \
-                                'exon_diff\t%s\t%s\t%012d\t1' \
-                                % (partition_id,
-                                    sample_index,
-                                    max(partition_start, exon_pos))
-                            _output_line_count += 1
-                            assert exon_end_pos > partition_start
-                            if exon_end_pos < partition_end:
-                                '''Print decrement at interval end 
-                                iff exon ends before partition
-                                ends.'''
-                                print >>self.output_stream, \
-                                    'exon_diff\t%s\t%s\t' \
-                                    '%012d\t-1' \
-                                    % (partition_id, 
-                                        sample_index,
-                                        exon_end_pos)
-                                _output_line_count += 1
-                try:
-                    reverse_strand_string = [field for field in alignment
-                                    if field[:5] == 'XS:A:'][0][5:]
-                except IndexError:
-                    # No introns
-                    continue
-                # Output introns
-                for (intron_pos, intron_end_pos,
-                        left_displacement, right_displacement) \
-                    in introns:
-                    print >>self.output_stream, (
-                            ('bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
-                             '%d\t%d\t1')
-                             % (sample_index, 
-                                self.reference_index.\
-                                rname_to_string[rname],
-                                intron_pos, intron_end_pos,
-                                reverse_strand_string,
-                                left_displacement,
-                                right_displacement)
-                        )
-                    _output_line_count += 1
+                _output_line_count += alignment_printer.print_alignment_data(
+                    multiread_to_report(
+                        corrected_multiread,
+                        alignment_count_to_report=alignment_count_to_report,
+                        seed=0,
+                        non_deterministic=non_deterministic,
+                        tie_margin=self.tie_margin
+                    )
+                )
+            qname_count += 1
+            if qname_count == qname_total:
+                tokens = rname_stream.readline().strip().split('\x1e')
+                qname_total, rnames = int(tokens[0]), set(tokens[1:])
+                qname_count = 0
         self.return_set.add(0)
 
 def handle_temporary_directory(archive, temp_dir_path):
@@ -503,7 +457,8 @@ def handle_temporary_directory(archive, temp_dir_path):
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_build_exe='bowtie2-build', reference_index_base='genome',
-    bowtie2_args=None, temp_dir_path=tempfile.mkdtemp(), bin_size=10000,
+    bowtie2_args=None, tie_margin=6,
+    temp_dir_path=tempfile.mkdtemp(), bin_size=10000,
     manifest_file='manifest', verbose=False, exon_differentials=True,
     exon_intervals=False, stranded=False, report_multiplier=1.2,
     keep_alive=False):
@@ -573,7 +528,33 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
 
         Exonic chunks / introns
 
-        Format 3 (splice_sam); tab-delimited output tuple columns:
+        Format 3 (sam_ties) output only for ties in alignment score (which are
+            within some tie margin as decided by multiread_to_report);
+        tab-delimited output tuple columns:
+        Standard SAM output except fields are in different order -- and the
+        first four fields include sample/intron information. If an alignment
+        overlaps k introns, k lines are output.
+        1. The character 'N' so the line can be matched up
+            with intron bed lines
+        2. Sample index
+        3. Number string representing RNAME; see BowtieIndexReference class
+            in bowtie_index for conversion information
+        4. Intron start position or '\x1c' if no introns present
+        5. Intron end position or '\x1c' if no introns present
+        6. '+' or '-' indicating which strand is sense strand
+        7. POS
+        8. QNAME
+        9. FLAG
+        10. MAPQ
+        11. CIGAR
+        12. RNEXT
+        13. PNEXT
+        14. TLEN
+        15. SEQ
+        16. QUAL
+        ... + optional fields
+
+        Format 4 (sam); tab-delimited output tuple columns:
         Standard 11-column SAM output except fields are in different order, and
         the first field corresponds to sample label. (Fields are reordered to
         facilitate partitioning by sample name/RNAME and sorting by POS.) Each
@@ -597,9 +578,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         ... + optional fields, including -- for reads overlapping introns --:
         XS:A:'+' or '-' depending on which strand is the sense strand
 
-        Introns/insertions/deletions
+        Introns (intron_bed), insertions/deletions (indel_bed)
 
-        Format 4 (bed); tab-delimited output tuple columns (bed):
+        Format 5; tab-delimited output tuple columns:
         1. 'I', 'D', or 'N' for insertion, deletion, or intron line
         2. Sample label
         3. Number string representing RNAME
@@ -633,6 +614,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             outputing RNAME number strings to facilitate later sorting
         bowtie2_args: string containing precisely extra command-line arguments
             to pass to Bowtie2
+        tie_margin: allowed score difference per 100 bases among ties in
+            max score. For example, 150 and 144 are tied alignment scores
+            for a 100-bp read when tie_margin is 6.
         manifest_file: path to manifest file
         temp_dir_path: path of temporary directory for storing intermediate
             alignments
@@ -655,11 +639,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         No return value.
     """
     start_time = time.time()
-    fasta_file, reads_file = input_files_from_input_stream(
-                                            input_stream,
-                                            verbose=verbose,
-                                            temp_dir_path=temp_dir_path
-                                        )
+    fasta_file, reads_file, rnames_file = input_files_from_input_stream(
+                                                input_stream,
+                                                verbose=verbose,
+                                                temp_dir_path=temp_dir_path
+                                            )
     bowtie2_index_base = os.path.join(temp_dir_path, 'tempidx')
     bowtie_build_return_code = create_index_from_reference_fasta(
                                     bowtie2_build_exe,
@@ -673,7 +657,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         output_file = os.path.join(temp_dir_path, 'out.sam')
         bowtie_command = ' ' .join([bowtie2_exe,
             bowtie2_args if bowtie2_args is not None else '',
-            '--local -t --no-hd --mm -x', bowtie2_index_base, '--12',
+            '--local -t -a --no-hd --mm -x', bowtie2_index_base, '--12',
             reads_file, '-S', output_file])
         print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
         bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
@@ -692,8 +676,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             return_set = set()
             output_thread = BowtieOutputThread(
                                 open(output_file),
+                                open(rnames_file),
                                 reference_index=reference_index,
                                 manifest_object=manifest_object,
+                                bowtie2_args=bowtie2_args,
                                 return_set=return_set,
                                 exon_differentials=exon_differentials, 
                                 exon_intervals=exon_intervals, 
@@ -701,7 +687,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                 verbose=verbose, 
                                 output_stream=output_stream,
                                 stranded=stranded,
-                                report_multiplier=report_multiplier
+                                report_multiplier=report_multiplier,
+                                tie_margin=tie_margin,
                             )
             output_thread.start()
             # Join thread to pause execution in main thread
@@ -729,6 +716,11 @@ if __name__ == '__main__':
         help='When --verbose is also invoked, the only lines of lengthy '
              'intermediate output written to stderr have line number that '
              'increases exponentially with this base')
+    parser.add_argument('--tie-margin', type=int, required=False,
+        default=6,
+        help='Allowed score difference per 100 bases among ties in '
+             'max score. For example, 150 and 144 are tied alignment scores '
+             'for a 100-bp read when --tie-margin is 6.')
     parser.add_argument(\
         '--keep-alive', action='store_const', const=True, default=False,
         help='Prints reporter:status:alive messages to stderr to keep EMR '
@@ -806,6 +798,7 @@ if __name__ == '__main__' and not args.test:
         exon_intervals=args.exon_intervals,
         stranded=args.stranded,
         report_multiplier=args.report_multiplier,
+        tie_margin=args.tie_margin,
         keep_alive=args.keep_alive)
 
 elif __name__ == '__main__':

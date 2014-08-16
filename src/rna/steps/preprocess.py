@@ -145,10 +145,10 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     push_url = Url(push)
     if push_url.is_local:
         destination = push
-    elif push_url.is_s3:
+    elif push_url.is_s3 or push_url.is_hdfs:
         destination = temp_dir
     else:
-        raise RuntimeError('Push destination must be on S3 or local.')
+        raise RuntimeError('Push destination must be on S3, HDFS, or local.')
     fastq_cues = set(['@'])
     fasta_cues = set(['>', ';'])
     for k, line in enumerate(sys.stdin):

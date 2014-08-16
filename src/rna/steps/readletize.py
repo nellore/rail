@@ -25,7 +25,7 @@ Input is partitioned by field 1, the read sequence.
 
 Hadoop output (written to stdout)
 ----------------------------
-Tab-delimited output tuple columns:
+(readletized) Tab-delimited output tuple columns:
 1. Readlet sequence or its reversed complement, whichever is first in
     alphabetical order
 2. Read sequence ID + ('-' if readlet sequence is reverse-complemented; else
@@ -41,10 +41,25 @@ Tab-delimited output tuple columns:
     "mapred_task_partition" environment variable -- a unique index for a task
     within a job -- and Y is the index of the read sequence relative to the
     beginning of the input stream.
+
+(unique) Single column:
+1. A unique read sequence
 """
 import sys
 import os
 import string
+import site
+
+base_path = os.path.abspath(
+                    os.path.dirname(os.path.dirname(os.path.dirname(
+                        os.path.realpath(__file__)))
+                    )
+                )
+utils_path = os.path.join(base_path, 'rna', 'utils')
+site.addsitedir(utils_path)
+site.addsitedir(base_path)
+
+from dooplicity.tools import xstream
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count, _output_line_count = 0, 0
@@ -132,24 +147,28 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
     if cap_size != max_readlet_size:
         # Always have a start or end read of length max_readlet_size
         cap_sizes.append(max_readlet_size)
-    for _input_line_count, line in enumerate(input_stream):
+    for (seq,), xpartition in xstream(input_stream, 1):
+        print >>output_stream, 'unique\t%s' % seq
         seq_id = task_partition + ':' + str(_input_line_count)
-        tokens = line.rstrip().split('\t')
-        assert len(tokens) == 3
-        seq, samples, reversed_complement_samples = tokens
         if len(seq) < min_readlet_size:
             continue
-        samples = samples.split('\x1d')
-        if samples[0] == '\x1c':
-            samples = []
-        sample_count = str(len(samples))
-        samples = set(samples)
-        reversed_complement_samples = reversed_complement_samples.split('\x1d')
-        if reversed_complement_samples[0] == '\x1c':
-            reversed_complement_samples = []
-        reversed_complement_sample_count \
-            = str(len(reversed_complement_samples))
-        reversed_complement_samples = set(reversed_complement_samples)
+        samples = set()
+        reversed_complement_samples = set()
+        sample_count, reversed_complement_sample_count = 0, 0
+        for line_samples, line_reversed_complement_samples in xpartition:
+            if line_samples != '\x1c':
+                samples_to_add = line_samples.split('\x1d')
+                sample_count += len(samples_to_add)
+                samples.update(samples_to_add)
+            if line_reversed_complement_samples != '\x1c':
+                reversed_complement_samples_to_add \
+                    = line_reversed_complement_samples.split('\x1d')
+                reversed_complement_sample_count += len(
+                        reversed_complement_samples_to_add
+                    )
+                reversed_complement_samples.update(
+                        reversed_complement_samples_to_add
+                    )
         '''Construct a readlet identifier as follows: read sequence ID + 
         ('-' if readlet sequence is reverse-complemented; else '+') + '\x1e' +
         displacement of readlet's 5' end from read's 5' end + '\x1e' +
@@ -211,8 +230,8 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
                                         seq_size - j - max_readlet_size))
         # Add additional info to first readlet in to_write
         to_write[0] = '\x1e'.join([to_write[0], seq,
-                                    sample_count,
-                                    reversed_complement_sample_count,
+                                    str(sample_count),
+                                    str(reversed_complement_sample_count),
                                     '\x1f'.join(samples),
                                     '\x1f'.join(reversed_complement_samples)])
         if verbose and next_report_line == i:
@@ -221,7 +240,7 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
             next_report_line = int((next_report_line + 1)
                 * report_multiplier + 1) - 1
         for readlet in to_write:
-            print >>output_stream, readlet
+            print >>output_stream, 'readletized\t%s' % readlet
         _output_line_count += len(to_write)
     output_stream.flush()
 

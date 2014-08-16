@@ -79,7 +79,15 @@ class FileMover:
                 pass
             command_list = ['cp', filename, url.to_url()]
         else:
-            command_list = ['hadoop', 'fs', '-put']
+            parent_dir = os.path.dirname(filename)
+            dir_chain = []
+            while parent_dir != 'hdfs:'
+                dir_chain.append(parent_dir)
+                parent_dir = os.path.dirname(filename)
+            for dir_to_create in dir_chain[::-1]:
+                command_list = ['hdfs', 'dfs', '-mkdir', dir_to_create]
+                subprocess.Popen(command_list, stdout=sys.stderr).wait()
+            command_list = ['hdfs', 'dfs', '-put']
             command_list.append(filename)
             command_list.append('/'.join([url.to_url(),
                                             os.path.basename(filename)]))
@@ -144,13 +152,19 @@ class FileMover:
                     = subprocess.Popen(command_list, stdout=sys.stderr)
                 time.sleep(1)
                 last_print_time = time.time()
-                last_size = os.path.getsize(filename)
+                try:
+                    last_size = os.path.getsize(filename)
+                except OSError:
+                    last_size = 0
                 while s3cmd_process.poll() is None:
                     now_time = time.time()
                     if now_time - last_print_time > 120:
                         print >>sys.stderr, '\nreporter:status:alive'
                         sys.stderr.flush()
-                        new_size = os.path.getsize(filename)
+                        try:
+                            new_size = os.path.getsize(filename)
+                        except OSError:
+                            new_size = 0
                         if new_size == last_size:
                             # Download stalled
                             break_outer_loop = True
@@ -162,7 +176,10 @@ class FileMover:
                 if break_outer_loop:
                     tries += 1
                     s3cmd_process.kill()
-                    os.remove(filename)
+                    try:
+                        os.remove(filename)
+                    except OSError:
+                        pass
                     time.sleep(2)
                     continue
                 if s3cmd_process.poll() > 0:

@@ -55,7 +55,7 @@ Format 2 (exon_diff); tab-delimited output tuple columns:
 
 Note that only unique alignments are currently output as ivals and/or diffs.
 
-Format 3 (end_to_end_sam); tab-delimited output tuple columns:
+Format 3 (sam); tab-delimited output tuple columns:
 Standard SAM output except fields are in different order, and the first field
 corresponds to sample label. (Fields are reordered to facilitate partitioning
 by sample name/RNAME and sorting by POS.) Each line corresponds to a
@@ -75,9 +75,9 @@ spliced alignment. The order of the fields is as follows.
 12. QUAL
 ... + optional fields
 
-Introns/insertions/deletions
+Insertions/deletions (indel_bed)
 
-(bed); tab-delimited output tuple columns (bed):
+tab-delimited output tuple columns:
 1. 'I' or 'D' insertion or deletion line
 2. Sample label
 3. Number string representing RNAME
@@ -140,7 +140,7 @@ import bowtie
 import bowtie_index
 import partition
 import manifest
-from cigar_parse import indels_introns_and_exons, reference_from_seq
+from alignment_handlers import indels_introns_and_exons, reference_from_seq
 from dooplicity.tools import xstream
 
 # Initialize global variables for tracking number of input/output lines
@@ -212,8 +212,8 @@ class BowtieOutputThread(threading.Thread):
     
     def __init__(self, input_stream, reference_index, manifest_object, 
         return_set, output_stream=sys.stdout, exon_differentials=True,
-        exon_intervals=False, end_to_end_sam=True, verbose=False,
-        bin_size=10000, report_multiplier=1.2):
+        exon_intervals=False, verbose=False, bin_size=10000,
+        report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -228,8 +228,6 @@ class BowtieOutputThread(threading.Thread):
                 this is sys.stdout.
             exon_differentials: True iff EC differentials are to be emitted.
             exon_intervals: True iff EC intervals are to be emitted.
-            end_to_end_sam: True iff SAM with end_to_end alignments should
-                be output. See docstring for more information.
             verbose: True if alignments should occasionally be written 
                 to stderr.
             bin_size: genome is partitioned in units of bin_size for later load
@@ -248,7 +246,6 @@ class BowtieOutputThread(threading.Thread):
         self.report_multiplier = report_multiplier
         self.exon_differentials = exon_differentials
         self.exon_intervals = exon_intervals
-        self.end_to_end_sam = end_to_end_sam
         self.manifest_object = manifest_object
         self.return_set = return_set
 
@@ -262,6 +259,13 @@ class BowtieOutputThread(threading.Thread):
         global _output_line_count
         next_report_line = 0
         i = 0
+        alignment_printer = AlignmentPrinter(
+                self.manifest_object,
+                self.reference_index,
+                output_stream=sys.stdout,
+                exon_ivals=exon_intervals,
+                exon_diffs=exon_differentials
+            )
         for (qname,), xpartition in xstream(self.input_stream, 1):
             # While labeled multiread, this list may end up simply a uniread
             multiread = []
@@ -348,103 +352,24 @@ class BowtieOutputThread(threading.Thread):
                         print >>self.output_stream, \
                             'fasta\t%s\t\x1c>%s\x1d%d\x1d\x1d\x1ds\t%s' \
                             % (alignment[9], alignment[2], new_pos, ref)
+                        _output_line_count += 1
                 except IndexError:
                     # No secondary alignments
                     pass
             else:
-                if self.end_to_end_sam:
-                    '''End-to-end SAM is output for every line with at least
-                    one possible alignment.'''
-                    for alignment in multiread:
-                        print >>self.output_stream, (
-                            ('%s\t%s\t%s\t%012d\t%s\t%s\t'
-                                % ('end_to_end_sam', sample_label, 
-                                    self.reference_index.rname_to_string[
-                                        alignment[2]
-                                    ],
-                                int(alignment[3]),
-                                alignment[0].partition('\x1d')[0],
-                                alignment[1])) 
-                            + '\t'.join(alignment[4:])
-                            + ('\tNH:i:%d' % len(multiread)))
-                        _output_line_count += 1
-                # Output exonic chunks and indels for primary alignment
-                alignment = multiread[0]
-                md = [field for field in alignment
-                            if field[:5] == 'MD:Z:'][0][5:]
-                insertions, deletions, _, exons \
-                                            = indels_introns_and_exons(
-                                                cigar, md, pos, seq
-                                            )
-                # Output indels
-                for insert_pos, insert_seq in insertions:
-                    print >>self.output_stream, (
-                           ('bed\tI\t%s\t%s\t%012d\t%012d\t%s'
-                            '\t\x1c\t\x1c\t1')
-                            % (sample_label, self.reference_index.\
-                                rname_to_string[rname],
-                                insert_pos, insert_pos,
-                                insert_seq)
+                # Report all end-to-end alignments
+                NH_field = '\tNH:i:%d' % len(multiread)
+                _output_line_count += alignment_printer.print_alignment_data(
+                            ([alignment + [NH_field] 
+                                for alignment in multiread],)
                         )
-                    _output_line_count += 1
-                for del_pos, del_seq in deletions:
-                    print >>self.output_stream, (
-                           ('bed\tD\t%s\t%s\t%012d\t%012d\t%s'
-                            '\t\x1c\t\x1c\t1')
-                            % (sample_label, self.reference_index.\
-                                rname_to_string[rname],
-                                del_pos, del_pos + len(del_seq),
-                                del_seq)
-                        )
-                    _output_line_count += 1
-                # Output exonic chunks
-                if self.exon_intervals:
-                    for exon_pos, exon_end_pos in exons:
-                        partitions = partition.partition(
-                                rname, exon_pos, exon_end_pos,
-                                self.bin_size)
-                        for partition_id, _, _ in partitions:
-                            print >>self.output_stream, \
-                                'exon_ival\t%s\t%012d\t' \
-                                '%012d\t%s' \
-                                % (partition_id,
-                                    exon_pos, exon_end_pos, 
-                                    sample_label)
-                            _output_line_count += 1
-                if self.exon_differentials:
-                    for exon_pos, exon_end_pos in exons:
-                        partitions = partition.partition(
-                            rname, exon_pos, exon_end_pos,
-                            self.bin_size)
-                        for (partition_id, partition_start, 
-                                partition_end) in partitions:
-                            assert exon_pos < partition_end
-                            # Print increment at interval start
-                            print >>self.output_stream, \
-                                'exon_diff\t%s\t%s\t%012d\t1' \
-                                % (partition_id,
-                                    sample_label,
-                                    max(partition_start, exon_pos))
-                            _output_line_count += 1
-                            assert exon_end_pos > partition_start
-                            if exon_end_pos < partition_end:
-                                '''Print decrement at interval end 
-                                iff exon ends before partition
-                                ends.'''
-                                print >>self.output_stream, \
-                                    'exon_diff\t%s\t%s\t' \
-                                    '%012d\t-1' \
-                                    % (partition_id, 
-                                        sample_label,
-                                        exon_end_pos)
-                                _output_line_count += 1
         self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 
     manifest_file='manifest', bowtie2_args=None, bin_size=10000, verbose=False,
-    exon_differentials=True, exon_intervals=False, end_to_end_sam=True,
-    report_multiplier=1.2, keep_alive=False):
+    exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
+    keep_alive=False):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -499,7 +424,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         Note that only unique alignments are currently output as ivals and/or
         diffs.
 
-        Format 3 (end_to_end_sam); tab-delimited output tuple columns:
+        Format 3 (sam); tab-delimited output tuple columns:
         Standard SAM output except fields are in different order, and the first
         field corresponds to sample label. (Fields are reordered to facilitate
         partitioning by sample name/RNAME and sorting by POS.) Each line
@@ -519,6 +444,24 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         11. SEQ
         12. QUAL
         ... + optional fields
+
+        Insertions/deletions (indel_bed)
+
+        tab-delimited output tuple columns:
+        1. 'I' or 'D' insertion or deletion line
+        2. Sample label
+        3. Number string representing RNAME
+        4. Start position (Last base before insertion or 
+            first base of deletion)
+        5. End position (Last base before insertion or last base of deletion 
+                            (exclusive))
+        6. Inserted sequence for insertions or deleted sequence for deletions
+        ----Next fields are for introns only; they are '\x1c' for indels----
+        7. '\x1c'
+        8. '\x1c'
+        --------------------------------------------------------------------
+        9. Number of instances of insertion or deletion in sample; this is
+            always +1 before bed_pre combiner/reducer
 
         Read whose primary alignment is not end-to-end
 
@@ -563,8 +506,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             stderr.
         exon_differentials: True iff EC differentials are to be emitted.
         exon_intervals: True iff EC intervals are to be emitted.
-        end_to_end_sam: True iff SAM with end_to_end alignments should be
-            output. See docstring for more information.
         report_multiplier: if verbose is True, the line number of an alignment
             or read written to stderr increases exponentially with base
             report_multiplier.
@@ -614,7 +555,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                 bin_size=bin_size,
                 verbose=verbose, 
                 output_stream=output_stream,
-                end_to_end_sam=end_to_end_sam,
                 report_multiplier=report_multiplier
             )
         output_thread.start()
@@ -649,10 +589,6 @@ if __name__ == '__main__':
         const=True,
         default=False, 
         help='Print exon intervals')
-    parser.add_argument('--end-to-end-sam', action='store_const', const=True,
-        default=True, 
-        help='Print read-by-read SAM output of end-to-end alignments for '
-             'later consolidation after realignment.')
     parser.add_argument('--manifest', type=str, required=False,
         default='manifest',
         help='Path to manifest file')
@@ -692,7 +628,6 @@ if __name__ == '__main__' and not args.test:
         bin_size=args.partition_length,
         exon_differentials=args.exon_differentials,
         exon_intervals=args.exon_intervals,
-        end_to_end_sam=args.end_to_end_sam,
         report_multiplier=args.report_multiplier,
         keep_alive=args.keep_alive)
     print >>sys.stderr, 'DONE with align_reads.py; in/out=%d/%d; ' \

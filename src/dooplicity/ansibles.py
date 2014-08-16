@@ -668,6 +668,7 @@ class Url:
         self.is_s3 = self.type[:2] == 's3'
         self.is_curlable = self.type in ['ftp', 'http', 'https']
         self.is_local = self.type == 'local'
+        self.is_hdfs = self.type == 'hdfs'
 
     def to_url(self, caps=False):
         """ Returns URL string: an absolute path if local or an URL.

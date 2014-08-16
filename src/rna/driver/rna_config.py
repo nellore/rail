@@ -998,8 +998,7 @@ class RailRnaElastic:
         if master_instance_bid_price is None:
             base.spot_master = False
         else:
-            if not (isinstance(master_instance_bid_price, float) 
-                    and master_instance_bid_price > 0):
+            if not (master_instance_bid_price > 0):
                 base.errors.append('Spot instance bid price for master nodes '
                                    '(--master-instance-bid-price) must be '
                                    '> 0, but {0} was entered.'.format(
@@ -1010,8 +1009,7 @@ class RailRnaElastic:
         if core_instance_bid_price is None:
             base.spot_core = False
         else:
-            if not (isinstance(core_instance_bid_price, float) 
-                    and core_instance_bid_price > 0):
+            if not (core_instance_bid_price > 0):
                 base.errors.append('Spot instance bid price for core nodes '
                                    '(--core-instance-bid-price) must be '
                                    '> 0, but {0} was entered.'.format(
@@ -1022,8 +1020,7 @@ class RailRnaElastic:
         if task_instance_bid_price is None:
             base.spot_task = False
         else:
-            if not (isinstance(task_instance_bid_price, float) 
-                    and task_instance_bid_price > 0):
+            if not (task_instance_bid_price > 0):
                 base.errors.append('Spot instance bid price for task nodes '
                                    '(--task-instance-bid-price) must be '
                                    '> 0, but {0} was entered.'.format(
@@ -1486,7 +1483,7 @@ class RailRnaAlign:
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30',
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
         normalize_percentile=0.75,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', assembly='hg19',
@@ -1662,8 +1659,7 @@ class RailRnaAlign:
                                                     readlet_interval
                                                 ))
         base.readlet_interval = readlet_interval
-        if not (isinstance(cap_size_multiplier, float) and cap_size_multiplier
-                > 1):
+        if not (cap_size_multiplier > 1):
             base.errors.append('Cap size multiplier (--cap-size-multiplier) '
                                'must be > 1, '
                                'but {0} was entered.'.format(
@@ -1717,14 +1713,20 @@ class RailRnaAlign:
         base.motif_radius = motif_radius
         base.genome_bowtie1_args = genome_bowtie1_args
         base.transcriptome_bowtie2_args = transcriptome_bowtie2_args
-        if not (isinstance(normalize_percentile, float) and
-                    0 <= normalize_percentile <= 1):
+        if not (0 <= normalize_percentile <= 1):
             base.errors.append('Normalization percentile '
                                '(--normalize-percentile) must on the '
                                'interval [0, 1], but {0} was entered'.format(
                                                     normalize_percentile
                                                 ))
         base.normalize_percentile = normalize_percentile
+        if not (isinstance(tie_margin, int) and
+                    tie_margin >= 0):
+            base.errors.append('Tie margin (--tie-margin) must be an '
+                               'integer >= 0, but {0} was entered.'.format(
+                                                    tie_margin
+                                                ))
+        base.tie_margin = tie_margin
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
         base.output_sam = output_sam
         base.bam_basename = bam_basename
@@ -1888,6 +1890,13 @@ class RailRnaAlign:
             help=('percentile to use when computing normalization factors for '
                   'sample coverages')
         )
+        algo_parser.add_argument(
+            '--tie-margin', type=int, required=False,
+            metavar='<int>'
+            default=6,
+            help=('allowed score difference per 100 bases among ties in '
+                  'max score. For example, 150 and 144 are tied alignment '
+                  'scores for a 100-bp read when --tie-margin is 6')
         output_parser.add_argument(
             '--do-not-output-bam-by-chr', action='store_const', const=True,
             default=False,
@@ -1939,23 +1948,7 @@ class RailRnaAlign:
                 'multiple_outputs' : True
             },
             {
-                'name' : 'Aggregate duplicate read sequences',
-                'run' : 'sum.py --type 3 --value-count 2 {0}'.format(
-                                                                keep_alive
-                                                            ),
-                'inputs' : [path_join(elastic, 'align_reads', 'readletize')],
-                'output' : 'combine_sequences',
-                'taskx' : 4,
-                'part' : 'k1,1',
-                'keys' : 1,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
-                'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
-                    ]
-            },
-            {
-                'name' : 'Segment reads into readlets',
+                'name' : 'Segment unique read sequences into readlets',
                 'run' : ('readletize.py --max-readlet-size={0} '
                          '--readlet-interval={1} '
                          '--capping-multiplier={2}').format(
@@ -1963,15 +1956,16 @@ class RailRnaAlign:
                                     base.readlet_interval,
                                     base.cap_size_multiplier
                                 ),
-                'inputs' : ['combine_sequences'],
+                'inputs' : [path_join(elastic, 'align_reads', 'readletize')],
                 'output' : 'readletize',
                 'taskx' : 4,
                 'part' : 'k1,1',
                 'keys' : 1,
+                'multiple_outputs' : True,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -1985,7 +1979,7 @@ class RailRnaAlign:
                                                     keep_alive,
                                                     base.genome_bowtie1_args,
                                                 ),
-                'inputs' : ['readletize'],
+                'inputs' : [path_join(elastic, 'readletize', 'readletized')],
                 'output' : 'align_readlets',
                 'taskx' : 4,
                 'part' : 'k1,1',
@@ -1993,7 +1987,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2024,7 +2018,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2042,7 +2036,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2059,7 +2053,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2080,7 +2074,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2098,7 +2092,7 @@ class RailRnaAlign:
                                             keep_alive,
                                             base.transcriptome_bowtie2_args
                                         ),
-                'inputs' : ['combine_sequences'],
+                'inputs' : [path_join(elastic, 'readletize', 'unique')],
                 'output' : 'cointron_enum',
                 'taskx' : 4,
                 'archives' : ab.Url(path_join(elastic,
@@ -2110,7 +2104,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2127,18 +2121,19 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
                 'name' : 'Align reads to transcriptome elements',
                 'run' : ('realign_reads.py --original-idx={0} '
                          '--bowtie2-exe={1} --partition-length={2} '
-                         '--exon-differentials --manifest={3} {4} '
-                         '{5} -- {6}').format(
+                         '--exon-differentials --tie-margin {3} '
+                         '--manifest={4} {5} {6} -- {7}').format(
                                         base.bowtie1_idx,
                                         base.bowtie2_exe,
                                         base.genome_partition_length,
+                                        base.tie_margin,
                                         manifest,
                                         verbose,
                                         keep_alive,
@@ -2155,7 +2150,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (40000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2172,7 +2167,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2188,7 +2183,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2213,7 +2208,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2234,14 +2229,16 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
                 'name' : 'Aggregate intron and indel results by sample',
                 'run' : 'bed_pre.py',
-                'inputs' : [path_join(elastic, 'realign_reads', 'bed'),
-                            path_join(elastic, 'align_reads', 'bed')],
+                'inputs' : [path_join(elastic, 'realign_reads', 'indel_bed'),
+                            path_join(elastic, 'align_reads', 'indel_bed'),
+                            path_join(elastic, 'realign_reads', 'intron_bed'),
+                            path_join(elastic, 'align_reads', 'intron_bed')],
                 'output' : 'prebed',
                 'taskx' : 8,
                 'part' : 'k1,6',
@@ -2249,7 +2246,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2273,7 +2270,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             },
             {
@@ -2294,9 +2291,8 @@ class RailRnaAlign:
                                         if not base.do_not_output_bam_by_chr
                                         else ''
                                     ),
-                'inputs' : [path_join(elastic, 'align_reads', 
-                                'end_to_end_sam'),
-                            path_join(elastic, 'realign_reads', 'splice_sam')],
+                'inputs' : [path_join(elastic, 'align_reads', 'sam'),
+                            path_join(elastic, 'realign_reads', 'sam')],
                 'output' : 'bam',
                 'taskx' : 1,
                 'part' : ('k1,1' if base.do_not_output_bam_by_chr else 'k1,2'),
@@ -2306,7 +2302,7 @@ class RailRnaAlign:
                         'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
                         'mapreduce.reduce.shuffle.merge.percent=0.4',
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (20000000000 / base.total_cores)
+                            % (1073741824) # 1 GB
                     ]
             }]
 
@@ -2517,7 +2513,7 @@ class RailRnaLocalAlignJson:
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30',
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', num_processes=1, keep_intermediates=False):
@@ -2547,6 +2543,7 @@ class RailRnaLocalAlignJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -2588,7 +2585,7 @@ class RailRnaElasticAlignJson:
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30',
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', log_uri=None, ami_version='3.1.0',
@@ -2643,6 +2640,7 @@ class RailRnaElasticAlignJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -2706,7 +2704,7 @@ class RailRnaLocalAllJson:
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30',
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, keep_intermediates=False, check_manifest=True):
@@ -2737,6 +2735,7 @@ class RailRnaLocalAllJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -2786,7 +2785,7 @@ class RailRnaElasticAllJson:
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30',
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
         normalize_percentile=0.75,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
@@ -2844,6 +2843,7 @@ class RailRnaElasticAllJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
