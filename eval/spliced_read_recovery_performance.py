@@ -51,7 +51,7 @@ src_path = os.path.join(base_path, 'src')
 site.addsitedir(utils_path)
 site.addsitedir(src_path)
 
-from cigar_parse import indels_introns_and_exons
+from alignment_handlers import indels_introns_and_exons
 from dooplicity.tools import xstream
 
 def dummy_md_index(cigar):

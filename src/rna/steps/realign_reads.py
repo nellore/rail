@@ -65,8 +65,8 @@ Note that only unique alignments are currently output as ivals and/or diffs.
 
 Exonic chunks / introns
 
-Format 3 (sam_ties) output only for ties in alignment score (which are within
-    some tie margin as decided by multiread_to_report);
+Format 3 (sam_intron_ties) output only for ties in alignment score (which are
+    within some tie margin as decided by multiread_to_report);
 tab-delimited output tuple columns:
 Standard SAM output except fields are in different order -- and the first four
 fields include sample/intron information. If an alignment overlaps k introns, k
@@ -76,8 +76,8 @@ lines are output.
 2. Sample index
 3. Number string representing RNAME; see BowtieIndexReference class
     in bowtie_index for conversion information
-4. Intron start position or '\x1c' if no introns present
-5. Intron end position or '\x1c' if no introns present
+4. Intron start position
+5. Intron end position
 6. '+' or '-' indicating which strand is sense strand
 7. POS
 8. QNAME
@@ -91,7 +91,12 @@ lines are output.
 16. QUAL
 ... + optional fields
 
-Format 4 (splice_sam); tab-delimited output tuple columns:
+Format 4 (sam_clip_ties) output only for ties in alignment score when
+    no introns are overlapped -- these alignments are almost invariably
+    soft-clipped
+[SAME AS SAM FIELDS; see SAM format specification]
+
+Format 5 (sam); tab-delimited output tuple columns:
 Standard 11-column SAM output except fields are in different order, and the
 first field corresponds to sample label. (Fields are reordered to facilitate
 partitioning by sample name/RNAME and sorting by POS.) Each line corresponds to
@@ -116,7 +121,7 @@ XS:A:'+' or '-' depending on which strand is the sense strand
 
 Introns (intron_bed), insertions/deletions (indel_bed)
 
-Format 5; tab-delimited output tuple columns:
+Format 6; tab-delimited output tuple columns:
 1. 'I', 'D', or 'N' for insertion, deletion, or intron line
 2. Sample label
 3. Number string representing RNAME
@@ -424,7 +429,7 @@ class BowtieOutputThread(threading.Thread):
                         qual_to_write = rest_of_line[9][::-1]
                     else:
                         seq_to_write = rest_of_line[8]
-                        qual_to_write = rest_of_line[0]
+                        qual_to_write = rest_of_line[9]
                     _output_line_count \
                         += alignment_printer.print_unmapped_read(
                                                         qname,
@@ -436,7 +441,7 @@ class BowtieOutputThread(threading.Thread):
                     multiread_to_report(
                         corrected_multiread,
                         alignment_count_to_report=alignment_count_to_report,
-                        seed=0,
+                        seed=seed,
                         non_deterministic=non_deterministic,
                         tie_margin=self.tie_margin
                     )
@@ -569,7 +574,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         16. QUAL
         ... + optional fields
 
-        Format 4 (sam); tab-delimited output tuple columns:
+        Format 4 (sam_clip_ties) output only for ties in alignment score when
+        no introns are overlapped -- these alignments are almost invariably
+        soft-clipped
+        [SAME AS SAM FIELDS; see SAM format specification]
+
+        Format 5 (sam); tab-delimited output tuple columns:
         Standard 11-column SAM output except fields are in different order, and
         the first field corresponds to sample label. (Fields are reordered to
         facilitate partitioning by sample name/RNAME and sorting by POS.) Each

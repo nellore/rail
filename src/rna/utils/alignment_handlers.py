@@ -222,9 +222,11 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
     if weights:
         # Choose primary alignment using weights
         assert len(multiread) == len(weights)
+        print >>sys.stderr, weights
+        print >>sys.stderr, multiread
         total = sum(weights)
-        weight_bounds = [0.] + running_sum([float(weight) / total
-                                            for weight in weights])
+        weight_bounds = [0.] + list(running_sum([float(weight) / total
+                                            for weight in weights]))
         primary_index = bisect.bisect_left(weight_bounds, random.random()) - 1
         prereturn_multiread = (
                 [(multiread[primary_index][0],
@@ -292,15 +294,27 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
             reports_to_retain_count = alignment_count_to_report - len(
                     prereturn_multiread[1]
                 )
+        assert reports_to_retain_count > 0
         scores = [[int(token[5:]) for token in alignment[::-1]
                    if token[:5] == 'AS:i:'][0] 
                    for alignment in prereturn_multiread[0]]
         try:
             min_permitted_score = scores[reports_to_retain_count - 1]
+        except IndexError:
+            # k value larger than number of alignments; retain all
+            reports_to_return = prereturn_multiread[0]
+        else:
             left_count = scores[:reports_to_retain_count - 1].count(
                                 min_permitted_score
                             )
             min_permitted_count = scores.count(min_permitted_score)
+            if min_permitted_score == scores[0] \
+                and not (int(prereturn_multiread[0][0][1]) & 256):
+                '''Primary alignment has been decided, but its score is the
+                same as the min score. Exclude it from random sample of 
+                min scores.'''
+                left_count -= 1
+                min_permitted_count -= 1
             reports_to_return = prereturn_multiread[0][
                                     :reports_to_retain_count - left_count - 1
                                 ] + \
@@ -309,9 +323,6 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
                     reports_to_retain_count - left_count - 1
                     + min_permitted_count
                 ], left_count + 1)
-        except IndexError:
-            # k value larger than number of alignments; retain all
-            reports_to_return = prereturn_multiread[0]
     else:
         # Report all
         reports_to_return = prereturn_multiread[0]
@@ -508,8 +519,8 @@ class AlignmentPrinter:
     """ Encapsulates methods for printing alignment information. """
 
     def __init__(self, manifest_object, reference_index,
-                 output_stream=sys.stdout,
-                 bin_size=5000, exon_ivals=False, exon_diffs=True):
+                 output_stream=sys.stdout, bin_size=5000, exon_ivals=False,
+                 exon_diffs=True):
         """
             manifest_object: object of type LabelsAndIndices; see manifest.py
             reference_index: object of type BowtieIndexReference; see bowtie.py
@@ -556,8 +567,8 @@ class AlignmentPrinter:
 
             Alignments
             
-            (sam_ties) output only for ties in alignment score (which are
-                within some tie margin as decided by multiread_to_report);
+            (sam_intron_ties) output only for ties in alignment score (which
+                are within some tie margin as decided by multiread_to_report);
             this is the first element of multiread_reports_and_ties
             tab-delimited output tuple columns:
             Standard SAM output except fields are in different order -- and the
@@ -569,20 +580,26 @@ class AlignmentPrinter:
             2. Sample index
             3. Number string representing RNAME; see BowtieIndexReference class
                 in bowtie_index for conversion information
-            4. Intron start position or '\x1c' if no introns present
-            5. Intron end position or '\x1c' if no introns present
+            4. Intron start position
+            5. Intron end position
             6. '+' or '-' indicating which strand is sense strand
-            7. POS
-            8. QNAME
-            9. FLAG
-            10. MAPQ
-            11. CIGAR
-            12. RNEXT
-            13. PNEXT
-            14. TLEN
-            15. SEQ
-            16. QUAL
+            7. '-' to ensure that the line follows all intron lines
+            8. POS
+            9. QNAME
+            10. FLAG
+            11. MAPQ
+            12. CIGAR
+            13. RNEXT
+            14. PNEXT
+            15. TLEN
+            16. SEQ
+            17. QUAL
             ... + optional fields
+
+            (sam_clip_ties) output only for ties in alignment score when
+            no introns are overlapped -- these alignments are almost invariably
+            soft-clipped
+            [SAME AS SAM FIELDS; see SAM format specification]
 
             (sam) output only for alignments to be reported (first element
             of tuple multiread_reports_and_ties)
@@ -675,6 +692,10 @@ class AlignmentPrinter:
         output_line_count = 0
         try:
             primary_flag = int(multiread_reports_and_ties[0][0][1])
+        except IndexError:
+            # No alignments to report
+            pass
+        else:
             sample_index = self.manifest_object.label_to_index[
                     multiread_reports_and_ties[0][0][0].rpartition('\x1d')[2]
                 ]
@@ -785,11 +806,13 @@ class AlignmentPrinter:
                                 alignment[0].partition('\x1d')[0],
                                 alignment[1]) + alignment[4:]
                         )
-        except IndexError:
-            # No alignments to report
-            pass
         try:
-            for alignment in multiread_reports_and_ties[1]:
+            ties_to_print = multiread_reports_and_ties[1]
+        except IndexError:
+            # No ties
+            pass
+        else:
+            for alignment in ties_to_print:
                 qname = alignment[0]
                 flag = alignment[1]
                 cigar = alignment[5]
@@ -800,21 +823,25 @@ class AlignmentPrinter:
                             if field[:5] == 'MD:Z:'][0][5:]
                 insertions, deletions, introns, exons \
                     = indels_introns_and_exons(cigar, md, pos, seq)
-                sense = [field[5:] for field in alignment
+                try:
+                    sense = [field[5:] for field in alignment
                             if field[:5] == 'XS:A:'][0]
-                for intron in introns:
-                    print >>self.output_stream, (
-                                    ('sam_ties\tN\t%s\t%s\t%d\t%d\t%s'
-                                     '\t%012d\t%s\t%s') % (
-                            self.manifest_object.label_to_index[
-                                qname.rpartition('\x1d')[2]
-                            ], self.reference_index.rname_to_string[rname],
-                            intron[0], intron[1], sense, pos,
-                            qname.partition('\x1d')[0], flag
-                        )) + '\t'.join(alignment[4:])
-        except IndexError:
-            # No ties
-            pass
+                except IndexError:
+                    pass
+                if introns:
+                    for intron in introns:
+                        print >>self.output_stream, (
+                                        ('sam_intron_ties\tN\t%s\t%s\t'
+                                         '%012d\t%012d\t%s\t_'
+                                         '\t%012d\t%s\t%s\t') % (
+                                self.manifest_object.label_to_index[
+                                    qname.rpartition('\x1d')[2]
+                                ], self.reference_index.rname_to_string[rname],
+                                intron[0], intron[1], sense, pos,
+                                qname, flag)) + '\t'.join(alignment[4:])
+                else:
+                    print >>self.output_stream, '\t'.join(('sam_clip_ties',) \
+                                                            + alignment)
         return output_line_count
 
 if __name__ == '__main__':

@@ -321,9 +321,10 @@ class RailRnaErrors:
                 self._aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
                 self._aws_secret_access_key \
                     = os.environ['AWS_SECRET_ACCESS_KEY']
-                to_search = None
             except KeyError:
                 to_search = '[default]'
+            else:
+                to_search = None
             try:
                 # Also grab region
                 self.region = os.environ['AWS_DEFAULT_REGION']
@@ -1893,7 +1894,7 @@ class RailRnaAlign:
         algo_parser.add_argument(
             '--tie-margin', type=int, required=False,
             metavar='<int>',
-            default=6,
+            default=0,
             help=('allowed score difference per 100 bases among ties in '
                   'max score. For example, 150 and 144 are tied alignment '
                   'scores for a 100-bp read when --tie-margin is 6')
@@ -2118,7 +2119,7 @@ class RailRnaAlign:
                 'output' : 'cointron_fasta',
                 'taskx' : 8,
                 'part' : 'k1,4',
-                'keys' : 4,
+                'keys' : 7,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
@@ -2155,14 +2156,57 @@ class RailRnaAlign:
                     ]
             },
             {
+                'name' : 'Associate spliced alignments with intron coverages',
+                'run' : 'intron_coverage.py --bowtie-idx {0}'.format(
+                                                        base.bowtie1_idx
+                                                    ),
+                'inputs' : [path_join(elastic, 'realign_reads', 'intron_bed'),
+                            path_join(elastic, 'realign_reads',
+                                               'sam_intron_ties')],
+                'output' : 'intron_coverage',
+                'taskx' : 4,
+                'part' : 'k1,6',
+                'keys' : 7,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (1073741824) # 1 GB
+                    ]
+            },
+            {
+                'name' : 'Finalize primary alignments of spliced reads',
+                'run' : ('break_ties.py --exon-differentials '
+                            '--bowtie-idx {0} --partition-length {1} '
+                            '--manifest {2} -- {3}').format(
+                                    base.bowtie1_idx,
+                                    base.genome_partition_length,
+                                    base.manifest,
+                                    base.bowtie2_args
+                                ),
+                'inputs' : ['intron_coverage',
+                            path_join(elastic, 'realign_reads',
+                                                'sam_clip_ties')],
+                'output' : 'break_ties',
+                'taskx' : 4,
+                'part' : 'k1,1',
+                'keys' : 1,
+                'multiple_outputs' : True,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (1073741824) # 1 GB
+                    ]
+            },
+            {
                 'name' : 'Merge exon differentials at same genomic positions',
                 'run' : 'sum.py {0}'.format(
                                         keep_alive
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'exon_diff'),
-                            path_join(elastic, 'realign_reads', 'exon_diff')],
+                            path_join(elastic, 'realign_reads', 'exon_diff'),
+                            path_join(elastic, 'break_ties', 'exon_diff')],
                 'output' : 'collapse',
-                'taskx' : 8,
+                'taskx' : 4,
                 'part' : 'k1,3',
                 'keys' : 3,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
@@ -2177,7 +2221,7 @@ class RailRnaAlign:
                          '--partition-stats').format(base.bowtie1_idx),
                 'inputs' : ['collapse'],
                 'output' : 'precoverage',
-                'taskx' : 8,
+                'taskx' : 4,
                 'part' : 'k1,2',
                 'keys' : 3,
                 'multiple_outputs' : True,
@@ -2238,8 +2282,10 @@ class RailRnaAlign:
                 'run' : 'bed_pre.py',
                 'inputs' : [path_join(elastic, 'realign_reads', 'indel_bed'),
                             path_join(elastic, 'align_reads', 'indel_bed'),
+                            path_join(elastic, 'break_ties', 'indel_bed'),
                             path_join(elastic, 'realign_reads', 'intron_bed'),
-                            path_join(elastic, 'align_reads', 'intron_bed')],
+                            path_join(elastic, 'align_reads', 'intron_bed'),
+                            path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
                 'taskx' : 8,
                 'part' : 'k1,6',
@@ -2293,7 +2339,8 @@ class RailRnaAlign:
                                         else ''
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'sam'),
-                            path_join(elastic, 'realign_reads', 'sam')],
+                            path_join(elastic, 'realign_reads', 'sam'),
+                            path_join(elastic, 'break_ties', 'sam')],
                 'output' : 'bam',
                 'taskx' : 1,
                 'part' : ('k1,1' if base.do_not_output_bam_by_chr else 'k1,2'),

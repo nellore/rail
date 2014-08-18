@@ -138,23 +138,19 @@ class S3Ansible:
         cleaned_url = clean_url(path)
         # Extract filename from URL; everything after terminal slash
         filename = cleaned_url[::-1][:cleaned_url[::-1].index('/')][::-1]
-        try:
-            aws_command = ' '.join([self.aws, '--profile', self.profile, 
-                                        's3 ls', cleaned_url])
-            aws_process = subprocess.Popen(aws_command,
-                                            stdout=subprocess.PIPE,
-                                            stderr=self._osdevnull,
-                                            shell=True,
-                                            bufsize=-1)
-            filename_size = len(filename)
-            for line in aws_process.stdout:
-                line = line.strip()
-                if line[:3] != 'PRE' and filename == line[-filename_size:]:
-                    return True
-            return False
-        except subprocess.CalledProcessError:
-            # No bucket
-            return False
+        aws_command = ' '.join([self.aws, '--profile', self.profile, 
+                                's3 ls', cleaned_url])
+        aws_process = subprocess.Popen(aws_command,
+                                        stdout=subprocess.PIPE,
+                                        stderr=self._osdevnull,
+                                        shell=True,
+                                        bufsize=-1)
+        filename_size = len(filename)
+        for line in aws_process.stdout:
+            line = line.strip()
+            if line[:3] != 'PRE' and filename == line[-filename_size:]:
+                return True
+        return False
 
     def is_dir(self, path):
         """ Checks whether a directory on S3 exists.
@@ -171,9 +167,9 @@ class S3Ansible:
         while cleaned_url[-2] == '/':
             cleaned_url = cleaned_url[:-1]
         # Now the URL has just one trailing slash
-        try:
-            aws_command = ' '.join([self.aws, '--profile', self.profile, 
+        aws_command = ' '.join([self.aws, '--profile', self.profile, 
                                         's3 ls', cleaned_url])
+        try:
             list_out = \
                 subprocess.check_output(aws_command,
                                          stderr=self._osdevnull,
@@ -499,9 +495,10 @@ class AWSAnsible(object):
                 self._aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
                 self._aws_secret_access_key \
                     = os.environ['AWS_SECRET_ACCESS_KEY']
-                to_search = None
             except KeyError:
                 to_search = '[default]'
+            else:
+                to_search = None
             try:
                 # Also grab region
                 self.region = os.environ['AWS_DEFAULT_REGION']
