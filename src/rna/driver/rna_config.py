@@ -1277,6 +1277,8 @@ class RailRnaElastic:
                 'Name' : 'Configure Hadoop',
                 'ScriptBootstrapAction' : {
                     'Args' : [
+                        '-c',
+                        'fs.s3n.multipart.uploads.enabled=true',
                         '-y',
                         'yarn.nodemanager.pmem-check-enabled=false',
                         '-y',
