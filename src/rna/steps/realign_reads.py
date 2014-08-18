@@ -405,6 +405,14 @@ class BowtieOutputThread(threading.Thread):
                 rname = rest_of_line[1]
                 if rname in rnames:
                     multiread.append(list((qname,) + rest_of_line))
+            qname_count += 1
+            if qname_count == qname_total:
+                tokens = self.rname_stream.readline().strip().split('\x1e')
+                try:
+                    qname_total, rnames = int(tokens[0]), set(tokens[1:])
+                    qname_count = 0
+                except ValueError:
+                    done = True
             if flag & 4:
                 # Write only the SAM output if the read was unmapped
                 _output_line_count += alignment_printer.print_unmapped_read(
@@ -446,14 +454,6 @@ class BowtieOutputThread(threading.Thread):
                         tie_margin=self.tie_margin
                     )
                 )
-            qname_count += 1
-            if qname_count == qname_total:
-                tokens = self.rname_stream.readline().strip().split('\x1e')
-                try:
-                    qname_total, rnames = int(tokens[0]), set(tokens[1:])
-                    qname_count = 0
-                except ValueError:
-                    done = True
         self.return_set.add(0)
 
 def handle_temporary_directory(archive, temp_dir_path):

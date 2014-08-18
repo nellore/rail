@@ -222,8 +222,6 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
     if weights:
         # Choose primary alignment using weights
         assert len(multiread) == len(weights)
-        print >>sys.stderr, weights
-        print >>sys.stderr, multiread
         total = sum(weights)
         weight_bounds = [0.] + list(running_sum([float(weight) / total
                                             for weight in weights]))
@@ -326,6 +324,10 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
     else:
         # Report all
         reports_to_return = prereturn_multiread[0]
+    '''Change MAPQ to 255 to make results consistent; TODO: CHECK unique.h in
+    BT2 code to compute MAPQ consistent with that for genome alignments.'''
+    reports_to_return = [alignment[:4] + ('255',) + alignment[5:] 
+                            for alignment in reports_to_return]
     if prereturn_multiread_count == 1:
         NH_field = 'NH:i:' + str(len(reports_to_return))
         return ([(alignment + (NH_field,) if 'NH:i:' not in alignment[-1]

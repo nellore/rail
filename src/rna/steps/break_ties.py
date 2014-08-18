@@ -176,12 +176,24 @@ start_time = time.time()
 for (qname,), xpartition in xstream(sys.stdin, 1):
     alignments = [(qname,) + alignment for alignment in xpartition]
     input_line_count += len(alignments)
-    # Separate into alignments that overlap introns and alignments that don't 
-    max_length = max(alignments, key=len)
+    # Separate into alignments that overlap introns and alignments that don't
     clipped_alignments = [alignment for alignment in alignments
                             if alignment[-1][:5] != 'XC:i:']
-    if clipped_alignments:
-        # Choose from among clipped alignments with highest score
+    intron_alignments = [alignment for alignment in alignments
+                            if alignment[-1][:5] == 'XC:i:']
+    # Compute min coverage for alignments that are the same
+    alignment_dict = defaultdict(int)
+    for alignment in intron_alignments:
+        if alignment[:-1] not in alignment_dict:
+            alignment_dict[alignment[:-1]] = int(alignment[-1][5:])
+        else:
+            alignment_dict[alignment[:-1]] \
+                = min(alignment_dict[alignment[:-1]],
+                        int(alignment[-1][5:]))
+    weights = alignment_dict.values()
+    if clipped_alignments and not any(weights):
+        '''Choose from among clipped alignments with highest score if there
+        is no intron alignment among ties with a coverage > 0.'''
         alignments_and_scores = [(alignment, [int(tokens[5:])
                                                 for tokens in alignment
                                                 if tokens[:5] == 'AS:i:'][0])
@@ -202,13 +214,9 @@ for (qname,), xpartition in xstream(sys.stdin, 1):
                     )
                 )
     else:
-        '''All alignments overlap introns; compute min coverage for alignments
-        that are the same.'''
-        alignment_dict = defaultdict(int)
-        for alignment in alignments:
-            alignment_dict[alignment[:-1]] \
-                = min(alignment_dict[alignment[:-1]], int(alignment[-1][5:]))
-        weights = list(alignment_dict.values())
+        '''Choose from among alignments crossing introns if at least one
+        of them has a coverage > 1.'''
+        weights = alignment_dict.values()
         if not any(weights): weights = [1] * len(weights)
         output_line_count += alignment_printer.print_alignment_data(
                     multiread_to_report(
