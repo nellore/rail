@@ -565,9 +565,11 @@ class RailRnaLocal:
                 base.manifest = os.path.join(base.manifest_dir, 'MANIFEST')
                 ansible.get(manifest_url, destination=base.manifest)
             files_to_check = []
+            base.sample_count = 0
             with open(base.manifest) as manifest_stream:
                 for line in manifest_stream:
                     if line[0] == '#' or not line.strip(): continue
+                    base.sample_count += 1
                     tokens = line.strip().split('\t')
                     check_sample_label = True
                     if len(tokens) == 5:
@@ -871,9 +873,11 @@ class RailRnaElastic:
             else:
                 manifest = manifest_url.to_url()
             files_to_check = []
+            base.sample_count = 0
             with open(manifest) as manifest_stream:
                 for line in manifest_stream:
                     if line[0] == '#' or not line.strip(): continue
+                    base.sample_count += 1
                     tokens = line.strip().split('\t')
                     check_sample_label = True
                     if len(tokens) == 5:
@@ -2145,7 +2149,8 @@ class RailRnaAlign:
                             'cointron_fasta',
                             path_join(elastic, 'align_reads', 'fasta')],
                 'output' : 'realign_reads',
-                'taskx' : 8,
+                # Ensure that a single reducer isn't assigned too much fasta
+                'taskx' : max(base.sample_count / 10, 8),
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
