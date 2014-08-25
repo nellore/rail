@@ -7,9 +7,10 @@ Precedes Rail-RNA-bed_pre, Rail-RNA-bam
 Decides primary alignments from among ties according to the read coverage
 (by "uniquely" aligning reads) of the minimally covered intron overlapped
 by the alignment. The rules are as follows.
--If soft-clipped alignments that do not overlap introns are among the tied
-alignments of a read, the tie is broken uniformly at random from among the 
-soft-clipped alignments with the highest score.
+-Break ties first by selecting from among alignments that overlap the fewest
+introns.
+-If no introns are overlapped in this group of alignments, break ties
+uniformly at random
 -Otherwise, each alignment is weighted by the read coverage of its minimally
 covered intron, and the tie is broken at random according to these weights.
 Examples: if all weights are 0, the tie is broken uniformly at random. If there
@@ -176,24 +177,15 @@ start_time = time.time()
 for (qname,), xpartition in xstream(sys.stdin, 1):
     alignments = [(qname,) + alignment for alignment in xpartition]
     input_line_count += len(alignments)
-    # Separate into alignments that overlap introns and alignments that don't
-    clipped_alignments = [alignment for alignment in alignments
-                            if alignment[-1][:5] != 'XC:i:']
-    intron_alignments = [alignment for alignment in alignments
-                            if alignment[-1][:5] == 'XC:i:']
-    # Compute min coverage for alignments that are the same
-    alignment_dict = defaultdict(int)
-    for alignment in intron_alignments:
-        if alignment[:-1] not in alignment_dict:
-            alignment_dict[alignment[:-1]] = int(alignment[-1][5:])
-        else:
-            alignment_dict[alignment[:-1]] \
-                = min(alignment_dict[alignment[:-1]],
-                        int(alignment[-1][5:]))
-    weights = alignment_dict.values()
-    if clipped_alignments and not any(weights):
-        '''Choose from among clipped alignments with highest score if there
-        is no intron alignment among ties with a coverage > 0.'''
+    '''Separate into alignments that overlap the fewest introns and
+    alignments that don't.'''
+    intron_counts = [alignment[5].count('N') for alignment in alignments]
+    min_intron_count = min(intron_counts)
+    if not min_intron_count:
+        '''There is at least one alignment that overlaps no introns; report 
+        an alignment with highest score at random.'''
+        clipped_alignments = [alignments[i] for i in xrange(len(intron_counts))
+                                if intron_counts[i] == 0]
         alignments_and_scores = [(alignment, [int(tokens[5:])
                                                 for tokens in alignment
                                                 if tokens[:5] == 'AS:i:'][0])
@@ -214,8 +206,18 @@ for (qname,), xpartition in xstream(sys.stdin, 1):
                     )
                 )
     else:
-        '''Choose from among alignments crossing introns if at least one
-        of them has a coverage > 1.'''
+        # All alignments overlap introns
+        intron_alignments = [alignments[i] for i in xrange(len(intron_counts))
+                                if intron_counts[i] == min_intron_count]
+        # Compute min coverage for alignments that are the same
+        alignment_dict = defaultdict(int)
+        for alignment in intron_alignments:
+            if alignment[:-1] not in alignment_dict:
+                alignment_dict[alignment[:-1]] = int(alignment[-1][5:])
+            else:
+                alignment_dict[alignment[:-1]] \
+                    = min(alignment_dict[alignment[:-1]],
+                            int(alignment[-1][5:]))
         weights = alignment_dict.values()
         if not any(weights): weights = [1] * len(weights)
         output_line_count += alignment_printer.print_alignment_data(

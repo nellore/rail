@@ -1490,8 +1490,8 @@ class RailRnaAlign:
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6,
-        normalize_percentile=0.75,
+        transcriptome_bowtie2_args='-k 30', count_multiplier=6, tie_margin=6,
+        normalize_percentile=0.75, very_replicable=False,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', assembly='hg19',
         s3_ansible=None):
@@ -1734,7 +1734,16 @@ class RailRnaAlign:
                                                     tie_margin
                                                 ))
         base.tie_margin = tie_margin
+        if not (isinstance(count_multiplier, int) and
+                    count_multiplier >= 0):
+            base.errors.append('Count multiplier (--count-multiplier) must '
+                               'be an integer >= 0, but '
+                               '{0} was entered.'.format(
+                                                    count_multiplier
+                                                ))
+        base.count_multiplier = count_multiplier
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
+        base.very_replicable = very_replicable
         base.output_sam = output_sam
         base.bam_basename = bam_basename
         base.bed_basename = bed_basename
@@ -1818,7 +1827,7 @@ class RailRnaAlign:
         algo_parser.add_argument(
             '--max-readlet-size', type=int, required=False,
             metavar='<int>',
-            default=23,
+            default=25,
             help='max size of read segment to align when searching for introns'
         )
         algo_parser.add_argument(
@@ -1882,12 +1891,17 @@ class RailRnaAlign:
         )
         algo_parser.add_argument(
             '--genome-bowtie1-args', type=str, required=False,
-            default='-v 0 -a -m 20',
+            default='-v 0 -a -m 30',
             help=SUPPRESS
         )
         algo_parser.add_argument(
             '--transcriptome-bowtie2-args', type=str, required=False,
             default='-k 30',
+            help=SUPPRESS
+        )
+        algo_parser.add_argument(
+            '--count-multiplier', type=int, required=False,
+            default=15,
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -1904,6 +1918,14 @@ class RailRnaAlign:
             help=('allowed score difference per 100 bases among ties in '
                   'max score. For example, 150 and 144 are tied alignment '
                   'scores for a 100-bp read when --tie-margin is 6')
+        )
+        algo_parser.add_argument(
+            '--very-replicable', action='store_const', const=True,
+            default=False,
+            help=('ensures that results are exactly replicable across '
+                  'modes, core counts, and cluster sizes; otherwise, '
+                  'replicability is nearly exact unless same configuration '
+                  'is used')
         )
         output_parser.add_argument(
             '--do-not-output-bam-by-chr', action='store_const', const=True,
@@ -2137,14 +2159,19 @@ class RailRnaAlign:
                 'run' : ('realign_reads.py --original-idx={0} '
                          '--bowtie2-exe={1} --partition-length={2} '
                          '--exon-differentials --tie-margin {3} '
-                         '--manifest={4} {5} {6} -- {7}').format(
+                         '--count-multiplier {4} --manifest={5} '
+                         '{6} {7} {8} -- {9}').format(
                                         base.bowtie1_idx,
                                         base.bowtie2_exe,
                                         base.genome_partition_length,
                                         base.tie_margin,
+                                        base.count_multiplier,
                                         manifest,
                                         verbose,
                                         keep_alive,
+                                        '--replicable'
+                                        if base.very_replicable
+                                        else '',
                                         base.bowtie2_args
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
@@ -2187,7 +2214,7 @@ class RailRnaAlign:
                             '--manifest {2} -- {3}').format(
                                     base.bowtie1_idx,
                                     base.genome_partition_length,
-                                    base.manifest,
+                                    manifest,
                                     base.bowtie2_args
                                 ),
                 'inputs' : ['intron_coverage',
@@ -2291,7 +2318,6 @@ class RailRnaAlign:
                             path_join(elastic, 'align_reads', 'indel_bed'),
                             path_join(elastic, 'break_ties', 'indel_bed'),
                             path_join(elastic, 'realign_reads', 'intron_bed'),
-                            path_join(elastic, 'align_reads', 'intron_bed'),
                             path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
                 'taskx' : 8,
@@ -2568,8 +2594,9 @@ class RailRnaLocalAlignJson:
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6,
-        normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+        transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
+        tie_margin=6, very_replicable=False, normalize_percentile=0.75,
+        do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', num_processes=1, keep_intermediates=False):
         base = RailRnaErrors(manifest, output_dir, 
@@ -2597,9 +2624,11 @@ class RailRnaLocalAlignJson:
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
+            count_multiplier=count_multiplier,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
+            very_replicable=very_replicable,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
@@ -2640,7 +2669,8 @@ class RailRnaElasticAlignJson:
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6,
+        transcriptome_bowtie2_args='-k 30', count_multiplier=6,
+        tie_margin=6, very_replicable=False,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', log_uri=None, ami_version='3.1.0',
@@ -2694,9 +2724,11 @@ class RailRnaElasticAlignJson:
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
+            count_multiplier=count_multiplier,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
+            very_replicable=very_replicable,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename,
@@ -2759,8 +2791,9 @@ class RailRnaLocalAllJson:
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6,
-        normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+        count_multiplier=6, transcriptome_bowtie2_args='-k 30', tie_margin=6,
+        very_replicable=False, normalize_percentile=0.75,
+        do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, keep_intermediates=False, check_manifest=True):
         base = RailRnaErrors(manifest, output_dir, 
@@ -2790,8 +2823,10 @@ class RailRnaLocalAllJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            count_multiplier=count_multiplier,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
+            very_replicable=very_replicable,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
@@ -2840,8 +2875,8 @@ class RailRnaElasticAllJson:
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6,
-        normalize_percentile=0.75,
+        transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=6,
+        normalize_percentile=0.75, very_replicable=False,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         log_uri=None, ami_version='3.1.0',
@@ -2898,8 +2933,10 @@ class RailRnaElasticAllJson:
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            count_multiplier=count_multiplier,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
+            very_replicable=very_replicable,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename,

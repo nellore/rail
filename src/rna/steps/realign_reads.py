@@ -311,10 +311,12 @@ class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
     def __init__(self, input_stream, rname_stream, reference_index,
-        manifest_object, bowtie2_args, return_set, tie_margin=6,
+        manifest_object, return_set, tie_margin=6,
         output_stream=sys.stdout, exon_differentials=True,
         exon_intervals=False, stranded=False,
-        verbose=False, bin_size=10000, report_multiplier=1.2):
+        verbose=False, bin_size=10000, report_multiplier=1.2,
+        alignment_count_to_report=1, seed=0, non_deterministic=False,
+        replicable=False):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -347,6 +349,11 @@ class BowtieOutputThread(threading.Thread):
             report_multiplier: if verbose is True, the line number of an
                 alignment written to stderr increases exponentially with base
                 report_multiplier.
+            alignment_count_to_report: number of alignments to be reported
+            seed: bowtie2's --seed parameter,
+            non_deterministic: bowtie2's --non-deterministic parameter
+            replicable: True iff -a parameter has been invoked, and results
+                are to be made replicable
         """
         super(BowtieOutputThread, self).__init__()
         self.daemon = True
@@ -362,8 +369,11 @@ class BowtieOutputThread(threading.Thread):
         self.exon_intervals = exon_intervals
         self.manifest_object = manifest_object
         self.return_set = return_set
-        self.bowtie2_args = bowtie2_args
         self.tie_margin = tie_margin
+        self.alignment_count_to_report = alignment_count_to_report
+        self.seed = seed
+        self.non_deterministic = non_deterministic
+        self.replicable = replicable
 
     def run(self):
         """ Prints SAM, exon_ivals, exon_diffs, and introns.
@@ -383,8 +393,6 @@ class BowtieOutputThread(threading.Thread):
                 exon_ivals=self.exon_intervals,
                 exon_diffs=self.exon_differentials
             )
-        alignment_count_to_report, seed, non_deterministic \
-            = bowtie.parsed_bowtie_args(self.bowtie2_args)
         qname_count = 0
         tokens = self.rname_stream.readline().strip().split('\x1e')
         qname_total, rnames = int(tokens[0]), set(tokens[1:])
@@ -403,7 +411,7 @@ class BowtieOutputThread(threading.Thread):
                     next_report_line = max(int(next_report_line
                         * self.report_multiplier), next_report_line + 1)
                 rname = rest_of_line[1]
-                if rname in rnames:
+                if self.replicable or rname in rnames:
                     multiread.append(list((qname,) + rest_of_line))
             qname_count += 1
             if qname_count == qname_total:
@@ -448,9 +456,10 @@ class BowtieOutputThread(threading.Thread):
                 _output_line_count += alignment_printer.print_alignment_data(
                     multiread_to_report(
                         corrected_multiread,
-                        alignment_count_to_report=alignment_count_to_report,
-                        seed=seed,
-                        non_deterministic=non_deterministic,
+                        alignment_count_to_report=\
+                        self.alignment_count_to_report,
+                        seed=self.seed,
+                        non_deterministic=self.non_deterministic,
                         tie_margin=self.tie_margin
                     )
                 )
@@ -481,7 +490,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     temp_dir_path=tempfile.mkdtemp(), bin_size=10000,
     manifest_file='manifest', verbose=False, exon_differentials=True,
     exon_intervals=False, stranded=False, report_multiplier=1.2,
-    keep_alive=False):
+    keep_alive=False, replicable=False, count_multiplier=6):
     """ Runs Rail-RNA-realign.
 
         Uses Bowtie index including only sequences framing introns to align
@@ -660,6 +669,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             exponentially with base report_multiplier.
         keep_alive: prints reporter:status:alive messages to stderr to keep EMR 
             task alive.
+        replicable: use bowtie2's -a to ensure results are reproducible.
+        count_multiplier: the bowtie2 -k parameter used is
+            alignment_count_to_report * count_multiplier, where
+            alignment_count_to_report is the user-specified bowtie2 -k arg.
+            Ignored if replicable = True.
 
         No return value.
     """
@@ -680,10 +694,14 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                         )
         manifest_object = manifest.LabelsAndIndices(manifest_file)
         output_file = os.path.join(temp_dir_path, 'out.sam')
+        alignment_count_to_report, seed, non_deterministic \
+            = bowtie.parsed_bowtie_args(bowtie2_args)
         bowtie_command = ' ' .join([bowtie2_exe,
             bowtie2_args if bowtie2_args is not None else '',
-            '--local -t -a --no-hd --mm -x', bowtie2_index_base, '--12',
-            reads_file, '-S', output_file])
+            '{0} --local -t --no-hd --mm -x'.format(
+            ('-a' if replicable else 
+            ('-k {0}'.format(alignment_count_to_report * count_multiplier)))),
+            bowtie2_index_base, '--12', reads_file, '-S', output_file])
         print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
         bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
             stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
@@ -704,7 +722,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                 open(rnames_file),
                                 reference_index=reference_index,
                                 manifest_object=manifest_object,
-                                bowtie2_args=bowtie2_args,
                                 return_set=return_set,
                                 exon_differentials=exon_differentials, 
                                 exon_intervals=exon_intervals, 
@@ -714,6 +731,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                 stranded=stranded,
                                 report_multiplier=report_multiplier,
                                 tie_margin=tie_margin,
+                                alignment_count_to_report=\
+                                alignment_count_to_report,
+                                seed=seed,
+                                non_deterministic=non_deterministic,
+                                replicable=replicable
                             )
             output_thread.start()
             # Join thread to pause execution in main thread
@@ -761,6 +783,15 @@ if __name__ == '__main__':
         const=True,
         default=False, 
         help='Print exon intervals')
+    parser.add_argument('--replicable', action='store_const',
+        const=True,
+        default=False, 
+        help='Ensures that results are completely reproducible across '
+             'different cluster configurations.')
+    parser.add_argument('--count-multiplier', type=int, required=False,
+        default=4,
+        help='User-specified bowtie2 -k parameter is multiplied by this '
+             'value when enumerating alignments')
     parser.add_argument(\
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
@@ -807,7 +838,7 @@ if __name__ == '__main__' and not args.test:
     archive = os.path.join(args.archive,
         str(os.getpid())) if args.archive is not None else None
     # Handle temporary directory if CTRL+C'd
-    atexit.register(handle_temporary_directory, archive, temp_dir_path)
+    #atexit.register(handle_temporary_directory, archive, temp_dir_path)
     if args.verbose:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path
@@ -824,7 +855,9 @@ if __name__ == '__main__' and not args.test:
         stranded=args.stranded,
         report_multiplier=args.report_multiplier,
         tie_margin=args.tie_margin,
-        keep_alive=args.keep_alive)
+        keep_alive=args.keep_alive,
+        replicable=args.replicable,
+        count_multiplier=args.count_multiplier)
 
 elif __name__ == '__main__':
     # Test units

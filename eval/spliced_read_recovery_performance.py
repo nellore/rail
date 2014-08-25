@@ -91,7 +91,8 @@ def dummy_md_index(cigar):
 
 def write_read_introns_from_bed_stream(bed_stream, output_stream,
                                         intron_counts,
-                                        generous=False):
+                                        generous=False,
+                                        instance=False):
     """ Writes output that maps QNAMES to introns overlapped.
 
         bed_stream: input stream containing lines of a BED file characterizing
@@ -147,13 +148,21 @@ def write_read_introns_from_bed_stream(bed_stream, output_stream,
             introns = [chrom + ';'.join(['']
                                 + [str(bound) for bound in intron])
                              for intron in sorted(list(introns))]
-            print >>output_stream, '%s\t%s\tt' \
-                % (name[:-2] if generous else name, '\t'.join(introns))
+            if instance:
+                print >>output_stream, '%s\t%s\tt' \
+                    % (name[:-2] if generous else name, '\t'.join(introns))
+            else:
+                for intron in introns:
+                    print >>output_stream, '%s;%s\t%s\tt' \
+                    % (name[:-2] if generous else name,
+                       intron,
+                       intron)
         for intron in introns:
             intron_counts[intron] += 1
 
 def write_read_introns_from_sam_stream(sam_stream, output_stream,
-                                        retrieved_intron_counts):
+                                        retrieved_intron_counts,
+                                        instance=False):
     """ Writes output that maps QNAMES to introns overlapped.
 
         sam_stream: where to find retrieved alignments in SAM form
@@ -187,9 +196,16 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream,
             introns = [rname 
                           + ';'.join([''] + [str(bound) for bound in intron])
                           for intron in sorted(list(introns))]
-            for intron in introns:
-                retrieved_intron_counts[intron] += 1
-            print >>output_stream, '%s\t%s\tr' % (name, '\t'.join(introns))
+            if instance:
+                for intron in introns:
+                    retrieved_intron_counts[intron] += 1
+                print >>output_stream, '%s\t%s\tr' % (name, '\t'.join(introns))
+            else:
+                for intron in introns:
+                    retrieved_intron_counts[intron] += 1
+                    print >>output_stream, '%s;%s\t%s\tr' % (name,
+                                                             intron,
+                                                             intron)
         except IndexError:
             print >>sys.stderr, ('Error found on line: ' + line)
             raise
@@ -248,6 +264,11 @@ if __name__ == '__main__':
             formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('-t', '--true-introns-bed', type=str, required=True, 
         help='Full path of BED file containing true introns')
+    parser.add_argument('-r', '--read-instance', action='store_const',
+        const=True, default=False,
+        help='Defines an instance as an alignment that overlaps introns '
+             'rather than the event that an intron is overlapped by '
+             'an alignment')
     parser.add_argument('-g', '--generous', action='store_const', const=True,
         default=False,
         help='TopHat/STAR cut off /1s and /2s from read names, even in '
@@ -271,9 +292,11 @@ if __name__ == '__main__':
             write_read_introns_from_bed_stream(true_introns_bed_stream,
                                                 combined_stream,
                                                 intron_counts,
-                                                generous=args.generous)
+                                                generous=args.generous,
+                                                instance=args.read_instance)
         write_read_introns_from_sam_stream(sys.stdin, combined_stream,
-                                            retrieved_intron_counts)
+                                            retrieved_intron_counts,
+                                            instance=args.read_instance)
     import subprocess
     sorted_combined_file = os.path.join(temp_dir_path, 'combined.sorted.temp')
     subprocess.check_call(' '.join(['sort -k1,1', combined_file, 

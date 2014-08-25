@@ -271,7 +271,9 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
                 '''Nothing to report yet; all alignments to be reported are
                 among ties.'''
                 return ([], [(alignment[0], str(int(alignment[1]) | 256))
-                                + alignment[2:] for alignment, _
+                                + alignment[2:] + ('NH:i:%d'
+                                    % alignment_count_to_report,)
+                                for alignment, _
                                 in alignments_and_scores[:tie_count]])
             prereturn_multiread = (
                 [(alignment[0], str(int(alignment[1]) | 256))
@@ -311,7 +313,7 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
                 '''Primary alignment has been decided, but its score is the
                 same as the min score. Exclude it from random sample of 
                 min scores.'''
-                left_count -= 1
+                left_count -= 1 
                 min_permitted_count -= 1
             reports_to_return = prereturn_multiread[0][
                                     :reports_to_retain_count - left_count - 1
@@ -330,7 +332,8 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
                             for alignment in reports_to_return]
     if prereturn_multiread_count == 1:
         NH_field = 'NH:i:' + str(len(reports_to_return))
-        return ([(alignment + (NH_field,) if 'NH:i:' not in alignment[-1]
+        return ([(alignment + (NH_field,) if 'NH:i:' not in
+                  [alignment[-1][:5], alignment[-2][:5]]
                   else alignment) for alignment in reports_to_return],)
     # prereturn_multiread's length is 2, meaning there are ties
     NH_field = 'NH:i:'+ str(len(reports_to_return)

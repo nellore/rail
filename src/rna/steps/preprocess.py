@@ -377,11 +377,12 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             nucs_read += len(seq)
                         if nucs_read > nucleotides_per_input:
                             break
-                if push_url.is_s3:
+                if push_url.is_s3 or push_url.is_hdfs:
                     print >>sys.stderr, 'Pushing "%s" to "%s" ...' % (
                                                             output_file,
                                                             push_url.to_url()
                                                         )
+                    print >>sys.stderr, 'reporter:status:alive'
                     mover.put(output_file, push_url.plus(os.path.basename(
                                                                 output_file
                                                             )))

@@ -216,23 +216,30 @@ def separated_introns(introns, separation):
         Two introns overlapped by readlet alignments may be on the same 
         strand but much further apart than a read can overlap. This function
         splits up alignments if successive introns are separated by more
-        than separation.
+        than separation. IT ALSO ENUMERATES ALL INTRON COMBINATIONS WITH AND
+        WITHOUT 'EDGE' INTRONS.
 
         alignment_collections: list of intron tuples (pos, end pos)
         separation: number of bases at or above which introns should be
             separated
 
-        Return value: List of lists of introns.
+        Return value: list of lists of introns.
     """
     if not introns: return []
     introns.sort()
-    to_return = [[introns[0]]]
+    prereturn = [[introns[0]]]
     for i in xrange(1, len(introns)):
-        if introns[i][0] - to_return[-1][-1][1] >= separation:
-            to_return.append([introns[i]])
+        if introns[i][0] - prereturn[-1][-1][1] >= separation:
+            prereturn.append([introns[i]])
         else:
-            to_return[-1].append(introns[i])
-    return to_return
+            prereturn[-1].append(introns[i])
+    to_return = set()
+    for intron_combo in prereturn:
+        to_return.add(tuple(intron_combo[:]))
+        to_return.add(tuple(intron_combo[1:-1]))
+        to_return.add(tuple(intron_combo[1:]))
+        to_return.add(tuple(intron_combo[:-1]))
+    return [list(intron_combo) for intron_combo in to_return if intron_combo]
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
