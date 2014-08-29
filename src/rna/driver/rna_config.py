@@ -2156,17 +2156,10 @@ class RailRnaAlign:
             },
             {
                 'name' : 'Align reads to transcriptome elements',
-                'run' : ('realign_reads.py --original-idx={0} '
-                         '--bowtie2-exe={1} --partition-length={2} '
-                         '--exon-differentials --tie-margin {3} '
-                         '--count-multiplier {4} --manifest={5} '
-                         '{6} {7} {8} -- {9}').format(
-                                        base.bowtie1_idx,
+                'run' : ('realign_reads.py --bowtie2-exe={0} '
+                         '--count-multiplier {1} {2} {3} {4} -- {5}').format(
                                         base.bowtie2_exe,
-                                        base.genome_partition_length,
-                                        base.tie_margin,
                                         base.count_multiplier,
-                                        manifest,
                                         verbose,
                                         keep_alive,
                                         '--replicable'
@@ -2182,6 +2175,31 @@ class RailRnaAlign:
                 'taskx' : max(base.sample_count / 10, 8),
                 'part' : 'k1,1',
                 'keys' : 1,
+                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
+                'extra_args' : [
+                        'mapreduce.input.fileinputformat.split.maxsize=%d'
+                            % (1073741824) # 1 GB
+                    ]
+            },
+            {
+                'name' : 'Collect and compare read alignments',
+                'run' : ('compare_alignments.py --bowtie-idx={0} '
+                         '--partition-length={1} --exon-differentials '
+                         '--tie-margin {2} --manifest={3} {4} -- {5}').format(
+                                        base.bowtie1_idx,
+                                        base.genome_partition_length,
+                                        base.tie_margin,
+                                        manifest,
+                                        verbose,
+                                        base.bowtie2_args
+                                    ),
+                'inputs' : [path_join(elastic, 'align_reads', 'postponed_sam'),
+                            'realign_reads'],
+                'output' : 'compare_alignments',
+                # Ensure that a single reducer isn't assigned too much fasta
+                'taskx' : 4,
+                'part' : 'k1,1',
+                'keys' : 1,
                 'multiple_outputs' : True,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
@@ -2194,8 +2212,9 @@ class RailRnaAlign:
                 'run' : 'intron_coverage.py --bowtie-idx {0}'.format(
                                                         base.bowtie1_idx
                                                     ),
-                'inputs' : [path_join(elastic, 'realign_reads', 'intron_bed'),
-                            path_join(elastic, 'realign_reads',
+                'inputs' : [path_join(elastic, 'compare_alignments',
+                                                    'intron_bed'),
+                            path_join(elastic, 'compare_alignments',
                                                'sam_intron_ties')],
                 'output' : 'intron_coverage',
                 'taskx' : 4,
@@ -2218,8 +2237,8 @@ class RailRnaAlign:
                                     base.bowtie2_args
                                 ),
                 'inputs' : ['intron_coverage',
-                            path_join(elastic, 'realign_reads',
-                                                'sam_clip_ties')],
+                            path_join(elastic, 'compare_alignments',
+                                               'sam_clip_ties')],
                 'output' : 'break_ties',
                 'taskx' : 4,
                 'part' : 'k1,1',
@@ -2237,7 +2256,8 @@ class RailRnaAlign:
                                         keep_alive
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'exon_diff'),
-                            path_join(elastic, 'realign_reads', 'exon_diff'),
+                            path_join(elastic, 'compare_alignments',
+                                               'exon_diff'),
                             path_join(elastic, 'break_ties', 'exon_diff')],
                 'output' : 'collapse',
                 'taskx' : 4,
@@ -2314,10 +2334,12 @@ class RailRnaAlign:
             {
                 'name' : 'Aggregate intron and indel results by sample',
                 'run' : 'bed_pre.py',
-                'inputs' : [path_join(elastic, 'realign_reads', 'indel_bed'),
+                'inputs' : [path_join(elastic, 'compare_alignments',
+                                               'indel_bed'),
                             path_join(elastic, 'align_reads', 'indel_bed'),
                             path_join(elastic, 'break_ties', 'indel_bed'),
-                            path_join(elastic, 'realign_reads', 'intron_bed'),
+                            path_join(elastic, 'compare_alignments',
+                                               'intron_bed'),
                             path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
                 'taskx' : 8,
@@ -2372,7 +2394,7 @@ class RailRnaAlign:
                                         else ''
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'sam'),
-                            path_join(elastic, 'realign_reads', 'sam'),
+                            path_join(elastic, 'compare_alignments', 'sam'),
                             path_join(elastic, 'break_ties', 'sam')],
                 'output' : 'bam',
                 'taskx' : 1,

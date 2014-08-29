@@ -105,14 +105,8 @@ Tab-delimited output tuple columns (readletize)
 3. The sample label if field 1 is the read sequence's reversed complement;
     else '\x1c'
 
-Tab-delimited tuple columns (fasta):
-1. Read sequence
-2. '\x1c' + FASTA reference name including '>'. The following format is used:
-    original RNAME + '\x1d' + start position of sequence + '\x1d\x1d\x1d' + 'p'
-    if derived from primary alignment to genome; 's' if derived from secondary
-    alignment to genome; 'i' if derived from cointron search (does not apply
-    here)
-3. FASTA sequence
+Tab-delimited tuple columns (postponed_sam):
+Standard 11+ -column raw SAM output
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -140,7 +134,7 @@ import bowtie
 import bowtie_index
 import partition
 import manifest
-from alignment_handlers import AlignmentPrinter, reference_from_seq
+from alignment_handlers import AlignmentPrinter
 from dooplicity.tools import xstream
 
 # Initialize global variables for tracking number of input/output lines
@@ -321,42 +315,13 @@ class BowtieOutputThread(threading.Thread):
                         'readletize\t%s\t\x1c\t%s' \
                         % (reversed_complement_seq, sample_label)
                 _output_line_count += 1
-                '''Write fasta lines for realignment; they will be combined
-                with fasta lines for transcriptome elements obtained in later
-                reduce step.'''
+                '''Write SAM output for comparison/combination with spliced
+                alignments obtained later.'''
                 if flag & 4: continue
-                new_pos, ref = reference_from_seq(
-                                            cigar,
-                                            seq,
-                                            self.reference_index,
-                                            rname,
-                                            pos
-                                        )
-                print >>self.output_stream, \
-                    'fasta\t%s\t\x1c>%s\x1d%d\x1d\x1d\x1dp\t%s' \
-                    % (seq, rname, new_pos, ref)
-                try:
-                    for alignment in multiread[1:]:
-                        if int(alignment[1]) & 16:
-                            # Reverse-complement
-                            reversed_complement_seq \
-                                    = alignment[9][::-1].translate(
-                                    _reversed_complement_translation_table
-                                )
-                        new_pos, ref = reference_from_seq(
-                                            alignment[5],
-                                            reversed_complement_seq,
-                                            self.reference_index,
-                                            alignment[2],
-                                            int(alignment[3])
-                                        )
-                        print >>self.output_stream, \
-                            'fasta\t%s\t\x1c>%s\x1d%d\x1d\x1d\x1ds\t%s' \
-                            % (alignment[9], alignment[2], new_pos, ref)
-                        _output_line_count += 1
-                except IndexError:
-                    # No secondary alignments
-                    pass
+                for alignment in multiread:
+                    print >>self.output_stream, \
+                        '\t'.join(('postponed_sam',) + alignment)
+                    _output_line_count += 1
             else:
                 # Report all end-to-end alignments
                 NH_field = 'NH:i:%d' % len(multiread)
@@ -477,15 +442,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         3. The sample label if field 1 is the read sequence's reversed
             complement; else '\x1c'
 
-        Tab-delimited tuple columns (fasta):
-        1. Read sequence
-        2. '\x1c' + FASTA reference name including '>'. The following format is
-            used:
-            original RNAME + '\x1d' + start position of sequence
-            + '\x1d\x1d\x1d' + 'p' if derived from primary alignment to genome;
-            's' if derived from secondary alignment to genome; 'i' if derived
-            from cointron search
-        3. FASTA sequence
+        Tab-delimited tuple columns (postponed_sam):
+        Standard 11+ -column raw SAM output
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 

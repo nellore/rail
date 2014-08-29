@@ -75,9 +75,13 @@ def multiread_with_introns(multiread, stranded=False):
         offset = int(alignment[3]) - 1
         cigar = re.split(r'([MINDS])', alignment[5])[:-1]
         flag = int(alignment[1])
-        if not tokens[-1]:
+        if not tokens[-1] or len(tokens) == 1:
             # No introns can be found
-            pos = offset + int(tokens[1])
+            try:
+                pos = offset + int(tokens[1])
+            except IndexError:
+                # Ordinary alignment without augmented RNAME
+                pos = offset + 1
             rname = tokens[0]
             '''Use second field in each element of new_multiread to store which
             items should be tested to find whether two alignments are

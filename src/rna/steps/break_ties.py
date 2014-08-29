@@ -10,7 +10,7 @@ by the alignment. The rules are as follows.
 -Break ties first by selecting from among alignments that overlap the fewest
 introns.
 -If no introns are overlapped in this group of alignments, break ties
-uniformly at random
+uniformly at random from among max scores
 -Otherwise, each alignment is weighted by the read coverage of its minimally
 covered intron, and the tie is broken at random according to these weights.
 Examples: if all weights are 0, the tie is broken uniformly at random. If there

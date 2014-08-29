@@ -653,7 +653,9 @@ def selected_readlet_alignments_by_clustering(readlets):
     if len(largest_maximum_cliques) == 1:
         return largest_maximum_cliques[0]
     else:
-        return []
+        '''Alignment is in general too repetitive; postpone treatment until
+        a nice systematic way to handle this case is found.'''
+        pass
 
 def pairwise(iterable):
     """ Iterates through iterable in pairs.

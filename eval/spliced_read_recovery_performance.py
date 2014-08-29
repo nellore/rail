@@ -284,7 +284,8 @@ if __name__ == '__main__':
     import tempfile
     import atexit
     temp_dir_path = tempfile.mkdtemp()
-    atexit.register(remove_temporary_directories, [temp_dir_path])
+    print >>sys.stderr, temp_dir_path
+    #atexit.register(remove_temporary_directories, [temp_dir_path])
     combined_file = os.path.join(temp_dir_path, 'combined.temp')
     intron_counts, retrieved_intron_counts = defaultdict(int), defaultdict(int)
     with open(combined_file, 'w') as combined_stream:
