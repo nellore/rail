@@ -2168,7 +2168,7 @@ class RailRnaAlign:
                                         base.bowtie2_args
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
-                            'cointron_fasta')],
+                            'cointron_fasta'],
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
                 'taskx' : max(base.sample_count / 10, 8),
