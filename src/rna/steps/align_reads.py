@@ -284,9 +284,12 @@ class BowtieOutputThread(threading.Thread):
             multiread.append((qname,) + rest_of_line)
             for rest_of_line in xpartition:
                 multiread.append((qname,) + rest_of_line)
-            if flag & 4 or 'S' in cigar:
-                '''Write primary/soft-clipped primary alignments for
-                realignment in a reduce step. First, get exons from alignment
+            if flag & 4 or 'S' in cigar or 'XM:i:0' not in multiread[0]:
+                '''Write unmapped/soft-clipped primary alignments for
+                realignment in a reduce step. Also write any inexact matches;
+                Rail tries to explain reads with as few introns as possible,
+                and there's no chance an exact match will overlap introns
+                according to this principle. First, get exons from alignment
                 for assignment of read to a bin.'''
                 seq = seq.upper()
                 if flag & 16:
