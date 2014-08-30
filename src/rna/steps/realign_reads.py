@@ -55,6 +55,7 @@ import tempfile
 import atexit
 import subprocess
 import time
+import string
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -66,6 +67,7 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.tools import xstream
+from alignment_handlers import AlignmentPrinter
 import partition
 import manifest
 import bowtie
@@ -242,6 +244,8 @@ class BowtieOutputThread(threading.Thread):
             No return value.
         """
         global _output_line_count
+        reversed_complement_translation_table \
+            = string.maketrans('ATCG', 'TAGC')
         next_report_line = 0
         i = 0
         qname_count = 0
@@ -250,8 +254,7 @@ class BowtieOutputThread(threading.Thread):
         done = False
         for (qname,), xpartition in xstream(self.input_stream, 1):
             assert not done
-            # While labeled multiread, this list may end up simply a uniread
-            multiread = []
+            printed = False
             for rest_of_line in xpartition:
                 i += 1
                 flag = int(rest_of_line[0])
@@ -265,7 +268,25 @@ class BowtieOutputThread(threading.Thread):
                 if self.replicable or rname in rnames:
                     print >>self.output_stream, \
                         '\t'.join((qname,) + rest_of_line)
+                    printed = True
                     _output_line_count += 1
+            if flag & 4 or not printed:
+                # This is an unmapped read
+                if flag & 16:
+                    seq_to_write = rest_of_line[8][::-1].translate(
+                                    reversed_complement_translation_table
+                                )
+                    qual_to_write = rest_of_line[9][::-1]
+                else:
+                    seq_to_write = rest_of_line[8]
+                    qual_to_write = rest_of_line[9]
+                # Write only essentials; handle "formal" writing in next step
+                print >>self.output_stream, ('%s\t4\t\x1c\t\x1c\t\x1c\t\x1c'
+                                             '\t\x1c\t\x1c\t\x1c\t%s\t%s') % (
+                                                    qname,
+                                                    seq_to_write,
+                                                    qual_to_write
+                                                )
             qname_count += 1
             if qname_count == qname_total:
                 tokens = self.rname_stream.readline().strip().split('\x1e')

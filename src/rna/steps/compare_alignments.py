@@ -214,15 +214,18 @@ if __name__ == '__main__':
     start_time = time.time()
     for (qname,), xpartition in xstream(sys.stdin, 1):
         # While labeled multiread, this list may end up simply a uniread
-        multiread = [(qname,) + rest_of_line for rest_of_line in xpartition]
-        input_line_count += len(multiread)
-        flag = int(multiread[0][1])
-        if flag & 4:
+        initial_multiread \
+            = [(qname,) + rest_of_line for rest_of_line in xpartition]
+        input_line_count += len(initial_multiread)
+        multiread = [alignment for alignment in initial_multiread
+                        if not (int(alignment[1]) & 4)]
+        flag = int(initial_multiread[0][1])
+        if not multiread:
             # Write only the SAM output if the read was unmapped
             output_line_count += alignment_printer.print_unmapped_read(
                                                     qname,
-                                                    multiread[0][9],
-                                                    multiread[0][10]
+                                                    initial_multiread[0][9],
+                                                    initial_multiread[0][10]
                                                 )
         else:
             '''Correct positions to match original reference's, correct
@@ -235,13 +238,13 @@ if __name__ == '__main__':
                 '''This is effectively an unmapped read; write
                 corresponding SAM output.'''
                 if flag & 16:
-                    seq_to_write = multiread[0][9][::-1].translate(
+                    seq_to_write = initial_multiread[0][9][::-1].translate(
                                     reversed_complement_translation_table
                                 )
-                    qual_to_write = multiread[0][10][::-1]
+                    qual_to_write = initial_multiread[0][10][::-1]
                 else:
-                    seq_to_write = multiread[0][9]
-                    qual_to_write = multiread[0][10]
+                    seq_to_write = initial_multiread[0][9]
+                    qual_to_write = initial_multiread[0][10]
                 output_line_count \
                     += alignment_printer.print_unmapped_read(
                                                     qname,
