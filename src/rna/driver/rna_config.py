@@ -1307,10 +1307,10 @@ class RailRnaElastic:
                         % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-m',
                         'mapreduce.map.java.opts=-Xmx%dm'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10 * 2),
                         '-m',
                         'mapreduce.reduce.java.opts=-Xmx%dm'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10 * 2),
                         '-m',
                         'mapreduce.map.cpu.vcores=1',
                         '-m',
