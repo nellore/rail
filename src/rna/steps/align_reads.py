@@ -336,8 +336,7 @@ class BowtieOutputThread(threading.Thread):
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 
     manifest_file='manifest', bowtie2_args=None, bin_size=10000, verbose=False,
-    exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
-    keep_alive=False):
+    exon_differentials=True, exon_intervals=False, report_multiplier=1.2):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -470,8 +469,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         report_multiplier: if verbose is True, the line number of an alignment
             or read written to stderr increases exponentially with base
             report_multiplier.
-        keep_alive: True iff "reporter:status:alive" should be printed to
-            stderr periodically to keep job alive while Bowtie is running
 
         No return value.
     """
@@ -494,16 +491,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     # Because of problems with buffering, write output to file
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
         stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
-    if keep_alive:
-        period_start = time.time()
-        while bowtie_process.poll() is None:
-            now = time.time()
-            if now - period_start > 60:
-                print >>sys.stderr, '\nreporter:status:alive'
-                period_start = now
-            time.sleep(.2)
-    else:
-        bowtie_process.wait()
+    bowtie_process.wait()
     if os.path.exists(output_file):
         return_set = set()
         output_thread = BowtieOutputThread(
@@ -578,6 +566,12 @@ if __name__ == '__main__':
     different command-line arguments can be passed to it for unit tests.'''
     args = parser.parse_args(argv[1:])
 
+    # Start keep_alive thread immediately
+    if args.keep_alive:
+        from dooplicity.tools import KeepAlive
+        keep_alive_thread = KeepAlive(sys.stderr)
+        keep_alive_thread.start()
+
 if __name__ == '__main__' and not args.test:
     start_time = time.time()
     go(bowtie2_exe=args.bowtie2_exe,
@@ -589,8 +583,7 @@ if __name__ == '__main__' and not args.test:
         bin_size=args.partition_length,
         exon_differentials=args.exon_differentials,
         exon_intervals=args.exon_intervals,
-        report_multiplier=args.report_multiplier,
-        keep_alive=args.keep_alive)
+        report_multiplier=args.report_multiplier)
     print >>sys.stderr, 'DONE with align_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)

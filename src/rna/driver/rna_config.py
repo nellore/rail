@@ -2016,8 +2016,10 @@ class RailRnaAlign:
                 'keys' : 1,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
+                        'mapreduce.reduce.shuffle.input.buffer.percent=0.5',
+                        'mapreduce.reduce.shuffle.merge.percent=0.5',
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2177,7 +2179,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*2) # 2 GB
                     ]
             },
             {

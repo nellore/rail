@@ -381,8 +381,7 @@ class BowtieOutputThread(threading.Thread):
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base='genome', bowtie2_args='', verbose=False,
-    report_multiplier=1.2, keep_alive=False, stranded=False, fudge=5,
-    score_min=60):
+    report_multiplier=1.2, stranded=False, fudge=5, score_min=60):
     """ Runs Rail-RNA-cointron_enum 
 
         Alignment script for MapReduce pipelines that wraps Bowtie. Finds
@@ -426,9 +425,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             stderr.
         report_multiplier: if verbose is True, the line number of an alignment
             written to stderr increases exponentially with base
-            report_multiplier.    
-        keep_alive: True iff "reporter:status:alive" should be printed to
-            stderr periodically to keep job alive while Bowtie is running
+            report_multiplier.
         stranded: True iff input reads are strand-specific; this affects
             whether an output partition has a terminal '+' or '-' indicating
             the sense strand. Further, if stranded is True, an alignment is
@@ -459,16 +456,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     # Because of problems with buffering, write output to file
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
         stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
-    if keep_alive:
-        period_start = time.time()
-        while bowtie_process.poll() is None:
-            now = time.time()
-            if now - period_start > 60:
-                print >>sys.stderr, '\nreporter:status:alive'
-                period_start = now
-            time.sleep(.2)
-    else:
-        bowtie_process.wait()
+    bowtie_process.wait()
     if os.path.exists(output_file):
         return_set = set()
         output_thread = BowtieOutputThread(
@@ -539,6 +527,12 @@ if __name__ == '__main__':
     different command-line arguments can be passed to it for unit tests.'''
     args = parser.parse_args(argv[1:])
 
+    # Start keep_alive thread immediately
+    if args.keep_alive:
+        from dooplicity.tools import KeepAlive
+        keep_alive_thread = KeepAlive(sys.stderr)
+        keep_alive_thread.start()
+    
 if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
@@ -547,7 +541,6 @@ if __name__ == '__main__' and not args.test:
         bowtie2_args=bowtie2_args, 
         verbose=args.verbose,
         report_multiplier=args.report_multiplier,
-        keep_alive=args.keep_alive,
         stranded=args.stranded,
         fudge=args.fudge,
         score_min=args.score_min)

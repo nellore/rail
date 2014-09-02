@@ -94,6 +94,12 @@ filemover.add_args(parser)
 bowtie.add_args(parser)
 args = parser.parse_args()
 
+# Start keep_alive thread immediately
+if args.keep_alive:
+    from dooplicity.tools import KeepAlive
+    keep_alive_thread = KeepAlive(sys.stderr)
+    keep_alive_thread.start()
+
 if args.keep_alive:
     class BedTobigwigThread(threading.Thread):
         """ Wrapper class for bedtobigwig that permits polling for completion.
@@ -134,6 +140,7 @@ start_time = time.time()
 import tempfile
 from tempdel import remove_temporary_directories
 import atexit
+
 temp_dir_path = tempfile.mkdtemp()
 # Clean up after script
 atexit.register(remove_temporary_directories, [temp_dir_path])
@@ -221,29 +228,17 @@ for (sample_label,), xpartition in xstream(sys.stdin, 1):
     if args.verbose:
         print >>sys.stderr, 'Writing bigwig with command %s .' \
             % ' '.join(bigwig_command)
-    if args.keep_alive:
-        bedtobigwig_thread = BedTobigwigThread(bigwig_command)
-        bedtobigwig_thread.start()
-        while bedtobigwig_thread.is_alive():
-            print >>sys.stderr, 'reporter:status:alive'
-            sys.stderr.flush()
-            time.sleep(5)
-        if bedtobigwig_thread.bedtobigwig_process:
-            raise RuntimeError('bedgraphtobigwig process failed w/ '
-                               'exitlevel %d.'
-                                % bedtobigwig_thread.bedtobigwig_process)
-    else:
-        bedtobigwig_process = subprocess.Popen(
-                                    bigwig_command,
-                                    stderr=sys.stderr,
-                                    stdout=sys.stderr,
-                                    bufsize=-1
-                                )
-        bedtobigwig_process.wait()
-        if bedtobigwig_process.returncode:
-            raise RuntimeError('bedgraphtobigwig process failed w/ '
-                               'exitlevel %d.'
-                                % bedtobigwig_process.returncode)
+    bedtobigwig_process = subprocess.Popen(
+                                bigwig_command,
+                                stderr=sys.stderr,
+                                stdout=sys.stderr,
+                                bufsize=-1
+                            )
+    bedtobigwig_process.wait()
+    if bedtobigwig_process.returncode:
+        raise RuntimeError('bedgraphtobigwig process failed w/ '
+                           'exitlevel %d.'
+                            % bedtobigwig_process.returncode)
     if args.verbose:
         print >>sys.stderr, ('bedTobigwig command '
                              + ' '.join([args.bigwig_exe, bed_filename,

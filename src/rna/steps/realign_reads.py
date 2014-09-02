@@ -161,7 +161,7 @@ def input_files_from_input_stream(input_stream,
     return final_fasta_filename, reads_filename, rname_filename
 
 def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
-        index_basename, keep_alive=False):
+        index_basename):
     """ Creates Bowtie2 index from reference fasta.
 
         bowtie2_build_exe: Path to Bowtie2
@@ -170,36 +170,15 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
 
         Return value: return value of bowtie-build process
     """
-    if args.keep_alive:
-        class BowtieBuildThread(threading.Thread):
-            """ Wrapper class for bowtie-build to poll for completion.
-            """
-            def __init__(self, command_list):
-                super(BowtieBuildThread, self).__init__()
-                self.command_list = command_list
-                self.bowtie_build_process = None
-            def run(self):
-                self.bowtie_build_process = subprocess.Popen(self.command_list,
-                                                stdout=sys.stderr).wait()
-        bowtie_build_thread = BowtieBuildThread([args.bowtie2_build_exe,
-                                                    fasta_file,
-                                                    index_basename])
-        bowtie_build_thread.start()
-        while bowtie_build_thread.is_alive():
-            print >>sys.stderr, 'reporter:status:alive'
-            sys.stderr.flush()
-            time.sleep(5)
-        return bowtie_build_thread.bowtie_build_process
-    else:
-        bowtie_build_process = subprocess.Popen(
-                                    [args.bowtie2_build_exe,
-                                        fasta_file,
-                                        index_basename],
-                                    stderr=sys.stderr,
-                                    stdout=sys.stderr
-                                )
-        bowtie_build_process.wait()
-        return bowtie_build_process.returncode
+    bowtie_build_process = subprocess.Popen(
+                                [args.bowtie2_build_exe,
+                                    fasta_file,
+                                    index_basename],
+                                stderr=sys.stderr,
+                                stdout=sys.stderr
+                            )
+    bowtie_build_process.wait()
+    return bowtie_build_process.returncode
 
 class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
@@ -315,7 +294,7 @@ def handle_temporary_directory(archive, temp_dir_path):
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_build_exe='bowtie2-build', bowtie2_args=None,
     temp_dir_path=tempfile.mkdtemp(), verbose=False, report_multiplier=1.2,
-    keep_alive=False, replicable=False, count_multiplier=6):
+    replicable=False, count_multiplier=6):
     """ Runs Rail-RNA-realign.
 
         Uses Bowtie index including only sequences framing introns to align
@@ -376,8 +355,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         report_multiplier: if verbose is True, the line number of an alignment,
             read, or first readlet of a read written to stderr increases
             exponentially with base report_multiplier.
-        keep_alive: prints reporter:status:alive messages to stderr to keep EMR 
-            task alive.
         replicable: use bowtie2's -a to ensure results are reproducible.
         count_multiplier: the bowtie2 -k parameter used is
             alignment_count_to_report * count_multiplier, where
@@ -410,16 +387,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
         bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
             stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
-        if keep_alive:
-            period_start = time.time()
-            while bowtie_process.poll() is None:
-                now = time.time()
-                if now - period_start > 60:
-                    print >>sys.stderr, '\nreporter:status:alive'
-                    period_start = now
-                time.sleep(.2)
-        else:
-            bowtie_process.wait()
+        bowtie_process.wait()
         if os.path.exists(output_file):
             return_set = set()
             output_thread = BowtieOutputThread(
@@ -504,6 +472,12 @@ if __name__ == '__main__':
     different command-line arguments can be passed to it for unit tests.'''
     args = parser.parse_args(argv[1:])
 
+    # Start keep_alive thread immediately
+    if args.keep_alive:
+        from dooplicity.tools import KeepAlive
+        keep_alive_thread = KeepAlive(sys.stderr)
+        keep_alive_thread.start()
+
 if __name__ == '__main__' and not args.test:
     temp_dir_path = tempfile.mkdtemp()
     archive = os.path.join(args.archive,
@@ -519,7 +493,6 @@ if __name__ == '__main__' and not args.test:
         temp_dir_path=temp_dir_path,
         verbose=args.verbose, 
         report_multiplier=args.report_multiplier,
-        keep_alive=args.keep_alive,
         replicable=args.replicable,
         count_multiplier=args.count_multiplier)
 elif __name__ == '__main__':
