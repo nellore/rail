@@ -26,3 +26,6 @@ fn=`basename $2`
 
 s3cmd get $2 ./
 tar xzvf $fn
+cd index
+ln -s genome.4.bt2 genome.4.ebwt
+cd ..

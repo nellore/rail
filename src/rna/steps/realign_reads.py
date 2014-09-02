@@ -205,8 +205,7 @@ class BowtieOutputThread(threading.Thread):
     """ Processes Bowtie alignments, emitting tuples for exons and introns. """
     
     def __init__(self, input_stream, rname_stream, return_set,
-        output_stream=sys.stdout, verbose=False, report_multiplier=1.2,
-        replicable=False):
+        output_stream=sys.stdout, verbose=False, report_multiplier=1.2):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -223,8 +222,6 @@ class BowtieOutputThread(threading.Thread):
             report_multiplier: if verbose is True, the line number of an
                 alignment written to stderr increases exponentially with base
                 report_multiplier.
-            replicable: True iff -a parameter has been invoked, and results
-                are to be made replicable
         """
         super(BowtieOutputThread, self).__init__()
         self.daemon = True
@@ -234,7 +231,6 @@ class BowtieOutputThread(threading.Thread):
         self.output_stream = output_stream
         self.verbose = verbose
         self.report_multiplier = report_multiplier
-        self.replicable = replicable
 
     def run(self):
         """ Prints raw SAM output.
@@ -265,7 +261,7 @@ class BowtieOutputThread(threading.Thread):
                     next_report_line = max(int(next_report_line
                         * self.report_multiplier), next_report_line + 1)
                 rname = rest_of_line[1]
-                if self.replicable or rname in rnames:
+                if rname in rnames:
                     print >>self.output_stream, \
                         '\t'.join((qname,) + rest_of_line)
                     printed = True
@@ -432,8 +428,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                 return_set=return_set,
                                 verbose=verbose, 
                                 output_stream=output_stream,
-                                report_multiplier=report_multiplier,
-                                replicable=replicable
+                                report_multiplier=report_multiplier
                             )
             output_thread.start()
             # Join thread to pause execution in main thread

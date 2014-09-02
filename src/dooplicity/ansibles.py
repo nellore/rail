@@ -296,6 +296,12 @@ class S3Ansible:
         """
         cleaned_prefix = clean_url(prefix)
         bucket = bucket_from_url(cleaned_prefix)
+        # Create bucket if it doesn't exist
+        try:
+            self.create_bucket(bucket)
+        except subprocess.CalledProcessError:
+            # Bucket exists
+            pass
         # Remove bucket name from prefix
         prefix = cleaned_prefix[cleaned_prefix[6:].index('/')+7:]
         aws_command = ' '.join([self.aws, '--profile', self.profile,
