@@ -1304,7 +1304,7 @@ class RailRnaElastic:
                         % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-m',
                         'mapreduce.reduce.memory.mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10 * 2),
                         '-m',
                         'mapreduce.map.java.opts=-Xmx%dm'
                         % (base.nodemanager_mem / base.max_tasks * 8 / 10 * 2),
@@ -1995,7 +1995,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2016,10 +2016,8 @@ class RailRnaAlign:
                 'keys' : 1,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.reduce.shuffle.input.buffer.percent=0.5',
-                        'mapreduce.reduce.shuffle.merge.percent=0.5',
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*4) # 4 GB
+                            % (1073741824*4), # 4 GB
                     ]
             },
             {
@@ -2050,7 +2048,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2068,7 +2066,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2085,7 +2083,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2106,7 +2104,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2136,7 +2134,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2153,7 +2151,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2173,13 +2171,13 @@ class RailRnaAlign:
                             'cointron_fasta'],
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'taskx' : max(base.sample_count / 10, 8),
+                'taskx' : 4,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*2) # 2 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2205,7 +2203,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2224,7 +2222,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2248,7 +2246,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2267,7 +2265,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2283,7 +2281,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2308,7 +2306,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2329,7 +2327,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
@@ -2349,7 +2347,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*4) # 4 GB
                     ]
             },
             {
