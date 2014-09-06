@@ -19,6 +19,11 @@ reduced_redundancy = False
 send_chunk = 4096
 EOF
 
+mkdir -p $1
+cd $1
+
+fn=`basename $2`
+
 cat >.download_idx.py <<EOF
 """
 .download_idx.py
@@ -38,7 +43,7 @@ filename = sys.argv[2]
 while tries < 5:
     break_outer_loop = False
     s3cmd_process \
-        = subprocess.Popen(['s3cmd', 'get', url], stdout=sys.stderr)
+        = subprocess.Popen(['s3cmd', 'get', url, './', '-f'])
     time.sleep(1)
     last_check_time = time.time()
     try:
@@ -70,11 +75,18 @@ while tries < 5:
         time.sleep(2)
         continue
     if s3cmd_process.poll() > 0:
-        raise RuntimeError(('Non-zero exitlevel %d from s3cmd '
-                            'get command')  % (
-                                            s3cmd_process.poll()
-                                        ))
-                                    
+        if tries > 5:
+            raise RuntimeError(('Non-zero exitlevel %d from s3cmd '
+                                'get command')  % (
+                                                s3cmd_process.poll()
+                                            ))
+        else:
+            try:
+                os.remove(filename)
+            except OSError:
+                pass
+            time.sleep(2)
+            continue                       
     break
 if tries > 5:
     raise RuntimeError('Could not download file from S3 '
@@ -82,13 +94,8 @@ if tries > 5:
 
 EOF
 
-mkdir -p $1
-cd $1
-
-fn=`basename $2`
-
-pypy .download_idx.py $2 $fn || { echo 'index download failed' ; exit 1; }
-tar xzvf $fn
+python .download_idx.py $2 $fn
+tar xvzf $fn
 cd index
 ln -s genome.4.bt2 genome.4.ebwt
 cd ..

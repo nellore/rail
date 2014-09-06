@@ -722,7 +722,7 @@ class RailRnaElastic:
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-        log_uri=None, ami_version='3.1.1',
+        log_uri=None, ami_version='3.2.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -1123,7 +1123,7 @@ class RailRnaElastic:
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='3.1.1',
+            default='3.2.0',
             help='Amazon Linux AMI to use'
         )
         elastic_parser.add_argument('--visible-to-all-users',
@@ -2528,7 +2528,7 @@ class RailRnaElasticPreprocessJson:
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        log_uri=None, ami_version='3.1.1',
+        log_uri=None, ami_version='3.2.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2700,7 +2700,7 @@ class RailRnaElasticAlignJson:
         tie_margin=6, very_replicable=False,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
-        bed_basename='', log_uri=None, ami_version='3.1.1',
+        bed_basename='', log_uri=None, ami_version='3.2.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2906,7 +2906,7 @@ class RailRnaElasticAllJson:
         normalize_percentile=0.75, very_replicable=False,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
-        log_uri=None, ami_version='3.1.1',
+        log_uri=None, ami_version='3.2.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
