@@ -184,8 +184,10 @@ class FileMover:
                     continue
                 if s3cmd_process.poll() > 0:
                     raise RuntimeError('Non-zero exitlevel %d from s3cmd '
-                                       'get command "%s"' % (exit_level,
-                                                                command))
+                                       'get command "%s"' % (
+                                                        s3cmd_process.poll(),
+                                                        command)
+                                                    )
                 break
             if tries > 5:
                 raise RuntimeError('Could not download file from S3 '

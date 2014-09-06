@@ -118,6 +118,9 @@ class Launcher:
             payload: string with json payload to copy to stdin
                 of replacement process
         """
+        print json.dumps(json.loads(payload), sort_keys=True,
+                            indent=4, separators=(',', ': '))
+        quit()
         read_pipe, write_pipe = os.pipe()
         if os.fork() != 0:
             # Parent process; read from child after determining executable

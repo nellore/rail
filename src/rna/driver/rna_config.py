@@ -1288,7 +1288,7 @@ class RailRnaElastic:
                         % base.nodemanager_mem,
                         '-y',
                         'yarn.scheduler.minimum-allocation-mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
+                        % (base.nodemanager_mem / base.max_tasks * 9 / 10),
                         '-y',
                         'yarn.nodemanager.vmem-pmem-ratio=2.1',
                         '-y',
@@ -1301,16 +1301,16 @@ class RailRnaElastic:
                         'mapreduce.reduce.speculative=false',
                         '-m',
                         'mapreduce.map.memory.mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
+                        % (base.nodemanager_mem / base.max_tasks),
                         '-m',
                         'mapreduce.reduce.memory.mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
+                        % (base.nodemanager_mem / base.max_tasks),
                         '-m',
                         'mapreduce.map.java.opts=-Xmx%dm'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10 * 2),
+                        % (base.nodemanager_mem / base.max_tasks * 9 / 10),
                         '-m',
                         'mapreduce.reduce.java.opts=-Xmx%dm'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10 * 2),
+                        % (base.nodemanager_mem / base.max_tasks * 9 / 10),
                         '-m',
                         'mapreduce.map.cpu.vcores=1',
                         '-m',
@@ -2051,7 +2051,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*4) # 4 GB
+                            % (1073741824*4), # 4 GB
                     ]
             },
             {
@@ -2271,7 +2271,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*2) # 2 GB
                     ]
             },
             {

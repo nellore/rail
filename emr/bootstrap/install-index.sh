@@ -19,12 +19,75 @@ reduced_redundancy = False
 send_chunk = 4096
 EOF
 
+cat >.download_idx.py <<EOF
+"""
+.download_idx.py
+
+Checks if file size hasn't changed while downloading idx, and if it hasn't,
+kills subprocess and restarts it.
+"""
+
+import sys
+import time
+import os
+import subprocess
+
+tries = 0
+url = sys.argv[1]
+filename = sys.argv[2]
+while tries < 5:
+    break_outer_loop = False
+    s3cmd_process \
+        = subprocess.Popen(['s3cmd', 'get', url], stdout=sys.stderr)
+    time.sleep(1)
+    last_check_time = time.time()
+    try:
+        last_size = os.path.getsize(filename)
+    except OSError:
+        last_size = 0
+    while s3cmd_process.poll() is None:
+        now_time = time.time()
+        if now_time - last_check_time > 120:
+            try:
+                new_size = os.path.getsize(filename)
+            except OSError:
+                new_size = 0
+            if new_size == last_size:
+                # Download stalled
+                break_outer_loop = True
+                break
+            else:
+                last_size = new_size
+            last_check_time = now_time
+            time.sleep(1)
+    if break_outer_loop:
+        tries += 1
+        s3cmd_process.kill()
+        try:
+            os.remove(filename)
+        except OSError:
+            pass
+        time.sleep(2)
+        continue
+    if s3cmd_process.poll() > 0:
+        raise RuntimeError(('Non-zero exitlevel %d from s3cmd '
+                            'get command')  % (
+                                            s3cmd_process.poll()
+                                        ))
+                                    
+    break
+if tries > 5:
+    raise RuntimeError('Could not download file from S3 '
+                       'within 5 tries.')
+
+EOF
+
 mkdir -p $1
 cd $1
 
 fn=`basename $2`
 
-s3cmd get $2 ./
+pypy .download_idx.py $2 $fn || { echo 'index download failed' ; exit 1; }
 tar xzvf $fn
 cd index
 ln -s genome.4.bt2 genome.4.ebwt
