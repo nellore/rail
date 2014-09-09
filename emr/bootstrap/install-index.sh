@@ -85,6 +85,7 @@ while tries < 5:
                 os.remove(filename)
             except OSError:
                 pass
+            tries += 1
             time.sleep(2)
             continue                       
     break
