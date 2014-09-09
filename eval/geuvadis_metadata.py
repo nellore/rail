@@ -1,5 +1,5 @@
 """
-geuvadis_metadeta.py
+geuvadis_metadata.py
 
 Reads https://github.com/alyssafrazee/ballgown_code/blob/master/
 GEUVADIS_preprocessing/pop_data_annot_whole.txt
