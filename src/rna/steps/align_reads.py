@@ -101,9 +101,10 @@ Tab-delimited output tuple columns (unmapped):
 
 Tab-delimited output tuple columns (readletize)
 1. SEQ or its reversed complement, whichever is first in alphabetical order
-2. The sample label if field 1 is the read sequence; else '\x1c'
-3. The sample label if field 1 is the read sequence's reversed complement;
-    else '\x1c'
+2. (('+' if primary alignment is soft-clipped, else '-') + the sample label if
+    field 1 is the read sequence); else '\x1c'
+3. (('+' if primary alignment is soft-clipped, else '-') + the sample label if
+    field 1 is the read sequence's reversed complement); else '\x1c'
 
 Tab-delimited tuple columns (postponed_sam):
 Standard 11+ -column raw SAM output
@@ -312,11 +313,15 @@ class BowtieOutputThread(threading.Thread):
                     )
                 if seq < reversed_complement_seq:
                     print >>self.output_stream, \
-                        'readletize\t%s\t\x1c\t%s' % (seq, sample_label)
+                        'readletize\t%s\t\x1c\t%s' % (seq, 
+                            ('+' if 'S' in cigar else '-') + 
+                            sample_label)
                 else:
                     print >>self.output_stream, \
                         'readletize\t%s\t\x1c\t%s' \
-                        % (reversed_complement_seq, sample_label)
+                        % (reversed_complement_seq,
+                            ('+' if 'S' in cigar else '-') + 
+                            sample_label)
                 _output_line_count += 1
                 '''Write SAM output for comparison/combination with spliced
                 alignments obtained later.'''
@@ -331,6 +336,7 @@ class BowtieOutputThread(threading.Thread):
                 _output_line_count += alignment_printer.print_alignment_data(
                         ([alignment + (NH_field,) for alignment in multiread],)
                     )
+        self.output_stream.flush()
         self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',

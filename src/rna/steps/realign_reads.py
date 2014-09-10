@@ -270,6 +270,7 @@ class BowtieOutputThread(threading.Thread):
                     qname_count = 0
                 except ValueError:
                     done = True
+        self.output_stream.flush()
         self.return_set.add(0)
 
 def handle_temporary_directory(archive, temp_dir_path):

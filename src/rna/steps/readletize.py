@@ -13,13 +13,14 @@ end-to-end alignments overlap.
 
 Input (read from stdin)
 ----------------------------
-Tab-delimited input tuple columns:
-1. Read sequence (does not have to be unique)
-2. '\x1d'-separated list of samples, one for each sample read whose sequence
-    matches the sequence in field 1. If list is empty, '\x1c' is filler.
-3. '\x1d'-separated list of samples, one for each sample read whose sequence
-    matches the reversed complement of the sequence in field 1. If list is
-    empty, '\x1c' is filler.
+Tab-delimited input tuple columns (readletize)
+1. SEQ or its reversed complement, whichever is first in alphabetical order
+    (does not have to be unique)
+2. (('+' if primary alignment is soft-clipped, else '-') + the sample label if
+    field 1 is the read sequence); if the list is empty, '\x1c' is filler
+3. (('+' if primary alignment is soft-clipped, else '-') + the sample label if
+    field 1 is the read sequence's reversed complement); if the list is empty,
+    '\x1c' is filler
 
 Input is partitioned by field 1, the read sequence.
 
@@ -155,21 +156,32 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
         samples = set()
         reversed_complement_samples = set()
         sample_count, reversed_complement_sample_count = 0, 0
+        readletize = False
         for line_samples, line_reversed_complement_samples in xpartition:
             _input_line_count += 1
             if line_samples != '\x1c':
-                samples_to_add = line_samples.split('\x1d')
+                samples_to_add = [sample[1:] for sample
+                                    in line_samples.split('\x1d')]
+                if '+' in line_samples:
+                    '''Only readletize if sequence is sourced by at least one
+                    soft clip.'''
+                    readletize = True
                 sample_count += len(samples_to_add)
                 samples.update(samples_to_add)
             if line_reversed_complement_samples != '\x1c':
-                reversed_complement_samples_to_add \
-                    = line_reversed_complement_samples.split('\x1d')
+                reversed_complement_samples_to_add = [sample[1:] for sample
+                    in line_reversed_complement_samples.split('\x1d')]
+                if '+' in line_reversed_complement_samples:
+                    '''Only readletize if sequence is sourced by at least one
+                    soft clip.'''
+                    readletize = True
                 reversed_complement_sample_count += len(
                         reversed_complement_samples_to_add
                     )
                 reversed_complement_samples.update(
                         reversed_complement_samples_to_add
                     )
+        if not readletize: continue
         '''Construct a readlet identifier as follows: read sequence ID + 
         ('-' if readlet sequence is reverse-complemented; else '+') + '\x1e' +
         displacement of readlet's 5' end from read's 5' end + '\x1e' +

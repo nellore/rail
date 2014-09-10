@@ -144,7 +144,6 @@ def multiread_with_introns(multiread, stranded=False):
             '''Alignment to transcriptome was purely exonic; this case should
             be ignored.'''
             continue
-        # Count number of samples in which intron combo was initially detected
         new_multiread.append(
                     ([alignment[0], str(flag | 256),
                         rname, str(pos), alignment[4], new_cigar]

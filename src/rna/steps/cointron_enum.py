@@ -377,6 +377,7 @@ class BowtieOutputThread(threading.Thread):
                 for line_to_write in to_write:
                     print line_to_write
                     _output_line_count += 1
+        self.output_stream.flush()
         self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',

@@ -230,10 +230,15 @@ if __name__ == '__main__':
         else:
             '''Correct positions to match original reference's, correct
             CIGARs, eliminate duplicates, and decide primary alignment.'''
-            corrected_multiread = multiread_with_introns(
-                                        multiread,
-                                        stranded=args.stranded
-                                    )
+            try:
+                corrected_multiread = multiread_with_introns(
+                                            multiread,
+                                            stranded=args.stranded
+                                        )
+            except:
+                print >>sys.stderr, ('Error encountered interpreting '
+                                     'multiread %s' % (multiread,))
+                raise
             if not corrected_multiread:
                 '''This is effectively an unmapped read; write
                 corresponding SAM output.'''

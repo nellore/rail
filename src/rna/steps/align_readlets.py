@@ -204,6 +204,7 @@ class BowtieOutputThread(threading.Thread):
                             '%s\t%s\t\x1c\t\x1c\t\x1c' % (read_id[:-1],
                                                             read_rest)
                     _output_line_count += 1
+        self.output_stream.flush()
         self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',

@@ -1288,7 +1288,7 @@ class RailRnaElastic:
                         % base.nodemanager_mem,
                         '-y',
                         'yarn.scheduler.minimum-allocation-mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks * 9 / 10),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-y',
                         'yarn.nodemanager.vmem-pmem-ratio=2.1',
                         '-y',
@@ -1301,16 +1301,16 @@ class RailRnaElastic:
                         'mapreduce.reduce.speculative=false',
                         '-m',
                         'mapreduce.map.memory.mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-m',
                         'mapreduce.reduce.memory.mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-m',
                         'mapreduce.map.java.opts=-Xmx%dm'
-                        % (base.nodemanager_mem / base.max_tasks * 9 / 10),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-m',
                         'mapreduce.reduce.java.opts=-Xmx%dm'
-                        % (base.nodemanager_mem / base.max_tasks * 9 / 10),
+                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
                         '-m',
                         'mapreduce.map.cpu.vcores=1',
                         '-m',
@@ -2045,7 +2045,7 @@ class RailRnaAlign:
                                             ),
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
-                'taskx' : 1,
+                'taskx' : 3,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
@@ -2127,7 +2127,7 @@ class RailRnaAlign:
                                         ),
                 'inputs' : [path_join(elastic, 'readletize', 'unique')],
                 'output' : 'cointron_enum',
-                'taskx' : 1,
+                'taskx' : max(3, base.sample_count / 30),
                 'archives' : ab.Url(path_join(elastic,
                                     base.output_dir,
                                     'transcript_index',
@@ -2148,7 +2148,7 @@ class RailRnaAlign:
                                                     ),
                 'inputs' : ['cointron_enum'],
                 'output' : 'cointron_fasta',
-                'taskx' : 1,
+                'taskx' : max(8, base.sample_count / 30),
                 'part' : 'k1,4',
                 'keys' : 7,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
@@ -2174,7 +2174,7 @@ class RailRnaAlign:
                             'cointron_fasta'],
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'taskx' : 4,
+                'taskx' : max(4, base.sample_count / 30),
                 'part' : 'k1,1',
                 'keys' : 1,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
@@ -2209,7 +2209,7 @@ class RailRnaAlign:
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*3) # 1 GB
                     ]
             },
             {
