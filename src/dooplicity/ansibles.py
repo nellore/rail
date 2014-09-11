@@ -307,12 +307,21 @@ class S3Ansible:
         aws_command = ' '.join([self.aws, '--profile', self.profile,
                                     's3api get-bucket-lifecycle --bucket',
                                     bucket])
-        rules = json.loads(
-                            subprocess.check_output(aws_command, 
+        lifecycle_process = subprocess.Popen(aws_command, 
                                                     bufsize=-1,
-                                                    stderr=sys.stderr,
+                                                    stderr=subprocess.PIPE,
+                                                    stdout=subprocess.PIPE,
                                                     shell=True)
-                        )['Rules']
+        errors = lifecycle_process.stderr.read()
+        try:
+            rules = json.loads(lifecycle_process.stdout.read())['Rules']
+        except ValueError:
+            # No Lifecycle Configuration
+            rules = []
+        return_value = lifecycle_process.wait()
+        if not return_value and not 'NoSuchLifecycleConfiguration' in errors:
+            # Raise exception iff lifecycle config exists
+            raise RuntimeError(errors)
         add_rule = True
         for rule in rules:
             try:
