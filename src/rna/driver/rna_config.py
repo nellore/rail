@@ -240,7 +240,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                         if 'keys' in protostep else 'cat',
                 action_on_failure=action_on_failure,
                 jar=jar,
-                tasks=(reducer_count * protostep['taskx']
+                tasks=((reducer_count * protostep['taskx'] * 10 / 8)
                         if protostep['taskx'] is not None
                         else 1),
                 partitioner_options=(protostep['part']
@@ -1988,7 +1988,7 @@ class RailRnaAlign:
                                 ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletize')],
                 'output' : 'readletize',
-                'taskx' : 1,
+                'taskx' : 3,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
@@ -2011,7 +2011,7 @@ class RailRnaAlign:
                                                 ),
                 'inputs' : [path_join(elastic, 'readletize', 'readletized')],
                 'output' : 'align_readlets',
-                'taskx' : 1,
+                'taskx' : 3,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
@@ -2174,16 +2174,13 @@ class RailRnaAlign:
                             'cointron_fasta'],
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'taskx' : max(4, base.sample_count / 30),
+                'taskx' : max(6, base.sample_count / 20),
                 'part' : 'k1,1',
                 'keys' : 1,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
                             % (1073741824*3), # 3 GB
-                        'mapreduce.reduce.memory.mb=%d'
-                        % ((base.nodemanager_mem / base.max_tasks * 8 / 10 * 2)
-                            if hasattr(base, 'nodemanager_mem') else 0)
                     ]
             },
             {
@@ -2202,14 +2199,14 @@ class RailRnaAlign:
                             'realign_reads'],
                 'output' : 'compare_alignments',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'taskx' : 1,
+                'taskx' : max(4, base.sample_count / 20),
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*3) # 1 GB
+                            % (1073741824*3) # 3 GB
                     ]
             },
             {
@@ -2265,7 +2262,7 @@ class RailRnaAlign:
                                                'exon_diff'),
                             path_join(elastic, 'break_ties', 'exon_diff')],
                 'output' : 'collapse',
-                'taskx' : 1,
+                'taskx' : max(4, base.sample_count / 20),
                 'part' : 'k1,3',
                 'keys' : 3,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
@@ -2280,14 +2277,14 @@ class RailRnaAlign:
                          '--partition-stats').format(base.bowtie1_idx),
                 'inputs' : ['collapse'],
                 'output' : 'precoverage',
-                'taskx' : 1,
+                'taskx' : max(4, base.sample_count / 20),
                 'part' : 'k1,2',
                 'keys' : 3,
                 'multiple_outputs' : True,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                            % (1073741824*2) # 2 GB
                     ]
             },
             {
@@ -2347,7 +2344,7 @@ class RailRnaAlign:
                                                'intron_bed'),
                             path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
-                'taskx' : 1,
+                'taskx' : max(4, base.sample_count / 20),
                 'part' : 'k1,6',
                 'keys' : 6,
                 'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
