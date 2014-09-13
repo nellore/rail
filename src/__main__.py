@@ -143,7 +143,7 @@ class Launcher:
                     runner_args.append('--keep-intermediates')
                 if self.gzip_intermediates:
                     runner_args.extend(['--gzip-outputs', '--gzip-level',
-                                            str(gzip_level)])
+                                            str(self.gzip_level)])
                 if self.log:
                     runner_args.extend(['-l', os.path.abspath(self.log)])
             else:

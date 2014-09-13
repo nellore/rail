@@ -132,7 +132,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
     try:
         task_streams = {}
         for input_file in input_files:
-            with xopen(input_file) as input_stream:
+            with xopen(None, input_file) as input_stream:
                 for line in input_stream:
                     key = separator.join(
                                 line.strip().split(separator)[:key_fields]
@@ -143,18 +143,18 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     except KeyError:
                         # Task file doesn't exist yet; create it
                         if gzip:
-                            task_file = os.path.join(output_dir, str(task) + '.'
-                                                        + str(process_id)
+                            task_file = os.path.join(output_dir, str(task) +
+                                                        '.' + str(process_id)
                                                         + '.unsorted.gz')
-                            task_stream[task] = xopen(
-                                True, [task_file, 'w', gzip_level]
+                            task_streams[task] = xopen(
+                                True, task_file, 'w', gzip_level
                             )
                         else:
-                            task_file = os.path.join(output_dir, str(task) + '.'
-                                                        + str(process_id)
+                            task_file = os.path.join(output_dir, str(task) +
+                                                        '.' + str(process_id)
                                                         + '.unsorted')
-                            task_stream[task] = xopen(
-                                False, [task_file, 'w']
+                            task_streams[task] = xopen(
+                                False, task_file, 'w'
                             )
                         task_streams[task].write(line)
         for task in task_streams:
@@ -252,9 +252,9 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             # Reducer. Merge sort the input glob.
             if gzip:
                 # Use process substitution
-                prefix = 'sort -S %d %s -m %s' % (memcap, sort_options,
-                        ' '.join(['<(gzip -cd %s)' % input_file
-                                    for input_file in input_files])
+                prefix = '(sort -S %d %s -m %s' % (memcap, sort_options,
+                          ' '.join(['<(gzip -cd %s)' % input_file
+                                    for input_file in input_files]) + ')'
                     )
             else:
                 # Reducer. Merge sort the input glob.
@@ -297,8 +297,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                     command_to_run)
                     if gzip:
                         task_file_streams[key] = xopen(True,
-                                [os.path.join(key_dir, str(task_id) + '.gz'),
-                                    'w', gzip_level]
+                                os.path.join(key_dir, str(task_id) + '.gz'),
+                                    'w', gzip_level
                             )
                     else:
                         task_file_streams[key] = open(
@@ -318,7 +318,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                     = prefix + ' | ' + streaming_command + (
                             ' 2>%s | gzip -%d >%s'
                                 % (err_file,
-                                    gzip_level
+                                    gzip_level,
                                     out_file)
                         )
             else:
@@ -327,11 +327,13 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                     = prefix + ' | ' + streaming_command + (' >%s 2>%s'
                                                              % (out_file,
                                                                 err_file))
+            # Need bash or zsh for process substitution
             single_output_process_return = subprocess.call(
                                                     command_to_run,
                                                     shell=True,
                                                     env=new_env,
-                                                    bufsize=-1
+                                                    bufsize=-1,
+                                                    executable='/bin/bash'
                                                 )
             if single_output_process_return != 0:
                 return (('Exit level was %d.')
@@ -632,7 +634,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 multiple_outputs, 
                                 separator,
                                 None,
-                                None),
+                                None,
+                                gzip,
+                                gzip_level),
                             callback=return_values.append
                         )
                 pool.close()
@@ -732,7 +736,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                             step_data['key_fields'],
                                             separator,
                                             step_data['task_count'],
-                                            memcap),
+                                            memcap,
+                                            gzip,
+                                            gzip_level),
                                         callback=return_values.append
                                     )
                 pool.close()
@@ -804,7 +810,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 multiple_outputs,
                                 separator,
                                 step_data['sort_options'],
-                                memcap),
+                                memcap, gzip, gzip_level),
                              callback=return_values.append
                         )
                 pool.close()

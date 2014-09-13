@@ -493,7 +493,8 @@ class RailRnaLocal:
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-                    num_processes=1, keep_intermediates=False):
+                    num_processes=1, keep_intermediates=False,
+                    gzip_intermediates=False, gzip_level=3):
         """ base: instance of RailRnaErrors """
         # Initialize ansible for easy checks
         ansible = ab.Ansible()
@@ -667,7 +668,14 @@ class RailRnaLocal:
                 '''Make default number of processes cpu count less 1
                 so Facebook tab in user's browser won't go all unresponsive.'''
                 base.num_processes -= 1
-        self.keep_intermediates = keep_intermediates
+        if gzip_intermediates:
+            if not (isinstance(gzip_level, int)
+                                    and 9 >= gzip_level >= 1):
+                base.errors.append('Gzip level (--gzip-level) '
+                                   'must be an integer between 1 and 9, '
+                                   'but {0} was entered.'.format(
+                                                    gzip_level
+                                                ))
 
     @staticmethod
     def add_args(required_parser, general_parser, output_parser, 
@@ -1516,7 +1524,7 @@ class RailRnaAlign:
                 base.bowtie1_version = subprocess.check_output(
                         bowtie1_version_command
                     ).split('\n', 1)[0].split(' ')[-1]
-            except subprocess.CalledProcessError as e:
+            except Exception as e:
                 base.errors.append(('Error "{0}" encountered attempting to '
                                     'execute "{1}".').format(
                                                         e.message,
@@ -1547,7 +1555,7 @@ class RailRnaAlign:
                 base.bowtie2_version = subprocess.check_output(
                         bowtie2_version_command
                     ).split('\n', 1)[0].split(' ')[-1]
-            except subprocess.CalledProcessError as e:
+            except Exception as e:
                 base.errors.append(('Error "{0}" encountered attempting to '
                                     'execute "{1}".').format(
                                                         e.message,
@@ -1573,9 +1581,24 @@ class RailRnaAlign:
             base.bowtie2_idx = bowtie2_idx
             base.samtools_exe = base.check_program('samtools', 'SAMTools',
                                 '--samtools', entered_exe=samtools_exe)
-            samtools_process = subprocess.Popen(
-                    [base.samtools_exe], stderr=subprocess.PIPE
-                )
+            try:
+                samtools_process = subprocess.Popen(
+                        [base.samtools_exe], stderr=subprocess.PIPE
+                    )
+            except Exception as e:
+                base.errors.append(('Error "{0}" encountered attempting to '
+                                    'execute "{1}".').format(
+                                                        e.message,
+                                                        base.samtools_exe
+                                                    ))
+            if base.errors:
+                # Output any errors before detect message is determined
+                raise RuntimeError(
+                        '\n'.join(
+                                ['%d) %s' % (i+1, error) for i, error
+                                    in enumerate(base.errors)]
+                            ) if len(base.errors) > 1 else base.errors[0]
+                    )
             base.samtools_version = '<unknown>'
             for line in samtools_process.stderr:
                 if 'Version:' in line:
