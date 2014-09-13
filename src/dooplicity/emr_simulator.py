@@ -46,6 +46,8 @@ import interface as dp_iface
 import signal
 import gc
 import tempfile
+# For opening gzipped files and uncompressed files depending on magic number
+from tools import xopen
 
 def add_args(parser):
     """ Adds args relevant to EMR simulator.
@@ -78,6 +80,14 @@ def add_args(parser):
             help='If --keep-intermediates is False, keeps outputs that are ' \
                  'unused as inputs by steps.'
         )
+    parser.add_argument('--gzip-outputs', action='store_const',
+            const=True, default=False,
+            help='Compress step output files with gzip'
+        )
+    parser.add_argument('--gzip-level', type=int, required=False,
+            default=3,
+            help='Level of gzip compression to use, if applicable'
+        )
 
 def init_worker():
     """ Prevents KeyboardInterrupt from reaching a pool's workers.
@@ -91,7 +101,8 @@ def init_worker():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
-                    key_fields, separator, task_count, memcap):
+                    key_fields, separator, task_count, memcap,
+                    gzip=False, gzip_level=3):
     """ Partitions input data into tasks and presorts them.
 
         Files in output directory are in the format x.y, where x is a task
@@ -112,6 +123,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         task_count: number of tasks in which to partition input.
         memcap: maximum amount of memory to use per UNIX sort instance;
             ignored if sort is None.
+        gzip: True iff all files written should be gzipped; else False.
+        gzip_level: Level of gzip compression to use, if applicable.
 
         Return value: Empty tuple if no errors encountered; otherwise
             (input_files,).
@@ -119,7 +132,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
     try:
         task_streams = {}
         for input_file in input_files:
-            with open(input_file) as input_stream:
+            with xopen(input_file) as input_stream:
                 for line in input_stream:
                     key = separator.join(
                                 line.strip().split(separator)[:key_fields]
@@ -129,27 +142,56 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                         task_streams[task].write(line)
                     except KeyError:
                         # Task file doesn't exist yet; create it
-                        task_file = os.path.join(output_dir, str(task) + '.'
-                                                             + str(process_id)
-                                                             + '.unsorted')
-                        task_streams[task] = open(task_file, 'w')
+                        if gzip:
+                            task_file = os.path.join(output_dir, str(task) + '.'
+                                                        + str(process_id)
+                                                        + '.unsorted.gz')
+                            task_stream[task] = xopen(
+                                True, [task_file, 'w', gzip_level]
+                            )
+                        else:
+                            task_file = os.path.join(output_dir, str(task) + '.'
+                                                        + str(process_id)
+                                                        + '.unsorted')
+                            task_stream[task] = xopen(
+                                False, [task_file, 'w']
+                            )
                         task_streams[task].write(line)
         for task in task_streams:
             task_streams[task].close()
         # Presort task files
-        for unsorted_file in glob.glob(os.path.join(
-                                                output_dir,
-                                                '*.%s.unsorted' % process_id
-                                            )):
-            sort_command = 'sort -S %d %s %s > %s' % (memcap,
-                                                        sort_options,
-                                                        unsorted_file,
-                                                        unsorted_file[:-9])
-            sort_return = subprocess.call(sort_command, shell=True, bufsize=-1)
-            if sort_return != 0:
-                return ('Error encountered sorting input file %s.' %
-                            input_file,)
-            os.remove(unsorted_file)
+        if gzip:
+            for unsorted_file in glob.glob(os.path.join(
+                                                    output_dir,
+                                                    '*.%s.unsorted.gz'
+                                                    % process_id
+                                                )):
+                sort_command = ('gzip -cd %s | sort -S %d %s | gzip -c -%d >%s'
+                                    % (unsorted_file, memcap, sort_options,
+                                        gzip_level,
+                                        unsorted_file[:-12] + '.gz'))
+                sort_return = subprocess.call(sort_command, shell=True,
+                                                bufsize=-1)
+                if sort_return != 0:
+                    return ('Error encountered sorting file %s.' %
+                                unsorted_file,)
+                os.remove(unsorted_file)
+        else:
+            for unsorted_file in glob.glob(os.path.join(
+                                                    output_dir,
+                                                    '*.%s.unsorted'
+                                                    % process_id
+                                                )):
+                sort_command = 'sort -S %d %s %s >%s' % (memcap,
+                                                            sort_options,
+                                                            unsorted_file,
+                                                            unsorted_file[:-9])
+                sort_return = subprocess.call(sort_command, shell=True,
+                                                bufsize=-1)
+                if sort_return != 0:
+                    return ('Error encountered sorting file %s.' %
+                                unsorted_file,)
+                os.remove(unsorted_file)
         return tuple()
     except Exception as e:
         # Uncaught miscellaneous exception
@@ -160,7 +202,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
-                                  separator, sort_options, memcap):
+                                  separator, sort_options, memcap,
+                                  gzip=False, gzip_level=3):
     """ Runs a streaming command on a task, segregating multiple outputs. 
 
         streaming_command: streaming command to run.
@@ -184,6 +227,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             SHOULD BE PRESORTED.
         memcap: maximum amount of memory to use per UNIX sort instance;
             ignored if sort is None.
+        gzip: True iff all files written should be gzipped; else False.
+        gzip_level: Level of gzip compression to use, if applicable.
 
         Return value: empty tuple iff step runs successfully; otherwise, tuple
             (error message, full streaming command that was run)
@@ -200,12 +245,21 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             with open(input_files[0], 'rb') as binary_input_stream:
                 if binary_input_stream.read(2) == '\x1f\x8b':
                     # Magic number of gzip'd file found
-                    prefix = 'gunzip -c %s' % input_glob
+                    prefix = 'gzip -cd %s' % input_glob
                 else:
                     prefix = 'cat %s' % input_glob
         else:
             # Reducer. Merge sort the input glob.
-            prefix = 'sort -S %d %s -m %s' % (memcap, sort_options, input_glob)
+            if gzip:
+                # Use process substitution
+                prefix = 'sort -S %d %s -m %s' % (memcap, sort_options,
+                        ' '.join(['<(gzip -cd %s)' % input_file
+                                    for input_file in input_files])
+                    )
+            else:
+                # Reducer. Merge sort the input glob.
+                prefix = 'sort -S %d %s -m %s' % (memcap, sort_options,
+                                                    input_glob)
         err_file = os.path.join(err_dir, '%d.log' % task_id)
         new_env = os.environ.copy()
         new_env['mapreduce_task_partition'] \
@@ -214,12 +268,14 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             # Must grab each line of output and separate by directory
             command_to_run \
                 = prefix + ' | ' + streaming_command + (' 2>%s' % err_file)
+            # Need bash or zsh for process substitution
             multiple_output_process = subprocess.Popen(
                     command_to_run,
                     shell=True,
                     stdout=subprocess.PIPE,
                     env=new_env,
-                    bufsize=-1
+                    bufsize=-1,
+                    executable='/bin/bash'
                 )
             task_file_streams = {}
             for line in multiple_output_process.stdout:
@@ -239,8 +295,15 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                             return (('Problem encountered trying to create '
                                      'directory %s.') % key_dir,
                                     command_to_run)
-                    task_file_streams[key] = open(os.path.join(key_dir,
-                                                        str(task_id)), 'w')
+                    if gzip:
+                        task_file_streams[key] = xopen(True,
+                                [os.path.join(key_dir, str(task_id) + '.gz'),
+                                    'w', gzip_level]
+                            )
+                    else:
+                        task_file_streams[key] = open(
+                                os.path.join(key_dir, str(task_id)), 'w'
+                            )
                     task_file_streams[key].write(line_to_write)
             multiple_output_process_return = multiple_output_process.wait()
             if multiple_output_process_return != 0:
@@ -249,9 +312,19 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             for key in task_file_streams:
                 task_file_streams[key].close()
         else:
-            out_file = os.path.join(output_dir, str(task_id))
-            command_to_run \
-                = prefix + ' | ' + streaming_command + (' >%s 2>%s'
+            if gzip:
+                out_file = os.path.join(output_dir, str(task_id) + '.gz')
+                command_to_run \
+                    = prefix + ' | ' + streaming_command + (
+                            ' 2>%s | gzip -%d >%s'
+                                % (err_file,
+                                    gzip_level
+                                    out_file)
+                        )
+            else:
+                out_file = os.path.join(output_dir, str(task_id))
+                command_to_run \
+                    = prefix + ' | ' + streaming_command + (' >%s 2>%s'
                                                              % (out_file,
                                                                 err_file))
             single_output_process_return = subprocess.call(
@@ -271,7 +344,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
 
 def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
-                    log):
+                    log, gzip=False, gzip_level=3):
     """ Runs Hadoop Streaming simulation.
 
         FUNCTIONALITY IS IDIOSYNCRATIC; it is currently confined to those
@@ -293,6 +366,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         keep_intermediates: keeps all intermediate output.
         keep_last_output: keeps outputs that are unused as inputs by steps.
         log: name of file in which to store messages written to stderr
+        gzip: True iff all files written should be gzipped; else False.
+        gzip_level: Level of gzip compression to use, if applicable.
 
         No return value.
     """
@@ -910,4 +985,4 @@ if __name__ == '__main__':
     run_simulation(args.branding, args.json_config, args.force,
                     args.memcap, args.num_processes, args.separator,
                     args.keep_intermediates, args.keep_last_output,
-                    args.log)
+                    args.log, args.gzip_outputs, args.gzip_level)
