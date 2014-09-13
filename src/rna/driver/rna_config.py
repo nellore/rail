@@ -714,6 +714,17 @@ class RailRnaLocal:
             help='keep intermediate files in log directory after job flow ' \
                  'is complete'
         )
+        general_parser.add_argument(
+            '-g', '--gzip-intermediates', action='store_const', const=True,
+            default=False,
+            help='compress intermediate files; slower, but saves space'
+        )
+        general_parser.add_argument(
+           '--gzip-level', type=int, required=False, metavar='<int>',
+            default=3,
+            help='level of gzip compression to use for intermediates, ' \
+                 'if applicable'
+        )
 
 class RailRnaElastic:
     """ Checks elastic-mode input parameters and relevant programs.

@@ -100,10 +100,13 @@ class Launcher:
     """ Facilitates replacing the current process with a Dooplicity runner. """
 
     def __init__(self, force=False, num_processes=1, keep_intermediates=False,
-                    region='us-east-1', log=None):
+                    gzip_intermediates=False, gzip_level=3, region='us-east-1',
+                    log=None):
         self.force = force
         self.num_processes = num_processes
         self.keep_intermediates = keep_intermediates
+        self.gzip_intermediates = gzip_intermediates
+        self.gzip_level = gzip_level
         self.region = region
         self.log = log
 
@@ -138,6 +141,9 @@ class Launcher:
                     runner_args.append('-f')
                 if self.keep_intermediates:
                     runner_args.append('--keep-intermediates')
+                if self.gzip_intermediates:
+                    runner_args.extend(['--gzip-outputs', '--gzip-level',
+                                            str(gzip_level)])
                 if self.log:
                     runner_args.extend(['-l', os.path.abspath(self.log)])
             else:
@@ -628,6 +634,16 @@ if __name__ == '__main__':
                                            if mode == 'local'
                                            else False
                                         ),
+                                        gzip_intermediates=(
+                                           args.gzip_intermediates
+                                           if mode == 'local'
+                                           else False
+                                        ),
+                                        gzip_level=(
+                                           args.gzip_level
+                                           if mode == 'local'
+                                           else 3
+                                        ),
                                         log=(
                                             log_file if mode == 'local'
                                             else None
@@ -645,6 +661,16 @@ if __name__ == '__main__':
                                            args.keep_intermediates
                                            if mode == 'local'
                                            else False
+                                        ),
+                                        gzip_intermediates=(
+                                           args.gzip_intermediates
+                                           if mode == 'local'
+                                           else False
+                                        ),
+                                        gzip_level=(
+                                           args.gzip_level
+                                           if mode == 'local'
+                                           else 3
                                         ),
                                         log=(
                                             log_file if mode == 'local'

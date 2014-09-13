@@ -106,9 +106,8 @@ class UpdateThread(threading.Thread):
             h, m = divmod(m, 60)
             # Edit just the time line of the header
             progress = next(progress_char_gen)
-            sys.stdout.write(('\x1b[36m\x1b[?7l\x1b[J%02dh:%02dm:%02ds'
-                              '   %s   '
-                              '%s\x1b[?7h\x1b[0m\r') % (h, m, s,
+            sys.stdout.write(('\x1b[?7l\x1b[J%02dh:%02dm:%02ds'
+                              '   %s   %s\x1b[?7h\r') % (h, m, s,
                                     progress, self.message
                                 ))
             sys.stdout.flush()
