@@ -90,7 +90,7 @@ def qname_from_read(original_qname, seq, sample_label):
                     '\x1d', sample_label])
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
-        push='.', mover=filemover.FileMover()):
+        to_stdout=False, push='.', mover=filemover.FileMover()):
     """ Runs Rail-RNA-preprocess
 
         Input (read from stdin)
@@ -142,13 +142,15 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     print >>sys.stderr, 'Created local destination directory "%s".' % temp_dir
     atexit.register(remove_temporary_directories, [temp_dir])
     input_line_count, output_line_count = 0, 0
-    push_url = Url(push)
-    if push_url.is_local:
-        destination = push
-    elif push_url.is_s3 or push_url.is_hdfs:
-        destination = temp_dir
-    else:
-        raise RuntimeError('Push destination must be on S3, HDFS, or local.')
+    if not to_stdout:
+        push_url = Url(push)
+        if push_url.is_local:
+            destination = push
+        elif push_url.is_s3 or push_url.is_hdfs:
+            destination = temp_dir
+        else:
+            raise RuntimeError('Push destination must be '
+                               'on S3, HDFS, or local.')
     fastq_cues = set(['@'])
     fasta_cues = set(['>', ';'])
     for k, line in enumerate(sys.stdin):
@@ -196,55 +198,59 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             file_number = 0
             break_outer_loop = False
             while True:
-                '''Name files using Hadoop task environment property
-                mapred.task.partition.'''
-                if gzip_output:
-                    try:
-                        output_file = os.path.join(
+                if not to_stdout:
+                    '''Name files using Hadoop task environment property
+                    mapred.task.partition.'''
+                    if gzip_output:
+                        try:
+                            output_file = os.path.join(
                                     destination, 
                                     '.'.join([
                                         os.environ['mapred_task_partition'],
                                         str(k), str(file_number), 'gz'
                                     ])
                                 )
-                    except KeyError:
-                        '''Hadoop 2.x: mapreduce.task.partition; see 
-                        http://hadoop.apache.org/docs/r2.0.3-alpha/
-                        hadoop-project-dist/hadoop-common/
-                        DeprecatedProperties.html.'''
-                        output_file = os.path.join(
+                        except KeyError:
+                            '''Hadoop 2.x: mapreduce.task.partition; see 
+                            http://hadoop.apache.org/docs/r2.0.3-alpha/
+                            hadoop-project-dist/hadoop-common/
+                            DeprecatedProperties.html.'''
+                            output_file = os.path.join(
                                     destination, 
                                     '.'.join([
                                         os.environ['mapreduce_task_partition'],
                                         str(k), str(file_number), 'gz'
                                     ])
                                 )
-                    open_args = [output_file, 'w', gzip_level]
+                        open_args = [output_file, 'w', gzip_level]
+                    else:
+                        try:
+                            output_file = os.path.join(
+                                    destination, 
+                                    '.'.join([
+                                        os.environ['mapred_task_partition'],
+                                        str(k), str(file_number)
+                                    ])
+                                )
+                        except KeyError:
+                            output_file = os.path.join(
+                                    destination, 
+                                    '.'.join([
+                                        os.environ['mapreduce_task_partition'],
+                                        str(k), str(file_number)
+                                    ])
+                                )
+                        open_args = [output_file, 'w']
                 else:
-                    try:
-                        output_file = os.path.join(
-                                    destination, 
-                                    '.'.join([
-                                        os.environ['mapred_task_partition'],
-                                        str(k), str(file_number)
-                                    ])
-                                )
-                    except KeyError:
-                        output_file = os.path.join(
-                                    destination, 
-                                    '.'.join([
-                                        os.environ['mapreduce_task_partition'],
-                                        str(k), str(file_number)
-                                    ])
-                                )
-                    open_args = [output_file, 'w']
+                    open_args = []
                 try:
                     os.makedirs(os.path.dirname(output_file))
                 except OSError:
                     pass
                 '''Use xopen to handle compressed streams and normal streams
                 generally.'''
-                with xopen(gzip_output, *open_args) as output_stream:
+                with xopen(gzip_output if not to_stdout else '-', *open_args) \
+                    as output_stream:
                     line_numbers = [0, 0]
                     read_next_line = True
                     nucs_read = 0
@@ -375,9 +381,9 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                         _output_line_count += 1
                         for seq in seqs:
                             nucs_read += len(seq)
-                        if nucs_read > nucleotides_per_input:
+                        if not to_stdout and nucs_read > nucleotides_per_input:
                             break
-                if push_url.is_s3 or push_url.is_hdfs:
+                if not to_stdout and (push_url.is_s3 or push_url.is_hdfs):
                     print >>sys.stderr, 'Pushing "%s" to "%s" ...' % (
                                                             output_file,
                                                             push_url.to_url()
@@ -408,6 +414,10 @@ if __name__ == '__main__':
         default=8000000,
         help='Write to next file if more than this many nucleotides are ' \
              'found to have been written to given output file')
+    parser.add_argument('--stdout', action='store_const', const=True,
+        default=False,
+        help='Write to stdout rather than to gzip files; useful in hadoop ' \
+             'modes when using LZO output formats')
     parser.add_argument('--gzip-output', action='store_const', const=True,
         default=False,
         help='Compress output files with gzip')
@@ -427,6 +437,7 @@ if __name__ == '__main__':
     go(nucleotides_per_input=args.nucs_per_file,
         gzip_output=args.gzip_output,
         gzip_level=args.gzip_level,
+        to_stdout=args.stdout,
         push=args.push,
         mover=mover)
     print >>sys.stderr, 'DONE with preprocess.py; in/out=%d/%d; ' \

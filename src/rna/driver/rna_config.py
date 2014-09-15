@@ -22,8 +22,6 @@ base_path = os.path.abspath(
                     )
                 )
 utils_path = os.path.join(base_path, 'rna', 'utils')
-_hadoop_streaming_jar = os.path.join(base_path, 'lib',
-                                        'hadoop-streaming-mod.jar')
 import site
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
@@ -38,6 +36,8 @@ import subprocess
 
 '''These are placed here for convenience; their locations may change
 on EMR depending on bootstraps.'''
+_hadoop_streaming_jar = '/mnt/lib/hadoop-streaming-mod.jar'
+_relevant_elephant_jar = '/mnt/lib/relevant-elephant.jar'
 _elastic_bowtie1_idx = '/mnt/index/genome'
 _elastic_bowtie2_idx = '/mnt/index/genome'
 _elastic_bedgraphtobigwig_exe ='/mnt/bin/bedGraphToBigWig'
@@ -129,6 +129,10 @@ def step(name, inputs, output,
         to_return['HadoopJarStep']['Args'].extend(
             ['-D', extra_arg]
         )
+    # Add libjar for splittable LZO
+    to_return['HadoopJarStep']['Args'].extend(
+            ['-libjars', _relevant_elephant_jar]
+        )
     if archives is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-archives', archives
@@ -148,13 +152,26 @@ def step(name, inputs, output,
     # Don't write empty files
     to_return['HadoopJarStep']['Args'].append('-lazyOutput')
     if multiple_outputs:
+        '''This option is only available in hacked hadoop-streaming; see
+        hadoop/make_jars.sh for more information.'''
         to_return['HadoopJarStep']['Args'].append('-multiOutput')
     if inputformat is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-inputformat', inputformat
             ])
     else:
-
+        '''Always use splittable LZO; it's deprecated because hadoop-streaming
+        uses the old mapred API.'''
+        to_return['HadoopJarStep']['Args'].extend([
+                '-inputformat',
+                'com.twitter.elephantbird.mapred.input'
+                '.DeprecatedLzoTextInputFormat'
+            ])
+    to_return['HadoopJarStep']['Args'].extend([
+            '-outputformat',
+            'com.twitter.elephantbird.mapred.output'
+            '.DeprecatedLzoTextOutputFormat'
+        ])
     return to_return
 
 # TODO: Flesh out specification of protostep and migrate to Dooplicity
@@ -735,7 +752,7 @@ class RailRnaElastic:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar=_hadoop_streaming_jar,
+        hadoop_jar=None,
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -976,7 +993,10 @@ class RailRnaElastic:
                                                 action_on_failure
                                             ))
         base.action_on_failure = action_on_failure
-        base.hadoop_jar = hadoop_jar
+        if hadoop_jar is None:
+            base.hadoop_jar = _hadoop_streaming_jar
+        else:
+            base.hadoop_jar = hadoop_jar
         instance_type_message = ('Instance type (--instance-type) must be '
                                  'in the set {{"m1.small", "m1.large", '
                                  '"m1.xlarge", "c1.medium", "c1.xlarge", '
@@ -1151,9 +1171,10 @@ class RailRnaElastic:
         )
         elastic_parser.add_argument('--hadoop-jar', type=str, required=False,
             metavar='<jar>',
-            default=_hadoop_streaming_jar,
+            default=None,
             help=('Hadoop Streaming Java ARchive to use; must be modified '
-                  'to include -multiOutput option using package_rail.sh')
+                  'to include -multiOutput option using package_rail.sh '
+                  '(def: custom Rail jar)')
         )
         elastic_parser.add_argument('--master-instance-count', type=int,
             metavar='<int>',
@@ -1305,9 +1326,9 @@ class RailRnaElastic:
                         '-y',
                         'yarn.nodemanager.localizer.fetch.thread-count=1',
                         '-m',
-                        'mapreduce.map.speculative=false',
+                        'mapreduce.map.speculative=true',
                         '-m',
-                        'mapreduce.reduce.speculative=false',
+                        'mapreduce.reduce.speculative=true',
                         '-m',
                         'mapreduce.map.memory.mb=%d'
                         % (base.nodemanager_mem / base.max_tasks * 8 / 10),
@@ -1415,23 +1436,24 @@ class RailRnaPreprocess:
         base.gzip_input = gzip_input
 
     @staticmethod
-    def add_args(general_parser, output_parser):
+    def add_args(general_parser, output_parser, elastic=False):
         """ Adds parameter descriptions relevant to preprocess job flow to an
             object of class argparse.ArgumentParser.
 
             No return value.
         """
-        output_parser.add_argument(
-            '--nucleotides-per-input', type=int, required=False,
-            metavar='<int>',
-            default=1000000000,
-            help='max nucleotides from input reads to assign to each task'
-        )
-        output_parser.add_argument(
-            '--do-not-gzip-input', action='store_const', const=True,
-            default=False,
-            help=('leave preprocessed input reads uncompressed')
-        )
+        if not elastic:
+            output_parser.add_argument(
+                '--nucleotides-per-input', type=int, required=False,
+                metavar='<int>',
+                default=100000000,
+                help='max nucleotides from input reads to assign to each task'
+            )
+            output_parser.add_argument(
+                '--do-not-gzip-input', action='store_const', const=True,
+                default=False,
+                help=('leave preprocessed input reads uncompressed')
+            )
         general_parser.add_argument(
             '--do-not-check-manifest', action='store_const', const=True,
             default=False,
@@ -1439,18 +1461,20 @@ class RailRnaPreprocess:
         )
 
     @staticmethod
-    def protosteps(base, prep_dir, push_dir):
+    def protosteps(base, prep_dir, push_dir, elastic=False):
         return [
             {
                 'name' : 'Preprocess input reads',
                 'run' : ('preprocess.py --nucs-per-file={0} {1} '
-                         '--push={2}').format(
+                         '--push={2} {3}').format(
                                                     base.nucleotides_per_input,
                                                     '--gzip-output' if
                                                     base.gzip_input else '',
                                                     ab.Url(push_dir).to_url(
                                                             caps=True
-                                                        )
+                                                        ),
+                                                    '--to-stdout' if elastic
+                                                    else ''
                                                 ),
                 'inputs' : [base.manifest],
                 'no_input_prefix' : True,
@@ -2539,7 +2563,7 @@ class RailRnaLocalPreprocessJson:
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
                 os.path.join(base.intermediate_dir, 'preprocess'),
-                base.output_dir),
+                base.output_dir, elastic=False),
                 '', '', step_dir,
                 base.num_processes,
                 base.intermediate_dir, unix=False
@@ -2559,7 +2583,7 @@ class RailRnaElasticPreprocessJson:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar=_hadoop_streaming_jar,
+        hadoop_jar=None,
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -2608,7 +2632,7 @@ class RailRnaElasticPreprocessJson:
             = RailRnaElastic.hadoop_debugging_steps(base) + steps(
                     RailRnaPreprocess.protosteps(base,
                         path_join(True, base.intermediate_dir, 'preprocess'),
-                        base.output_dir),
+                        base.output_dir, elastic=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True
@@ -2733,7 +2757,7 @@ class RailRnaElasticAlignJson:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar=_hadoop_streaming_jar,
+        hadoop_jar=None,
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -2907,8 +2931,8 @@ class RailRnaLocalAllJson:
                                         'preprocess', 'push')
         self._json_serial['Steps'] = \
             steps(RailRnaPreprocess.protosteps(base,
-                prep_dir, push_dir), '', '', step_dir, base.num_processes,
-                base.intermediate_dir, unix=False
+                prep_dir, push_dir, elastic=False), '', '', step_dir,
+                base.num_processes, base.intermediate_dir, unix=False
             ) + \
             steps(RailRnaAlign.protosteps(base,
                 push_dir, elastic=False), '', '', step_dir,
@@ -2941,7 +2965,7 @@ class RailRnaElasticAllJson:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar=_hadoop_streaming_jar,
+        hadoop_jar=None,
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -3021,7 +3045,8 @@ class RailRnaElasticAllJson:
         self._json_serial['Steps'] \
             = RailRnaElastic.hadoop_debugging_steps(base) + \
                 steps(
-                    RailRnaPreprocess.protosteps(base, prep_dir, push_dir),
+                    RailRnaPreprocess.protosteps(base, prep_dir, push_dir,
+                                                    elastic=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True

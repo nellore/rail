@@ -408,7 +408,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         try:
             for step in job_flow:
                 step_args = {}
-                for j in xrange(0, len(step['HadoopJarStep']['Args']), 2):
+                j = 0
+                j_max = len(step['HadoopJarStep']['Args'])
+                while j < j_max:
                     arg_name = step['HadoopJarStep']['Args'][j][1:].strip()
                     if arg_name == 'D':
                         D_arg = step['HadoopJarStep']['Args'][j+1].split('=')
@@ -422,6 +424,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 = int(D_arg[1].split(',')[-1])
                         elif D_arg[0] == 'stream.num.map.output.key.fields':
                             step_args['sort_options'] = '-k1,%s' % D_arg[1]
+                        j += 2
                     elif arg_name == 'input':
                         try:
                             step_args['input'] = ','.join(
@@ -431,9 +434,17 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         except KeyError:
                             step_args['input'] \
                                 = step['HadoopJarStep']['Args'][j+1]
+                        j += 2
+                    elif arg_name == 'multiOutput':
+                        step_args['multiple_outputs'] = True
+                        j += 1
+                    elif arg_name == 'lazyOutput':
+                        # Do nothing
+                        j += 1
                     else:
                         step_args[step['HadoopJarStep']['Args'][j][1:]] \
                             = step['HadoopJarStep']['Args'][j+1].strip()
+                        j += 2
                 steps[step['Name']] = step_args
         except (KeyError, IndexError):
             iface.fail(
@@ -562,7 +573,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 # Perform map step only if mapper isn't identity
                 try:
                     if step_data['outputformat'] \
-                        == 'edu.jhu.cs.MultipleOutputFormat':
+                        == 'edu.jhu.cs.MultipleOutputFormat' \
+                        or 'multiOutput' in step_data:
                         multiple_outputs = True
                     else:
                         multiple_outputs = False

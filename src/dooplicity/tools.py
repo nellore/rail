@@ -117,11 +117,14 @@ def xopen(gzipped, *args):
 
         gzipped: True iff gzip.open() should be used to open rather than
             open(); False iff open() should be used; None if input should be
-            read and guessed
+            read and guessed; '-' if output should be stdout
         *args: unnamed arguments to pass
 
         Return value: file object
     """
+    if gzipped == '-':
+        import sys
+        return sys.stdout
     import gzip
     if gzipped is None:
         with open(args[0], 'rb') as binary_input_stream:
