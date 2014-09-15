@@ -31,6 +31,7 @@ import dooplicity.ansibles as ab
 import tempfile
 import shutil
 from dooplicity.tools import which, is_exe, path_join
+from version import version_number
 import sys
 from argparse import SUPPRESS
 import subprocess
@@ -153,6 +154,7 @@ def step(name, inputs, output,
                 '-inputformat', inputformat
             ])
     else:
+
     return to_return
 
 # TODO: Flesh out specification of protostep and migrate to Dooplicity
@@ -1478,7 +1480,8 @@ class RailRnaPreprocess:
                 'Name' : 'Install Rail-RNA',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        's3://rail-emr/bin/rail-rna-0.1.0.tar.gz',
+                        's3://rail-emr/bin/rail-rna-%s.tar.gz' 
+                        % version_number,
                         '/mnt'
                     ],
                     'Path' : 's3://rail-emr/bootstrap/install-rail.sh'
@@ -2479,7 +2482,8 @@ class RailRnaAlign:
                 'Name' : 'Install Rail-RNA',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        's3://rail-emr/bin/rail-rna-0.1.0.tar.gz',
+                        's3://rail-emr/bin/rail-rna-%s.tar.gz'
+                        % version_number,
                         '/mnt'
                     ],
                     'Path' : 's3://rail-emr/bootstrap/install-rail.sh'

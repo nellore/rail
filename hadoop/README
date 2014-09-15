@@ -1,3 +1,5 @@
+BELOW IS NO LONGER TRUE; see make_jars.sh for what happens now
+
 Sometimes it's necessary to write a little Java class that we can plug
 into Hadoop, e.g. to enable new input and output formats or to
 customize the shuffle/sort step.
