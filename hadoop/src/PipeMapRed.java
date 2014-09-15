@@ -554,6 +554,13 @@ public abstract class PipeMapRed {
         }
       }
       try {
+        multipleOutputs.close();
+      } catch (IOException io) {
+        LOG.warn(io);
+      } catch (NullPointerException npe) {
+        // Just means we're not using multiple outputs
+      }
+      try {
         waitOutputThreads();
       } catch (IOException io) {
         LOG.warn(io);
