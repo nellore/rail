@@ -429,6 +429,8 @@ if __name__ == '__main__':
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
                 bed_basename=args.bed_basename,
                 num_processes=args.num_processes,
+                gzip_intermediates=args.gzip_intermediates,
+                gzip_level=args.gzip_level,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest)
             )
@@ -468,6 +470,8 @@ if __name__ == '__main__':
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
                 bed_basename=args.bed_basename,
                 num_processes=args.num_processes,
+                gzip_intermediates=args.gzip_intermediates,
+                gzip_level=args.gzip_level,
                 keep_intermediates=args.keep_intermediates
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'local':
@@ -480,6 +484,8 @@ if __name__ == '__main__':
                 nucleotides_per_input=args.nucleotides_per_input,
                 gzip_input=(not args.do_not_gzip_input),
                 num_processes=args.num_processes,
+                gzip_intermediates=args.gzip_intermediates,
+                gzip_level=args.gzip_level,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest)
             )

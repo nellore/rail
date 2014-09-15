@@ -22,6 +22,8 @@ base_path = os.path.abspath(
                     )
                 )
 utils_path = os.path.join(base_path, 'rna', 'utils')
+_hadoop_streaming_jar = os.path.join(base_path, 'lib',
+                                        'hadoop-streaming-mod.jar')
 import site
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
@@ -83,7 +85,7 @@ def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
     reducer='org.apache.hadoop.mapred.lib.IdentityReducer', 
     action_on_failure='TERMINATE_JOB_FLOW',
-    jar='/home/hadoop/contrib/streaming/hadoop-streaming.jar',
+    jar=_hadoop_streaming_jar,
     tasks=0, partitioner_options=None, key_fields=None, archives=None,
     multiple_outputs=False, inputformat=None, extra_args=[]):
     """ Outputs JSON for a given step.
@@ -126,21 +128,6 @@ def step(name, inputs, output,
         to_return['HadoopJarStep']['Args'].extend(
             ['-D', extra_arg]
         )
-    if multiple_outputs:
-        # This only matters in elastic mode
-        if inputformat == 'edu.jhu.cs.CombinedInputFormat':
-            to_return['HadoopJarStep']['Args'].extend([
-                '-libjars', '/mnt/lib/multiplefiles.jar,'
-                            '/mnt/lib/combined.jar'
-            ])
-        else:
-            to_return['HadoopJarStep']['Args'].extend([
-                '-libjars', '/mnt/lib/multiplefiles.jar'
-            ])
-    elif inputformat == 'edu.jhu.cs.CombinedInputFormat':
-        to_return['HadoopJarStep']['Args'].extend([
-                '-libjars', '/mnt/lib/combined.jar'
-            ])
     if archives is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-archives', archives
@@ -157,14 +144,15 @@ def step(name, inputs, output,
             '-mapper', mapper,
             '-reducer', reducer
         ])
+    # Don't write empty files
+    to_return['HadoopJarStep']['Args'].append('-lazyOutput')
     if multiple_outputs:
-        to_return['HadoopJarStep']['Args'].extend([
-                '-outputformat', 'edu.jhu.cs.MultipleOutputFormat'
-            ])
+        to_return['HadoopJarStep']['Args'].append('-multiOutput')
     if inputformat is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-inputformat', inputformat
             ])
+    else:
     return to_return
 
 # TODO: Flesh out specification of protostep and migrate to Dooplicity
@@ -745,7 +733,7 @@ class RailRnaElastic:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming.jar',
+        hadoop_jar=_hadoop_streaming_jar,
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -1161,9 +1149,9 @@ class RailRnaElastic:
         )
         elastic_parser.add_argument('--hadoop-jar', type=str, required=False,
             metavar='<jar>',
-            default='/home/hadoop/contrib/streaming/' \
-                    'hadoop-streaming.jar',
-            help=('Hadoop Streaming Java ARchive to use; controls version')
+            default=_hadoop_streaming_jar,
+            help=('Hadoop Streaming Java ARchive to use; must be modified '
+                  'to include -multiOutput option using package_rail.sh')
         )
         elastic_parser.add_argument('--master-instance-count', type=int,
             metavar='<int>',
@@ -1603,6 +1591,8 @@ class RailRnaAlign:
             for line in samtools_process.stderr:
                 if 'Version:' in line:
                     base.samtools_version = line.rpartition(' ')[-1].strip()
+                    if base.samtools_version[-1] == ')':
+                        base.samtools_version = base.samtools_version[:-1]
             base.detect_message =('Detected Bowtie 1 v{0}, Bowtie 2 v{1}, '
                                   'and SAMTools v{2}.').format(
                                                base.bowtie1_version,
@@ -2523,13 +2513,15 @@ class RailRnaLocalPreprocessJson:
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        num_processes=1, keep_intermediates=False, check_manifest=True):
+        num_processes=1, gzip_intermediates=False, gzip_level=3,
+        keep_intermediates=False, check_manifest=True):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
         RailRnaLocal(base, check_manifest=check_manifest,
-            num_processes=num_processes, keep_intermediates=keep_intermediates)
+            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
+            gzip_level=gzip_level, keep_intermediates=keep_intermediates)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
         if base.errors:
@@ -2563,7 +2555,7 @@ class RailRnaElasticPreprocessJson:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming.jar',
+        hadoop_jar=_hadoop_streaming_jar,
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -2656,12 +2648,14 @@ class RailRnaLocalAlignJson:
         tie_margin=6, very_replicable=False, normalize_percentile=0.75,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
-        bed_basename='', num_processes=1, keep_intermediates=False):
+        bed_basename='', num_processes=1, gzip_intermediates=False,
+        gzip_level=3, keep_intermediates=False):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
+            gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             keep_intermediates=keep_intermediates)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=False, bowtie1_exe=bowtie1_exe,
@@ -2735,7 +2729,7 @@ class RailRnaElasticAlignJson:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming.jar',
+        hadoop_jar=_hadoop_streaming_jar,
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -2853,7 +2847,8 @@ class RailRnaLocalAllJson:
         very_replicable=False, normalize_percentile=0.75,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
-        num_processes=1, keep_intermediates=False, check_manifest=True):
+        num_processes=1, gzip_intermediates=False, gzip_level=3,
+        keep_intermediates=False, check_manifest=True):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -2861,7 +2856,8 @@ class RailRnaLocalAllJson:
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
         RailRnaLocal(base, check_manifest=check_manifest,
-            num_processes=num_processes, keep_intermediates=keep_intermediates)
+            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
+            gzip_level=gzip_level, keep_intermediates=keep_intermediates)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
@@ -2941,7 +2937,7 @@ class RailRnaElasticAllJson:
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar='/home/hadoop/contrib/streaming/hadoop-streaming.jar',
+        hadoop_jar=_hadoop_streaming_jar,
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,

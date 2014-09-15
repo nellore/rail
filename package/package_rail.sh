@@ -10,9 +10,10 @@ ARNAME=rail-rna-${VER}.tar.gz
 
 make -C hadoop
 
-# Make lib directory for the multiplefiles.jar file
+# Make lib directory for the hacked hadoop-streaming jar
+rm -rf lib
 mkdir -p lib
-cp hadoop/*.jar lib
+cp hadoop/out/*.jar lib
 
 tar -zcvf ${ARNAME} --exclude '*.pyc' --exclude '*.tar.gz' src lib
 
