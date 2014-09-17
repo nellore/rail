@@ -149,7 +149,7 @@ class FileMover:
             while tries < 5:
                 break_outer_loop = False
                 s3cmd_process \
-                    = subprocess.Popen(command_list)
+                    = subprocess.Popen(command_list, stdout=sys.stderr)
                 time.sleep(1)
                 last_print_time = time.time()
                 try:

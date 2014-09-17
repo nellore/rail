@@ -154,7 +154,7 @@ def handle_temporary_directory(temp_dir_path):
     shutil.rmtree(temp_dir_path)
 
 def write_reads(output_stream, input_stream=sys.stdin, verbose=False,
-    report_multiplier=1.2):
+    report_multiplier=1.2, offset=0):
     """ Writes input reads/readlets in tab-separated format parsable by Bowtie.
 
         Unpaired reads are marked 0 after original read ID, while paired-end
@@ -173,13 +173,15 @@ def write_reads(output_stream, input_stream=sys.stdin, verbose=False,
         report_multiplier: if verbose is True, the line number of a read or its 
             first readlet written to stderr increases exponentially with base
             report_multiplier.
+        offset: if first token of each line is to be ignored, this is 1; else 
+            this is 0. First token is ignored for TextInputFormat-style input.
 
         No return value.
     """
     next_report_line = 0
     global _input_line_count
     for i, line in enumerate(input_stream):
-        tokens = line.rstrip().split('\t')
+        tokens = line.rstrip().split('\t')[offset:]
         if len(tokens) not in (3, 5, 6):
             raise RuntimeError('The following line has an invalid number of '
                 'tab-separated tokens:\n%sA valid line has 3, 5, or 6 such '
@@ -342,7 +344,8 @@ class BowtieOutputThread(threading.Thread):
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 
     manifest_file='manifest', bowtie2_args=None, bin_size=10000, verbose=False,
-    exon_differentials=True, exon_intervals=False, report_multiplier=1.2):
+    exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
+    offset=0):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -475,6 +478,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         report_multiplier: if verbose is True, the line number of an alignment
             or read written to stderr increases exponentially with base
             report_multiplier.
+        offset: if first token of each line is to be ignored, this is 1; else 
+            this is 0. First token is ignored for TextInputFormat-style input.
 
         No return value.
     """
@@ -486,7 +491,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     with open(reads_file, 'w') as read_stream:
         write_reads(
             read_stream, input_stream=input_stream, verbose=verbose,
-            report_multiplier=report_multiplier
+            report_multiplier=report_multiplier, offset=offset
         )
     output_file = os.path.join(temp_dir, 'out.sam')
     bowtie_command = ' '.join([bowtie2_exe,
@@ -544,6 +549,10 @@ if __name__ == '__main__':
         const=True,
         default=False, 
         help='Print exon intervals')
+    parser.add_argument('--ignore-first-token', action='store_const',
+        const=True,
+        default=False, 
+        help='Ignores first token of every line')
     parser.add_argument('--manifest', type=str, required=False,
         default='manifest',
         help='Path to manifest file')
@@ -589,7 +598,8 @@ if __name__ == '__main__' and not args.test:
         bin_size=args.partition_length,
         exon_differentials=args.exon_differentials,
         exon_intervals=args.exon_intervals,
-        report_multiplier=args.report_multiplier)
+        report_multiplier=args.report_multiplier,
+        offset=(1 if args.ignore_first_token else 0))
     print >>sys.stderr, 'DONE with align_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)

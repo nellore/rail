@@ -124,6 +124,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
         steps = OrderedDict()
         # Check steps for requred data
         required_data = set(['input', 'output', 'mapper', 'reducer'])
+        bad_output_data = []
         try:
             for step in job_flow:
                 if 'hadoop-streaming' \
@@ -155,10 +156,10 @@ def run_job_flow(branding, json_config, force, no_browser=False,
                 )
             raise
         iface.step('Read job flow from input JSON.')
+        iface.status('Checking that output directories on S3 are writable...')
         '''Check steps for required Hadoop Streaming command-line parameters
         and for whether outputs are writable.'''
         missing_data = defaultdict(list)
-        bad_output_data = []
         identity_steps = []
         identity_mappers \
             = set(['cat', 'org.apache.hadoop.mapred.lib.IdentityMapper'])
@@ -202,27 +203,30 @@ def run_job_flow(branding, json_config, force, no_browser=False,
         the user.'''
         buckets = set()
         for step in steps:
+            step_data = steps[step]
             if ab.Url(step_data['output']).is_s3:
                 s3_ansible.remove_dir(steps[step]['output'])
-                buckets.add(ab.bucket_from_url(steps[step]['output']))
+                buckets.add(ab.bucket_from_url(step_data['output'])
         for bucket in buckets:
             try:
                 s3_ansible.create_bucket(bucket)
-            except Exception:
+            except Exception as e:
                 raise RuntimeError(('Bucket %s already exists on S3. Change '
                                     'affected output directories in job flow '
                                     'and try again. The more distinctive the '
                                     'name chosen, the less likely it\'s '
                                     'already a bucket on S3. It may be '
-                                    'easier to create a bucket first on S3 '
-                                    'and use its name + a subdirectory as '
-                                    'the output directory.') % bucket)
+                                    'easier to create a bucket first using '
+                                    'the web interface and use its name + a '
+                                    'subdirectory as the output directory.')
+                                    % bucket)
         iface.step('Set up output directories on S3.')
+        iface.status('Submitting job flow...')
         job_flow_response = aws_ansible.post_request(full_payload)
         json_response = json.load(job_flow_response)
         if 'JobFlowId' not in json_response:
-            raise RuntimeError('Job submission failed. Server returned the '
-                               'following response: %s.'
+            raise RuntimeError('Job flow submission failed. Server returned '
+                               'the following response: %s.'
                                 % json.dumps(json_response, sort_keys=True,
                                     indent=4, separators=(',', ': ')))
         else:

@@ -241,12 +241,12 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                     ])
                                 )
                         open_args = [output_file, 'w']
+                    try:
+                        os.makedirs(os.path.dirname(output_file))
+                    except OSError:
+                        pass
                 else:
                     open_args = []
-                try:
-                    os.makedirs(os.path.dirname(output_file))
-                except OSError:
-                    pass
                 '''Use xopen to handle compressed streams and normal streams
                 generally.'''
                 with xopen(gzip_output if not to_stdout else '-', *open_args) \

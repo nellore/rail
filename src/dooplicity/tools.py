@@ -35,6 +35,7 @@ THE SOFTWARE.
 from itertools import groupby
 import os
 import threading
+import contextlib
 
 class KeepAlive(threading.Thread):
     """ Writes Hadoop status messages to avert task termination. """
@@ -112,19 +113,52 @@ def path_join(unix, *args):
     else:
         return os.path.join(*args)
 
+@contextlib.contextmanager
 def xopen(gzipped, *args):
     """ Passes args on to the appropriate opener, gzip or regular.
 
         gzipped: True iff gzip.open() should be used to open rather than
             open(); False iff open() should be used; None if input should be
-            read and guessed; '-' if output should be stdout
+            read and guessed; '-' if writing to stdout
+        *args: unnamed arguments to pass
+
+        Yield value: file object
+    """
+    import sys
+    if gzipped == '-':
+        fh = sys.stdout
+    else:
+        import gzip
+        if gzipped is None:
+            with open(args[0], 'rb') as binary_input_stream:
+                # Check for magic number
+                if binary_input_stream.read(2) == '\x1f\x8b':
+                    gzipped = True
+                else:
+                    gzipped = False
+        if gzipped:
+            fh = gzip.open(*args)
+        else:
+            fh = open(*args)
+    try:
+        yield fh
+    finally:
+        if fh is not sys.stdout:
+            fh.close()
+
+def yopen(gzipped, *args):
+    """ Passes args on to the appropriate opener, gzip or regular.
+
+        Just like xopen minus stdout feature and for use without
+        with statement. Could merge xopen and yopen at some point.
+
+        gzipped: True iff gzip.open() should be used to open rather than
+            open(); False iff open() should be used; None if input should be
+            read and guessed
         *args: unnamed arguments to pass
 
         Return value: file object
     """
-    if gzipped == '-':
-        import sys
-        return sys.stdout
     import gzip
     if gzipped is None:
         with open(args[0], 'rb') as binary_input_stream:

@@ -38,6 +38,11 @@ import subprocess
 on EMR depending on bootstraps.'''
 _hadoop_streaming_jar = '/mnt/lib/hadoop-streaming-mod.jar'
 _relevant_elephant_jar = '/mnt/lib/relevant-elephant.jar'
+_hadoop_lzo_jar = ('/home/hadoop/.versions/2.4.0/share/hadoop'
+                   '/common/lib/hadoop-lzo.jar')
+_s3distcp_jar = '/home/hadoop/lib/emr-s3distcp-1.0.jar'
+_hdfs_temp_dir = 'hdfs:///railtemp'
+_base_combine_split_size = 268435456 # 250 MB
 _elastic_bowtie1_idx = '/mnt/index/genome'
 _elastic_bowtie2_idx = '/mnt/index/genome'
 _elastic_bedgraphtobigwig_exe ='/mnt/bin/bedGraphToBigWig'
@@ -114,7 +119,6 @@ def step(name, inputs, output,
             'Jar' : jar,
             'Args' : []
         }
-
     }
     to_return['HadoopJarStep']['Args'].extend(
             ['-D', 'mapreduce.job.reduces=%d' % tasks]
@@ -149,8 +153,6 @@ def step(name, inputs, output,
             '-mapper', mapper,
             '-reducer', reducer
         ])
-    # Don't write empty files
-    to_return['HadoopJarStep']['Args'].append('-lazyOutput')
     if multiple_outputs:
         '''This option is only available in hacked hadoop-streaming; see
         hadoop/make_jars.sh for more information.'''
@@ -165,7 +167,7 @@ def step(name, inputs, output,
         to_return['HadoopJarStep']['Args'].extend([
                 '-inputformat',
                 'com.twitter.elephantbird.mapred.input'
-                '.DeprecatedLzoTextInputFormat'
+                '.DeprecatedCombineLzoTextInputFormat'
             ])
     to_return['HadoopJarStep']['Args'].extend([
             '-outputformat',
@@ -199,6 +201,10 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                 'archives' : archives parameter; present only if necessary
                 'multiple_outputs' : key that's present iff there are multiple
                     outputs
+                'index_output' : key that's present iff output LZOs should be
+                    indexed after step; applicable only in Hadoop modes
+                'direct_copy' : if output directory is s3, copy outputs there 
+                    directly; do not use hdfs
                 'extra_args' : list of '-D' args
             }
 
@@ -220,10 +226,20 @@ def steps(protosteps, action_on_failure, jar, step_dir,
     for protostep in protosteps:
         assert ('keys' in protostep and 'part' in protostep) or \
                 ('keys' not in protostep and 'part' not in protostep)
-        identity_mapper = ('cut -f 2-' if (unix and 
-                           'inputformat' in protostep
-                           and protostep['inputformat']
-                           == 'edu.jhu.cs.CombinedInputFormat') else 'cat')
+        # Can't copy directly to S3 if there are multiple outputs ... yet!
+        assert not (('direct_copy' in protostep) and ('multiple_outputs'
+                        in protostep))
+        identity_mapper = ('cut -f 2-' if unix else 'cat')
+        final_output = (path_join(unix, intermediate_dir,
+                                        protostep['output'])
+                        if 'no_output_prefix' not in
+                        protostep else protostep['output'])
+        final_output_url = ab.Url(final_output)
+        if (not ('direct_copy' in protostep) and unix
+            and final_output_url.is_s3):
+            intermediate_output = _hdfs_temp_dir + final_output_url.suffix[1:]
+        else:
+            intermediate_output = final_output
         true_steps.append(step(
                 name=protostep['name'],
                 inputs=([path_join(unix, intermediate_dir,
@@ -231,10 +247,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                             protostep['inputs']]
                         if 'no_input_prefix' not in
                         protostep else protostep['inputs']),
-                output=(path_join(unix, intermediate_dir,
-                                        protostep['output'])
-                        if 'no_output_prefix' not in
-                        protostep else protostep['output']),
+                output=intermediate_output,
                 mapper=' '.join(['pypy' if unix
                         else _executable, 
                         path_join(unix, step_dir,
@@ -265,6 +278,37 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                     if 'extra_args' in protostep else [])
             )
         )
+        if unix and 'index_output' in protostep:
+            # Index inputs before subsequent step begins
+            true_steps.append(
+                    {
+                        'Name' : ('Index output of "'
+                                    + protostep['name'] + '"'),
+                        'ActionOnFailure' : action_on_failure,
+                        'HadoopJarStep' : {
+                            'Jar' : _hadoop_lzo_jar,
+                            'Args' : ['com.hadoop.compression.lzo'
+                                      '.DistributedLzoIndexer',
+                                      intermediate_output]
+                        }
+                    }
+                )
+        if (not ('direct_copy' in protostep) and unix
+            and final_output_url.is_s3):
+            # s3distcp intermediates over
+            true_steps.append(
+                    {
+                        'Name' : ('Copy output of "'
+                                    + protostep['name'] + '" to S3'),
+                        'ActionOnFailure' : action_on_failure,
+                        'HadoopJarStep' : {
+                            'Jar' : _s3distcp_jar,
+                            'Args' : ['--src', intermediate_output,
+                                      '--dest', final_output,
+                                      '--deleteOnSuccess']
+                        }
+                    }
+                )
     return true_steps
 
 class RailRnaErrors:
@@ -748,7 +792,7 @@ class RailRnaElastic:
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-        log_uri=None, ami_version='3.2.0',
+        log_uri=None, ami_version='3.1.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -774,9 +818,11 @@ class RailRnaElastic:
             "m2.2xlarge"  : 4,
             "m2.4xlarge"  : 8,
             "cc1.4xlarge" : 8,
-            "c3.2xlarge" : 8,
-            "c3.4xlarge" : 16,
-            "c3.8xlarge" : 32
+            "m3.xlarge"   : 4,
+            "m3.2xlarge"  : 8,
+            "c3.2xlarge"  : 8,
+            "c3.4xlarge"  : 16,
+            "c3.8xlarge"  : 32
         }
 
         base.instance_mems = {
@@ -788,6 +834,8 @@ class RailRnaElastic:
             "m2.xlarge"   : (16*1024), # 17.1 GB
             "m2.2xlarge"  : (16*1024), # 34.2 GB
             "m2.4xlarge"  : (16*1024), # 68.4 GB
+            "m3.xlarge"   : (15*1024),
+            "m3.2xlarge"  : (30*1024),
             "cc1.4xlarge" : (16*1024), # 23.0 GB
             "c3.2xlarge" : (15*1024), # 15.0 GB
             "c3.4xlarge" : (30*1024), # 30 GB
@@ -806,6 +854,8 @@ class RailRnaElastic:
             "m2.2xlarge"  : 30720,
             "m2.4xlarge"  : 61440,
             "cc1.4xlarge" : 20480,
+            "m3.xlarge"   : 11520,
+            "m3.2xlarge"  : 23040,
             "c3.2xlarge" : 11520,
             "c3.4xlarge" : 23040,
             "c3.8xlarge" : 53248
@@ -1152,8 +1202,8 @@ class RailRnaElastic:
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='3.2.0',
-            help='Amazon Linux AMI to use'
+            default='3.1.1',
+            help='Amazon Machine Image to use'
         )
         elastic_parser.add_argument('--visible-to-all-users',
             action='store_const',
@@ -1473,17 +1523,19 @@ class RailRnaPreprocess:
                                                     ab.Url(push_dir).to_url(
                                                             caps=True
                                                         ),
-                                                    '--to-stdout' if elastic
+                                                    '--stdout' if elastic
                                                     else ''
                                                 ),
                 'inputs' : [base.manifest],
                 'no_input_prefix' : True,
-                'output' : prep_dir,
+                'output' : push_dir if elastic else prep_dir,
                 'no_output_prefix' : True,
                 'inputformat' : (
                        'org.apache.hadoop.mapred.lib.NLineInputFormat'
                     ),
-                'taskx' : 0
+                'taskx' : 0,
+                'index_output' : True,
+                'direct_copy' : True
             },
         ]
 
@@ -2013,7 +2065,7 @@ class RailRnaAlign:
                 'run' : ('align_reads.py --bowtie-idx={0} --bowtie2-idx={1} '
                          '--bowtie2-exe={2} '
                          '--exon-differentials --partition-length={3} '
-                         '--manifest={4} {5} {6} -- {7}').format(
+                         '--manifest={4} {5} {6} {7} -- {8}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
@@ -2021,12 +2073,19 @@ class RailRnaAlign:
                                                         manifest,
                                                         verbose,
                                                         keep_alive,
+                                                        '--ignore-first-token'
+                                                        if elastic else '',
                                                         base.bowtie2_args),
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
                 'taskx' : 0,
-                'multiple_outputs' : True
+                'multiple_outputs' : True,
+                'extra_args' : [
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size / 4)
+                    ]
             },
             {
                 'name' : 'Segment unique read sequences into readlets',
@@ -2043,10 +2102,10 @@ class RailRnaAlign:
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % _base_combine_split_size
                     ]
             },
             {
@@ -2065,14 +2124,15 @@ class RailRnaAlign:
                 'taskx' : 3,
                 'part' : 'k1,1',
                 'keys' : 1,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*4), # 4 GB
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size*4),
                         'mapreduce.reduce.memory.mb=%d'
                         % ((base.nodemanager_mem / base.max_tasks * 8 / 10 * 2)
                             if hasattr(base, 'nodemanager_mem') else 0),
-                    ]
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Search for introns using readlet alignments',
@@ -2099,11 +2159,12 @@ class RailRnaAlign:
                 'taskx' : 3,
                 'part' : 'k1,1',
                 'keys' : 1,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*4), # 4 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size*4)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Enumerate possible intron cooccurrences on readlets',
@@ -2117,11 +2178,12 @@ class RailRnaAlign:
                 'taskx' : 1,
                 'part' : 'k1,2',
                 'keys' : 4,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Get transcriptome elements for realignment',
@@ -2134,11 +2196,12 @@ class RailRnaAlign:
                 'taskx' : 1,
                 'part' : 'k1,4',
                 'keys' : 4,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Build index of transcriptome elements',
@@ -2155,11 +2218,12 @@ class RailRnaAlign:
                 'taskx' : None,
                 'part' : 'k1,1',
                 'keys' : 1,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Finalize intron cooccurrences on reads',
@@ -2185,11 +2249,12 @@ class RailRnaAlign:
                                     'intron.tar.gz#intron')).to_native_url(),
                 'part' : 'k1,1',
                 'keys' : 1,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*2) # 2 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size*2)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Get transcriptome elements for read realignment',
@@ -2202,11 +2267,12 @@ class RailRnaAlign:
                 'taskx' : max(8, base.sample_count / 30),
                 'part' : 'k1,4',
                 'keys' : 7,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Align reads to transcriptome elements',
@@ -2228,11 +2294,12 @@ class RailRnaAlign:
                 'taskx' : max(6, base.sample_count / 20),
                 'part' : 'k1,1',
                 'keys' : 1,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*3), # 3 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size*3)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Collect and compare read alignments',
@@ -2254,10 +2321,10 @@ class RailRnaAlign:
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*3) # 3 GB
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size*3)
                     ]
             },
             {
@@ -2273,11 +2340,12 @@ class RailRnaAlign:
                 'taskx' : 1,
                 'part' : 'k1,6',
                 'keys' : 7,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Finalize primary alignments of spliced reads',
@@ -2297,10 +2365,10 @@ class RailRnaAlign:
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
                     ]
             },
             {
@@ -2316,11 +2384,12 @@ class RailRnaAlign:
                 'taskx' : max(4, base.sample_count / 20),
                 'part' : 'k1,3',
                 'keys' : 3,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*2) # 2 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size*2)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Compile sample coverages from exon differentials',
@@ -2332,10 +2401,10 @@ class RailRnaAlign:
                 'part' : 'k1,2',
                 'keys' : 3,
                 'multiple_outputs' : True,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*2) # 2 GB
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size*2)
                     ]
             },
             {
@@ -2357,11 +2426,12 @@ class RailRnaAlign:
                 'taskx' : 1,
                 'part' : 'k1,1',
                 'keys' : 3,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Write normalization factors for sample coverages',
@@ -2378,11 +2448,12 @@ class RailRnaAlign:
                 'taskx' : None,
                 'part' : 'k1,1',
                 'keys' : 2,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Aggregate intron and indel results by sample',
@@ -2398,11 +2469,12 @@ class RailRnaAlign:
                 'taskx' : max(4, base.sample_count / 20),
                 'part' : 'k1,6',
                 'keys' : 6,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824*2) # 2 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size*2)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Write beds with intron and indel results by sample',
@@ -2422,11 +2494,12 @@ class RailRnaAlign:
                 'taskx' : 1,
                 'part' : 'k1,2',
                 'keys' : 4,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
+                    ],
+                'direct_copy' : True
             },
             {
                 'name' : 'Write bams with alignments by sample',
@@ -2453,13 +2526,14 @@ class RailRnaAlign:
                 'taskx' : 1,
                 'part' : ('k1,1' if base.do_not_output_bam_by_chr else 'k1,2'),
                 'keys' : 3,
-                'inputformat' : 'edu.jhu.cs.CombinedInputFormat',
                 'extra_args' : [
                         'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
                         'mapreduce.reduce.shuffle.merge.percent=0.4',
-                        'mapreduce.input.fileinputformat.split.maxsize=%d'
-                            % (1073741824) # 1 GB
-                    ]
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
+                    ],
+                'direct_copy' : True
             }]
 
     @staticmethod
@@ -2579,7 +2653,7 @@ class RailRnaElasticPreprocessJson:
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        log_uri=None, ami_version='3.2.0',
+        log_uri=None, ami_version='3.1.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2753,7 +2827,7 @@ class RailRnaElasticAlignJson:
         tie_margin=6, very_replicable=False,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
-        bed_basename='', log_uri=None, ami_version='3.2.0',
+        bed_basename='', log_uri=None, ami_version='3.1.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2961,7 +3035,7 @@ class RailRnaElasticAllJson:
         normalize_percentile=0.75, very_replicable=False,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
-        log_uri=None, ami_version='3.2.0',
+        log_uri=None, ami_version='3.1.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',

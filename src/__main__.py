@@ -121,6 +121,10 @@ class Launcher:
             payload: string with json payload to copy to stdin
                 of replacement process
         """
+        # Reactivate these lines just to see json
+        '''print json.dumps(json.loads(payload), sort_keys=True,
+                            indent=4, separators=(',', ': '))
+        quit()'''
         read_pipe, write_pipe = os.pipe()
         if os.fork() != 0:
             # Parent process; read from child after determining executable
@@ -500,8 +504,6 @@ if __name__ == '__main__':
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 region=args.region, verbose=args.verbose,
-                nucleotides_per_input=args.nucleotides_per_input,
-                gzip_input=(not args.do_not_gzip_input),
                 bowtie2_args=args.bowtie2_args,
                 genome_partition_length=args.genome_partition_length,
                 max_readlet_size=args.max_readlet_size,
@@ -600,8 +602,6 @@ if __name__ == '__main__':
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 region=args.region, verbose=args.verbose,
-                nucleotides_per_input=args.nucleotides_per_input,
-                gzip_input=(not args.do_not_gzip_input),
                 log_uri=args.log_uri,
                 ami_version=args.ami_version,
                 visible_to_all_users=args.visible_to_all_users,

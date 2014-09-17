@@ -118,12 +118,17 @@ class S3Ansible:
             No return value.
         """
         cleaned_url = clean_url(bucket)
-        subprocess.check_call(' '.join([self.aws, '--profile', self.profile,
-                                        's3 mb', cleaned_url]),
-                                bufsize=-1,
-                                shell=True,
-                                stderr=self._osdevnull,
-                                stdout=self._osdevnull)
+        try:
+            subprocess.check_output(' '.join([self.aws, '--profile',
+                                            self.profile,
+                                            's3 mb', cleaned_url,
+                                            '--region', 'us-east-1']),
+                                    bufsize=-1,
+                                    shell=True,
+                                    stderr=self._osdevnull)
+        except subprocess.CalledProcessError as e:
+            if 'BucketAlreadyOwnedByYou' not in e.output:
+                raise
 
     def exists(self, path):
         """ Checks whether a file on S3 exists.
@@ -300,8 +305,14 @@ class S3Ansible:
         try:
             self.create_bucket(bucket)
         except subprocess.CalledProcessError:
-            # Bucket exists
-            pass
+            raise RuntimeError(('Bucket %s already exists on S3. Change '
+                                'affected output directories in job flow '
+                                'and try again. The more distinctive the '
+                                'name chosen, the less likely it\'s '
+                                'already a bucket on S3. It may be '
+                                'easier to create a bucket first on S3 '
+                                'and use its name + a subdirectory as '
+                                'the output directory.') % bucket)
         # Remove bucket name from prefix
         prefix = cleaned_prefix[cleaned_prefix[6:].index('/')+7:]
         aws_command = ' '.join([self.aws, '--profile', self.profile,
@@ -319,7 +330,7 @@ class S3Ansible:
             # No Lifecycle Configuration
             rules = []
         return_value = lifecycle_process.wait()
-        if not return_value and not 'NoSuchLifecycleConfiguration' in errors:
+        if return_value and not 'NoSuchLifecycleConfiguration' in errors:
             # Raise exception iff lifecycle config exists
             raise RuntimeError(errors)
         add_rule = True
@@ -455,6 +466,7 @@ def retry(ExceptionToCheck, tries=4, delay=3, backoff=2, logger=None):
 
 @retry(socket.error, tries=4, delay=3, backoff=2)
 @retry(urllib2.URLError, tries=4, delay=3, backoff=2)
+@retry(urllib2.HTTPError, tries=4, delay=3, backoff=2)
 def urlopen_with_retry(request):
     """ Facilitates retries when opening URLs.
 

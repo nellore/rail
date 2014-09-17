@@ -47,7 +47,7 @@ import signal
 import gc
 import tempfile
 # For opening gzipped files and uncompressed files depending on magic number
-from tools import xopen
+from tools import yopen
 
 def add_args(parser):
     """ Adds args relevant to EMR simulator.
@@ -132,7 +132,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
     try:
         task_streams = {}
         for input_file in input_files:
-            with xopen(None, input_file) as input_stream:
+            with yopen(None, input_file) as input_stream:
                 for line in input_stream:
                     key = separator.join(
                                 line.strip().split(separator)[:key_fields]
@@ -146,14 +146,14 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             task_file = os.path.join(output_dir, str(task) +
                                                         '.' + str(process_id)
                                                         + '.unsorted.gz')
-                            task_streams[task] = xopen(
+                            task_streams[task] = yopen(
                                 True, task_file, 'w', gzip_level
                             )
                         else:
                             task_file = os.path.join(output_dir, str(task) +
                                                         '.' + str(process_id)
                                                         + '.unsorted')
-                            task_streams[task] = xopen(
+                            task_streams[task] = yopen(
                                 False, task_file, 'w'
                             )
                         task_streams[task].write(line)
@@ -296,7 +296,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                      'directory %s.') % key_dir,
                                     command_to_run)
                     if gzip:
-                        task_file_streams[key] = xopen(True,
+                        task_file_streams[key] = yopen(True,
                                 os.path.join(key_dir, str(task_id) + '.gz'),
                                     'w', gzip_level
                             )
@@ -572,9 +572,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             if step_data['mapper'] not in identity_mappers:
                 # Perform map step only if mapper isn't identity
                 try:
-                    if step_data['outputformat'] \
-                        == 'edu.jhu.cs.MultipleOutputFormat' \
-                        or 'multiOutput' in step_data:
+                    if ('multiple_outputs' in step_data) or \
+                        step_data['outputformat'] \
+                        == 'edu.jhu.cs.MultipleOutputFormat':
                         multiple_outputs = True
                     else:
                         multiple_outputs = False
@@ -610,7 +610,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             failed = True
                             raise
                     try:
-                        if step_data['outputformat'] \
+                        if ('multiple_outputs' in step_data) or \
+                            step_data['outputformat'] \
                             == 'edu.jhu.cs.MultipleOutputFormat':
                             # Multiple outputs apply AFTER reduce step
                             multiple_outputs = False
@@ -808,7 +809,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 input_file_count = len(input_files)
                 pool = multiprocessing.Pool(num_processes, init_worker)
                 try:
-                    multiple_outputs = (step_data['outputformat']
+                    multiple_outputs = (('multiple_outputs' in step_data) or
+                                        step_data['outputformat']
                                         == 'edu.jhu.cs.MultipleOutputFormat')
                 except KeyError:
                     multiple_outputs = False
