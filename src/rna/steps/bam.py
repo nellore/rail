@@ -70,6 +70,7 @@ import version
 import filemover
 import threading
 from dooplicity.ansibles import Url
+import subprocess
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -162,6 +163,12 @@ while True:
                     raise RuntimeError('samtools returned exitlevel %d' 
                         % samtools_return)
                 subprocess_stdout.close()
+                # Index bam
+                if not output_path.endswith('.unmapped.bam'):
+                    subprocess.check_call('samtools index %s'
+                                            % output_path, 
+                                            shell=True,
+                                            bufsize=-1)
         last_output_filename = output_filename
         last_output_path = output_path
         move_temporary_file = True
@@ -174,7 +181,10 @@ while True:
         and not output_url.is_local:
         mover.put(last_output_path, 
             output_url.plus(last_output_filename))
+        mover.put(last_output_path + '.bai',
+                    output_url.plus(last_output_filename + '.bai'))
         os.remove(last_output_path)
+        os.remove(last_output_path + '.bai')
         move_temporary_file = False
     if not line: break
     if ((sample_label != last_sample_label or 
@@ -190,6 +200,12 @@ while True:
                         raise RuntimeError('samtools returned exitlevel %d' 
                             % samtools_return)
                     subprocess_stdout.close()
+                    # Index bam
+                    if not output_path.endswith('.unmapped.bam'):
+                        subprocess.check_call('samtools index %s'
+                                                % output_path, 
+                                                shell=True,
+                                                bufsize=-1)
             '''If --out is a local file, just write directly to that file.
             Otherwise, write to a temporary file that will later be uploaded to
             the destination.'''
