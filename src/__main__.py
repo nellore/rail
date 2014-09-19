@@ -543,6 +543,7 @@ if __name__ == '__main__':
                 ec2_key_name=args.ec2_key_name,
                 keep_alive=args.keep_alive,
                 termination_protected=args.termination_protected,
+                no_consistent_view=args.no_consistent_view,
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime
             )
@@ -593,6 +594,7 @@ if __name__ == '__main__':
                 ec2_key_name=args.ec2_key_name,
                 keep_alive=args.keep_alive,
                 termination_protected=args.termination_protected,
+                no_consistent_view=args.no_consistent_view,
                 intermediate_lifetime=args.intermediate_lifetime
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'elastic':
@@ -620,6 +622,7 @@ if __name__ == '__main__':
                 ec2_key_name=args.ec2_key_name,
                 keep_alive=args.keep_alive,
                 termination_protected=args.termination_protected,
+                no_consistent_view=args.no_consistent_view,
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime
             )

@@ -236,7 +236,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                         protostep else protostep['output'])
         final_output_url = ab.Url(final_output)
         if (not ('direct_copy' in protostep) and unix
-            and final_output_url.is_s3):
+            and final_output_url.is_s3 and base.no_consistent_view):
             intermediate_output = _hdfs_temp_dir + final_output_url.suffix[1:]
         else:
             intermediate_output = final_output
@@ -294,7 +294,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                     }
                 )
         if (not ('direct_copy' in protostep) and unix
-            and final_output_url.is_s3):
+            and final_output_url.is_s3 and base.no_consistent_view):
             # s3distcp intermediates over
             true_steps.append(
                     {
@@ -792,7 +792,7 @@ class RailRnaElastic:
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-        log_uri=None, ami_version='3.1.1',
+        log_uri=None, ami_version='3.2.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -802,7 +802,8 @@ class RailRnaElastic:
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False, intermediate_lifetime=4):
+        termination_protected=False, no_consistent_view=False,
+        intermediate_lifetime=4):
 
         # CLI is REQUIRED in elastic mode
         base.check_s3(reason='Rail-RNA is running in "elastic" mode')
@@ -1159,6 +1160,7 @@ class RailRnaElastic:
         base.ec2_key_name = ec2_key_name
         base.keep_alive = keep_alive
         base.termination_protected = termination_protected
+        base.no_consistent_view = no_consistent_view
 
     @staticmethod
     def add_args(general_parser, required_parser, output_parser, 
@@ -1202,7 +1204,7 @@ class RailRnaElastic:
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='3.1.1',
+            default='3.2.1',
             help='Amazon Machine Image to use'
         )
         elastic_parser.add_argument('--visible-to-all-users',
@@ -1219,6 +1221,13 @@ class RailRnaElastic:
                   '<choice> is in {"TERMINATE_JOB_FLOW", "CANCEL_AND_WAIT", '
                   '"CONTINUE", "TERMINATE_CLUSTER"}')
         )
+        elastic_parser.add_argument('--no-consistent-view',
+            action='store_const',
+            const=True,
+            default=False,
+            help=('do not use "consistent view," which incurs DynamoDB '
+                 'charges; some intermediate data may then (very rarely) '
+                 'be lost')
         elastic_parser.add_argument('--hadoop-jar', type=str, required=False,
             metavar='<jar>',
             default=None,
@@ -1399,8 +1408,10 @@ class RailRnaElastic:
                         ('mapreduce.output.fileoutputformat.compress.codec='
                          'org.apache.hadoop.io.compress.GzipCodec'),
                         '-m',
-                        'mapreduce.job.maps=%d' % base.total_cores
-                    ],
+                        'mapreduce.job.maps=%d' % base.total_cores,
+
+                    ] + (['-e', 'fs.s3.consistent=true']
+                            if not base.no_consistent_view else []),
                     'Path' : ('s3://elasticmapreduce/bootstrap-actions/'
                               'configure-hadoop')
                 }
@@ -2653,7 +2664,7 @@ class RailRnaElasticPreprocessJson:
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        log_uri=None, ami_version='3.1.1',
+        log_uri=None, ami_version='3.2.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2663,8 +2674,8 @@ class RailRnaElasticPreprocessJson:
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False, check_manifest=True,
-        intermediate_lifetime=4):
+        termination_protected=False, no_consistent_view=False,
+        check_manifest=True, intermediate_lifetime=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -2685,6 +2696,7 @@ class RailRnaElasticPreprocessJson:
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected,
+            no_consistent_view=no_consistent_view,
             intermediate_lifetime=intermediate_lifetime)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
@@ -2827,7 +2839,7 @@ class RailRnaElasticAlignJson:
         tie_margin=6, very_replicable=False,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
-        bed_basename='', log_uri=None, ami_version='3.1.1',
+        bed_basename='', log_uri=None, ami_version='3.2.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2837,7 +2849,7 @@ class RailRnaElasticAlignJson:
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False,
+        termination_protected=False, no_consistent_view=False,
         intermediate_lifetime=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
@@ -2858,6 +2870,7 @@ class RailRnaElasticAlignJson:
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected,
+            no_consistent_view=no_consistent_view,
             intermediate_lifetime=intermediate_lifetime)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=True, bowtie1_exe=bowtie1_exe,
@@ -3035,7 +3048,7 @@ class RailRnaElasticAllJson:
         normalize_percentile=0.75, very_replicable=False,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
-        log_uri=None, ami_version='3.1.1',
+        log_uri=None, ami_version='3.2.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -3046,7 +3059,7 @@ class RailRnaElasticAllJson:
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, check_manifest=True,
-        intermediate_lifetime=4):
+        no_consistent_view=False, intermediate_lifetime=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -3067,6 +3080,7 @@ class RailRnaElasticAllJson:
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected,
+            no_consistent_view=no_consistent_view,
             intermediate_lifetime=intermediate_lifetime)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
