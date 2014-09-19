@@ -206,7 +206,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
             step_data = steps[step]
             if ab.Url(step_data['output']).is_s3:
                 s3_ansible.remove_dir(steps[step]['output'])
-                buckets.add(ab.bucket_from_url(step_data['output'])
+                buckets.add(ab.bucket_from_url(step_data['output']))
         for bucket in buckets:
             try:
                 s3_ansible.create_bucket(bucket)

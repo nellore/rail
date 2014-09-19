@@ -178,7 +178,8 @@ def step(name, inputs, output,
 
 # TODO: Flesh out specification of protostep and migrate to Dooplicity
 def steps(protosteps, action_on_failure, jar, step_dir, 
-            reducer_count, intermediate_dir, extra_args=[], unix=False):
+            reducer_count, intermediate_dir, extra_args=[], unix=False,
+            no_consistent_view=False):
     """ Turns list with "protosteps" into well-formed StepConfig list.
 
         A protostep looks like this:
@@ -215,6 +216,8 @@ def steps(protosteps, action_on_failure, jar, step_dir,
         reducer_count: number of reducers; determines number of tasks
         unix: performs UNIX-like path joins; also inserts pypy in for
             executable since unix=True only on EMR
+        no_consistent_view: True iff consistent view should be switched off;
+            adds s3distcp commands when there are multiple outputs
 
         Return value: list of StepConfigs (see Elastic MapReduce API docs)
     """
@@ -236,7 +239,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                         protostep else protostep['output'])
         final_output_url = ab.Url(final_output)
         if (not ('direct_copy' in protostep) and unix
-            and final_output_url.is_s3 and base.no_consistent_view):
+            and final_output_url.is_s3 and no_consistent_view):
             intermediate_output = _hdfs_temp_dir + final_output_url.suffix[1:]
         else:
             intermediate_output = final_output
@@ -294,7 +297,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                     }
                 )
         if (not ('direct_copy' in protostep) and unix
-            and final_output_url.is_s3 and base.no_consistent_view):
+            and final_output_url.is_s3 and no_consistent_view):
             # s3distcp intermediates over
             true_steps.append(
                     {
@@ -1227,7 +1230,7 @@ class RailRnaElastic:
             default=False,
             help=('do not use "consistent view," which incurs DynamoDB '
                  'charges; some intermediate data may then (very rarely) '
-                 'be lost')
+                 'be lost'))
         elastic_parser.add_argument('--hadoop-jar', type=str, required=False,
             metavar='<jar>',
             default=None,
@@ -2721,7 +2724,8 @@ class RailRnaElasticPreprocessJson:
                         base.output_dir, elastic=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
-                    reducer_count, base.intermediate_dir, unix=True
+                    reducer_count, base.intermediate_dir, unix=True,
+                    no_consistent_view=base.no_consistent_view
                 )
         self._json_serial['AmiVersion'] = base.ami_version
         if base.log_uri is not None:
@@ -2922,7 +2926,8 @@ class RailRnaElasticAlignJson:
                                                         elastic=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
-                    reducer_count, base.intermediate_dir, unix=True
+                    reducer_count, base.intermediate_dir, unix=True,
+                    no_consistent_view=base.no_consistent_view
                 )
         self._json_serial['AmiVersion'] = base.ami_version
         if base.log_uri is not None:
@@ -3137,13 +3142,15 @@ class RailRnaElasticAllJson:
                                                     elastic=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
-                    reducer_count, base.intermediate_dir, unix=True
+                    reducer_count, base.intermediate_dir, unix=True,
+                    no_consistent_view=base.no_consistent_view
                 ) + \
                 steps(
                     RailRnaAlign.protosteps(base, push_dir, elastic=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
-                    reducer_count, base.intermediate_dir, unix=True
+                    reducer_count, base.intermediate_dir, unix=True,
+                    no_consistent_view=base.no_consistent_view
                 )
         self._json_serial['AmiVersion'] = base.ami_version
         if base.log_uri is not None:

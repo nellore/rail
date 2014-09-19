@@ -18,4 +18,5 @@ ARNAME=rail-rna-${VER}.tar.gz
 cd ..
 tar czvf ${ARNAME} --exclude '*.pyc' --exclude '*.tar.gz' src lib
 
+echo "This should be executed from Rail's root directory!"
 echo "s3cmd put --acl-public ${ARNAME} s3://rail-emr/bin/"
