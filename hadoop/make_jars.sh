@@ -7,29 +7,27 @@
 # including its particular hadoop-lzo
 
 cd $(dirname "${BASH_SOURCE[0]}")
-rm -f relevantelephant.tar.gz relevantelephant.jar hadoop-streaming-mod.jar hadoop-streaming-mod.tar.gz
+rm -f relevantelephant.tar.gz relevantelephant.jar multiple-files.jar multiple-files.tar.gz
 tar cvzf relevant-elephant.tar.gz relevant-elephant
-tar cvzf hadoop-streaming-mod.tar.gz hadoop-streaming-mod
+tar cvzf multiple-files.tar.gz multiple-files
 scp -i $2 relevant-elephant.tar.gz hadoop@$1:~/relevant-elephant.tar.gz
-scp -i $2 hadoop-streaming-mod.tar.gz hadoop@$1:~/hadoop-streaming-mod.tar.gz
+scp -i $2 multiple-files.tar.gz hadoop@$1:~/multiple-files.tar.gz
 ssh -t -t -i $2 hadoop@${1} <<ENDSSH
 tar xvzf relevant-elephant.tar.gz
 rm -rf relevant-elephant_out
 mkdir -p relevant-elephant_out
 javac -classpath \$(find ~/share/ *.jar | tr '\n' ':') -d relevant-elephant_out relevant-elephant/*.java
 jar -cvf relevant-elephant.jar -C relevant-elephant_out .
-tar xvzf hadoop-streaming-mod.tar.gz
-rm -rf hadoop-streaming-mod_out
-mkdir -p hadoop-streaming-mod_out
-javac -classpath \$(find ~/share/ *.jar | tr '\n' ':') -d hadoop-streaming-mod_out hadoop-streaming-mod/*.java
-cp ~/share/hadoop/tools/lib/hadoop-streaming*.jar hadoop-streaming-mod_out/
-cd hadoop-streaming-mod_out; mv hadoop-streaming*.jar hadoop-streaming-mod.jar; jar uf hadoop-streaming*.jar org/apache/hadoop/streaming/* edu/jhu/cs/MultipleOutputs*
-mv hadoop-streaming-mod.jar ../
+tar xvzf multiple-files.tar.gz
+rm -rf multiple-files_out
+mkdir -p multiple-files_out
+javac -classpath \$(find ~/share/ *.jar | tr '\n' ':') -d multiple-files_out multiple-files/*.java
+jar -cvf multiple-files.jar -C multiple-files_out .
 logout
 ENDSSH
-scp -i $2 hadoop@$1:~/hadoop-streaming-mod.jar ./
+scp -i $2 hadoop@$1:~/multiple-files.jar ./
 scp -i $2 hadoop@$1:~/relevant-elephant.jar ./
 rm -rf ../lib
 mkdir -p ../lib
-cp hadoop-streaming-mod.jar ../lib/
+cp multiple-files.jar ../lib/
 cp relevant-elephant.jar ../lib/

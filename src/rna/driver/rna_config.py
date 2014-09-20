@@ -36,7 +36,8 @@ import subprocess
 
 '''These are placed here for convenience; their locations may change
 on EMR depending on bootstraps.'''
-_hadoop_streaming_jar = '/mnt/lib/hadoop-streaming-mod.jar'
+_hadoop_streaming_jar = '/home/hadoop/contrib/streaming/hadoop-streaming.jar'
+_multiple_files_jar = '/mnt/lib/multiple-files.jar'
 _relevant_elephant_jar = '/mnt/lib/relevant-elephant.jar'
 _hadoop_lzo_jar = ('/home/hadoop/.versions/2.4.0/share/hadoop'
                    '/common/lib/hadoop-lzo.jar')
@@ -137,6 +138,9 @@ def step(name, inputs, output,
     to_return['HadoopJarStep']['Args'].extend(
             ['-libjars', _relevant_elephant_jar]
         )
+    if multiple_outputs:
+        to_return['HadoopJarStep']['Args'][-1] \
+            +=  (',%s' % _multiple_files_jar)
     if archives is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-archives', archives
@@ -154,9 +158,9 @@ def step(name, inputs, output,
             '-reducer', reducer
         ])
     if multiple_outputs:
-        '''This option is only available in hacked hadoop-streaming; see
-        hadoop/make_jars.sh for more information.'''
-        to_return['HadoopJarStep']['Args'].append('-multiOutput')
+        to_return['HadoopJarStep']['Args'].extend([
+                '-outputformat', 'edu.jhu.cs.MultipleOutputFormat'
+            ])
     if inputformat is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-inputformat', inputformat
@@ -169,11 +173,6 @@ def step(name, inputs, output,
                 'com.twitter.elephantbird.mapred.input'
                 '.DeprecatedCombineLzoTextInputFormat'
             ])
-    to_return['HadoopJarStep']['Args'].extend([
-            '-outputformat',
-            'com.twitter.elephantbird.mapred.output'
-            '.DeprecatedLzoTextOutputFormat'
-        ])
     return to_return
 
 # TODO: Flesh out specification of protostep and migrate to Dooplicity
@@ -1234,9 +1233,7 @@ class RailRnaElastic:
         elastic_parser.add_argument('--hadoop-jar', type=str, required=False,
             metavar='<jar>',
             default=None,
-            help=('Hadoop Streaming Java ARchive to use; must be modified '
-                  'to include -multiOutput option using package_rail.sh '
-                  '(def: custom Rail jar)')
+            help=('Hadoop Streaming Java ARchive to use (def: AMI default)')
         )
         elastic_parser.add_argument('--master-instance-count', type=int,
             metavar='<int>',
@@ -1408,11 +1405,12 @@ class RailRnaElastic:
                         '-m',
                         'mapreduce.reduce.cpu.vcores=1',
                         '-m',
+                        'mapred.output.compress=true',
+                        '-m',
                         ('mapreduce.output.fileoutputformat.compress.codec='
-                         'org.apache.hadoop.io.compress.GzipCodec'),
+                         'com.hadoop.compression.lzo.LzopCodec'),
                         '-m',
                         'mapreduce.job.maps=%d' % base.total_cores,
-
                     ] + (['-e', 'fs.s3.consistent=true']
                             if not base.no_consistent_view else []),
                     'Path' : ('s3://elasticmapreduce/bootstrap-actions/'
