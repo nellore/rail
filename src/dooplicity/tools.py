@@ -9,7 +9,7 @@ The functions which() and is_exe() was taken from
 http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
 and is not covered under the license below.
 
-Licensed under the MIT License:
+Licensed under the MIT License except where otherwise noted:
 
 Copyright (c) 2014 Abhi Nellore and Ben Langmead.
 
@@ -231,6 +231,115 @@ class dlist:
 
     def __exit__(self, type, value, traceback):
         self.tear_down()
+ 
+class SafeClient(object):
+    """ Wrapper for IPython.parallel.Client adding callbacks for AsyncResults.
+
+        This class is taken from the gist
+        https://gist.github.com/remram44/5902529 by Remi Rampin and is not
+        licensed under the MIT license. It provides an add_callback() method
+        so it is thread-safe to wait on different results from different
+        threads.
+    """
+    def __init__(self, *args, **kwargs):
+        from IPython.parallel import Client
+        self.client = Client(*args, **kwargs)
+        self._callback_thread = None
+        self._callback_condition = threading.Condition()
+        self._callbacks = None
+
+    def add_callback(self, asyncresult, callback):
+        """ Adds a callback for an AsyncResult.
+
+            A single thread is started when this method is first called.
+
+            asyncresult: an AsyncResult object
+            callback: function to be executed after result becomes available
+
+            No return value.
+        """
+        item = (set(asyncresult.msg_ids), asyncresult, callback)
+ 
+        self._callback_condition.acquire()
+ 
+        if self._callback_thread is None:
+            self._callbacks = [item]
+            self._callback_thread = threading.Thread(
+                    target=self._callback_loop)
+            self._callback_thread.start()
+        else:
+            self._callbacks.append(item)
+            self._callback_condition.notify()
+ 
+        self._callback_condition.release()
+
+    def _callback_loop(self):
+        import time
+        while True:
+            self._callback_condition.acquire()
+            if self.client._closed:
+                break
+            if not self._callbacks:
+                self._callback_condition.wait()
+ 
+            if self._callbacks:
+                self.client.spin()
+                i = 0
+                while i < len(self._callbacks):
+                    msgs, res, cb = self._callbacks[i]
+                    msgs.intersection_update(self.client.outstanding)
+                    if not msgs:
+                        cb(res)
+                        del self._callbacks[i]
+                    else:
+                        i += 1
+ 
+            self._callback_condition.release()
+            time.sleep(1e-3)
+ 
+    def close(self):
+        self._callback_condition.acquire()
+        self.client.close()
+        self._callback_condition.notify()
+        self._callback_condition.release()
+ 
+    def lock(self):
+        @contextlib.contextmanager
+        def acquirelock():
+            self._callback_condition.acquire()
+            try:
+                yield
+            finally:
+                self._callback_condition.release()
+        return acquirelock()
+ 
+    @property
+    def ids(self):
+        return self.client.ids
+ 
+    def direct_view(self, targets='all'):
+        @contextlib.contextmanager
+        def wrapper():
+            self._callback_condition.acquire()
+            try:
+                yield self.client.direct_view(targets=targets)
+            finally:
+                self._callback_condition.release()
+        return wrapper()
+ 
+    def load_balanced_view(self, targets='all'):
+        @contextlib.contextmanager
+        def wrapper():
+            self._callback_condition.acquire()
+            try:
+                yield self.client.load_balanced_view(targets=targets)
+            finally:
+                self._callback_condition.release()
+        return wrapper()
+ 
+    def shutdown(self, *args, **kwargs):
+        self.client.shutdown(*args, **kwargs)
+        self.close()
 
 class xstream:
     """ Permits Pythonic iteration through partitioned/sorted input streams.

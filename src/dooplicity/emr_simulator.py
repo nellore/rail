@@ -9,6 +9,10 @@ mirrors that of StepConfig list from JSON sent to EMR via RunJobsFlow. Any
 files input to a mapper can be gzip'd, but inputs to a reducer currently cannot
 be.
 
+In --ipy mode, this script uses IPython to run tasks on different engines
+mediated by a controller. IPython controller and engines must be started before
+this script is invoked.
+
 Licensed under the MIT License:
 
 Copyright (c) 2014 Abhi Nellore and Ben Langmead.
@@ -38,15 +42,10 @@ import os
 import shutil
 from collections import defaultdict, OrderedDict
 import time
-import glob
-import hashlib
-import subprocess
 import json
 import interface as dp_iface
 import signal
 import gc
-import tempfile
-# For opening gzipped files and uncompressed files depending on magic number
 from tools import yopen
 
 def add_args(parser):
@@ -82,11 +81,39 @@ def add_args(parser):
         )
     parser.add_argument('--gzip-outputs', action='store_const',
             const=True, default=False,
-            help='Compress step output files with gzip'
+            help='Compress step output files with gzip.'
         )
     parser.add_argument('--gzip-level', type=int, required=False,
             default=3,
-            help='Level of gzip compression to use, if applicable'
+            help='Level of gzip compression to use, if applicable.'
+        )
+    parser.add_argument('--ipy', action='store_const', const=True,
+            default=False,
+            help=('Uses IPython controller and engines to execute tasks; this '
+                  'permits running a MapReduce job flow on a wide array of '
+                  'cluster setups. Ignores --num-processes in favor of the '
+                  'number of available engines.')
+        )
+    parser.add_argument('--ipcontroller-json', type=str, required=False,
+            default=None,
+            help=('Path to ipcontroller-client.json file; relevant only if '
+                  '--ipy is invoked. See IPython documentation for '
+                  'more information. If left unspecified, IPython\'s default '
+                  'path is used.')
+        )
+    parser.add_argument('--profile', type=str, required=False,
+            default=None,
+            help=('Connects to this IPython profile; relevant only if --ipy '
+                  'is invoked and takes precedence over --ipcontroller-json.')
+        )
+    parser.add_argument('--scratch', type=str, required=False,
+            default=None,
+            help=('Where to write any intermediate output before copying to '
+                  'consolidated intermediate directory. This is typically '
+                  'a directory local to a given node. None means write '
+                  'directory to consolidated intermediate directory. An empty '
+                  'string means write to a temporary directory securely '
+                  'created by Python.')
         )
 
 def init_worker():
@@ -101,8 +128,8 @@ def init_worker():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
-                    key_fields, separator, task_count, memcap,
-                    gzip=False, gzip_level=3):
+                    key_fields, separator, task_count, memcap, yopen,
+                    gzip=False, gzip_level=3, scratch=None):
     """ Partitions input data into tasks and presorts them.
 
         Files in output directory are in the format x.y, where x is a task
@@ -123,14 +150,36 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         task_count: number of tasks in which to partition input.
         memcap: maximum amount of memory to use per UNIX sort instance;
             ignored if sort is None.
+        yopen: yopen function from dooplicity.tools.
         gzip: True iff all files written should be gzipped; else False.
         gzip_level: Level of gzip compression to use, if applicable.
+        scratch: where to write output before copying to output_dir. If empty
+            string, writes to temporary directory; if None, writes directly
+            to output directory.
 
         Return value: Empty tuple if no errors encountered; otherwise
             (input_files,).
     """
     try:
         task_streams = {}
+        if scratch == '':
+            # Write to temporary directory
+            final_output_dir = output_dir
+            try:
+                output_dir = tempfile.mkdtemp()
+            except OSError:
+                return ('Problem encountered trying to create temporary '
+                        'scratch subdirectory.')
+        elif scratch:
+            # Write to temporary directory in special location
+            final_output_dir = output_dir
+            try:
+                output_dir = tempfile.mkdtemp(dir=scratch)
+            except OSError:
+                return ('Problem encountered trying to create temporary '
+                        'scratch subdirectory of %s.' % scratch,)
+        else:
+            final_output_dir = output_dir
         for input_file in input_files:
             with yopen(None, input_file) as input_stream:
                 for line in input_stream:
@@ -192,6 +241,11 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     return ('Error encountered sorting file %s.' %
                                 unsorted_file,)
                 os.remove(unsorted_file)
+        if final_output_dir != output_dir:
+            # Copy all output files to final destination and kill temp dir
+            for output_file in glob.glob(os.path.join(output_dir, '*')):
+                shutil.copy(output_file, final_output_dir)
+            shutil.rmtree(output_dir)
         return tuple()
     except Exception as e:
         # Uncaught miscellaneous exception
@@ -202,8 +256,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
-                                  separator, sort_options, memcap,
-                                  gzip=False, gzip_level=3):
+                                  separator, sort_options, memcap, yopen,
+                                  gzip=False, gzip_level=3, scratch=None):
     """ Runs a streaming command on a task, segregating multiple outputs. 
 
         streaming_command: streaming command to run.
@@ -227,14 +281,36 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             SHOULD BE PRESORTED.
         memcap: maximum amount of memory to use per UNIX sort instance;
             ignored if sort is None.
+        yopen: yopen function from dooplicity.tools.
         gzip: True iff all files written should be gzipped; else False.
         gzip_level: Level of gzip compression to use, if applicable.
+        scratch: where to write output before copying to output_dir. If empty
+            string, writes to temporary directory; if None, writes directly
+            to output directory.
 
         Return value: empty tuple iff step runs successfully; otherwise, tuple
             (error message, full streaming command that was run)
     """
     command_to_run = None
     try:
+        if scratch == '':
+            # Write to temporary directory
+            final_output_dir = output_dir
+            try:
+                output_dir = tempfile.mkdtemp()
+            except OSError:
+                return ('Problem encountered trying to create temporary '
+                        'scratch subdirectory.')
+        elif scratch:
+            # Write to temporary directory in special location
+            final_output_dir = output_dir
+            try:
+                output_dir = tempfile.mkdtemp(dir=scratch)
+            except OSError:
+                return ('Problem encountered trying to create temporary '
+                        'scratch subdirectory of %s.' % scratch,)
+        else:
+            final_output_dir = output_dir
         input_files = [input_file for input_file in glob.glob(input_glob)
                         if os.path.isfile(input_file)]
         if not input_files:
@@ -338,6 +414,11 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             if single_output_process_return != 0:
                 return (('Exit level was %d.')
                         % single_output_process_return, command_to_run)
+        if final_output_dir != output_dir:
+            # Copy all output files to final destination and kill temp dir
+            for output_file in glob.glob(os.path.join(output_dir, '*')):
+                shutil.copy(output_file, final_output_dir)
+            shutil.rmtree(output_dir)
         return tuple()
     except Exception as e:
         # Uncaught miscellaneous exception
@@ -346,7 +427,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
 
 def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
-                    log, gzip=False, gzip_level=3):
+                    log, gzip=False, gzip_level=3, ipy=False,
+                    ipcontroller_json=None, profile=None, scratch=None):
     """ Runs Hadoop Streaming simulation.
 
         FUNCTIONALITY IS IDIOSYNCRATIC; it is currently confined to those
@@ -362,14 +444,25 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         force: True iff all existing directories should be erased when
             writing intermediates.
         memcap: maximum amount of memory to use per UNIX sort instance.
-        num_processes: number of subprocesses to open at once.
+        num_processes: number of subprocesses to open at once; applicable only 
+            when not in ipy mode
         separator: separator between successive fields in inputs and 
             intermediates.
         keep_intermediates: keeps all intermediate output.
         keep_last_output: keeps outputs that are unused as inputs by steps.
         log: name of file in which to store messages written to stderr
         gzip: True iff all files written should be gzipped; else False.
-        gzip_level: Level of gzip compression to use, if applicable.
+        gzip_level: level of gzip compression to use, if applicable.
+        ipy: use iPython engines to run tasks.
+        ipcontroller_json: path to ipcontroller-client.json; relevant only if 
+            ipy is True. If None, uses IPython's default location.
+        profile: name of IPython cluster configuration profile to use; None if
+            profile is not specified. In this case, ipcontroller_json takes
+            precedence.
+        scratch: scratch directory, typically local. Files are written here by
+            tasks before copying to final destination. If None, files are
+            written directory to final destination. If '', files are written
+            to safely created temporary directory.
 
         No return value.
     """
@@ -388,6 +481,79 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                          log_stream=log_stream)
     failed = False
     try:
+        # Using IPython?
+        if ipy:
+            try:
+                from IPython.parallel import Client
+            except ImportError:
+                iface.fail('IPython is required to run Dooplicity\'s EMR '
+                           'simulator in --ipy mode. Visit ipython.org to '
+                           'download it, or simply download the Anaconda '
+                           'distribution of Python at '
+                           'https://store.continuum.io/cshop/anaconda/; it\'s '
+                           'easy to install and comes with IPython and '
+                           'several other useful packages.')
+                failed = True
+                raise
+            else:
+                from dooplicity.tools import SafeClient
+            if profile:
+                try:
+                    rc = SafeClient(profile=profile)
+                except ValueError:
+                    iface.fail('Cluster configuration profile "%s" was not '
+                               'found.' % profile)
+                    failed = True
+                    raise
+            elif ipcontroller_json:
+                try:
+                    rc = SafeClient(ipcontroller_json)
+                except IOError:
+                    iface.fail(
+                            'Cannot find connection information JSON file %s.'
+                            % ipcontroller_json
+                        )
+                    failed = True
+                    raise
+            else:
+                try:
+                    rc = SafeClient()
+                except IOError:
+                    iface.fail(
+                            'Cannot find ipcontroller-client.json. Ensure '
+                            'that IPython controller and engines are running.'
+                            ' If controller is running on a remote machine, '
+                            'copy the ipcontroller-client.json file from there '
+                            'to a local directory; then rerun this script '
+                            'specifying the local path to '
+                            'ipcontroller-client.json with the '
+                            '--ipcontroller-json command-line parameter.'
+                        )
+                    failed = True
+                    raise
+            if not rc.ids:
+                iface.fail(
+                        'An IPython controller is running, but no engines are '
+                        'connected to it.'
+                    )
+                failed = True
+                raise RuntimeError
+            # Use all engines and accommodate engines the user may add later
+            balanced_view = rc.load_balanced_view()
+            # Sync imports required by functions applied asynchronously
+            with balanced_view.sync_imports():
+                import os
+                import subprocess
+                import glob
+                import hashlib
+                import tempfile
+                import shutil
+        else:
+            import multiprocessing
+            import subprocess
+            import glob
+            import hashlib
+            import tempfile
         # Serialize JSON configuration
         if json_config is not None:
             with open(json_config) as json_stream:
@@ -555,7 +721,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 failed = True
                 raise
         # Run steps
-        import multiprocessing
         step_number = 0
         total_steps = len(steps)
         for step in steps:
@@ -619,7 +784,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         # No outputformat
                         pass
                 return_values = []
-                pool = multiprocessing.Pool(num_processes, init_worker)
+                if not ipy:
+                    pool = multiprocessing.Pool(num_processes, init_worker)
                 if nline_input:
                     # Create temporary input files
                     split_input_dir = tempfile.mkdtemp()
@@ -640,19 +806,30 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
                 for i, input_file in enumerate(input_files):
                     if os.path.isfile(input_file):
-                        pool.apply_async(
-                            step_runner_with_error_return, 
-                            args=(step_data['mapper'], input_file,
-                                output_dir, err_dir, i,
-                                multiple_outputs, 
-                                separator,
-                                None,
-                                None,
-                                gzip,
-                                gzip_level),
-                            callback=return_values.append
-                        )
-                pool.close()
+                        if not ipy:
+                            pool.apply_async(
+                                step_runner_with_error_return, 
+                                args=(step_data['mapper'], input_file,
+                                    output_dir, err_dir, i,
+                                    multiple_outputs, 
+                                    separator,
+                                    None,
+                                    None,
+                                    yopen,
+                                    gzip,
+                                    gzip_level,
+                                    scratch),
+                                callback=return_values.append
+                            )
+                        else:
+                            temp_object = balanced_view.apply_async(
+                                step_runner_with_error_return,
+                                step_data['mapper'], input_file, output_dir,
+                                err_dir, i, multiple_outputs, separator, None,
+                                None, yopen, gzip, gzip_level, scratch)
+                            rc.add_callback(temp_object, return_values.append)
+                if not ipy:
+                    pool.close()
                 iface.step('Step %d/%d: %s' % 
                             (step_number + 1, total_steps, step))
                 while len(return_values) != input_file_count:
@@ -741,20 +918,33 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 input_file_group_count = len(input_file_groups)
                 pool = multiprocessing.Pool(num_processes, init_worker)
                 for i, input_file_group in enumerate(input_file_groups):
-                    pool.apply_async(
-                                        presorted_tasks,
-                                        args=(input_file_group, i,
-                                            step_data['sort_options'],
-                                            output_dir,
-                                            step_data['key_fields'],
-                                            separator,
-                                            step_data['task_count'],
-                                            memcap,
-                                            gzip,
-                                            gzip_level),
-                                        callback=return_values.append
-                                    )
-                pool.close()
+                    if not ipy:
+                        pool.apply_async(
+                                presorted_tasks,
+                                args=(input_file_group, i,
+                                    step_data['sort_options'],
+                                    output_dir,
+                                    step_data['key_fields'],
+                                    separator,
+                                    step_data['task_count'],
+                                    memcap,
+                                    yopen,
+                                    gzip,
+                                    gzip_level,
+                                    scratch),
+                                callback=return_values.append
+                            )
+                    else:
+                        temp_object = balanced_view.apply_async(
+                                presorted_tasks, input_file_group, i,
+                                step_data['sort_options'], output_dir,
+                                step_data['key_fields'], separator,
+                                step_data['task_count'], memcap, yopen, gzip,
+                                gzip_level, scratch
+                            )
+                        rc.add_callback(temp_object, return_values.append)
+                if not ipy:
+                    pool.close()
                 iface.step('Step %d/%d: %s'
                              % (step_number + 1, total_steps, step))
                 while len(return_values) != input_file_group_count:
@@ -817,17 +1007,28 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 err_dir = os.path.join(steps[step]['output'], 'dp.reduce.log')
                 output_dir = step_data['output']
                 for i, input_file in enumerate(input_files):
-                    pool.apply_async(
-                            step_runner_with_error_return, 
-                            args=(step_data['reducer'], input_file,
-                                output_dir, err_dir, i, 
-                                multiple_outputs,
-                                separator,
-                                step_data['sort_options'],
-                                memcap, gzip, gzip_level),
-                             callback=return_values.append
-                        )
-                pool.close()
+                    if not ipy:
+                        pool.apply_async(
+                                step_runner_with_error_return, 
+                                args=(step_data['reducer'], input_file,
+                                    output_dir, err_dir, i, 
+                                    multiple_outputs,
+                                    separator,
+                                    step_data['sort_options'],
+                                    memcap, yopen, gzip, gzip_level, scratch),
+                                 callback=return_values.append
+                            )
+                    else:
+                        temp_object = balanced_view.apply_async(
+                                step_runner_with_error_return, 
+                                step_data['reducer'], input_file,
+                                output_dir, err_dir, i, multiple_outputs,
+                                separator, step_data['sort_options'],
+                                memcap, yopen, gzip, gzip_level, scratch
+                            )
+                        rc.add_callback(temp_object, return_values.append)
+                if not ipy:
+                    pool.close()
                 while len(return_values) != input_file_count:
                     try:
                         max_tuple = max(map(len, return_values))
@@ -1005,4 +1206,6 @@ if __name__ == '__main__':
     run_simulation(args.branding, args.json_config, args.force,
                     args.memcap, args.num_processes, args.separator,
                     args.keep_intermediates, args.keep_last_output,
-                    args.log, args.gzip_outputs, args.gzip_level)
+                    args.log, args.gzip_outputs, args.gzip_level,
+                    args.ipy, args.ipcontroller_json, args.profile,
+                    args.scratch)
