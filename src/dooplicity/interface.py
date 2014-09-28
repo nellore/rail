@@ -264,9 +264,11 @@ class DooplicityInterface:
                     os.path.abspath(main.__file__),
                     os.path.abspath(temp_json_file),
                     ' -b {0}'.format(os.path.abspath(print_args.branding))
-                    if 'branding' in arg_dir else '',
+                    if ('branding' in arg_dir
+                        and print_args.branding is not None) else '',
                     ' -l {0}'.format(os.path.abspath(print_args.log))
-                    if 'log' in arg_dir else '',
+                    if ('log' in arg_dir 
+                        and print_args.log is not None) else '',
                     ' '.join(terminal_args)
                 )
             for output_stream in self._write_streams:
