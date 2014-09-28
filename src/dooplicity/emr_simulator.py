@@ -289,7 +289,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                 )
                 try:
                     os.makedirs(destination)
-                except OSError
+                except OSError:
                     # Directory already exists
                     pass
                 for filename in filenames:
@@ -483,7 +483,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                 )
                 try:
                     os.makedirs(destination)
-                except OSError
+                except OSError:
                     # Directory already exists
                     pass
                 for filename in filenames:
