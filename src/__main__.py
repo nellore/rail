@@ -122,9 +122,9 @@ class Launcher:
                 of replacement process
         """
         # Reactivate these lines just to see json
-        '''print json.dumps(json.loads(payload), sort_keys=True,
+        print json.dumps(json.loads(payload), sort_keys=True,
                             indent=4, separators=(',', ': '))
-        quit()'''
+        quit()
         read_pipe, write_pipe = os.pipe()
         if os.fork() != 0:
             # Parent process; read from child after determining executable
