@@ -724,6 +724,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         marked_intermediates.add(step_input)
         # Create intermediate directories
         for step in steps:
+            steps[step]['output'] = os.path.abspath(steps[step]['output'])
             try:
                 shutil.rmtree(steps[step]['output'])
             except OSError:
