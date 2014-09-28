@@ -139,6 +139,12 @@ def add_args(parser):
                   'string means write to a temporary directory securely '
                   'created by Python.')
         )
+    parser.add_argument('--common', type=str, required=False,
+            default=None,
+            help=('Location of a writable directory accessible across all '
+                  'nodes; this is where some temporary files may be stored '
+                  'and is not important unless running in --ipy mode; if '
+                  'left unspecified, defaults to Python temporary directory'))
 
 def init_worker():
     """ Prevents KeyboardInterrupt from reaching a pool's workers.
@@ -466,7 +472,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
 def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
                     log, gzip=False, gzip_level=3, ipy=False,
-                    ipcontroller_json=None, ipy_profile=None, scratch=None):
+                    ipcontroller_json=None, ipy_profile=None, scratch=None,
+                    common=None):
     """ Runs Hadoop Streaming simulation.
 
         FUNCTIONALITY IS IDIOSYNCRATIC; it is currently confined to those
@@ -501,6 +508,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             tasks before copying to final destination. If None, files are
             written directory to final destination. If '', files are written
             to safely created temporary directory.
+        common: path to directory accessible across nodes in --ipy mode
 
         No return value.
     """
@@ -580,6 +588,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 raise RuntimeError
             # Use all engines
             num_processes = len(rc)
+            print >>sys.stderr, num_processes
         else:
             import multiprocessing
         # Serialize JSON configuration
@@ -819,7 +828,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     view_gen = itertools.cycle(rc)
                 if nline_input:
                     # Create temporary input files
-                    split_input_dir = tempfile.mkdtemp()
+                    split_input_dir = tempfile.mkdtemp(dir=common)
                     input_files = []
                     with open(step_inputs[0]) as nline_stream:
                         for i, line in enumerate(nline_stream):
@@ -1271,4 +1280,4 @@ if __name__ == '__main__':
                     args.keep_intermediates, args.keep_last_output,
                     args.log, args.gzip_outputs, args.gzip_level,
                     args.ipy, args.ipcontroller_json, args.ipy_profile,
-                    args.scratch)
+                    args.scratch, args.common)
