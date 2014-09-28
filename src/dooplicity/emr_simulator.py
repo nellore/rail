@@ -137,8 +137,8 @@ def add_args(parser):
             help=('Where to write any intermediate output before copying to '
                   'consolidated intermediate directory. This is typically '
                   'a directory local to a given node. None means write '
-                  'directory to consolidated intermediate directory. An empty '
-                  'string means write to a temporary directory securely '
+                  'directory to consolidated intermediate directory. The '
+                  'string \"-\" means write to a temporary directory securely '
                   'created by Python.')
         )
     parser.add_argument('--common', type=str, required=False,
@@ -185,7 +185,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         yopen: yopen function from dooplicity.tools.
         gzip: True iff all files written should be gzipped; else False.
         gzip_level: Level of gzip compression to use, if applicable.
-        scratch: where to write output before copying to output_dir. If empty
+        scratch: where to write output before copying to output_dir. If "-"
             string, writes to temporary directory; if None, writes directly
             to output directory.
 
@@ -200,7 +200,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         import shutil
         import os
         task_streams = {}
-        if scratch == '':
+        if scratch == '-':
             # Write to temporary directory
             final_output_dir = output_dir
             try:
@@ -281,8 +281,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 os.remove(unsorted_file)
         if final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
-            for output_file in glob.glob(os.path.join(output_dir, '*')):
-                shutil.copy(output_file, final_output_dir)
+            shutil.copytree(output_dir, final_output_dir)
             shutil.rmtree(output_dir)
         return tuple()
     except Exception as e:
@@ -324,7 +323,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         yopen: yopen function from dooplicity.tools.
         gzip: True iff all files written should be gzipped; else False.
         gzip_level: Level of gzip compression to use, if applicable.
-        scratch: where to write output before copying to output_dir. If empty
+        scratch: where to write output before copying to output_dir. If "-"
             string, writes to temporary directory; if None, writes directly
             to output directory.
 
@@ -338,7 +337,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         import glob
         import tempfile
         import shutil
-        if scratch == '':
+        if scratch == '-':
             # Write to temporary directory
             final_output_dir = output_dir
             try:
@@ -461,8 +460,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                         % single_output_process_return, command_to_run)
         if final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
-            for output_file in glob.glob(os.path.join(output_dir, '*')):
-                shutil.copy(output_file, final_output_dir)
+            shutil.copytree(output_dir, final_output_dir)
             shutil.rmtree(output_dir)
         return tuple()
     except Exception as e:
