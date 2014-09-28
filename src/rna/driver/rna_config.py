@@ -557,7 +557,8 @@ class RailRnaLocal:
                                 'mode, but {0} was entered.').format(
                                         base.intermediate_dir
                                     ))
-
+        else:
+            base.intermediate_dir = os.path.abspath(base.intermediate_dir)
         output_dir_url = ab.Url(base.output_dir)
         if output_dir_url.is_curlable:
             base.errors.append(('Output directory must be local or on S3 '
@@ -899,7 +900,6 @@ class RailRnaElastic:
                                     ))
         if base.intermediate_dir is None:
             base.intermediate_dir = base.output_dir + '.intermediate'
-        base.intermediate_dir = os.path.abspath(base.intermediate_dir)
         intermediate_dir_url = ab.Url(base.intermediate_dir)
         if intermediate_dir_url.is_local:
             base.errors.append(('Intermediate directory (--intermediate) '
