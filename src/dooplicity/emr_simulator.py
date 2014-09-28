@@ -13,6 +13,8 @@ In --ipy mode, the script uses IPython to run tasks on different engines
 mediated by a controller. IPython controller and engines must be started before
 this script is invoked.
 
+All paths in input JSON should be absolute.
+
 Licensed under the MIT License:
 
 Copyright (c) 2014 Abhi Nellore and Ben Langmead.
@@ -724,7 +726,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         marked_intermediates.add(step_input)
         # Create intermediate directories
         for step in steps:
-            steps[step]['output'] = os.path.abspath(steps[step]['output'])
             try:
                 shutil.rmtree(steps[step]['output'])
             except OSError:

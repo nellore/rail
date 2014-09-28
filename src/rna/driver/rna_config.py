@@ -584,6 +584,7 @@ class RailRnaLocal:
                         os.remove(base.output_dir)
                     except OSError:
                         pass
+                base.output_dir = os.path.abspath(base.output_dir)
         elif output_dir_url.is_s3 \
             and ansible.s3_ansible.is_dir(base.output_dir):
             if not base.force:
@@ -898,6 +899,7 @@ class RailRnaElastic:
                                     ))
         if base.intermediate_dir is None:
             base.intermediate_dir = base.output_dir + '.intermediate'
+        base.intermediate_dir = os.path.abspath(base.intermediate_dir)
         intermediate_dir_url = ab.Url(base.intermediate_dir)
         if intermediate_dir_url.is_local:
             base.errors.append(('Intermediate directory (--intermediate) '
