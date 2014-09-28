@@ -590,7 +590,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 raise RuntimeError
             # Use all engines
             num_processes = len(rc)
-            print >>sys.stderr, num_processes
         else:
             import multiprocessing
         # Serialize JSON configuration
