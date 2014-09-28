@@ -620,6 +620,7 @@ class RailRnaLocal:
                                     [base.manifest_dir])
                 base.manifest = os.path.join(base.manifest_dir, 'MANIFEST')
                 ansible.get(manifest_url, destination=base.manifest)
+            base.manifest = os.path.abspath(base.manifest)
             files_to_check = []
             base.sample_count = 0
             with open(base.manifest) as manifest_stream:
