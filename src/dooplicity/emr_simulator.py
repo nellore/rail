@@ -281,8 +281,22 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 os.remove(unsorted_file)
         if final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
-            for output_file in glob.glob(os.path.join(output_dir, '*')):
-                shutil.move(output_file, final_output_dir)
+            for root, dirnames, filenames in os.walk(output_dir):
+                if not filenames: continue
+                destination = os.path.join(
+                                    final_output_dir,
+                                    os.path.relpath(root, output_dir)
+                                )
+                try:
+                    os.makedirs(destination)
+                except OSError
+                    # Directory already exists
+                    pass
+                for filename in filenames:
+                    shutil.copy(
+                            os.path.join(root, filename),
+                            os.path.join(destination, filename)
+                        )
             shutil.rmtree(output_dir)
         return tuple()
     except Exception as e:
@@ -461,8 +475,22 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                         % single_output_process_return, command_to_run)
         if final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
-            for output_file in glob.glob(os.path.join(output_dir, '*')):
-                shutil.move(output_file, final_output_dir)
+            for root, dirnames, filenames in os.walk(output_dir):
+                if not filenames: continue
+                destination = os.path.join(
+                                    final_output_dir,
+                                    os.path.relpath(root, output_dir)
+                                )
+                try:
+                    os.makedirs(destination)
+                except OSError
+                    # Directory already exists
+                    pass
+                for filename in filenames:
+                    shutil.copy(
+                            os.path.join(root, filename),
+                            os.path.join(destination, filename)
+                        )
             shutil.rmtree(output_dir)
         return tuple()
     except Exception as e:
