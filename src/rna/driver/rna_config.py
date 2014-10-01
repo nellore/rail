@@ -33,6 +33,9 @@ from version import version_number
 import sys
 from argparse import SUPPRESS
 import subprocess
+import time
+from traceback import format_exc
+from collections import defaultdict
 
 '''These are placed here for convenience; their locations may change
 on EMR depending on bootstraps.'''
@@ -80,13 +83,38 @@ else:
     if _print_warning:
         _warning_message = ('WARNING: PyPy 2.x not found. '
             'Installation is recommended to optimize performance '
-            'of Rail-RNA in "local" mode. If it is installed, '
+            'of Rail-RNA in "local" or "parallel" mode. If it is installed, '
             'make sure the "pypy" executable is in PATH, or use '
             'it to execute Rail-RNA via "[path to \'pypy\'] '
             '[path to \'rail-rna\']".')
         _executable = sys.executable
     else:
         _warning_message = 'Launching Dooplicity runner with PyPy...'
+
+def ready_engines(rc):
+    """ Prepares engines for checks. 
+
+        rc: IPython Client object
+
+        No return value.
+    """
+    asyncresult = rc[:].execute('import os')
+    while not asyncresult.ready():
+        time.sleep(1e-1)
+    if not asyncresult.successful():
+        raise RuntimeError(
+                    'Problem encountered executing "import os" on engines.'
+                )
+    asyncresult = rc[:].push(
+            dict(is_exe=is_exe, which=which)
+        )
+    while not asyncresult.ready():
+        time.sleep(1e-1)
+    if not asyncresult.successful():
+        raise RuntimeError(
+                    'Problem encountered pushing functions is_exe() and '
+                    'which() to engines.'
+                )
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
@@ -539,31 +567,111 @@ class RailRnaErrors:
         '''--region's help looks different from mode to mode; don't include it
         here.'''
 
+def ipython_client(ipython_profile=None, ipcontroller_json=None):
+    """ Performs checks on IPython engines and returns IPython Client object.
+
+        Also checks that IPython is installed/configured properly and raises
+        exception _immediately_ if it's not; then prints
+        engine detection message.
+
+        ipython_profile: IPython parallel profile, if specified; otherwise None
+        ipcontroller_json: IP Controller json file, if specified; else None
+
+        No return value.
+    """
+    errors = []
+    try:
+        from IPython.parallel import Client
+    except ImportError:
+        errors.append(
+                   'IPython is required to run Rail-RNA in '
+                   '"parallel" mode. Visit ipython.org to '
+                   'download it, or simply download the Anaconda '
+                   'distribution of Python at '
+                   'https://store.continuum.io/cshop/anaconda/; it\'s '
+                   'easy to install and comes with IPython and '
+                   'several other useful packages.'
+                )
+    if ipython_profile:
+        try:
+            rc = Client(profile=ipy_profile)
+        except ValueError:
+            errors.append(
+                    'Cluster configuration profile "%s" was not '
+                    'found.' % ipy_profile
+                )
+    elif ipcontroller_json:
+        try:
+            rc = Client(ipcontroller_json)
+        except IOError:
+            errors.append(
+                    'Cannot find connection information JSON file %s.'
+                    % ipcontroller_json
+                )
+    else:
+        try:
+            rc = Client()
+        except IOError:
+            errors.append(
+                    'Cannot find ipcontroller-client.json. Ensure '
+                    'that IPython controller and engines are running.'
+                    ' If controller is running on a remote machine, '
+                    'copy the ipcontroller-client.json file from there '
+                    'to a local directory; then rerun this script '
+                    'specifying the local path to '
+                    'ipcontroller-client.json with the '
+                    '--ipcontroller-json command-line parameter.'
+                )
+    if errors:
+        raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(errors)]
+                        ) if len(errors) > 1 else errors[0]
+                )
+    if not rc.ids:
+        raise RuntimeError(
+                'An IPython controller is running, but no engines are '
+                'connected to it. Engines must be connected to an IPython '
+                'controller when running Rail-RNA in "parallel" mode.'
+            )
+    engine_detect_message = ('Detected %d running IPython engines.' 
+                                % len(self.rc.ids))
+    print >>sys.stderr, engine_detect_message
+    if not sys.stderr.isatty():
+        # So the user sees it too
+        print engine_detect_message
+    return rc
+
 class RailRnaLocal:
-    """ Checks local-mode JSON from input parameters and relevant programs.
+    """ Checks local- or parallel-mode JSON for programs and input parameters.
 
         Subsumes only those parameters relevant to local mode. Adds errors
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
                     num_processes=1, keep_intermediates=False,
-                    gzip_intermediates=False, gzip_level=3):
+                    gzip_intermediates=False, gzip_level=3, parallel=False,
+                    local=True, scratch=None):
         """ base: instance of RailRnaErrors """
         # Initialize ansible for easy checks
         ansible = ab.Ansible()
         if not ab.Url(base.intermediate_dir).is_local:
-            base.errors.append(('Intermediate directory must be local '
-                                'when running Rail-RNA in "local" '
-                                'mode, but {0} was entered.').format(
+            base.errors.append(('Intermediate directory must be in locally '
+                                'accessible filesystem when running Rail-RNA '
+                                'in "local" or "parallel" mode, but {0} was '
+                                'entered.').format(
                                         base.intermediate_dir
                                     ))
         else:
             base.intermediate_dir = os.path.abspath(base.intermediate_dir)
         output_dir_url = ab.Url(base.output_dir)
         if output_dir_url.is_curlable:
-            base.errors.append(('Output directory must be local or on S3 '
+            base.errors.append(('Output directory must be in locally '
+                                'accessible filesystem or on S3 '
                                 'when running Rail-RNA in "local" '
-                                'mode, but {0} was entered.').format(
+                                'or "parallel" mode, '
+                                'but {0} was entered.').format(
                                         base.output_dir
                                     ))
         elif output_dir_url.is_s3 and 'AWS CLI' not in base.checked_programs:
@@ -571,176 +679,219 @@ class RailRnaLocal:
             # Change ansible params
             ansible.aws_exe = base.aws_exe
             ansible.profile = base.profile
-        if output_dir_url.is_local \
-            and os.path.exists(output_dir_url.to_url()):
-            if not base.force:
-                base.errors.append(('Output directory {0} exists, '
-                                    'and --force was not invoked to permit '
-                                    'overwriting it.').format(base.output_dir))
-            else:
-                try:
-                    shutil.rmtree(base.output_dir)
-                except OSError:
+        base.check_s3_on_engines = None
+        base.check_curl_on_engines = None
+        if not parallel:
+            if output_dir_url.is_local \
+                and os.path.exists(output_dir_url.to_url()):
+                if not base.force:
+                    base.errors.append(('Output directory {0} exists, '
+                                        'and --force was not invoked to '
+                                        'permit overwriting it.').format(
+                                                base.output_dir)
+                                            )
+                else:
                     try:
-                        os.remove(base.output_dir)
+                        shutil.rmtree(base.output_dir)
                     except OSError:
-                        pass
-                base.output_dir = os.path.abspath(base.output_dir)
-        elif output_dir_url.is_s3 \
-            and ansible.s3_ansible.is_dir(base.output_dir):
-            if not base.force:
-                base.errors.append(('Output directory {0} exists on S3, and '
-                                    '--force was not invoked to permit '
-                                    'overwriting it.').format(base_output_dir))
-            else:
-                ansible.s3ansible.remove_dir(base.output_dir)
-        # Check manifest; download it if necessary
-        manifest_url = ab.Url(base.manifest)
-        if manifest_url.is_s3 and 'AWS CLI' not in base.checked_programs:
-            base.check_s3(reason='the manifest file is on S3')
-            # Change ansible params
-            ansible.aws_exe = base.aws_exe
-            ansible.profile = base.profile
-        elif manifest_url.is_curlable \
-            and 'Curl' not in base.checked_programs:
-            base.curl_exe = base.check_program('curl', 'Curl', '--curl',
+                        try:
+                            os.remove(base.output_dir)
+                        except OSError:
+                            pass
+                    base.output_dir = os.path.abspath(base.output_dir)
+            elif output_dir_url.is_s3 \
+                and ansible.s3_ansible.is_dir(base.output_dir):
+                if not base.force:
+                    base.errors.append(('Output directory {0} exists on S3, '
+                                        'and --force was not invoked to '
+                                        'permit overwriting it.').format(
+                                                base_output_dir)
+                                            )
+                else:
+                    ansible.s3ansible.remove_dir(base.output_dir)
+            # Check manifest; download it if necessary
+            manifest_url = ab.Url(base.manifest)
+            if manifest_url.is_s3 and 'AWS CLI' not in base.checked_programs:
+                base.check_s3(reason='the manifest file is on S3')
+                # Change ansible params
+                ansible.aws_exe = base.aws_exe
+                ansible.profile = base.profile
+            elif manifest_url.is_curlable \
+                and 'Curl' not in base.checked_programs:
+                base.curl_exe = base.check_program('curl', 'Curl', '--curl',
                                     entered_exe=base.curl_exe,
                                     reason='the manifest file is on the web')
-            ansible.curl_exe = base.curl_exe
-        if not ansible.exists(manifest_url.to_url()):
-            base.errors.append(('Manifest file (--manifest) {0} '
-                                'does not exist. Check the URL and '
-                                'try again.').format(base.manifest))
-        else:
-            if not manifest_url.is_local:
-                base.manifest_dir = tempfile.mkdtemp()
-                import atexit
-                from tempdel import remove_temporary_directories
-                atexit.register(remove_temporary_directories,
-                                    [base.manifest_dir])
-                base.manifest = os.path.join(base.manifest_dir, 'MANIFEST')
-                ansible.get(manifest_url, destination=base.manifest)
-            base.manifest = os.path.abspath(base.manifest)
-            files_to_check = []
-            base.sample_count = 0
-            with open(base.manifest) as manifest_stream:
-                for line in manifest_stream:
-                    if line[0] == '#' or not line.strip(): continue
-                    base.sample_count += 1
-                    tokens = line.strip().split('\t')
-                    check_sample_label = True
-                    if len(tokens) == 5:
-                        files_to_check.extend([tokens[0], tokens[2]])
-                    elif len(tokens) == 3:
-                        files_to_check.append(tokens[0])
-                    else:
-                        base.errors.append(('The following line from the '
-                                            'manifest file {0} '
-                                            'has an invalid number of '
-                                            'tokens:\n{1}'
-                                            ).format(
-                                                    manifest_url.to_url(),
-                                                    line
-                                                ))
-                        check_sample_label = False
-                    if check_sample_label and tokens[-1].count('-') != 2:
-                        line = line.strip()
-                        base.errors.append(('The following line from the '
-                                            'manifest file {0} '
-                                            'has an invalid sample label: '
-                                            '\n{1}\nA valid sample label '
-                                            'takes the following form:\n'
-                                            '<Group ID>-<BioRep ID>-'
-                                            '<TechRep ID>'
-                                            ).format(
-                                                    manifest_url.to_url(),
-                                                    line
-                                                ))
-            if files_to_check:
-                if check_manifest:
-                    # Check files in manifest only if in preprocess job flow
-                    file_count = len(files_to_check)
-                    for k, filename in enumerate(files_to_check):
-                        sys.stdout.write(
-                                '\r\x1b[KChecking that file %d/%d from '
-                                'manifest file exists...' % (k+1, file_count)
-                            )
-                        sys.stdout.flush()
-                        filename_url = ab.Url(filename)
-                        if filename_url.is_s3 \
-                            and 'AWS CLI' not in base.checked_programs:
-                                base.check_s3(reason=('at least one sample '
+                ansible.curl_exe = base.curl_exe
+            if not ansible.exists(manifest_url.to_url()):
+                base.errors.append(('Manifest file (--manifest) {0} '
+                                    'does not exist. Check the URL and '
+                                    'try again.').format(base.manifest))
+            else:
+                if not manifest_url.is_local:
+                    '''Download/check manifest only if not an IPython engine
+                    (not parallel).'''
+                    base.manifest_dir = base.intermediate_dir
+                    import atexit
+                    from tempdel import remove_temporary_directories
+                    atexit.register(remove_temporary_directories,
+                                        [base.manifest_dir])
+                    base.manifest = os.path.join(base.manifest_dir, 'MANIFEST')
+                    ansible.get(manifest_url, destination=base.manifest)
+                base.manifest = os.path.abspath(base.manifest)
+                files_to_check = []
+                base.sample_count = 0
+                with open(base.manifest) as manifest_stream:
+                    for line in manifest_stream:
+                        if line[0] == '#' or not line.strip(): continue
+                        base.sample_count += 1
+                        tokens = line.strip().split('\t')
+                        check_sample_label = True
+                        if len(tokens) == 5:
+                            files_to_check.extend([tokens[0], tokens[2]])
+                        elif len(tokens) == 3:
+                            files_to_check.append(tokens[0])
+                        else:
+                            base.errors.append(('The following line from the '
+                                                'manifest file {0} '
+                                                'has an invalid number of '
+                                                'tokens:\n{1}'
+                                                ).format(
+                                                        manifest_url.to_url(),
+                                                        line
+                                                    ))
+                            check_sample_label = False
+                        if check_sample_label and tokens[-1].count('-') != 2:
+                            line = line.strip()
+                            base.errors.append(('The following line from the '
+                                                'manifest file {0} '
+                                                'has an invalid sample label: '
+                                                '\n{1}\nA valid sample label '
+                                                'takes the following form:\n'
+                                                '<Group ID>-<BioRep ID>-'
+                                                '<TechRep ID>'
+                                                ).format(
+                                                        manifest_url.to_url(),
+                                                        line
+                                                    ))
+                if files_to_check:
+                    if check_manifest:
+                        # Check files in manifest only if in preprocess flow
+                        file_count = len(files_to_check)
+                        for k, filename in enumerate(files_to_check):
+                            sys.stdout.write(
+                                    '\r\x1b[KChecking that file %d/%d from '
+                                    'manifest file exists...' % (k+1,
+                                                                 file_count)
+                                )
+                            sys.stdout.flush()
+                            filename_url = ab.Url(filename)
+                            if filename_url.is_s3 \
+                                and 'AWS CLI' not in base.checked_programs:
+                                    if local:
+                                        base.check_s3(reason=(
+                                                      'at least one sample '
                                                       'FASTA/FASTQ from the '
                                                       'manifest file is on '
-                                                      'S3'))
-                                # Change ansible params
-                                ansible.aws_exe = base.aws_exe
-                                ansible.profile = base.profile
-                        elif filename_url.is_curlable \
-                            and 'Curl' not in base.checked_programs:
-                            base.curl_exe = base.check_program('curl', 'Curl',
-                                                '--curl',
-                                                entered_exe=base.curl_exe,
-                                                reason=('at least one sample '
-                                                  'FASTA/FASTQ from the '
-                                                  'manifest file is on '
-                                                  'the web'))
-                            ansible.curl_exe = base.curl_exe
-                        if not ansible.exists(filename):
-                            base.errors.append(('The file {0} from the '
-                                                'manifest file {1} does not '
-                                                'exist. Check the URL and try '
-                                                'again.').format(
+                                                      'S3')
+                                                    )
+                                    base.check_s3_on_engines = (
+                                                      'at least one sample '
+                                                      'FASTA/FASTQ from the '
+                                                      'manifest file is on '
+                                                      'S3'
+                                                    )
+                                    # Change ansible params
+                                    ansible.aws_exe = base.aws_exe
+                                    ansible.profile = base.profile
+                            elif filename_url.is_curlable \
+                                and 'Curl' not in base.checked_programs:
+                                if local:
+                                    base.curl_exe = base.check_program('curl',
+                                                    'Curl',
+                                                    '--curl',
+                                                    entered_exe=base.curl_exe,
+                                                    reason=(
+                                                      'at least one sample '
+                                                      'FASTA/FASTQ from the '
+                                                      'manifest file is on '
+                                                      'the web')
+                                                )
+                                base.check_curl_on_engines = (
+                                                      'at least one sample '
+                                                      'FASTA/FASTQ from the '
+                                                      'manifest file is on '
+                                                      'the web'
+                                                    )
+                                ansible.curl_exe = base.curl_exe
+                            if not ansible.exists(filename):
+                                base.errors.append((
+                                                    'The file {0} from the '
+                                                    'manifest file {1} does '
+                                                    'not exist. Check the URL '
+                                                    'and try again.').format(
                                                         filename,
                                                         manifest_url.to_url()
-                                                    ))
-                    sys.stdout.write(
-                            '\r\x1b[KChecked all files listed in manifest '
-                            'file.\n'
-                        )
-                    sys.stdout.flush()
-            else:
-                base.errors.append(('Manifest file (--manifest) {0} '
-                                    'has no valid lines.').format(
+                                                ))
+                        sys.stdout.write(
+                                '\r\x1b[KChecked all files listed in manifest '
+                                'file.\n'
+                            )
+                        sys.stdout.flush()
+                else:
+                    base.errors.append(('Manifest file (--manifest) {0} '
+                                        'has no valid lines.').format(
                                                         manifest_url.to_url()
                                                     ))
-        from multiprocessing import cpu_count
-        if num_processes:
-            if not (isinstance(num_processes, int)
-                                    and num_processes >= 1):
-                base.errors.append('Number of processes (--num-processes) '
-                                   'must be an integer >= 1, '
-                                   'but {0} was entered.'.format(
-                                                    num_processes
-                                                ))
+            from multiprocessing import cpu_count
+            if num_processes:
+                if not (isinstance(num_processes, int)
+                                        and num_processes >= 1):
+                    base.errors.append('Number of processes (--num-processes) '
+                                       'must be an integer >= 1, '
+                                       'but {0} was entered.'.format(
+                                                        num_processes
+                                                    ))
+                else:
+                    base.num_processes = num_processes
             else:
-                base.num_processes = num_processes
-        else:
-            try:
-                base.num_processes = cpu_count()
-            except NotImplementedError:
-                base.num_processes = 1
-            if base.num_processes != 1:
-                '''Make default number of processes cpu count less 1
-                so Facebook tab in user's browser won't go all unresponsive.'''
-                base.num_processes -= 1
-        if gzip_intermediates:
-            if not (isinstance(gzip_level, int)
-                                    and 9 >= gzip_level >= 1):
-                base.errors.append('Gzip level (--gzip-level) '
-                                   'must be an integer between 1 and 9, '
-                                   'but {0} was entered.'.format(
-                                                    gzip_level
-                                                ))
+                try:
+                    base.num_processes = cpu_count()
+                except NotImplementedError:
+                    base.num_processes = 1
+                if base.num_processes != 1:
+                    '''Make default number of processes cpu count less 1
+                    so Facebook tab in user's browser won't go all
+                    unresponsive.'''
+                    base.num_processes -= 1
+            if gzip_intermediates:
+                if not (isinstance(gzip_level, int)
+                                        and 9 >= gzip_level >= 1):
+                    base.errors.append('Gzip level (--gzip-level) '
+                                       'must be an integer between 1 and 9, '
+                                       'but {0} was entered.'.format(
+                                                        gzip_level
+                                                    ))
+            if scratch:
+                if not os.path.exists(scratch):
+                    try:
+                        os.makedirs(scratch)
+                    except OSError:
+                        base.errors.append(
+                                ('Could not create scratch directory %s; '
+                                 'check that it\'s not a file and that '
+                                 'write permissions are active.') % scratch
+                            )
+
 
     @staticmethod
     def add_args(required_parser, general_parser, output_parser, 
-                    prep=False, align=False):
+                    prep=False, align=False, parallel=False):
         """ Adds parameter descriptions relevant to local mode to an object
             of class argparse.ArgumentParser.
 
             prep: preprocess-only
             align: align-only
+            parallel: add parallel-mode arguments
 
             No return value.
         """
@@ -766,12 +917,34 @@ class RailRnaLocal:
             default='./rail-rna_logs',
             help='directory for storing intermediate files and logs'
         )
-        general_parser.add_argument(
-           '-p', '--num-processes', type=int, required=False, metavar='<int>',
-            default=None,
-            help='number of processes to run simultaneously (def: # cpus ' \
-                 '- 1 if # cpus > 1; else 1)'
-        )
+        if not parallel:
+            general_parser.add_argument(
+               '-p', '--num-processes', type=int, required=False,
+                metavar='<int>', default=None,
+                help=('number of processes to run simultaneously (def: # cpus '
+                      '- 1 if # cpus > 1; else 1)')
+            )
+        else:
+            general_parser.add_argument(
+                '--ipcontroller-json', type=str, required=False,
+                metavar='<file>',
+                default=None,
+                help=('path to ipcontroller-client.json file '
+                      '(def: IPython default for selected profile)')
+            )
+            general_parser.add_argument(
+                '--ipython-profile', type=str, required=False, metavar='<str>',
+                default=None,
+                help=('connects to this IPython profile (def: default IPython '
+                      'profile')
+            )
+            general_parser.add_argument(
+                '--scratch', type=str, required=False, metavar='<dir>',
+                default=None,
+                help=('where to write node stdout before copying to '
+                      'intermediate directory (def: securely created '
+                      'temporary directory)')
+            )
         general_parser.add_argument(
             '--keep-intermediates', action='store_const', const=True,
             default=False,
@@ -2663,6 +2836,117 @@ class RailRnaLocalPreprocessJson:
     def json_serial(self):
         return self._json_serial
 
+class RailRnaParallelPreprocessJson:
+    """ Constructs JSON for parallel mode + preprocess job flow. """
+    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
+        force=False, aws_exe=None, profile='default', region='us-east-1',
+        verbose=False, nucleotides_per_input=8000000, gzip_input=True,
+        num_processes=1, gzip_intermediates=False, gzip_level=3,
+        ipython_profile=None, ipcontroller_json=None, scratch=None,
+        keep_intermediates=False, check_manifest=True):
+        rc = ipython_client(ipython_profile=ipython_profile,
+                                ipcontroller_json=ipcontroller_json)
+        ready_engines(rc)
+        base = RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose)
+        engine_bases = [RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose) for i in rc.ids]
+        RailRnaLocal(base, check_manifest=check_manifest,
+            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
+            gzip_level=gzip_level, keep_intermediates=keep_intermediates,
+            local=False, parallel=False)
+        asyncresults = []
+        for i in rc.ids:
+            asyncresults.append(
+                    rc[i].apply_async(
+                        RailRnaLocal, engine_bases[i],
+                        check_manifest=check_manifest,
+                        num_processes=num_processes,
+                        gzip_intermediates=gzip_intermediates,
+                        gzip_level=gzip_level,
+                        keep_intermediates=keep_intermediates,
+                        local=False, parallel=True
+                    )
+                )
+        while any([not asyncresult.ready() for asyncresult in asyncresults]):
+            time.sleep(1e-1)
+        asyncexceptions = defaultdict(set)
+        for asyncresult in asyncresults:
+            try:
+                asyncdict = asyncresult.get_dict()
+            except Exception as e:
+                asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+        if asyncexceptions:
+            runtimeerror_message = []
+            for exc in asyncexceptions:
+                runtimeerror_message.extend(
+                        ['Engine(s) %s report(s) the following exception.'
+                            % asyncexceptions[exc],
+                         exc]
+                     )
+            raise RuntimeError('\n'.join(runtimeerror_message))
+        asyncresults = []
+        if base.check_curl_on_engines:
+            for i in rc.ids:
+                asyncresults.append(
+                        rc[i].apply_async(
+                            engine_bases[i].check_program, 'curl', 'Curl',
+                            '--curl', entered_exe=base.curl_exe,
+                            reason=base.check_curl_on_engines
+                        )
+                    )
+        if base.check_s3_on_engines:
+            for i in rc.ids:
+                asyncresults.append(
+                        rc[i].apply_async(
+                            engine_bases[i].check_s3,
+                            reason=base.check_curl_on_engines
+                        )
+                    )
+        if asyncresults:
+            asyncexceptions = defaultdict(set)
+            for asyncresult in asyncresults:
+                try:
+                    asyncdict = asyncresult.get_dict()
+                except Exception as e:
+                    asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+            if asyncexceptions:
+                runtimeerror_message = []
+                for exc in asyncexceptions:
+                    runtimeerror_message.extend(
+                            ['Engines %s report the following exception.'
+                                % asyncexceptions[exc],
+                             exc]
+                         )
+                raise RuntimeError('\n'.join(runtimeerror_message))
+        RailRnaPreprocess(base,
+            nucleotides_per_input=nucleotides_per_input, gzip_input=gzip_input)
+        if base.errors:
+            raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(base.errors)]
+                        ) if len(base.errors) > 1 else base.errors[0]
+                )
+        self._json_serial = {}
+        step_dir = os.path.join(base_path, 'rna', 'steps')
+        self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
+                os.path.join(base.intermediate_dir, 'preprocess'),
+                base.output_dir, elastic=False),
+                '', '', step_dir,
+                base.num_processes,
+                base.intermediate_dir, unix=False
+            )
+        self.base = base
+    
+    @property
+    def json_serial(self):
+        return self._json_serial
+
 class RailRnaElasticPreprocessJson:
     """ Constructs JSON for elastic mode + preprocess job flow. """
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
@@ -2776,6 +3060,152 @@ class RailRnaLocalAlignJson:
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             keep_intermediates=keep_intermediates)
+        RailRnaAlign(base, input_dir=input_dir,
+            elastic=False, bowtie1_exe=bowtie1_exe,
+            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
+            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
+            samtools_exe=samtools_exe,
+            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
+            genome_partition_length=genome_partition_length,
+            max_readlet_size=max_readlet_size,
+            readlet_config_size=readlet_config_size,
+            min_readlet_size=min_readlet_size,
+            readlet_interval=readlet_interval,
+            cap_size_multiplier=cap_size_multiplier,
+            max_intron_size=max_intron_size,
+            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            motif_search_window_size=motif_search_window_size,
+            max_gaps_mismatches=max_gaps_mismatches,
+            motif_radius=motif_radius,
+            genome_bowtie1_args=genome_bowtie1_args,
+            count_multiplier=count_multiplier,
+            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            tie_margin=tie_margin,
+            normalize_percentile=normalize_percentile,
+            very_replicable=very_replicable,
+            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            output_sam=output_sam, bam_basename=bam_basename,
+            bed_basename=bed_basename)
+        if base.errors:
+            raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(base.errors)]
+                        ) if len(base.errors) > 1 else base.errors[0]
+                )
+        print >>sys.stderr, base.detect_message
+        if not sys.stderr.isatty():
+            # So the user sees it too
+            print base.detect_message
+        self._json_serial = {}
+        step_dir = os.path.join(base_path, 'rna', 'steps')
+        self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
+                base.input_dir, elastic=False), '', '', step_dir,
+                base.num_processes, base.intermediate_dir, unix=False
+            )
+        self.base = base
+
+    @property
+    def json_serial(self):
+        return self._json_serial
+
+class RailRnaParallelAlignJson:
+    """ Constructs JSON for local mode + align job flow. """
+    def __init__(self, manifest, output_dir, input_dir,
+        intermediate_dir='./intermediate',
+        force=False, aws_exe=None, profile='default', region='us-east-1',
+        verbose=False, bowtie1_exe=None,
+        bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
+        bowtie2_build_exe=None, bowtie2_idx='genome',
+        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
+        genome_partition_length=5000, max_readlet_size=25,
+        readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
+        cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
+        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
+        transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
+        tie_margin=6, very_replicable=False, normalize_percentile=0.75,
+        do_not_output_bam_by_chr=False,
+        output_sam=False, bam_basename='alignments',
+        bed_basename='', num_processes=1,
+        ipython_profile=None, ipcontroller_json=None, scratch=None,
+        gzip_intermediates=False,
+        gzip_level=3, keep_intermediates=False):
+        rc = ipython_client(ipython_profile=ipython_profile,
+                                ipcontroller_json=ipcontroller_json)
+        ready_engines(rc)
+        engine_bases = [RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose) for i in rc.ids]
+        RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
+            gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
+            keep_intermediates=keep_intermediates, local=False, parallel=False)
+        asyncresults = []
+        for i in rc.ids:
+            asyncresults.append(
+                    rc[i].apply_async(
+                        RailRnaLocal, engine_bases[i],
+                        check_manifest=check_manifest,
+                        num_processes=num_processes,
+                        gzip_intermediates=gzip_intermediates,
+                        gzip_level=gzip_level,
+                        keep_intermediates=keep_intermediates,
+                        local=False, parallel=True
+                    )
+                )
+        while any([not asyncresult.ready() for asyncresult in asyncresults]):
+            time.sleep(1e-1)
+        asyncexceptions = defaultdict(set)
+        for asyncresult in asyncresults:
+            try:
+                asyncdict = asyncresult.get_dict()
+            except Exception as e:
+                asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+        if asyncexceptions:
+            runtimeerror_message = []
+            for exc in asyncexceptions:
+                runtimeerror_message.extend(
+                        ['Engine(s) %s report(s) the following exception.'
+                            % asyncexceptions[exc],
+                         exc]
+                     )
+            raise RuntimeError('\n'.join(runtimeerror_message))
+        asyncresults = []
+        if base.check_curl_on_engines:
+            for i in rc.ids:
+                asyncresults.append(
+                        rc[i].apply_async(
+                            engine_bases[i].check_program, 'curl', 'Curl',
+                            '--curl', entered_exe=base.curl_exe,
+                            reason=base.check_curl_on_engines
+                        )
+                    )
+        if base.check_s3_on_engines:
+            for i in rc.ids:
+                asyncresults.append(
+                        rc[i].apply_async(
+                            engine_bases[i].check_s3,
+                            reason=base.check_curl_on_engines
+                        )
+                    )
+        if asyncresults:
+            asyncexceptions = defaultdict(set)
+            for asyncresult in asyncresults:
+                try:
+                    asyncdict = asyncresult.get_dict()
+                except Exception as e:
+                    asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+            if asyncexceptions:
+                runtimeerror_message = []
+                for exc in asyncexceptions:
+                    runtimeerror_message.extend(
+                            ['Engine(s) %s report(s) the following exception.'
+                                % asyncexceptions[exc],
+                             exc]
+                         )
+                raise RuntimeError('\n'.join(runtimeerror_message))
         RailRnaAlign(base, input_dir=input_dir,
             elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -2979,6 +3409,165 @@ class RailRnaLocalAllJson:
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, keep_intermediates=keep_intermediates)
+        RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
+            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
+            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
+            samtools_exe=samtools_exe,
+            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
+            genome_partition_length=genome_partition_length,
+            max_readlet_size=max_readlet_size,
+            readlet_config_size=readlet_config_size,
+            min_readlet_size=min_readlet_size,
+            readlet_interval=readlet_interval,
+            cap_size_multiplier=cap_size_multiplier,
+            max_intron_size=max_intron_size,
+            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            motif_search_window_size=motif_search_window_size,
+            max_gaps_mismatches=max_gaps_mismatches,
+            motif_radius=motif_radius,
+            genome_bowtie1_args=genome_bowtie1_args,
+            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            count_multiplier=count_multiplier,
+            tie_margin=tie_margin,
+            normalize_percentile=normalize_percentile,
+            very_replicable=very_replicable,
+            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            output_sam=output_sam, bam_basename=bam_basename,
+            bed_basename=bed_basename)
+        if base.errors:
+            raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(base.errors)]
+                        ) if len(base.errors) > 1 else base.errors[0]
+                )
+        print >>sys.stderr, base.detect_message
+        if not sys.stderr.isatty():
+            # So the user sees it too
+            print base.detect_message
+        self._json_serial = {}
+        step_dir = os.path.join(base_path, 'rna', 'steps')
+        prep_dir = path_join(False, base.intermediate_dir,
+                                        'preprocess')
+        push_dir = path_join(False, base.intermediate_dir,
+                                        'preprocess', 'push')
+        self._json_serial['Steps'] = \
+            steps(RailRnaPreprocess.protosteps(base,
+                prep_dir, push_dir, elastic=False), '', '', step_dir,
+                base.num_processes, base.intermediate_dir, unix=False
+            ) + \
+            steps(RailRnaAlign.protosteps(base,
+                push_dir, elastic=False), '', '', step_dir,
+                base.num_processes, base.intermediate_dir, unix=False
+            )
+        self.base = base
+
+    @property
+    def json_serial(self):
+        return self._json_serial
+
+class RailRnaParallelAllJson:
+    """ Constructs JSON for local mode + preprocess+align job flow. """
+    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
+        force=False, aws_exe=None, profile='default', region='us-east-1',
+        verbose=False, nucleotides_per_input=8000000, gzip_input=True,
+        bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
+        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
+        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
+        genome_partition_length=5000, max_readlet_size=25,
+        readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
+        cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
+        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
+        count_multiplier=6, transcriptome_bowtie2_args='-k 30', tie_margin=6,
+        very_replicable=False, normalize_percentile=0.75,
+        do_not_output_bam_by_chr=False,
+        output_sam=False, bam_basename='alignments', bed_basename='',
+        num_processes=1, gzip_intermediates=False, gzip_level=3,
+        ipython_profile=None, ipcontroller_json=None, scratch=None,
+        keep_intermediates=False, check_manifest=True):
+        rc = ipython_client(ipython_profile=ipython_profile,
+                                ipcontroller_json=ipcontroller_json)
+        ready_engines(rc)
+        engine_bases = [RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose) for i in rc.ids]
+        base = RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose)
+        RailRnaLocal(base, check_manifest=check_manifest,
+            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
+            gzip_level=gzip_level, keep_intermediates=keep_intermediates,
+            parallel=False, local=False)
+        asyncresults = []
+        for i in rc.ids:
+            asyncresults.append(
+                    rc[i].apply_async(
+                        RailRnaLocal, engine_bases[i],
+                        check_manifest=check_manifest,
+                        num_processes=num_processes,
+                        gzip_intermediates=gzip_intermediates,
+                        gzip_level=gzip_level,
+                        keep_intermediates=keep_intermediates,
+                        local=False, parallel=True
+                    )
+                )
+        while any([not asyncresult.ready() for asyncresult in asyncresults]):
+            time.sleep(1e-1)
+        asyncexceptions = defaultdict(set)
+        for asyncresult in asyncresults:
+            try:
+                asyncdict = asyncresult.get_dict()
+            except Exception as e:
+                asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+        if asyncexceptions:
+            runtimeerror_message = []
+            for exc in asyncexceptions:
+                runtimeerror_message.extend(
+                        ['Engine(s) %s report(s) the following exception.'
+                            % asyncexceptions[exc],
+                         exc]
+                     )
+            raise RuntimeError('\n'.join(runtimeerror_message))
+        asyncresults = []
+        if base.check_curl_on_engines:
+            for i in rc.ids:
+                asyncresults.append(
+                        rc[i].apply_async(
+                            engine_bases[i].check_program, 'curl', 'Curl',
+                            '--curl', entered_exe=base.curl_exe,
+                            reason=base.check_curl_on_engines
+                        )
+                    )
+        if base.check_s3_on_engines:
+            for i in rc.ids:
+                asyncresults.append(
+                        rc[i].apply_async(
+                            engine_bases[i].check_s3,
+                            reason=base.check_curl_on_engines
+                        )
+                    )
+        if asyncresults:
+            asyncexceptions = defaultdict(set)
+            for asyncresult in asyncresults:
+                try:
+                    asyncdict = asyncresult.get_dict()
+                except Exception as e:
+                    asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+            if asyncexceptions:
+                runtimeerror_message = []
+                for exc in asyncexceptions:
+                    runtimeerror_message.extend(
+                            ['Engine(s) %s report(s) the following exception.'
+                                % asyncexceptions[exc],
+                             exc]
+                         )
+                raise RuntimeError('\n'.join(runtimeerror_message))
+        RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
+            gzip_input=gzip_input)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
