@@ -523,7 +523,7 @@ def indels_introns_and_exons(cigar, md, pos, seq):
     new_exons.append(last_exon)
     return insertions, deletions, introns, new_exons
 
-class AlignmentPrinter:
+class AlignmentPrinter(object):
     """ Encapsulates methods for printing alignment information. """
 
     def __init__(self, manifest_object, reference_index,

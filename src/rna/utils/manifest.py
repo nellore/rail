@@ -14,7 +14,7 @@ def add_args(parser):
         '--manifest', metavar='PATH', type=str, required=False,
         help='Manifest file')
 
-class LabelsAndIndices:
+class LabelsAndIndices(object):
     """ Parses the manifest file to create manifest dictionary. """
     def __init__(self, manifest_file):
         self.label_to_index = {}

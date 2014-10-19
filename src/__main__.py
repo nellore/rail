@@ -97,7 +97,7 @@ class RailHelpFormatter(argparse.HelpFormatter):
             return '%s %s' % ('/'.join(action.option_strings),
                                 self._format_args(action, action.dest.upper()))
 
-class Launcher:
+class Launcher(object):
     """ Facilitates replacing the current process with a Dooplicity runner. """
 
     def __init__(self, force=False, num_processes=1, keep_intermediates=False,

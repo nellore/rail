@@ -113,7 +113,7 @@ class UpdateThread(threading.Thread):
             sys.stdout.flush()
             time.sleep(.04)
 
-class DooplicityInterface:
+class DooplicityInterface(object):
     """ Encapsulates methods for writing status updates to console. """
 
     def __init__(self, branding=None, log_stream=None,

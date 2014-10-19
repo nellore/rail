@@ -343,7 +343,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                 )
     return true_steps
 
-class RailRnaErrors:
+class RailRnaErrors(object):
     """ Holds accumulated errors in Rail-RNA's input parameters.
 
         Checks only those parameters common to all modes/job flows.
@@ -654,7 +654,7 @@ def ipython_client(ipython_profile=None, ipcontroller_json=None):
         print engine_detect_message
     return rc
 
-class RailRnaLocal:
+class RailRnaLocal(object):
     """ Checks local- or parallel-mode JSON for programs and input parameters.
 
         Subsumes only those parameters relevant to local mode. Adds errors
@@ -985,7 +985,7 @@ class RailRnaLocal:
                  'if applicable'
         )
 
-class RailRnaElastic:
+class RailRnaElastic(object):
     """ Checks elastic-mode input parameters and relevant programs.
 
         Subsumes only those parameters relevant to elastic mode. Adds errors
@@ -1681,7 +1681,7 @@ class RailRnaElastic:
             to_return['Ec2KeyName'] = base.ec2_key_name
         return to_return
 
-class RailRnaPreprocess:
+class RailRnaPreprocess(object):
     """ Sets parameters relevant to just the preprocessing step of a job flow.
     """
     def __init__(self, base, nucleotides_per_input=8000000, gzip_input=True):
@@ -1775,7 +1775,7 @@ class RailRnaPreprocess:
             }
         ]
 
-class RailRnaAlign:
+class RailRnaAlign(object):
     """ Sets parameters relevant to just the "align" job flow. """
     def __init__(self, base, input_dir=None, elastic=False,
         bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
@@ -2283,11 +2283,13 @@ class RailRnaAlign:
                 'run' : ('align_reads.py --bowtie-idx={0} --bowtie2-idx={1} '
                          '--bowtie2-exe={2} '
                          '--exon-differentials --partition-length={3} '
-                         '--manifest={4} {5} {6} {7} -- {8}').format(
+                         '--min-exon-size={4} '
+                         '--manifest={5} {6} {7} {8} -- {9}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
                                                 base.genome_partition_length,
+                                                base.min_exon_size,
                                                         manifest,
                                                         verbose,
                                                         keep_alive,
@@ -2828,7 +2830,7 @@ class RailRnaAlign:
             }
         ]
 
-class RailRnaLocalPreprocessJson:
+class RailRnaLocalPreprocessJson(object):
     """ Constructs JSON for local mode + preprocess job flow. """
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
@@ -2866,7 +2868,7 @@ class RailRnaLocalPreprocessJson:
     def json_serial(self):
         return self._json_serial
 
-class RailRnaParallelPreprocessJson:
+class RailRnaParallelPreprocessJson(object):
     """ Constructs JSON for parallel mode + preprocess job flow. """
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
@@ -2985,7 +2987,7 @@ class RailRnaParallelPreprocessJson:
     def json_serial(self):
         return self._json_serial
 
-class RailRnaElasticPreprocessJson:
+class RailRnaElasticPreprocessJson(object):
     """ Constructs JSON for elastic mode + preprocess job flow. """
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
@@ -3071,7 +3073,7 @@ class RailRnaElasticPreprocessJson:
     def json_serial(self):
         return self._json_serial
 
-class RailRnaLocalAlignJson:
+class RailRnaLocalAlignJson(object):
     """ Constructs JSON for local mode + align job flow. """
     def __init__(self, manifest, output_dir, input_dir,
         intermediate_dir='./intermediate',
@@ -3148,7 +3150,7 @@ class RailRnaLocalAlignJson:
     def json_serial(self):
         return self._json_serial
 
-class RailRnaParallelAlignJson:
+class RailRnaParallelAlignJson(object):
     """ Constructs JSON for local mode + align job flow. """
     def __init__(self, manifest, output_dir, input_dir,
         intermediate_dir='./intermediate',
@@ -3302,7 +3304,7 @@ class RailRnaParallelAlignJson:
     def json_serial(self):
         return self._json_serial
 
-class RailRnaElasticAlignJson:
+class RailRnaElasticAlignJson(object):
     """ Constructs JSON for elastic mode + align job flow. """
     def __init__(self, manifest, output_dir, input_dir, 
         intermediate_dir='./intermediate',
@@ -3427,7 +3429,7 @@ class RailRnaElasticAlignJson:
     def json_serial(self):
         return self._json_serial
 
-class RailRnaLocalAllJson:
+class RailRnaLocalAllJson(object):
     """ Constructs JSON for local mode + preprocess+align job flow. """
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
@@ -3513,7 +3515,7 @@ class RailRnaLocalAllJson:
     def json_serial(self):
         return self._json_serial
 
-class RailRnaParallelAllJson:
+class RailRnaParallelAllJson(object):
     """ Constructs JSON for local mode + preprocess+align job flow. """
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
@@ -3682,7 +3684,7 @@ class RailRnaParallelAllJson:
     def json_serial(self):
         return self._json_serial
 
-class RailRnaElasticAllJson:
+class RailRnaElasticAllJson(object):
     """ Constructs JSON for elastic mode + preprocess+align job flow. """
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
