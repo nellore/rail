@@ -322,9 +322,9 @@ class BowtieOutputThread(threading.Thread):
                 split_cigar = re.split(r'([MINDS])', cigar)[:-1]
                 try:
                     if ((split_cigar[1] == 'S'
-                            and int(split_cigar[0]) >= 0) or
+                            and int(split_cigar[0]) >= self.min_exon_size) or
                         (split_cigar[-1] == 'S'
-                            and int(split_cigar[-2]) >= 0)):
+                            and int(split_cigar[-2]) >= self.min_exon_size)):
                         search_for_introns = True
                     else:
                         search_for_introns = False
