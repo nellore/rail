@@ -28,7 +28,7 @@ site.addsitedir(base_path)
 import dooplicity.ansibles as ab
 import tempfile
 import shutil
-from dooplicity.tools import which, is_exe, path_join
+from dooplicity.tools import path_join, is_exe, which
 from version import version_number
 import sys
 from argparse import SUPPRESS
@@ -91,30 +91,32 @@ else:
     else:
         _warning_message = 'Launching Dooplicity runner with PyPy...'
 
-def ready_engines(rc):
+def ready_engines(rc, base):
     """ Prepares engines for checks. 
 
         rc: IPython Client object
+        base: instance of RailRnaErrors
 
         No return value.
     """
+    rc[:].execute('import socket').get()
+    rc[:].execute('import subprocess').get()
+    engine_to_hostnames = rc[:].apply(socket.get_hostnames).get_dict()
+    hostname_to_engines = defaultdict(set)
+    for engine in hostnames:
+        hostname_to_engines[engine_to_hostnames[engine]].add(engine)
+    # Distribute Rail-RNA to nodes
+    
+    while not asyncresult.ready():
+        time.sleep(1e-1)
+    if not asyncresult.successful():
+        asyncresult.get()
+    asyncresult = rc[:]
     asyncresult = rc[:].execute('import os')
     while not asyncresult.ready():
         time.sleep(1e-1)
     if not asyncresult.successful():
-        raise RuntimeError(
-                    'Problem encountered executing "import os" on engines.'
-                )
-    asyncresult = rc[:].push(
-            dict(is_exe=is_exe, which=which)
-        )
-    while not asyncresult.ready():
-        time.sleep(1e-1)
-    if not asyncresult.successful():
-        raise RuntimeError(
-                    'Problem encountered pushing functions is_exe() and '
-                    'which() to engines.'
-                )
+        asyncresult.get()
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
@@ -367,7 +369,7 @@ class RailRnaErrors:
         self.verbose = verbose
         self.profile = profile
 
-    def check_s3(self, reason=None):
+    def check_s3(self, reason=None, is_exe=None, which=None):
         """ Checks for AWS CLI and configuration file.
 
             In this script, S3 checking is performed as soon as it is found
@@ -381,6 +383,10 @@ class RailRnaErrors:
 
             No return value.
         """
+        if not is_exe:
+            is_exe = globals()['is_exe']
+        if not which:
+            which = globals()['which']
         original_errors_size = len(self.errors)
         if self.aws_exe is None:
             self.aws_exe = 'aws'
@@ -482,7 +488,8 @@ class RailRnaErrors:
         self.checked_programs.add('AWS CLI')
 
     def check_program(self, exe, program_name, parameter,
-                        entered_exe=None, reason=None):
+                        entered_exe=None, reason=None,
+                        is_exe=None, which=None):
         """ Checks if program in PATH or if user specified it properly.
 
             Errors are added to self.errors.
@@ -498,6 +505,10 @@ class RailRnaErrors:
 
             No return value.
         """
+        if not is_exe:
+            is_exe = globals()['is_exe']
+        if not which:
+            which = globals()['which']
         original_errors_size = len(self.errors)
         if entered_exe is None:
             if not which(exe):
@@ -636,7 +647,7 @@ def ipython_client(ipython_profile=None, ipcontroller_json=None):
                 'controller when running Rail-RNA in "parallel" mode.'
             )
     engine_detect_message = ('Detected %d running IPython engines.' 
-                                % len(self.rc.ids))
+                                % len(rc.ids))
     print >>sys.stderr, engine_detect_message
     if not sys.stderr.isatty():
         # So the user sees it too
@@ -652,10 +663,11 @@ class RailRnaLocal:
     def __init__(self, base, check_manifest=False,
                     num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3, parallel=False,
-                    local=True, scratch=None):
+                    local=True, scratch=None, ansible=None):
         """ base: instance of RailRnaErrors """
         # Initialize ansible for easy checks
-        ansible = ab.Ansible()
+        if not ansible:
+            ansible = ab.Ansible()
         if not ab.Url(base.intermediate_dir).is_local:
             base.errors.append(('Intermediate directory must be in locally '
                                 'accessible filesystem when running Rail-RNA '
@@ -675,7 +687,9 @@ class RailRnaLocal:
                                         base.output_dir
                                     ))
         elif output_dir_url.is_s3 and 'AWS CLI' not in base.checked_programs:
-            base.check_s3(reason='the output directory is on S3')
+            base.check_s3(reason='the output directory is on S3',
+                            is_exe=is_exe,
+                            which=which)
             # Change ansible params
             ansible.aws_exe = base.aws_exe
             ansible.profile = base.profile
@@ -712,7 +726,9 @@ class RailRnaLocal:
             # Check manifest; download it if necessary
             manifest_url = ab.Url(base.manifest)
             if manifest_url.is_s3 and 'AWS CLI' not in base.checked_programs:
-                base.check_s3(reason='the manifest file is on S3')
+                base.check_s3(reason='the manifest file is on S3',
+                                is_exe=is_exe,
+                                which=which)
                 # Change ansible params
                 ansible.aws_exe = base.aws_exe
                 ansible.profile = base.profile
@@ -720,7 +736,9 @@ class RailRnaLocal:
                 and 'Curl' not in base.checked_programs:
                 base.curl_exe = base.check_program('curl', 'Curl', '--curl',
                                     entered_exe=base.curl_exe,
-                                    reason='the manifest file is on the web')
+                                    reason='the manifest file is on the web',
+                                    is_exe=is_exe,
+                                    which=which)
                 ansible.curl_exe = base.curl_exe
             if not ansible.exists(manifest_url.to_url()):
                 base.errors.append(('Manifest file (--manifest) {0} '
@@ -792,7 +810,9 @@ class RailRnaLocal:
                                                       'at least one sample '
                                                       'FASTA/FASTQ from the '
                                                       'manifest file is on '
-                                                      'S3')
+                                                      'S3'),
+                                                      is_exe=is_exe,
+                                                      which=which
                                                     )
                                     base.check_s3_on_engines = (
                                                       'at least one sample '
@@ -814,7 +834,9 @@ class RailRnaLocal:
                                                       'at least one sample '
                                                       'FASTA/FASTQ from the '
                                                       'manifest file is on '
-                                                      'the web')
+                                                      'the web'),
+                                                    is_exe=is_exe,
+                                                    which=which
                                                 )
                                 base.check_curl_on_engines = (
                                                       'at least one sample '
@@ -871,16 +893,16 @@ class RailRnaLocal:
                                        'but {0} was entered.'.format(
                                                         gzip_level
                                                     ))
-            if scratch:
-                if not os.path.exists(scratch):
-                    try:
-                        os.makedirs(scratch)
-                    except OSError:
-                        base.errors.append(
-                                ('Could not create scratch directory %s; '
-                                 'check that it\'s not a file and that '
-                                 'write permissions are active.') % scratch
-                            )
+        if scratch:
+            if not os.path.exists(scratch):
+                try:
+                    os.makedirs(scratch)
+                except OSError:
+                    base.errors.append(
+                            ('Could not create scratch directory %s; '
+                             'check that it\'s not a file and that '
+                             'write permissions are active.') % scratch
+                        )
 
 
     @staticmethod
@@ -1773,7 +1795,8 @@ class RailRnaAlign:
             '''Programs and Bowtie indices should be checked only in local
             mode.'''
             base.bowtie1_exe = base.check_program('bowtie', 'Bowtie 1',
-                                '--bowtie1', entered_exe=bowtie1_exe)
+                                '--bowtie1', entered_exe=bowtie1_exe,
+                                is_exe=is_exe, which=which)
             bowtie1_version_command = [base.bowtie1_exe, '--version']
             try:
                 base.bowtie1_version = subprocess.check_output(
@@ -1790,7 +1813,9 @@ class RailRnaAlign:
             base.bowtie1_build_exe = base.check_program('bowtie-build',
                                             'Bowtie 1 Build',
                                             '--bowtie1-build',
-                                            entered_exe=bowtie1_build_exe)
+                                            entered_exe=bowtie1_build_exe,
+                                            is_exe=is_exe,
+                                            which=which)
             for extension in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', 
                                 '.rev.1.ebwt', '.rev.2.ebwt']:
                 index_file = bowtie1_idx + extension
@@ -1804,7 +1829,8 @@ class RailRnaAlign:
                                         'exist.').format(index_file))
             base.bowtie1_idx = bowtie1_idx
             base.bowtie2_exe = base.check_program('bowtie2', 'Bowtie 2',
-                                '--bowtie2', entered_exe=bowtie2_exe)
+                                '--bowtie2', entered_exe=bowtie2_exe,
+                                is_exe=is_exe, which=which)
             bowtie2_version_command = [base.bowtie2_exe, '--version']
             try:
                 base.bowtie2_version = subprocess.check_output(
@@ -1821,7 +1847,9 @@ class RailRnaAlign:
             base.bowtie2_build_exe = base.check_program('bowtie2-build',
                                             'Bowtie 2 Build',
                                             '--bowtie2-build',
-                                            entered_exe=bowtie2_build_exe)
+                                            entered_exe=bowtie2_build_exe,
+                                            is_exe=is_exe,
+                                            which=which)
             for extension in ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', 
                                 '.rev.1.bt2', '.rev.2.bt2']:
                 index_file = bowtie2_idx + extension
@@ -1835,7 +1863,8 @@ class RailRnaAlign:
                                         'exist.').format(index_file))
             base.bowtie2_idx = bowtie2_idx
             base.samtools_exe = base.check_program('samtools', 'SAMTools',
-                                '--samtools', entered_exe=samtools_exe)
+                                '--samtools', entered_exe=samtools_exe,
+                                is_exe=is_exe, which=which)
             try:
                 samtools_process = subprocess.Popen(
                         [base.samtools_exe], stderr=subprocess.PIPE
@@ -1868,7 +1897,8 @@ class RailRnaAlign:
                                             )
             base.bedgraphtobigwig_exe = base.check_program('bedGraphToBigWig', 
                                     'BedGraphToBigWig', '--bedgraphtobigwig',
-                                    entered_exe=bedgraphtobigwig_exe)
+                                    entered_exe=bedgraphtobigwig_exe,
+                                    is_exe=is_exe, which=which)
             # Check input dir
             if input_dir is not None:
                 if not os.path.exists(input_dir):
@@ -2863,13 +2893,13 @@ class RailRnaParallelPreprocessJson:
         for i in rc.ids:
             asyncresults.append(
                     rc[i].apply_async(
-                        RailRnaLocal, engine_bases[i],
+                        RailRnaLocal.__init__, engine_bases[i],
                         check_manifest=check_manifest,
                         num_processes=num_processes,
                         gzip_intermediates=gzip_intermediates,
                         gzip_level=gzip_level,
                         keep_intermediates=keep_intermediates,
-                        local=False, parallel=True
+                        local=False, parallel=True, ansible=ab.Ansible()
                     )
                 )
         while any([not asyncresult.ready() for asyncresult in asyncresults]):
@@ -2879,13 +2909,15 @@ class RailRnaParallelPreprocessJson:
             try:
                 asyncdict = asyncresult.get_dict()
             except Exception as e:
-                asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+                asyncexceptions[format_exc()].add(
+                        asyncresult.metadata['engine_id']
+                    )
         if asyncexceptions:
             runtimeerror_message = []
             for exc in asyncexceptions:
                 runtimeerror_message.extend(
                         ['Engine(s) %s report(s) the following exception.'
-                            % asyncexceptions[exc],
+                            % list(asyncexceptions[exc]),
                          exc]
                      )
             raise RuntimeError('\n'.join(runtimeerror_message))
@@ -2896,7 +2928,9 @@ class RailRnaParallelPreprocessJson:
                         rc[i].apply_async(
                             engine_bases[i].check_program, 'curl', 'Curl',
                             '--curl', entered_exe=base.curl_exe,
-                            reason=base.check_curl_on_engines
+                            reason=base.check_curl_on_engines,
+                            is_exe=is_exe,
+                            which=which
                         )
                     )
         if base.check_s3_on_engines:
@@ -2904,7 +2938,9 @@ class RailRnaParallelPreprocessJson:
                 asyncresults.append(
                         rc[i].apply_async(
                             engine_bases[i].check_s3,
-                            reason=base.check_curl_on_engines
+                            reason=base.check_curl_on_engines,
+                            is_exe=is_exe,
+                            which=which
                         )
                     )
         if asyncresults:
@@ -2913,7 +2949,9 @@ class RailRnaParallelPreprocessJson:
                 try:
                     asyncdict = asyncresult.get_dict()
                 except Exception as e:
-                    asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+                    asyncexceptions[format_exc()].add(
+                            asyncresult.metadata['engine_id']
+                        )
             if asyncexceptions:
                 runtimeerror_message = []
                 for exc in asyncexceptions:
@@ -3146,13 +3184,13 @@ class RailRnaParallelAlignJson:
         for i in rc.ids:
             asyncresults.append(
                     rc[i].apply_async(
-                        RailRnaLocal, engine_bases[i],
+                        RailRnaLocal.__init__, engine_bases[i],
                         check_manifest=check_manifest,
                         num_processes=num_processes,
                         gzip_intermediates=gzip_intermediates,
                         gzip_level=gzip_level,
                         keep_intermediates=keep_intermediates,
-                        local=False, parallel=True
+                        local=False, parallel=True, ansible=ab.Ansible()
                     )
                 )
         while any([not asyncresult.ready() for asyncresult in asyncresults]):
@@ -3162,13 +3200,15 @@ class RailRnaParallelAlignJson:
             try:
                 asyncdict = asyncresult.get_dict()
             except Exception as e:
-                asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+                asyncexceptions[format_exc()].add(
+                        asyncresult.metadata['engine_id']
+                    )
         if asyncexceptions:
             runtimeerror_message = []
             for exc in asyncexceptions:
                 runtimeerror_message.extend(
                         ['Engine(s) %s report(s) the following exception.'
-                            % asyncexceptions[exc],
+                            % list(asyncexceptions[exc]),
                          exc]
                      )
             raise RuntimeError('\n'.join(runtimeerror_message))
@@ -3179,7 +3219,9 @@ class RailRnaParallelAlignJson:
                         rc[i].apply_async(
                             engine_bases[i].check_program, 'curl', 'Curl',
                             '--curl', entered_exe=base.curl_exe,
-                            reason=base.check_curl_on_engines
+                            reason=base.check_curl_on_engines,
+                            is_exe=is_exe,
+                            which=which
                         )
                     )
         if base.check_s3_on_engines:
@@ -3187,7 +3229,9 @@ class RailRnaParallelAlignJson:
                 asyncresults.append(
                         rc[i].apply_async(
                             engine_bases[i].check_s3,
-                            reason=base.check_curl_on_engines
+                            reason=base.check_curl_on_engines,
+                            is_exe=is_exe,
+                            which=which
                         )
                     )
         if asyncresults:
@@ -3196,13 +3240,15 @@ class RailRnaParallelAlignJson:
                 try:
                     asyncdict = asyncresult.get_dict()
                 except Exception as e:
-                    asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+                    asyncexceptions[format_exc()].add(
+                            asyncresult.metadata['engine_id']
+                        )
             if asyncexceptions:
                 runtimeerror_message = []
                 for exc in asyncexceptions:
                     runtimeerror_message.extend(
                             ['Engine(s) %s report(s) the following exception.'
-                                % asyncexceptions[exc],
+                                % list(asyncexceptions[exc]),
                              exc]
                          )
                 raise RuntimeError('\n'.join(runtimeerror_message))
@@ -3498,6 +3544,8 @@ class RailRnaParallelAllJson:
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
+        from IPython.parallel import require
+        RailRnaLocal = require(globals()['RailRnaLocal'], rna_config)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, keep_intermediates=keep_intermediates,
@@ -3512,7 +3560,7 @@ class RailRnaParallelAllJson:
                         gzip_intermediates=gzip_intermediates,
                         gzip_level=gzip_level,
                         keep_intermediates=keep_intermediates,
-                        local=False, parallel=True
+                        local=False, parallel=True, ansible=ab.Ansible()
                     )
                 )
         while any([not asyncresult.ready() for asyncresult in asyncresults]):
@@ -3522,13 +3570,15 @@ class RailRnaParallelAllJson:
             try:
                 asyncdict = asyncresult.get_dict()
             except Exception as e:
-                asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+                asyncexceptions[format_exc()].add(
+                        asyncresult.metadata['engine_id']
+                    )
         if asyncexceptions:
             runtimeerror_message = []
             for exc in asyncexceptions:
                 runtimeerror_message.extend(
                         ['Engine(s) %s report(s) the following exception.'
-                            % asyncexceptions[exc],
+                            % list(asyncexceptions[exc]),
                          exc]
                      )
             raise RuntimeError('\n'.join(runtimeerror_message))
@@ -3539,7 +3589,9 @@ class RailRnaParallelAllJson:
                         rc[i].apply_async(
                             engine_bases[i].check_program, 'curl', 'Curl',
                             '--curl', entered_exe=base.curl_exe,
-                            reason=base.check_curl_on_engines
+                            reason=base.check_curl_on_engines,
+                            is_exe=is_exe,
+                            which=which
                         )
                     )
         if base.check_s3_on_engines:
@@ -3547,7 +3599,9 @@ class RailRnaParallelAllJson:
                 asyncresults.append(
                         rc[i].apply_async(
                             engine_bases[i].check_s3,
-                            reason=base.check_curl_on_engines
+                            reason=base.check_curl_on_engines,
+                            is_exe=is_exe,
+                            which=which
                         )
                     )
         if asyncresults:
@@ -3556,13 +3610,15 @@ class RailRnaParallelAllJson:
                 try:
                     asyncdict = asyncresult.get_dict()
                 except Exception as e:
-                    asyncexceptions[format_exc()].add(asyncdict.keys()[0])
+                    asyncexceptions[format_exc()].add(
+                            asyncresult.metadata['engine_id']
+                        )
             if asyncexceptions:
                 runtimeerror_message = []
                 for exc in asyncexceptions:
                     runtimeerror_message.extend(
                             ['Engine(s) %s report(s) the following exception.'
-                                % asyncexceptions[exc],
+                                % list(asyncexceptions[exc]),
                              exc]
                          )
                 raise RuntimeError('\n'.join(runtimeerror_message))

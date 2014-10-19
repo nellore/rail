@@ -128,9 +128,9 @@ class Launcher:
                 of replacement process
         """
         # Reactivate these lines just to see json
-        print json.dumps(json.loads(payload), sort_keys=True,
-                            indent=4, separators=(',', ': '))
-        quit()
+        #print json.dumps(json.loads(payload), sort_keys=True,
+        #                    indent=4, separators=(',', ': '))
+        #quit()
         read_pipe, write_pipe = os.pipe()
         if os.fork() != 0:
             # Parent process; read from child after determining executable
@@ -627,7 +627,7 @@ if __name__ == '__main__':
             )
     elif args.job_flow == 'go' and args.go_mode == 'parallel':
         mode = 'parallel'
-        json_creator = RailRnaLocalAllJson(
+        json_creator = RailRnaParallelAllJson(
                 args.manifest, args.output,
                 intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
@@ -662,7 +662,6 @@ if __name__ == '__main__':
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
                 bed_basename=args.bed_basename,
-                num_processes=args.num_processes,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 keep_intermediates=args.keep_intermediates,
@@ -673,7 +672,7 @@ if __name__ == '__main__':
             )
     elif args.job_flow == 'align' and args.align_mode == 'parallel':
         mode = 'parallel'
-        json_creator = RailRnaLocalAlignJson(
+        json_creator = RailRnaParallelAlignJson(
                 args.manifest, args.output, args.input,
                 intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
@@ -706,7 +705,6 @@ if __name__ == '__main__':
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
                 bed_basename=args.bed_basename,
-                num_processes=args.num_processes,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 keep_intermediates=args.keep_intermediates,
@@ -716,14 +714,13 @@ if __name__ == '__main__':
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'parallel':
         mode = 'parallel'
-        json_creator = RailRnaLocalPreprocessJson(
+        json_creator = RailRnaParallelPreprocessJson(
                 args.manifest, args.output,
                 intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 verbose=args.verbose,
                 nucleotides_per_input=args.nucleotides_per_input,
                 gzip_input=(not args.do_not_gzip_input),
-                num_processes=args.num_processes,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 keep_intermediates=args.keep_intermediates,

@@ -770,7 +770,7 @@ class AlignmentPrinter:
                                     max(partition_start, exon_pos))
                             output_line_count += 1
                             assert exon_end_pos > partition_start
-                            if exon_end_pos < partition_end:
+                            if exon_end_pos <= partition_end:
                                 '''Print decrement at interval end 
                                 iff exon ends before partition
                                 ends.'''

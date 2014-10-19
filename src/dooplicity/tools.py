@@ -89,7 +89,6 @@ def which(program):
             for candidate in ext_candidates(exe_file):
                 if is_exe(candidate):
                     return candidate
-
     return None
 
 def path_join(unix, *args):

@@ -267,6 +267,6 @@ if __name__ == '__main__':
                 )
             )
 
-    print >> sys.stderr, 'DONE with compare_alignments.py; in/out=%d/%d; ' \
+    print >>sys.stderr, 'DONE with compare_alignments.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (input_line_count, output_line_count,
                             time.time() - start_time)

@@ -92,10 +92,10 @@ for (partition_id, sample_label), xpartition in xstream(sys.stdin, 2):
         pos = int(pos)
         for _, diff in diffs:
             coverage += int(diff)
-            print 'coverage\t%s\t%s\t%012d\t%d' % (sample_label, 
-                rname, pos, coverage)
             bin_diff_count += 1
-            output_line_count += 1
+        print 'coverage\t%s\t%s\t%012d\t%d' % (sample_label, 
+                rname, pos, coverage)
+        output_line_count += 1
     if args.partition_stats:
         print 'partition_stats\t%d\t%s' % (bin_diff_count, 
                                             time.time() - bin_start_time)
