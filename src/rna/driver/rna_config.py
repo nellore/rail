@@ -1784,7 +1784,8 @@ class RailRnaAlign(object):
         genome_partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        min_exon_size=9, intron_search_filter='none',
+        motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6, tie_margin=6,
         normalize_percentile=0.75, very_replicable=False,
@@ -2014,6 +2015,26 @@ class RailRnaAlign(object):
                                'must be an integer > 0, but '
                                '{0} was entered.'.format(min_exon_size))
         base.min_exon_size = min_exon_size
+        if intron_search_filter == 'none':
+            base.intron_search_filter = 0
+        elif intron_search_filter == 'mild':
+            base.intron_search_filter = base.min_exon_size
+        elif intron_search_filter == 'strict':
+            try:
+                base.intron_search_filter = int(base.min_exon_size * 1.5)
+            except:
+                pass
+        elif not (
+                (isinstance(intron_search_filter, int)
+                    and intron_search_filter >= 0) or
+                intron_search_filter in ['none', 'mild', 'strict']
+            ):
+            base.errors.append('Intron search filter (--intron-search-filter) '
+                               'must be an integer >= 0 or one of {"none", '
+                               '"mild", "strict"}, but {0} was '
+                               'entered.'.format(intron_search_filter))
+        else:
+            base.intron_search_filter = intron_search_filter
         if not (isinstance(motif_search_window_size, int) and 
                     motif_search_window_size >= 0):
             base.errors.append('Motif search window size '
@@ -2196,6 +2217,14 @@ class RailRnaAlign(object):
                   'bases')
         )
         algo_parser.add_argument(
+            '--intron-search-filter', type=str, required=False,
+            metavar='<choice/int>',
+            default='none',
+            help=('filter out reads searched for introns that fall below '
+                  'threshold <int> for initially detected anchor length; '
+                  'or select <choice> from {"strict", "mild", "none"}')
+        )
+        algo_parser.add_argument(
             '--motif-search-window-size', type=int, required=False,
             default=1000,
             help=SUPPRESS
@@ -2289,7 +2318,7 @@ class RailRnaAlign(object):
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
                                                 base.genome_partition_length,
-                                                base.min_exon_size,
+                                                base.intron_search_filter,
                                                         manifest,
                                                         verbose,
                                                         keep_alive,
@@ -3085,7 +3114,8 @@ class RailRnaLocalAlignJson(object):
         genome_partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        min_exon_size=9, intron_search_filter='none',
+        motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
         tie_margin=6, very_replicable=False, normalize_percentile=0.75,
@@ -3115,6 +3145,7 @@ class RailRnaLocalAlignJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            intron_search_filter=intron_search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
@@ -3162,7 +3193,8 @@ class RailRnaParallelAlignJson(object):
         genome_partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        min_exon_size=9, intron_search_filter='none',
+        motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
         tie_margin=6, very_replicable=False, normalize_percentile=0.75,
@@ -3269,6 +3301,7 @@ class RailRnaParallelAlignJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            intron_search_filter=intron_search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
@@ -3316,7 +3349,8 @@ class RailRnaElasticAlignJson(object):
         genome_partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        min_exon_size=9, intron_search_filter='none',
+        motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6,
         tie_margin=6, very_replicable=False,
@@ -3370,6 +3404,7 @@ class RailRnaElasticAlignJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            intron_search_filter=intron_search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
@@ -3440,7 +3475,8 @@ class RailRnaLocalAllJson(object):
         genome_partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        min_exon_size=9, intron_search_filter='none',
+        motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         count_multiplier=6, transcriptome_bowtie2_args='-k 30', tie_margin=6,
         very_replicable=False, normalize_percentile=0.75,
@@ -3471,6 +3507,7 @@ class RailRnaLocalAllJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            intron_search_filter=intron_search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
@@ -3526,7 +3563,8 @@ class RailRnaParallelAllJson(object):
         genome_partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        min_exon_size=9, intron_search_filter='none',
+        motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         count_multiplier=6, transcriptome_bowtie2_args='-k 30', tie_margin=6,
         very_replicable=False, normalize_percentile=0.75,
@@ -3639,7 +3677,9 @@ class RailRnaParallelAllJson(object):
             readlet_interval=readlet_interval,
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
-            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            min_intron_size=min_intron_size,
+            intron_search_filter=intron_search_filter,
+            min_exon_size=min_exon_size,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
@@ -3695,7 +3735,8 @@ class RailRnaElasticAllJson(object):
         genome_partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, motif_search_window_size=1000, max_gaps_mismatches=3,
+        min_exon_size=9, intron_search_filter='none',
+        motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=6,
         normalize_percentile=0.75, very_replicable=False,
@@ -3750,7 +3791,9 @@ class RailRnaElasticAllJson(object):
             readlet_interval=readlet_interval,
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
-            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            min_intron_size=min_intron_size,
+            intron_search_filter=intron_search_filter,
+            min_exon_size=min_exon_size,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
