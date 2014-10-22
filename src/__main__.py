@@ -403,12 +403,6 @@ if __name__ == '__main__':
                         prep_elastic_general, align_elastic_general,
                         go_elastic_general]:
         subparser.add_argument(
-                    '-j', '--json', action='store_const', const=True,
-                    default=False,
-                    help=('print JSON with steps to stdout and do not run '
-                          'job flow')
-                )
-        subparser.add_argument(
                     '-h', '--help',
                     action='help', default=SUPPRESS,
                     help='show this help message and exit'
@@ -418,6 +412,12 @@ if __name__ == '__main__':
                     action='version',
                     version=('Rail-RNA v{0}'.format(version_number)),
                     help='show version information and exit'
+                )
+        subparser.add_argument(
+                    '-j', '--json',
+                    action='store_const', const=True,
+                    default=False,
+                    help=('print job flow JSON to stdout and exit')
                 )
     parser.add_argument(
             '-v', '--version',
