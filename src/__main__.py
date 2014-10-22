@@ -218,8 +218,6 @@ def rail_help_wrapper(prog):
     return RailHelpFormatter(prog, max_help_position=37)
 
 if __name__ == '__main__':
-    if '--json' not in sys.argv and '-j' not in sys.argv:
-        print '\nLoading...'
     parser = RailParser(
             usage=_usage_message,
             add_help=False
@@ -535,6 +533,8 @@ if __name__ == '__main__':
                           output_parser=go_elastic_output,
                           algo_parser=go_elastic_algo, elastic=True)
     args = parser.parse_args()
+    if not args.json:
+        print '\nLoading...'
     if args.job_flow == 'go' and args.go_mode == 'local':
         mode = 'local'
         json_creator = RailRnaLocalAllJson(
@@ -560,7 +560,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
-                intron_search_filter=args.intron_search_filter,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -602,7 +602,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
-                intron_search_filter=args.intron_search_filter,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -660,7 +660,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
-                intron_search_filter=args.intron_search_filter,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -704,7 +704,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
-                intron_search_filter=args.intron_search_filter,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -758,7 +758,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
-                intron_search_filter=args.intron_search_filter,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -810,7 +810,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
-                intron_search_filter=args.intron_search_filter,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
