@@ -796,12 +796,15 @@ class RailRnaLocal(object):
                         # Check files in manifest only if in preprocess flow
                         file_count = len(files_to_check)
                         for k, filename in enumerate(files_to_check):
-                            sys.stdout.write(
-                                    '\r\x1b[KChecking that file %d/%d from '
-                                    'manifest file exists...' % (k+1,
-                                                                 file_count)
-                                )
-                            sys.stdout.flush()
+                            if sys.stdout.isatty():
+                                sys.stdout.write(
+                                        '\r\x1b[KChecking that file %d/%d '
+                                        'from manifest file exists...' % (
+                                                                    k+1,
+                                                                    file_count
+                                                                )
+                                    )
+                                sys.stdout.flush()
                             filename_url = ab.Url(filename)
                             if filename_url.is_s3 \
                                 and 'AWS CLI' not in base.checked_programs:
@@ -854,11 +857,12 @@ class RailRnaLocal(object):
                                                         filename,
                                                         manifest_url.to_url()
                                                 ))
-                        sys.stdout.write(
-                                '\r\x1b[KChecked all files listed in manifest '
-                                'file.\n'
-                            )
-                        sys.stdout.flush()
+                        if sys.stdout.isatty():
+                            sys.stdout.write(
+                                    '\r\x1b[KChecked all files listed in '
+                                    'manifest file.\n'
+                                )
+                            sys.stdout.flush()
                 else:
                     base.errors.append(('Manifest file (--manifest) {0} '
                                         'has no valid lines.').format(
@@ -1188,11 +1192,15 @@ class RailRnaElastic(object):
                     file_count = len(files_to_check)
                     # Check files in manifest only if in preprocess job flow
                     for k, filename in enumerate(files_to_check):
-                        sys.stdout.write(
-                                '\r\x1b[KChecking that file %d/%d from '
-                                'manifest file exists...' % (k+1, file_count)
-                            )
-                        sys.stdout.flush()
+                        if sys.stdout.isatty():
+                            sys.stdout.write(
+                                    '\r\x1b[KChecking that file %d/%d '
+                                    'from manifest file exists...' % (
+                                                                k+1,
+                                                                file_count
+                                                            )
+                                )
+                            sys.stdout.flush()
                         filename_url = ab.Url(filename)
                         if filename_url.is_curlable \
                             and 'Curl' not in base.checked_programs:
@@ -1212,11 +1220,12 @@ class RailRnaElastic(object):
                                                         filename,
                                                         manifest_url.to_url()
                                                     ))
-                    sys.stdout.write(
-                            '\r\x1b[KChecked all files listed in manifest '
-                            'file.\n'
-                        )
-                    sys.stdout.flush()
+                    if sys.stdout.isatty():
+                        sys.stdout.write(
+                                '\r\x1b[KChecked all files listed in manifest '
+                                'file.\n'
+                            )
+                        sys.stdout.flush()
             else:
                 base.errors.append(('Manifest file (--manifest) {0} '
                                     'has no valid lines.').format(

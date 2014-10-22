@@ -103,7 +103,7 @@ class Launcher(object):
     def __init__(self, force=False, num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3, region='us-east-1',
                     log=None, scratch=None, ipython_profile=None,
-                    ipcontroller_json=None, common=None):
+                    ipcontroller_json=None, common=None, json=False):
         self.force = force
         self.num_processes = num_processes
         self.keep_intermediates = keep_intermediates
@@ -115,6 +115,7 @@ class Launcher(object):
         self.ipython_profile = ipython_profile
         self.ipcontroller_json = ipcontroller_json
         self.common = common
+        self.json = json
 
     def run(self, mode, payload):
         """ Replaces current process, using PyPy if it's available.
@@ -127,10 +128,10 @@ class Launcher(object):
             payload: string with json payload to copy to stdin
                 of replacement process
         """
-        # Reactivate these lines just to see json
-        #print json.dumps(json.loads(payload), sort_keys=True,
-        #                    indent=4, separators=(',', ': '))
-        #quit()
+        if self.json:
+            print json.dumps(json.loads(payload), sort_keys=True,
+                             indent=4, separators=(',', ': '))
+            quit()
         read_pipe, write_pipe = os.pipe()
         if os.fork() != 0:
             # Parent process; read from child after determining executable
@@ -217,7 +218,8 @@ def rail_help_wrapper(prog):
     return RailHelpFormatter(prog, max_help_position=37)
 
 if __name__ == '__main__':
-    print '\nLoading...'
+    if '--json' not in sys.argv and '-j' not in sys.argv:
+        print '\nLoading...'
     parser = RailParser(
             usage=_usage_message,
             add_help=False
@@ -402,6 +404,12 @@ if __name__ == '__main__':
                         align_parallel_general, go_parallel_general,
                         prep_elastic_general, align_elastic_general,
                         go_elastic_general]:
+        subparser.add_argument(
+                    '-j', '--json', action='store_const', const=True,
+                    default=False,
+                    help=('print JSON with steps to stdout and do not run '
+                          'job flow')
+                )
         subparser.add_argument(
                     '-h', '--help',
                     action='help', default=SUPPRESS,
@@ -920,7 +928,8 @@ if __name__ == '__main__':
                                             args.scratch
                                             if mode == 'parallel'
                                             else None
-                                        )
+                                        ),
+                                        json=args.json
                                     )
     except AttributeError:
         # No region specified
@@ -969,6 +978,7 @@ if __name__ == '__main__':
                                             args.scratch
                                             if mode == 'parallel'
                                             else None
-                                        )
+                                        ),
+                                        json=args.json
                                     )
     launcher.run(mode, json.dumps(json_creator.json_serial))
