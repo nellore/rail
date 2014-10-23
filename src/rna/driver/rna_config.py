@@ -2025,7 +2025,7 @@ class RailRnaAlign(object):
                                '{0} was entered.'.format(min_exon_size))
         base.min_exon_size = min_exon_size
         if search_filter == 'none':
-            base.search_filter = 0
+            base.search_filter = 1
         elif search_filter == 'mild':
             base.search_filter = base.min_exon_size
         elif search_filter == 'strict':
@@ -2035,7 +2035,7 @@ class RailRnaAlign(object):
                 pass
         elif not (
                 (isinstance(search_filter, int)
-                    and search_filter >= 0) or
+                    and search_filter >= 1) or
                 search_filter in ['none', 'mild', 'strict']
             ):
             base.errors.append('Search filter (--search-filter) '
