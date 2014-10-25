@@ -137,6 +137,7 @@ import partition
 import manifest
 from alignment_handlers import AlignmentPrinter
 from dooplicity.tools import xstream
+import re
 
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
@@ -210,7 +211,7 @@ class BowtieOutputThread(threading.Thread):
     def __init__(self, input_stream, reference_index, manifest_object, 
         return_set, output_stream=sys.stdout, exon_differentials=True,
         exon_intervals=False, verbose=False, bin_size=10000,
-        report_multiplier=1.2):
+        report_multiplier=1.2, min_exon_size=8):
         """ Constructor for BowtieOutputThread.
 
             input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -232,6 +233,10 @@ class BowtieOutputThread(threading.Thread):
             report_multiplier: if verbose is True, the line number of an
                 alignment written to stderr increases exponentially with base
                 report_multiplier.
+            min_exon_size: minimum exon size searched for in intron_search.py
+                later in pipeline; used to determine how large a soft clip on
+                one side of a read is necessary to pass it on to intron search
+                pipeline
         """
         super(BowtieOutputThread, self).__init__()
         self.daemon = True
@@ -244,6 +249,7 @@ class BowtieOutputThread(threading.Thread):
         self.exon_differentials = exon_differentials
         self.exon_intervals = exon_intervals
         self.manifest_object = manifest_object
+        self.min_exon_size = min_exon_size
         self.return_set = return_set
 
     def run(self):
@@ -313,16 +319,27 @@ class BowtieOutputThread(threading.Thread):
                 reversed_complement_seq = seq[::-1].translate(
                         _reversed_complement_translation_table
                     )
+                split_cigar = re.split(r'([MINDS])', cigar)[:-1]
+                try:
+                    if ((split_cigar[1] == 'S'
+                            and int(split_cigar[0]) >= self.min_exon_size) or
+                        (split_cigar[-1] == 'S'
+                            and int(split_cigar[-2]) >= self.min_exon_size)):
+                        search_for_introns = True
+                    else:
+                        search_for_introns = False
+                except IndexError:
+                    search_for_introns = False
                 if seq < reversed_complement_seq:
                     print >>self.output_stream, \
-                        'readletize\t%s\t\x1c\t%s' % (seq, 
-                            ('+' if 'S' in cigar else '-') + 
+                        'readletize\t%s\t\x1c\t%s%s' % (seq, 
+                            ('+' if search_for_introns else '-'),
                             sample_label)
                 else:
                     print >>self.output_stream, \
-                        'readletize\t%s\t\x1c\t%s' \
+                        'readletize\t%s\t\x1c\t%s%s' \
                         % (reversed_complement_seq,
-                            ('+' if 'S' in cigar else '-') + 
+                            ('+' if search_for_introns else '-'),
                             sample_label)
                 _output_line_count += 1
                 '''Write SAM output for comparison/combination with spliced
@@ -345,7 +362,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 
     manifest_file='manifest', bowtie2_args=None, bin_size=10000, verbose=False,
     exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
-    offset=0):
+    offset=0, min_exon_size=8):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -480,6 +497,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             report_multiplier.
         offset: if first token of each line is to be ignored, this is 1; else 
             this is 0. First token is ignored for TextInputFormat-style input.
+        min_exon_size: minimum exon size searched for in intron_search.py later
+            in pipeline; used to determine how large a soft clip on one side of
+            a read is necessary to pass it on to intron search pipeline
 
         No return value.
     """
@@ -515,7 +535,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                 bin_size=bin_size,
                 verbose=verbose, 
                 output_stream=output_stream,
-                report_multiplier=report_multiplier
+                report_multiplier=report_multiplier,
+                min_exon_size=min_exon_size
             )
         output_thread.start()
         # Join thread to pause execution in main thread
@@ -549,6 +570,9 @@ if __name__ == '__main__':
         const=True,
         default=False, 
         help='Print exon intervals')
+    parser.add_argument('--min-exon-size', type=int, required=False,
+        default=8,
+        help='Minimum size of exons searched for in intron_search.py')
     parser.add_argument('--ignore-first-token', action='store_const',
         const=True,
         default=False, 
@@ -599,7 +623,8 @@ if __name__ == '__main__' and not args.test:
         exon_differentials=args.exon_differentials,
         exon_intervals=args.exon_intervals,
         report_multiplier=args.report_multiplier,
-        offset=(1 if args.ignore_first_token else 0))
+        offset=(1 if args.ignore_first_token else 0),
+        min_exon_size=args.min_exon_size)
     print >>sys.stderr, 'DONE with align_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)

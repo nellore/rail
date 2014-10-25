@@ -16,11 +16,12 @@ Input (read from stdin)
 Tab-delimited input tuple columns (readletize)
 1. SEQ or its reversed complement, whichever is first in alphabetical order
     (does not have to be unique)
-2. (('+' if primary alignment is soft-clipped, else '-') + the sample label if
-    field 1 is the read sequence); if the list is empty, '\x1c' is filler
-3. (('+' if primary alignment is soft-clipped, else '-') + the sample label if
-    field 1 is the read sequence's reversed complement); if the list is empty,
+2. (('+' if primary alignment is substantially soft-clipped, else '-')
+    + the sample label if field 1 is the read sequence); if the list is empty,
     '\x1c' is filler
+3. (('+' if primary alignment is substantially soft-clipped, else '-') + the
+    sample label if field 1 is the read sequence's reversed complement); if
+    the list is empty, '\x1c' is filler
 
 Input is partitioned by field 1, the read sequence.
 

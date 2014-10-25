@@ -91,7 +91,7 @@ _right_elements = _right_reverse_elements | _right_forward_elements
 if 'pypy' not in sys.version.lower():
     # For fast global alignment without PyPy
     from scipy import weave
-    class GlobalAlignment:
+    class GlobalAlignment(object):
         """ Invokes Weave to obtain alignment score matrix with C. """
 
         def __init__(self, substitution_matrix=[[ 0,-1,-1,-1,-1,-1],
@@ -239,7 +239,7 @@ if 'pypy' not in sys.version.lower():
                                 )
 else:
     # Use Python version of class
-    class GlobalAlignment:
+    class GlobalAlignment(object):
         """ Uses Python to obtain alignment score matrix. """
 
         def __init__(self, substitution_matrix=[[ 0,-1,-1,-1,-1,-1],

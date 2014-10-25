@@ -523,7 +523,7 @@ def indels_introns_and_exons(cigar, md, pos, seq):
     new_exons.append(last_exon)
     return insertions, deletions, introns, new_exons
 
-class AlignmentPrinter:
+class AlignmentPrinter(object):
     """ Encapsulates methods for printing alignment information. """
 
     def __init__(self, manifest_object, reference_index,
@@ -770,7 +770,7 @@ class AlignmentPrinter:
                                     max(partition_start, exon_pos))
                             output_line_count += 1
                             assert exon_end_pos > partition_start
-                            if exon_end_pos < partition_end:
+                            if exon_end_pos <= partition_end:
                                 '''Print decrement at interval end 
                                 iff exon ends before partition
                                 ends.'''

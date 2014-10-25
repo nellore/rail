@@ -80,7 +80,7 @@ def bucket_from_url(url):
         start_index += 1
     return url[start_index:start_index+url[start_index:].index('/')]
 
-class S3Ansible:
+class S3Ansible(object):
     """ Permits simple interactions with S3 via the AWS CLI. 
 
         Another option is to use Boto directly, but it comes with a lot of
@@ -659,7 +659,7 @@ class AWSAnsible(object):
                                     data=payload)
         return urlopen_with_retry(request)
 
-class Url:
+class Url(object):
     def __init__(self, url):
         """ Uses prefix to determine type of URL.
 
@@ -769,7 +769,7 @@ class CommandThread(threading.Thread):
             = subprocess.Popen(self.command_list, stdout=self._osdevnull,
                                                 stderr=self._osdevnull).wait()
 
-class WebAnsible:
+class WebAnsible(object):
     """ Ultimate goal: seamless communication with various web services.
 
         For now, just distinguishes among S3, the local filesystem, and the
@@ -846,7 +846,7 @@ class WebAnsible:
             raise RuntimeError(('Nonzero exitlevel %d from curl command '
                                 '"%s"') % (curl_thread.exit_level, command))
 
-class Ansible:
+class Ansible(object):
     """ Ultimate goal: seamless communication with various web services.
 
         For now, just distinguishes among S3, the local filesystem, and the

@@ -89,7 +89,6 @@ def which(program):
             for candidate in ext_candidates(exe_file):
                 if is_exe(candidate):
                     return candidate
-
     return None
 
 def path_join(unix, *args):
@@ -171,7 +170,7 @@ def yopen(gzipped, *args):
         return gzip.open(*args)
     return open(*args)
 
-class dlist:
+class dlist(object):
     """ List data type that spills to disk if a memlimit is reached.
 
         Keeping memory usage low can be important in Hadoop, so this class
@@ -341,7 +340,7 @@ class SafeClient(object):
         self.client.shutdown(*args, **kwargs)
         self.close()
 
-class xstream:
+class xstream(object):
     """ Permits Pythonic iteration through partitioned/sorted input streams.
 
         All iterators are implemented as generators. Could have subclassed

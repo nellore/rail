@@ -97,13 +97,13 @@ class RailHelpFormatter(argparse.HelpFormatter):
             return '%s %s' % ('/'.join(action.option_strings),
                                 self._format_args(action, action.dest.upper()))
 
-class Launcher:
+class Launcher(object):
     """ Facilitates replacing the current process with a Dooplicity runner. """
 
     def __init__(self, force=False, num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3, region='us-east-1',
                     log=None, scratch=None, ipython_profile=None,
-                    ipcontroller_json=None, common=None):
+                    ipcontroller_json=None, common=None, json=False):
         self.force = force
         self.num_processes = num_processes
         self.keep_intermediates = keep_intermediates
@@ -115,6 +115,7 @@ class Launcher:
         self.ipython_profile = ipython_profile
         self.ipcontroller_json = ipcontroller_json
         self.common = common
+        self.json = json
 
     def run(self, mode, payload):
         """ Replaces current process, using PyPy if it's available.
@@ -127,10 +128,10 @@ class Launcher:
             payload: string with json payload to copy to stdin
                 of replacement process
         """
-        # Reactivate these lines just to see json
-        print json.dumps(json.loads(payload), sort_keys=True,
-                            indent=4, separators=(',', ': '))
-        quit()
+        if self.json:
+            print json.dumps(json.loads(payload), sort_keys=True,
+                             indent=4, separators=(',', ': '))
+            quit()
         read_pipe, write_pipe = os.pipe()
         if os.fork() != 0:
             # Parent process; read from child after determining executable
@@ -217,7 +218,6 @@ def rail_help_wrapper(prog):
     return RailHelpFormatter(prog, max_help_position=37)
 
 if __name__ == '__main__':
-    print '\nLoading...'
     parser = RailParser(
             usage=_usage_message,
             add_help=False
@@ -413,6 +413,12 @@ if __name__ == '__main__':
                     version=('Rail-RNA v{0}'.format(version_number)),
                     help='show version information and exit'
                 )
+        subparser.add_argument(
+                    '-j', '--json',
+                    action='store_const', const=True,
+                    default=False,
+                    help=('print job flow JSON to stdout and exit')
+                )
     parser.add_argument(
             '-v', '--version',
             action='version',
@@ -527,6 +533,8 @@ if __name__ == '__main__':
                           output_parser=go_elastic_output,
                           algo_parser=go_elastic_algo, elastic=True)
     args = parser.parse_args()
+    if not args.json:
+        print '\nLoading...'
     if args.job_flow == 'go' and args.go_mode == 'local':
         mode = 'local'
         json_creator = RailRnaLocalAllJson(
@@ -552,6 +560,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -593,6 +602,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -627,7 +637,7 @@ if __name__ == '__main__':
             )
     elif args.job_flow == 'go' and args.go_mode == 'parallel':
         mode = 'parallel'
-        json_creator = RailRnaLocalAllJson(
+        json_creator = RailRnaParallelAllJson(
                 args.manifest, args.output,
                 intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
@@ -650,6 +660,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -662,7 +673,6 @@ if __name__ == '__main__':
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
                 bed_basename=args.bed_basename,
-                num_processes=args.num_processes,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 keep_intermediates=args.keep_intermediates,
@@ -673,7 +683,7 @@ if __name__ == '__main__':
             )
     elif args.job_flow == 'align' and args.align_mode == 'parallel':
         mode = 'parallel'
-        json_creator = RailRnaLocalAlignJson(
+        json_creator = RailRnaParallelAlignJson(
                 args.manifest, args.output, args.input,
                 intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
@@ -694,6 +704,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -706,7 +717,6 @@ if __name__ == '__main__':
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 output_sam=args.output_sam, bam_basename=args.bam_basename,
                 bed_basename=args.bed_basename,
-                num_processes=args.num_processes,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 keep_intermediates=args.keep_intermediates,
@@ -716,14 +726,13 @@ if __name__ == '__main__':
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'parallel':
         mode = 'parallel'
-        json_creator = RailRnaLocalPreprocessJson(
+        json_creator = RailRnaParallelPreprocessJson(
                 args.manifest, args.output,
                 intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 verbose=args.verbose,
                 nucleotides_per_input=args.nucleotides_per_input,
                 gzip_input=(not args.do_not_gzip_input),
-                num_processes=args.num_processes,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 keep_intermediates=args.keep_intermediates,
@@ -749,6 +758,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -800,6 +810,7 @@ if __name__ == '__main__':
                 max_intron_size=args.max_intron_size,
                 min_intron_size=args.min_intron_size,
                 min_exon_size=args.min_exon_size,
+                search_filter=args.search_filter,
                 motif_search_window_size=args.motif_search_window_size,
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
@@ -917,7 +928,8 @@ if __name__ == '__main__':
                                             args.scratch
                                             if mode == 'parallel'
                                             else None
-                                        )
+                                        ),
+                                        json=args.json
                                     )
     except AttributeError:
         # No region specified
@@ -966,6 +978,7 @@ if __name__ == '__main__':
                                             args.scratch
                                             if mode == 'parallel'
                                             else None
-                                        )
+                                        ),
+                                        json=args.json
                                     )
     launcher.run(mode, json.dumps(json_creator.json_serial))

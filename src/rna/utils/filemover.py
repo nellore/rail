@@ -38,7 +38,7 @@ class CommandThread(threading.Thread):
                                     stderr=sys.stderr,
                                     shell=True).wait()
 
-class FileMover:
+class FileMover(object):
     """ Responsible for details on how to move files to and from URLs. """
     
     def __init__(self, args=None, s3cmd_exe='s3cmd', s3cred=None,
