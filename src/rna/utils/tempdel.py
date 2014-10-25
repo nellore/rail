@@ -15,4 +15,4 @@ def remove_temporary_directories(temp_dir_paths):
         No return value.
     """
     for temp_dir_path in temp_dir_paths:
-    	shutil.rmtree(temp_dir_path)
+        shutil.rmtree(temp_dir_path)
