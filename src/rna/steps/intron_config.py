@@ -301,8 +301,8 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
         the directed acylic graph (DAG).
 
         To enumerate all possible combinations of introns that can be
-        overlapped by a read, consider each node separately, and find the ways
-        the intron represented by that node can be the first intron on a
+        overlapped by a readlet, consider each node separately, and find the
+        ways the intron represented by that node can be the first intron on a
         read; that is, walk every path starting from that node edge by edge
         until its weight exceeds readlet_size, the maximal readlet length.
 

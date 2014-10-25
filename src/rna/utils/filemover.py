@@ -226,13 +226,19 @@ class FileMover(object):
                                             command))
         elif url.is_local:
             command_list = ['cp', url.to_url(), dest]
+            exit_level \
+                = subprocess.Popen(command_list, stdout=sys.stderr).wait()
+            if exit_level > 0:
+                raise RuntimeError('Nonzero exitlevel %d from cp '
+                                   'command "%s"' % (exit_level, 
+                                        ''.join(command_list)))
         else:
             command_list = ["hadoop", "fs", "-get"]
             command_list.append(url.to_url())
             command_list.append(dest)
-            command = ' '.join(command_list)
             exit_level \
                 = subprocess.Popen(command_list, stdout=sys.stderr).wait()
             if exit_level > 0:
                 raise RuntimeError('Nonzero exitlevel %d from hadoop fs '
-                                   '-get command "%s"' % (exit_level, command))
+                                   '-get command "%s"' % (exit_level,
+                                        ' '.join(command_list)))
