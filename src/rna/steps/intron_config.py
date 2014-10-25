@@ -43,7 +43,6 @@ Tab-delimited tuple columns:
 import sys
 import argparse
 import time
-from copy import deepcopy
 from collections import defaultdict
 from collections import deque
 import os

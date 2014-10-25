@@ -10,7 +10,6 @@ import os
 import sys
 import subprocess
 import time
-import random
 import threading
 
 def add_args(parser):

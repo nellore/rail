@@ -67,9 +67,6 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.tools import xstream
-from alignment_handlers import AlignmentPrinter
-import partition
-import manifest
 import bowtie
 import argparse
 

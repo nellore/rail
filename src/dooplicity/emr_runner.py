@@ -31,12 +31,10 @@ THE SOFTWARE.
 """
 import interface as dp_iface
 import sys
-import os
 import json
 from collections import OrderedDict, defaultdict
 import argparse
 import webbrowser
-import site
 import ansibles as ab
 
 _aws_regions = set(['us-east-1', 'us-west-2', 'us-west-1', 'eu-west-1',

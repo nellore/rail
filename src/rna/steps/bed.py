@@ -63,8 +63,6 @@ import atexit
 # Define string version_number
 from version import version_number
 import filemover
-import subprocess
-import shutil
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 

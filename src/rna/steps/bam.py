@@ -51,7 +51,6 @@ import os
 import sys
 import site
 import argparse
-import threading
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -68,7 +67,6 @@ import manifest
 # Define string version_number
 import version
 import filemover
-import threading
 from dooplicity.ansibles import Url
 import subprocess
 

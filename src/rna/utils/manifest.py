@@ -6,9 +6,6 @@ Contains some helpful tools for parsing the file manifest, which lists the
 locations of files containing raw reads and their corresponding sample names.
 """
 
-import os
-from collections import deque
-
 def add_args(parser):
     parser.add_argument(\
         '--manifest', metavar='PATH', type=str, required=False,

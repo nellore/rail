@@ -60,7 +60,6 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-import partition
 import bowtie
 import bowtie_index
 from dooplicity.tools import xstream

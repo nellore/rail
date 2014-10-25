@@ -65,7 +65,6 @@ site.addsitedir(base_path)
 import bowtie
 import bowtie_index
 import partition
-from collections import deque
 from dooplicity.tools import xstream
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')

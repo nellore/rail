@@ -36,7 +36,6 @@ import urllib2
 import hashlib
 import hmac
 import binascii
-import math
 import subprocess
 import json
 from version import version as _version

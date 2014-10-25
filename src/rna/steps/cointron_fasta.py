@@ -42,7 +42,6 @@ import site
 import argparse
 import copy
 import string
-from collections import defaultdict
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(

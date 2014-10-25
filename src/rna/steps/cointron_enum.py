@@ -36,7 +36,6 @@ import os
 import site
 import threading
 import subprocess
-import string
 import tempfile
 import atexit
 from collections import defaultdict
