@@ -643,9 +643,16 @@ def selected_readlet_alignments_by_clustering(readlets):
                 [alignments[j][:-1] for j in alignment_cluster]
             )
         unclustered_alignments = new_unclustered_alignments
+    clustered_alignments.sort(key=len, reverse=True)
     maximum_cliques = []
-    for cluster in clustered_alignments:
-        maximum_cliques.append(maximum_clique(cluster))
+    for i, cluster in enumerate(clustered_alignments):
+        current_maximum_clique = maximum_clique(cluster)
+        maximum_cliques.append(current_maximum_clique)
+        try:
+            if len(current_maximum_clique) > len(clustered_alignments[i+1]):
+                break
+        except IndexError:
+            pass
     largest_maximum_clique_size = max(map(len, maximum_cliques))
     largest_maximum_cliques = [clique for clique in maximum_cliques
                                if len(clique) == largest_maximum_clique_size]

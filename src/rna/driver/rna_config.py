@@ -2356,7 +2356,7 @@ class RailRnaAlign(object):
                                 ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletize')],
                 'output' : 'readletize',
-                'taskx' : 3,
+                'taskx' : 3 if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
@@ -2379,7 +2379,7 @@ class RailRnaAlign(object):
                                                 ),
                 'inputs' : [path_join(elastic, 'readletize', 'readletized')],
                 'output' : 'align_readlets',
-                'taskx' : 3,
+                'taskx' : 3 if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'extra_args' : [
@@ -2414,7 +2414,7 @@ class RailRnaAlign(object):
                                             ),
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
-                'taskx' : 3,
+                'taskx' : 3 if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'extra_args' : [
@@ -2500,7 +2500,7 @@ class RailRnaAlign(object):
                                         ),
                 'inputs' : [path_join(elastic, 'readletize', 'unique')],
                 'output' : 'cointron_enum',
-                'taskx' : max(3, base.sample_count / 30),
+                'taskx' : max(3, base.sample_count / 30) if elastic else 1,
                 'archives' : ab.Url(path_join(elastic,
                                     base.output_dir,
                                     'transcript_index',
@@ -2522,7 +2522,7 @@ class RailRnaAlign(object):
                                                     ),
                 'inputs' : ['cointron_enum'],
                 'output' : 'cointron_fasta',
-                'taskx' : max(8, base.sample_count / 30),
+                'taskx' : max(8, base.sample_count / 30) if elastic else 1,
                 'part' : 'k1,4',
                 'keys' : 7,
                 'extra_args' : [
@@ -2549,7 +2549,7 @@ class RailRnaAlign(object):
                             'cointron_fasta'],
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'taskx' : max(6, base.sample_count / 20),
+                'taskx' : max(6, base.sample_count / 20) if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'extra_args' : [
@@ -2575,7 +2575,7 @@ class RailRnaAlign(object):
                             'realign_reads'],
                 'output' : 'compare_alignments',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'taskx' : max(4, base.sample_count / 20),
+                'taskx' : max(4, base.sample_count / 20) if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
@@ -2639,7 +2639,7 @@ class RailRnaAlign(object):
                                                'exon_diff'),
                             path_join(elastic, 'break_ties', 'exon_diff')],
                 'output' : 'collapse',
-                'taskx' : max(4, base.sample_count / 20),
+                'taskx' : max(4, base.sample_count / 20) if elastic else 1,
                 'part' : 'k1,3',
                 'keys' : 3,
                 'extra_args' : [
@@ -2655,7 +2655,7 @@ class RailRnaAlign(object):
                          '--partition-stats').format(base.bowtie1_idx),
                 'inputs' : ['collapse'],
                 'output' : 'precoverage',
-                'taskx' : max(4, base.sample_count / 20),
+                'taskx' : max(4, base.sample_count / 20) if elastic else 1,
                 'part' : 'k1,2',
                 'keys' : 3,
                 'multiple_outputs' : True,
@@ -2724,7 +2724,7 @@ class RailRnaAlign(object):
                                                'intron_bed'),
                             path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
-                'taskx' : max(4, base.sample_count / 20),
+                'taskx' : max(4, base.sample_count / 20) if elastic else 1,
                 'part' : 'k1,6',
                 'keys' : 6,
                 'extra_args' : [
