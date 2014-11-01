@@ -292,7 +292,8 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                         if 'keys' in protostep else 'cat',
                 action_on_failure=action_on_failure,
                 jar=jar,
-                tasks=((reducer_count * protostep['taskx'] * 10 / 8)
+                tasks=(reducer_count * protostep['taskx']
+                        * (10 / 8 if unix else 1)
                         if protostep['taskx'] is not None
                         else 1),
                 partitioner_options=(protostep['part']
