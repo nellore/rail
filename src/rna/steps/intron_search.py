@@ -66,6 +66,7 @@ import bowtie
 import bowtie_index
 import partition
 from dooplicity.tools import xstream
+from alignment_handlers import pairwise
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -662,19 +663,6 @@ def selected_readlet_alignments_by_clustering(readlets):
         '''Alignment is in general too repetitive; postpone treatment until
         a nice systematic way to handle this case is found.'''
         pass
-
-def pairwise(iterable):
-    """ Iterates through iterable in pairs.
-
-        If iterable's items are [a1, a2, a3, a4, ...], yields tuples (a1, a2),
-        (a2, a3), (a3, a4), .... See
-        https://docs.python.org/2/library/itertools.html.
-
-        Return value: generator for pairs
-    """
-    left, right = itertools.tee(iterable)
-    next(right, None)
-    return itertools.izip(left, right)
 
 def introns_from_clique(clique, read_seq, reference_index,
         min_exon_size=8, min_intron_size=10, max_intron_size=500000,

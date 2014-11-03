@@ -898,6 +898,8 @@ class RailRnaLocal(object):
                                        'but {0} was entered.'.format(
                                                         gzip_level
                                                     ))
+            base.gzip_intermediates = gzip_intermediates
+            base.gzip_level = gzip_level
         if scratch:
             if not os.path.exists(scratch):
                 try:
@@ -997,7 +999,7 @@ class RailRnaElastic(object):
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-        log_uri=None, ami_version='3.2.1',
+        log_uri=None, ami_version='3.2.3',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -1414,7 +1416,7 @@ class RailRnaElastic(object):
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='3.2.1',
+            default='3.2.3',
             help='Amazon Machine Image to use'
         )
         elastic_parser.add_argument('--visible-to-all-users',
@@ -1736,13 +1738,16 @@ class RailRnaPreprocess(object):
             {
                 'name' : 'Preprocess input reads',
                 'run' : ('preprocess.py --nucs-per-file={0} {1} '
-                         '--push={2} {3}').format(
+                         '--push={2} --gzip-level {3} {4}').format(
                                                     base.nucleotides_per_input,
                                                     '--gzip-output' if
                                                     base.gzip_input else '',
                                                     ab.Url(push_dir).to_url(
                                                             caps=True
                                                         ),
+                                                    base.gzip_level if
+                                                    'gzip_level' in
+                                                    dir(base) else 3,
                                                     '--stdout' if elastic
                                                     else ''
                                                 ),
@@ -3031,7 +3036,7 @@ class RailRnaElasticPreprocessJson(object):
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        log_uri=None, ami_version='3.2.1',
+        log_uri=None, ami_version='3.2.3',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -3366,7 +3371,7 @@ class RailRnaElasticAlignJson(object):
         tie_margin=6, very_replicable=False,
         normalize_percentile=0.75, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
-        bed_basename='', log_uri=None, ami_version='3.2.1',
+        bed_basename='', log_uri=None, ami_version='3.2.3',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -3752,7 +3757,7 @@ class RailRnaElasticAllJson(object):
         normalize_percentile=0.75, very_replicable=False,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
-        log_uri=None, ami_version='3.2.1',
+        log_uri=None, ami_version='3.2.3',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',

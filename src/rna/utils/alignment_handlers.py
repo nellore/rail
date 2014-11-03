@@ -15,6 +15,7 @@ import random
 import sys
 import bisect
 import partition
+import itertools
 
 def running_sum(iterable):
     """ Generates a running sum of the numbers in an iterable
@@ -27,6 +28,19 @@ def running_sum(iterable):
     for number in iterable:
         total += number
         yield total
+
+def pairwise(iterable):
+    """ Iterates through iterable in pairs.
+
+        If iterable's items are [a1, a2, a3, a4, ...], yields tuples (a1, a2),
+        (a2, a3), (a3, a4), .... See
+        https://docs.python.org/2/library/itertools.html.
+
+        Return value: generator for pairs
+    """
+    left, right = itertools.tee(iterable)
+    next(right, None)
+    return itertools.izip(left, right)
 
 def multiread_with_introns(multiread, stranded=False):
     """ Modifies read alignments to fix CIGARs/positions/primary alignments.
