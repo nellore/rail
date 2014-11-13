@@ -108,7 +108,7 @@ for input_line_count, line in enumerate(sys.stdin):
                                         shell=True,
                                         executable='/bin/bash',
                                         bufsize=-1
-                                    ).split()[:-1]
+                                    ).split()
     except subprocess.CalledProcessError:
         from traceback import format_exc
         print >>sys.stderr, \
