@@ -223,7 +223,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         if len(source_dict[source_urls]) == 3:
             skip_count = source_dict[source_urls][1]
             if len(source_urls) == 2:
-                if records_to_consume % 2:
+                if source_dict[source_urls][2] % 2:
                     records_to_consume = source_dict[source_urls][2] - 1
                 else:
                     records_to_consume = source_dict[source_urls][2]
