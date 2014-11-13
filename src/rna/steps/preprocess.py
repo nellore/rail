@@ -223,10 +223,12 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         if len(source_dict[source_urls]) == 3:
             skip_count = source_dict[source_urls][1]
             if len(source_urls) == 2:
-                if source_dict[source_urls][2] % 2:
-                    records_to_consume = source_dict[source_urls][2] - 1
-                else:
-                    records_to_consume = source_dict[source_urls][2]
+                records_to_consume = source_dict[source_urls][2]
+                if skip_count % 2:
+                    skip_count -= 1
+                    records_to_consume += 1
+                if records_to_consume % 2:
+                    records_to_consume -= 1
             else:
                 records_to_consume = source_dict[source_urls][2]
         else:
@@ -340,10 +342,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 else:
                                     # paired-end
                                     line_skip_count = max(
-                                            (((skip_count - 1) / 2) * 4 - 1)
-                                            if (skip_count % 2)
-                                            else ((skip_count / 2) * 4 - 1)
-                                        , 0)
+                                            ((skip_count / 2) * 4 - 1), 0
+                                        )
                                     for _ in xrange(line_skip_count):
                                         next(source_stream_2)
                                 for _ in xrange(line_skip_count):
@@ -406,10 +406,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 else:
                                     # paired-end
                                     line_skip_count = max(
-                                            (((skip_count - 1) / 2) * 2 - 1)
-                                            if (skip_count % 2)
-                                            else ((skip_count / 2) * 2 - 1)
-                                        , 0)
+                                            ((skip_count / 2) * 2 - 1), 0
+                                        )
                                     for _ in xrange(line_skip_count):
                                         next(source_stream_2)
                                 for _ in xrange(line_skip_count):
