@@ -506,7 +506,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             break_outer_loop = True
                             perform_push = True
                             break
-                        if not to_stdout and records_to_consume and \
+                        if not to_stdout and not records_to_consume and \
                             nucs_read > nucleotides_per_input:
                             file_number += 1
                             break
