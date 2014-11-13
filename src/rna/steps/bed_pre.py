@@ -57,7 +57,7 @@ Tab-delimited output tuple columns:
 --------------------------------------------------------------------
 10. SUMMED number of instances of intron, insertion, or deletion in sample
 
-OUTPUT COORDINATES ARE 0-INDEXED.
+OUTPUT COORDINATES ARE 1-INDEXED.
 """
 import os
 import sys

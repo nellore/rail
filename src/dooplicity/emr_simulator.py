@@ -707,7 +707,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             try:
                 if step_data['inputformat'] \
                     == 'org.apache.hadoop.mapred.lib.NLineInputFormat' \
-                    and not os.path.isfile(step_data['input']):
+                    and os.path.isdir(step_data['input']):
                     errors.append(('In step "%s", input should be a single '
                                    'file if using NLineFormat, but '
                                    '"%s" was specified.') % (

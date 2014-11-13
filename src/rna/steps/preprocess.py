@@ -10,8 +10,18 @@ future steps.
 
 Input (read from stdin)
 ----------------------------
-Myrna-style manifest file, each of whose lines is in one of the following
-formats:
+Tab-separated fields:
+---If URL is local:
+1. #!splitload
+2. \x1d-separated list of 0-based indexes of reads at which to start
+    each new file
+3. \x1d-separated list of numbers of reads to include in gzipped files
+4. \x1d-separated list of manifest lines whose tabs are replaced by \x1es
+
+---Otherwise:
+manifest line
+
+A manifest line has the following format
 
 (for single-end reads)
 <URL>(tab)<Optional MD5>(tab)<Sample label>
@@ -95,8 +105,19 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
 
         Input (read from stdin)
         ----------------------------
-        Myrna-style manifest file, each of whose lines is in one of the
-        following formats:
+        Tab-separated fields:
+        ---If URL is local:
+        1. #!splitload
+        2. \x1d-separated list of 0-based indexes of reads at which to start
+            each new file
+        3. \x1d-separated list of numbers of reads to include in gzipped files
+        4. \x1d-separated list of manifest lines whose tabs are replaced by
+            \x1es
+
+        ---Otherwise:
+        manifest line
+
+        A manifest line has the following format
 
         (for single-end reads)
         <URL>(tab)<Optional MD5>(tab)<Sample label>
@@ -153,29 +174,69 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                'on S3, HDFS, or local.')
     fastq_cues = set(['@'])
     fasta_cues = set(['>', ';'])
-    for k, line in enumerate(sys.stdin):
+    source_dict = {}
+    for line in sys.stdin:
+        if not line.strip() or line[0] == '#': continue
         _input_line_count += 1
         # Kill offset from start of manifest file
         tokens = line.strip().split('\t')[1:]
-        try:
-            stripped = tokens[0].strip()
-            if stripped[0] == '#' or not stripped:
-                continue
-        except IndexError:
-            continue
         token_count = len(tokens)
-        if token_count == 3:
+        if token_count == 4 and tokens[0] == '#!splitload':
+            '''Line specifies precisely how records from files should be
+            placed.'''
+            assert not to_stdout, ('Split manifest line inconsistent with '
+                                   'writing to stdout.')
+            indexes = tokens[1].split('\x1d')
+            read_counts = tokens[2].split('\x1d')
+            manifest_lines = [token.split('\x1e')
+                                for token in tokens[3].split('\x1d')]
+            assert len(indexes) == len(read_counts) == len(manifest_lines)
+            for i, manifest_line in enumerate(manifest_lines):
+                manifest_line_field_count = len(manifest_line)
+                if manifest_line_field_count == 3:
+                    source_dict[(Url(manifest_line[0]),)] = \
+                        (manifest_line[-1],
+                            int(indexes[i]), int(read_counts[i]))
+                else:
+                    assert manifest_line_field_count == 5
+                    source_dict[(Url(manifest_line[0]),
+                                 Url(manifest_line[2]))] = (
+                                                        manifest_line[-1],
+                                                        int(indexes[i]),
+                                                        int(read_counts[i])
+                                                    )
+        elif token_count == 3:
             # Single-end reads
-            source_urls = [Url(tokens[0])]
+            source_dict[(Url(tokens[0]),)] = (tokens[-1],)
         elif token_count == 5:
             # token_count == 5
-            source_urls = [Url(tokens[0]), Url(tokens[2])]
+            source_dict[(Url(tokens[0]), Url(tokens[2]))] = (tokens[-1],)
         else:
             # Not a valid line, but continue for robustness
             continue
-        sample_label = tokens[-1]
+    file_number = 0
+    for source_urls in source_dict:
+        sample_label = source_dict[source_urls][0]
         downloaded = set()
         sources = []
+        records_printed = 0
+        if len(source_dict[source_urls]) == 3:
+            skip_count = source_dict[source_urls][1]
+            if len(source_urls) == 2:
+                if records_to_consume % 2:
+                    records_to_consume = source_dict[source_urls][2] - 1
+                else:
+                    records_to_consume = source_dict[source_urls][2]
+            else:
+                records_to_consume = source_dict[source_urls][2]
+        else:
+            skip_count = 0
+            records_to_consume = None # Consume all records
+        assert records_to_consume >= 0, (
+                'Negative value %d of records to consume encountered.'
+            ) % records_to_consume
+        if records_to_consume == 0: continue
+        skipped = False
         for source_url in source_urls:
             if not source_url.is_local:
                 # Download
@@ -195,7 +256,6 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         with xopen(None, sources[0]) as source_stream_1, \
             xopen(None, sources[1]) as source_stream_2:
             source_streams = [source_stream_1, source_stream_2]
-            file_number = 0
             break_outer_loop = False
             while True:
                 if not to_stdout:
@@ -207,7 +267,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                     destination, 
                                     '.'.join([
                                         os.environ['mapred_task_partition'],
-                                        str(k), str(file_number), 'gz'
+                                        str(file_number), 'gz'
                                     ])
                                 )
                         except KeyError:
@@ -219,17 +279,17 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                     destination, 
                                     '.'.join([
                                         os.environ['mapreduce_task_partition'],
-                                        str(k), str(file_number), 'gz'
+                                        str(file_number), 'gz'
                                     ])
                                 )
-                        open_args = [output_file, 'w', gzip_level]
+                        open_args = [output_file, 'a', gzip_level]
                     else:
                         try:
                             output_file = os.path.join(
                                     destination, 
                                     '.'.join([
                                         os.environ['mapred_task_partition'],
-                                        str(k), str(file_number)
+                                        str(file_number)
                                     ])
                                 )
                         except KeyError:
@@ -240,7 +300,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                         str(k), str(file_number)
                                     ])
                                 )
-                        open_args = [output_file, 'w']
+                        open_args = [output_file, 'a']
                     try:
                         os.makedirs(os.path.dirname(output_file))
                     except OSError:
@@ -251,6 +311,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 generally.'''
                 with xopen(gzip_output if not to_stdout else '-', *open_args) \
                     as output_stream:
+                    perform_push = False
                     line_numbers = [0, 0]
                     read_next_line = True
                     nucs_read = 0
@@ -267,6 +328,35 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                         line_numbers = [i + 1 for i in line_numbers]
                         lines = [line.strip() for line in lines]
                         if lines[0][0] in fastq_cues:
+                            if records_to_consume and not skipped:
+                                '''Skip lines as necessary; for paired-end
+                                reads skip the largest even number of records 
+                                less than records_to_consume.'''
+                                if len(source_urls) == 1:
+                                    # single-end
+                                    line_skip_count = max(
+                                            skip_count * 4 - 1, 0
+                                        )
+                                else:
+                                    # paired-end
+                                    line_skip_count = max(
+                                            (((skip_count - 1) / 2) * 4 - 1)
+                                            if (skip_count % 2)
+                                            else ((skip_count / 2) * 4 - 1)
+                                        , 0)
+                                    for _ in xrange(line_skip_count):
+                                        next(source_stream_2)
+                                for _ in xrange(line_skip_count):
+                                    next(source_stream_1)
+                                if skip_count:
+                                    lines = []
+                                    for source_stream in source_streams:
+                                        lines.append(source_stream.readline())
+                                    if not lines[0]:
+                                        break_outer_loop = True
+                                        break
+                                    lines = [line.strip() for line in lines]
+                                skipped = True
                             seqs = [source_stream.readline().strip()
                                         for source_stream in source_streams]
                             line_numbers = [i + 1 for i in line_numbers]
@@ -304,6 +394,35 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                         'line %d of file "%s".'
                                     ) % (line_numbers[i], sources[i])
                         elif lines[0][0] in fasta_cues:
+                            if records_to_consume and not skipped:
+                                '''Skip lines as necessary; for paired-end
+                                reads skip the largest even number of records 
+                                less than records_to_consume.'''
+                                if len(source_urls) == 1:
+                                    # single-end
+                                    line_skip_count = max(
+                                            skip_count * 2 - 1, 0
+                                        )
+                                else:
+                                    # paired-end
+                                    line_skip_count = max(
+                                            (((skip_count - 1) / 2) * 2 - 1)
+                                            if (skip_count % 2)
+                                            else ((skip_count / 2) * 2 - 1)
+                                        , 0)
+                                    for _ in xrange(line_skip_count):
+                                        next(source_stream_2)
+                                for _ in xrange(line_skip_count):
+                                    next(source_stream_1)
+                                if skip_count:
+                                    lines = []
+                                    for source_stream in source_streams:
+                                        lines.append(source_stream.readline())
+                                    if not lines[0]:
+                                        break_outer_loop = True
+                                        break
+                                    lines = [line.strip() for line in lines]
+                                skipped = True
                             original_qnames, seqs, quals, lines = []*4
                             for i, source_stream in enumerate(source_streams):
                                 next_line = source_stream.readline()
@@ -367,6 +486,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                         seqs[1],
                                         quals[1]]
                                     )
+                            records_printed += 2
                         else:
                             # Single-end write
                             print >>output_stream, '\t'.join(
@@ -378,12 +498,21 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                         seqs[0],
                                         quals[0]]
                                     )
+                            records_printed += 1
                         _output_line_count += 1
                         for seq in seqs:
                             nucs_read += len(seq)
-                        if not to_stdout and nucs_read > nucleotides_per_input:
+                        if records_printed == records_to_consume:
+                            break_outer_loop = True
+                            perform_push = True
                             break
-                if not to_stdout and (push_url.is_s3 or push_url.is_hdfs):
+                        if not to_stdout and records_to_consume and \
+                            nucs_read > nucleotides_per_input:
+                            file_number += 1
+                            break
+                if (not to_stdout) and (push_url.is_s3 or push_url.is_hdfs) \
+                    and ((not records_to_consume) or
+                         (records_to_consume and perform_push)):
                     print >>sys.stderr, 'Pushing "%s" to "%s" ...' % (
                                                             output_file,
                                                             push_url.to_url()
@@ -397,7 +526,6 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     except OSError:
                         pass
                 if break_outer_loop: break
-                file_number += 1
         # Clear temporary directory
         for input_file in os.listdir(temp_dir):
             try:

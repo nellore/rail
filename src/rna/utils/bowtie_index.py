@@ -191,8 +191,6 @@ class BowtieIndexReference(object):
 
 
 def which(program):
-    import os
-
     def is_exe(fp):
         return os.path.isfile(fp) and os.access(fp, os.X_OK)
 

@@ -6,6 +6,38 @@ Precedes Rail-RNA-preprocess
 
 Counts up total number of reads across files on the _local_ filesystem and
 assigns how they should be divided among workers.
+
+Input (read from stdin)
+----------------------------
+Tab-separated fields:
+---If URL is local:
+1. #!splitload
+2. number of read(s) (pairs) in sample; number of pairs if paired-end and
+    number of reads if single-end
+3. number of uncompressed bytes in left (or right) reads file
+4 ... end. same as manifest line
+
+---Otherwise:
+manifest line---
+(for single-end reads)
+<URL>(tab)<Optional MD5>(tab)<Sample label>
+
+(for paired-end reads)
+<URL 1>(tab)<Optional MD5 1>(tab)<URL 2>(tab)<Optional MD5 2>(tab)
+<Sample label>
+
+Hadoop output (written to stdout)
+----------------------------
+Tab-separated fields:
+---If URL is local:
+1. #!splitload
+2. \x1d-separated list of 0-based indexes of reads at which to start
+    each new file
+3. \x1d-separated list of numbers of reads to include in gzipped files
+4. \x1d-separated list of manifest lines whose tabs are replaced by \x1es
+
+---Otherwise:
+same as manifest line
 """
 
 import os
@@ -25,6 +57,9 @@ site.addsitedir(base_path)
 from alignment_handlers import running_sum, pairwise
 import math
 import time
+from dooplicity.ansibles import Url
+import atexit
+import filemover
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -34,21 +69,42 @@ parser.add_argument(
         help=('Number of subprocesses that will be opened at once in '
               'future steps')
     )
+parser.add_argument(\
+    '--out', metavar='URL', type=str, required=False, default=None,
+    help='URL to which output should be written. Default is current '
+         'working directory')
+parser.add_argument(
+    '--filename', type=str, required=False, default='split.manifest',
+    help='Output manifest filename'
+    )
+
 args = parser.parse_args(sys.argv[1:])
 
 start_time = time.time()
 input_line_count, output_line_count = 0, 0
+output_url = Url(args.out) if args.out is not None else Url(os.getcwd())
+if output_url.is_local:
+    # Set up destination directory
+    try: os.makedirs(output_url.to_url())
+    except: pass
+else:
+    mover = filemover.FileMover(args=args)
+    # Set up temporary destination
+    import tempfile
+    temp_dir_path = tempfile.mkdtemp()
+    from tempdel import remove_temporary_directories
+    atexit.register(remove_temporary_directories, [temp_dir_path])
 samples = {}
-for i, line in enumerate(sys.stdin):
+for input_line_count, line in enumerate(sys.stdin):
     tokens = line.strip().split('\t')
     token_count = len(tokens)
-    if not (token_count >= 6 and tokens[0] == '#!splitload'):
+    if not (token_count > 5 and tokens[0] == '#!splitload'):
         sys.stdout.write(line)
         output_line_count += 1
         continue
     assert token_count in [6, 8], (
             'Line {} of input has {} fields, but 6 or 8 are expected.'
-        ).format(input_line_count+1, token_count)
+        ).format(input_line_count + 1, token_count)
     if token_count == 6:
         samples[(tokens[3], None)] = (int(tokens[1]), int(tokens[2])) \
                                         + tuple(tokens[3:])
@@ -63,9 +119,8 @@ critical_sample_values = [
             (critical_value, True) for critical_value in 
             running_sum([sample_data[0] for sample_data in samples.values()])
         ]
-total_reads = sum([critical_value[0]
-                    for critical_value in critical_sample_values])
-reads_per_file = math.ceil(float(total_reads) / args.num_processes)
+total_reads = critical_sample_values[-1][0]
+reads_per_file = int(math.ceil(float(total_reads) / args.num_processes))
 critical_read_values = [(0, False)]
 candidate_critical_value = critical_read_values[-1][0] + reads_per_file
 while candidate_critical_value < total_reads:
@@ -81,28 +136,44 @@ try:
 except StopIteration:
     pass
 else:
-    lines_assigned, reads_assigned = [[]], 0
+    lines_assigned, reads_assigned, sample_index = [[]], 0, 0
     for critical_pair in pairwise(critical_values):
         if critical_pair[0][-1]:
-            current_sample = sample_iter.next()
+            try:
+                current_sample = sample_iter.next()
+            except StopIteration:
+                break
             sample_index = 0
-        if critical_pair[1][0] == critical_pair[0][0]:
-            continue
         span = critical_pair[1][0] - critical_pair[0][0]
-        if reads_assigned + span > reads_per_file:
-            lines_assigned.append([])
-            reads_assigned = 0
+        if not span:
+            continue
         lines_assigned[-1].append((current_sample, samples[current_sample][-1],
                                     sample_index, span))
+        sample_index += span
         reads_assigned += span
-    for assignment in lines_assigned:
-        zipped = zip(*assignment)
-        print '\t'.join(['#!splitload'] + [','.join([(element + ';NA'
-                    if (type(element) is tuple and element[1] is None)
-                    else (';'.join(element) if type(element) is tuple
-                                            else str(element)))
-                    for element in field]) for field in zipped])
-        output_line_count += 1
+        if not (reads_assigned % reads_per_file):
+            lines_assigned.append([])
+    if output_url.is_local:
+        output_path = os.path.join(args.out, args.filename)
+    else:
+        output_path = os.path.join(temp_dir_path, args.filename)
+    with open(output_path, 'w') as output_stream:
+        for line_tuples in lines_assigned:
+            if not line_tuples: continue
+            print >>output_stream, '\t'.join(('#!splitload', '\x1d'.join(
+                            str(line_tuple[-2]) for line_tuple in line_tuples
+                        ), 
+                        '\x1d'.join(
+                            str(line_tuple[-1]) for line_tuple in line_tuples
+                        ),
+                        '\x1d'.join(
+                                '\x1e'.join(samples[line_tuple[0]][2:])
+                                for line_tuple in line_tuples
+                            )
+                        ))
+    if not output_url.is_local:
+        mover.put(output_path, output_url.plus(args.filename))
+        os.remove(output_path)
 
 sys.stdout.flush()
 print >>sys.stderr, 'DONE with assign_splits.py; in/out=%d/%d; ' \

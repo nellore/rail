@@ -22,9 +22,10 @@ formats:
 Hadoop output (written to stdout)
 ----------------------------
 Tab-separated output fields:
----If all URLs are local:
-1.
-2. number of read(s) (pairs) in sample
+---If URL is local:
+1. #!splitload
+2. number of read(s) (pairs) in sample; number of pairs if paired-end and
+    number of reads if single-end
 3. number of uncompressed bytes in left (or right) reads file
 4 ... end. same as manifest line
 
@@ -64,15 +65,22 @@ fasta_cues = set(['>', ';'])
 input_line_count, output_line_count = 0, 0
 
 for input_line_count, line in enumerate(sys.stdin):
-    tokens = line.strip().split('\t')
+    # Kill offset from start of manifest file
+    tokens = line.strip().split('\t')[1:]
+    try:
+        stripped = tokens[0].strip()
+        if stripped[0] == '#' or not line.strip():
+            continue
+    except IndexError:
+        continue
     token_count = len(tokens)
     assert token_count in [3, 5], (
             'Line {} of input has {} fields, but 3 or 5 are expected.'
-        ).format(input_line_count+1, token_count)
+        ).format(input_line_count + 1, token_count)
     file_to_count = tokens[0]
-    if not ((token_count == 3 and Url(tokens[0]).is_local) or
+    if (not ((token_count == 3 and Url(tokens[0]).is_local) or
         (token_count == 5 and Url(tokens[0]).is_local
-            and Url(tokens[2]).is_local)):
+            and Url(tokens[2]).is_local))):
         sys.stdout.write(line)
         output_line_count += 1
         continue
@@ -111,12 +119,11 @@ for input_line_count, line in enumerate(sys.stdin):
     lines_and_bytes[0] = str(int(lines_and_bytes[0]) / line_divider)
     sys.stdout.write(
         '\t'.join(
-            ['#!splitload'] + lines_and_bytes + [line]
+            ['#!splitload'] + lines_and_bytes + [line.partition('\t')[2]]
         )
     )
     output_line_count += 1
 
-sys.stdout.write('\n')
 sys.stdout.flush()
 print >>sys.stderr, 'DONE with count_inputs.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (input_line_count + 1, output_line_count,

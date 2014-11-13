@@ -1734,11 +1734,39 @@ class RailRnaPreprocess(object):
 
     @staticmethod
     def protosteps(base, prep_dir, push_dir, elastic=False):
-        return [
-            {
-                'name' : 'Preprocess input reads',
-                'run' : ('preprocess.py --nucs-per-file={0} {1} '
-                         '--push={2} --gzip-level {3} {4}').format(
+        if not elastic:
+            steps_to_return = [
+                {
+                    'name' : 'Count lines in input files',
+                    'run' : 'count_inputs.py',
+                    'inputs' : [base.manifest],
+                    'no_input_prefix' : True,
+                    'output' : 'count_lines',
+                    'inputformat' : (
+                           'org.apache.hadoop.mapred.lib.NLineInputFormat'
+                        ),
+                    'taskx' : 0,
+                    'direct_copy' : True
+                },
+                {
+                    'name' : 'Assign reads to preprocessing tasks',
+                    'run' : ('assign_splits.py --num-processes {0}'
+                             ' --out {1} --filename {2}').format(
+                                                        base.num_processes,
+                                                        base.intermediate_dir,
+                                                        'split.manifest'
+                                                    ),
+                    'inputs' : ['count_lines'],
+                    'output' : 'assign_reads',
+                    'taskx' : None,
+                    'keys' : 1,
+                    'part' : 'k1,1',
+                    'direct_copy' : True
+                },
+                {
+                    'name' : 'Preprocess reads',
+                    'run' : ('preprocess.py --nucs-per-file={0} {1} '
+                             '--push={2} --gzip-level {3} {4}').format(
                                                     base.nucleotides_per_input,
                                                     '--gzip-output' if
                                                     base.gzip_input else '',
@@ -1751,18 +1779,50 @@ class RailRnaPreprocess(object):
                                                     '--stdout' if elastic
                                                     else ''
                                                 ),
-                'inputs' : [base.manifest],
-                'no_input_prefix' : True,
-                'output' : push_dir if elastic else prep_dir,
-                'no_output_prefix' : True,
-                'inputformat' : (
-                       'org.apache.hadoop.mapred.lib.NLineInputFormat'
-                    ),
-                'taskx' : 0,
-                'index_output' : True,
-                'direct_copy' : True
-            },
-        ]
+                    'inputs' : [os.path.join(base.intermediate_dir,
+                                                'split.manifest')],
+                    'no_input_prefix' : True,
+                    'output' : push_dir if elastic else prep_dir,
+                    'no_output_prefix' : True,
+                    'inputformat' : (
+                           'org.apache.hadoop.mapred.lib.NLineInputFormat'
+                        ),
+                    'taskx' : 0,
+                    'index_output' : True,
+                    'direct_copy' : True
+                },
+            ]
+        else:
+            steps_to_return = [
+                {
+                    'name' : 'Preprocess input reads',
+                    'run' : ('preprocess.py --nucs-per-file={0} {1} '
+                             '--push={2} --gzip-level {3} {4}').format(
+                                                    base.nucleotides_per_input,
+                                                    '--gzip-output' if
+                                                    base.gzip_input else '',
+                                                    ab.Url(push_dir).to_url(
+                                                            caps=True
+                                                        ),
+                                                    base.gzip_level if
+                                                    'gzip_level' in
+                                                    dir(base) else 3,
+                                                    '--stdout' if elastic
+                                                    else ''
+                                                ),
+                    'inputs' : [base.manifest],
+                    'no_input_prefix' : True,
+                    'output' : push_dir if elastic else prep_dir,
+                    'no_output_prefix' : True,
+                    'inputformat' : (
+                           'org.apache.hadoop.mapred.lib.NLineInputFormat'
+                        ),
+                    'taskx' : 0,
+                    'index_output' : True,
+                    'direct_copy' : True
+                },
+            ]
+        return steps_to_return
 
     @staticmethod
     def bootstrap():

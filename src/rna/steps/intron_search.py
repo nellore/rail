@@ -45,7 +45,6 @@ ALL OUTPUT COORDINATES ARE 1-INDEXED.
 import sys
 import os
 import site
-import threading
 import string
 import subprocess
 import re
