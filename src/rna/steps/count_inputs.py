@@ -26,8 +26,7 @@ Tab-separated output fields:
 1. #!splitload
 2. number of read(s) (pairs) in sample; number of pairs if paired-end and
     number of reads if single-end
-3. number of uncompressed bytes in left (or right) reads file
-4 ... end. same as manifest line
+3 ... end. same as manifest line
 
 ---Otherwise:
 same as manifest line
@@ -87,9 +86,9 @@ for input_line_count, line in enumerate(sys.stdin):
     with open(file_to_count, 'rb') as binary_input_stream:
         if binary_input_stream.read(2) == '\x1f\x8b':
             # Magic number of gzip'd file found
-            command_to_run = 'gzip -cd {} | wc -lc'.format(file_to_count)
+            command_to_run = 'gzip -cd {} | wc -l'.format(file_to_count)
         else:
-            command_to_run = 'wc -lc {}'.format(file_to_count)
+            command_to_run = 'wc -l {}'.format(file_to_count)
     with xopen(None, file_to_count) as input_stream:
         first_char = input_stream.readline()[0]
         if first_char in fastq_cues:

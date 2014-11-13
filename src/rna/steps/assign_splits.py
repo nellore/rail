@@ -14,8 +14,7 @@ Tab-separated fields:
 1. #!splitload
 2. number of read(s) (pairs) in sample; number of pairs if paired-end and
     number of reads if single-end
-3. number of uncompressed bytes in left (or right) reads file
-4 ... end. same as manifest line
+3 ... end. same as manifest line
 
 ---Otherwise:
 manifest line---
@@ -98,21 +97,19 @@ samples = {}
 for input_line_count, line in enumerate(sys.stdin):
     tokens = line.strip().split('\t')
     token_count = len(tokens)
-    if not (token_count > 5 and tokens[0] == '#!splitload'):
+    if not (token_count > 4 and tokens[0] == '#!splitload'):
         sys.stdout.write(line)
         output_line_count += 1
         continue
-    assert token_count in [6, 8], (
-            'Line {} of input has {} fields, but 6 or 8 are expected.'
+    assert token_count in [5, 7], (
+            'Line {} of input has {} fields, but 5 or 7 are expected.'
         ).format(input_line_count + 1, token_count)
-    if token_count == 6:
-        samples[(tokens[3], None)] = (int(tokens[1]), int(tokens[2])) \
-                                        + tuple(tokens[3:])
+    if token_count == 5:
+        samples[(tokens[2], None)] = (int(tokens[1]),) + tuple(tokens[2:])
     else:
-        # token_count is 8
-        samples[(tokens[3], tokens[5])] = (int(tokens[1])*2,
-                                            int(tokens[2])*2) \
-                                            + tuple(tokens[3:])
+        # token_count is 7
+        samples[(tokens[2], tokens[4])] = (int(tokens[1])*2,) \
+                                            + tuple(tokens[2:])
 input_line_count += 1
 
 critical_sample_values = [
@@ -167,7 +164,7 @@ else:
                             str(line_tuple[-1]) for line_tuple in line_tuples
                         ),
                         '\x1d'.join(
-                                '\x1e'.join(samples[line_tuple[0]][2:])
+                                '\x1e'.join(samples[line_tuple[0]][1:])
                                 for line_tuple in line_tuples
                             )
                         ))
