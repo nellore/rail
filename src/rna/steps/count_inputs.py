@@ -87,7 +87,7 @@ for input_line_count, line in enumerate(sys.stdin):
     with open(file_to_count, 'rb') as binary_input_stream:
         if binary_input_stream.read(2) == '\x1f\x8b':
             # Magic number of gzip'd file found
-            command_to_run = 'wc -lc $(gzip -cd {})'.format(file_to_count)
+            command_to_run = 'gzip -cd {} | wc -lc'.format(file_to_count)
         else:
             command_to_run = 'wc -lc {}'.format(file_to_count)
     with xopen(None, file_to_count) as input_stream:
