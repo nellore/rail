@@ -176,7 +176,9 @@ class BowtieIndexReference(object):
             while ref_off < off and count > 0:
                 buf_elt = buf_off >> 2
                 shift_amt = (buf_off & 3) << 1
-                stretch.append('ACGT'[(ord(self.fh4mm[buf_elt]) >> shift_amt) & 3])
+                stretch.append(
+                    'ACGT'[(ord(self.fh4mm[buf_elt]) >> shift_amt) & 3]
+                )
                 buf_off += 1
                 count -= 1
                 ref_off += 1

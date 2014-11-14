@@ -88,7 +88,7 @@ for input_line_count, line in enumerate(sys.stdin):
             # Magic number of gzip'd file found
             command_to_run = 'gzip -cd {} | wc -l'.format(file_to_count)
         else:
-            command_to_run = 'wc -l {}'.format(file_to_count)
+            command_to_run = 'cat {} | wc -l'.format(file_to_count)
     with xopen(None, file_to_count) as input_stream:
         first_char = input_stream.readline()[0]
         if first_char in fastq_cues:
@@ -108,17 +108,17 @@ for input_line_count, line in enumerate(sys.stdin):
                                         shell=True,
                                         executable='/bin/bash',
                                         bufsize=-1
-                                    ).split()
+                                    )
     except subprocess.CalledProcessError:
         from traceback import format_exc
         print >>sys.stderr, \
                 'Error\n\n{}\nencountered counting lines with {}.'.format(
                     format_exc(), command_to_run
                 )
-    lines_and_bytes[0] = str(int(lines_and_bytes[0]) / line_divider)
+    lines_and_bytes = str(int(lines_and_bytes) / line_divider)
     sys.stdout.write(
         '\t'.join(
-            ['#!splitload'] + lines_and_bytes + [line.partition('\t')[2]]
+            ['#!splitload', lines_and_bytes] + [line.partition('\t')[2]]
         )
     )
     output_line_count += 1
