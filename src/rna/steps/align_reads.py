@@ -293,7 +293,7 @@ class BowtieOutputThread(threading.Thread):
             multiread.append((qname,) + rest_of_line)
             for rest_of_line in xpartition:
                 multiread.append((qname,) + rest_of_line)
-            if flag & 4 or 'S' in cigar or 'XM:i:0' not in multiread[0]:
+            if flag & 4 or 'S' in cigar or 'NM:i:0' not in multiread[0]:
                 '''Write unmapped/soft-clipped primary alignments for
                 realignment in a reduce step. Also write any inexact matches;
                 Rail tries to explain reads with as few introns as possible,
@@ -332,7 +332,7 @@ class BowtieOutputThread(threading.Thread):
                     search_for_introns = False
                 if seq < reversed_complement_seq:
                     print >>self.output_stream, \
-                        'readletize\t%s\t\x1c\t%s%s' % (seq, 
+                        'readletize\t%s\t%s%s\t\x1c' % (seq, 
                             ('+' if search_for_introns else '-'),
                             sample_label)
                 else:

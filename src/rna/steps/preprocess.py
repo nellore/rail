@@ -234,7 +234,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         else:
             skip_count = 0
             records_to_consume = None # Consume all records
-        assert records_to_consume >= 0, (
+        assert (records_to_consume >= 0 or records_to_consume is None), (
                 'Negative value %d of records to consume encountered.'
             ) % records_to_consume
         if records_to_consume == 0: continue
@@ -468,6 +468,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 original_qnames[1] += '/2'
                             assert seqs[1]
                             assert quals[1]
+                            seqs = [seq.upper() for seq in seqs]
                             print >>output_stream, '\t'.join(
                                         [qname_from_read(
                                                 original_qnames[0],
@@ -487,6 +488,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             records_printed += 2
                         else:
                             # Single-end write
+                            seqs[0] = seqs[0].upper()
                             print >>output_stream, '\t'.join(
                                         [qname_from_read(
                                                 original_qnames[0],

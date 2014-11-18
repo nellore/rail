@@ -74,21 +74,21 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
 
         Input (read from stdin)
         ----------------------------
-        Tab-delimited input tuple columns:
-        1. Read sequence (does not have to be unique)
-        2. '\x1d'-separated list of samples, one for each sample read whose
-            sequence matches the sequence in field 1. If list is empty,
-            '\x1c' is filler.
-        3. '\x1d'-separated list of samples, one for each sample read whose
-            sequence matches the reversed complement of the sequence in field
-            1. If list is empty, '\x1c' is filler.
+        Tab-delimited input tuple columns (readletize)
+        1. SEQ or its reversed complement, whichever is first in alphabetical
+            order (does not have to be unique)
+        2. (('+' if primary alignment is substantially soft-clipped, else '-')
+            + the sample label if field 1 is the read sequence); if the list is
+            empty, '\x1c' is filler
+        3. (('+' if primary alignment is substantially soft-clipped, else '-')
+            + the sample label if field 1 is the read sequence's reversed
+            complement); if the list is empty, '\x1c' is filler
 
         Input is partitioned by field 1, the read sequence.
 
         Hadoop output (written to stdout)
         ----------------------------
-        Tab-delimited output tuple columns
-
+        (readletized) Tab-delimited output tuple columns:
         1. Readlet sequence or its reversed complement, whichever is first in
             alphabetical order
         2. Read sequence ID + ('-' if readlet sequence is reverse-complemented;
@@ -97,14 +97,17 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
             end (+, for EXACTLY one readlet of a read sequence, '\x1e' + read
             sequence + '\x1e' + number of instances of read sequence + '\x1e'
             + number of instances of read sequence's reversed complement +
-            '\x1e' + (an '\x1f'-separated set of unique sample labels with read
-            sequences that match the original read sequence) + '\x1e' + (an
-            '\x1f'-separated set of unique sample labels with read sequences
-            that match the reversed complement of the original read sequence).
-            Here, a read sequence ID takes the form X:Y, where X is the
-            "mapred_task_partition" environment variable -- a unique index for
-            a task within a job -- and Y is the index of the read sequence
+            '\x1e' + (an '\x1f'-separated set of unique sample labels with
+            read sequences that match the original read sequence) + '\x1e' +
+            (an '\x1f'-separated set of unique sample labels with read
+            sequences that match the reversed complement of the original read
+            sequence). Here, a read sequence ID takes the form X:Y, where X is
+            the "mapred_task_partition" environment variable -- a unique index
+            for a task within a job -- and Y is the index of the read sequence
             relative to the beginning of the input stream.
+
+        (unique) Single column:
+        1. A unique read sequence
 
         output_stream: where to write output, typically a file stream.
         input_stream: where to retrieve sequences, typically sys.stdin on first
@@ -116,8 +119,8 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin, min_readlet_size=8,
             readletize=False.
         readlet_interval: number of bases separating successive readlets along
             the read. Ignored if readletize=False.
-        capping_multiplier: successive capping readlets on a given end of a read
-            are increased in size exponentially with base
+        capping_multiplier: successive capping readlets on a given end of a
+            read are increased in size exponentially with base
             capping_multiplier.
         verbose: True if reads/readlets should occasionally be written 
             to stderr.
