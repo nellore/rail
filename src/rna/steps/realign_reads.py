@@ -74,6 +74,8 @@ import argparse
 _input_line_count = 0
 _output_line_count = 0
 
+_reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
+
 def input_files_from_input_stream(input_stream,
                                     temp_dir_path=tempfile.mkdtemp(),
                                     verbose=False):
@@ -123,8 +125,17 @@ def input_files_from_input_stream(input_stream,
                             rnames.append(value[0][2:-2])
                         else:
                             # Add to temporary seq stream
-                            print >>read_stream, '\t'.join([value[0], read_seq,
-                                                                value[1]])
+                            if value[0] == '0':
+                                print >>read_stream, '\t'.join([value[1],
+                                                                    read_seq,
+                                                                    value[2]])
+                            else:
+                                print >>read_stream, '\t'.join([
+                                            value[1],
+                                            read_seq[::-1].translate(
+                                        _reversed_complement_translation_table
+                                    ),
+                                            value[2][::-1]])
                             read_count += 1
                     if read_count:
                         # Print FASTA line iff there's a read to align it to
@@ -216,8 +227,6 @@ class BowtieOutputThread(threading.Thread):
             No return value.
         """
         global _output_line_count
-        reversed_complement_translation_table \
-            = string.maketrans('ATCG', 'TAGC')
         next_report_line = 0
         i = 0
         qname_count = 0
@@ -246,7 +255,7 @@ class BowtieOutputThread(threading.Thread):
                 # This is an unmapped read
                 if flag & 16:
                     seq_to_write = rest_of_line[8][::-1].translate(
-                                    reversed_complement_translation_table
+                                    _reversed_complement_translation_table
                                 )
                     qual_to_write = rest_of_line[9][::-1]
                 else:

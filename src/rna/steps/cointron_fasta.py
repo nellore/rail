@@ -67,7 +67,6 @@ args = parser.parse_args()
 start_time = time.time()
 input_line_count = 0
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
-reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
     # Store max extend sizes and sequences for identical intron combos
     combos = {}
@@ -160,10 +159,6 @@ for key, xpartition in xstream(sys.stdin, 2, skip_duplicates=True):
                      + '\x1di\t' + ''.join(subseqs))
         for read_seq in final_combos[combo][2]:
             print read_seq + '\t' + fasta_info
-            reversed_complement_read_seq = read_seq[::-1].translate(
-                    reversed_complement_translation_table
-                )
-            print reversed_complement_read_seq + '\t' + fasta_info
     if args.verbose:
         print >>sys.stderr, '%d potential FASTA reference sequences ' \
                             'condensed to %d' % (seq_count, len(final_combos))

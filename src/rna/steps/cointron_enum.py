@@ -13,7 +13,7 @@ Input (read from stdin)
 ----------------------------
 Single input tuple column:
 1. SEQ or its reversed complement, whichever is first in alphabetical order
-    --- should be unique for efficient processing, but this isn't required
+    --- must be unique
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -39,6 +39,7 @@ import subprocess
 import tempfile
 import atexit
 from collections import defaultdict
+import string
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -56,6 +57,8 @@ from alignment_handlers import multiread_with_introns, indels_introns_and_exons
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
 _output_line_count = 0
+
+_reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 def maximal_cliques(cointrons):
     """ Finds maximal cliques of graph of intron combinations.
@@ -307,6 +310,13 @@ class BowtieOutputThread(threading.Thread):
                         if field[:5] == 'MD:Z:'][0][5:]
                 pos = int(alignment[3])
                 seq = alignment[9]
+                reversed_complement_seq = seq[::-1].translate(
+                        _reversed_complement_translation_table
+                    )
+                if seq < reversed_complement_seq:
+                    seq_to_print = seq
+                else:
+                    seq_to_print = reversed_complement_seq
                 seq_size = len(seq)
                 rname = alignment[2]
                 sense = [field for field in alignment
@@ -371,7 +381,7 @@ class BowtieOutputThread(threading.Thread):
                                                 + self.fudge),
                                     right_size=(right_extend_size
                                                 + self.fudge),
-                                    seq=seq
+                                    seq=seq_to_print
                                ))
                 for line_to_write in to_write:
                     print line_to_write
@@ -446,7 +456,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         for _input_line_count, line in enumerate(input_stream):
             seq = line.strip()
             print >>read_stream, \
-                '\t'.join([str(_input_line_count), seq, 'I'*len(seq)])
+                '\t'.join([seq, seq, 'I'*len(seq)])
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12',

@@ -582,7 +582,7 @@ class AlignmentPrinter(object):
                     0, qname.partition('\x1d')[0], seq, qual)
         return 1
 
-    def print_alignment_data(self, multiread_reports_and_ties):
+    def print_alignment_data(self, multiread_reports_and_ties, count=1):
         """ Prints almost-SAM alignments, introns/indels, and exonic coverage.
 
             Descriptions of output:
@@ -664,7 +664,8 @@ class AlignmentPrinter(object):
                 is negative
             2. Bin number
             3. Sample label
-            4. +1 or -1.
+            4. +1 or -1 * count, the number of instances of a read sequence
+                for which to print exonic chunks
 
             Introns (intron_bed) / insertions/deletions (indel_bed);
             tab-delimited output tuple columns:
@@ -689,7 +690,7 @@ class AlignmentPrinter(object):
                 THE FORWARD STRAND.
             -------------------------------------------------------------------
             9. Number of instances of intron, insertion, or deletion in sample;
-                this is always +1 before bed_pre combiner/reducer
+                this is always +1 * count before bed_pre combiner/reducer
 
             multiread_reports_and_ties: either:
                 1) 2-tuple whose second element is a list of "tied" alignments
@@ -721,7 +722,7 @@ class AlignmentPrinter(object):
             sample_index = self.manifest_object.label_to_index[
                     multiread_reports_and_ties[0][0][0].rpartition('\x1d')[2]
                 ]
-            if not (primary_flag & 256):
+            if count and not (primary_flag & 256):
                 '''First alignment to report is a primary, so output exons,
                 introns, and indels.'''
                 alignment = multiread_reports_and_ties[0][0]
@@ -737,21 +738,23 @@ class AlignmentPrinter(object):
                 for insert_pos, insert_seq in insertions:
                     print >>self.output_stream, (
                            ('indel_bed\tI\t%s\t%s\t%012d\t%012d\t%s'
-                            '\t\x1c\t\x1c\t1')
+                            '\t\x1c\t\x1c\t%d')
                             % (sample_index, self.reference_index.\
                                 rname_to_string[rname],
                                 insert_pos, insert_pos,
-                                insert_seq)
+                                insert_seq,
+                                count)
                         )
                     output_line_count += 1
                 for del_pos, del_seq in deletions:
                     print >>self.output_stream, (
                            ('indel_bed\tD\t%s\t%s\t%012d\t%012d\t%s'
-                            '\t\x1c\t\x1c\t1')
+                            '\t\x1c\t\x1c\t%d')
                             % (sample_index, self.reference_index.\
                                 rname_to_string[rname],
                                 del_pos, del_pos + len(del_seq),
-                                del_seq)
+                                del_seq,
+                                count)
                         )
                     output_line_count += 1
                 # Output exonic chunks
@@ -761,13 +764,14 @@ class AlignmentPrinter(object):
                                 rname, exon_pos, exon_end_pos, self.bin_size
                             )
                         for partition_id, _, _ in partitions:
-                            print >>self.output_stream, \
-                                'exon_ival\t%s\t%012d\t' \
-                                '%012d\t%s' \
-                                % (partition_id,
-                                    exon_pos, exon_end_pos, 
-                                    sample_index)
-                            output_line_count += 1
+                            for i in xrange(count):
+                                print >>self.output_stream, \
+                                    'exon_ival\t%s\t%012d\t' \
+                                    '%012d\t%s' \
+                                    % (partition_id,
+                                        exon_pos, exon_end_pos, 
+                                        sample_index)
+                                output_line_count += 1
                 if self.exon_diffs:
                     for exon_pos, exon_end_pos in exons:
                         partitions = partition.partition(
@@ -778,10 +782,11 @@ class AlignmentPrinter(object):
                             assert exon_pos < partition_end
                             # Print increment at interval start
                             print >>self.output_stream, \
-                                'exon_diff\t%s\t%s\t%012d\t1' \
+                                'exon_diff\t%s\t%s\t%012d\t%d' \
                                 % (partition_id,
                                     sample_index,
-                                    max(partition_start, exon_pos))
+                                    max(partition_start, exon_pos),
+                                    count)
                             output_line_count += 1
                             assert exon_end_pos > partition_start
                             if exon_end_pos <= partition_end:
@@ -790,10 +795,11 @@ class AlignmentPrinter(object):
                                 ends.'''
                                 print >>self.output_stream, \
                                     'exon_diff\t%s\t%s\t' \
-                                    '%012d\t-1' \
+                                    '%012d\t-%d' \
                                     % (partition_id, 
                                         sample_index,
-                                        exon_end_pos)
+                                        exon_end_pos,
+                                        count)
                                 output_line_count += 1
                 try:
                     reverse_strand_string = [field for field in alignment
@@ -804,14 +810,15 @@ class AlignmentPrinter(object):
                         in introns:
                         print >>self.output_stream, (
                                 ('intron_bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
-                                 '%d\t%d\t1')
+                                 '%d\t%d\t%d')
                                  % (sample_index, 
                                     self.reference_index.\
                                     rname_to_string[rname],
                                     intron_pos, intron_end_pos,
                                     reverse_strand_string,
                                     left_displacement,
-                                    right_displacement)
+                                    right_displacement,
+                                    count)
                             )
                         output_line_count += 1
                 except IndexError:

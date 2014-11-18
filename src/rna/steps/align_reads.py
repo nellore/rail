@@ -15,23 +15,32 @@ Input (read from stdin)
 ----------------------------
 Tab-delimited input tuple columns in a mix of any of the following three
 formats:
- Format 1 (single-end, 3-column):
-  1. Name
-  2. Nucleotide sequence
-  3. Quality sequence
- Format 2 (paired-end, 5-column):
-  1. Name
-  2. Nucleotide sequence for mate 1
-  3. Quality sequence for mate 1
-  4. Nucleotide sequence for mate 2
-  5. Quality sequence for mate 2
- Format 3 (paired, 6-column):
-  1. Name for mate 1
-  2. Nucleotide sequence for mate 1
-  3. Quality sequence for mate 1
-  4. Name for mate 2
-  5. Nucleotide sequence for mate 2
-  6. Quality sequence for mate 2
+Format 1 (single-end, 3-column):
+  1. Nucleotide sequence or its reversed complement, whichever is first in 
+    alphabetical order
+  2. 1 if sequence was reverse-complemented else 0
+  3. Name
+  4. Quality sequence or its reverse, whichever corresponds to field 1
+
+Format 2 (paired, 2 lines, 3 columns each)
+(so this is the same as single-end)
+  1. Nucleotide sequence for mate 1 or its reversed complement, whichever is
+    first in alphabetical order
+  2. 1 if sequence was reverse-complemented else 0
+  3. Name for mate 1
+  4. Quality sequence for mate 1 or its reverse, whichever corresponds to
+    field 1
+    
+    (new line)
+
+  1. Nucleotide sequence for mate 2 or its reversed complement, whichever is
+    first in alphabetical order
+  2. 1 if sequence was reverse complemented else 0
+  3. Name for mate 2
+  4. Quality sequence for mate 2 or its reverse, whichever corresponds to
+    field 1
+
+Input is partitioned and sorted by field 1, the read sequence.
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -51,7 +60,8 @@ Format 2 (exon_diff); tab-delimited output tuple columns:
 2. Sample label
 3. max(EC start, bin start) (inclusive) on forward strand IFF diff is
     positive and EC end (exclusive) on forward strand IFF diff is negative
-4. +1 or -1.
+4. +1 or -1 * count, the number of instances of a read sequence for which to
+    print exonic chunks
 
 Note that only unique alignments are currently output as ivals and/or diffs.
 
@@ -77,7 +87,7 @@ spliced alignment. The order of the fields is as follows.
 
 Insertions/deletions (indel_bed)
 
-tab-delimited output tuple columns:
+Tab-delimited output tuple columns:
 1. 'I' or 'D' insertion or deletion line
 2. Sample label
 3. Number string representing RNAME
@@ -90,24 +100,28 @@ tab-delimited output tuple columns:
 8. '\x1c'
 --------------------------------------------------------------------
 9. Number of instances of insertion or deletion in sample; this is
-    always +1 before bed_pre combiner/reducer
+    always +1 * count before bed_pre combiner/reducer
 
 Read whose primary alignment is not end-to-end
 
 Tab-delimited output tuple columns (unmapped):
 1. SEQ
-2. QNAME
-3. QUAL
+2. 1 if SEQ is reverse-complemented, else 0
+3. QNAME
+4. QUAL
 
 Tab-delimited output tuple columns (readletize)
 1. SEQ or its reversed complement, whichever is first in alphabetical order
-2. (('+' if primary alignment is soft-clipped, else '-') + the sample label if
-    field 1 is the read sequence); else '\x1c'
-3. (('+' if primary alignment is soft-clipped, else '-') + the sample label if
-    field 1 is the read sequence's reversed complement); else '\x1c'
+2. '\x1d'-separated list of sample indexes for which field 1 is the read
+    sequence else '\x1c'
+3. '\x1d'-separated list of sample indexes for which field 1 is the read
+    sequence's reversed complement else '\x1c'
 
 Tab-delimited tuple columns (postponed_sam):
 Standard 11+ -column raw SAM output
+
+Single column (unique):
+1. A unique read sequence
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -121,6 +135,7 @@ import shutil
 import tempfile
 import atexit
 import time
+import copy
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -154,215 +169,378 @@ def handle_temporary_directory(temp_dir_path):
     """
     shutil.rmtree(temp_dir_path)
 
-def write_reads(output_stream, input_stream=sys.stdin, verbose=False,
-    report_multiplier=1.2, offset=0):
-    """ Writes input reads/readlets in tab-separated format parsable by Bowtie.
+def handle_bowtie_output(input_stream, reference_index, manifest_object,
+        k_value=1, align_stream=None, other_stream=None,
+        output_stream=sys.stdout, exon_differentials=True,
+        exon_intervals=False, verbose=False, bin_size=10000,
+        report_multiplier=1.2, min_exon_size=8):
+    """ Prints end-to-end alignments and selects reads to be realigned.
 
-        Unpaired reads are marked 0 after original read ID, while paired-end
-        reads are marked 1 and 2.
-
-        Input formats:
-        3-token: name TAB seq TAB qual
-        5-token: name TAB seq1 TAB qual1 TAB seq2 TAB qual2
-        6-token: name1 TAB seq1 TAB qual1 TAB name2 TAB seq2 TAB qual2
-
-        output_stream: where to write reads, typically a file stream.
-        input_stream: where to retrieve reads, typically sys.stdin on first
-            pass of Bowtie and a file stream on second pass.
-        verbose: True if reads/readlets should occasionally be written 
+        input_stream: where to retrieve Bowtie's SAM output, typically a
+            Bowtie process's stdout.
+        reference_index: object of class bowtie_index.BowtieIndexReference
+            that permits access to reference
+        manifest_object: object of class LabelsAndIndices that maps indices
+            to labels and back; used to shorten intermediate output.
+        align_stream: where to write reads that are to be aligned on second
+            pass
+        other_stream: where reads with the same sequence as those from the
+            input stream are stored; if the primary alignment of a read from
+            the input stream is not a tie and the edit distance (NM:i) is 0,
+            these reads are assigned the same alignments. If None, second-pass
+            alignment is being performed because there were ties or a nonzero
+            edit distance during first-pass alignment.
+        output_stream: where to emit exon and intron tuples; typically,
+            this is sys.stdout.
+        k_value: argument of Bowtie 2's -k parameter
+        exon_differentials: True iff EC differentials are to be emitted.
+        exon_intervals: True iff EC intervals are to be emitted.
+        verbose: True if alignments should occasionally be written 
             to stderr.
-        report_multiplier: if verbose is True, the line number of a read or its 
-            first readlet written to stderr increases exponentially with base
+        bin_size: genome is partitioned in units of bin_size for later load
+            balancing.
+        report_multiplier: if verbose is True, the line number of an
+            alignment written to stderr increases exponentially with base
             report_multiplier.
-        offset: if first token of each line is to be ignored, this is 1; else 
-            this is 0. First token is ignored for TextInputFormat-style input.
+        min_exon_size: minimum exon size searched for in intron_search.py
+            later in pipeline; used to determine how large a soft clip on
+            one side of a read is necessary to pass it on to intron search
+            pipeline
 
         No return value.
     """
+    global _output_line_count
     next_report_line = 0
-    global _input_line_count
-    for i, line in enumerate(input_stream):
-        tokens = line.rstrip().split('\t')[offset:]
-        if len(tokens) not in (3, 5, 6):
-            raise RuntimeError('The following line has an invalid number of '
-                'tab-separated tokens:\n%sA valid line has 3, 5, or 6 such '
-                'tokens.' % line)
-        if len(tokens) == 3:
-            to_write = '%s\t%s\t%s' \
-                % (tokens[0], tokens[1], tokens[2])
-        else:
-            to_write = '%s\t%s\t%s\n%s\t%s\t%s' \
-                % (tokens[0], tokens[1], tokens[2],
-                    (tokens[0] if len(tokens) == 5 else tokens[3]),
-                        tokens[-2], tokens[-1])
-            assert len(tokens[1]) == len(tokens[2])
-            assert len(tokens[-2]) == len(tokens[-1])
-        print >>output_stream, to_write
-        if verbose and next_report_line == i:
-            print >>sys.stderr, 'Read(s) %d: %s' % (i, to_write)
-            next_report_line = int((next_report_line + 1)
-                * report_multiplier + 1) - 1
-        _input_line_count += 1
-    output_stream.flush()
-
-class BowtieOutputThread(threading.Thread):
-    """ Processes Bowtie alignments, emitting tuples for exons and introns. """
-    
-    def __init__(self, input_stream, reference_index, manifest_object, 
-        return_set, output_stream=sys.stdout, exon_differentials=True,
-        exon_intervals=False, verbose=False, bin_size=10000,
-        report_multiplier=1.2, min_exon_size=8):
-        """ Constructor for BowtieOutputThread.
-
-            input_stream: where to retrieve Bowtie's SAM output, typically a
-                Bowtie process's stdout.
-            reference_index: object of class bowtie_index.BowtieIndexReference
-                that permits access to reference
-            manifest_object: object of class LabelsAndIndices that maps indices
-                to labels and back; used to shorten intermediate output.
-            return_set: 0 is added to the set if a process completes
-                successfully; else nothing is added
-            output_stream: where to emit exon and intron tuples; typically,
-                this is sys.stdout.
-            exon_differentials: True iff EC differentials are to be emitted.
-            exon_intervals: True iff EC intervals are to be emitted.
-            verbose: True if alignments should occasionally be written 
-                to stderr.
-            bin_size: genome is partitioned in units of bin_size for later load
-                balancing.
-            report_multiplier: if verbose is True, the line number of an
-                alignment written to stderr increases exponentially with base
-                report_multiplier.
-            min_exon_size: minimum exon size searched for in intron_search.py
-                later in pipeline; used to determine how large a soft clip on
-                one side of a read is necessary to pass it on to intron search
-                pipeline
-        """
-        super(BowtieOutputThread, self).__init__()
-        self.daemon = True
-        self.input_stream = input_stream
-        self.output_stream = output_stream
-        self.reference_index = reference_index
-        self.verbose = verbose
-        self.bin_size = bin_size
-        self.report_multiplier = report_multiplier
-        self.exon_differentials = exon_differentials
-        self.exon_intervals = exon_intervals
-        self.manifest_object = manifest_object
-        self.min_exon_size = min_exon_size
-        self.return_set = return_set
-
-    def run(self):
-        """ Prints exons for end-to-end alignments.
-
-            Overrides default method containing thread activity.
-
-            No return value.
-        """
-        global _output_line_count
-        next_report_line = 0
-        i = 0
-        alignment_printer = AlignmentPrinter(
-                self.manifest_object,
-                self.reference_index,
-                bin_size=self.bin_size,
-                output_stream=self.output_stream,
-                exon_ivals=self.exon_intervals,
-                exon_diffs=self.exon_differentials
-            )
-        for (qname,), xpartition in xstream(self.input_stream, 1):
-            # While labeled multiread, this list may end up simply a uniread
-            multiread = []
-            sample_label = self.manifest_object.label_to_index[
+    i = 0
+    alignment_printer = AlignmentPrinter(
+            manifest_object,
+            reference_index,
+            bin_size=bin_size,
+            output_stream=output_stream,
+            exon_ivals=exon_intervals,
+            exon_diffs=exon_differentials
+        )
+    if other_stream:
+        # First-pass alignment
+        if verbose:
+            print >>sys.stderr, 'Processing first-pass alignments.'
+        other_xstream = xstream(other_stream, 1)
+        for (qname,), xpartition in xstream(input_stream, 1):
+            is_reverse, _, qname = qname.partition('\x1d')
+            is_reverse = int(is_reverse)
+            _, other_xpartition = other_xstream.next()
+            sample_label = manifest_object.label_to_index[
                         qname.rpartition('\x1d')[2]
                     ]
             # Handle primary alignment
             rest_of_line = xpartition.next()
             i += 1
             flag = int(rest_of_line[0])
+            if is_reverse:
+                true_flag = flag ^ 16
+            else:
+                true_flag = flag
             cigar = rest_of_line[4]
             rname = rest_of_line[1]
             pos = int(rest_of_line[2])
             seq, qual = rest_of_line[8], rest_of_line[9]
-            if self.verbose and next_report_line == i:
+            if verbose and next_report_line == i:
                 print >>sys.stderr, \
                     'SAM output record %d: rdname="%s", flag=%d' \
-                    % (i, qname, flag)
+                    % (i, qname, true_flag)
                 next_report_line = max(int(next_report_line
-                    * self.report_multiplier), next_report_line + 1)
-            multiread.append((qname,) + rest_of_line)
-            for rest_of_line in xpartition:
-                multiread.append((qname,) + rest_of_line)
-            if flag & 4 or 'S' in cigar or 'XM:i:0' not in multiread[0]:
-                '''Write unmapped/soft-clipped primary alignments for
-                realignment in a reduce step. Also write any inexact matches;
-                Rail tries to explain reads with as few introns as possible,
-                and there's no chance an exact match will overlap introns
-                according to this principle. First, get exons from alignment
-                for assignment of read to a bin.'''
-                seq = seq.upper()
-                if flag & 16:
-                    '''If it's reverse-complemented, write seq the way it was
-                    found.'''
-                    seq = seq[::-1].translate(
-                        _reversed_complement_translation_table
-                    )
-                    qual = qual[::-1]
-                print >>self.output_stream, 'unmapped\t%s\t%s\t%s' % (
+                    * report_multiplier), next_report_line + 1)
+            if flag & 4:
+                print >>output_stream, 'unique\t%s' % seq
+                print >>output_stream, 'unmapped\t%s\t%d\t%s\t%s' % (
                                                             seq,
+                                                            is_reverse,
                                                             qname,
                                                             qual
                                                         )
-                _output_line_count += 1
-                '''To reduce alignment burden, find reversed complement and
-                only write sequence that comes first in lexicographic order.'''
+                try:
+                    for is_reverse, qname, qual in other_xpartition:
+                        print >>output_stream, 'unmapped\t%s\t%s\t%s\t%s' % (
+                                                                seq,
+                                                                is_reverse,
+                                                                qname,
+                                                                qual
+                                                            )
+                except ValueError:
+                    pass
+                continue
+            multiread = [(qname,) + rest_of_line] + \
+                [(qname,) + next_line for next_line in xpartition]
+            scores = \
+                [field[5:] for field in multiread if field[:5] == 'XS:i:'] + \
+                [field[5:] for field in multiread if field[:5] == 'AS:i:']
+            tie_present = (len(scores) == 2) and (scores[0] == scores[1])
+            clip_present = 'S' in cigar
+            exact_match = 'NM:i:0' in multiread[0]
+            alignment_reversed = [
+                                    int(alignment[1]) & 16
+                                    for alignment in multiread
+                                ]
+            if exact_match and not clip_present:
+                # All alignments for all read sequences can be written
+                NH_field = 'NH:i:%d' % len(multiread)
+                reversed_flags = None
+                '''First set count=0 to avoid printing exon_diffs and indels;
+                then set count = k + 1 to print presummed exon_diffs and indels
+                so fewer lines are written to disk.'''
+                k = 0
+                if k_value == 1 and not tie_present:
+                    try:
+                        for current_is_reverse, current_qname, current_qual \
+                            in other_xpartition:
+                            k += 1
+                            if current_is_reverse == '1':
+                                if not reversed_flags:
+                                    reversed_flags = [
+                                            str(int(alignment[1]) ^ 16)
+                                            for alignment in multiread
+                                        ]
+                                _output_line_count += \
+                                    alignment_printer.print_alignment_data(
+                                            ([(current_qname,
+                                                reversed_flags[j])
+                                               + alignment[2:10]
+                                               + (current_qual[::-1]
+                                                    if alignment_reversed[j]
+                                                    else current_qual,)
+                                               + tuple([
+                                                    field for field in
+                                                    alignment[11:] if 
+                                                    field[:5] != 'XS:i:'
+                                                ])
+                                               + (NH_field,)
+                                               for j, alignment
+                                               in enumerate(multiread)],),
+                                            count=0
+                                        )
+                            else:
+                                _output_line_count += \
+                                    alignment_printer.print_alignment_data(
+                                            ([(current_qname,)
+                                                + alignment[1:10]
+                                                + (current_qual[::-1]
+                                                  if alignment_reversed[j]
+                                                  else current_qual,)
+                                                + tuple([
+                                                    field for field in
+                                                    alignment[11:] if 
+                                                    field[:5] != 'XS:i:'
+                                                ])
+                                               + (NH_field,)
+                                               for j, alignment
+                                               in enumerate(multiread)],),
+                                            count=0
+                                        )
+                    except ValueError:
+                        pass
+                if is_reverse:
+                    _output_line_count += \
+                        alignment_printer.print_alignment_data(
+                                ([(alignment[0], str(int(alignment[1]) ^ 16))
+                                   + alignment[2:] + (NH_field,)
+                                   for alignment in multiread],),
+                                count=(k+1)
+                            )
+                else:
+                    _output_line_count += \
+                        alignment_printer.print_alignment_data(
+                                ([alignment + (NH_field,)
+                                   for alignment in multiread],),
+                                count=(k+1)
+                            )
+            if k_value != 1 \
+                or tie_present or not (exact_match and not clip_present):
+                # Prepare for second-pass Bowtie 2
                 reversed_complement_seq = seq[::-1].translate(
-                        _reversed_complement_translation_table
-                    )
+                    _reversed_complement_translation_table
+                )
+                if seq < reversed_complement_seq:
+                    seq_to_print = seq
+                    qual_to_print = qual
+                else:
+                    seq_to_print = reversed_complement_seq
+                    qual_to_print = qual[::-1]
+                try:
+                    for current_is_reverse, current_qname, current_qual \
+                        in other_xpartition:
+                        print >>align_stream, '\t'.join([
+                                '%s\x1d%s' % (
+                                        current_is_reverse, current_qname
+                                    ), seq_to_print, current_qual
+                            ])
+                except ValueError:
+                    # No other reads
+                    pass
+            if not (exact_match and not clip_present):
+                print >>output_stream, 'unique\t%s' % seq_to_print
+                # Write "postponed" SAM/readletize/unmapped lines
                 split_cigar = re.split(r'([MINDS])', cigar)[:-1]
                 try:
                     if ((split_cigar[1] == 'S'
-                            and int(split_cigar[0]) >= self.min_exon_size) or
+                            and int(split_cigar[0]) >= min_exon_size) or
                         (split_cigar[-1] == 'S'
-                            and int(split_cigar[-2]) >= self.min_exon_size)):
+                            and int(split_cigar[-2]) >= min_exon_size)):
                         search_for_introns = True
                     else:
                         search_for_introns = False
                 except IndexError:
                     search_for_introns = False
-                if seq < reversed_complement_seq:
-                    print >>self.output_stream, \
-                        'readletize\t%s\t\x1c\t%s%s' % (seq, 
-                            ('+' if search_for_introns else '-'),
-                            sample_label)
+                if is_reverse:
+                    for alignment in multiread:
+                        print >>output_stream, \
+                            '\t'.join(('postponed_sam', alignment[0])
+                                + (str(int(alignment[1]) ^ 16),)
+                                + alignment[2:])
+                        _output_line_count += 1
                 else:
-                    print >>self.output_stream, \
-                        'readletize\t%s\t\x1c\t%s%s' \
-                        % (reversed_complement_seq,
-                            ('+' if search_for_introns else '-'),
-                            sample_label)
-                _output_line_count += 1
-                '''Write SAM output for comparison/combination with spliced
-                alignments obtained later.'''
-                if flag & 4: continue
-                for alignment in multiread:
-                    print >>self.output_stream, \
-                        '\t'.join(('postponed_sam',) + alignment)
+                    for alignment in multiread:
+                        print >>output_stream, \
+                            '\t'.join(('postponed_sam',) + alignment)
+                        _output_line_count += 1
+                if search_for_introns:
+                    if true_flag & 16:
+                        print >>output_stream, \
+                                'readletize\t%s\t\x1c\t%s' % (
+                                        seq_to_print,
+                                        sample_label
+                                    )
+                    else:
+                        print >>output_stream, \
+                                'readletize\t%s\t%s\t\x1c' % (
+                                        seq_to_print,
+                                        sample_label
+                                    )
                     _output_line_count += 1
+                print >>output_stream, 'unmapped\t%s\t%d\t%s\t%s' % (
+                                                            seq_to_print,
+                                                            is_reverse,
+                                                            qname,
+                                                            qual_to_print
+                                                        )
+    else:
+        # Second-pass alignment
+        if verbose:
+            print >>sys.stderr, 'Processing second-pass alignments.'
+        for (qname,), xpartition in xstream(input_stream, 1):
+            is_reverse, _, qname = qname.partition('\x1d')
+            is_reverse = int(is_reverse)
+            sample_label = manifest_object.label_to_index[
+                        qname.rpartition('\x1d')[2]
+                    ]
+            # Handle primary alignment
+            rest_of_line = xpartition.next()
+            i += 1
+            flag = int(rest_of_line[0])
+            if is_reverse:
+                true_flag = flag ^ 16
             else:
-                # Report all end-to-end alignments
+                true_flag = flag
+            cigar = rest_of_line[4]
+            rname = rest_of_line[1]
+            pos = int(rest_of_line[2])
+            seq, qual = rest_of_line[8], rest_of_line[9]
+            if verbose and next_report_line == i:
+                print >>sys.stderr, \
+                    'SAM output record %d: rdname="%s", flag=%d' \
+                    % (i, qname, true_flag)
+                next_report_line = max(int(next_report_line
+                    * report_multiplier), next_report_line + 1)
+            if flag & 4:
+                print >>output_stream, 'unmapped\t%s\t%d\t%s\t%s' % (
+                                                            seq,
+                                                            is_reverse,
+                                                            qname,
+                                                            qual
+                                                        )
+                continue
+            multiread = [(qname,) + rest_of_line] + \
+                [(qname,) + next_line for next_line in xpartition]
+            clip_present = 'S' in cigar
+            exact_match = 'NM:i:0' in multiread[0]
+            if exact_match and not clip_present:
+                # All alignments for all read sequences can be written
                 NH_field = 'NH:i:%d' % len(multiread)
-                _output_line_count += alignment_printer.print_alignment_data(
-                        ([alignment + (NH_field,) for alignment in multiread],)
-                    )
-        self.output_stream.flush()
-        self.return_set.add(0)
+                if is_reverse:
+                    _output_line_count += \
+                        alignment_printer.print_alignment_data(
+                                ([(alignment[0], str(int(alignment[1]) ^ 16))
+                                   + alignment[2:] + (NH_field,)
+                                   for alignment in multiread],),
+                                count=1
+                            )
+                else:
+                    _output_line_count += \
+                        alignment_printer.print_alignment_data(
+                                ([alignment + (NH_field,)
+                                   for alignment in multiread],),
+                                count=1
+                            )
+            else:
+                # Write "postponed" SAM/readletize/unmapped lines
+                reversed_complement_seq = seq[::-1].translate(
+                    _reversed_complement_translation_table
+                )
+                if seq < reversed_complement_seq:
+                    seq_to_print = seq
+                    qual_to_print = qual
+                else:
+                    seq_to_print = reversed_complement_seq
+                    qual_to_print = qual[::-1]
+                split_cigar = re.split(r'([MINDS])', cigar)[:-1]
+                try:
+                    if ((split_cigar[1] == 'S'
+                            and int(split_cigar[0]) >= min_exon_size) or
+                        (split_cigar[-1] == 'S'
+                            and int(split_cigar[-2]) >= min_exon_size)):
+                        search_for_introns = True
+                    else:
+                        search_for_introns = False
+                except IndexError:
+                    search_for_introns = False
+                if is_reverse:
+                    for alignment in multiread:
+                        print >>output_stream, \
+                            '\t'.join(('postponed_sam', alignment[0])
+                                + (str(int(alignment[1]) ^ 16),)
+                                + alignment[2:])
+                        _output_line_count += 1
+                else:
+                    for alignment in multiread:
+                        print >>output_stream, \
+                            '\t'.join(('postponed_sam',) + alignment)
+                        _output_line_count += 1
+                if search_for_introns:
+                    if true_flag & 16:
+                        print >>output_stream, \
+                                'readletize\t%s\t\x1c\t%s' % (
+                                        seq_to_print,
+                                        sample_label
+                                    )
+                    else:
+                        print >>output_stream, \
+                                'readletize\t%s\t%s\t\x1c' % (
+                                        seq_to_print,
+                                        sample_label
+                                    )
+                    _output_line_count += 1
+                print >>output_stream, 'unmapped\t%s\t%d\t%s\t%s' % (
+                                                            seq_to_print,
+                                                            is_reverse,
+                                                            qname,
+                                                            qual_to_print
+                                                        )
+    output_stream.flush()
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 
     manifest_file='manifest', bowtie2_args=None, bin_size=10000, verbose=False,
     exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
-    offset=0, min_exon_size=8):
+    min_exon_size=8):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -373,23 +551,32 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         ----------------------------
         Tab-delimited input tuple columns in a mix of any of the following
         three formats:
-         Format 1 (single-end, 3-column):
-          1. Name
-          2. Nucleotide sequence
-          3. Quality sequence
-         Format 2 (paired-end, 5-column):
-          1. Name
-          2. Nucleotide sequence for mate 1
-          3. Quality sequence for mate 1
-          4. Nucleotide sequence for mate 2
-          5. Quality sequence for mate 2
-         Format 3 (paired, 6-column):
-          1. Name for mate 1
-          2. Nucleotide sequence for mate 1
-          3. Quality sequence for mate 1
-          4. Name for mate 2
-          5. Nucleotide sequence for mate 2
-          6. Quality sequence for mate 2
+        Format 1 (single-end, 3-column):
+          1. Nucleotide sequence or its reversed complement, whichever is first
+            in alphabetical order
+          2. 1 if sequence was reverse-complemented else 0
+          3. Name
+          4. Quality sequence or its reverse, whichever corresponds to field 1
+
+        Format 2 (paired, 2 lines, 3 columns each)
+        (so this is the same as single-end)
+          1. Nucleotide sequence for mate 1 or its reversed complement,
+            whichever is first in alphabetical order
+          2. 1 if sequence was reverse-complemented else 0
+          3. Name for mate 1
+          4. Quality sequence for mate 1 or its reverse, whichever corresponds
+            to field 1
+            
+            (new line)
+
+          1. Nucleotide sequence for mate 2 or its reversed complement,
+            whichever is first in alphabetical order
+          2. 1 if sequence was reverse complemented else 0
+          3. Name for mate 2
+          4. Quality sequence for mate 2 or its reverse, whichever corresponds
+            to field 1
+
+        Input is partitioned and sorted by field 1, the read sequence.
 
         Hadoop output (written to stdout)
         ----------------------------
@@ -412,7 +599,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             negative
         2. Bin number
         3. Sample label
-        4. +1 or -1.
+        4. +1 or -1 * count, the number of instances of a read sequence for
+            which to print exonic chunks
 
         Note that only unique alignments are currently output as ivals and/or
         diffs.
@@ -454,24 +642,29 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         8. '\x1c'
         --------------------------------------------------------------------
         9. Number of instances of insertion or deletion in sample; this is
-            always +1 before bed_pre combiner/reducer
+            always +1 * count before bed_pre combiner/reducer
 
         Read whose primary alignment is not end-to-end
 
         Tab-delimited output tuple columns (unmapped):
         1. SEQ
-        2. QNAME
-        3. QUAL
+        2. 1 if SEQ is reverse-complemented, else 0
+        3. QNAME
+        4. QUAL
 
         Tab-delimited output tuple columns (readletize)
         1. SEQ or its reversed complement, whichever is first in alphabetical
             order
-        2. The sample label if field 1 is the read sequence; else '\x1c'
-        3. The sample label if field 1 is the read sequence's reversed
-            complement; else '\x1c'
+        2. '\x1d'-separated list of sample indexes for which field 1 is the
+            read sequence else '\x1c'
+        3. '\x1d'-separated list of sample indexes for which field 1 is the
+            read sequence's reversed complement else '\x1c'
 
         Tab-delimited tuple columns (postponed_sam):
         Standard 11+ -column raw SAM output
+
+        Single column (unique):
+        1. A unique read sequence
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
@@ -495,8 +688,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         report_multiplier: if verbose is True, the line number of an alignment
             or read written to stderr increases exponentially with base
             report_multiplier.
-        offset: if first token of each line is to be ignored, this is 1; else 
-            this is 0. First token is ignored for TextInputFormat-style input.
         min_exon_size: minimum exon size searched for in intron_search.py later
             in pipeline; used to determine how large a soft clip on one side of
             a read is necessary to pass it on to intron search pipeline
@@ -505,45 +696,87 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     """
     temp_dir = tempfile.mkdtemp()
     atexit.register(handle_temporary_directory, temp_dir)
-    reads_file = os.path.join(temp_dir, 'reads.temp')
-    reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
-    manifest_object = manifest.LabelsAndIndices(manifest_file)
-    with open(reads_file, 'w') as read_stream:
-        write_reads(
-            read_stream, input_stream=input_stream, verbose=verbose,
-            report_multiplier=report_multiplier, offset=offset
-        )
-    output_file = os.path.join(temp_dir, 'out.sam')
+    align_file = os.path.join(temp_dir, 'first_pass_reads.temp')
+    other_reads_file = os.path.join(temp_dir, 'other_reads.temp')
+    k_value, _, _ = bowtie.parsed_bowtie_args(bowtie2_args)
+    with open(align_file, 'w') as align_stream, \
+        open(other_reads_file, 'w') as other_stream:
+        for seq_number, ((seq,), xpartition) in enumerate(
+                                                        xstream(sys.stdin, 1)
+                                                    ):
+            is_reversed, name, qual = next(xpartition)
+            print >>align_stream, '\t'.join([
+                    '%s\x1d%s' % (is_reversed, name),
+                    seq, qual
+                ])
+            others_printed = False
+            for is_reversed, name, qual in xpartition:
+                print >>other_stream, '\t'.join([
+                        str(seq_number), is_reversed, name, qual
+                    ])
+                others_printed = True
+            if not others_printed:
+                print >>other_stream, str(seq_number)
+    output_file = os.path.join(temp_dir, 'first_pass_out.sam')
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12',
-        reads_file, '-S', output_file])
-    print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
+        align_file, '-S', output_file])
+    print >>sys.stderr, 'Starting first-pass Bowtie2 with command: ' \
+        + bowtie_command
     # Because of problems with buffering, write output to file
     bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
         stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
     bowtie_process.wait()
+    reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
+    manifest_object = manifest.LabelsAndIndices(manifest_file)
+    os.remove(align_file)
+    align_file = os.path.join(temp_dir, 'second_pass_reads.temp')
     if os.path.exists(output_file):
-        return_set = set()
-        output_thread = BowtieOutputThread(
-                open(output_file),
-                reference_index,
-                manifest_object,
-                return_set,
-                exon_differentials=exon_differentials, 
-                exon_intervals=exon_intervals, 
-                bin_size=bin_size,
-                verbose=verbose, 
-                output_stream=output_stream,
-                report_multiplier=report_multiplier,
-                min_exon_size=min_exon_size
-            )
-        output_thread.start()
-        # Join thread to pause execution in main thread
-        if verbose: print >>sys.stderr, 'Joining thread...'
-        output_thread.join()
-        if not return_set:
-            raise RuntimeError('Error occurred in BowtieOutputThread.')
+        with open(output_file) as bowtie_stream, \
+            open(other_reads_file) as other_stream, \
+            open(align_file, 'w') as align_stream:
+            handle_bowtie_output(
+                    bowtie_stream,
+                    reference_index,
+                    manifest_object,
+                    k_value=k_value,
+                    align_stream=align_stream,
+                    other_stream=other_stream,
+                    exon_differentials=exon_differentials, 
+                    exon_intervals=exon_intervals, 
+                    bin_size=bin_size,
+                    verbose=verbose, 
+                    output_stream=output_stream,
+                    report_multiplier=report_multiplier,
+                    min_exon_size=min_exon_size
+                )
+        os.remove(output_file)
+        output_file = os.path.join(temp_dir, 'second_pass_out.sam')
+        bowtie_command = ' '.join([bowtie2_exe,
+            bowtie2_args if bowtie2_args is not None else '',
+            ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12',
+            align_file, '-S', output_file])
+        print >>sys.stderr, 'Starting second-pass Bowtie2 with command: ' \
+            + bowtie_command
+        bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
+            stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
+        bowtie_process.wait()
+        if os.path.exists(output_file):
+            with open(output_file) as bowtie_stream:
+                handle_bowtie_output(
+                        bowtie_stream,
+                        reference_index,
+                        manifest_object,
+                        k_value=k_value,
+                        exon_differentials=exon_differentials, 
+                        exon_intervals=exon_intervals, 
+                        bin_size=bin_size,
+                        verbose=verbose, 
+                        output_stream=output_stream,
+                        report_multiplier=report_multiplier,
+                        min_exon_size=min_exon_size
+                    )
 
 if __name__ == '__main__':
     import argparse
@@ -573,10 +806,6 @@ if __name__ == '__main__':
     parser.add_argument('--min-exon-size', type=int, required=False,
         default=8,
         help='Minimum size of exons searched for in intron_search.py')
-    parser.add_argument('--ignore-first-token', action='store_const',
-        const=True,
-        default=False, 
-        help='Ignores first token of every line')
     parser.add_argument('--manifest', type=str, required=False,
         default='manifest',
         help='Path to manifest file')
@@ -623,7 +852,6 @@ if __name__ == '__main__' and not args.test:
         exon_differentials=args.exon_differentials,
         exon_intervals=args.exon_intervals,
         report_multiplier=args.report_multiplier,
-        offset=(1 if args.ignore_first_token else 0),
         min_exon_size=args.min_exon_size)
     print >>sys.stderr, 'DONE with align_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
@@ -632,116 +860,4 @@ elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
     import unittest
-
-    class TestWriteReads(unittest.TestCase):
-        """ Tests write_reads(). """
-        def setUp(self):
-            '''input_reads has 5-, 6-, and 3-token examples, each on a
-            different line. Every read has 100 bases.'''
-            input_reads = \
-                'r1;LB:holder' \
-                    '\tTTACATACCATACAGTGCGCTAGCGGGTGACAGATATAATGCAGATCCAT' \
-                      'ACAGACCAGATGGCAGACATGTGTTGCAGSCTGCAAGTGCAACGCGGTGA' \
-                    '\tFFB<9889340///29==:766234466666340///29==:76623446' \
-                      '744442<<9889<888@?FFFFFFFFFFFFDB<4444340///29==:76' \
-                    '\tGACCAGAGGTGCACCAAATGACAGTGCGCCACAGATGGCGCATGCAGTGG' \
-                      'CCAGAAACGTGCGACCGATGACAGGTGCACAATGCCGCTGACGACGTGAA' \
-                    '\t444744442<<9889<8880///29==:766230///29==:766230//' \
-                      '<9889340///29==:766234466666340///<9889340///29==:\n' \
-                'r2/1;LB:holder' \
-                    '\tGCAGAGTGCCGCAATGACGTGCGCCAAAGCGGTGACAGGGTGACAGTGAA' \
-                      'CCAAGTGACAAGTGAACAGGTGCCAGAGTGACCGAGTGACCAGTGGACCA' \
-                    '\t442<<9889<8880///29==:766230//442<<9889<8880///29=' \
-                      '44442<<9889<8880///29==:76623044442<<9889<8880///2' \
-                '\tr2/2;LB:holder' \
-                    '\tCAGAGTGCCGCAATGACGTGCGCCAAAGCGGACAAAGCACCATGACAAGT' \
-                      'ACACAGGTGACAGTGACAAGACAGAGGTGACACAGAGAAAGtGGGTGTGA' \
-                    '\t<<9889<8880///29==:766230//442<<<<9889<8880///29==' \
-                      '44442<<9889<8880///29==:766230///2944442<<9889<888\n' \
-                'r3;LB:holder' \
-                    '\tATCGATTAAGCTATAACAGATAACATAGACATTGCGCCCATAATAGATAA' \
-                      'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC' \
-                    '\tFFFFFFFFFFFFDB<4444340///29==:766234466666777689<3' \
-                      '44=<<;444744442<<9889<888@?FFFFFFFFFFFFDB<4444340/\n'
-            self.temp_dir_path = tempfile.mkdtemp()
-            self.input_file = os.path.join(self.temp_dir_path,
-                                'sample_input.tsv')
-            # Store reads in temporary file
-            with open(self.input_file, 'w') as reads_stream:
-                reads_stream.write(input_reads)
-            # For storing output of write_reads()
-            self.output_file = os.path.join(self.temp_dir_path,
-                                'sample_output.tsv')
-
-        def test_output(self):
-            """ Fails if output of write_reads() is not in the right form. """
-            with open(self.input_file) as input_stream:
-                with open(self.output_file, 'w') as output_stream:
-                    write_reads(output_stream, input_stream=input_stream)
-
-            # Verify output
-            with open(self.output_file) as processed_stream:
-                first_read_from_pair = \
-                    processed_stream.readline().rstrip().split('\t')
-                second_read_from_pair = \
-                    processed_stream.readline().rstrip().split('\t')
-                self.assertEquals(
-                    [
-                        'r1;LB:holder',
-                        'TTACATACCATACAGTGCGCTAGCGGGTGACAGATATAATGCAGATCCAT'
-                        'ACAGACCAGATGGCAGACATGTGTTGCAGSCTGCAAGTGCAACGCGGTGA',
-                        'FFB<9889340///29==:766234466666340///29==:76623446'
-                        '744442<<9889<888@?FFFFFFFFFFFFDB<4444340///29==:76'
-                    ],
-                    first_read_from_pair
-                )
-                self.assertEquals(
-                    [
-                        'r1;LB:holder',
-                        'GACCAGAGGTGCACCAAATGACAGTGCGCCACAGATGGCGCATGCAGTGG'
-                        'CCAGAAACGTGCGACCGATGACAGGTGCACAATGCCGCTGACGACGTGAA',
-                        '444744442<<9889<8880///29==:766230///29==:766230//'
-                        '<9889340///29==:766234466666340///<9889340///29==:'
-                    ],
-                    second_read_from_pair
-                )
-                first_read_from_pair = \
-                    processed_stream.readline().rstrip().split('\t')
-                second_read_from_pair = \
-                    processed_stream.readline().rstrip().split('\t')
-                self.assertEquals(
-                    [
-                        'r2/1;LB:holder',
-                        'GCAGAGTGCCGCAATGACGTGCGCCAAAGCGGTGACAGGGTGACAGTGAA'
-                        'CCAAGTGACAAGTGAACAGGTGCCAGAGTGACCGAGTGACCAGTGGACCA',
-                        '442<<9889<8880///29==:766230//442<<9889<8880///29='
-                        '44442<<9889<8880///29==:76623044442<<9889<8880///2'
-                    ],
-                    first_read_from_pair
-                )
-                self.assertEquals(
-                    [
-                        'r2/2;LB:holder',
-                        'CAGAGTGCCGCAATGACGTGCGCCAAAGCGGACAAAGCACCATGACAAGT'
-                        'ACACAGGTGACAGTGACAAGACAGAGGTGACACAGAGAAAGtGGGTGTGA',
-                        '<<9889<8880///29==:766230//442<<<<9889<8880///29=='
-                        '44442<<9889<8880///29==:766230///2944442<<9889<888'
-                    ],
-                    second_read_from_pair
-                )
-                self.assertEquals(
-                    [
-                        'r3;LB:holder',
-                        'ATCGATTAAGCTATAACAGATAACATAGACATTGCGCCCATAATAGATAA'
-                        'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC',
-                        'FFFFFFFFFFFFDB<4444340///29==:766234466666777689<3'
-                        '44=<<;444744442<<9889<888@?FFFFFFFFFFFFDB<4444340/'
-                    ],
-                    processed_stream.readline().rstrip().split('\t')
-                )
-
-        def tearDown(self):
-            # Kill temporary directory
-            shutil.rmtree(self.temp_dir_path)
-   
     unittest.main()

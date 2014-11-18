@@ -2388,7 +2388,7 @@ class RailRnaAlign(object):
                          '--bowtie2-exe={2} '
                          '--exon-differentials --partition-length={3} '
                          '--min-exon-size={4} '
-                         '--manifest={5} {6} {7} {8} -- {9}').format(
+                         '--manifest={5} {6} {7} -- {8}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
@@ -2397,13 +2397,13 @@ class RailRnaAlign(object):
                                                         manifest,
                                                         verbose,
                                                         keep_alive,
-                                                        '--ignore-first-token'
-                                                        if elastic else '',
                                                         base.bowtie2_args),
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
-                'taskx' : 0,
+                'taskx' : 3 if elastic else 1,
+                'part' : 'k1,1',
+                'keys' : 1,
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2564,7 +2564,7 @@ class RailRnaAlign(object):
                                             keep_alive,
                                             base.transcriptome_bowtie2_args
                                         ),
-                'inputs' : [path_join(elastic, 'readletize', 'unique')],
+                'inputs' : [path_join(elastic, 'align_reads', 'unique')],
                 'output' : 'cointron_enum',
                 'taskx' : max(3, base.sample_count / 30) if elastic else 1,
                 'archives' : ab.Url(path_join(elastic,

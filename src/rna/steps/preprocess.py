@@ -37,17 +37,31 @@ None.
 Other output (written to directory specified by command-line parameter --push)
 ____________________________
 Files containing input data in one of the following formats:
+
 Format 1 (single-end, 3-column):
-  1. Name
-  2. Nucleotide sequence
-  3. Quality sequence
-Format 2 (paired, 6-column):
-  1. Name for mate 1
-  2. Nucleotide sequence for mate 1
-  3. Quality sequence for mate 1
-  4. Name for mate 2
-  5. Nucleotide sequence for mate 2
-  6. Quality sequence for mate 2
+  1. Nucleotide sequence or its reversed complement, whichever is first in 
+    alphabetical order
+  2. 1 if sequence was reverse-complemented else 0
+  3. Name
+  4. Quality sequence or its reverse, whichever corresponds to field 1
+
+Format 2 (paired, 2 lines, 3 columns each)
+(so this is the same as single-end)
+  1. Nucleotide sequence for mate 1 or its reversed complement, whichever is
+    first in alphabetical order
+  2. 1 if sequence was reverse-complemented else 0
+  3. Name for mate 1
+  4. Quality sequence for mate 1 or its reverse, whichever corresponds to
+    field 1
+    
+    (new line)
+
+  1. Nucleotide sequence for mate 2 or its reversed complement, whichever is
+    first in alphabetical order
+  2. 1 if sequence was reverse complemented else 0
+  3. Name for mate 2
+  4. Quality sequence for mate 2 or its reverse, whichever corresponds to
+    field 1
 
 Quality sequences are strings of Is for FASTA input.
 
@@ -59,6 +73,7 @@ import sys
 import atexit
 import tempfile
 import site
+import string
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -73,6 +88,8 @@ from dooplicity.ansibles import Url
 from dooplicity.tools import xopen
 import filemover
 from tempdel import remove_temporary_directories
+
+_reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 _input_line_count, _output_line_count = 0, 0
 
@@ -134,17 +151,31 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             --push)
         ____________________________
         Files containing input data in one of the following formats:
+
         Format 1 (single-end, 3-column):
-          1. Name
-          2. Nucleotide sequence
-          3. Quality sequence
-        Format 2 (paired, 6-column):
-          1. Name for mate 1
-          2. Nucleotide sequence for mate 1
-          3. Quality sequence for mate 1
-          4. Name for mate 2
-          5. Nucleotide sequence for mate 2
-          6. Quality sequence for mate 2
+          1. Nucleotide sequence or its reversed complement, whichever is first
+            in alphabetical order
+          2. 1 if sequence was reverse-complemented else 0
+          3. Name
+          4. Quality sequence or its reverse, whichever corresponds to field 1
+
+        Format 2 (paired, 2 lines, 3 columns each)
+        (so this is the same as single-end)
+          1. Nucleotide sequence for mate 1 or its reversed complement,
+            whichever is first in alphabetical order
+          2. 1 if sequence was reverse-complemented else 0
+          3. Name for mate 1
+          4. Quality sequence for mate 1 or its reverse, whichever corresponds
+            to field 1
+            
+            (new line)
+
+          1. Nucleotide sequence for mate 2 or its reversed complement,
+            whichever is first in alphabetical order
+          2. 1 if sequence was reverse complemented else 0
+          3. Name for mate 2
+          4. Quality sequence for mate 2 or its reverse, whichever corresponds
+            to field 1
 
         Quality sequences are strings of Is for FASTA input.
 
@@ -234,7 +265,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         else:
             skip_count = 0
             records_to_consume = None # Consume all records
-        assert records_to_consume >= 0, (
+        assert (records_to_consume >= 0 or records_to_consume is None), (
                 'Negative value %d of records to consume encountered.'
             ) % records_to_consume
         if records_to_consume == 0: continue
@@ -468,33 +499,78 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 original_qnames[1] += '/2'
                             assert seqs[1]
                             assert quals[1]
+                            seqs = [seq.upper() for seq in seqs]
+                            reversed_complement_seqs = [
+                                    seqs[0][::-1].translate(
+                                        _reversed_complement_translation_table
+                                    ),
+                                    seqs[1][::-1].translate(
+                                        _reversed_complement_translation_table
+                                    )
+                                ]
+                            if seqs[0] < reversed_complement_seqs[0]:
+                                left_seq = seqs[0]
+                                left_qual = quals[0]
+                                left_reversed = '0'
+                            else:
+                                left_seq = reversed_complement_seqs[0]
+                                left_qual = quals[0][::-1]
+                                left_reversed = '1'
+                            if seqs[1] < reversed_complement_seqs[1]:
+                                right_seq = seqs[1]
+                                right_qual = quals[1]
+                                right_reversed = '0'
+                            else:
+                                right_seq = reversed_complement_seqs[1]
+                                right_qual = quals[1][::-1]
+                                right_reversed = '1'
                             print >>output_stream, '\t'.join(
-                                        [qname_from_read(
-                                                original_qnames[0],
-                                                seqs[0] + quals[0], 
-                                                sample_label
-                                            ),
-                                        seqs[0],
-                                        quals[0],
-                                        qname_from_read(
-                                                original_qnames[1],
-                                                seqs[1] + quals[1], 
-                                                sample_label
-                                            ),
-                                        seqs[1],
-                                        quals[1]]
+                                        [
+                                            left_seq,
+                                            left_reversed,
+                                            qname_from_read(
+                                                    original_qnames[0],
+                                                    seqs[0] + quals[0], 
+                                                    sample_label
+                                                ),
+                                            '\n'.join([left_qual, right_seq]),
+                                            right_reversed,
+                                            qname_from_read(
+                                                    original_qnames[1],
+                                                    seqs[1] + quals[1], 
+                                                    sample_label
+                                                ),
+                                            right_qual
+                                        ]
                                     )
                             records_printed += 2
                         else:
+                            seqs[0] = seqs[0].upper()
+                            reversed_complement_seqs = [
+                                    seqs[0][::-1].translate(
+                                        _reversed_complement_translation_table
+                                    )
+                                ]
                             # Single-end write
+                            if seqs[0] < reversed_complement_seqs[0]:
+                                seq = seqs[0]
+                                qual = quals[0]
+                                is_reversed = '0'
+                            else:
+                                seq = reversed_complement_seqs[0]
+                                qual = quals[0][::-1]
+                                is_reversed = '1'
                             print >>output_stream, '\t'.join(
-                                        [qname_from_read(
+                                        [
+                                            seq,
+                                            is_reversed,
+                                            qname_from_read(
                                                 original_qnames[0],
                                                 seqs[0] + quals[0], 
                                                 sample_label
                                             ),
-                                        seqs[0],
-                                        quals[0]]
+                                            qual
+                                        ]
                                     )
                             records_printed += 1
                         _output_line_count += 1
