@@ -2383,18 +2383,25 @@ class RailRnaAlign(object):
         keep_alive = ('--keep-alive' if elastic else '')
         return [  
             {
-                'name' : 'Align reads to genome',
+                'name' : 'Align reads and segment them into readlets',
                 'run' : ('align_reads.py --bowtie-idx={0} --bowtie2-idx={1} '
                          '--bowtie2-exe={2} '
                          '--exon-differentials --partition-length={3} '
                          '--min-exon-size={4} '
-                         '--manifest={5} {6} {7} -- {8}').format(
+                         '--manifest={5} '
+                         '--max-readlet-size={6} '
+                         '--readlet-interval={7} '
+                         '--capping-multiplier={8} '
+                         '{9} {10} -- {11}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
                                                 base.genome_partition_length,
                                                 base.search_filter,
                                                         manifest,
+                                                        base.max_readlet_size,
+                                                        base.readlet_interval,
+                                                base.cap_size_multiplier,
                                                         verbose,
                                                         keep_alive,
                                                         base.bowtie2_args),
@@ -2412,27 +2419,6 @@ class RailRnaAlign(object):
                     ]
             },
             {
-                'name' : 'Segment unique read sequences into readlets',
-                'run' : ('readletize.py --max-readlet-size={0} '
-                         '--readlet-interval={1} '
-                         '--capping-multiplier={2}').format(
-                                    base.max_readlet_size,
-                                    base.readlet_interval,
-                                    base.cap_size_multiplier
-                                ),
-                'inputs' : [path_join(elastic, 'align_reads', 'readletize')],
-                'output' : 'readletize',
-                'taskx' : 3 if elastic else 1,
-                'part' : 'k1,1',
-                'keys' : 1,
-                'multiple_outputs' : True,
-                'extra_args' : [
-                        'elephantbird.use.combine.input.format=true',
-                        'elephantbird.combine.split.size=%d'
-                            % _base_combine_split_size
-                    ]
-            },
-            {
                 'name' : 'Align unique readlets to genome',
                 'run' : ('align_readlets.py --bowtie-idx={0} '
                          '--bowtie-exe={1} {2} {3} '
@@ -2443,7 +2429,7 @@ class RailRnaAlign(object):
                                                     keep_alive,
                                                     base.genome_bowtie1_args,
                                                 ),
-                'inputs' : [path_join(elastic, 'readletize', 'readletized')],
+                'inputs' : [path_join(elastic, 'align_reads', 'readletized')],
                 'output' : 'align_readlets',
                 'taskx' : 3 if elastic else 1,
                 'part' : 'k1,1',

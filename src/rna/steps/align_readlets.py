@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
 Rail-RNA-align_readlets
-Follows Rail-RNA-readletize after an optional Rail-RNA-sum combine/reduce step
+
+Follows Rail-RNA-align_reads
 Precedes Rail-RNA-intron_search
 
 Alignment script for MapReduce pipelines that wraps Bowtie. Aligns input

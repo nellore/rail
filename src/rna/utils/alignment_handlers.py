@@ -804,6 +804,10 @@ class AlignmentPrinter(object):
                 try:
                     reverse_strand_string = [field for field in alignment
                                     if field[:5] == 'XS:A:'][0][5:]
+                except IndexError:
+                    # No introns
+                    pass
+                else:
                     # Output introns
                     for (intron_pos, intron_end_pos,
                             left_displacement, right_displacement) \
@@ -821,9 +825,6 @@ class AlignmentPrinter(object):
                                     count)
                             )
                         output_line_count += 1
-                except IndexError:
-                    # No introns
-                    pass
             # Write SAM output
             for alignment in multiread_reports_and_ties[0]:
                 print >>self.output_stream, 'sam\t' \
