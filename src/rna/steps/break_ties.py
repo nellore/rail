@@ -139,6 +139,10 @@ parser.add_argument('--exon-intervals', action='store_const',
     const=True,
     default=False, 
     help='Print exon intervals')
+parser.add_argument('--drop-deletions', action='store_const',
+        const=True,
+        default=False, 
+        help='Drop deletions from coverage vectors')
 
 bowtie.add_args(parser)
 manifest.add_args(parser)
@@ -170,7 +174,8 @@ alignment_printer = AlignmentPrinter(manifest_object,
                                         output_stream=sys.stdout,
                                         bin_size=args.partition_length,
                                         exon_ivals=args.exon_intervals,
-                                        exon_diffs=args.exon_differentials)
+                                        exon_diffs=args.exon_differentials,
+                                        drop_deletions=args.drop_deletions)
 input_line_count, output_line_count = 0, 0
 start_time = time.time()
 

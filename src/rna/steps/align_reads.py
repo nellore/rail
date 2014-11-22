@@ -303,7 +303,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
         exon_intervals=False, verbose=False, bin_size=10000,
         report_multiplier=1.2, min_exon_size=8,
         min_readlet_size=8, max_readlet_size=25,
-        readlet_interval=5):
+        readlet_interval=5, drop_deletions=False):
     """ Prints end-to-end alignments and selects reads to be realigned.
 
         input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -347,6 +347,8 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             readletize=False.
         readlet_interval: number of bases separating successive readlets along
             the read
+        drop_deletions: True iff deletions should be dropped from coverage
+            vector
 
         No return value.
     """
@@ -359,7 +361,8 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             bin_size=bin_size,
             output_stream=output_stream,
             exon_ivals=exon_intervals,
-            exon_diffs=exon_differentials
+            exon_diffs=exon_differentials,
+            drop_deletions=drop_deletions
         )
     if other_stream:
         # First-pass alignment
@@ -720,7 +723,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     manifest_file='manifest', bowtie2_args=None, bin_size=10000, verbose=False,
     exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
     min_exon_size=8, min_readlet_size=15, max_readlet_size=25,
-    readlet_interval=12, capping_multiplier=1.5):
+    readlet_interval=12, capping_multiplier=1.5, drop_deletions=False):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -889,6 +892,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         capping_multiplier: successive capping readlets on a given end of a
             read are increased in size exponentially with base
             capping_multiplier
+        drop_deletions: True iff deletions should be dropped from coverage
+            vector
 
         No return value.
     """
@@ -988,7 +993,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                     min_exon_size=min_exon_size,
                     min_readlet_size=min_readlet_size,
                     max_readlet_size=max_readlet_size,
-                    readlet_interval=readlet_interval
+                    readlet_interval=readlet_interval,
+                    drop_deletions=drop_deletions
                 )
         os.remove(output_file)
         output_file = os.path.join(temp_dir, 'second_pass_out.sam')
@@ -1016,7 +1022,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         verbose=verbose, 
                         output_stream=output_stream,
                         report_multiplier=report_multiplier,
-                        min_exon_size=min_exon_size
+                        min_exon_size=min_exon_size,
+                        drop_deletions=drop_deletions
                     )
     sys.stdout.flush()
 
@@ -1037,6 +1044,10 @@ if __name__ == '__main__':
         default=False,
         help='Periodically print Hadoop status messages to stderr to keep ' \
              'job alive')
+    parser.add_argument('--drop-deletions', action='store_const',
+        const=True,
+        default=False, 
+        help='Drop deletions from coverage vectors')
     parser.add_argument('--exon-differentials', action='store_const',
         const=True,
         default=True, 
@@ -1113,7 +1124,8 @@ if __name__ == '__main__' and not args.test:
         min_readlet_size=args.min_readlet_size,
         max_readlet_size=args.max_readlet_size,
         readlet_interval=args.readlet_interval,
-        capping_multiplier=args.capping_multiplier)
+        capping_multiplier=args.capping_multiplier,
+        drop_deletions=args.drop_deletions)
     print >>sys.stderr, 'DONE with align_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)

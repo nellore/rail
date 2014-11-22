@@ -423,7 +423,7 @@ def reference_from_seq(cigar, seq, reference_index, rname, pos):
         return (new_pos + i, reference_seq[i:])
     return (new_pos + i, reference_seq[i:j+1])
 
-def indels_introns_and_exons(cigar, md, pos, seq):
+def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
     """ Computes indels, introns, and exons from CIGAR, MD string,
         and POS of a given alignment.
 
@@ -431,6 +431,7 @@ def indels_introns_and_exons(cigar, md, pos, seq):
         md: MD:Z string
         pos: position of first aligned base
         seq: read sequence
+        drop_deletions: drops deletions from coverage vectors iff True
 
         Return value: tuple (insertions, deletions, introns, exons). Insertions
             is a list of tuples (last genomic position before insertion, 
@@ -509,6 +510,7 @@ def indels_introns_and_exons(cigar, md, pos, seq):
             md_delete_size = len(md[md_index+1])
             assert md_delete_size >= delete_size
             deletions.append((pos, md[md_index+1][:delete_size]))
+            if not drop_deletions: exons.append((pos, pos + delete_size))
             if md_delete_size > delete_size:
                 # Deletion contains an intron
                 md[md_index+1] = md[md_index+1][delete_size:]
@@ -542,13 +544,14 @@ class AlignmentPrinter(object):
 
     def __init__(self, manifest_object, reference_index,
                  output_stream=sys.stdout, bin_size=5000, exon_ivals=False,
-                 exon_diffs=True):
+                 exon_diffs=True, drop_deletions=False):
         """
             manifest_object: object of type LabelsAndIndices; see manifest.py
             reference_index: object of type BowtieIndexReference; see bowtie.py
             output_stream: where to print output
             exon_ivals: True iff exon_ivals should be output
             exon_diffs: True iff exon_diffs should be output
+            drop_deletions: counts deletions in coverage vectors iff False
         """
         self.manifest_object = manifest_object
         self.reference_index = reference_index
@@ -556,6 +559,7 @@ class AlignmentPrinter(object):
         self.exon_diffs = exon_diffs
         self.bin_size = bin_size
         self.output_stream = output_stream
+        self.drop_deletions = drop_deletions
 
     def print_unmapped_read(self, qname, seq, qual):
         """ Prints an unmapped read from a qname, qual, and seq.
@@ -733,7 +737,8 @@ class AlignmentPrinter(object):
                 md = [field for field in alignment
                             if field[:5] == 'MD:Z:'][0][5:]
                 insertions, deletions, introns, exons \
-                    = indels_introns_and_exons(cigar, md, pos, seq)
+                    = indels_introns_and_exons(cigar, md, pos, seq,
+                                            drop_deletions=self.drop_deletions)
                 # Output indels
                 for insert_pos, insert_seq in insertions:
                     print >>self.output_stream, (
@@ -852,7 +857,8 @@ class AlignmentPrinter(object):
                 md = [field for field in alignment
                             if field[:5] == 'MD:Z:'][0][5:]
                 insertions, deletions, introns, exons \
-                    = indels_introns_and_exons(cigar, md, pos, seq)
+                    = indels_introns_and_exons(cigar, md, pos, seq,
+                                            drop_deletions=self.drop_deletions)
                 try:
                     sense = [field[5:] for field in alignment
                             if field[:5] == 'XS:A:'][0]
@@ -891,7 +897,8 @@ if __name__ == '__main__':
                                [(18909796, 18909816), (18909818, 18909827)]),
                          indels_introns_and_exons(
                                 '20M2D9M', '20^GG7A1', 18909796,
-                                'TAGCCTCTGTCAGCACTCCTGAGTTCAGA')
+                                'TAGCCTCTGTCAGCACTCCTGAGTTCAGA',
+                                drop_deletions=True)
                     )
 
         def test_read_2(self):
@@ -900,7 +907,8 @@ if __name__ == '__main__':
                                [(73888540, 73888560), (73888562, 73888571)]),
                          indels_introns_and_exons(
                                 '20M2D9M', '20^GG8C0', 73888540,
-                                'TAGCCTCTGTCAGCACTCCTGAGTTCAGA')
+                                'TAGCCTCTGTCAGCACTCCTGAGTTCAGA',
+                                drop_deletions=True)
                     )
 
         def test_read_3(self):
@@ -912,7 +920,8 @@ if __name__ == '__main__':
                          indels_introns_and_exons(
                                 '20M151N47M2D3M2I4M', '67^GT3T2C0', 20620147,
                                 'CCGCACCCGTACTGCTACAGATTTCCATCATCGCCACCCGCGGGC'
-                                'ATTCTGAAAAAGAGCGACGAAGAAGCAACCT')
+                                'ATTCTGAAAAAGAGCGACGAAGAAGCAACCT',
+                                drop_deletions=True)
                     )
 
         def test_read_4(self):
@@ -924,7 +933,30 @@ if __name__ == '__main__':
                                 '9M2I63M70N2M', '1A2C1A0G1G1C1C0C1G2A54',
                                  20620147,
                                 'TTCTNCCTGCTTGTATGACCGTGTTGGGCGTGAGTGGCTTGTCCC'
-                                'TCAAGTAGAGACCATAGCGAGATGGGTACCT')
+                                'TCAAGTAGAGACCATAGCGAGATGGGTACCT',
+                                drop_deletions=True)
+                    )
+
+        def test_read_5(self):
+            """ Fails if example doesn't give expected indels/introns/exons."""
+            self.assertEquals(([], [(18909816, 'GG')], [], 
+                               [(18909796, 18909827)]),
+                         indels_introns_and_exons(
+                                '20M2D9M', '20^GG7A1', 18909796,
+                                'TAGCCTCTGTCAGCACTCCTGAGTTCAGA',
+                                drop_deletions=False)
+                    )
+
+        def test_read_6(self):
+            """ Fails if example doesn't give expected indels/introns/exons."""
+            self.assertEquals(([(20620369, 'CA')], [(20620365, 'GT')],
+                               [(20620167, 20620318, 20, 56)],
+                               [(20620147, 20620167), (20620318, 20620374)]),
+                         indels_introns_and_exons(
+                                '20M151N47M2D3M2I4M', '67^GT3T2C0', 20620147,
+                                'CCGCACCCGTACTGCTACAGATTTCCATCATCGCCACCCGCGGGC'
+                                'ATTCTGAAAAAGAGCGACGAAGAAGCAACCT',
+                                drop_deletions=False)
                     )
 
     unittest.main()

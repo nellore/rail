@@ -172,6 +172,10 @@ if __name__ == '__main__':
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
              'in output have terminal + and - indicating sense strand')
+    parser.add_argument('--drop-deletions', action='store_const',
+        const=True,
+        default=False, 
+        help='Drop deletions from coverage vectors')
 
     # Add command-line arguments for dependencies
     partition.add_args(parser)
@@ -202,7 +206,8 @@ if __name__ == '__main__':
                     bin_size=args.partition_length,
                     output_stream=sys.stdout,
                     exon_ivals=args.exon_intervals,
-                    exon_diffs=args.exon_differentials
+                    exon_diffs=args.exon_differentials,
+                    drop_deletions=args.drop_deletions
                 )
     alignment_count_to_report, seed, non_deterministic \
                 = bowtie.parsed_bowtie_args(bowtie_args)

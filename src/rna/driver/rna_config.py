@@ -999,7 +999,7 @@ class RailRnaElastic(object):
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-        log_uri=None, ami_version='3.2.3',
+        log_uri=None, ami_version='3.3.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -1416,7 +1416,7 @@ class RailRnaElastic(object):
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='3.2.3',
+            default='3.3.1',
             help='Amazon Machine Image to use'
         )
         elastic_parser.add_argument('--visible-to-all-users',
@@ -1863,7 +1863,7 @@ class RailRnaAlign(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6, tie_margin=6,
-        normalize_percentile=0.75, very_replicable=False,
+        normalize_percentile=0.75, very_replicable=False, drop_deletions=False,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', assembly='hg19',
         s3_ansible=None):
@@ -2159,6 +2159,7 @@ class RailRnaAlign(object):
                                                     count_multiplier
                                                 ))
         base.count_multiplier = count_multiplier
+        base.drop_deletions = drop_deletions
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
         base.very_replicable = very_replicable
         base.output_sam = output_sam
@@ -2353,6 +2354,11 @@ class RailRnaAlign(object):
                   'is used')
         )
         output_parser.add_argument(
+            '--drop-deletions', action='store_const', const=True,
+            default=False,
+            help=('drop deletions from coverage vectors encoded in bigwigs')
+        )
+        output_parser.add_argument(
             '--do-not-output-bam-by-chr', action='store_const', const=True,
             default=False,
             help=('place all of a sample\'s alignments in one file rather '
@@ -2380,6 +2386,7 @@ class RailRnaAlign(object):
     def protosteps(base, input_dir, elastic=False):
         manifest = ('/mnt/MANIFEST' if elastic else base.manifest)
         verbose = ('--verbose' if base.verbose else '')
+        drop_deletions = ('--drop-deletions' if base.drop_deletions else '')
         keep_alive = ('--keep-alive' if elastic else '')
         return [  
             {
@@ -2392,7 +2399,7 @@ class RailRnaAlign(object):
                          '--max-readlet-size={6} '
                          '--readlet-interval={7} '
                          '--capping-multiplier={8} '
-                         '{9} {10} -- {11}').format(
+                         '{9} {10} {11} -- {12}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
@@ -2402,6 +2409,7 @@ class RailRnaAlign(object):
                                                         base.max_readlet_size,
                                                         base.readlet_interval,
                                                 base.cap_size_multiplier,
+                                                drop_deletions,
                                                         verbose,
                                                         keep_alive,
                                                         base.bowtie2_args),
@@ -2615,11 +2623,13 @@ class RailRnaAlign(object):
                 'name' : 'Collect and compare read alignments',
                 'run' : ('compare_alignments.py --bowtie-idx={0} '
                          '--partition-length={1} --exon-differentials '
-                         '--tie-margin {2} --manifest={3} {4} -- {5}').format(
+                         '--tie-margin {2} --manifest={3} '
+                         '{4} {5} -- {6}').format(
                                         base.bowtie1_idx,
                                         base.genome_partition_length,
                                         base.tie_margin,
                                         manifest,
+                                        drop_deletions,
                                         verbose,
                                         base.bowtie2_args
                                     ),
@@ -2661,10 +2671,11 @@ class RailRnaAlign(object):
                 'name' : 'Finalize primary alignments of spliced reads',
                 'run' : ('break_ties.py --exon-differentials '
                             '--bowtie-idx {0} --partition-length {1} '
-                            '--manifest {2} -- {3}').format(
+                            '--manifest {2} {3} -- {4}').format(
                                     base.bowtie1_idx,
                                     base.genome_partition_length,
                                     manifest,
+                                    drop_deletions,
                                     base.bowtie2_args
                                 ),
                 'inputs' : ['intron_coverage',
@@ -3082,7 +3093,7 @@ class RailRnaElasticPreprocessJson(object):
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        log_uri=None, ami_version='3.2.3',
+        log_uri=None, ami_version='3.3.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -3180,7 +3191,7 @@ class RailRnaLocalAlignJson(object):
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
         tie_margin=6, very_replicable=False, normalize_percentile=0.75,
-        do_not_output_bam_by_chr=False,
+        drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', num_processes=1, gzip_intermediates=False,
         gzip_level=3, keep_intermediates=False):
@@ -3216,6 +3227,7 @@ class RailRnaLocalAlignJson(object):
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
+            drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
@@ -3259,7 +3271,7 @@ class RailRnaParallelAlignJson(object):
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
         tie_margin=6, very_replicable=False, normalize_percentile=0.75,
-        do_not_output_bam_by_chr=False,
+        drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
@@ -3372,6 +3384,7 @@ class RailRnaParallelAlignJson(object):
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
+            drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
@@ -3415,9 +3428,10 @@ class RailRnaElasticAlignJson(object):
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6,
         tie_margin=6, very_replicable=False,
-        normalize_percentile=0.75, do_not_output_bam_by_chr=False,
+        normalize_percentile=0.75, drop_deletions=False,
+        do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
-        bed_basename='', log_uri=None, ami_version='3.2.3',
+        bed_basename='', log_uri=None, ami_version='3.3.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -3475,6 +3489,7 @@ class RailRnaElasticAlignJson(object):
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
+            drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename,
@@ -3541,7 +3556,7 @@ class RailRnaLocalAllJson(object):
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         count_multiplier=6, transcriptome_bowtie2_args='-k 30', tie_margin=6,
         very_replicable=False, normalize_percentile=0.75,
-        do_not_output_bam_by_chr=False,
+        drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         keep_intermediates=False, check_manifest=True):
@@ -3578,6 +3593,7 @@ class RailRnaLocalAllJson(object):
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
+            drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
@@ -3629,7 +3645,7 @@ class RailRnaParallelAllJson(object):
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         count_multiplier=6, transcriptome_bowtie2_args='-k 30', tie_margin=6,
         very_replicable=False, normalize_percentile=0.75,
-        do_not_output_bam_by_chr=False,
+        drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
@@ -3750,6 +3766,7 @@ class RailRnaParallelAllJson(object):
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
+            drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
@@ -3801,9 +3818,9 @@ class RailRnaElasticAllJson(object):
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=6,
         normalize_percentile=0.75, very_replicable=False,
-        do_not_output_bam_by_chr=False,
+        drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
-        log_uri=None, ami_version='3.2.3',
+        log_uri=None, ami_version='3.3.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -3864,6 +3881,7 @@ class RailRnaElasticAllJson(object):
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
+            drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename,
