@@ -198,8 +198,7 @@ class Launcher(object):
                                                     'emr_runner.py'
                                                 ),
                                 '-b', os.path.join(base_path, 
-                                        'rna', 'driver', 'rail-rna.txt'),
-                                '-c']
+                                        'rna', 'driver', 'rail-rna.txt')]
                 if self.force:
                     runner_args.append('-f')
                 if self.region != 'us-east-1':
