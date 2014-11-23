@@ -258,7 +258,6 @@ def steps(protosteps, action_on_failure, jar, step_dir,
     for protostep in protosteps:
         assert ('keys' in protostep and 'part' in protostep) or \
                 ('keys' not in protostep and 'part' not in protostep)
-        # Can't copy directly to S3 if there are multiple outputs ... yet!
         assert not (('direct_copy' in protostep) and ('multiple_outputs'
                         in protostep))
         identity_mapper = ('cut -f 2-' if unix else 'cat')
@@ -272,6 +271,12 @@ def steps(protosteps, action_on_failure, jar, step_dir,
             intermediate_output = _hdfs_temp_dir + final_output_url.suffix[1:]
         else:
             intermediate_output = final_output
+        try:
+            if not protostep['direct_copy']:
+                intermediate_output \
+                    = _hdfs_temp_dir + final_output_url.suffix[1:]
+        except KeyError:
+            pass
         true_steps.append(step(
                 name=protostep['name'],
                 inputs=([path_join(unix, intermediate_dir,
@@ -326,6 +331,23 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                         }
                     }
                 )
+        try:
+            if not protostep['direct_copy']:
+                true_steps.append(
+                    {
+                        'Name' : ('Copy output of "'
+                                    + protostep['name'] + '" to S3'),
+                        'ActionOnFailure' : action_on_failure,
+                        'HadoopJarStep' : {
+                            'Jar' : _s3distcp_jar,
+                            'Args' : ['--src', intermediate_output,
+                                      '--dest', final_output,
+                                      '--deleteOnSuccess']
+                        }
+                    }
+                )
+        except KeyError:
+            pass
         if (not ('direct_copy' in protostep) and unix
             and final_output_url.is_s3 and no_consistent_view):
             # s3distcp intermediates over
@@ -1819,7 +1841,7 @@ class RailRnaPreprocess(object):
                         ),
                     'taskx' : 0,
                     'index_output' : True,
-                    'direct_copy' : True
+                    'direct_copy' : False
                 },
             ]
         return steps_to_return
