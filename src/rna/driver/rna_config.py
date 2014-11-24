@@ -2445,7 +2445,7 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size / 4)
+                            % (_base_combine_split_size*2)
                     ]
             },
             {
