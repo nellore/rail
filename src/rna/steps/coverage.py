@@ -200,7 +200,7 @@ for (sample_label,), xpartition in xstream(sys.stdin, 1):
                 input_line_count += 1
                 print >>bed_stream, '%s\t%d\t%d\t%d' % (rname,
                     last_pos, pos, last_coverage)
-                if coverage != 0:
+                if last_coverage != 0:
                     # Only care about nonzero-coverage regions
                     coverage_histogram[last_coverage] += pos - last_pos
                 last_pos, last_coverage = pos, coverage
@@ -209,6 +209,7 @@ for (sample_label,), xpartition in xstream(sys.stdin, 1):
                 print >>bed_stream, '%s\t%d\t%d\t%d' % (rname,
                     last_pos, reference_index.rname_lengths[rname], coverage)
     # Output normalization factor
+    print >>sys.stderr, coverage_histogram
     print '-\t%s\t%d' % (sample_label, percentile(coverage_histogram,
                                                     args.percentile))
     output_line_count += 1

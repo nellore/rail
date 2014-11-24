@@ -897,6 +897,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
 
         No return value.
     """
+    global _input_line_count
     # Handle readletizing preliminaries
     try:
         task_partition = os.environ['mapred_task_partition']
@@ -932,6 +933,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             best_mean_qual, best_qual_index, i = None, 0, 0
             others_to_print = dlist()
             for is_reversed, name, qual in xpartition:
+                _input_line_count += 1
                 others_to_print.append(
                         '\t'.join([
                             str(seq_number), is_reversed, name, qual

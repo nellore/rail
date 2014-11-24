@@ -2803,7 +2803,6 @@ class RailRnaAlign(object):
                 'run' : 'bed_pre.py',
                 'inputs' : [path_join(elastic, 'compare_alignments',
                                                'indel_bed'),
-                            path_join(elastic, 'align_reads', 'indel_bed'),
                             path_join(elastic, 'break_ties', 'indel_bed'),
                             path_join(elastic, 'compare_alignments',
                                                'intron_bed'),

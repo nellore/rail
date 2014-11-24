@@ -179,10 +179,13 @@ while True:
         and not output_url.is_local:
         mover.put(last_output_path, 
             output_url.plus(last_output_filename))
-        mover.put(last_output_path + '.bai',
-                    output_url.plus(last_output_filename + '.bai'))
         os.remove(last_output_path)
-        os.remove(last_output_path + '.bai')
+        if not last_output_path.endswith('.unmapped.bam'):
+            mover.put(
+                    ''.join([last_output_path, '.bai']),
+                    output_url.plus(''.join([last_output_filename, '.bai']))
+                )
+            os.remove(''.join([last_output_path, '.bai']))
         move_temporary_file = False
     if not line: break
     if ((sample_label != last_sample_label or 
