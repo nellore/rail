@@ -262,10 +262,5 @@ while True:
     last_sample_label = sample_label
     input_line_count += 1
 
-if not output_url.is_local:
-    # Clean up
-    import shutil
-    shutil.rmtree(temp_dir_path)
-
 print >>sys.stderr, 'DONE with bam.py; in=%d; time=%0.3f s' \
                         % (input_line_count, time.time() - start_time)
