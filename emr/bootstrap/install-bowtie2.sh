@@ -23,15 +23,6 @@ reduced_redundancy = False
 send_chunk = 4096
 EOF
 
-# Change to destination directory
-mkdir -p $1
-cd $1
-
-if [ `uname -m` != "x86_64" ] ; then
-	echo "Not a 64-bit platform!"
-	exit 1
-fi
-
 s3cmd get s3://rail-emr/bin/bowtie2-2.2.3-linux-x86_64.zip|| { echo 's3cmd get failed' ; exit 1; }
 unzip bowtie2-2.2.3-linux-x86_64.zip || { echo 'unzip failed' ; exit 1; }
 sudo ln -s `pwd`/bowtie2-2.2.3/bowtie2 /usr/local/bin

@@ -1840,8 +1840,7 @@ class RailRnaPreprocess(object):
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
                         ),
                     'taskx' : 0,
-                    'index_output' : True,
-                    'direct_copy' : False
+                    'direct_copy' : True
                 },
             ]
         return steps_to_return
