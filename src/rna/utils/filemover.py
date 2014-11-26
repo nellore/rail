@@ -28,14 +28,15 @@ class CommandThread(threading.Thread):
     def __init__(self, command_list):
         super(CommandThread, self).__init__()
         self.command_list = command_list
-        self.process_return = None
+        self.process_return, self.process = None, None
     def run(self):
-        self.process_return \
+        self.process \
             = subprocess.Popen(' '.join(self.command_list),
                                     bufsize=-1,
                                     stdout=sys.stderr,
                                     stderr=sys.stderr,
-                                    shell=True).wait()
+                                    shell=True)
+        self.process_return = self.process.wait()
 
 class FileMover(object):
     """ Responsible for details on how to move files to and from URLs. """
@@ -174,6 +175,7 @@ class FileMover(object):
                         time.sleep(1)
                 if break_outer_loop:
                     tries += 1
+                    print >>sys.stderr, 'Download stalled on try %d.' % tries
                     s3cmd_process.kill()
                     try:
                         os.remove(filename)
@@ -197,17 +199,48 @@ class FileMover(object):
             command_list = ['curl', '-s', '-O', '--connect-timeout', '60']
             command_list.append(url.to_url())
             command = ' '.join(command_list)
-            while True:
+            filename = os.path.join(dest, url.to_url().rpartition('/')[2])
+            tries = 0
+            while tries < 5:
+                break_outer_loop = False
                 curl_thread = CommandThread(command_list)
                 curl_thread.start()
                 last_print_time = time.time()
+                try:
+                    last_size = os.path.getsize(filename)
+                except OSError:
+                    last_size = 0
                 while curl_thread.is_alive():
                     now_time = time.time()
-                    if now_time - last_print_time > 60:
+                    if now_time - last_print_time > 160:
                         print >>sys.stderr, '\nreporter:status:alive'
                         sys.stderr.flush()
+                        try:
+                            new_size = os.path.getsize(filename)
+                        except OSError:
+                            new_size = 0
+                        if new_size == last_size:
+                            # Download stalled
+                            break_outer_loop = True
+                            break
+                        else:
+                            last_size = new_size
                         last_print_time = now_time
+                        time.sleep(1)
                     time.sleep(1)
+                if break_outer_loop:
+                    tries += 1
+                    print >>sys.stderr, 'Download stalled on try %d.' % tries
+                    try:
+                        curl_thread.process.kill()
+                    except AttributeError:
+                        pass
+                    try:
+                        os.remove(filename)
+                    except OSError:
+                        pass
+                    time.sleep(2)
+                    continue
                 if curl_thread.process_return > 89 \
                     or curl_thread.process_return == 56:
                     '''If the exit code is greater than the highest-documented
