@@ -19,7 +19,7 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, xopen
 
 import string
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
@@ -109,6 +109,6 @@ if __name__ == '__main__':
              'increases exponentially with this base')
     args = parser.parse_args()
 
-    with open(args.rnames_file) as rname_stream:
+    with xopen(None, args.rnames_file) as rname_stream:
         go(rname_stream, verbose=args.verbose,
             report_multiplier=args.report_multiplier)

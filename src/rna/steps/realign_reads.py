@@ -67,6 +67,7 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.tools import xstream
+import gzip
 import bowtie
 import argparse
 
@@ -77,7 +78,8 @@ _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 def input_files_from_input_stream(input_stream,
                                     temp_dir_path=tempfile.mkdtemp(),
-                                    verbose=False):
+                                    verbose=False,
+                                    gzip_level=3):
     """ Creates FASTA reference to index, rname file, and file with reads.
 
         Each line of the read file is in the following format:
@@ -97,6 +99,7 @@ def input_files_from_input_stream(input_stream,
         input_stream: where to find Hadoop input
         temp_dir_path: where to store files
         verbose: output extra debugging messages
+        gzip_level: gzip compression level (0-9)
 
         Return value: tuple (path to FASTA reference file, path to read file)
     """
@@ -105,12 +108,12 @@ def input_files_from_input_stream(input_stream,
     deduped_fasta_filename = os.path.join(temp_dir_path, 'temp.deduped.prefa')
     final_fasta_filename = os.path.join(temp_dir_path, 'temp.fa')
     reads_filename = os.path.join(temp_dir_path, 'reads.temp')
-    rname_filename = os.path.join(temp_dir_path, 'rnames.temp')
+    rname_filename = os.path.join(temp_dir_path, 'rnames.temp.gz')
     if verbose:
         print >>sys.stderr, 'Writing prefasta and input reads...'
     with open(prefasta_filename, 'w') as fasta_stream:
         with open(reads_filename, 'w') as read_stream:
-            with open(rname_filename, 'w') as rname_stream:
+            with gzip.open(rname_filename, 'w', gzip_level) as rname_stream:
                 for (read_seq,), xpartition in xstream(input_stream, 1):
                     rnames = []
                     fasta_lines = []
@@ -211,7 +214,7 @@ def handle_temporary_directory(archive, temp_dir_path):
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_build_exe='bowtie2-build', bowtie2_args=None,
     temp_dir_path=tempfile.mkdtemp(), verbose=False, report_multiplier=1.2,
-    replicable=False, count_multiplier=6):
+    replicable=False, count_multiplier=6, gzip_level=3):
     """ Runs Rail-RNA-realign.
 
         Uses Bowtie index including only sequences framing introns to align
@@ -277,6 +280,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             alignment_count_to_report * count_multiplier, where
             alignment_count_to_report is the user-specified bowtie2 -k arg.
             Ignored if replicable = True.
+        gzip_level: level of gzip compression to use for some temporary files
 
         No return value.
     """
@@ -284,7 +288,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     fasta_file, reads_file, rnames_file = input_files_from_input_stream(
                                                 input_stream,
                                                 verbose=verbose,
-                                                temp_dir_path=temp_dir_path
+                                                temp_dir_path=temp_dir_path,
+                                                gzip_level=gzip_level
                                             )
     bowtie2_index_base = os.path.join(temp_dir_path, 'tempidx')
     bowtie_build_return_code = create_index_from_reference_fasta(
@@ -362,6 +367,9 @@ if __name__ == '__main__':
         default=None,
         help='Save output and Bowtie command to a subdirectory (named using ' 
              'this process\'s PID) of PATH')
+    parser.add_argument('--gzip-level', type=int, required=False,
+        default=3,
+        help='Level of gzip compression to use, if applicable')
 
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
@@ -404,7 +412,8 @@ if __name__ == '__main__' and not args.test:
         verbose=args.verbose, 
         report_multiplier=args.report_multiplier,
         replicable=args.replicable,
-        count_multiplier=args.count_multiplier)
+        count_multiplier=args.count_multiplier,
+        gzip_level=args.gzip_level)
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
