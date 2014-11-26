@@ -2438,7 +2438,7 @@ class RailRnaAlign(object):
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
-                'taskx' : max(3, base.sample_count / 30) if elastic else 1,
+                'taskx' : max(6, base.sample_count / 15) if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
@@ -2582,7 +2582,7 @@ class RailRnaAlign(object):
                                         ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unique')],
                 'output' : 'cointron_enum',
-                'taskx' : max(3, base.sample_count / 30) if elastic else 1,
+                'taskx' : max(18, base.sample_count / 10) if elastic else 1,
                 'archives' : ab.Url(path_join(elastic,
                                     base.output_dir,
                                     'transcript_index',
@@ -2634,7 +2634,7 @@ class RailRnaAlign(object):
                             'cointron_fasta'],
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'taskx' : max(6, base.sample_count / 20) if elastic else 1,
+                'taskx' : max(18, base.sample_count / 10) if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'extra_args' : [

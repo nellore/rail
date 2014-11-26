@@ -90,7 +90,7 @@ def go(rname_stream, output_stream=sys.stdout, input_stream=sys.stdin,
             except ValueError:
                 done = True
     output_stream.flush()
-    print >>sys.stderr, ('realign_reads_delegte.py reports %d output lines.'
+    print >>sys.stderr, ('realign_reads_delegate.py reports %d output lines.'
                             % output_line_count)
 
 if __name__ == '__main__':

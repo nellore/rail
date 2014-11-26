@@ -308,12 +308,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         delegate_command = ''.join(
                 [sys.executable, ' ', os.path.realpath(__file__)[:-3],
                     '_delegate.py '
-                    + ('--report-multiplier %d --rnames-file %s %s'
+                    + ('--report-multiplier %08f --rnames-file %s %s'
                         % (report_multiplier, rnames_file,
                             '--verbose' if verbose else ''))]
             )
         full_command = ' | '.join([bowtie_command, delegate_command])
-        print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
+        print >>sys.stderr, 'Starting Bowtie2 with command: ' + full_command
         bowtie_process = subprocess.Popen(full_command, bufsize=-1,
             stdout=sys.stdout, stderr=sys.stderr, shell=True)
         return_code = bowtie_process.wait()
@@ -326,7 +326,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     else:
         raise RuntimeError('Bowtie build process failed with exitlevel %d.'
                             % bowtie_build_return_code)
-    print >>sys.stderr, 'DONE with realign_reads.py; in/out=%d; ' \
+    print >>sys.stderr, 'DONE with realign_reads.py; in=%d; ' \
         'time=%0.3f s' % (_input_line_count, time.time() - start_time)
 
 if __name__ == '__main__':
