@@ -2438,7 +2438,7 @@ class RailRnaAlign(object):
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
-                'taskx' : 3 if elastic else 1,
+                'taskx' : max(3, base.sample_count / 30) if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
@@ -2461,7 +2461,7 @@ class RailRnaAlign(object):
                                                 ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletized')],
                 'output' : 'align_readlets',
-                'taskx' : 3 if elastic else 1,
+                'taskx' : 5 if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'extra_args' : [
@@ -2496,7 +2496,7 @@ class RailRnaAlign(object):
                                             ),
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
-                'taskx' : 3 if elastic else 1,
+                'taskx' : 5 if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'extra_args' : [
@@ -2620,7 +2620,7 @@ class RailRnaAlign(object):
                          '--count-multiplier {2} {3} {4} {5} -- {6}').format(
                                         base.bowtie2_exe,
                                         base.gzip_level
-                                        if'gzip_level' in
+                                        if 'gzip_level' in
                                         dir(base) else 3,
                                         base.count_multiplier,
                                         verbose,
