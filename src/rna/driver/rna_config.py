@@ -1609,7 +1609,7 @@ class RailRnaElastic(object):
                         % base.nodemanager_mem,
                         '-y',
                         'yarn.scheduler.minimum-allocation-mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
+                        % (base.nodemanager_mem / base.max_tasks),
                         '-y',
                         'yarn.nodemanager.vmem-pmem-ratio=2.1',
                         '-y',
@@ -1622,10 +1622,10 @@ class RailRnaElastic(object):
                         'mapreduce.reduce.speculative=true',
                         '-m',
                         'mapreduce.map.memory.mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
+                        % (base.nodemanager_mem / base.max_tasks),
                         '-m',
                         'mapreduce.reduce.memory.mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks * 8 / 10),
+                        % (base.nodemanager_mem / base.max_tasks),
                         '-m',
                         'mapreduce.map.java.opts=-Xmx%dm'
                         % (base.nodemanager_mem / base.max_tasks * 8 / 10),

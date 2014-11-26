@@ -70,9 +70,8 @@ from dooplicity.tools import xstream
 import bowtie
 import argparse
 
-# Initialize global variables for tracking number of input/output lines
+# Initialize global variable for tracking number of input lines
 _input_line_count = 0
-_output_line_count = 0
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -166,6 +165,8 @@ def input_files_from_input_stream(input_stream,
                                 in xrange(0, len(seq), 80)])
                 )
                 output_stream.write('\n')
+    os.remove(deduped_fasta_filename)
+    os.remove(prefasta_filename)
     return final_fasta_filename, reads_filename, rname_filename
 
 def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
@@ -187,97 +188,6 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
                             )
     bowtie_build_process.wait()
     return bowtie_build_process.returncode
-
-class BowtieOutputThread(threading.Thread):
-    """ Processes Bowtie alignments, emitting tuples for exons and introns. """
-    
-    def __init__(self, input_stream, rname_stream, return_set,
-        output_stream=sys.stdout, verbose=False, report_multiplier=1.2):
-        """ Constructor for BowtieOutputThread.
-
-            input_stream: where to retrieve Bowtie's SAM output, typically a
-                Bowtie process's stdout.
-            rname_stream: where to retrieve RNAMES, each of which is in
-                the form (number of qnames associated with rnames) + '\x1e'
-                + ('\x1e'-separated list of valid rnames)
-            return_set: 0 is added to this set if the thread finishes
-                successfully
-            output_stream: where to emit exon and intron tuples; typically,
-                this is sys.stdout.
-            verbose: True if alignments should occasionally be written 
-                to stderr.
-            report_multiplier: if verbose is True, the line number of an
-                alignment written to stderr increases exponentially with base
-                report_multiplier.
-        """
-        super(BowtieOutputThread, self).__init__()
-        self.daemon = True
-        self.input_stream = input_stream
-        self.rname_stream = rname_stream
-        self.return_set = return_set
-        self.output_stream = output_stream
-        self.verbose = verbose
-        self.report_multiplier = report_multiplier
-
-    def run(self):
-        """ Prints raw SAM output.
-
-            Overrides default method containing thread activity.
-
-            No return value.
-        """
-        global _output_line_count
-        next_report_line = 0
-        i = 0
-        qname_count = 0
-        tokens = self.rname_stream.readline().strip().split('\x1e')
-        qname_total, rnames = int(tokens[0]), set(tokens[1:])
-        done = False
-        for (qname,), xpartition in xstream(self.input_stream, 1):
-            assert not done
-            printed = False
-            for rest_of_line in xpartition:
-                i += 1
-                flag = int(rest_of_line[0])
-                if self.verbose and next_report_line == i:
-                    print >>sys.stderr, \
-                        'SAM output record %d: rdname="%s", flag=%d' \
-                        % (i, qname, flag)
-                    next_report_line = max(int(next_report_line
-                        * self.report_multiplier), next_report_line + 1)
-                rname = rest_of_line[1]
-                if rname in rnames:
-                    print >>self.output_stream, \
-                        '\t'.join((qname,) + rest_of_line)
-                    printed = True
-                    _output_line_count += 1
-            if flag & 4 or not printed:
-                # This is an unmapped read
-                if flag & 16:
-                    seq_to_write = rest_of_line[8][::-1].translate(
-                                    _reversed_complement_translation_table
-                                )
-                    qual_to_write = rest_of_line[9][::-1]
-                else:
-                    seq_to_write = rest_of_line[8]
-                    qual_to_write = rest_of_line[9]
-                # Write only essentials; handle "formal" writing in next step
-                print >>self.output_stream, ('%s\t4\t\x1c\t\x1c\t\x1c\t\x1c'
-                                             '\t\x1c\t\x1c\t\x1c\t%s\t%s') % (
-                                                    qname,
-                                                    seq_to_write,
-                                                    qual_to_write
-                                                )
-            qname_count += 1
-            if qname_count == qname_total:
-                tokens = self.rname_stream.readline().strip().split('\x1e')
-                try:
-                    qname_total, rnames = int(tokens[0]), set(tokens[1:])
-                    qname_count = 0
-                except ValueError:
-                    done = True
-        self.output_stream.flush()
-        self.return_set.add(0)
 
 def handle_temporary_directory(archive, temp_dir_path):
     """ Archives or deletes temporary directory.
@@ -382,7 +292,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                     fasta_file,
                                     bowtie2_index_base)
     if bowtie_build_return_code == 0:
-        output_file = os.path.join(temp_dir_path, 'out.sam')
         alignment_count_to_report, _, _ \
             = bowtie.parsed_bowtie_args(bowtie2_args)
         bowtie_command = ' ' .join([bowtie2_exe,
@@ -390,36 +299,30 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             '{0} --local -t --no-hd --mm -x'.format(
             ('-a' if replicable else 
             ('-k {0}'.format(alignment_count_to_report * count_multiplier)))),
-            bowtie2_index_base, '--12', reads_file, '-S', output_file])
+            bowtie2_index_base, '--12', reads_file])
+        delegate_command = ''.join(
+                [sys.executable, ' ', os.path.realpath(__file__)[:-3],
+                    '_delegate.py '
+                    + ('--report-multiplier %d --rnames-file %s %s'
+                        % (report_multiplier, rnames_file,
+                            '--verbose' if verbose else ''))]
+            )
+        full_command = ' | '.join([bowtie_command, delegate_command])
         print >>sys.stderr, 'Starting Bowtie2 with command: ' + bowtie_command
-        bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1,
-            stdout=subprocess.PIPE, stderr=sys.stderr, shell=True)
-        bowtie_process.wait()
-        if os.path.exists(output_file):
-            return_set = set()
-            output_thread = BowtieOutputThread(
-                                open(output_file),
-                                open(rnames_file),
-                                return_set=return_set,
-                                verbose=verbose, 
-                                output_stream=output_stream,
-                                report_multiplier=report_multiplier
-                            )
-            output_thread.start()
-            # Join thread to pause execution in main thread
-            if verbose: print >>sys.stderr, 'Joining thread...'
-            output_thread.join()
-            if not return_set:
-                raise RuntimeError('Error occurred in BowtieOutputThread.')
+        bowtie_process = subprocess.Popen(full_command, bufsize=-1,
+            stdout=sys.stdout, stderr=sys.stderr, shell=True)
+        return_code = bowtie_process.wait()
+        if return_code:
+            raise RuntimeError('Error occurred while reading Bowtie 2 output; '
+                               'exitlevel was %d.' % return_code)
     elif bowtie_build_return_code == 1:
         print >>sys.stderr, ('Bowtie build failed, but probably because '
                              'FASTA file was empty. Continuing...')
     else:
         raise RuntimeError('Bowtie build process failed with exitlevel %d.'
                             % bowtie_build_return_code)
-    print >> sys.stderr, 'DONE with realign_reads.py; in/out=%d/%d; ' \
-        'time=%0.3f s' % (_input_line_count, _output_line_count,
-                                time.time() - start_time)
+    print >>sys.stderr, 'DONE with realign_reads.py; in/out=%d; ' \
+        'time=%0.3f s' % (_input_line_count, time.time() - start_time)
 
 if __name__ == '__main__':
     # Print file's docstring if -h is invoked
