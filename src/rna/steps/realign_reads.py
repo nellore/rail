@@ -297,6 +297,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                     fasta_file,
                                     bowtie2_index_base)
     if bowtie_build_return_code == 0:
+        try:
+            os.remove(fasta_file)
+        except OSError:
+            pass
         alignment_count_to_report, _, _ \
             = bowtie.parsed_bowtie_args(bowtie2_args)
         bowtie_command = ' ' .join([bowtie2_exe,

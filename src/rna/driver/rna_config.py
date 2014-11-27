@@ -2661,7 +2661,7 @@ class RailRnaAlign(object):
                             'realign_reads'],
                 'output' : 'compare_alignments',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'taskx' : max(4, base.sample_count / 20) if elastic else 1,
+                'taskx' : max(18, base.sample_count / 10) if elastic else 1,
                 'part' : 'k1,1',
                 'keys' : 1,
                 'multiple_outputs' : True,
@@ -2732,7 +2732,7 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size*2)
+                            % (_base_combine_split_size)
                     ],
                 'direct_copy' : True
             },
@@ -2749,7 +2749,7 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size*2)
+                            % (_base_combine_split_size)
                     ]
             },
             {

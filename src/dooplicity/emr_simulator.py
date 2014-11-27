@@ -1228,7 +1228,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 pass
                 iface.step('    Deleted temporary files.')
             step_number += 1
-        if not keep_last_output:
+        if not keep_last_output and not keep_intermediates:
             try:
                 os.remove(step_data['output'])
             except OSError:
