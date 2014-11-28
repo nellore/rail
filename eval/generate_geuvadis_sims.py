@@ -68,6 +68,7 @@ import tempfile
 import multiprocessing
 import time
 import atexit
+import gc
 
 def kill_dir(path_to_dir):
     """ Removes directory tree.
@@ -129,6 +130,8 @@ def write_par_and_pro(par_template, pro_template, basename,
                 '\n'.join(all_parameters[:-2])
             print >>write_stream, 'REF_FILE_NAME\t%s' % name_to_write
             print >>write_stream, 'SEED\t%d' % seed
+    del rpkms
+    gc.collect()
     return 0
 
 def run_flux(par, flux):
