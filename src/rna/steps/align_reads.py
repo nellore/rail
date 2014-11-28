@@ -433,12 +433,10 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 '''First set count=0 to avoid printing exon_diffs and indels;
                 then set count = k + 1 to print presummed exon_diffs and indels
                 so fewer lines are written to disk.'''
-                k = 0
                 if k_value == 1 and not tie_present:
                     try:
                         for current_is_reverse, current_qname, current_qual \
                             in other_xpartition:
-                            k += 1
                             if current_is_reverse == '1':
                                 if not reversed_flags:
                                     reversed_flags = [
@@ -462,8 +460,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                                 ])
                                                + (NH_field,)
                                                for j, alignment
-                                               in enumerate(multiread)],),
-                                            count=0
+                                               in enumerate(multiread)],)
                                         )
                             else:
                                 _output_line_count += \
@@ -482,8 +479,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                                 ])
                                                + (NH_field,)
                                                for j, alignment
-                                               in enumerate(multiread)],),
-                                            count=0
+                                               in enumerate(multiread)],)
                                         )
                     except ValueError:
                         pass
@@ -492,15 +488,13 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                         alignment_printer.print_alignment_data(
                                 ([(alignment[0], str(int(alignment[1]) ^ 16))
                                    + alignment[2:] + (NH_field,)
-                                   for alignment in multiread],),
-                                count=(k+1)
+                                   for alignment in multiread],)
                             )
                 else:
                     _output_line_count += \
                         alignment_printer.print_alignment_data(
                                 ([alignment + (NH_field,)
-                                   for alignment in multiread],),
-                                count=(k+1)
+                                   for alignment in multiread],)
                             )
             else:
                 print >>output_stream, 'unique\t%s' % seq
@@ -677,15 +671,13 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                         alignment_printer.print_alignment_data(
                                 ([(alignment[0], str(int(alignment[1]) ^ 16))
                                    + alignment[2:] + (NH_field,)
-                                   for alignment in multiread],),
-                                count=1
+                                   for alignment in multiread],)
                             )
                 else:
                     _output_line_count += \
                         alignment_printer.print_alignment_data(
                                 ([alignment + (NH_field,)
-                                   for alignment in multiread],),
-                                count=1
+                                   for alignment in multiread],)
                             )
             else:
                 # Write "postponed" SAM/unmapped lines
