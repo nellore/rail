@@ -261,7 +261,7 @@ if __name__ == '__main__':
                             i, rpkms, sample),
                        callback=return_values.append)
     pool.close()
-    relevant_count = len(relevant_samples)
+    relevant_count = len(samples)
     while len(return_values) != relevant_count:
         sys.stdout.write('Created %d/%d PAR/PRO pairs.\r' \
                             % (len(return_values), relevant_count))
@@ -271,7 +271,7 @@ if __name__ == '__main__':
     print >>sys.stderr, 'Running sims...'
     pool = multiprocessing.Pool(args.num_processes)
     return_values = []
-    for sample in relevant_samples:
+    for sample in samples:
         pool.apply_async(run_flux,
                          (os.path.join(args.output, sample + '_sim.par'),
                           args.flux),
