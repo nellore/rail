@@ -85,7 +85,6 @@ def write_par_and_pro(par_template, pro_template, basename,
                       seed, rpkms, sample):
     """ Writes PAR and PRO file for a given sample.
 
-        args: ordered tuple whose components are:
         par_template: PAR template file
         pro_template: PRO template file
         basename: Destination PAR/PRO basename
@@ -130,7 +129,6 @@ def write_par_and_pro(par_template, pro_template, basename,
                 '\n'.join(all_parameters[:-2])
             print >>write_stream, 'REF_FILE_NAME\t%s' % name_to_write
             print >>write_stream, 'SEED\t%d' % seed
-    del rpkms
     gc.collect()
     return 0
 

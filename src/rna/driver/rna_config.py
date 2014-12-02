@@ -2114,23 +2114,21 @@ class RailRnaAlign(object):
         if search_filter == 'none':
             base.search_filter = 1
         elif search_filter == 'mild':
-            base.search_filter = base.min_exon_size
+            base.search_filter = int(base.min_exon_size * 2 / 3)
         elif search_filter == 'strict':
             try:
-                base.search_filter = int(base.min_exon_size * 1.5)
+                base.search_filter = base.min_exon_size
             except:
                 pass
-        elif not (
-                (isinstance(search_filter, int)
-                    and search_filter >= 1) or
-                search_filter in ['none', 'mild', 'strict']
-            ):
-            base.errors.append('Search filter (--search-filter) '
-                               'must be an integer >= 0 or one of {"none", '
-                               '"mild", "strict"}, but {0} was '
-                               'entered.'.format(search_filter))
         else:
-            base.search_filter = search_filter
+            try:
+                base.search_filter = int(search_filter)
+            except ValueError:
+                # Not an integer
+                base.errors.append('Search filter (--search-filter) '
+                                   'must be an integer >= 1 or one of '
+                                   '{"none", "mild", "strict"}, but {0} was '
+                                   'entered.'.format(search_filter))
         if not (isinstance(motif_search_window_size, int) and 
                     motif_search_window_size >= 0):
             base.errors.append('Motif search window size '
@@ -2316,7 +2314,7 @@ class RailRnaAlign(object):
         algo_parser.add_argument(
             '--search-filter', type=str, required=False,
             metavar='<choice/int>',
-            default='none',
+            default='mild',
             help=('filter out reads searched for introns that fall below '
                   'threshold <int> for initially detected anchor length; '
                   'or select <choice> from {"strict", "mild", "none"}')

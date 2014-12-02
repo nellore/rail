@@ -35,7 +35,8 @@ Tab-delimited tuple columns:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
     subsequence sizes framing introns + '\x1d' + comma-separated list of intron
-    sizes
+    sizes + '\x1d + distance to previous intron or 'NA' if beginning of
+    strand + '\x1d' + distance to next intron or 'NA' if end of strand.
 3. Sequence
 """
 import sys
