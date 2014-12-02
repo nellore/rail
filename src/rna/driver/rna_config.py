@@ -2314,7 +2314,7 @@ class RailRnaAlign(object):
         algo_parser.add_argument(
             '--search-filter', type=str, required=False,
             metavar='<choice/int>',
-            default='mild',
+            default='none',
             help=('filter out reads searched for introns that fall below '
                   'threshold <int> for initially detected anchor length; '
                   'or select <choice> from {"strict", "mild", "none"}')
