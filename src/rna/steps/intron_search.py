@@ -3,7 +3,7 @@
 Rail-RNA-intron_search
 
 Follows Rail-RNA-align_readlets
-Precedes Rail-RNA-intron_call
+Precedes Rail-RNA-intron_config
 
 Reduce step in MapReduce pipelines that -- very roughly -- infers splice
 junctions between successive readlets that align noncontiguously.
@@ -1134,8 +1134,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                 seq_size = len(seq)
                 seq_count = int(seq_info[3])
                 reversed_complement_seq_count = int(seq_info[4])
-                sample_labels = seq_info[5]
-                reversed_complement_sample_labels = seq_info[6]
+                sample_indexes = seq_info[5]
+                reversed_complement_sample_indexes = seq_info[6]
                 seq_info_captured = True
             if poses != '\x1c':
                 # If there are alignments, add them to collected_readlets
@@ -1164,13 +1164,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 in enumerate(collected_readlets)]
             # Set seed for each read so results for read are reproducible
             random.seed(seq)
-            sample_labels = set((sample_labels.split('\x1f')
-                                    if len(sample_labels) else []))
-            reversed_complement_sample_labels \
-                = set((reversed_complement_sample_labels.split('\x1f')
-                        if len(reversed_complement_sample_labels) else []))
+            sample_indexes = set((sample_indexes.split('\x1f')
+                                    if len(sample_indexes) else []))
+            reversed_complement_sample_indexes \
+                = set((reversed_complement_sample_indexes.split('\x1f')
+                        if len(reversed_complement_sample_indexes) else []))
             if stranded:
-                if sample_labels:
+                if sample_indexes:
                     introns = list(introns_from_clique(
                                     selected_readlet_alignments_by_clustering(
                                             multireadlets
@@ -1189,16 +1189,16 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         ))
                     for (intron_rname, intron_reverse_strand,
                             intron_pos, intron_end_pos) in introns:
-                        for sample_label in sample_labels:
+                        for sample_index in sample_indexes:
                             print '%s%s\t%s\t%012d\t%012d' % (
                                     intron_rname,
                                     '-' if intron_reverse_strand else '+',
-                                    sample_label,
+                                    sample_index,
                                     intron_pos,
                                     intron_end_pos
                                 )
                             _output_line_count += 1
-                if reversed_complement_sample_labels:
+                if reversed_complement_sample_indexes:
                     introns = introns_from_clique(
                                     selected_readlet_alignments_by_clustering(
                                             multireadlets
@@ -1217,11 +1217,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         )
                     for (intron_rname, intron_reverse_strand,
                              intron_pos, intron_end_pos) in introns:
-                        for sample_label in reversed_complement_sample_labels:
+                        for sample_index in reversed_complement_sample_indexes:
                             print '%s%s\t%s\t%012d\t%012d' % (
                                     intron_rname,
                                     '-' if intron_reverse_strand else '+',
-                                    sample_label,
+                                    sample_index,
                                     intron_pos,
                                     intron_end_pos
                                 )
@@ -1244,12 +1244,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                     )
                 for (intron_rname, intron_reverse_strand,
                         intron_pos, intron_end_pos) in introns:
-                    for sample_label in (sample_labels
-                                          | reversed_complement_sample_labels):
+                    for sample_index in (sample_indexes
+                                         | reversed_complement_sample_indexes):
                         print '%s%s\t%s\t%012d\t%012d' % (
                                 intron_rname,
                                 '-' if intron_reverse_strand else '+',
-                                sample_label,
+                                sample_index,
                                 intron_pos,
                                 intron_end_pos
                             )

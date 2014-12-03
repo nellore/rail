@@ -2336,7 +2336,7 @@ class RailRnaAlign(object):
         )
         algo_parser.add_argument(
             '--genome-bowtie1-args', type=str, required=False,
-            default='-v 0 -a -m 30',
+            default='-v 0 -a -m 6',
             help=SUPPRESS
         )
         algo_parser.add_argument(
