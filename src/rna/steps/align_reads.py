@@ -301,9 +301,9 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
         task_partition, cap_sizes, k_value=1, align_stream=None,
         other_stream=None, output_stream=sys.stdout, exon_differentials=True,
         exon_intervals=False, verbose=False, bin_size=10000,
-        report_multiplier=1.2, min_exon_size=8, min_readlet_size=8,
-        max_readlet_size=25, readlet_interval=5, drop_deletions=False,
-        clip_phred_cutoff=30):
+        report_multiplier=1.2, min_exon_size=8,
+        min_readlet_size=8, max_readlet_size=25,
+        readlet_interval=5, drop_deletions=False):
     """ Prints end-to-end alignments and selects reads to be realigned.
 
         input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -349,10 +349,6 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             the read
         drop_deletions: True iff deletions should be dropped from coverage
             vector
-        clip_phred_cutoff: soft-clipped reads are not readletized unless any
-            clipped end has an average quality score >= this value; for reads
-            where one clipped end is high-quality but the other is low-quality,
-            the low-quality end is cut off before readletizing
 
         No return value.
     """
@@ -506,43 +502,15 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 # Prep for second-pass Bowtie 2 and print output
                 split_cigar = re.split(r'([MINDS])', cigar)[:-1]
                 try:
-                    split_cigar[0] = int(split_cigar[0])
-                except ValueError:
-                    # Unmapped read; should have been handled, but safety net
-                    seq_to_readletize = None
-                else:
-                    split_cigar[-2] = int(split_cigar[-2])
-                    seq_to_readletize = None
-                    if (split_cigar[1] == 'S'
-                            and split_cigar[0] >= min_exon_size):
-                        left_average_quality = (
-                                sum([ord(base) - 33 
-                                     for base in qual[:split_cigar[0]]])
-                                     / split_cigar[0]
-                            )
-                        if left_average_quality < clip_phred_cutoff:
-                            seq_to_readletize = seq[split_cigar[0]:]
-                        else:
-                            seq_to_readletize = seq
-                    if (split_cigar[-1] == 'S'
-                            and split_cigar[-2] >= min_exon_size):
-                        right_average_quality = (
-                                sum([ord(base) - 33 
-                                     for base in qual[-split_cigar[-2]:]])
-                                     / split_cigar[-2]
-                            )
-                        if right_average_quality < clip_phred_cutoff:
-                            if seq_to_readletize:
-                                if len(seq_to_readletize) != len(seq):
-                                    '''Neither clip average quality passes
-                                    muster.'''
-                                    seq_to_readletize = None
-                                else:
-                                    seq_to_readletize = seq[:-split_cigar[-2]]
-                            else:
-                                seq_to_readletize = seq[:-split_cigar[-2]]
-                        elif not seq_to_readletize:
-                            seq_to_readletize = seq
+                    if ((split_cigar[1] == 'S'
+                            and int(split_cigar[0]) >= min_exon_size) or
+                        (split_cigar[-1] == 'S'
+                            and int(split_cigar[-2]) >= min_exon_size)):
+                        search_for_introns = True
+                    else:
+                        search_for_introns = False
+                except IndexError:
+                    search_for_introns = False
                 reversed_complement_seq = seq[::-1].translate(
                     _reversed_complement_translation_table
                 )
@@ -552,19 +520,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 else:
                     seq_to_print = reversed_complement_seq
                     qual_to_print = qual[::-1]
-                if seq_to_readletize:
-                    # Search seq_to_readletize for introns
-                    if len(seq_to_readletize) != len(seq):
-                        reversed_complement_seq_to_readletize \
-                            = seq_to_readletize[::-1].translate(
-                                    _reversed_complement_translation_table
-                                )
-                        if (seq_to_readletize
-                                >= reversed_complement_seq_to_readletize):
-                            seq_to_readletize \
-                                = reversed_complement_seq_to_readletize
-                    else:
-                        seq_to_readletize = seq_to_print
+                if search_for_introns:
                     sample_indexes, reversed_complement_sample_indexes = (
                             set(), set()
                         )
@@ -601,7 +557,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                         sample_indexes.add(sample_index)
                         sample_count += 1
                     print_readletized_output(
-                            seq=seq_to_readletize,
+                            seq=seq_to_print,
                             sample_indexes=sample_indexes,
                             reversed_complement_sample_indexes=\
                                 reversed_complement_sample_indexes,
@@ -759,8 +715,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     manifest_file='manifest', bowtie2_args=None, bin_size=10000, verbose=False,
     exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
     min_exon_size=8, min_readlet_size=15, max_readlet_size=25,
-    readlet_interval=12, capping_multiplier=1.5, drop_deletions=False,
-    clip_phred_cutoff=30):
+    readlet_interval=12, capping_multiplier=1.5, drop_deletions=False):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -931,10 +886,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             capping_multiplier
         drop_deletions: True iff deletions should be dropped from coverage
             vector
-        clip_phred_cutoff: soft-clipped reads are not readletized unless any
-            clipped end has an average quality score >= this value; for reads
-            where one clipped end is high-quality but the other is low-quality,
-            the low-quality end is cut off before readletizing
 
         No return value.
     """
@@ -1037,8 +988,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                     min_readlet_size=min_readlet_size,
                     max_readlet_size=max_readlet_size,
                     readlet_interval=readlet_interval,
-                    drop_deletions=drop_deletions,
-                    clip_phred_cutoff=clip_phred_cutoff
+                    drop_deletions=drop_deletions
                 )
         os.remove(output_file)
         output_file = os.path.join(temp_dir, 'second_pass_out.sam')
@@ -1067,8 +1017,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         output_stream=output_stream,
                         report_multiplier=report_multiplier,
                         min_exon_size=min_exon_size,
-                        drop_deletions=drop_deletions,
-                        clip_phred_cutoff=clip_phred_cutoff
+                        drop_deletions=drop_deletions
                     )
     sys.stdout.flush()
 
@@ -1122,12 +1071,6 @@ if __name__ == '__main__':
         default=1.5, 
         help='Successive capping readlets on a given end of a read are '
              'increased in size exponentially with this base')
-    parser.add_argument('--clip-phred-cutoff', type=int, required=False,
-        default=30, 
-        help='Soft-clipped reads are not readletized unless any clipped '
-             'end has an average quality score >= this value for reads '
-             'where one clipped end is high-quality but the other is '
-             'low-quality, the low-quality end is cut off before readletizing')
     parser.add_argument('--test', action='store_const', const=True,
         default=False,
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
@@ -1176,8 +1119,7 @@ if __name__ == '__main__' and not args.test:
         max_readlet_size=args.max_readlet_size,
         readlet_interval=args.readlet_interval,
         capping_multiplier=args.capping_multiplier,
-        drop_deletions=args.drop_deletions,
-        clip_phred_cutoff=args.clip_phred_cutoff)
+        drop_deletions=args.drop_deletions)
     print >>sys.stderr, 'DONE with align_reads.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)
