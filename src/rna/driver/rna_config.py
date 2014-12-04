@@ -1883,7 +1883,8 @@ class RailRnaAlign(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=6, tie_margin=6,
+        transcriptome_bowtie2_args='-k 30', clip_phred_cutoff=30,
+        count_multiplier=6, tie_margin=6,
         normalize_percentile=0.75, very_replicable=False, drop_deletions=False,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', assembly='hg19',
@@ -2178,6 +2179,14 @@ class RailRnaAlign(object):
                                                     count_multiplier
                                                 ))
         base.count_multiplier = count_multiplier
+        if not (isinstance(clip_phred_cutoff, int) and
+                    clip_phred_cutoff >= 0):
+            base.errors.append('Clip Phred cutoff (--clip-phred-cutoff) must '
+                               'be an integer >= 0, but '
+                               '{0} was entered.'.format(
+                                                    clip_phred_cutoff
+                                                ))
+        base.clip_phred_cutoff = clip_phred_cutoff
         base.drop_deletions = drop_deletions
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
         base.very_replicable = very_replicable
@@ -2350,6 +2359,11 @@ class RailRnaAlign(object):
             help=SUPPRESS
         )
         algo_parser.add_argument(
+            '--clip-phred-cutoff', type=int, required=False,
+            default=15,
+            help=SUPPRESS
+        )
+        algo_parser.add_argument(
             '--normalize-percentile', type=float, required=False,
             metavar='<dec>',
             default=0.75,
@@ -2418,7 +2432,8 @@ class RailRnaAlign(object):
                          '--max-readlet-size={6} '
                          '--readlet-interval={7} '
                          '--capping-multiplier={8} '
-                         '{9} {10} {11} -- {12}').format(
+                         '--clip-phred-cutoff={9} '
+                         '{10} {11} {12} -- {13}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
@@ -2428,6 +2443,7 @@ class RailRnaAlign(object):
                                                         base.max_readlet_size,
                                                         base.readlet_interval,
                                                 base.cap_size_multiplier,
+                                                base.clip_phred_cutoff,
                                                 drop_deletions,
                                                         verbose,
                                                         keep_alive,
@@ -3210,12 +3226,12 @@ class RailRnaLocalAlignJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
-        tie_margin=6, very_replicable=False, normalize_percentile=0.75,
-        drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, bam_basename='alignments',
-        bed_basename='', num_processes=1, gzip_intermediates=False,
-        gzip_level=3, keep_intermediates=False):
+        transcriptome_bowtie2_args='-k 30', count_multiplier=6,
+        clip_phred_cutoff=30, tie_margin=6, very_replicable=False,
+        normalize_percentile=0.75, drop_deletions=False,
+        do_not_output_bam_by_chr=False, output_sam=False,
+        bam_basename='alignments', bed_basename='', num_processes=1,
+        gzip_intermediates=False, gzip_level=3, keep_intermediates=False):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -3244,6 +3260,7 @@ class RailRnaLocalAlignJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             count_multiplier=count_multiplier,
+            clip_phred_cutoff=clip_phred_cutoff,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
@@ -3290,14 +3307,13 @@ class RailRnaParallelAlignJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
-        tie_margin=6, very_replicable=False, normalize_percentile=0.75,
-        drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, bam_basename='alignments',
-        bed_basename='', num_processes=1,
+        transcriptome_bowtie2_args='-k 30', count_multiplier=6,
+        clip_phred_cutoff=30, tie_margin=6, very_replicable=False,
+        normalize_percentile=0.75, drop_deletions=False,
+        do_not_output_bam_by_chr=False, output_sam=False,
+        bam_basename='alignments', bed_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
-        gzip_intermediates=False,
-        gzip_level=3, keep_intermediates=False):
+        gzip_intermediates=False, gzip_level=3, keep_intermediates=False):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         ready_engines(rc)
@@ -3401,6 +3417,7 @@ class RailRnaParallelAlignJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             count_multiplier=count_multiplier,
+            clip_phred_cutoff=clip_phred_cutoff,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
@@ -3448,7 +3465,7 @@ class RailRnaElasticAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6,
-        tie_margin=6, very_replicable=False,
+        clip_phred_cutoff=30, tie_margin=6, very_replicable=False,
         normalize_percentile=0.75, drop_deletions=False,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
@@ -3506,6 +3523,7 @@ class RailRnaElasticAlignJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             count_multiplier=count_multiplier,
+            clip_phred_cutoff=clip_phred_cutoff,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
@@ -3575,7 +3593,8 @@ class RailRnaLocalAllJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        count_multiplier=6, transcriptome_bowtie2_args='-k 30', tie_margin=6,
+        count_multiplier=6, clip_phred_cutoff=30,
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
         very_replicable=False, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
@@ -3611,6 +3630,7 @@ class RailRnaLocalAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            clip_phred_cutoff=clip_phred_cutoff,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
@@ -3664,7 +3684,8 @@ class RailRnaParallelAllJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        count_multiplier=6, transcriptome_bowtie2_args='-k 30', tie_margin=6,
+        count_multiplier=6, clip_phred_cutoff=30,
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
         very_replicable=False, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
@@ -3784,6 +3805,7 @@ class RailRnaParallelAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            clip_phred_cutoff=clip_phred_cutoff,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
@@ -3838,7 +3860,7 @@ class RailRnaElasticAllJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=6,
-        normalize_percentile=0.75, very_replicable=False,
+        clip_phred_cutoff=30, normalize_percentile=0.75, very_replicable=False,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         log_uri=None, ami_version='3.3.1',
@@ -3899,6 +3921,7 @@ class RailRnaElasticAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            clip_phred_cutoff=clip_phred_cutoff,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
