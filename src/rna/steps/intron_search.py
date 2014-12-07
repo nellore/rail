@@ -3,7 +3,7 @@
 Rail-RNA-intron_search
 
 Follows Rail-RNA-align_readlets
-Precedes Rail-RNA-intron_config
+Precedes Rail-RNA-intron_filter
 
 Reduce step in MapReduce pipelines that -- very roughly -- infers splice
 junctions between successive readlets that align noncontiguously.
@@ -31,14 +31,13 @@ Input is partitioned by field 1, the read sequence ID.
 Hadoop output (written to stdout)
 ----------------------------
 Tab-delimited columns:
-1. Reference name (RNAME in SAM format) + ';' + partition number +  
-    ('+' or '-' indicating which strand is the sense strand if input reads are
-        strand-specific -- that is, --stranded was invoked; otherwise, there is
-        no terminal '+' or '-')
-2. Candidate intron start (inclusive) on forward strand (1-indexed)
-3. Candidate intron end (exclusive) on forward strand (1-indexed)
-4. '\x1f'-separated list of sample (label)s in which intron was detected
-5. Total number of reads supporting intron
+1. Reference name (RNAME in SAM format) +
+    '+' or '-' indicating which strand is the sense strand
+2. Intron start position (inclusive)
+3. Intron end position (exclusive)
+4. '\x1f'-separated list of sample indexes in which intron was found
+5. '\x1f'-separated list of numbers of reads in which intron was found
+    in respective sample specified by field 4
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -1058,15 +1057,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         Hadoop output (written to stdout)
         ----------------------------
         Tab-delimited columns:
-        1. Reference name (RNAME in SAM format) + ';' + partition number +  
-            ('+' or '-' indicating which strand is the sense strand if input
-                reads are strand-specific -- that is, --stranded in was
-                invoked; otherwise, there is no terminal '+' or '-')
-        2. Candidate intron start (inclusive) on forward strand (1-indexed)
-        3. Candidate intron end (exclusive) on forward strand (1-indexed)
-        4. '\x1f'-separated list of sample (label)s in which intron was
-            detected
-        5. Total number of reads supporting intron
+        1. Reference name (RNAME in SAM format) +
+            '+' or '-' indicating which strand is the sense strand
+        2. Intron start position (inclusive)
+        3. Intron end position (exclusive)
+        4. '\x1f'-separated list of sample indexes in which intron was found
+        5. '\x1f'-separated list of numbers of reads in which intron was found
+            in respective sample specified by field 4
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
@@ -1132,10 +1129,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                 assert seq_info_size == 7
                 seq = seq_info[2]
                 seq_size = len(seq)
-                seq_count = int(seq_info[3])
-                reversed_complement_seq_count = int(seq_info[4])
-                sample_indexes = seq_info[5]
-                reversed_complement_sample_indexes = seq_info[6]
+                sample_indexes = seq_info[3]
+                reversed_complement_sample_indexes = seq_info[4]
+                seq_counts = seq_info[5]
+                reversed_complement_seq_counts = seq_info[6]
                 seq_info_captured = True
             if poses != '\x1c':
                 # If there are alignments, add them to collected_readlets
@@ -1164,11 +1161,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 in enumerate(collected_readlets)]
             # Set seed for each read so results for read are reproducible
             random.seed(seq)
-            sample_indexes = set((sample_indexes.split('\x1f')
-                                    if len(sample_indexes) else []))
-            reversed_complement_sample_indexes \
-                = set((reversed_complement_sample_indexes.split('\x1f')
-                        if len(reversed_complement_sample_indexes) else []))
             if stranded:
                 if sample_indexes:
                     introns = list(introns_from_clique(
@@ -1189,15 +1181,15 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         ))
                     for (intron_rname, intron_reverse_strand,
                             intron_pos, intron_end_pos) in introns:
-                        for sample_index in sample_indexes:
-                            print '%s%s\t%s\t%012d\t%012d' % (
-                                    intron_rname,
-                                    '-' if intron_reverse_strand else '+',
-                                    sample_index,
-                                    intron_pos,
-                                    intron_end_pos
-                                )
-                            _output_line_count += 1
+                        print '%s%s\t%d\t%d\t%s\t%s' % (
+                                intron_rname,
+                                '-' if intron_reverse_strand else '+',
+                                intron_pos,
+                                intron_end_pos,
+                                sample_indexes,
+                                seq_counts
+                            )
+                        _output_line_count += 1
                 if reversed_complement_sample_indexes:
                     introns = introns_from_clique(
                                     selected_readlet_alignments_by_clustering(
@@ -1217,16 +1209,33 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         )
                     for (intron_rname, intron_reverse_strand,
                              intron_pos, intron_end_pos) in introns:
-                        for sample_index in reversed_complement_sample_indexes:
-                            print '%s%s\t%s\t%012d\t%012d' % (
-                                    intron_rname,
-                                    '-' if intron_reverse_strand else '+',
-                                    sample_index,
-                                    intron_pos,
-                                    intron_end_pos
-                                )
-                            _output_line_count += 1
+                        print '%s%s\t%d\t%d\t%s\t%s' % (
+                                intron_rname,
+                                '-' if intron_reverse_strand else '+',
+                                intron_pos,
+                                intron_end_pos,
+                                reversed_complement_sample_indexes,
+                                reversed_complement_seq_counts
+                            )
+                        _output_line_count += 1
             else:
+                sample_indexes = (sample_indexes.split('\x1f')
+                                    if sample_indexes else [])
+                reversed_complement_sample_indexes \
+                    = (reversed_complement_sample_indexes.split('\x1f')
+                        if reversed_complement_sample_indexes else [])
+                seq_counts = seq_counts.split('\x1f')
+                reversed_complement_seq_counts \
+                    = reversed_complement_seq_counts.split('\x1f')
+                counts = defaultdict(int)
+                for i, sample_index  in enumerate(sample_indexes):
+                    counts[sample_index] += int(seq_counts[i])
+                for i, sample_index in enumerate(
+                                        reversed_complement_sample_indexes
+                                    ):
+                    counts[sample_index] += int(
+                            reversed_complement_seq_counts[i]
+                        )
                 introns = introns_from_clique(
                                 selected_readlet_alignments_by_clustering(
                                         multireadlets
@@ -1243,17 +1252,18 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         max_gaps_mismatches=max_gaps_mismatches
                     )
                 for (intron_rname, intron_reverse_strand,
-                        intron_pos, intron_end_pos) in introns:
-                    for sample_index in (sample_indexes
-                                         | reversed_complement_sample_indexes):
-                        print '%s%s\t%s\t%012d\t%012d' % (
-                                intron_rname,
-                                '-' if intron_reverse_strand else '+',
-                                sample_index,
-                                intron_pos,
-                                intron_end_pos
+                            intron_pos, intron_end_pos) in introns:
+                    print '%s%s\t%d\t%d\t%s\t%s' % (
+                            intron_rname,
+                            '-' if intron_reverse_strand else '+',
+                            intron_pos,
+                            intron_end_pos,
+                            '\x1f'.join(counts.keys()),
+                            '\x1f'.join(
+                                [str(count) for count in counts.values()]
                             )
-                        _output_line_count += 1
+                        )
+                    _output_line_count += 1
 
 if __name__ == '__main__':
     import argparse

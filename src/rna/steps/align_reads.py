@@ -112,16 +112,19 @@ Tab-delimited output tuple columns (unmapped):
 Tab-delimited output tuple columns (readletized)
 1. Readlet sequence or its reversed complement, whichever is first in
     alphabetical order
-2. Read sequence ID + ('-' if readlet sequence is reverse-complemented; else
-    '+') + '\x1e' + displacement of readlet's 5' end from read's 5' end +
-    '\x1e' + displacement of readlet's 3' end from read's 3' end (+, for
-    EXACTLY one readlet of a read sequence, '\x1e' + read sequence + '\x1e'
-    + number of instances of read sequence + '\x1e' + number of instances of
-    read sequence's reversed complement + '\x1e' + (an '\x1f'-separated set of
-    unique sample labels with read sequences that match the original read
-    sequence) + '\x1e' + (an '\x1f'-separated set of unique sample labels with
-    read sequences that match the reversed complement of the original read
-    sequence). Here, a read sequence ID takes the form X:Y, where X is the
+2. '\x1d'-separated list of [read sequence ID + ('-' if readlet sequence is
+    reverse-complemented; else '+') + '\x1e' + displacement of readlet's 5' end
+    from read's 5' end + '\x1e' + displacement of readlet's 3' end from read's
+    3' end (+, for EXACTLY one readlet of a read sequence, '\x1e' +
+    read sequence + '\x1e' + (an '\x1f'-separated list A of unique sample
+    labels with read sequences that match the original read sequence) + '\x1e'
+    + (an '\x1f'-separated list  of unique sample labels B with read sequences
+    that match the reversed complement of the original read sequence))] + 
+    '\x1e' + (an '\x1f'-separated list of the number of instances of the read
+    sequence for each respective sample in list A) + '\x1e' + (an
+    '\x1f'-separated list of the number of instances of the read
+    sequence's reversed complement for each respective sample in list B). Here,
+    a read sequence ID takes the form X:Y, where X is the
     "mapred_task_partition" environment variable -- a unique index for a task
     within a job -- and Y is the index of the read sequence relative to the
     beginning of the input stream.
@@ -145,6 +148,7 @@ import tempfile
 import atexit
 import time
 import copy
+from collections import defaultdict
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -179,8 +183,7 @@ def handle_temporary_directory(temp_dir_path):
     shutil.rmtree(temp_dir_path)
 
 def print_readletized_output(seq, sample_indexes,
-        reversed_complement_sample_indexes, sample_count,
-        reversed_complement_sample_count, seq_id, cap_sizes,
+        reversed_complement_sample_indexes, seq_id, cap_sizes,
         output_stream=sys.stdout, min_readlet_size=8, max_readlet_size=25,
         readlet_interval=5, verbose=False):
     """ Readletizes the unique read sequence seq.
@@ -195,12 +198,11 @@ def print_readletized_output(seq, sample_indexes,
         formula min_readlet_size*capping_multiplier^n for n an integer >= 0.
 
         seq: sequence to readletize
-        sample_indexes: indexes of samples in which seq appears
-        reversed_complement_sample_indexes: indexes of samples in which
-            reversed complement of seq appears
-        sample_count: number of instances of read sequence across samples
-        reversed_complement_sample_count: number of instances of reversed
-            complement of read across samples
+        sample_indexes: dictionary mapping indexes of samples in which seq
+            appears to their counts in that sample
+        reversed_complement_sample_indexes: dictionary mapping indexes of
+            samples in which reversed complement of seq appears to their counts
+            in that sample
         seq_id: unique identifier to assign to a given sequence
         cap_sizes: list of sizes of capping readlets
         min_readlet_size: "capping" readlets (that is, readlets that terminate
@@ -227,11 +229,15 @@ def print_readletized_output(seq, sample_indexes,
     displacement of readlet's 3' end from read's 3' end (+, for EXACTLY one
     readlet of a read sequence, '\x1e' + read sequence + '\x1e' + number of
     instances of read sequence + '\x1e' + number of instances of read
-    sequence's reversed complement + '\x1e' + (an '\x1f'-separated set of
+    sequence's reversed complement + '\x1e' + (an '\x1f'-separated list A of
     unique sample labels with read sequences that match the original read
-    sequence) + '\x1e' + (an '\x1f'-separated set of unique sample labels with
-    read sequences that match the reversed complement of the original read
-    sequence). Here, a read sequence ID takes the form X:Y, where X is the
+    sequence) + '\x1e' + (an '\x1f'-separated list  of unique sample labels B
+    with read sequences that match the reversed complement of the original read
+    sequence)) + '\x1e' + (an '\x1f'-separated list of the number of instances
+    of the read sequence for each respective sample in list A) + '\x1e' + (an
+    '\x1f'-separated list of the number of instances of the read
+    sequence's reversed complement for each respective sample in list B). Here,
+    a read sequence ID takes the form X:Y, where X is the
     "mapred_task_partition" environment variable -- a unique index for a task
     within a job -- and Y is the index of the read sequence relative to the
     beginning of the input stream.'''
@@ -282,12 +288,17 @@ def print_readletized_output(seq, sample_indexes,
                                     seq_size - j - max_readlet_size))
     # Add additional info to first readlet in to_write
     to_write[0] = '\x1e'.join([to_write[0], seq,
-                                str(sample_count),
-                                str(reversed_complement_sample_count),
-                                '\x1f'.join(sample_indexes),
-                                '\x1f'.join(
-                                        reversed_complement_sample_indexes
-                                    )])
+                    '\x1f'.join(sample_indexes.keys()),
+                    '\x1f'.join(
+                        reversed_complement_sample_indexes.keys()
+                    ),
+                    '\x1f'.join(
+                        [str(count) for count in sample_indexes.values()]
+                    ),
+                    '\x1f'.join(
+                        [str(count) for count
+                            in reversed_complement_sample_indexes.values()]
+                    )])
     if verbose:
         print >>sys.stderr, 'First readlet from read %d: %s' \
             % (i + 1, to_write[0])
@@ -522,9 +533,8 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                     qual_to_print = qual[::-1]
                 if search_for_introns:
                     sample_indexes, reversed_complement_sample_indexes = (
-                            set(), set()
+                            defaultdict(int), defaultdict(int)
                         )
-                    sample_count, reversed_complement_sample_count = 0, 0
                     try:
                         for current_is_reverse, current_qname, current_qual \
                             in other_xpartition:
@@ -534,36 +544,29 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                         ), seq_to_print, current_qual
                                 ])
                             if current_is_reverse == '1':
-                                reversed_complement_sample_indexes.add(
+                                reversed_complement_sample_indexes[
                                         manifest_object.label_to_index[
                                             current_qname.rpartition('\x1d')[2]
                                         ]
-                                    )
-                                reversed_complement_sample_count += 1
+                                    ] += 1
                             else:
-                                sample_indexes.add(
+                                sample_indexes[
                                         manifest_object.label_to_index[
                                             current_qname.rpartition('\x1d')[2]
                                         ]
-                                    )
-                                sample_count += 1
+                                    ] += 1
                     except ValueError:
                         # No other reads
                         pass
                     if is_reverse:
-                        reversed_complement_sample_indexes.add(sample_index)
-                        reversed_complement_sample_count += 1
+                        reversed_complement_sample_indexes[sample_index] += 1
                     else:
-                        sample_indexes.add(sample_index)
-                        sample_count += 1
+                        sample_indexes[sample_index] += 1
                     print_readletized_output(
                             seq=seq_to_print,
                             sample_indexes=sample_indexes,
                             reversed_complement_sample_indexes=\
                                 reversed_complement_sample_indexes,
-                            sample_count=sample_count,
-                            reversed_complement_sample_count=\
-                                reversed_complement_sample_count,
                             seq_id=(':'.join([task_partition,
                                                 str(readletized_index)])),
                             cap_sizes=cap_sizes,
@@ -830,20 +833,23 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         Tab-delimited output tuple columns (readletized):
         1. Readlet sequence or its reversed complement, whichever is first in
             alphabetical order
-        2. Read sequence ID + ('-' if readlet sequence is reverse-complemented;
-            else '+') + '\x1e' + displacement of readlet's 5' end from read's
-            5' end + '\x1e' + displacement of readlet's 3' end from read's 3'
-            end (+, for EXACTLY one readlet of a read sequence, '\x1e' + read
-            sequence + '\x1e' + number of instances of read sequence + '\x1e'
-            + number of instances of read sequence's reversed complement +
-            '\x1e' + (an '\x1f'-separated set of unique sample labels with
-            read sequences that match the original read sequence) + '\x1e' +
-            (an '\x1f'-separated set of unique sample labels with read
+        2. '\x1d'-separated list of [read sequence ID + ('-' if readlet
+            sequence is reverse-complemented; else '+') + '\x1e' + displacement
+            of readlet's 5' end from read's 5' end + '\x1e' + displacement of
+            readlet's 3' end from read's 3' end (+, for EXACTLY one readlet of
+            a read sequence, '\x1e' + read sequence + '\x1e' +
+            (an '\x1f'-separated list A of unique sample labels with read
+            sequences that match the original read sequence) + '\x1e' +
+            (an '\x1f'-separated list  of unique sample labels B with read
             sequences that match the reversed complement of the original read
-            sequence). Here, a read sequence ID takes the form X:Y, where X is
-            the "mapred_task_partition" environment variable -- a unique index
-            for a task within a job -- and Y is the index of the read sequence
-            relative to the beginning of the input stream.
+            sequence)) + '\x1e' + (an '\x1f'-separated list of the number of
+            instances of the read sequence for each respective sample in list
+            A) + '\x1e' + (an '\x1f'-separated list of the number of instances
+            of the read sequence's reversed complement for each respective
+            sample in list B). Here, a read sequence ID takes the form X:Y,
+            where X is the "mapred_task_partition" environment variable -- a
+            unique index for a task within a job -- and Y is the index of the
+            read sequence relative to the beginning of the input stream.
 
         Tab-delimited tuple columns (postponed_sam):
         Standard 11+ -column raw SAM output
@@ -1053,9 +1059,6 @@ if __name__ == '__main__':
     parser.add_argument('--min-exon-size', type=int, required=False,
         default=8,
         help='Minimum size of exons searched for in intron_search.py')
-    parser.add_argument('--manifest', type=str, required=False,
-        default='manifest',
-        help='Path to manifest file')
     parser.add_argument('--min-readlet-size', type=int, required=False,
         default=15, 
         help='Capping readlets (that is, readlets that terminate '
@@ -1079,6 +1082,7 @@ if __name__ == '__main__':
     # Add command-line arguments for dependencies
     partition.add_args(parser)
     bowtie.add_args(parser)
+    manifest.add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv
@@ -1151,15 +1155,13 @@ elif __name__ == '__main__':
                      'ATCGATTAAGCTATAACAGATAACATAGACATTGCGCCCATAATAGATAA'
                      'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC']
             sample_indexes = [
-                    set(['1']), set(['1', '2']), set(['1', '3']),
-                    set(['1'])
+                    {'1' : 2}, {'1' : 2, '2' : 3}, {'1' : 4, '3' : 5},
+                    {'1' : 5}
                 ]
             reversed_complement_sample_indexes = [
-                    set(['1']), set(['1', '2', '3']), set(['1', '2', '3']),
-                    set(['1'])
+                    {'1' : 7}, {'1' : 2, '2' : 2, '3' : 3},
+                    {'1' : 8, '2' : 1, '3' : 6}, {'1' : 1},
                 ]
-            sample_counts = [2, 2, 2, 1]
-            reversed_complement_sample_counts = [3, 3, 5, 1]
             cap_sizes = []
             cap_size = 25
             while cap_size <= 50:
@@ -1175,8 +1177,6 @@ elif __name__ == '__main__':
                     print_readletized_output(
                             input_seqs[i], sample_indexes[i],
                             reversed_complement_sample_indexes[i],
-                            sample_counts[i],
-                            reversed_complement_sample_counts[i],
                             '0:' + str(i), cap_sizes,
                             output_stream=output_stream,
                             min_readlet_size=25, readlet_interval=5,
@@ -1193,32 +1193,44 @@ elif __name__ == '__main__':
             total. Spot-check some readlets after checking for read info.'''
             read_info = [info.split('\x1e') for _, info
                             in collected_readlets]
-            read_info = [info[3:4] + [set(info[-2].split('\x1f')), 
-                            set(info[-1].split('\x1f'))]
+            read_info = [info[3:4]
+                            + [info[-i].split('\x1f')
+                                for i in xrange(4, 0, -1)]
                             for info in read_info if len(info) > 3]
+            sample_indexes, reversed_complement_sample_indexes \
+                = [{} for i in xrange(4)], [{} for i in xrange(4)]
+            for i in xrange(4):
+                for j in xrange(len(read_info[i][1])):
+                    sample_indexes[i][read_info[i][1][j]] \
+                        = int(read_info[i][3][j])
+                    reversed_complement_sample_indexes[i][read_info[i][2][j]] \
+                        = int(read_info[i][4][j])
+                read_info[i] = read_info[i][:-2]
+                read_info[i][1] = sample_indexes[i]
+                read_info[i][2] = reversed_complement_sample_indexes[i]
             self.assertTrue([
                     'TTACATACCATACAGTGCGCTAGCGGGTGACAGATATAATGCAGATCCAT'
                     'ACAGACCAGATGGCAGACATGTGTTGCAGSCTGCAAGTGCAACGCGGTGA',
-                    set(['1']),
-                    set(['1'])
+                    sample_indexes[0],
+                    reversed_complement_sample_indexes[0]
                 ] in read_info)
             self.assertTrue([
                     'GCAGAGTGCCGCAATGACGTGCGCCAAAGCGGTGACAGGGTGACAGTGAA'
                     'CCAAGTGACAAGTGAACAGGTGCCAGAGTGACCGAGTGACCAGTGGACCA',
-                    set(['1','2']),
-                    set(['1','2','3'])
+                    sample_indexes[1],
+                    reversed_complement_sample_indexes[1]
                 ] in read_info)
             self.assertTrue([
                     'CAGAGTGCCGCAATGACGTGCGCCAAAGCGGACAAAGCACCATGACAAGT'
                     'ACACAGGTGACAGTGACAAGACAGAGGTGACACAGAGAAAGtGGGTGTGA',
-                    set(['1','3']),
-                    set(['1','2','3'])
+                    sample_indexes[2],
+                    reversed_complement_sample_indexes[2]
                 ] in read_info)
             self.assertTrue([
                     'ATCGATTAAGCTATAACAGATAACATAGACATTGCGCCCATAATAGATAA'
                     'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC',
-                    set(['1']),
-                    set(['1'])
+                    sample_indexes[3],
+                    reversed_complement_sample_indexes[3]
                 ] in read_info)
             # Capping readlets
             self.assertTrue([       'ATCGATTAAGCTATAACAGATAACA'

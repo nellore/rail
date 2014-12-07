@@ -1883,7 +1883,8 @@ class RailRnaAlign(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=6, tie_margin=6,
+        transcriptome_bowtie2_args='-k 30', count_multiplier=6,
+        intron_confidence_criteria='0.5,5', tie_margin=6,
         normalize_percentile=0.75, very_replicable=False, drop_deletions=False,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', assembly='hg19',
@@ -2177,6 +2178,31 @@ class RailRnaAlign(object):
                                '{0} was entered.'.format(
                                                     count_multiplier
                                                 ))
+        confidence_criteria_split = intron_confidence_criteria.split(',')
+        confidence_criteria_error = False
+        try:
+            base.sample_fraction = float(confidence_criteria_split[0])
+        except ValueError:
+            confidence_criteria_error = True
+        else:
+            if not (0 <= base.sample_fraction <= 1):
+                confidence_criteria_error = True
+        try:
+            base.coverage_threshold = int(confidence_criteria_split[1])
+        except ValueError:
+            confidence_criteria_error = True
+        else:
+            if not (base.coverage_threshold >= 0):
+                confidence_criteria_error = True
+        if confidence_criteria_error:
+            base.errors.append('Intron confidence criteria '
+                               '(--intron-confidence-criteria) must be a '
+                               'comma-separated list of two elements: the '
+                               'first should be a decimal value between 0 '
+                               'and 1 inclusive, and the second should be '
+                               'an integer >= 1. {0} was entered.'.format(
+                                                    intron_confidence_criteria
+                                                ))
         base.count_multiplier = count_multiplier
         base.drop_deletions = drop_deletions
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
@@ -2320,6 +2346,14 @@ class RailRnaAlign(object):
                   'or select <choice> from {"strict", "mild", "none"}')
         )
         algo_parser.add_argument(
+            '--intron-confidence-criteria', type=str, required=False,
+            metavar='<dec>,<int>',
+            default='0.05,5',
+            help=('if parameter is "f,c", filter out introns that are not '
+                  'either present in at least a fraction f of samples or '
+                  'detected in at least c reads of one sample')
+        )
+        algo_parser.add_argument(
             '--motif-search-window-size', type=int, required=False,
             default=1000,
             help=SUPPRESS
@@ -2336,7 +2370,7 @@ class RailRnaAlign(object):
         )
         algo_parser.add_argument(
             '--genome-bowtie1-args', type=str, required=False,
-            default='-v 0 -a -m 6',
+            default='-v 0 -a -m 30',
             help=SUPPRESS
         )
         algo_parser.add_argument(
@@ -2504,13 +2538,35 @@ class RailRnaAlign(object):
                 'direct_copy' : True
             },
             {
+                'name' : 'Filter out introns that violate confidence criteria',
+                'run' : ('intron_filter.py --manifest={0} '
+                         '--sample-fraction={1} --coverage-threshold={2} '
+                         '{3}').format(
+                                        manifest,
+                                        base.sample_fraction,
+                                        base.coverage_threshold,
+                                        verbose
+                                    ),
+                'inputs' : ['intron_search'],
+                'output' : 'intron_filter',
+                'taskx' : 3 if elastic else 1,
+                'part' : 'k1,3',
+                'keys' : 3,
+                'extra_args' : [
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size)
+                    ],
+                'direct_copy' : True
+            },
+            {
                 'name' : 'Enumerate possible intron cooccurrences on readlets',
                 'run' : ('intron_config.py '
                          '--readlet-size={0} {1}').format(
                                                     base.readlet_config_size,
                                                     verbose
                                                 ),
-                'inputs' : ['intron_search'],
+                'inputs' : ['intron_filter'],
                 'output' : 'intron_config',
                 'taskx' : 1,
                 'part' : 'k1,2',
@@ -3211,11 +3267,11 @@ class RailRnaLocalAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
-        tie_margin=6, very_replicable=False, normalize_percentile=0.75,
-        drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, bam_basename='alignments',
-        bed_basename='', num_processes=1, gzip_intermediates=False,
-        gzip_level=3, keep_intermediates=False):
+        intron_confidence_criteria='0.5,5', tie_margin=6,
+        very_replicable=False, normalize_percentile=0.75, drop_deletions=False,
+        do_not_output_bam_by_chr=False, output_sam=False,
+        bam_basename='alignments', bed_basename='', num_processes=1,
+        gzip_intermediates=False, gzip_level=3, keep_intermediates=False):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -3244,6 +3300,7 @@ class RailRnaLocalAlignJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             count_multiplier=count_multiplier,
+            intron_confidence_criteria=intron_confidence_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
@@ -3291,10 +3348,10 @@ class RailRnaParallelAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
-        tie_margin=6, very_replicable=False, normalize_percentile=0.75,
-        drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, bam_basename='alignments',
-        bed_basename='', num_processes=1,
+        intron_confidence_criteria='0.5,5', tie_margin=6,
+        very_replicable=False, normalize_percentile=0.75, drop_deletions=False,
+        do_not_output_bam_by_chr=False, output_sam=False,
+        bam_basename='alignments', bed_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         gzip_intermediates=False,
         gzip_level=3, keep_intermediates=False):
@@ -3401,6 +3458,7 @@ class RailRnaParallelAlignJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             count_multiplier=count_multiplier,
+            intron_confidence_criteria=intron_confidence_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
@@ -3448,8 +3506,8 @@ class RailRnaElasticAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=6,
-        tie_margin=6, very_replicable=False,
-        normalize_percentile=0.75, drop_deletions=False,
+        intron_confidence_criteria='0.5,5', tie_margin=6,
+        very_replicable=False, normalize_percentile=0.75, drop_deletions=False,
         do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', log_uri=None, ami_version='3.3.1',
@@ -3506,6 +3564,7 @@ class RailRnaElasticAlignJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             count_multiplier=count_multiplier,
+            intron_confidence_criteria=intron_confidence_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
@@ -3575,7 +3634,8 @@ class RailRnaLocalAllJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        count_multiplier=6, transcriptome_bowtie2_args='-k 30', tie_margin=6,
+        count_multiplier=6, intron_confidence_criteria='0.5,5',
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
         very_replicable=False, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
@@ -3611,6 +3671,7 @@ class RailRnaLocalAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            intron_confidence_criteria=intron_confidence_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
@@ -3664,7 +3725,8 @@ class RailRnaParallelAllJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        count_multiplier=6, transcriptome_bowtie2_args='-k 30', tie_margin=6,
+        count_multiplier=6, intron_confidence_criteria='0.5,5',
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
         very_replicable=False, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
@@ -3784,6 +3846,7 @@ class RailRnaParallelAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            intron_confidence_criteria=intron_confidence_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,
@@ -3838,9 +3901,10 @@ class RailRnaElasticAllJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=6,
-        normalize_percentile=0.75, very_replicable=False,
-        drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, bam_basename='alignments', bed_basename='',
+        intron_confidence_criteria='0.5,5', normalize_percentile=0.75,
+        very_replicable=False, drop_deletions=False,
+        do_not_output_bam_by_chr=False, output_sam=False,
+        bam_basename='alignments', bed_basename='',
         log_uri=None, ami_version='3.3.1',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
@@ -3899,6 +3963,7 @@ class RailRnaElasticAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            intron_confidence_criteria=intron_confidence_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             very_replicable=very_replicable,

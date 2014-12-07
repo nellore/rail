@@ -13,7 +13,6 @@ given a minimum exon size min_exon_size.
 Input (read from stdin)
 ----------------------------
 Tab-delimited tuple columns:
-
 1. Reference name (RNAME in SAM format) +
     '+' or '-' indicating which strand is the sense strand
 2. Sample index

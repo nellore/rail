@@ -20,15 +20,18 @@ Tab-delimited input tuple columns:
     reverse-complemented; else '+') + '\x1e' + displacement of readlet's 5' end
     from read's 5' end + '\x1e' + displacement of readlet's 3' end from read's
     3' end (+, for EXACTLY one readlet of a read sequence, '\x1e' +
-    read sequence + '\x1e' + number of instances of read sequence + '\x1e' +
-    number of instances of read sequence's reversed complement + '\x1e' + (an
-    '\x1f'-separated set of unique sample labels with read sequences that match
-    the original read sequence) + '\x1e' + (an '\x1f'-separated set of unique
-    sample labels with read sequences that match the reversed complement of the
-    original read sequence))]. Here, a read sequence ID takes the form X:Y,
-    where X is the "mapred_task_partition" environment variable -- a unique
-    index for a task within a job -- and Y is the index of the read sequence
-    relative to the beginning of the input stream.
+    read sequence + '\x1e' + (an '\x1f'-separated list A of unique sample
+    labels with read sequences that match the original read sequence) + '\x1e'
+    + (an '\x1f'-separated list  of unique sample labels B with read sequences
+    that match the reversed complement of the original read sequence))] + 
+    '\x1e' + (an '\x1f'-separated list of the number of instances of the read
+    sequence for each respective sample in list A) + '\x1e' + (an
+    '\x1f'-separated list of the number of instances of the read
+    sequence's reversed complement for each respective sample in list B). Here,
+    a read sequence ID takes the form X:Y, where X is the
+    "mapred_task_partition" environment variable -- a unique index for a task
+    within a job -- and Y is the index of the read sequence relative to the
+    beginning of the input stream.
 
 Input is partitioned by field 1, the readlet sequence or its reversed
 complement.
@@ -42,11 +45,15 @@ from a distinct read rather than a unique readlet sequence:
     displacement of readlet's 3' end from read's 3' end (+, for EXACTLY one
     readlet of a read sequence, '\x1e' + read sequence + '\x1e' + number of
     instances of read sequence + '\x1e' + number of instances of read
-    sequence's reversed complement + '\x1e' + (an '\x1f'-separated set of
-    unique sample labels with read sequences that match the original read
-    sequence) + '\x1e' + (an '\x1f'-separated set of unique sample labels with
-    read sequences that match the reversed complement of the original read
-    sequence))
+    sequence's reversed complement + '\x1e' (+, for EXACTLY one readlet of a
+    read sequence, '\x1e' + read sequence + '\x1e' + (an '\x1f'-separated list
+    A of unique sample labels with read sequences that match the original read
+    sequence) + '\x1e' + (an '\x1f'-separated list  of unique sample labels B
+    with read sequences that match the reversed complement of the original read
+    sequence))] + '\x1e' + (an '\x1f'-separated list of the number of instances
+    of the read sequence for each respective sample in list A) + '\x1e' + (an
+    '\x1f'-separated list of the number of instances of the read sequence's
+    reversed complement for each respective sample in list B)
 3. '\x1f'-separated list of alignment RNAMEs or '\x1c' if no alignments found
 4. '\x1f'-separated list of alignment FLAGs or '\x1c' if no alignments found
 5. '\x1f'-separated list of alignment POSes or '\x1c' if no alignments found
@@ -220,21 +227,23 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         Tab-delimited input tuple columns:
         1. Readlet sequence or its reversed complement, whichever is first in
             alphabetical order
-        2. '\x1d'-separated list of [read sequence ID + 
-            ('-' if readlet sequence is reverse-complemented; else '+')
-            + '\x1e' + displacement of readlet's 5' end from read's
-            5' end + '\x1e' + displacement of readlet's 3' end from read's 3'
-            end (+, for EXACTLY one readlet of a read sequence, '\x1e' + 
-            read sequence + '\x1e' + number of instances of read sequence +
-            '\x1e' + number of instances of read sequence's reversed complement
-            + '\x1e' + (an '\x1f'-separated set of unique sample labels with
-            read sequences that match the original read sequence) + '\x1e' +
-            (an '\x1f'-separated set of unique sample labels with read
+        2. '\x1d'-separated list of [read sequence ID + ('-' if readlet
+            sequence is reverse-complemented; else '+') + '\x1e' + displacement
+            of readlet's 5' end from read's 5' end + '\x1e' + displacement of
+            readlet's 3' end from read's 3' end (+, for EXACTLY one readlet of
+            a read sequence, '\x1e' + read sequence + '\x1e' +
+            (an '\x1f'-separated list A of unique sample labels with read
+            sequences that match the original read sequence) + '\x1e' +
+            (an '\x1f'-separated list  of unique sample labels B with read
             sequences that match the reversed complement of the original read
-            sequence)]. Here, a read sequence ID takes the form X:Y, where X is
-            the "mapred_task_partition" environment variable -- a unique index
-            for a task within a job -- and Y is the index of the read sequence
-            relative to the beginning of the input stream.
+            sequence)) + '\x1e' + (an '\x1f'-separated list of the number of
+            instances of the read sequence for each respective sample in list
+            A) + '\x1e' + (an '\x1f'-separated list of the number of instances
+            of the read sequence's reversed complement for each respective
+            sample in list B). Here, a read sequence ID takes the form X:Y,
+            where X is the "mapred_task_partition" environment variable -- a
+            unique index for a task within a job -- and Y is the index of the
+            read sequence relative to the beginning of the input stream.
 
         Input is partitioned by field 1, the readlet sequence or its reversed
         complement.
@@ -244,12 +253,21 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         Tab-delimited output tuple columns, where each line corresponds to a
         readlet from a distinct read rather than a unique readlet sequence:
         1. Read sequence ID
-        2. Displacement of readlet's 5' end from read's 5' end + ';' +
+        2. Displacement of readlet's 5' end from read's 5' end + '\x1e' +
             displacement of readlet's 3' end from read's 3' end (+, for EXACTLY
-            one readlet of a read sequence, ';' + number of readlets in read
-            sequence + ';' + read sequence + ';' + number of instances of read
-            sequence + ';' + number of instances of read sequence's reversed
-            complement).
+            one readlet of a read sequence, '\x1e' + read sequence + '\x1e' +
+            number of instances of read sequence + '\x1e' + number of instances
+            of read sequence's reversed complement + '\x1e' (+, for EXACTLY one
+            readlet of a read sequence, '\x1e' + read sequence + '\x1e' +
+            (an '\x1f'-separated list A of unique sample labels with read
+            sequences that match the original read sequence) + '\x1e' +
+            (an '\x1f'-separated list  of unique sample labels B with read
+            sequences that match the reversed complement of the original read
+            sequence))] + '\x1e' + (an '\x1f'-separated list of the number of
+            instances of the read sequence for each respective
+            sample in list A) + '\x1e' + (an '\x1f'-separated list of the
+            number of instances of the read sequence's reversed complement for
+            each respective sample in list B)
         3. '\x1f'-separated list of alignment RNAMEs or '\x1c' if no alignments
         4. '\x1f'-separated list of alignment FLAGs or '\x1c' if no alignments
         5. '\x1f-separated list of alignment POSes or '\x1c' if no alignments
