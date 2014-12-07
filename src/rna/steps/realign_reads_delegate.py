@@ -6,7 +6,6 @@ final output. See realign_reads.py for output format information.
 """
 
 import sys
-import argparse
 import os
 import site
 
@@ -94,6 +93,7 @@ def go(rname_stream, output_stream=sys.stdout, input_stream=sys.stdin,
                             % output_line_count)
 
 if __name__ == '__main__':
+    import argparse
     parser = argparse.ArgumentParser(description=__doc__, 
                 formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--verbose', action='store_const', const=True,

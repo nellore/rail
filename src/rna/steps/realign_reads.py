@@ -50,7 +50,6 @@ ALL OUTPUT COORDINATES ARE 1-INDEXED.
 import sys
 import os
 import site
-import threading
 import tempfile
 import atexit
 import subprocess
@@ -311,15 +310,17 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             bowtie2_index_base, '--12', reads_file])
         delegate_command = ''.join(
                 [sys.executable, ' ', os.path.realpath(__file__)[:-3],
-                    '_delegate.py '
-                    + ('--report-multiplier %08f --rnames-file %s %s'
+                    '_delegate.py --report-multiplier %08f --rnames-file %s %s'
                         % (report_multiplier, rnames_file,
-                            '--verbose' if verbose else ''))]
+                            '--verbose' if verbose else '')]
             )
         full_command = ' | '.join([bowtie_command, delegate_command])
         print >>sys.stderr, 'Starting Bowtie2 with command: ' + full_command
-        bowtie_process = subprocess.Popen(full_command, bufsize=-1,
-            stdout=sys.stdout, stderr=sys.stderr, shell=True)
+        bowtie_process = subprocess.Popen(' '.join(
+                    ['set -exo pipefail;', full_command]
+                ), bufsize=-1,
+            stdout=sys.stdout, stderr=sys.stderr, shell=True,
+            executable='/bin/bash')
         return_code = bowtie_process.wait()
         if return_code:
             raise RuntimeError('Error occurred while reading Bowtie 2 output; '

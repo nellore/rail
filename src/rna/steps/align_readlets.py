@@ -27,8 +27,8 @@ Tab-delimited input tuple columns:
     '\x1e' + (an '\x1f'-separated list of the number of instances of the read
     sequence for each respective sample in list A) + '\x1e' + (an
     '\x1f'-separated list of the number of instances of the read
-    sequence's reversed complement for each respective sample in list B). Here,
-    a read sequence ID takes the form X:Y, where X is the
+    sequence's reversed complement for each respective sample in list B)].
+    Here, a read sequence ID takes the form X:Y, where X is the
     "mapred_task_partition" environment variable -- a unique index for a task
     within a job -- and Y is the index of the read sequence relative to the
     beginning of the input stream.
@@ -63,10 +63,10 @@ ALL OUTPUT COORDINATES ARE 1-INDEXED.
 import sys
 import os
 import site
-import threading
 import subprocess
 import tempfile
 import atexit
+import gzip
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -79,143 +79,13 @@ site.addsitedir(base_path)
 
 import bowtie
 from dooplicity.tools import xstream
+from tempdel import remove_temporary_directories
 
-# Initialize global variables for tracking number of input/output lines
+# Initialize global variable for tracking number of input lines
 _input_line_count = 0
-_output_line_count = 0
-
-def handle_temporary_directory(temp_dir_path):
-    """ Deletes temporary directory.
-
-        temp_dir_paths: path to temporary directory to delete
-
-        No return value.
-    """
-    import shutil
-    shutil.rmtree(temp_dir_path)
-
-import re
-_expression = re.compile('\x1d')
-
-def itersplit(a_string):
-    """ Generator for splitting a string between '\x1d's.
-
-        Based on http://stackoverflow.com/questions/3862010/
-        is-there-a-generator-version-of-string-split-in-python
-
-        a_string: string
-
-        Yield value: next part of string between \x1ds.
-    """
-    pos = 0
-    while True:
-        next = _expression.search(a_string, pos)
-        if not next:
-            yield a_string[pos:]
-            break
-        yield a_string[pos:next.start()]
-        pos = next.end()
-
-class BowtieOutputThread(threading.Thread):
-    """ Processes Bowtie alignments, emitting tuples for exons and introns. """
-    
-    def __init__(self, input_stream, qname_stream, return_set,
-        output_stream=sys.stdout, verbose=False, report_multiplier=1.2):
-        """ Constructor for BowtieOutputThread.
-
-            input_stream: where to retrieve Bowtie's SAM output, typically a
-                Bowtie process's stdout.
-            output_stream: where to emit exon and intron tuples; typically,
-                this is sys.stdout.
-            qname_stream: where to find long names containing read information
-                associated with readlets
-            return_set: 0 is added to this set if a thread finishes
-                successfully
-            verbose: True if alignments should occasionally be written 
-                to stderr.
-            bin_size: genome is partitioned in units of bin_size for later load
-                balancing.
-            report_multiplier: if verbose is True, the line number of an
-                alignment written to stderr increases exponentially with base
-                report_multiplier.
-        """
-        super(BowtieOutputThread, self).__init__()
-        self.daemon = True
-        self.input_stream = input_stream
-        self.output_stream = output_stream
-        self.verbose = verbose
-        self.report_multiplier = report_multiplier
-        self.qname_stream = qname_stream
-        self.return_set = return_set
-
-    def run(self):
-        """ Prints exons for end-to-end alignments.
-
-            Overrides default method containing thread activity.
-
-            No return value.
-        """
-        global _output_line_count
-        next_report_line, i = 0, 0
-        for (qname,), xpartition in xstream(self.input_stream, 1):
-            '''While labeled multireadlet, this list may end up simply a
-            unireadlet.'''
-            multireadlet = []
-            for tokens in xpartition:
-                (flag, rname, pos, mapq, cigar,
-                    rnext, pnext, tlen, seq, qual) = tokens[:10]
-                flag = int(flag)
-                multireadlet.append((rname, flag, pos))
-                if self.verbose and next_report_line == i:
-                    print >>sys.stderr, \
-                        'SAM output record %d: rdname="%s", flag=%d' % (i,
-                                                                        qname,
-                                                                        flag)
-                    next_report_line = int((next_report_line + 1)
-                                            * self.report_multiplier + 1) - 1
-                i += 1
-            '''If the next qname doesn't match the last qname or there are no
-            more lines, all of a multireadlet's alignments have been
-            collected.'''
-            reads = itersplit(self.qname_stream.readline().rstrip())
-            if not flag & 4:
-                '''Last readlet has at least one alignment; print all
-                alignments for each read from which readlet sequence is
-                derived.'''
-                rnames, flags, poses = zip(*multireadlet)
-                reverse_flags = [a_flag ^ 16 for a_flag in flags]
-                flags = '\x1f'.join([str(a_flag) for a_flag in flags])
-                reverse_flags = '\x1f'.join(
-                                        [str(a_flag) for a_flag
-                                            in reverse_flags]
-                                    )
-                rnames = '\x1f'.join(rnames)
-                poses = '\x1f'.join(poses)
-                for read in reads:
-                    read_id, _, read_rest = read.partition('\x1e')
-                    if read_id[-1] == '-':
-                        current_flags = reverse_flags
-                    else:
-                        current_flags = flags
-                    print >>self.output_stream, '%s\t%s\t%s\t%s\t%s' % \
-                        (read_id[:-1], read_rest, rnames,
-                            current_flags, poses)
-                    _output_line_count += 1
-            else:
-                '''Readlet had no reported alignments; print ONLY when readlet
-                contains general info about read.'''
-                for read in reads:
-                    read_id, _, read_rest = read.partition('\x1e')
-                    if len(read_rest.split('\x1e')) > 2:
-                        print >>self.output_stream, \
-                            '%s\t%s\t\x1c\t\x1c\t\x1c' % (read_id[:-1],
-                                                            read_rest)
-                    _output_line_count += 1
-        self.output_stream.flush()
-        self.return_set.add(0)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
-    bowtie_index_base='genome', bowtie_args='', verbose=False,
+    bowtie_index_base='genome', bowtie_args='', gzip_level=3, verbose=False,
     report_multiplier=1.2):
     """ Runs Rail-RNA-align_readlets.
 
@@ -240,7 +110,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             instances of the read sequence for each respective sample in list
             A) + '\x1e' + (an '\x1f'-separated list of the number of instances
             of the read sequence's reversed complement for each respective
-            sample in list B). Here, a read sequence ID takes the form X:Y,
+            sample in list B)]. Here, a read sequence ID takes the form X:Y,
             where X is the "mapred_task_partition" environment variable -- a
             unique index for a task within a job -- and Y is the index of the
             read sequence relative to the beginning of the input stream.
@@ -282,6 +152,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             with the reference.
         bowtie_args: string containing precisely extra command-line arguments
             to pass to first-pass Bowtie, e.g., "--tryhard --best"; or None.
+        gzip_level: level of gzip compression to use for qname file
         verbose: True iff more informative messages should be written to
             stderr.
         report_multiplier: if verbose is True, the line number of an alignment
@@ -293,11 +164,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     global _input_line_count
     # For storing long qnames
     temp_dir = tempfile.mkdtemp()
-    atexit.register(handle_temporary_directory, temp_dir)
-    qname_file = os.path.join(temp_dir, 'qnames.temp')
+    atexit.register(remove_temporary_directories, [temp_dir])
+    qnames_file = os.path.join(temp_dir, 'qnames.temp.gz')
     readlet_file = os.path.join(temp_dir, 'readlets.temp')
-    output_file = os.path.join(temp_dir, 'out.sam')
-    with open(qname_file, 'w') as qname_stream:
+    with gzip.open(qnames_file, 'w', gzip_level) as qname_stream:
         with open(readlet_file, 'w') as readlet_stream:
             for (seq_count, ((seq,), xpartition)) \
                 in enumerate(xstream(input_stream, 1)):
@@ -308,32 +178,25 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
                     _input_line_count += 1
                     qname_stream.write('\x1d' + qname)
                 qname_stream.write('\n')
-                qname_stream.flush()
-    bowtie_command = ' '.join([bowtie_exe,
-        bowtie_args,
-        '-S -t --sam-nohead --mm', bowtie_index_base, '--12', readlet_file,
-        output_file])
-    print >>sys.stderr, 'Starting Bowtie with command: ' + bowtie_command
-    bowtie_process = subprocess.Popen(bowtie_command, bufsize=-1, shell=True,
-        stdout=subprocess.PIPE, stderr=sys.stderr)
-    bowtie_process.wait()
-    if os.path.exists(output_file):
-        return_set = set()
-        with open(qname_file) as qname_stream:
-            output_thread = BowtieOutputThread(
-                    open(output_file),
-                    qname_stream,
-                    return_set,
-                    verbose=verbose, 
-                    output_stream=output_stream,
-                    report_multiplier=report_multiplier
-                )
-            output_thread.start()
-            # Join thread to pause execution in main thread
-            if verbose: print >>sys.stderr, 'Joining thread...'
-            output_thread.join()
-        if not return_set:
-            raise RuntimeError('Error occurred in BowtieOutputThread.')
+    bowtie_command = ' '.join([bowtie_exe, bowtie_args,
+        '-S -t --sam-nohead --mm', bowtie_index_base, '--12', readlet_file])
+    delegate_command = ''.join(
+                [sys.executable, ' ', os.path.realpath(__file__)[:-3],
+                    '_delegate.py --report-multiplier %08f --qnames-file %s %s'
+                        % (report_multiplier, qnames_file,
+                            '--verbose' if verbose else '')]
+            )
+    full_command = ' | '.join([bowtie_command, delegate_command])
+    print >>sys.stderr, 'Starting Bowtie with command: ' + full_command
+    bowtie_process = subprocess.Popen(' '.join(
+                    ['set -exo pipefail;', full_command]
+                ),
+            bufsize=-1, stdout=sys.stdout, stderr=sys.stderr, shell=True,
+            executable='/bin/bash')
+    return_code = bowtie_process.wait()
+    if return_code:
+        raise RuntimeError('Error occurred while reading Bowtie output; '
+                           'exitlevel was %d.' % return_code)
 
 if __name__ == '__main__':
     import argparse
@@ -348,6 +211,10 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
+    parser.add_argument('--gzip-level', type=int, required=False,
+        default=3,
+        help=('Level of gzip compression to use for temporary file storing '
+              'qnames.'))
     parser.add_argument('--test', action='store_const', const=True,
         default=False,
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN')
@@ -386,12 +253,12 @@ if __name__ == '__main__' and not args.test:
     start_time = time.time()
     go(bowtie_exe=args.bowtie_exe,
         bowtie_index_base=args.bowtie_idx,
-        bowtie_args=bowtie_args, 
+        bowtie_args=bowtie_args,
+        gzip_level=args.gzip_level,
         verbose=args.verbose,
         report_multiplier=args.report_multiplier)
-    print >>sys.stderr, 'DONE with align_readlets.py; in/out=%d/%d; ' \
-        'time=%0.3f s' % (_input_line_count, _output_line_count,
-                            time.time() - start_time)
+    print >>sys.stderr, 'DONE with align_readlets.py; in=%d; ' \
+        'time=%0.3f s' % (_input_line_count, time.time() - start_time)
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters

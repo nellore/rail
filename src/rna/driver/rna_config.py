@@ -2482,12 +2482,15 @@ class RailRnaAlign(object):
             {
                 'name' : 'Align unique readlets to genome',
                 'run' : ('align_readlets.py --bowtie-idx={0} '
-                         '--bowtie-exe={1} {2} {3} '
-                         '-- -t --sam-nohead --startverbose {4}').format(
+                         '--bowtie-exe={1} {2} {3} --gzip-level={4}'
+                         ' -- -t --sam-nohead --startverbose {5}').format(
                                                     base.bowtie1_idx,
                                                     base.bowtie1_exe,
                                                     verbose,
                                                     keep_alive,
+                                                    base.gzip_level
+                                                    if 'gzip_level' in
+                                                    dir(base) else 3,
                                                     base.genome_bowtie1_args,
                                                 ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletized')],
