@@ -123,7 +123,7 @@ def step(name, inputs, output,
     reducer='org.apache.hadoop.mapred.lib.IdentityReducer', 
     action_on_failure='TERMINATE_JOB_FLOW',
     jar=_hadoop_streaming_jar,
-    tasks=0, partitioner_options=None, key_fields=None, archives=None,
+    tasks=0, partition_field_count=None, key_fields=None, archives=None,
     multiple_outputs=False, inputformat=None, extra_args=[]):
     """ Outputs JSON for a given step.
 
@@ -134,8 +134,8 @@ def step(name, inputs, output,
         reducer: reducer command
         jar: path to Hadoop Streaming jar; ignored in local mode
         tasks: reduce task count
-        partitioner options: UNIX sort-like partitioner options
-        key fields: number of key fields,
+        partition field count: number of initial fields on which to partition
+        key fields: number of key fields
         archives: -archives option
         multiple_outputs: True iff there are multiple outputs; else False
         inputformat: -inputformat option
@@ -154,11 +154,21 @@ def step(name, inputs, output,
     to_return['HadoopJarStep']['Args'].extend(
             ['-D', 'mapreduce.job.reduces=%d' % tasks]
         )
-    if partitioner_options is not None and key_fields is not None:
+    if partition_field_count is not None and key_fields is not None:
+        assert key_fields >= partition_field_count
         to_return['HadoopJarStep']['Args'].extend([
-                '-D', 'mapreduce.partition.keypartitioner.options=-%s'
-                            % partitioner_options,
-                '-D', 'stream.num.map.output.key.fields=%d' % key_fields
+            '-D', 'stream.num.map.output.key.fields=%d' % key_fields,
+            '-D', 'mapreduce.partition.keypartitioner.options=-k1,%d'
+                        % partition_field_count
+        ])
+        if key_fields != partition_field_count:
+            to_return['HadoopJarStep']['Args'].extend([
+                '-D', 'mapreduce.job.output.key.comparator.class='
+                      'org.apache.hadoop.mapred.lib.KeyFieldBasedComparator',
+                '-D', 'mapreduce.partition.keycomparator.options='
+                      '"-k1,%d -k%d,%d"' % (partition_field_count,
+                                                partition_field_count + 1, 
+                                                key_fields)
             ])
     for extra_arg in extra_args:
         to_return['HadoopJarStep']['Args'].extend(
@@ -223,8 +233,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                 'no_output_prefix' : key that's present iff intermediate dir
                     should not be prepended to output dir
                 'keys'  : Number of key fields; present only if reducer
-                'part'  : KeyFieldBasedPartitioner options; present only if
-                            reducer
+                'part'  : x from KeyFieldBasedPartitioner option -k1,x
                 'taskx' : number of tasks per reducer or None if total number
                     of tasks should be 1
                 'inputformat' : input format; present only if necessary
@@ -301,7 +310,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                         * (10 / 8 if unix else 1)
                         if protostep['taskx'] is not None
                         else 1),
-                partitioner_options=(protostep['part']
+                partition_field_count=(protostep['part']
                     if 'part' in protostep else None),
                 key_fields=(protostep['keys']
                     if 'keys' in protostep else None),
@@ -1782,7 +1791,7 @@ class RailRnaPreprocess(object):
                     'output' : 'assign_reads',
                     'taskx' : None,
                     'keys' : 1,
-                    'part' : 'k1,1',
+                    'part' : 1,
                     'direct_copy' : True
                 },
                 {
@@ -2470,7 +2479,7 @@ class RailRnaAlign(object):
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
                 'taskx' : max(6, base.sample_count / 15) if elastic else 1,
-                'part' : 'k1,1',
+                'part' : 1,
                 'keys' : 1,
                 'multiple_outputs' : True,
                 'extra_args' : [
@@ -2496,7 +2505,7 @@ class RailRnaAlign(object):
                 'inputs' : [path_join(elastic, 'align_reads', 'readletized')],
                 'output' : 'align_readlets',
                 'taskx' : 5 if elastic else 1,
-                'part' : 'k1,1',
+                'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2531,7 +2540,7 @@ class RailRnaAlign(object):
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
                 'taskx' : 5 if elastic else 1,
-                'part' : 'k1,1',
+                'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2553,7 +2562,7 @@ class RailRnaAlign(object):
                 'inputs' : ['intron_search'],
                 'output' : 'intron_filter',
                 'taskx' : 3 if elastic else 1,
-                'part' : 'k1,3',
+                'part' : 3,
                 'keys' : 3,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2572,7 +2581,7 @@ class RailRnaAlign(object):
                 'inputs' : ['intron_filter'],
                 'output' : 'intron_config',
                 'taskx' : 1,
-                'part' : 'k1,2',
+                'part' : 2,
                 'keys' : 4,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2590,8 +2599,8 @@ class RailRnaAlign(object):
                 'inputs' : ['intron_config'],
                 'output' : 'intron_fasta',
                 'taskx' : 1,
-                'part' : 'k1,4',
-                'keys' : 4,
+                'part' : 3,
+                'keys' : 3,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -2612,7 +2621,7 @@ class RailRnaAlign(object):
                 'inputs' : ['intron_fasta'],
                 'output' : 'intron_index',
                 'taskx' : None,
-                'part' : 'k1,1',
+                'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2643,7 +2652,7 @@ class RailRnaAlign(object):
                                     base.output_dir,
                                     'transcript_index',
                                     'intron.tar.gz#intron')).to_native_url(),
-                'part' : 'k1,1',
+                'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2661,8 +2670,8 @@ class RailRnaAlign(object):
                 'inputs' : ['cointron_enum'],
                 'output' : 'cointron_fasta',
                 'taskx' : max(8, base.sample_count / 30) if elastic else 1,
-                'part' : 'k1,4',
-                'keys' : 7,
+                'part' : 2,
+                'keys' : 2,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -2691,7 +2700,7 @@ class RailRnaAlign(object):
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
                 'taskx' : max(18, base.sample_count / 10) if elastic else 1,
-                'part' : 'k1,1',
+                'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2719,7 +2728,7 @@ class RailRnaAlign(object):
                 'output' : 'compare_alignments',
                 # Ensure that a single reducer isn't assigned too much fasta
                 'taskx' : max(18, base.sample_count / 10) if elastic else 1,
-                'part' : 'k1,1',
+                'part' : 1,
                 'keys' : 1,
                 'multiple_outputs' : True,
                 'extra_args' : [
@@ -2739,7 +2748,7 @@ class RailRnaAlign(object):
                                                'sam_intron_ties')],
                 'output' : 'intron_coverage',
                 'taskx' : 1,
-                'part' : 'k1,6',
+                'part' : 6,
                 'keys' : 7,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2764,7 +2773,7 @@ class RailRnaAlign(object):
                                                'sam_clip_ties')],
                 'output' : 'break_ties',
                 'taskx' : 1,
-                'part' : 'k1,1',
+                'part' : 1,
                 'keys' : 1,
                 'multiple_outputs' : True,
                 'extra_args' : [
@@ -2784,7 +2793,7 @@ class RailRnaAlign(object):
                             path_join(elastic, 'break_ties', 'exon_diff')],
                 'output' : 'collapse',
                 'taskx' : max(4, base.sample_count / 20) if elastic else 1,
-                'part' : 'k1,3',
+                'part' : 3,
                 'keys' : 3,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2800,7 +2809,7 @@ class RailRnaAlign(object):
                 'inputs' : ['collapse'],
                 'output' : 'precoverage',
                 'taskx' : max(4, base.sample_count / 20) if elastic else 1,
-                'part' : 'k1,2',
+                'part' : 2,
                 'keys' : 3,
                 'multiple_outputs' : True,
                 'extra_args' : [
@@ -2826,7 +2835,7 @@ class RailRnaAlign(object):
                 'inputs' : [path_join(elastic, 'precoverage', 'coverage')],
                 'output' : 'coverage',
                 'taskx' : 1,
-                'part' : 'k1,1',
+                'part' : 1,
                 'keys' : 3,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2848,7 +2857,7 @@ class RailRnaAlign(object):
                 'inputs' : ['coverage'],
                 'output' : 'coverage_post',
                 'taskx' : None,
-                'part' : 'k1,1',
+                'part' : 1,
                 'keys' : 2,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2868,7 +2877,7 @@ class RailRnaAlign(object):
                             path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
                 'taskx' : max(4, base.sample_count / 20) if elastic else 1,
-                'part' : 'k1,6',
+                'part' : 6,
                 'keys' : 6,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -2893,8 +2902,8 @@ class RailRnaAlign(object):
                 'inputs' : ['prebed'],
                 'output' : 'bed',
                 'taskx' : 1,
-                'part' : 'k1,2',
-                'keys' : 4,
+                'part' : 2,
+                'keys' : 5,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -2925,7 +2934,7 @@ class RailRnaAlign(object):
                             path_join(elastic, 'break_ties', 'sam')],
                 'output' : 'bam',
                 'taskx' : 1,
-                'part' : ('k1,1' if base.do_not_output_bam_by_chr else 'k1,2'),
+                'part' : (1 if base.do_not_output_bam_by_chr else 2),
                 'keys' : 3,
                 'extra_args' : [
                         'mapreduce.reduce.shuffle.input.buffer.percent=0.4',

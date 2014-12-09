@@ -713,6 +713,8 @@ class AlignmentPrinter(object):
             output_stream: where to print output
             exon_ivals: True iff exon_ivals should be output
             exon_diffs: True iff exon_diffs should be output
+            count: number of alignments for which to output exon_ivals,
+                exon_diffs, indels, and introns
 
             Return value: output line count
         """
