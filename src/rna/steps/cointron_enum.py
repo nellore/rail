@@ -19,14 +19,13 @@ Hadoop output (written to stdout)
 Tab-delimited tuple columns:
 1. Reference name (RNAME in SAM format) + 
     '+' or '-' indicating which strand is the sense strand
-2. First intron start position in configuration
-3. Rest of intron start positions in configuration or '\x1c' if there are none
-4. Comma-separated list of intron end positions in configuration
-5. left_extend_size: by how many bases on the left side of an intron the
+2. Comma-separated list of intron start positions in configuration
+3. Comma-separated list of intron end positions in configuration
+4. left_extend_size: by how many bases on the left side of an intron the
     reference should extend
-6. right_extend_size: by how many bases on the right side of an intron the
+5. right_extend_size: by how many bases on the right side of an intron the
     reference should extend
-7. Read sequence
+6. Read sequence
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -78,15 +77,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         Tab-delimited tuple columns:
         1. Reference name (RNAME in SAM format) + 
             '+' or '-' indicating which strand is the sense strand
-        2. First intron start position in configuration
-        3. Rest of intron start positions in configuration or '\x1c' if there
-            are none
-        4. Comma-separated list of intron end positions in configuration
-        5. left_extend_size: by how many bases on the left side of an intron
+        2. Comma-separated list of intron start positions in configuration
+        3. Comma-separated list of intron end positions in configuration
+        4. left_extend_size: by how many bases on the left side of an intron
             the reference should extend
-        6. right_extend_size: by how many bases on the right side of an intron
+        5. right_extend_size: by how many bases on the right side of an intron
             the reference should extend
-        7. Read sequence
+        6. Read sequence
 
         input_stream: where to find input reads.
         output_stream: where to emit exonic chunks and introns.

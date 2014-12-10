@@ -648,26 +648,26 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         D_arg = step['HadoopJarStep']['Args'][j+1].split('=')
                         if D_arg[0] in ['mapred.reduce.tasks',
                                         'mapreduce.job.reduces']:
-                            step_args['task_count'] = int(D_arg[1].strip('"'))
+                            step_args['task_count'] = int(D_arg[1])
                         elif D_arg[0] \
                             in ['mapred.text.key.partitioner.options',
                                 'mapreduce.partition.keypartitioner.options']:
                             if 'sort_options' not in step_args:
                                 # Simulate TextComparator
-                                step_args['sort_options'] = D_arg[1].strip('"')
+                                step_args['sort_options'] = D_arg[1]
                             step_args['key_fields'] \
-                                = int(D_arg[1].strip('"').split(',')[-1])
+                                = int(D_arg[1].split(',')[-1])
                         elif D_arg[0] \
                             == 'stream.num.map.output.key.fields':
                             if 'key_fields' not in step_args:
                                 '''Set number of key fields only if it's not
                                 already specified by keypartitioner.options'''
                                 step_args['key_fields'] \
-                                    = int(D_arg[1].strip('"'))
+                                    = int(D_arg[1])
                         elif D_arg[0] \
                             in ['mapred.text.key.comparator.options',
                                 'mapreduce.partition.keycomparator.options']:
-                            step_args['sort_options'] = D_arg[1].strip('"')
+                            step_args['sort_options'] = D_arg[1]
                         j += 2
                     elif arg_name == 'input':
                         try:

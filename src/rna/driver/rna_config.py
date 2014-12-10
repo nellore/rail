@@ -166,7 +166,7 @@ def step(name, inputs, output,
                 '-D', 'mapreduce.job.output.key.comparator.class='
                       'org.apache.hadoop.mapred.lib.KeyFieldBasedComparator',
                 '-D', 'mapreduce.partition.keycomparator.options='
-                      '"-k1,%d -k%d,%d"' % (partition_field_count,
+                      '-k1,%d -k%d,%d' % (partition_field_count,
                                                 partition_field_count + 1, 
                                                 key_fields)
             ])
@@ -1380,6 +1380,14 @@ class RailRnaElastic(object):
                                                     task_instance_count
                                                 ))
         base.task_instance_count = task_instance_count
+        # Raise exceptions before computing mems
+        if base.errors:
+            raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(base.errors)]
+                        ) if len(base.errors) > 1 else base.errors[0]
+                )
         if base.core_instance_count > 0:
             base.mem \
                 = base.instance_mems[base.core_instance_type]
@@ -2670,8 +2678,8 @@ class RailRnaAlign(object):
                 'inputs' : ['cointron_enum'],
                 'output' : 'cointron_fasta',
                 'taskx' : max(8, base.sample_count / 30) if elastic else 1,
-                'part' : 2,
-                'keys' : 2,
+                'part' : 3,
+                'keys' : 3,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'

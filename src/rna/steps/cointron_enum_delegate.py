@@ -298,19 +298,15 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
                                              (cointrons[-1][0],
                                                 cointrons[-1][1])
                                          ][1]
-                    to_write.add(('{rname}{sense}\t{start}'
-                           '\t{other_starts}'
+                    to_write.add(('{rname}{sense}\t{starts}'
                            '\t{ends}\t{left_size}'
                            '\t{right_size}\t{seq}').format(
                                 rname=rname,
                                 sense=sense,
-                                start=cointrons[0][0],
-                                other_starts=(
-                                        ','.join(
-                                        [str(intron[0]) for intron
-                                            in cointrons[1:]]
-                                    ) if len(cointrons) > 1 else '\x1c'
-                                ),
+                                starts=','.join(
+                                        [str(intron[0])
+                                            for intron in cointrons]
+                                    ),
                                 ends=','.join(
                                         [str(intron[1])
                                             for intron in cointrons]
