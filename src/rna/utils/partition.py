@@ -23,7 +23,7 @@ def partition(rname, pos, end_pos, bin_size):
                                 start position of partition (1-BASED),
                                 end position of partition (1-BASED))
     """
-    first_bin = (pos - 1) / bin_size
+    first_bin = (pos - 2) / bin_size
     last_bin = (end_pos - 2) / bin_size
     for bin_number in xrange(first_bin, last_bin + 1):
         bin_pos = bin_number * bin_size + 1

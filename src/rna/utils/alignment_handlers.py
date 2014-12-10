@@ -786,7 +786,7 @@ class AlignmentPrinter(object):
                             )
                         for (partition_id, partition_start, 
                                 partition_end) in partitions:
-                            assert exon_pos < partition_end
+                            assert exon_pos <= partition_end
                             # Print increment at interval start
                             print >>self.output_stream, \
                                 'exon_diff\t%s\t%s\t%012d\t%d' \
