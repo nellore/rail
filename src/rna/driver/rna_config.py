@@ -121,8 +121,7 @@ def ready_engines(rc, base):
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
     reducer='org.apache.hadoop.mapred.lib.IdentityReducer', 
-    action_on_failure='TERMINATE_JOB_FLOW',
-    jar=_hadoop_streaming_jar,
+    action_on_failure='TERMINATE_JOB_FLOW', jar=_hadoop_streaming_jar,
     tasks=0, partition_field_count=None, key_fields=None, archives=None,
     multiple_outputs=False, inputformat=None, extra_args=[]):
     """ Outputs JSON for a given step.
@@ -234,8 +233,10 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                     should not be prepended to output dir
                 'keys'  : Number of key fields; present only if reducer
                 'part'  : x from KeyFieldBasedPartitioner option -k1,x
-                'taskx' : number of tasks per reducer or None if total number
-                    of tasks should be 1
+                'min_tasks' : minimum number of reducer tasks
+                'max_tasks' : maximum number of reducer tasks
+                'taskx' : if present, override, min_tasks and max_tasks in
+                    favor off taskx * reducer_count reducer tasks
                 'inputformat' : input format; present only if necessary
                 'archives' : archives parameter; present only if necessary
                 'multiple_outputs' : key that's present iff there are multiple
@@ -286,6 +287,26 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                     = _hdfs_temp_dir + final_output_url.suffix[1:]
         except KeyError:
             pass
+        assert 'taskx' in protostep or 'min_tasks' in protostep
+        if 'taskx' in protostep:
+            if protostep['taskx'] is None:
+                reducer_task_count = 1
+            else:
+                reducer_task_count = reducer_count * protostep['taskx']
+        else:
+            '''Task count logic: number of reduce tasks is equal to
+            min(minimum number of tasks greater than
+                min_tasks that's a multiple of the number of reducers,
+                max_tasks). min_tasks = 0 and max_tasks = 0 if no reduces are
+            to be performed. min_tasks must be specified, but max_tasks need
+            not be specified.'''
+            reducer_task_count = \
+                protostep['min_tasks'] + reducer_count - (
+                    (protostep['min_tasks'] + reducer_count) % reducer_count
+                )
+            if 'max_tasks' in protostep:
+                reducer_task_count = min(reducer_task_count,
+                                            protostep['max_tasks'])
         true_steps.append(step(
                 name=protostep['name'],
                 inputs=([path_join(unix, intermediate_dir,
@@ -306,10 +327,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                         if 'keys' in protostep else 'cat',
                 action_on_failure=action_on_failure,
                 jar=jar,
-                tasks=(reducer_count * protostep['taskx']
-                        * (10 / 8 if unix else 1)
-                        if protostep['taskx'] is not None
-                        else 1),
+                tasks=reducer_task_count,
                 partition_field_count=(protostep['part']
                     if 'part' in protostep else None),
                 key_fields=(protostep['keys']
@@ -1784,7 +1802,8 @@ class RailRnaPreprocess(object):
                     'inputformat' : (
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
                         ),
-                    'taskx' : 0,
+                    'min_tasks' : 0,
+                    'max_tasks' : 0,
                     'direct_copy' : True
                 },
                 {
@@ -1797,7 +1816,8 @@ class RailRnaPreprocess(object):
                                                     ),
                     'inputs' : ['count_lines'],
                     'output' : 'assign_reads',
-                    'taskx' : None,
+                    'min_tasks' : 1,
+                    'max_tasks' : 1,
                     'keys' : 1,
                     'part' : 1,
                     'direct_copy' : True
@@ -1826,7 +1846,8 @@ class RailRnaPreprocess(object):
                     'inputformat' : (
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
                         ),
-                    'taskx' : 0,
+                    'min_tasks' : 0,
+                    'max_tasks' : 0,
                     'index_output' : True,
                     'direct_copy' : True
                 },
@@ -1856,7 +1877,8 @@ class RailRnaPreprocess(object):
                     'inputformat' : (
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
                         ),
-                    'taskx' : 0,
+                    'min_tasks' : 0,
+                    'max_tasks' : 0,
                     'direct_copy' : True
                 },
             ]
@@ -2486,14 +2508,14 @@ class RailRnaAlign(object):
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
-                'taskx' : max(6, base.sample_count / 15) if elastic else 1,
+                'min_tasks' : base.sample_count * 3,
                 'part' : 1,
                 'keys' : 1,
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size*2)
+                            % (_base_combine_split_size * 2)
                     ]
             },
             {
@@ -2512,16 +2534,13 @@ class RailRnaAlign(object):
                                                 ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletized')],
                 'output' : 'align_readlets',
-                'taskx' : 5 if elastic else 1,
+                'min_tasks' : base.sample_count * 3,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size*4),
-                        'mapreduce.reduce.memory.mb=%d'
-                        % ((base.nodemanager_mem / base.max_tasks * 8 / 10 * 2)
-                            if hasattr(base, 'nodemanager_mem') else 0),
+                            % (_base_combine_split_size* 2),
                     ],
                 'direct_copy' : True
             },
@@ -2547,13 +2566,13 @@ class RailRnaAlign(object):
                                             ),
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
-                'taskx' : 5 if elastic else 1,
+                'min_tasks' : base.sample_count * 3,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size*4)
+                            % (_base_combine_split_size * 2)
                     ],
                 'direct_copy' : True
             },
@@ -2569,7 +2588,7 @@ class RailRnaAlign(object):
                                     ),
                 'inputs' : ['intron_search'],
                 'output' : 'intron_filter',
-                'taskx' : 3 if elastic else 1,
+                'min_tasks' : max(base.sample_count / 10, 1),
                 'part' : 3,
                 'keys' : 3,
                 'extra_args' : [
@@ -2628,7 +2647,8 @@ class RailRnaAlign(object):
                                                  keep_alive),
                 'inputs' : ['intron_fasta'],
                 'output' : 'intron_index',
-                'taskx' : None,
+                'min_tasks' : 1,
+                'max_tasks' : 1,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
@@ -2655,7 +2675,7 @@ class RailRnaAlign(object):
                                         ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unique')],
                 'output' : 'cointron_enum',
-                'taskx' : max(18, base.sample_count / 10) if elastic else 1,
+                'min_tasks' : base.sample_count * 3,
                 'archives' : ab.Url(path_join(elastic,
                                     base.output_dir,
                                     'transcript_index',
@@ -2665,7 +2685,7 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size*2)
+                            % (_base_combine_split_size * 2)
                     ],
                 'direct_copy' : True
             },
@@ -2677,7 +2697,7 @@ class RailRnaAlign(object):
                                                     ),
                 'inputs' : ['cointron_enum'],
                 'output' : 'cointron_fasta',
-                'taskx' : max(8, base.sample_count / 30) if elastic else 1,
+                'min_tasks' : base.sample_count * 3,
                 'part' : 3,
                 'keys' : 3,
                 'extra_args' : [
@@ -2707,13 +2727,13 @@ class RailRnaAlign(object):
                             'cointron_fasta'],
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'taskx' : max(18, base.sample_count / 10) if elastic else 1,
+                'min_tasks' : base.sample_count * 3,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size*3)
+                            % (_base_combine_split_size * 2)
                     ],
                 'direct_copy' : True
             },
@@ -2734,15 +2754,14 @@ class RailRnaAlign(object):
                 'inputs' : [path_join(elastic, 'align_reads', 'postponed_sam'),
                             'realign_reads'],
                 'output' : 'compare_alignments',
-                # Ensure that a single reducer isn't assigned too much fasta
-                'taskx' : max(18, base.sample_count / 10) if elastic else 1,
+                'taskx' : 1,
                 'part' : 1,
                 'keys' : 1,
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size*3)
+                            % (_base_combine_split_size * 2)
                     ]
             },
             {
@@ -2800,7 +2819,7 @@ class RailRnaAlign(object):
                                                'exon_diff'),
                             path_join(elastic, 'break_ties', 'exon_diff')],
                 'output' : 'collapse',
-                'taskx' : max(4, base.sample_count / 20) if elastic else 1,
+                'min_tasks' : base.sample_count * 3,
                 'part' : 3,
                 'keys' : 3,
                 'extra_args' : [
@@ -2816,7 +2835,7 @@ class RailRnaAlign(object):
                          '--partition-stats').format(base.bowtie1_idx),
                 'inputs' : ['collapse'],
                 'output' : 'precoverage',
-                'taskx' : max(4, base.sample_count / 20) if elastic else 1,
+                'min_tasks' : base.sample_count * 3,
                 'part' : 2,
                 'keys' : 3,
                 'multiple_outputs' : True,
@@ -2864,7 +2883,8 @@ class RailRnaAlign(object):
                                                     ),
                 'inputs' : ['coverage'],
                 'output' : 'coverage_post',
-                'taskx' : None,
+                'min_tasks' : 1,
+                'max_tasks' : 1,
                 'part' : 1,
                 'keys' : 2,
                 'extra_args' : [
@@ -2884,13 +2904,13 @@ class RailRnaAlign(object):
                                                'intron_bed'),
                             path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
-                'taskx' : max(4, base.sample_count / 20) if elastic else 1,
+                'min_tasks' : base.sample_count * 3,
                 'part' : 6,
                 'keys' : 6,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size*2)
+                            % (_base_combine_split_size)
                     ],
                 'direct_copy' : True
             },
