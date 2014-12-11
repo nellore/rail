@@ -215,9 +215,6 @@ if __name__ == '__main__':
         default=3,
         help=('Level of gzip compression to use for temporary file storing '
               'qnames.'))
-    parser.add_argument('--test', action='store_const', const=True,
-        default=False,
-        help='Run unit tests; DOES NOT NEED INPUT FROM STDIN')
     parser.add_argument('--keep-alive', action='store_const', const=True,
         default=False,
         help='Periodically print Hadoop status messages to stderr to keep ' \
@@ -248,7 +245,7 @@ if __name__ == '__main__':
         keep_alive_thread = KeepAlive(sys.stderr)
         keep_alive_thread.start()
 
-if __name__ == '__main__' and not args.test:
+if __name__ == '__main__':
     import time
     start_time = time.time()
     go(bowtie_exe=args.bowtie_exe,
@@ -259,9 +256,3 @@ if __name__ == '__main__' and not args.test:
         report_multiplier=args.report_multiplier)
     print >>sys.stderr, 'DONE with align_readlets.py; in=%d; ' \
         'time=%0.3f s' % (_input_line_count, time.time() - start_time)
-elif __name__ == '__main__':
-    # Test units
-    del sys.argv[1:] # Don't choke on extra command-line parameters
-    import unittest
-    # Add unit tests here
-    unittest.main()

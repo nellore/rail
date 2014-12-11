@@ -300,10 +300,13 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                 max_tasks). min_tasks = 0 and max_tasks = 0 if no reduces are
             to be performed. min_tasks must be specified, but max_tasks need
             not be specified.'''
-            reducer_task_count = \
-                protostep['min_tasks'] + reducer_count - (
-                    (protostep['min_tasks'] + reducer_count) % reducer_count
-                )
+            if not (protostep['min_tasks'] % reducer_count):
+                reducer_task_count = protostep['min_tasks']
+            else:
+                reducer_task_count = \
+                    protostep['min_tasks'] + reducer_count - (
+                        (protostep['min_tasks'] + reducer_count) % reducer_count
+                    )
             if 'max_tasks' in protostep:
                 reducer_task_count = min(reducer_task_count,
                                             protostep['max_tasks'])
@@ -2491,7 +2494,8 @@ class RailRnaAlign(object):
                          '--max-readlet-size={6} '
                          '--readlet-interval={7} '
                          '--capping-multiplier={8} '
-                         '{9} {10} {11} -- {12}').format(
+                         '--gzip-level {9}'
+                         '{10} {11} {12} -- {13}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
@@ -2501,6 +2505,9 @@ class RailRnaAlign(object):
                                                         base.max_readlet_size,
                                                         base.readlet_interval,
                                                 base.cap_size_multiplier,
+                                                base.gzip_level
+                                                if 'gzip_level' in
+                                                dir(base) else 3,
                                                 drop_deletions,
                                                         verbose,
                                                         keep_alive,
@@ -2754,7 +2761,7 @@ class RailRnaAlign(object):
                 'inputs' : [path_join(elastic, 'align_reads', 'postponed_sam'),
                             'realign_reads'],
                 'output' : 'compare_alignments',
-                'taskx' : 1,
+                'min_tasks' : base.sample_count * 3,
                 'part' : 1,
                 'keys' : 1,
                 'multiple_outputs' : True,
