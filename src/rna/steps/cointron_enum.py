@@ -122,8 +122,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     input_command = 'gzip -cd %s' % reads_file
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
-        ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12',
-        reads_file, '--score-min L,%d,0' % score_min, 
+        ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12 -',
+        '--score-min L,%d,0' % score_min, 
         '-D 24 -R 3 -N 1 -L 20 -i L,4,0'])
     delegate_command = ''.join(
             [sys.executable, ' ', os.path.realpath(__file__)[:-3],

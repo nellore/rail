@@ -178,7 +178,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
                     _input_line_count += 1
                     qname_stream.write('\x1d' + qname)
                 qname_stream.write('\n')
-    input_command = 'gzip -cd %s' % readlets_file
+    input_command = 'gzip -cd %s' % readlet_file
     bowtie_command = ' '.join([bowtie_exe, bowtie_args,
         '-S -t --sam-nohead --mm', bowtie_index_base, '--12 -'])
     delegate_command = ''.join(
