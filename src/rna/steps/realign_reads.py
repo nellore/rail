@@ -111,7 +111,7 @@ def input_files_from_input_stream(input_stream,
     if verbose:
         print >>sys.stderr, 'Writing prefasta and input reads...'
     with open(prefasta_filename, 'w') as fasta_stream:
-        with open(reads_filename, 'w') as read_stream:
+        with gzip.open(reads_filename, 'w') as read_stream:
             with gzip.open(rname_filename, 'w', gzip_level) as rname_stream:
                 for (read_seq,), xpartition in xstream(input_stream, 1):
                     rnames = []
@@ -150,7 +150,7 @@ def input_files_from_input_stream(input_stream,
         print >>sys.stderr, 'Done! Sorting and deduplicating prefasta...'
     # Sort prefasta and eliminate duplicate lines
     dedup_process_return = subprocess.call(
-            r'''sort %s | uniq > %s'''
+            r'''sort %s | uniq >%s'''
             % (prefasta_filename, deduped_fasta_filename), shell=True
         )
     if dedup_process_return != 0:
@@ -302,19 +302,21 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             pass
         alignment_count_to_report, _, _ \
             = bowtie.parsed_bowtie_args(bowtie2_args)
+        input_command = 'gzip -cd %s' % reads_file
         bowtie_command = ' ' .join([bowtie2_exe,
             bowtie2_args if bowtie2_args is not None else '',
             '{0} --local -t --no-hd --mm -x'.format(
             ('-a' if replicable else 
             ('-k {0}'.format(alignment_count_to_report * count_multiplier)))),
-            bowtie2_index_base, '--12', reads_file])
+            bowtie2_index_base, '--12 -'])
         delegate_command = ''.join(
                 [sys.executable, ' ', os.path.realpath(__file__)[:-3],
                     '_delegate.py --report-multiplier %08f --rnames-file %s %s'
                         % (report_multiplier, rnames_file,
                             '--verbose' if verbose else '')]
             )
-        full_command = ' | '.join([bowtie_command, delegate_command])
+        full_command = ' | '.join([input_command, 
+                                    bowtie_command, delegate_command])
         print >>sys.stderr, 'Starting Bowtie2 with command: ' + full_command
         bowtie_process = subprocess.Popen(' '.join(
                     ['set -exo pipefail;', full_command]

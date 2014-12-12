@@ -2667,14 +2667,17 @@ class RailRnaAlign(object):
             },
             {
                 'name' : 'Finalize intron cooccurrences on reads',
-                'run' : ('cointron_enum.py --bowtie2-idx={0} '
-                         '--bowtie2-exe={1} {2} {3} -- {4}').format(
+                'run' : ('cointron_enum.py --bowtie2-idx={0} --gzip-level {1} '
+                         '--bowtie2-exe={2} {3} {4} -- {5}').format(
                                             'intron/intron'
                                             if elastic else
                                             path_join(elastic,
                                                 base.output_dir,
                                                 'transcript_index',
                                                 'intron'),
+                                            base.gzip_level
+                                            if 'gzip_level' in
+                                            dir(base) else 3,
                                             base.bowtie2_exe,
                                             verbose,
                                             keep_alive,

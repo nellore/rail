@@ -166,9 +166,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     temp_dir = tempfile.mkdtemp()
     atexit.register(remove_temporary_directories, [temp_dir])
     qnames_file = os.path.join(temp_dir, 'qnames.temp.gz')
-    readlet_file = os.path.join(temp_dir, 'readlets.temp')
+    readlet_file = os.path.join(temp_dir, 'readlets.temp.gz')
     with gzip.open(qnames_file, 'w', gzip_level) as qname_stream:
-        with open(readlet_file, 'w') as readlet_stream:
+        with gzip.open(readlet_file, 'w', gzip_level) as readlet_stream:
             for (seq_count, ((seq,), xpartition)) \
                 in enumerate(xstream(input_stream, 1)):
                 print >>readlet_stream, \
@@ -178,15 +178,17 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
                     _input_line_count += 1
                     qname_stream.write('\x1d' + qname)
                 qname_stream.write('\n')
+    input_command = 'gzip -cd %s' % readlets_file
     bowtie_command = ' '.join([bowtie_exe, bowtie_args,
-        '-S -t --sam-nohead --mm', bowtie_index_base, '--12', readlet_file])
+        '-S -t --sam-nohead --mm', bowtie_index_base, '--12 -'])
     delegate_command = ''.join(
                 [sys.executable, ' ', os.path.realpath(__file__)[:-3],
                     '_delegate.py --report-multiplier %08f --qnames-file %s %s'
                         % (report_multiplier, qnames_file,
                             '--verbose' if verbose else '')]
             )
-    full_command = ' | '.join([bowtie_command, delegate_command])
+    full_command = ' | '.join([input_command, 
+                                bowtie_command, delegate_command])
     print >>sys.stderr, 'Starting Bowtie with command: ' + full_command
     bowtie_process = subprocess.Popen(' '.join(
                     ['set -exo pipefail;', full_command]

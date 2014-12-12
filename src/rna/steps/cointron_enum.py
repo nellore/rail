@@ -36,6 +36,7 @@ import subprocess
 import atexit
 import tempfile
 from collections import defaultdict
+import gzip
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -55,7 +56,8 @@ _input_line_count = 0
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base='genome', bowtie2_args='', verbose=False,
-    report_multiplier=1.2, stranded=False, fudge=5, score_min=60):
+    report_multiplier=1.2, stranded=False, fudge=5, score_min=60,
+    gzip_level=3):
     """ Runs Rail-RNA-cointron_enum 
 
         Alignment script for MapReduce pipelines that wraps Bowtie 2. Finds
@@ -105,17 +107,19 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         fudge: by how many bases to extend left and right extend sizes
                 to accommodate potential indels
         score_min: Bowtie2 CONSTANT minimum alignment score
+        gzip_level: compression level to use for temporary files
 
         No return value.
     """
     global _input_line_count
     temp_dir_path = tempfile.mkdtemp()
     atexit.register(remove_temporary_directories, [temp_dir_path])
-    reads_file = os.path.join(temp_dir_path, 'reads.temp')
-    with open(reads_file, 'w') as reads_stream:
+    reads_file = os.path.join(temp_dir_path, 'reads.temp.gz')
+    with gzip.open(reads_file, 'w', gzip_level) as reads_stream:
         for _input_line_count, line in enumerate(input_stream):
             seq = line.strip()
             print >>reads_stream, '\t'.join([seq, seq, 'I'*len(seq)])
+    input_command = 'gzip -cd %s' % reads_file
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12',
@@ -128,7 +132,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         '--stranded' if stranded else '',
                         '--verbose' if verbose else '')]
         )
-    full_command = ' | '.join([bowtie_command, delegate_command])
+    full_command = ' | '.join([input_command,
+                                bowtie_command, delegate_command])
     print >>sys.stderr, 'Starting Bowtie2 with command: ' + full_command
     bowtie_process = subprocess.Popen(' '.join(
                 ['set -exo pipefail;', full_command]
@@ -171,6 +176,9 @@ if __name__ == '__main__':
     parser.add_argument('--score-min', type=int, required=False,
         default=48,
         help='Bowtie2 minimum CONSTANT score to use')
+    parser.add_argument('--gzip-level', type=int, required=False,
+        default=3,
+        help='Gzip compression level to use for temporary Bowtie input file')
 
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
