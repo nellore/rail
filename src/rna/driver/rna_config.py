@@ -293,6 +293,8 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                 reducer_task_count = 1
             else:
                 reducer_task_count = reducer_count * protostep['taskx']
+        elif protostep['min_tasks'] is None:
+            reducer_task_count = reducer_count
         else:
             '''Task count logic: number of reduce tasks is equal to
             min(minimum number of tasks greater than
@@ -305,7 +307,8 @@ def steps(protosteps, action_on_failure, jar, step_dir,
             else:
                 reducer_task_count = \
                     protostep['min_tasks'] + reducer_count - (
-                        (protostep['min_tasks'] + reducer_count) % reducer_count
+                        (protostep['min_tasks'] + reducer_count)
+                        % reducer_count
                     )
             if 'max_tasks' in protostep:
                 reducer_task_count = min(reducer_task_count,
@@ -2515,7 +2518,7 @@ class RailRnaAlign(object):
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
-                'min_tasks' : base.sample_count * 3,
+                'min_tasks' : base.sample_count * 10 if elastic else None,
                 'part' : 1,
                 'keys' : 1,
                 'multiple_outputs' : True,
@@ -2541,7 +2544,7 @@ class RailRnaAlign(object):
                                                 ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletized')],
                 'output' : 'align_readlets',
-                'min_tasks' : base.sample_count * 3,
+                'min_tasks' : base.sample_count * 10 if elastic else None,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
@@ -2573,7 +2576,7 @@ class RailRnaAlign(object):
                                             ),
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
-                'min_tasks' : base.sample_count * 3,
+                'min_tasks' : base.sample_count * 10 if elastic else None,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
@@ -2595,7 +2598,8 @@ class RailRnaAlign(object):
                                     ),
                 'inputs' : ['intron_search'],
                 'output' : 'intron_filter',
-                'min_tasks' : max(base.sample_count / 10, 1),
+                'min_tasks' : (max(base.sample_count / 10, 1)
+                                if elastic else None),
                 'part' : 3,
                 'keys' : 3,
                 'extra_args' : [
@@ -2685,7 +2689,7 @@ class RailRnaAlign(object):
                                         ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unique')],
                 'output' : 'cointron_enum',
-                'min_tasks' : base.sample_count * 3,
+                'min_tasks' : base.sample_count * 10 if elastic else None,
                 'archives' : ab.Url(path_join(elastic,
                                     base.output_dir,
                                     'transcript_index',
@@ -2707,7 +2711,7 @@ class RailRnaAlign(object):
                                                     ),
                 'inputs' : ['cointron_enum'],
                 'output' : 'cointron_fasta',
-                'min_tasks' : base.sample_count * 3,
+                'min_tasks' : base.sample_count * 10 if elastic else None,
                 'part' : 3,
                 'keys' : 3,
                 'extra_args' : [
@@ -2737,7 +2741,7 @@ class RailRnaAlign(object):
                             'cointron_fasta'],
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'min_tasks' : base.sample_count * 3,
+                'min_tasks' : base.sample_count * 10 if elastic else None,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
@@ -2764,7 +2768,7 @@ class RailRnaAlign(object):
                 'inputs' : [path_join(elastic, 'align_reads', 'postponed_sam'),
                             'realign_reads'],
                 'output' : 'compare_alignments',
-                'min_tasks' : base.sample_count * 3,
+                'min_tasks' : base.sample_count * 10 if elastic else None,
                 'part' : 1,
                 'keys' : 1,
                 'multiple_outputs' : True,
@@ -2829,7 +2833,7 @@ class RailRnaAlign(object):
                                                'exon_diff'),
                             path_join(elastic, 'break_ties', 'exon_diff')],
                 'output' : 'collapse',
-                'min_tasks' : base.sample_count * 3,
+                'min_tasks' : base.sample_count * 10 if elastic else None,
                 'part' : 3,
                 'keys' : 3,
                 'extra_args' : [
@@ -2845,7 +2849,7 @@ class RailRnaAlign(object):
                          '--partition-stats').format(base.bowtie1_idx),
                 'inputs' : ['collapse'],
                 'output' : 'precoverage',
-                'min_tasks' : base.sample_count * 3,
+                'min_tasks' : base.sample_count * 10 if elastic else None,
                 'part' : 2,
                 'keys' : 3,
                 'multiple_outputs' : True,
@@ -2914,7 +2918,7 @@ class RailRnaAlign(object):
                                                'intron_bed'),
                             path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
-                'min_tasks' : base.sample_count * 3,
+                'min_tasks' : base.sample_count * 10 if elastic else None,
                 'part' : 6,
                 'keys' : 6,
                 'extra_args' : [
