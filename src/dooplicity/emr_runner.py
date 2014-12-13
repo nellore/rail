@@ -238,7 +238,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
                 webbrowser.open(_emr_url.format(region=aws_ansible.region,
                                                 job_flow_id=job_flow_id),
                                     new=2) # Open in new tab
-                iface.step('Opening URL in default browser.')
+                iface.step('Opening URL in default browser, if possible.')
         iface.done(closer=('Finished job flow submission script '
                            'on {date}. Run time was {length} seconds.')
                 )

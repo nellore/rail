@@ -25,7 +25,8 @@ import org.slf4j.LoggerFactory;
  * Apache Pig. It was copied to avoid having to depend on all of Pig for
  * this utility.
  *
- * @author Jonathan Coveney, Abhi Nellore
+ * @author Jonathan Coveney
+ * @author Abhi Nellore
  */
 public class SplitUtil {
   private static final Logger LOG = LoggerFactory.getLogger(SplitUtil.class);
@@ -173,10 +174,11 @@ public class SplitUtil {
   public static List<List<InputSplit>> getCombinedSplits(
           List<InputSplit> oneInputSplits, long maxCombinedSplitSize, Configuration conf)
           throws IOException, InterruptedException {
-    int combinedSplitCount = conf.getInt(COMBINE_SPLIT_SIZE, -1);
+    int combinedSplitCount = conf.getInt(COMBINED_SPLIT_COUNT, -1);
+    LOG.info("Combining splits into " + combinedSplitCount + " task(s).");
     if (combinedSplitCount <= 0) {
       // Do whatever Pig does if combined split count is unspecified or invalid
-      LOG.info("Combined split count is either unspecified or invalid; combining splits using combine split size.");
+      LOG.warn("Combined split count is either unspecified or invalid; combining splits using combine split size.");
       List<Node> nodes = new ArrayList<Node>();
       Map<String, Node> nodeMap = new HashMap<String, Node>();
       List<List<InputSplit>> result = new ArrayList<List<InputSplit>>();
@@ -344,17 +346,23 @@ public class SplitUtil {
           }
         }
       }
-      LOG.info("Original input paths (" + oneInputSplits.size() + ") combine into (" + result.size() + ")");
+      LOG.info("Original split(s) (" + oneInputSplits.size() + ") were combined into (" + result.size() + ") task(s).");
       return result;
     }
     // If a combined split count is available, assign splits to tasks using hashCode()
     List<List<InputSplit>> result = new ArrayList<List<InputSplit>>(combinedSplitCount);
-    int i = 0;
-    for (InputSplit split : oneInputSplits) {
-      result.get(split.hashCode() % combinedSplitCount).add(split);
-      i++;
+    for (int i = 0; i < combinedSplitCount; i++) {
+      result.add(null);
     }
-    LOG.info("Distributed " + i + " input splits among " + combinedSplitCount + " tasks.");
+    int index = 0, i = 0;
+    // Distribute splits across tasks
+    for (InputSplit split : oneInputSplits) {
+      if (result.get(index) == null) result.set(index, new ArrayList<InputSplit>());
+      result.get(index).add(split);
+      i++;
+      if (i % combinedSplitCount == 0) i = 0;
+    }
+    LOG.info("Distributed " + i + " input split(s) among " + combinedSplitCount + " task(s).");
     return result;
   }
 
@@ -363,7 +371,7 @@ public class SplitUtil {
           throws IOException, InterruptedException {
     List<CompositeInputSplit> compositeInputSplits = new ArrayList<CompositeInputSplit>(oneInputSplits.size());
     for (List<InputSplit> inputSplits : getCombinedSplits(oneInputSplits, maxCombinedSplitSize, conf)) {
-      if (inputSplits.size() != 0) compositeInputSplits.add(new CompositeInputSplit(inputSplits));
+      if (inputSplits != null) compositeInputSplits.add(new CompositeInputSplit(inputSplits));
     }
     return compositeInputSplits;
   }

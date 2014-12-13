@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Arrays;
 
 import com.twitter.elephantbird.util.HadoopCompat;
 import org.apache.hadoop.fs.FileStatus;
@@ -28,6 +29,8 @@ import com.hadoop.compression.lzo.LzoIndex;
  */
 public abstract class LzoInputFormat<K, V> extends FileInputFormat<K, V> {
   private static final Logger LOG = LoggerFactory.getLogger(LzoInputFormat.class);
+  public static final String IS_SPLITABLE = "elephantbird.is.splitable";
+  public static final String CHECK_IS_SPLITABLE = "elephantbird.check.is.splitable";
 
   private final PathFilter hiddenPathFilter = new PathFilter() {
     // avoid hidden files and directories.
@@ -52,17 +55,20 @@ public abstract class LzoInputFormat<K, V> extends FileInputFormat<K, V> {
   @Override
   protected List<FileStatus> listStatus(JobContext job) throws IOException {
     // The list of files is no different.
-    List<FileStatus> files = super.listStatus(job);
+    Path[] dirs = getInputPaths(job);
     List<FileStatus> results = Lists.newArrayList();
     boolean recursive = HadoopCompat.getConfiguration(job).getBoolean("mapred.input.dir.recursive", false);
-    Iterator<FileStatus> it = files.iterator();
-    while (it.hasNext()) {
-      FileStatus fileStatus = it.next();
-      FileSystem fs = fileStatus.getPath().getFileSystem(HadoopCompat.getConfiguration(job));
-      addInputPath(results, fs, fileStatus, recursive);
+    for (Path dir : dirs) {
+      FileSystem fs = dir.getFileSystem(HadoopCompat.getConfiguration(job));
+      List<FileStatus> files = Arrays.asList(fs.listStatus(dir));
+      Iterator<FileStatus> it = files.iterator();
+      while (it.hasNext()) {
+        FileStatus fileStatus = it.next();
+        addInputPath(results, fs, fileStatus, recursive);
+      }
     }
 
-    LOG.debug("Total lzo input paths to process : " + results.size());
+    LOG.info("Total lzo input paths to process : " + results.size());
     return results;
   }
 
@@ -100,12 +106,16 @@ public abstract class LzoInputFormat<K, V> extends FileInputFormat<K, V> {
      * this.getSplit(). Right now, FileInputFormat splits across the
      * blocks and this.getSplits() adjusts the positions.
      */
-    try {
-      FileSystem fs = filename.getFileSystem(HadoopCompat.getConfiguration(context) );
-      return fs.exists( filename.suffix( LzoIndex.LZO_INDEX_SUFFIX ) );
-    } catch (IOException e) { // not expected
-      throw new RuntimeException(e);
+    boolean checkIsSplitable = context.getConfiguration().getBoolean(CHECK_IS_SPLITABLE, false);
+    if (checkIsSplitable) {
+      try {
+        FileSystem fs = filename.getFileSystem(HadoopCompat.getConfiguration(context) );
+        return fs.exists( filename.suffix( LzoIndex.LZO_INDEX_SUFFIX ) );
+      } catch (IOException e) { // not expected
+        throw new RuntimeException(e);
+      }
     }
+    return context.getConfiguration().getBoolean(IS_SPLITABLE, false);
   }
 
   @Override
@@ -122,6 +132,11 @@ public abstract class LzoInputFormat<K, V> extends FileInputFormat<K, V> {
       // Load the index.
       FileSplit fileSplit = (FileSplit)genericSplit;
       Path file = fileSplit.getPath();
+
+      if (!isSplitable(job, file)) {
+        result.add(fileSplit);
+        continue;
+      }
 
       LzoIndex index; // reuse index for files with multiple blocks.
       if ( file.equals(prevFile) ) {
