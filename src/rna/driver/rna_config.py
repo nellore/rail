@@ -345,7 +345,8 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                     ),
                 inputformat=(protostep['inputformat']
                     if 'inputformat' in protostep else None),
-                extra_args=(protostep['extra_args']
+                extra_args=([extra_arg.format(task_count=reducer_count)
+                    for extra_arg in protostep['extra_args']]
                     if 'extra_args' in protostep else [])
             )
         )
@@ -2525,7 +2526,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size * 2)
+                            % (_base_combine_split_size * 2),
+                        'elephantbird.combined.split.count={task_count}'
                     ]
             },
             {
@@ -2551,6 +2553,7 @@ class RailRnaAlign(object):
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size* 2),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2582,7 +2585,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size * 2)
+                            % (_base_combine_split_size * 2),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2605,7 +2609,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2624,7 +2629,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2642,7 +2648,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2665,7 +2672,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2699,7 +2707,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size * 2)
+                            % (_base_combine_split_size * 2),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2717,7 +2726,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2747,7 +2757,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size * 2)
+                            % (_base_combine_split_size * 2),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2775,7 +2786,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size * 2)
+                            % (_base_combine_split_size * 2),
+                        'elephantbird.combined.split.count={task_count}'
                     ]
             },
             {
@@ -2794,7 +2806,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2820,7 +2833,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ]
             },
             {
@@ -2839,7 +2853,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2856,7 +2871,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ]
             },
             {
@@ -2881,7 +2897,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2904,7 +2921,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2924,7 +2942,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2949,7 +2968,8 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             },
@@ -2983,7 +3003,8 @@ class RailRnaAlign(object):
                         'mapreduce.reduce.shuffle.merge.percent=0.4',
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size)
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
             }]
