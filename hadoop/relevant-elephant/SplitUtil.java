@@ -363,7 +363,7 @@ public class SplitUtil {
           throws IOException, InterruptedException {
     List<CompositeInputSplit> compositeInputSplits = new ArrayList<CompositeInputSplit>(oneInputSplits.size());
     for (List<InputSplit> inputSplits : getCombinedSplits(oneInputSplits, maxCombinedSplitSize, conf)) {
-      compositeInputSplits.add(new CompositeInputSplit(inputSplits));
+      if (inputSplits.size() != 0) compositeInputSplits.add(new CompositeInputSplit(inputSplits));
     }
     return compositeInputSplits;
   }
