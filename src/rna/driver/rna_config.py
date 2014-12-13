@@ -2519,7 +2519,7 @@ class RailRnaAlign(object):
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
-                'min_tasks' : base.sample_count * 10 if elastic else None,
+                'min_tasks' : base.sample_count * 12 if elastic else None,
                 'part' : 1,
                 'keys' : 1,
                 'multiple_outputs' : True,
@@ -2546,13 +2546,13 @@ class RailRnaAlign(object):
                                                 ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletized')],
                 'output' : 'align_readlets',
-                'min_tasks' : base.sample_count * 10 if elastic else None,
+                'min_tasks' : base.sample_count * 12 if elastic else None,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size* 2),
+                            % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
                     ],
                 'direct_copy' : True
@@ -2579,7 +2579,7 @@ class RailRnaAlign(object):
                                             ),
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
-                'min_tasks' : base.sample_count * 10 if elastic else None,
+                'min_tasks' : base.sample_count * 12 if elastic else None,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
@@ -2751,7 +2751,7 @@ class RailRnaAlign(object):
                             'cointron_fasta'],
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'min_tasks' : base.sample_count * 10 if elastic else None,
+                'min_tasks' : base.sample_count * 12 if elastic else None,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
@@ -2779,7 +2779,7 @@ class RailRnaAlign(object):
                 'inputs' : [path_join(elastic, 'align_reads', 'postponed_sam'),
                             'realign_reads'],
                 'output' : 'compare_alignments',
-                'min_tasks' : base.sample_count * 10 if elastic else None,
+                'min_tasks' : base.sample_count * 12 if elastic else None,
                 'part' : 1,
                 'keys' : 1,
                 'multiple_outputs' : True,
@@ -2847,7 +2847,7 @@ class RailRnaAlign(object):
                                                'exon_diff'),
                             path_join(elastic, 'break_ties', 'exon_diff')],
                 'output' : 'collapse',
-                'min_tasks' : base.sample_count * 10 if elastic else None,
+                'min_tasks' : base.sample_count * 12 if elastic else None,
                 'part' : 3,
                 'keys' : 3,
                 'extra_args' : [
@@ -2864,7 +2864,7 @@ class RailRnaAlign(object):
                          '--partition-stats').format(base.bowtie1_idx),
                 'inputs' : ['collapse'],
                 'output' : 'precoverage',
-                'min_tasks' : base.sample_count * 10 if elastic else None,
+                'min_tasks' : base.sample_count * 12 if elastic else None,
                 'part' : 2,
                 'keys' : 3,
                 'multiple_outputs' : True,
@@ -2936,7 +2936,7 @@ class RailRnaAlign(object):
                                                'intron_bed'),
                             path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
-                'min_tasks' : base.sample_count * 10 if elastic else None,
+                'min_tasks' : base.sample_count * 12 if elastic else None,
                 'part' : 6,
                 'keys' : 6,
                 'extra_args' : [
