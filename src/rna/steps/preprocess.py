@@ -584,6 +584,11 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             nucs_read > nucleotides_per_input:
                             file_number += 1
                             break
+                if verbose:
+                    print >>sys.stderr, (
+                            'Exited with statement; line numbers are %s' 
+                            % line_numbers
+                        )
                 if (not to_stdout) and (push_url.is_s3 or push_url.is_hdfs) \
                     and ((not records_to_consume) or
                          (records_to_consume and perform_push)):
@@ -591,7 +596,6 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                                             output_file,
                                                             push_url.to_url()
                                                         )
-                    print >>sys.stderr, 'reporter:status:alive'
                     mover.put(output_file, push_url.plus(os.path.basename(
                                                                 output_file
                                                             )))
@@ -600,6 +604,10 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     except OSError:
                         pass
                 if break_outer_loop: break
+            if verbose:
+                print >>sys.stderr, 'Exiting source streams...'
+        if verbose:
+            print >>sys.stderr, 'Exited source streams.'
         # Clear temporary directory
         for input_file in os.listdir(temp_dir):
             try:

@@ -354,15 +354,16 @@ public class SplitUtil {
     for (int i = 0; i < combinedSplitCount; i++) {
       result.add(null);
     }
-    int index = 0, i = 0;
+    int index = 0, counter = 0;
     // Distribute splits across tasks
     for (InputSplit split : oneInputSplits) {
       if (result.get(index) == null) result.set(index, new ArrayList<InputSplit>());
       result.get(index).add(split);
-      i++;
-      if (i % combinedSplitCount == 0) i = 0;
+      counter++;
+      index++;
+      if (index % combinedSplitCount == 0) index = 0;
     }
-    LOG.info("Distributed " + i + " input split(s) among " + combinedSplitCount + " task(s).");
+    LOG.info("Distributed " + counter + " input split(s) among " + combinedSplitCount + " task(s).");
     return result;
   }
 

@@ -60,7 +60,12 @@ public abstract class LzoInputFormat<K, V> extends FileInputFormat<K, V> {
     boolean recursive = HadoopCompat.getConfiguration(job).getBoolean("mapred.input.dir.recursive", false);
     for (Path dir : dirs) {
       FileSystem fs = dir.getFileSystem(HadoopCompat.getConfiguration(job));
-      List<FileStatus> files = Arrays.asList(fs.listStatus(dir));
+      try {
+        List<FileStatus> files = Arrays.asList(fs.listStatus(dir));
+      } catch (FileNotFoundException e) {
+        // Rail-specific mod: input directories may not exist because a MultipleOutput may not have created one
+        continue;
+      }
       Iterator<FileStatus> it = files.iterator();
       while (it.hasNext()) {
         FileStatus fileStatus = it.next();

@@ -53,7 +53,7 @@ class KeepAlive(threading.Thread):
     def run(self):
         import time
         while True:
-            self.status_stream.write('\nreporter:status:alive\n')
+            self.status_stream.write('reporter:status:alive')
             self.status_stream.flush()
             time.sleep(self.period)
 

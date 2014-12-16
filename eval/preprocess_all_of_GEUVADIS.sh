@@ -4,6 +4,6 @@
 RAILHOME=~/rail
 
 # Set output directory here -- must be on S3!
-OUTPUT=s3://rail-papers/geuvadisprepped
+OUTPUT=s3://rail-papers/preppedgeuvadis
 
-python $RAILHOME/src prep elastic -m GEUVADIS_all_descriptive.manifest -c 20 --core-instance-bid-price 0.10 --master-instance-bid-price 0.10 -o $OUTPUT --ec2-key-name rail2 --do-not-check-manifest
+python $RAILHOME/src prep elastic -m GEUVADIS_all_descriptive.manifest -c 40 --core-instance-bid-price 0.04 --master-instance-bid-price 0.04 --core-instance-type m1.xlarge --master-instance-type m1.xlarge -o $OUTPUT --ec2-key-name rail2 --do-not-check-manifest
