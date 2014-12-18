@@ -660,6 +660,9 @@ def selected_readlet_alignments_by_clustering(readlets):
     else:
         '''Alignment is in general too repetitive; postpone treatment until
         a nice systematic way to handle this case is found.'''
+        print >>sys.stderr, '------------------'
+        print >>sys.stderr, largest_maximum_cliques
+        print >>sys.stderr, '------------------'
         pass
 
 def introns_from_clique(clique, read_seq, reference_index,

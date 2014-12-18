@@ -117,7 +117,8 @@ def qname_from_read(original_qname, seq, sample_label):
                     '\x1d', sample_label])
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
-        to_stdout=False, push='.', mover=filemover.FileMover()):
+        to_stdout=False, push='.', mover=filemover.FileMover(),
+        verbose=False):
     """ Runs Rail-RNA-preprocess
 
         Input (read from stdin)
@@ -596,6 +597,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                                             output_file,
                                                             push_url.to_url()
                                                         )
+                    print >>sys.stderr, 'reporter:status:alive'
                     mover.put(output_file, push_url.plus(os.path.basename(
                                                                 output_file
                                                             )))
@@ -637,6 +639,9 @@ if __name__ == '__main__':
     parser.add_argument('--push', type=str, required=False,
         default='.',
         help='Directory in which to push output files')
+    parser.add_argument('--verbose', action='store_const', const=True,
+        default=False,
+        help='Print out extra debugging statements')
     filemover.add_args(parser)
     args = parser.parse_args()
 
@@ -649,6 +654,7 @@ if __name__ == '__main__':
         gzip_level=args.gzip_level,
         to_stdout=args.stdout,
         push=args.push,
+        verbose=args.verbose,
         mover=mover)
     print >>sys.stderr, 'DONE with preprocess.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
