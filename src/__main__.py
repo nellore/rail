@@ -63,40 +63,6 @@ Add --help/-h to view help.""" if not _help_set.intersection(_argv_set)
 else ''
 )
 
-class RailParser(argparse.ArgumentParser):
-    """ Accommodates Rail-RNA's subcommand structure. """
-    
-    def error(self, message):
-        if not _help_set.intersection(_argv_set):
-            print >>sys.stderr, 'error: %s' % message
-        self.print_usage()
-        sys.exit(2)
-
-class RailHelpFormatter(argparse.HelpFormatter):
-    """ Formats help in a more condensed way.
-
-        Overrides not-so-public argparse API, but since the Python 2.x line is
-        no longer under very active development, this is probably okay.
-    """
-
-    def _get_help_string(self, action):
-        help = action.help
-        if '(def: ' not in action.help and not action.required \
-            and not action.const:
-            if action.default is not argparse.SUPPRESS:
-                defaulting_nargs = [argparse.OPTIONAL, argparse.ZERO_OR_MORE]
-                if action.option_strings or action.nargs in defaulting_nargs:
-                    help += ' (def: %(default)s)'
-        return help
-
-    def _format_action_invocation(self, action):
-        if not action.option_strings:
-            metavar, = self._metavar_formatter(action, action.dest)(1)
-            return metavar
-        else:
-            return '%s %s' % ('/'.join(action.option_strings),
-                                self._format_args(action, action.dest.upper()))
-
 class Launcher(object):
     """ Facilitates replacing the current process with a Dooplicity runner. """
 

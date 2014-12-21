@@ -31,11 +31,47 @@ import shutil
 from dooplicity.tools import path_join, is_exe, which
 from version import version_number
 import sys
-from argparse import SUPPRESS
+import argparse
 import subprocess
 import time
 from traceback import format_exc
 from collections import defaultdict
+
+class RailParser(argparse.ArgumentParser):
+    """ Accommodates Rail-RNA's subcommand structure. """
+    
+    def error(self, message):
+        if not _help_set.intersection(_argv_set):
+            print >>sys.stderr, 'error: %s' % message
+            self.print_usage()
+            sys.exit(2)
+        self.print_usage()
+        sys.exit(0)
+
+class RailHelpFormatter(argparse.HelpFormatter):
+    """ Formats help in a more condensed way.
+
+        Overrides not-so-public argparse API, but since the Python 2.x line is
+        no longer under very active development, this is probably okay.
+    """
+
+    def _get_help_string(self, action):
+        help = action.help
+        if '(def: ' not in action.help and not action.required \
+            and not action.const:
+            if action.default is not argparse.SUPPRESS:
+                defaulting_nargs = [argparse.OPTIONAL, argparse.ZERO_OR_MORE]
+                if action.option_strings or action.nargs in defaulting_nargs:
+                    help += ' (def: %(default)s)'
+        return help
+
+    def _format_action_invocation(self, action):
+        if not action.option_strings:
+            metavar, = self._metavar_formatter(action, action.dest)(1)
+            return metavar
+        else:
+            return '%s %s' % ('/'.join(action.option_strings),
+                                self._format_args(action, action.dest.upper()))
 
 '''These are placed here for convenience; their locations may change
 on EMR depending on bootstraps.'''
@@ -2362,7 +2398,7 @@ class RailRnaAlign(object):
         algo_parser.add_argument(
             '--cap-size-multiplier', type=float, required=False,
             default=1.1,
-            help=SUPPRESS
+            help=argparse.SUPPRESS
         )
         algo_parser.add_argument(
             '--max-intron-size', type=int, required=False,
@@ -2402,32 +2438,32 @@ class RailRnaAlign(object):
         algo_parser.add_argument(
             '--motif-search-window-size', type=int, required=False,
             default=1000,
-            help=SUPPRESS
+            help=argparse.SUPPRESS
         )
         algo_parser.add_argument(
             '--max-gaps-mismatches', type=int, required=False,
             default=None,
-            help=SUPPRESS
+            help=argparse.SUPPRESS
         )
         algo_parser.add_argument(
             '--motif-radius', type=int, required=False,
             default=5,
-            help=SUPPRESS
+            help=argparse.SUPPRESS
         )
         algo_parser.add_argument(
             '--genome-bowtie1-args', type=str, required=False,
             default='-v 0 -a -m 30',
-            help=SUPPRESS
+            help=argparse.SUPPRESS
         )
         algo_parser.add_argument(
             '--transcriptome-bowtie2-args', type=str, required=False,
             default='-k 30',
-            help=SUPPRESS
+            help=argparse.SUPPRESS
         )
         algo_parser.add_argument(
             '--count-multiplier', type=int, required=False,
             default=15,
-            help=SUPPRESS
+            help=argparse.SUPPRESS
         )
         algo_parser.add_argument(
             '--normalize-percentile', type=float, required=False,

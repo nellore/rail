@@ -1,6 +1,7 @@
 package com.twitter.elephantbird.mapreduce.input;
 
 import java.io.IOException;
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -62,14 +63,14 @@ public abstract class LzoInputFormat<K, V> extends FileInputFormat<K, V> {
       FileSystem fs = dir.getFileSystem(HadoopCompat.getConfiguration(job));
       try {
         List<FileStatus> files = Arrays.asList(fs.listStatus(dir));
+        Iterator<FileStatus> it = files.iterator();
+        while (it.hasNext()) {
+          FileStatus fileStatus = it.next();
+          addInputPath(results, fs, fileStatus, recursive);
+        }
       } catch (FileNotFoundException e) {
         // Rail-specific mod: input directories may not exist because a MultipleOutput may not have created one
         continue;
-      }
-      Iterator<FileStatus> it = files.iterator();
-      while (it.hasNext()) {
-        FileStatus fileStatus = it.next();
-        addInputPath(results, fs, fileStatus, recursive);
       }
     }
 
