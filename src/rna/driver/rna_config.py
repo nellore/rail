@@ -1472,7 +1472,10 @@ class RailRnaElastic(object):
         base.ec2_key_name = ec2_key_name
         base.keep_alive = keep_alive
         base.termination_protected = termination_protected
-        base.no_consistent_view = no_consistent_view
+        base.original_no_consistent_view = no_consistent_view
+        if no_consistent_view and base.region != 'us-east-1':
+            # Read-after-write consistency is guaranteed
+            base.no_consistent_view = False
 
     @staticmethod
     def add_args(general_parser, required_parser, output_parser, 
@@ -1721,8 +1724,14 @@ class RailRnaElastic(object):
                          'com.hadoop.compression.lzo.LzopCodec'),
                         '-m',
                         'mapreduce.job.maps=%d' % base.total_cores,
+                        '-c',
+                        'fs.s3.impl=org.apache.hadoop.fs.s3.S3FileSystem',
+                        '-c',
+                        'fs.s3n.impl='
+                        'org.apache.hadoop.fs.s3native.NativeS3FileSystem'
                     ] + (['-e', 'fs.s3.consistent=true']
-                            if not base.no_consistent_view else []),
+                            if not base.original_no_consistent_view
+                            else ['-e', 'fs.s3.consistent=false']),
                     'Path' : ('s3://elasticmapreduce/bootstrap-actions/'
                               'configure-hadoop')
                 }
