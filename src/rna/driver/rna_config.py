@@ -1637,11 +1637,11 @@ class RailRnaElastic(object):
                 'ActionOnFailure' : base.action_on_failure,
                 'HadoopJarStep' : {
                     'Args' : [
-                        ('s3://us-east-1.elasticmapreduce/libs/'
-                         'state-pusher/0.1/fetch')
+                        ('s3://%s.elasticmapreduce/libs/'
+                         'state-pusher/0.1/fetch') % base.region
                     ],
-                    'Jar' : ('s3://us-east-1.elasticmapreduce/libs/'
-                             'script-runner/script-runner.jar')
+                    'Jar' : ('s3://%s.elasticmapreduce/libs/'
+                             'script-runner/script-runner.jar') % base.region
                 },
                 'Name' : 'Set up Hadoop Debugging'
             }
@@ -1732,8 +1732,8 @@ class RailRnaElastic(object):
                     ] + (['-e', 'fs.s3.consistent=true']
                             if not base.original_no_consistent_view
                             else ['-e', 'fs.s3.consistent=false']),
-                    'Path' : ('s3://elasticmapreduce/bootstrap-actions/'
-                              'configure-hadoop')
+                    'Path' : ('s3://%s.elasticmapreduce/bootstrap-actions/'
+                              'configure-hadoop' % base.region)
                 }
             }
         ]
