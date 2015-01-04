@@ -664,7 +664,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     for engine_id in xrange(len(direct_view)):
                         host = host_map[engine_id]
                         pid = pid_map[engine_id]
-                        if host != socket.gethostname():
+                        if host == socket.gethostname():
                             # local
                             os.kill(pid, signal.SIGINT)
                         else:
