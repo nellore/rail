@@ -49,6 +49,12 @@ import shutil
 import signal
 import itertools
 import socket
+import subprocess
+import glob
+import hashlib
+import tempfile
+import shutil
+import os
 
 def add_args(parser):
     """ Adds args relevant to EMR simulator.
