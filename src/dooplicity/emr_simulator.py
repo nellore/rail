@@ -48,31 +48,7 @@ import gc
 import shutil
 import signal
 import itertools
-
-def yopen(gzipped, *args):
-    """ Passes args on to the appropriate opener, gzip or regular.
-
-        Just like xopen minus stdout feature and for use without
-        with statement. Could merge xopen and yopen at some point.
-
-        gzipped: True iff gzip.open() should be used to open rather than
-            open(); False iff open() should be used; None if input should be
-            read and guessed
-        *args: unnamed arguments to pass
-
-        Return value: file object
-    """
-    import gzip
-    if gzipped is None:
-        with open(args[0], 'rb') as binary_input_stream:
-            # Check for magic number
-            if binary_input_stream.read(2) == '\x1f\x8b':
-                gzipped = True
-            else:
-                gzipped = False
-    if gzipped:
-        return gzip.open(*args)
-    return open(*args)
+import socket
 
 def add_args(parser):
     """ Adds args relevant to EMR simulator.
@@ -159,8 +135,46 @@ def init_worker():
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
+def yopen(gzipped, *args):
+    """ Passes args on to the appropriate opener, gzip or regular.
+
+        Just like xopen minus stdout feature and for use without
+        with statement. Could merge xopen and yopen at some point.
+
+        gzipped: True iff gzip.open() should be used to open rather than
+            open(); False iff open() should be used; None if input should be
+            read and guessed
+        *args: unnamed arguments to pass
+
+        Return value: file object
+    """
+    import gzip
+    if gzipped is None:
+        with open(args[0], 'rb') as binary_input_stream:
+            # Check for magic number
+            if binary_input_stream.read(2) == '\x1f\x8b':
+                gzipped = True
+            else:
+                gzipped = False
+    if gzipped:
+        return gzip.open(*args)
+    return open(*args)
+
+def arglist_as_function(function_name_and_args):
+    """ Interprets list as [function_to_be_called, arg_1, arg_2, ...]
+
+        Keyword arguments are forbidden.
+
+        function_name_and_args: a list of the form
+            [function_to_be_called, arg_1, arg_2, ...] .
+
+        Return value: function_to_be_called(arg_1, arg_2, ...)
+    """
+    assert len(function_name_and_args) >= 2
+    return function_name_and_args[0](*function_name_and_args[1:])
+
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
-                    key_fields, separator, task_count, memcap, yopen,
+                    key_fields, separator, task_count, memcap,
                     gzip=False, gzip_level=3, scratch=None):
     """ Partitions input data into tasks and presorts them.
 
@@ -182,7 +196,6 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         task_count: number of tasks in which to partition input.
         memcap: maximum amount of memory to use per UNIX sort instance;
             ignored if sort is None.
-        yopen: yopen function from dooplicity.tools.
         gzip: True iff all files written should be gzipped; else False.
         gzip_level: Level of gzip compression to use, if applicable.
         scratch: where to write output before copying to output_dir. If "-"
@@ -193,12 +206,6 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             (input_files,).
     """
     try:
-        import subprocess
-        import glob
-        import hashlib
-        import tempfile
-        import shutil
-        import os
         task_streams = {}
         if scratch == '-':
             # Write to temporary directory
@@ -310,7 +317,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
-                                  separator, sort_options, memcap, yopen,
+                                  separator, sort_options, memcap,
                                   gzip=False, gzip_level=3, scratch=None):
     """ Runs a streaming command on a task, segregating multiple outputs. 
 
@@ -335,7 +342,6 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             SHOULD BE PRESORTED.
         memcap: maximum amount of memory to use per UNIX sort instance;
             ignored if sort is None.
-        yopen: yopen function from dooplicity.tools.
         gzip: True iff all files written should be gzipped; else False.
         gzip_level: Level of gzip compression to use, if applicable.
         scratch: where to write output before copying to output_dir. If "-"
@@ -347,11 +353,6 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
     """
     command_to_run = None
     try:
-        import os
-        import subprocess
-        import glob
-        import tempfile
-        import shutil
         if scratch == '-':
             # Write to temporary directory
             final_output_dir = output_dir
@@ -618,6 +619,56 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 raise RuntimeError
             # Use all engines
             num_processes = len(rc)
+            direct_view = rc[:]
+            iface.status('Loading dependencies on IPython engines...')
+            with direct_view.sync_imports(quiet=True):
+                import subprocess
+                import glob
+                import hashlib
+                import tempfile
+                import shutil
+                import os
+            direct_view.push(dict(
+                    yopen=yopen,
+                    step_runner_with_error_return=\
+                        step_runner_with_error_return,
+                    presorted_tasks=presorted_tasks
+                ))
+            direct_view.execute('os.chdir(\'%s\')' % os.getcwd()).get()
+            iface.step('Loaded dependencies on IPython engines.')
+            '''Use balanced view so scheduling is dynamic: tasks aren't
+            assigned to engines a priori.'''
+            balanced_view = rc.load_balanced_view()
+            pid_map = rc[:].apply_async(os.getpid).get_dict()
+            host_map = rc[:].apply_async(socket.gethostname).get_dict()
+            def interrupt_engines(direct_view, iface):
+                """ Interrupts IPython engines spanned by view
+
+                    Taken from:
+                    http://mail.scipy.org/pipermail/ipython-dev/
+                    2014-March/013426.html
+
+                    direct_view: IPython direct view
+                    iface: instance of DooplicityInterface
+
+                    No return value.
+                """
+                iface.status('Interrupting IPython engines...')
+                with open(os.devnull, 'w') as null_stream:
+                    for engine_id in xrange(len(direct_view)):
+                        host = host_map[engine_id]
+                        pid = pid_map[engine_id]
+                        if host != socket.gethostname():
+                            # local
+                            os.kill(pid, signal.SIGINT)
+                        else:
+                            subprocess.Popen(
+                                ('ssh -oStrictHostKeyChecking=no '
+                                 '-oBatchMode=yes {} kill -INT {}').format(
+                                    host, pid
+                                ), bufsize=-1, shell=True, stdout=null_stream,
+                                 stderr=null_stream
+                            )
         else:
             import multiprocessing
         # Serialize JSON configuration
@@ -861,12 +912,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     except KeyError:
                         # No outputformat
                         pass
-                return_values = []
-                if not ipy:
-                    pool = multiprocessing.Pool(num_processes, init_worker)
-                else:
-                    asyncresults = []
-                    view_gen = itertools.cycle(rc)
                 if nline_input:
                     # Create temporary input files
                     split_input_dir = tempfile.mkdtemp(dir=common)
@@ -885,43 +930,54 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     if os.path.isfile(input_file)]
                 input_file_count = len(input_files)
                 err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
-                for i, input_file in enumerate(input_files):
-                    if os.path.isfile(input_file):
-                        if not ipy:
-                            pool.apply_async(
-                                step_runner_with_error_return, 
-                                args=(step_data['mapper'], input_file,
-                                    output_dir, err_dir, i,
-                                    multiple_outputs, 
-                                    separator,
-                                    None,
-                                    None,
-                                    yopen,
-                                    gzip,
-                                    gzip_level,
-                                    scratch),
-                                callback=return_values.append
-                            )
-                        else:
-                            asyncresults.append(next(view_gen).apply_async(
-                                step_runner_with_error_return,
-                                step_data['mapper'], input_file, output_dir,
-                                err_dir, i, multiple_outputs, separator, None,
-                                None, yopen, gzip, gzip_level, scratch))
-                if not ipy:
-                    pool.close()
                 iface.step('Step %d/%d: %s' % 
                             (step_number + 1, total_steps, step))
-                while len(return_values) < input_file_count:
-                    if ipy:
-                        result_set = set()
-                        for p, asyncresult in enumerate(asyncresults):
-                            if asyncresult.ready():
-                                return_values.append(asyncresult.get())
-                                result_set.add(p)
-                        asyncresults[:] = [asyncresult for p, asyncresult
-                                            in enumerate(asyncresults)
-                                            if p not in result_set]
+                if not ipy:
+                    pool = multiprocessing.Pool(num_processes, init_worker)
+                    return_values = []
+                    for i, input_file in enumerate(input_files):
+                        if os.path.isfile(input_file):
+                            if not ipy:
+                                pool.apply_async(
+                                    step_runner_with_error_return, 
+                                    args=(step_data['mapper'], input_file,
+                                        output_dir, err_dir, i,
+                                        multiple_outputs, 
+                                        separator,
+                                        None,
+                                        None,
+                                        gzip,
+                                        gzip_level,
+                                        scratch),
+                                    callback=return_values.append
+                                )
+                    pool.close()
+                    while len(return_values) < input_file_count:
+                        try:
+                            max_tuple = max(map(len, return_values))
+                        except ValueError:
+                            # return_values is empty
+                            max_tuple = -1
+                            pass
+                        if max_tuple > 0:
+                            '''There are error tuples; could put error message
+                            directly in RuntimeError, but then it would be
+                            positioned after the Dooplicity message about
+                            resuming the job.'''
+                            errors = ['Streaming command "%s" failed: %s' % 
+                                      (error[1], error[0]) for error
+                                      in return_values if len(error) == 2]
+                            errors = [(('%d) ' % (i + 1)) + error)
+                                        if len(errors) > 1 else errors[0]
+                                        for i, error in enumerate(errors)]
+                            iface.fail('\n'.join(errors),
+                                        steps=(job_flow[step_number:]
+                                                if step_number != 0 else None))
+                            failed = True
+                            raise RuntimeError
+                        iface.status('    Tasks completed: %d/%d'
+                                     % (len(return_values), input_file_count))
+                        time.sleep(0.2)
                     try:
                         max_tuple = max(map(len, return_values))
                     except ValueError:
@@ -944,31 +1000,36 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                             if step_number != 0 else None))
                         failed = True
                         raise RuntimeError
-                    iface.status('    Tasks completed: %d/%d'
-                                 % (len(return_values), input_file_count))
-                    time.sleep(0.2)
-                try:
-                    max_tuple = max(map(len, return_values))
-                except ValueError:
-                    # return_values is empty
-                    max_tuple = -1
-                    pass
-                if max_tuple > 0:
-                    '''There are error tuples; could put error message
-                    directly in RuntimeError, but then it would be
-                    positioned after the Dooplicity message about
-                    resuming the job.'''
-                    errors = ['Streaming command "%s" failed: %s' % 
-                              (error[1], error[0]) for error
-                              in return_values if len(error) == 2]
-                    errors = [(('%d) ' % (i + 1)) + error)
-                                if len(errors) > 1 else errors[0]
-                                for i, error in enumerate(errors)]
-                    iface.fail('\n'.join(errors),
-                                steps=(job_flow[step_number:]
-                                        if step_number != 0 else None))
-                    failed = True
-                    raise RuntimeError
+                else:
+                    return_values = balanced_view.map(
+                                    arglist_as_function,
+                                    [[step_runner_with_error_return,
+                                        step_data['mapper'], input_file,
+                                        output_dir, err_dir, i,
+                                        multiple_outputs,
+                                        separator,
+                                        None,
+                                        None,
+                                        gzip,
+                                        gzip_level,
+                                        scratch] for i, input_file
+                                                 in enumerate(input_files)],
+                                    block=False,
+                                    ordered=False
+                                )
+                    iface.status('    Tasks completed: 0/%d'
+                                     % input_file_count)
+                    for i, return_value in enumerate(return_values):
+                        if return_value:
+                            # Bails after encountering exactly one error
+                            iface.fail('Streaming command "%s" failed: %s' % 
+                                            (return_value[1], return_value[0]),
+                                        steps=(job_flow[step_number:]
+                                                if step_number != 0 else None))
+                            failed = True
+                            raise RuntimeError
+                        iface.status('    Tasks completed: %d/%d'
+                                         % (i+1, input_file_count))
                 iface.step('    Completed %s.'
                            % dp_iface.inflected(input_file_count, 'task'))
                 # Adjust step inputs in case a reducer follows
@@ -990,7 +1051,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                                if step_number != 0 else None))
                         failed = True
                         raise
-                return_values = []
                 input_files = [input_file for input_file in step_inputs
                                 if os.path.isfile(input_file)]
                 input_file_count = len(input_files)
@@ -1005,13 +1065,12 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     input_file_groups = [[input_file]
                                             for input_file in input_files]
                 input_file_group_count = len(input_file_groups)
+                iface.step('Step %d/%d: %s'
+                             % (step_number + 1, total_steps, step))
                 if not ipy:
                     pool = multiprocessing.Pool(num_processes, init_worker)
-                else:
-                    asyncresults = []
-                    view_gen = itertools.cycle(rc)
-                for i, input_file_group in enumerate(input_file_groups):
-                    if not ipy:
+                    return_values = []
+                    for i, input_file_group in enumerate(input_file_groups):
                         pool.apply_async(
                                 presorted_tasks,
                                 args=(input_file_group, i,
@@ -1021,34 +1080,35 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     separator,
                                     step_data['task_count'],
                                     memcap,
-                                    yopen,
                                     gzip,
                                     gzip_level,
                                     scratch),
                                 callback=return_values.append
                             )
-                    else:
-                        asyncresults.append(next(view_gen).apply_async(
-                                presorted_tasks, input_file_group, i,
-                                step_data['sort_options'], output_dir,
-                                step_data['key_fields'], separator,
-                                step_data['task_count'], memcap, yopen, gzip,
-                                gzip_level, scratch
-                            ))
-                if not ipy:
                     pool.close()
-                iface.step('Step %d/%d: %s'
-                             % (step_number + 1, total_steps, step))
-                while len(return_values) < input_file_group_count:
-                    if ipy:
-                        result_set = set()
-                        for p, asyncresult in enumerate(asyncresults):
-                            if asyncresult.ready():
-                                return_values.append(asyncresult.get())
-                                result_set.add(p)
-                        asyncresults[:] = [asyncresult for p, asyncresult
-                                            in enumerate(asyncresults)
-                                            if p not in result_set]
+                    while len(return_values) < input_file_group_count:
+                        try:
+                            max_tuple = max(map(len, return_values))
+                        except ValueError:
+                            # return_values is empty
+                            max_tuple = -1
+                            pass
+                        if max_tuple > 0:
+                            # There are error tuples
+                            errors = [error[0] for error in return_values
+                                        if error]
+                            errors = [(('%d) ' % (i + 1)) + error)
+                                        if len(errors) > 1 else errors[0]
+                                        for i, error in enumerate(errors)]
+                            iface.fail('\n'.join(errors),
+                                       (job_flow[step_number:]
+                                        if step_number != 0 else None))
+                            failed = True
+                            raise RuntimeError
+                        iface.status(('    Inputs partitioned: %d/%d\r')
+                                     % (len(return_values),
+                                            input_file_group_count))
+                        time.sleep(0.2)
                     try:
                         max_tuple = max(map(len, return_values))
                     except ValueError:
@@ -1066,43 +1126,40 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     if step_number != 0 else None))
                         failed = True
                         raise RuntimeError
-                    iface.status(('    Inputs partitioned: %d/%d\r')
-                                 % (len(return_values),
-                                        input_file_group_count))
-                    time.sleep(0.2)
-                try:
-                    max_tuple = max(map(len, return_values))
-                except ValueError:
-                    # return_values is empty
-                    max_tuple = -1
-                    pass
-                if max_tuple > 0:
-                    # There are error tuples
-                    errors = [error[0] for error in return_values if error]
-                    errors = [(('%d) ' % (i + 1)) + error)
-                                if len(errors) > 1 else errors[0]
-                                for i, error in enumerate(errors)]
-                    iface.fail('\n'.join(errors),
-                               (job_flow[step_number:]
-                                if step_number != 0 else None))
-                    failed = True
-                    raise RuntimeError
+                else:
+                    return_values = balanced_view.map(
+                            arglist_as_function,
+                            [[presorted_tasks, input_file_group, i,
+                                step_data['sort_options'], output_dir,
+                                step_data['key_fields'], separator,
+                                step_data['task_count'], memcap, gzip,
+                                gzip_level, scratch] for i, input_file_group
+                                    in enumerate(input_file_groups)],
+                            block=False,
+                            ordered=False
+                        )
+                    iface.status('    Inputs partitioned: 0/%d'
+                                     % input_file_group_count)
+                    for i, return_value in enumerate(return_values):
+                        if return_value:
+                            # Bails after encountering exactly one error
+                            iface.fail(return_value[0],
+                                        steps=(job_flow[step_number:]
+                                                if step_number != 0 else None))
+                            failed = True
+                            raise RuntimeError
+                        iface.status('    Inputs partitioned: %d/%d'
+                                         % (i+1, input_file_group_count))
                 iface.step('    Partitioned %s into tasks.'
                             % dp_iface.inflected(input_file_group_count,
                                                  'input'))
                 iface.status('    Starting step runner...')
-                return_values = []
                 input_files = [os.path.join(output_dir, '%d.*' % i) 
                                for i in xrange(step_data['task_count'])]
                 # Filter out bad globs
                 input_files = [input_file for input_file in input_files
                                 if glob.glob(input_file)]
                 input_file_count = len(input_files)
-                if not ipy:
-                    pool = multiprocessing.Pool(num_processes, init_worker)
-                else:
-                    asyncresults = []
-                    view_gen = itertools.cycle(rc)
                 try:
                     multiple_outputs = (('multiple_outputs' in step_data) or
                                         step_data['outputformat']
@@ -1111,8 +1168,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     multiple_outputs = False
                 err_dir = os.path.join(steps[step]['output'], 'dp.reduce.log')
                 output_dir = step_data['output']
-                for i, input_file in enumerate(input_files):
-                    if not ipy:
+                return_values = []
+                if not ipy:
+                    pool = multiprocessing.Pool(num_processes, init_worker)
+                    for i, input_file in enumerate(input_files):
                         pool.apply_async(
                                 step_runner_with_error_return, 
                                 args=(step_data['reducer'], input_file,
@@ -1120,29 +1179,33 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     multiple_outputs,
                                     separator,
                                     step_data['sort_options'],
-                                    memcap, yopen, gzip, gzip_level, scratch),
+                                    memcap, gzip, gzip_level, scratch),
                                  callback=return_values.append
                             )
-                    else:
-                        asyncresults.append(next(view_gen).apply_async(
-                                step_runner_with_error_return, 
-                                step_data['reducer'], input_file,
-                                output_dir, err_dir, i, multiple_outputs,
-                                separator, step_data['sort_options'],
-                                memcap, yopen, gzip, gzip_level, scratch
-                            ))
-                if not ipy:
                     pool.close()
-                while len(return_values) < input_file_count:
-                    if ipy:
-                        result_set = set()
-                        for p, asyncresult in enumerate(asyncresults):
-                            if asyncresult.ready():
-                                return_values.append(asyncresult.get())
-                                result_set.add(p)
-                        asyncresults[:] = [asyncresult for p, asyncresult
-                                            in enumerate(asyncresults)
-                                            if p not in result_set]
+                    while len(return_values) < input_file_count:
+                        try:
+                            max_tuple = max(map(len, return_values))
+                        except ValueError:
+                            # return_values is empty
+                            max_tuple = -1
+                            pass
+                        if max_tuple > 0:
+                            # There are error tuples
+                            errors = ['Streaming command "%s" failed: %s' % 
+                                      (error[1], error[0]) for error 
+                                      in return_values if len(error) == 2]
+                            errors = [(('%d) ' % (i + 1)) + error)
+                                        if len(errors) > 1 else errors[0]
+                                        for i, error in enumerate(errors)]
+                            iface.fail('\n'.join(errors),
+                                       (job_flow[step_number:]
+                                        if step_number != 0 else None))
+                            failed = True
+                            raise RuntimeError
+                        iface.status('    Tasks completed: %d/%d'
+                                     % (len(return_values), input_file_count))
+                        time.sleep(0.2)
                     try:
                         max_tuple = max(map(len, return_values))
                     except ValueError:
@@ -1162,28 +1225,31 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     if step_number != 0 else None))
                         failed = True
                         raise RuntimeError
-                    iface.status('    Tasks completed: %d/%d'
-                                 % (len(return_values), input_file_count))
-                    time.sleep(0.2)
-                try:
-                    max_tuple = max(map(len, return_values))
-                except ValueError:
-                    # return_values is empty
-                    max_tuple = -1
-                    pass
-                if max_tuple > 0:
-                    # There are error tuples
-                    errors = ['Streaming command "%s" failed: %s' % 
-                              (error[1], error[0]) for error 
-                              in return_values if len(error) == 2]
-                    errors = [(('%d) ' % (i + 1)) + error)
-                                if len(errors) > 1 else errors[0]
-                                for i, error in enumerate(errors)]
-                    iface.fail('\n'.join(errors),
-                               (job_flow[step_number:]
-                                if step_number != 0 else None))
-                    failed = True
-                    raise RuntimeError
+                else:
+                    return_values = balanced_view.map(
+                            arglist_as_function,
+                            [[step_runner_with_error_return,
+                                step_data['reducer'], input_file, output_dir, 
+                                err_dir, i, multiple_outputs, separator,
+                                step_data['sort_options'], memcap, gzip,
+                                gzip_level, scratch] for i, input_file
+                                    in enumerate(input_files)],
+                            block=False,
+                            ordered=False
+                        )
+                    iface.status('    Tasks completed: 0/%d'
+                                     % input_file_count)
+                    for i, return_value in enumerate(return_values):
+                        if return_value:
+                            # Bails after encountering exactly one error
+                            iface.fail('Streaming command "%s" failed: %s' % 
+                                            (return_value[1], return_value[0]),
+                                        steps=(job_flow[step_number:]
+                                                if step_number != 0 else None))
+                            failed = True
+                            raise RuntimeError
+                        iface.status('    Tasks completed: %d/%d'
+                                         % (i+1, input_file_count))
                 iface.step('    Completed %s.'
                            % dp_iface.inflected(input_file_count, 'task'))
             # Really close open file handles in PyPy
@@ -1281,6 +1347,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         iface.done()
     except (Exception, GeneratorExit):
         # GeneratorExit added just in case this happens on modifying code
+        if 'interrupt_engines' in locals():
+            interrupt_engines(direct_view, iface)
         if not failed:
             time.sleep(0.2)
             if 'step_number' in locals():
@@ -1295,6 +1363,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 shutil.rmtree(split_input_dir)
         raise
     except (KeyboardInterrupt, SystemExit):
+        if 'interrupt_engines' in locals():
+            interrupt_engines(direct_view, iface)
         if 'step_number' in locals():
             iface.fail(steps=(job_flow[step_number:]
                         if step_number != 0 else None),
