@@ -424,9 +424,8 @@ def reference_from_seq(cigar, seq, reference_index, rname, pos):
     return (new_pos + i, reference_seq[i:j+1])
 
 def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
-    """ Computes indels, introns, and exons from CIGAR, MD string,
-        and POS of a given alignment.
-
+    """ Computes indels, introns, and exons from CIGAR, MD string, POS
+    
         cigar: CIGAR string
         md: MD:Z string
         pos: position of first aligned base

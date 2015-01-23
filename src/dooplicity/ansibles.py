@@ -681,6 +681,8 @@ class Url(object):
                 self.type = 'ftp'
             elif prefix[:5] == 'local':
                 self.type = 'local'
+            elif prefix[:3] == 'nfs':
+                self.type = 'nfs'
             else:
                 raise RuntimeError(('Unrecognized URL %s; it\'s not S3, HDFS, '
                                     'HTTP, FTP, or local.') % url)
@@ -692,13 +694,14 @@ class Url(object):
         self.is_curlable = self.type in ['ftp', 'http', 'https']
         self.is_local = self.type == 'local'
         self.is_hdfs = self.type == 'hdfs'
+        self.is_nfs = self.type == 'nfs'
 
     def to_url(self, caps=False):
         """ Returns URL string: an absolute path if local or an URL.
 
             Return value: URL string
         """
-        if self.type == 'local':
+        if self.type in ['local', 'nfs']:
             absolute_path = os.path.abspath(self.suffix)
             return (absolute_path + '/') if self.suffix[-1] == '/' \
                 else absolute_path

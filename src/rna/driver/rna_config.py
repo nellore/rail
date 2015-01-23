@@ -36,6 +36,8 @@ import subprocess
 import time
 from traceback import format_exc
 from collections import defaultdict
+import random
+import string
 
 class RailParser(argparse.ArgumentParser):
     """ Accommodates Rail-RNA's subcommand structure. """
@@ -135,14 +137,80 @@ def ready_engines(rc, base):
 
         No return value.
     """
-    rc[:].execute('import socket').get()
-    rc[:].execute('import subprocess').get()
+    direct_view = rc[:]
+    direct_view.execute('import socket').get()
+    direct_view.execute('import subprocess').get()
     engine_to_hostnames = rc[:].apply(socket.get_hostnames).get_dict()
     hostname_to_engines = defaultdict(set)
     for engine in hostnames:
         hostname_to_engines[engine_to_hostnames[engine]].add(engine)
-    # Distribute Rail-RNA to nodes
-    
+    '''Select engines to do "heavy lifting"; that is, they remove files copied
+    to hosts on SIGINT/SIGTERM. Do it randomly so if IWF occurs, second try
+    will be different.'''
+    engines_for_copying = [random.choice(engines) 
+                            for engines in hostname_to_engines.values()]
+    # Create temporary directories on selcted nodes
+    select_view = rc[engines_for_copying]
+    select_view.execute('import os').get()
+    select_view.execute('import atexit').get()
+    from tempdel import remove_temporary_directories
+    select_view.push(
+            dict(remove_temporary_directories=remove_temporary_directories)
+        )
+    # NOT WINDOWS-COMPATIBLE; must be changed if porting Rail to Windows
+    temp_dir = '/tmp/railrna-%s' % \
+        ''.join(random.SystemRandom().choice(string.ascii_uppercase
+            + string.digits) for _ in range(12))
+    temp_dir_result = select_view.apply_async(
+            os.makedirs, temp_dir
+        )
+    while not temp_dir_result.is_ready():
+        time.sleep(0.1)
+    if not temp_dir_result.successful():
+        raise RuntimeError(
+                'Error creating temporary directories on slave nodes. '
+                'Check that /tmp is writable on all nodes.'
+            )
+    register_result = select_view.apply_async(
+            atexit.register, remove_temporary_directories, [temp_dir]
+        )
+    while not register_result.is_ready():
+        time.sleep(0.1)
+    if not register_result.successful():
+        raise RuntimeError(
+                'Error scheduling temporary directories on slave nodes '
+                'for deletion.'
+            )
+    # Compress Rail-RNA and distribute it to nodes
+    try:
+        os.makedirs(temp_dir)
+    except OSError:
+        # Temp dir exists?
+        pass
+    compressed_rail_file = 'rail.tar.gz'
+    compressed_rail_path = os.path.join(temp_dir, compressed_rail_file)
+    atexit.register(remove_temporary_directories, [temp_dir])
+    with tarfile.open(os.path.join(temp_dir, compressed_rail_file),
+                        'w:gz') as tar_stream:
+        tar.add(base_dir, arcname='rail')
+    try:
+        import herd.herd as herd
+    except ImportError:
+        # Copy the hard, annoying way
+        pass
+    else:
+        herd.run_with_opts(
+                compressed_rail_path,
+                compressed_rail_path,
+                hostlist=','.join(hostname_to_engines.keys())
+            )
+    select_view.map(block=True)
+    subprocess.Popen('tar czvf {} {}'.format(os.path.join(
+                                                        compress_dir,
+                                                        compressed_rail_file
+                                                    ),
+                                             base_dir
+                                            ))
     while not asyncresult.ready():
         time.sleep(1e-1)
     if not asyncresult.successful():
@@ -1476,6 +1544,8 @@ class RailRnaElastic(object):
         if no_consistent_view and base.region != 'us-east-1':
             # Read-after-write consistency is guaranteed
             base.no_consistent_view = False
+        else:
+            base.no_consistent_view = True
 
     @staticmethod
     def add_args(general_parser, required_parser, output_parser, 
