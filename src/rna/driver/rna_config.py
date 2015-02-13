@@ -580,7 +580,7 @@ class RailRnaErrors(object):
         self.profile = profile
 
     def raise_runtime_exception(self):
-        """ Raises RuntimeException if self.errors is nonempty. """
+        """ Raises RuntimeError if self.errors is nonempty. """
         if self.errors:
             raise RuntimeError(
                     '\n'.join(
