@@ -3972,12 +3972,6 @@ class RailRnaParallelAllJson(object):
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose) for i in rc.ids]
-        from IPython.parallel import require
-        RailRnaLocal = require(globals()['RailRnaLocal'], rna_config)
-        RailRnaLocal(base, check_manifest=check_manifest,
-            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
-            gzip_level=gzip_level, keep_intermediates=keep_intermediates,
-            parallel=False, local=False)
         asyncresults = []
         for i in rc.ids:
             asyncresults.append(
@@ -4050,40 +4044,7 @@ class RailRnaParallelAllJson(object):
                              exc]
                          )
                 raise RuntimeError('\n'.join(runtimeerror_message))
-        RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
-            gzip_input=gzip_input)
-        RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
-            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
-            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe,
-            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
-            genome_partition_length=genome_partition_length,
-            max_readlet_size=max_readlet_size,
-            readlet_config_size=readlet_config_size,
-            min_readlet_size=min_readlet_size,
-            readlet_interval=readlet_interval,
-            cap_size_multiplier=cap_size_multiplier,
-            max_intron_size=max_intron_size,
-            min_intron_size=min_intron_size,
-            search_filter=search_filter,
-            min_exon_size=min_exon_size,
-            motif_search_window_size=motif_search_window_size,
-            max_gaps_mismatches=max_gaps_mismatches,
-            motif_radius=motif_radius,
-            genome_bowtie1_args=genome_bowtie1_args,
-            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
-            count_multiplier=count_multiplier,
-            intron_confidence_criteria=intron_confidence_criteria,
-            tie_margin=tie_margin,
-            normalize_percentile=normalize_percentile,
-            very_replicable=very_replicable,
-            drop_deletions=drop_deletions,
-            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, bam_basename=bam_basename,
-            bed_basename=bed_basename)
         base.raise_runtime_exception()
-        print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         prep_dir = path_join(False, base.intermediate_dir,
