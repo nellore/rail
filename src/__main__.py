@@ -44,24 +44,6 @@ u"""rail-rna <job flow> <mode> <[args]>
 Rail-RNA is a scalable MapReduce pipeline that can analyze many RNA-seq
 datasets at once. To view help for a given combination of <job flow> and
 <mode>, specify both, then add -h/--help.""".format(u'\u2200', version_number)
-_help_set = set(['--help', '-h'])
-_argv_set = set(sys.argv)
-
-def general_usage(job_flow_and_mode, required_args=''):
-    """ Special Rail-RNA usage message at subcommand level.
-
-        job_flow_and_mode: job flow and mode separated by a space
-
-        Return value: usage message
-    """
-    return \
-"""rail-rna {0} {1}<[opts]>{2}""".format(
-job_flow_and_mode, required_args,
-"""
-
-Add --help/-h to view help.""" if not _help_set.intersection(_argv_set)
-else ''
-)
 
 class Launcher(object):
     """ Facilitates replacing the current process with a Dooplicity runner. """
@@ -169,10 +151,6 @@ class Launcher(object):
             os.write(write_pipe, payload)
             os.close(write_pipe)
             ###SCRIPT TERMINATES HERE###
-
-def rail_help_wrapper(prog):
-    """ So formatter_class's max_help_position can be changed. """
-    return RailHelpFormatter(prog, max_help_position=37)
 
 if __name__ == '__main__':
     parser = RailParser(

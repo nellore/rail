@@ -39,6 +39,9 @@ from collections import defaultdict
 import random
 import string
 
+_help_set = set(['--help', '-h'])
+_argv_set = set(sys.argv)
+
 class RailParser(argparse.ArgumentParser):
     """ Accommodates Rail-RNA's subcommand structure. """
     
@@ -74,6 +77,26 @@ class RailHelpFormatter(argparse.HelpFormatter):
         else:
             return '%s %s' % ('/'.join(action.option_strings),
                                 self._format_args(action, action.dest.upper()))
+
+def general_usage(job_flow_and_mode, required_args=''):
+    """ Special Rail-RNA usage message at subcommand level.
+
+        job_flow_and_mode: job flow and mode separated by a space
+
+        Return value: usage message
+    """
+    return \
+"""rail-rna {0} {1}<[opts]>{2}""".format(
+job_flow_and_mode, required_args,
+"""
+
+Add --help/-h to view help.""" if not _help_set.intersection(_argv_set)
+else ''
+)
+
+def rail_help_wrapper(prog):
+    """ So formatter_class's max_help_position can be changed. """
+    return RailHelpFormatter(prog, max_help_position=37)
 
 '''These are placed here for convenience; their locations may change
 on EMR depending on bootstraps.'''
@@ -251,15 +274,15 @@ def ready_engines(rc, base):
         else:
             print_to_screen('Copying Bowtie index files to cluster nodes '
                             'with Herd...')
-`           index_files = [base.bowtie2_idx + extension
+            index_files = ([base.bowtie2_idx + extension
                             for extension in ['.1.bt2', '.2.bt2',
                                               '.3.bt2', '.4.bt2', 
-                                              '.rev.1.bt2', '.rev.2.bt2']] + \
-                            [base.bowtie1_idx + extension
+                                              '.rev.1.bt2', '.rev.2.bt2']]
+                            + [base.bowtie1_idx + extension
                                 for extension in [
                                         '.1.ebwt', '.2.ebwt', '.3.ebwt',
                                         '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt'
-                                    ]]:
+                                    ]])
             for index_file in index_files:
                 herd.run_with_options(
                         os.path.abspath(index_file),
