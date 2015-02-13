@@ -102,10 +102,7 @@ class Launcher(object):
         if os.fork() != 0:
             # Parent process; read from child after determining executable
             if mode == 'local':
-                print >>sys.stderr, _warning_message
-                if not sys.stderr.isatty():
-                    # So the user sees it too
-                    print _warning_message
+                print_to_screen(_warning_message)
                 runner_args = [_executable, os.path.join(
                                                     base_path,
                                                     'dooplicity',
@@ -124,12 +121,7 @@ class Launcher(object):
                 if self.log:
                     runner_args.extend(['-l', os.path.abspath(self.log)])
             elif mode == 'parallel':
-                parallel_warning_message \
-                    = 'Launching Dooplicity runner with Python...'
-                print >>sys.stderr, parallel_warning_message
-                if not sys.stderr.isatty():
-                    # So the user sees it too
-                    print parallel_warning_message
+                print_to_screen('Launching Dooplicity runner with Python...')
                 # sys.executable had better find IPython
                 runner_args = [sys.executable, os.path.join(
                                                     base_path,
@@ -650,7 +642,8 @@ if __name__ == '__main__':
                 check_manifest=(not args.do_not_check_manifest),
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
-                scratch=args.scratch
+                scratch=args.scratch,
+                do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes
             )
     elif args.job_flow == 'align' and args.align_mode == 'parallel':
         mode = 'parallel'
@@ -695,7 +688,8 @@ if __name__ == '__main__':
                 keep_intermediates=args.keep_intermediates,
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
-                scratch=args.scratch
+                scratch=args.scratch,
+                do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'parallel':
         mode = 'parallel'

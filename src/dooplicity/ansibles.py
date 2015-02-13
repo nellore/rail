@@ -500,7 +500,7 @@ class AWSAnsible(object):
             base_suffix = base_uri[7:]
             self.base_prefix = base_uri[:7]
         else:
-            raise RuntimeError('Base URI for GET request must begin with '
+            raise RuntimeError('Base URI for POST request must begin with '
                                'http:// or https://.')
         split_base_suffix = [segment for segment in base_suffix.split('/')
                                 if segment]

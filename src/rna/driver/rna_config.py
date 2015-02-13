@@ -129,8 +129,20 @@ else:
     else:
         _warning_message = 'Launching Dooplicity runner with PyPy...'
 
+def print_to_screen(message):
+    """ Prints message to stdout as well as stderr if stderr is redirected.
+
+        message: message to print
+
+        No return value.
+    """
+    print >>sys.stderr, message
+    if not sys.stderr.isatty():
+        # So the user sees it too
+        print message
+
 def ready_engines(rc, base):
-    """ Prepares engines for checks. 
+    """ Prepares engines for checks and copies index to nodes. 
 
         rc: IPython Client object
         base: instance of RailRnaErrors
@@ -138,21 +150,29 @@ def ready_engines(rc, base):
         No return value.
     """
     direct_view = rc[:]
-    direct_view.execute('import socket').get()
-    direct_view.execute('import subprocess').get()
-    engine_to_hostnames = rc[:].apply(socket.get_hostnames).get_dict()
+    with direct_view.sync_imports(quiet=True):
+        import socket
+        import subprocess
+        import site
+    current_hostname = socket.gethostname()
+    engine_to_hostnames = rc[:].apply(socket.gethostname).get_dict()
     hostname_to_engines = defaultdict(set)
     for engine in hostnames:
         hostname_to_engines[engine_to_hostnames[engine]].add(engine)
     '''Select engines to do "heavy lifting"; that is, they remove files copied
-    to hosts on SIGINT/SIGTERM. Do it randomly so if IWF occurs, second try
-    will be different.'''
+    to hosts on SIGINT/SIGTERM. Do it randomly (NO SEED) so if IWF occurs,
+    second try will be different. IWF = intermittent weird failure, terminology 
+    borrowed from a PC repair guide from the nineties that one of us (AN) wants
+    to perpetuate.'''
     engines_for_copying = [random.choice(engines) 
                             for engines in hostname_to_engines.values()]
-    # Create temporary directories on selcted nodes
+    # Create temporary directories on selected nodes
     select_view = rc[engines_for_copying]
-    select_view.execute('import os').get()
-    select_view.execute('import atexit').get()
+    with select_view.sync_imports(quiet=True):
+        import os
+        import atexit
+        import shutil
+        import tarfile
     from tempdel import remove_temporary_directories
     select_view.push(
             dict(remove_temporary_directories=remove_temporary_directories)
@@ -188,39 +208,67 @@ def ready_engines(rc, base):
         # Temp dir exists?
         pass
     compressed_rail_file = 'rail.tar.gz'
-    compressed_rail_path = os.path.join(temp_dir, compressed_rail_file)
-    atexit.register(remove_temporary_directories, [temp_dir])
-    with tarfile.open(os.path.join(temp_dir, compressed_rail_file),
-                        'w:gz') as tar_stream:
-        tar.add(base_dir, arcname='rail')
+    compressed_rail_path = os.path.join(base.intermediate_dir,
+                                            compressed_rail_file)
+    compressed_rail_destination = os.path.join(temp_dir, compressed_rail_file)
+    with tarfile.open(compressed_rail_path, 'w:gz') as tar_stream:
+        tar_stream.add(base_dir, arcname='rail')
     try:
         import herd.herd as herd
     except ImportError:
-        # Copy the hard, annoying way
-        pass
+        # Torrent distribution channel for compressed archive not available
+        print_to_screen('Copying Rail-RNA to cluster nodes...')
+        select_view.apply_async(
+                shutil.copyfile, compressed_rail_path,
+                compressed_rail_destination
+            )
     else:
+        print_to_screen('Copying Rail-RNA to cluster nodes with Herd...')
         herd.run_with_opts(
                 compressed_rail_path,
-                compressed_rail_path,
+                compressed_rail_destination,
                 hostlist=','.join(hostname_to_engines.keys())
             )
-    select_view.map(block=True)
-    subprocess.Popen('tar czvf {} {}'.format(os.path.join(
-                                                        compress_dir,
-                                                        compressed_rail_file
-                                                    ),
-                                             base_dir
-                                            ))
-    while not asyncresult.ready():
-        time.sleep(1e-1)
-    if not asyncresult.successful():
-        asyncresult.get()
-    asyncresult = rc[:]
-    asyncresult = rc[:].execute('import os')
-    while not asyncresult.ready():
-        time.sleep(1e-1)
-    if not asyncresult.successful():
-        asyncresult.get()
+    # Extract Rail
+    print_to_screen('Extracting Rail-RNA on cluster nodes...')
+    select_view.execute(
+            ('with tarfile.open({}, "r:gz") as tar_stream:'
+             ' tar_stream.extractall(path="{}")').format(
+                    compressed_rail_destination,
+                    temp_dir
+                )
+        ).get()
+    # Add Rail to path on every engine
+    direct_view.execute('site.addsitedir({})'.format(temp_dir))
+    if not base.do_not_copy_index_to_nodes:
+        # Only copy indexes to nodes if Herd is present since they're big
+        try:
+            import herd.herd as herd
+        except ImportError:
+            print_to_screen('Warning: Herd is not installed, so Bowtie '
+                            'indexes will not be copied to cluster nodes. '
+                            'This may slow down alignment.')
+        else:
+            print_to_screen('Copying Bowtie index files to cluster nodes '
+                            'with Herd...')
+`           index_files = [base.bowtie2_idx + extension
+                            for extension in ['.1.bt2', '.2.bt2',
+                                              '.3.bt2', '.4.bt2', 
+                                              '.rev.1.bt2', '.rev.2.bt2']] + \
+                            [base.bowtie1_idx + extension
+                                for extension in [
+                                        '.1.ebwt', '.2.ebwt', '.3.ebwt',
+                                        '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt'
+                                    ]]:
+            for index_file in index_files:
+                herd.run_with_options(
+                        os.path.abspath(index_file),
+                        os.path.join(temp_dir, os.path.basename(index_file)),
+                        hostlist=','.join(hostname_to_engines.keys())
+                    )
+        base.bowtie1_idx = os.path.join(temp_dir,
+                                        os.path.basename(base.bowtie1_idx))
+
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
@@ -807,12 +855,8 @@ def ipython_client(ipython_profile=None, ipcontroller_json=None):
                 'connected to it. Engines must be connected to an IPython '
                 'controller when running Rail-RNA in "parallel" mode.'
             )
-    engine_detect_message = ('Detected %d running IPython engines.' 
+    print_to_screen('Detected %d running IPython engines.' 
                                 % len(rc.ids))
-    print >>sys.stderr, engine_detect_message
-    if not sys.stderr.isatty():
-        # So the user sees it too
-        print engine_detect_message
     return rc
 
 class RailRnaLocal(object):
@@ -824,7 +868,8 @@ class RailRnaLocal(object):
     def __init__(self, base, check_manifest=False,
                     num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3, parallel=False,
-                    local=True, scratch=None, ansible=None):
+                    local=True, scratch=None, ansible=None,
+                    do_not_copy_index_to_nodes=False):
         """ base: instance of RailRnaErrors """
         # Initialize ansible for easy checks
         if not ansible:
@@ -856,6 +901,7 @@ class RailRnaLocal(object):
             ansible.profile = base.profile
         base.check_s3_on_engines = None
         base.check_curl_on_engines = None
+        base.do_not_copy_index_to_nodes = do_not_copy_index_to_nodes
         if not parallel:
             if output_dir_url.is_local \
                 and os.path.exists(output_dir_url.to_url()):
@@ -1134,6 +1180,15 @@ class RailRnaLocal(object):
                       'intermediate directory (def: securely created '
                       'temporary directory)')
             )
+            if align:
+                general_parser.add_argument(
+                        '--do-not-copy-index-to-nodes', action='store_const',
+                        const=True,
+                        default=False,
+                        help=('does not copy Bowtie/Bowtie 2 indexes to '
+                              'nodes before starting job flow; copying '
+                              'requires Herd')
+                    )
         general_parser.add_argument(
             '--keep-intermediates', action='store_const', const=True,
             default=False,
@@ -1553,7 +1608,7 @@ class RailRnaElastic(object):
         if align:
             required_parser.add_argument(
                 '-i', '--input', type=str, required=True, metavar='<s3_dir>',
-                help='input directory with preprocessed read; must begin ' \
+                help='input directory with preprocessed reads; must begin ' \
                      'with s3://'
             )
         required_parser.add_argument(
@@ -1794,11 +1849,6 @@ class RailRnaElastic(object):
                          'com.hadoop.compression.lzo.LzopCodec'),
                         '-m',
                         'mapreduce.job.maps=%d' % base.total_cores,
-                        '-c',
-                        'fs.s3.impl=org.apache.hadoop.fs.s3.S3FileSystem',
-                        '-c',
-                        'fs.s3n.impl='
-                        'org.apache.hadoop.fs.s3native.NativeS3FileSystem'
                     ] + (['-e', 'fs.s3.consistent=true']
                             if not base.original_no_consistent_view
                             else ['-e', 'fs.s3.consistent=false']),
@@ -3244,21 +3294,21 @@ class RailRnaParallelPreprocessJson(object):
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         keep_intermediates=False, check_manifest=True):
-        rc = ipython_client(ipython_profile=ipython_profile,
-                                ipcontroller_json=ipcontroller_json)
-        ready_engines(rc)
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
+        RailRnaLocal(base, check_manifest=check_manifest,
+            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
+            gzip_level=gzip_level, keep_intermediates=keep_intermediates,
+            local=False, parallel=False, align=False)
+        rc = ipython_client(ipython_profile=ipython_profile,
+                                ipcontroller_json=ipcontroller_json)
+        ready_engines(rc)
         engine_bases = [RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose) for i in rc.ids]
-        RailRnaLocal(base, check_manifest=check_manifest,
-            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
-            gzip_level=gzip_level, keep_intermediates=keep_intermediates,
-            local=False, parallel=False)
         asyncresults = []
         for i in rc.ids:
             asyncresults.append(
@@ -3506,10 +3556,7 @@ class RailRnaLocalAlignJson(object):
                                 in enumerate(base.errors)]
                         ) if len(base.errors) > 1 else base.errors[0]
                 )
-        print >>sys.stderr, base.detect_message
-        if not sys.stderr.isatty():
-            # So the user sees it too
-            print base.detect_message
+        print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
@@ -3544,7 +3591,8 @@ class RailRnaParallelAlignJson(object):
         bam_basename='alignments', bed_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         gzip_intermediates=False,
-        gzip_level=3, keep_intermediates=False):
+        gzip_level=3, keep_intermediates=False,
+        do_not_copy_index_to_nodes=False):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         ready_engines(rc)
@@ -3664,10 +3712,7 @@ class RailRnaParallelAlignJson(object):
                                 in enumerate(base.errors)]
                         ) if len(base.errors) > 1 else base.errors[0]
                 )
-        print >>sys.stderr, base.detect_message
-        if not sys.stderr.isatty():
-            # So the user sees it too
-            print base.detect_message
+        print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
@@ -3876,10 +3921,7 @@ class RailRnaLocalAllJson(object):
                                 in enumerate(base.errors)]
                         ) if len(base.errors) > 1 else base.errors[0]
                 )
-        print >>sys.stderr, base.detect_message
-        if not sys.stderr.isatty():
-            # So the user sees it too
-            print base.detect_message
+        print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         prep_dir = path_join(False, base.intermediate_dir,
@@ -3922,7 +3964,8 @@ class RailRnaParallelAllJson(object):
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
-        keep_intermediates=False, check_manifest=True):
+        keep_intermediates=False, check_manifest=True,
+        do_not_copy_index_to_nodes=False):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         ready_engines(rc)
@@ -4051,10 +4094,7 @@ class RailRnaParallelAllJson(object):
                                 in enumerate(base.errors)]
                         ) if len(base.errors) > 1 else base.errors[0]
                 )
-        print >>sys.stderr, base.detect_message
-        if not sys.stderr.isatty():
-            # So the user sees it too
-            print base.detect_message
+        print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         prep_dir = path_join(False, base.intermediate_dir,
