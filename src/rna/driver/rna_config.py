@@ -268,7 +268,8 @@ def ready_engines(rc, base):
                     )
         base.bowtie1_idx = os.path.join(temp_dir,
                                         os.path.basename(base.bowtie1_idx))
-
+        base.bowtie2_idx = os.path.join(temp_dir,
+                                        os.path.basename(base.bowtie2_idx))
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
@@ -577,6 +578,16 @@ class RailRnaErrors(object):
         self.curl_exe = curl_exe
         self.verbose = verbose
         self.profile = profile
+
+    def raise_runtime_exception(self):
+        """ Raises RuntimeException if self.errors is nonempty. """
+        if self.errors:
+            raise RuntimeError(
+                    '\n'.join(
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(self.errors)]
+                        ) if len(self.errors) > 1 else self.errors[0]
+                )
 
     def check_s3(self, reason=None, is_exe=None, which=None):
         """ Checks for AWS CLI and configuration file.
@@ -1565,13 +1576,7 @@ class RailRnaElastic(object):
                                                 ))
         base.task_instance_count = task_instance_count
         # Raise exceptions before computing mems
-        if base.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(base.errors)]
-                        ) if len(base.errors) > 1 else base.errors[0]
-                )
+        base.raise_runtime_exception()
         if base.core_instance_count > 0:
             base.mem \
                 = base.instance_mems[base.core_instance_type]
@@ -2184,14 +2189,8 @@ class RailRnaAlign(object):
                                                         e.message,
                                                         base.samtools_exe
                                                     ))
-            if base.errors:
-                # Output any errors before detect message is determined
-                raise RuntimeError(
-                        '\n'.join(
-                                ['%d) %s' % (i+1, error) for i, error
-                                    in enumerate(base.errors)]
-                            ) if len(base.errors) > 1 else base.errors[0]
-                    )
+            # Output any errors before detect message is determined
+            base.raise_runtime_exception()
             base.samtools_version = '<unknown>'
             for line in samtools_process.stderr:
                 if 'Version:' in line:
@@ -3264,13 +3263,7 @@ class RailRnaLocalPreprocessJson(object):
             gzip_level=gzip_level, keep_intermediates=keep_intermediates)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
-        if base.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(base.errors)]
-                        ) if len(base.errors) > 1 else base.errors[0]
-                )
+        base.raise_runtime_exception()
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
@@ -3302,6 +3295,9 @@ class RailRnaParallelPreprocessJson(object):
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, keep_intermediates=keep_intermediates,
             local=False, parallel=False, align=False)
+        RailRnaPreprocess(base,
+            nucleotides_per_input=nucleotides_per_input, gzip_input=gzip_input)
+        base.raise_runtime_exception()
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         ready_engines(rc)
@@ -3381,15 +3377,7 @@ class RailRnaParallelPreprocessJson(object):
                              exc]
                          )
                 raise RuntimeError('\n'.join(runtimeerror_message))
-        RailRnaPreprocess(base,
-            nucleotides_per_input=nucleotides_per_input, gzip_input=gzip_input)
-        if base.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(base.errors)]
-                        ) if len(base.errors) > 1 else base.errors[0]
-                )
+        base.raise_runtime_exception()
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
@@ -3446,13 +3434,7 @@ class RailRnaElasticPreprocessJson(object):
             intermediate_lifetime=intermediate_lifetime)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
-        if base.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(base.errors)]
-                        ) if len(base.errors) > 1 else base.errors[0]
-                )
+        base.raise_runtime_exception()
         self._json_serial = {}
         if base.core_instance_count > 0:
             reducer_count = base.core_instance_count \
@@ -3549,13 +3531,7 @@ class RailRnaLocalAlignJson(object):
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
-        if base.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(base.errors)]
-                        ) if len(base.errors) > 1 else base.errors[0]
-                )
+        base.raise_runtime_exception()
         print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
@@ -3593,16 +3569,48 @@ class RailRnaParallelAlignJson(object):
         gzip_intermediates=False,
         gzip_level=3, keep_intermediates=False,
         do_not_copy_index_to_nodes=False):
+        RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
+            gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
+            keep_intermediates=keep_intermediates, local=False, parallel=False)
+        RailRnaAlign(base, input_dir=input_dir,
+            elastic=False, bowtie1_exe=bowtie1_exe,
+            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
+            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
+            samtools_exe=samtools_exe,
+            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
+            genome_partition_length=genome_partition_length,
+            max_readlet_size=max_readlet_size,
+            readlet_config_size=readlet_config_size,
+            min_readlet_size=min_readlet_size,
+            readlet_interval=readlet_interval,
+            cap_size_multiplier=cap_size_multiplier,
+            max_intron_size=max_intron_size,
+            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            search_filter=search_filter,
+            motif_search_window_size=motif_search_window_size,
+            max_gaps_mismatches=max_gaps_mismatches,
+            motif_radius=motif_radius,
+            genome_bowtie1_args=genome_bowtie1_args,
+            count_multiplier=count_multiplier,
+            intron_confidence_criteria=intron_confidence_criteria,
+            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            tie_margin=tie_margin,
+            normalize_percentile=normalize_percentile,
+            very_replicable=very_replicable,
+            drop_deletions=drop_deletions,
+            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            output_sam=output_sam, bam_basename=bam_basename,
+            bed_basename=bed_basename)
+        base.raise_runtime_exception()
+        print_to_screen(base.detect_message)
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
-        ready_engines(rc)
+        ready_engines(rc, base)
         engine_bases = [RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose) for i in rc.ids]
-        RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
-            gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
-            keep_intermediates=keep_intermediates, local=False, parallel=False)
         asyncresults = []
         for i in rc.ids:
             asyncresults.append(
@@ -3675,44 +3683,7 @@ class RailRnaParallelAlignJson(object):
                              exc]
                          )
                 raise RuntimeError('\n'.join(runtimeerror_message))
-        RailRnaAlign(base, input_dir=input_dir,
-            elastic=False, bowtie1_exe=bowtie1_exe,
-            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
-            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe,
-            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
-            genome_partition_length=genome_partition_length,
-            max_readlet_size=max_readlet_size,
-            readlet_config_size=readlet_config_size,
-            min_readlet_size=min_readlet_size,
-            readlet_interval=readlet_interval,
-            cap_size_multiplier=cap_size_multiplier,
-            max_intron_size=max_intron_size,
-            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
-            search_filter=search_filter,
-            motif_search_window_size=motif_search_window_size,
-            max_gaps_mismatches=max_gaps_mismatches,
-            motif_radius=motif_radius,
-            genome_bowtie1_args=genome_bowtie1_args,
-            count_multiplier=count_multiplier,
-            intron_confidence_criteria=intron_confidence_criteria,
-            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
-            tie_margin=tie_margin,
-            normalize_percentile=normalize_percentile,
-            very_replicable=very_replicable,
-            drop_deletions=drop_deletions,
-            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, bam_basename=bam_basename,
-            bed_basename=bed_basename)
-        if base.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(base.errors)]
-                        ) if len(base.errors) > 1 else base.errors[0]
-                )
-        print_to_screen(base.detect_message)
+        base.raise_runtime_exception()
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
@@ -3810,13 +3781,7 @@ class RailRnaElasticAlignJson(object):
             bed_basename=bed_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
                                         profile=base.profile))
-        if base.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(base.errors)]
-                        ) if len(base.errors) > 1 else base.errors[0]
-                )
+        base.raise_runtime_exception()
         self._json_serial = {}
         if base.core_instance_count > 0:
             reducer_count = base.core_instance_count \
@@ -3914,13 +3879,7 @@ class RailRnaLocalAllJson(object):
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
-        if base.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(base.errors)]
-                        ) if len(base.errors) > 1 else base.errors[0]
-                )
+        base.raise_runtime_exception()
         print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
@@ -3966,6 +3925,46 @@ class RailRnaParallelAllJson(object):
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         keep_intermediates=False, check_manifest=True,
         do_not_copy_index_to_nodes=False):
+        base = RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose, local=False, parallel=False)
+        RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
+            gzip_input=gzip_input)
+        RailRnaLocal(base, check_manifest=check_manifest,
+            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
+            gzip_level=gzip_level, keep_intermediates=keep_intermediates)
+        RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
+            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
+            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
+            samtools_exe=samtools_exe,
+            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
+            genome_partition_length=genome_partition_length,
+            max_readlet_size=max_readlet_size,
+            readlet_config_size=readlet_config_size,
+            min_readlet_size=min_readlet_size,
+            readlet_interval=readlet_interval,
+            cap_size_multiplier=cap_size_multiplier,
+            max_intron_size=max_intron_size,
+            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            search_filter=search_filter,
+            motif_search_window_size=motif_search_window_size,
+            max_gaps_mismatches=max_gaps_mismatches,
+            motif_radius=motif_radius,
+            genome_bowtie1_args=genome_bowtie1_args,
+            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            count_multiplier=count_multiplier,
+            intron_confidence_criteria=intron_confidence_criteria,
+            tie_margin=tie_margin,
+            normalize_percentile=normalize_percentile,
+            very_replicable=very_replicable,
+            drop_deletions=drop_deletions,
+            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            output_sam=output_sam, bam_basename=bam_basename,
+            bed_basename=bed_basename)
+        base.raise_runtime_exception()
+        print_to_screen(base.detect_message)
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         ready_engines(rc)
@@ -3973,10 +3972,6 @@ class RailRnaParallelAllJson(object):
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose) for i in rc.ids]
-        base = RailRnaErrors(manifest, output_dir, 
-            intermediate_dir=intermediate_dir,
-            force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose)
         from IPython.parallel import require
         RailRnaLocal = require(globals()['RailRnaLocal'], rna_config)
         RailRnaLocal(base, check_manifest=check_manifest,
@@ -4087,13 +4082,7 @@ class RailRnaParallelAllJson(object):
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
-        if base.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(base.errors)]
-                        ) if len(base.errors) > 1 else base.errors[0]
-                )
+        base.raise_runtime_exception()
         print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
@@ -4203,13 +4192,7 @@ class RailRnaElasticAllJson(object):
             bed_basename=bed_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
                                         profile=base.profile))
-        if base.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(base.errors)]
-                        ) if len(base.errors) > 1 else base.errors[0]
-                )
+        base.raise_runtime_exception()
         self._json_serial = {}
         if base.core_instance_count > 0:
             reducer_count = base.core_instance_count \
