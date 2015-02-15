@@ -102,6 +102,10 @@ class Launcher(object):
                                             str(self.gzip_level)])
                 if self.log:
                     runner_args.extend(['-l', os.path.abspath(self.log)])
+                os.dup2(read_pipe, sys.stdin.fileno())
+                os.close(read_pipe)
+                os.close(write_pipe)
+                os.execv(_executable, runner_args)
             elif mode == 'parallel':
                 print_to_screen('Launching Dooplicity runner with Python...')
                 # sys.executable had better find IPython
@@ -123,7 +127,8 @@ class Launcher(object):
                 if self.log:
                     runner_args.extend(['-l', os.path.abspath(self.log)])
                 if self.common:
-                    runner_args.extend(['--common', os.path.abspath(self.log)])
+                    runner_args.extend(['--common',
+                        os.path.abspath(self.common)])
                 if self.scratch:
                     runner_args.extend(['--scratch', self.scratch])
                 if self.ipython_profile:
@@ -131,6 +136,10 @@ class Launcher(object):
                 if self.ipcontroller_json:
                     runner_args.extend(['--ipcontroller-json',
                                             self.ipcontroller_json])
+                os.dup2(read_pipe, sys.stdin.fileno())
+                os.close(read_pipe)
+                os.close(write_pipe)
+                os.execv(sys.executable, runner_args)
             else:
                 runner_args = [_executable, os.path.join(
                                                     base_path,
@@ -143,10 +152,10 @@ class Launcher(object):
                     runner_args.append('-f')
                 if self.region != 'us-east-1':
                     runner_args.extend(['-r', self.region])
-            os.dup2(read_pipe, sys.stdin.fileno())
-            os.close(read_pipe)
-            os.close(write_pipe)
-            os.execv(_executable, runner_args)
+                os.dup2(read_pipe, sys.stdin.fileno())
+                os.close(read_pipe)
+                os.close(write_pipe)
+                os.execv(_executable, runner_args)
         else:
             os.write(write_pipe, payload)
             os.close(write_pipe)

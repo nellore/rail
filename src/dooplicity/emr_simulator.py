@@ -645,8 +645,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             '''Use balanced view so scheduling is dynamic: tasks aren't
             assigned to engines a priori.'''
             balanced_view = rc.load_balanced_view()
-            pid_map = rc[:].apply_async(os.getpid).get_dict()
-            host_map = rc[:].apply_async(socket.gethostname).get_dict()
+            pid_map = direct_view.apply_async(os.getpid).get_dict()
+            host_map = direct_view.apply_async(socket.gethostname).get_dict()
             def interrupt_engines(direct_view, iface):
                 """ Interrupts IPython engines spanned by view
 
@@ -666,11 +666,12 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         pid = pid_map[engine_id]
                         if host == socket.gethostname():
                             # local
+                            print pid
                             os.kill(pid, signal.SIGINT)
                         else:
                             subprocess.Popen(
                                 ('ssh -oStrictHostKeyChecking=no '
-                                 '-oBatchMode=yes {} kill -INT {}').format(
+                                 '-oBatchMode=yes {} kill -SIGINT {}').format(
                                     host, pid
                                 ), bufsize=-1, shell=True, stdout=null_stream,
                                  stderr=null_stream
