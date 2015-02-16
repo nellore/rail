@@ -981,6 +981,18 @@ def ipython_client(ipython_profile=None, ipcontroller_json=None):
             )
     print_to_screen('Detected %d running IPython engines.' 
                                 % len(rc.ids))
+    # Use Dill to permit general serializing
+    try:
+        import dill
+    except ImportError:
+        raise RuntimeError(
+                'Rail-RNA requires Dill in "parallel" mode. Install it by '
+                'running "pip install dill", or see the StackOverflow '
+                'question http://stackoverflow.com/questions/23576969/'
+                'how-to-install-dill-in-ipython for other leads.'
+            )
+    else:
+        rc[:].use_dill()
     return rc
 
 class RailRnaLocal(object):
@@ -3399,19 +3411,19 @@ class RailRnaParallelPreprocessJson(object):
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         keep_intermediates=False, check_manifest=True):
+        rc = ipython_client(ipython_profile=ipython_profile,
+                                ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
         RailRnaLocal(base, check_manifest=check_manifest,
-            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
+            num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, keep_intermediates=keep_intermediates,
             local=False, parallel=False)
         RailRnaPreprocess(base,
             nucleotides_per_input=nucleotides_per_input, gzip_input=gzip_input)
         base.raise_runtime_exception()
-        rc = ipython_client(ipython_profile=ipython_profile,
-                                ipcontroller_json=ipcontroller_json)
         ready_engines(rc, base, prep=True)
         engine_bases = {}
         for i in rc.ids:
