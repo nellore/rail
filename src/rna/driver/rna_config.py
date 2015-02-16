@@ -285,7 +285,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     to_return = {}
     for i, asyncresult in enumerate(asyncresults):
         if asyncresult.metadata['engine_id'] not in ids_not_to_return:
-            to_return[i] = asyncresult.get()
+            to_return[asyncresult.metadata['engine_id']] = asyncresult.get()
     return to_return
 
 def ready_engines(rc, base, prep=False):
@@ -311,7 +311,7 @@ def ready_engines(rc, base, prep=False):
                'several other useful packages.'
             )
     direct_view = rc[:]
-    all_engines = range(len(rc))
+    all_engines = rc.ids
     #current_hostname = socket.gethostname()
     engine_to_hostnames = apply_async_with_errors(
                                 rc, all_engines, socket.gethostname,
@@ -425,10 +425,10 @@ def ready_engines(rc, base, prep=False):
             print_to_screen('Copied Bowtie index files to cluster nodes '
                             'with Herd.',
                             newline=True, carriage_return=False)
-        base.bowtie1_idx = os.path.join(temp_dir,
-                                        os.path.basename(base.bowtie1_idx))
-        base.bowtie2_idx = os.path.join(temp_dir,
-                                        os.path.basename(base.bowtie2_idx))
+            base.bowtie1_idx = os.path.join(temp_dir,
+                                            os.path.basename(base.bowtie1_idx))
+            base.bowtie2_idx = os.path.join(temp_dir,
+                                            os.path.basename(base.bowtie2_idx))
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
@@ -738,16 +738,6 @@ class RailRnaErrors(object):
         self.verbose = verbose
         self.profile = profile
 
-    def raise_runtime_exception(self):
-        """ Raises RuntimeError if self.errors is nonempty. """
-        if self.errors:
-            raise RuntimeError(
-                    '\n'.join(
-                            ['%d) %s' % (i+1, error) for i, error
-                                in enumerate(self.errors)]
-                        ) if len(self.errors) > 1 else self.errors[0]
-                )
-
     def check_s3(self, reason=None, is_exe=None, which=None):
         """ Checks for AWS CLI and configuration file.
 
@@ -958,6 +948,41 @@ class RailRnaErrors(object):
         )
         '''--region's help looks different from mode to mode; don't include it
         here.'''
+
+def raise_runtime_error(bases):
+    """ Raises RuntimeError if any base.errors is nonempty.
+
+        bases: dictionary mapping IPython engine IDs to RailRnaErrors
+            instances or a single RailRnaError instance.
+
+        No return value.
+    """
+    assert isinstance(bases, RailRnaErrors) or isinstance(bases, dict)
+    if isinstance(bases, RailRnaErrors) and bases.errors:
+        raise RuntimeError(
+                '\n'.join(
+                        ['%d) %s' % (i+1, error) for i, error
+                            in enumerate(bases.errors)]
+                    ) if len(bases.errors) > 1 else bases.errors[0]
+            )
+    elif isinstance(bases, dict):
+        errors_to_report = defaultdict(set)
+        for engine in bases:
+            assert isinstance(bases[engine], RailRnaErrors)
+            if bases[engine].errors:
+                errors_to_report['\n'.join(
+                            ['%d) %s' % (i+1, error) for i, error
+                                in enumerate(bases[engine].errors)]
+                        ) if len(bases[engine].errors) > 1
+                          else bases[engine].errors[0]].add(engine)
+        runtimeerror_message = []
+        if errors_to_report:
+            for message in errors_to_report:
+                runtimeerror_message.extend(
+                    ['Engine(s) %s report(s) the following errors.'
+                        % errors_to_report[message], message]
+                    )
+            raise RuntimeError('\n',join(errors_to_report))
 
 def ipython_client(ipython_profile=None, ipcontroller_json=None):
     """ Performs checks on IPython engines and returns IPython Client object.
@@ -1748,7 +1773,7 @@ class RailRnaElastic(object):
                                                 ))
         base.task_instance_count = task_instance_count
         # Raise exceptions before computing mems
-        base.raise_runtime_exception()
+        raise_runtime_error(base)
         if base.core_instance_count > 0:
             base.mem \
                 = base.instance_mems[base.core_instance_type]
@@ -2362,7 +2387,7 @@ class RailRnaAlign(object):
                                                         base.samtools_exe
                                                     ))
             # Output any errors before detect message is determined
-            base.raise_runtime_exception()
+            raise_runtime_error(base)
             base.samtools_version = '<unknown>'
             for line in samtools_process.stderr:
                 if 'Version:' in line:
@@ -3435,7 +3460,7 @@ class RailRnaLocalPreprocessJson(object):
             gzip_level=gzip_level, keep_intermediates=keep_intermediates)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
-        base.raise_runtime_exception()
+        raise_runtime_error(base)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
@@ -3471,7 +3496,7 @@ class RailRnaParallelPreprocessJson(object):
             local=False, parallel=False)
         RailRnaPreprocess(base,
             nucleotides_per_input=nucleotides_per_input, gzip_input=gzip_input)
-        base.raise_runtime_exception()
+        raise_runtime_error(base)
         ready_engines(rc, base, prep=True)
         engine_bases = {}
         for i in rc.ids:
@@ -3498,7 +3523,7 @@ class RailRnaParallelPreprocessJson(object):
         if base.check_s3_on_engines:
             apply_async_with_errors(rc, rc.ids, engine_base_checks,
                 reason=base.check_curl_on_engines, is_exe=is_exe, which=which)
-        base.raise_runtime_exception()
+        raise_runtime_error(base)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
@@ -3555,7 +3580,7 @@ class RailRnaElasticPreprocessJson(object):
             intermediate_lifetime=intermediate_lifetime)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
-        base.raise_runtime_exception()
+        raise_runtime_error(base)
         self._json_serial = {}
         if base.core_instance_count > 0:
             reducer_count = base.core_instance_count \
@@ -3652,7 +3677,7 @@ class RailRnaLocalAlignJson(object):
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
-        base.raise_runtime_exception()
+        raise_runtime_error(base)
         print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
@@ -3690,9 +3715,16 @@ class RailRnaParallelAlignJson(object):
         gzip_intermediates=False,
         gzip_level=3, keep_intermediates=False,
         do_not_copy_index_to_nodes=False):
-        RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
-            gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
-            keep_intermediates=keep_intermediates, local=False, parallel=False)
+        rc = ipython_client(ipython_profile=ipython_profile,
+                                ipcontroller_json=ipcontroller_json)
+        base = RailRnaErrors(manifest, output_dir, 
+            intermediate_dir=intermediate_dir,
+            force=force, aws_exe=aws_exe, profile=profile,
+            region=region, verbose=verbose)
+        RailRnaLocal(base, check_manifest=False,
+            num_processes=len(rc), gzip_intermediates=gzip_intermediates,
+            gzip_level=gzip_level, keep_intermediates=keep_intermediates,
+            local=False, parallel=False)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -3723,88 +3755,65 @@ class RailRnaParallelAlignJson(object):
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
-        base.raise_runtime_exception()
-        print_to_screen(base.detect_message)
-        rc = ipython_client(ipython_profile=ipython_profile,
-                                ipcontroller_json=ipcontroller_json)
-        ready_engines(rc, base)
-        engine_bases = [RailRnaErrors(manifest, output_dir, 
-            intermediate_dir=intermediate_dir,
-            force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose) for i in rc.ids]
-        asyncresults = []
+        raise_runtime_error(base)
+        ready_engines(rc, base, prep=False)
+        engine_bases = {}
         for i in rc.ids:
-            asyncresults.append(
-                    rc[i].apply_async(
-                        RailRnaLocal.__init__, engine_bases[i],
-                        check_manifest=check_manifest,
-                        num_processes=num_processes,
-                        gzip_intermediates=gzip_intermediates,
-                        gzip_level=gzip_level,
-                        keep_intermediates=keep_intermediates,
-                        local=False, parallel=True, ansible=ab.Ansible()
-                    )
+            engine_bases[i] = RailRnaErrors(
+                    manifest, output_dir, intermediate_dir=intermediate_dir,
+                    force=force, aws_exe=aws_exe, profile=profile,
+                    region=region, verbose=verbose
                 )
-        while any([not asyncresult.ready() for asyncresult in asyncresults]):
-            time.sleep(1e-1)
-        asyncexceptions = defaultdict(set)
-        for asyncresult in asyncresults:
-            try:
-                asyncdict = asyncresult.get_dict()
-            except Exception as e:
-                asyncexceptions[format_exc()].add(
-                        asyncresult.metadata['engine_id']
-                    )
-        if asyncexceptions:
-            runtimeerror_message = []
-            for exc in asyncexceptions:
-                runtimeerror_message.extend(
-                        ['Engine(s) %s report(s) the following exception.'
-                            % list(asyncexceptions[exc]),
-                         exc]
-                     )
-            raise RuntimeError('\n'.join(runtimeerror_message))
-        asyncresults = []
+        apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
+            check_manifest=False, num_processes=num_processes,
+            gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
+            keep_intermediates=keep_intermediates, local=False, parallel=True,
+            ansible=ab.Ansible())
+        apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
+            input_dir=input_dir, elastic=False, bowtie1_exe=bowtie1_exe,
+            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
+            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
+            samtools_exe=samtools_exe,
+            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
+            genome_partition_length=genome_partition_length,
+            max_readlet_size=max_readlet_size,
+            readlet_config_size=readlet_config_size,
+            min_readlet_size=min_readlet_size,
+            readlet_interval=readlet_interval,
+            cap_size_multiplier=cap_size_multiplier,
+            max_intron_size=max_intron_size,
+            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            search_filter=search_filter,
+            motif_search_window_size=motif_search_window_size,
+            max_gaps_mismatches=max_gaps_mismatches,
+            motif_radius=motif_radius,
+            genome_bowtie1_args=genome_bowtie1_args,
+            count_multiplier=count_multiplier,
+            intron_confidence_criteria=intron_confidence_criteria,
+            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            tie_margin=tie_margin,
+            normalize_percentile=normalize_percentile,
+            very_replicable=very_replicable,
+            drop_deletions=drop_deletions,
+            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            output_sam=output_sam, bam_basename=bam_basename,
+            bed_basename=bed_basename)
+        engine_base_checks = {}
+        for i in rc.ids:
+            engine_base_checks[i] = engine_bases[i].check_program
         if base.check_curl_on_engines:
-            for i in rc.ids:
-                asyncresults.append(
-                        rc[i].apply_async(
-                            engine_bases[i].check_program, 'curl', 'Curl',
-                            '--curl', entered_exe=base.curl_exe,
-                            reason=base.check_curl_on_engines,
-                            is_exe=is_exe,
-                            which=which
-                        )
-                    )
+            apply_async_with_errors(rc, rc.ids, engine_base_checks,
+                'curl', 'Curl', '--curl', entered_exe=base.curl_exe,
+                reason=base.check_curl_on_engines, is_exe=is_exe, which=which)
+        engine_base_checks = {}
+        for i in rc.ids:
+            engine_base_checks[i] = engine_bases[i].check_s3
         if base.check_s3_on_engines:
-            for i in rc.ids:
-                asyncresults.append(
-                        rc[i].apply_async(
-                            engine_bases[i].check_s3,
-                            reason=base.check_curl_on_engines,
-                            is_exe=is_exe,
-                            which=which
-                        )
-                    )
-        if asyncresults:
-            asyncexceptions = defaultdict(set)
-            for asyncresult in asyncresults:
-                try:
-                    asyncdict = asyncresult.get_dict()
-                except Exception as e:
-                    asyncexceptions[format_exc()].add(
-                            asyncresult.metadata['engine_id']
-                        )
-            if asyncexceptions:
-                runtimeerror_message = []
-                for exc in asyncexceptions:
-                    runtimeerror_message.extend(
-                            ['Engine(s) %s report(s) the following exception.'
-                                % list(asyncexceptions[exc]),
-                             exc]
-                         )
-                raise RuntimeError('\n'.join(runtimeerror_message))
-        base.raise_runtime_exception()
+            apply_async_with_errors(rc, rc.ids, engine_base_checks,
+                reason=base.check_curl_on_engines, is_exe=is_exe, which=which)
+        raise_runtime_error(engine_bases)
+        print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
@@ -3902,7 +3911,7 @@ class RailRnaElasticAlignJson(object):
             bed_basename=bed_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
                                         profile=base.profile))
-        base.raise_runtime_exception()
+        raise_runtime_error(base)
         self._json_serial = {}
         if base.core_instance_count > 0:
             reducer_count = base.core_instance_count \
@@ -4000,7 +4009,7 @@ class RailRnaLocalAllJson(object):
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
-        base.raise_runtime_exception()
+        raise_runtime_error(base)
         print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
@@ -4046,16 +4055,18 @@ class RailRnaParallelAllJson(object):
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         keep_intermediates=False, check_manifest=True,
         do_not_copy_index_to_nodes=False):
+        rc = ipython_client(ipython_profile=ipython_profile,
+                                ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose)
-        RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
-            gzip_input=gzip_input)
         RailRnaLocal(base, check_manifest=check_manifest,
-            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
+            num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, keep_intermediates=keep_intermediates,
             local=False, parallel=False)
+        RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
+            gzip_input=gzip_input)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
@@ -4085,88 +4096,65 @@ class RailRnaParallelAllJson(object):
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
             bed_basename=bed_basename)
-        base.raise_runtime_exception()
-        print_to_screen(base.detect_message)
-        rc = ipython_client(ipython_profile=ipython_profile,
-                                ipcontroller_json=ipcontroller_json)
-        ready_engines(rc, base)
-        engine_bases = [RailRnaErrors(manifest, output_dir, 
-            intermediate_dir=intermediate_dir,
-            force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose) for i in rc.ids]
-        asyncresults = []
+        raise_runtime_error(base)
+        ready_engines(rc, base, prep=False)
+        engine_bases = {}
         for i in rc.ids:
-            asyncresults.append(
-                    rc[i].apply_async(
-                        RailRnaLocal, engine_bases[i],
-                        check_manifest=check_manifest,
-                        num_processes=num_processes,
-                        gzip_intermediates=gzip_intermediates,
-                        gzip_level=gzip_level,
-                        keep_intermediates=keep_intermediates,
-                        local=False, parallel=True, ansible=ab.Ansible()
-                    )
+            engine_bases[i] = RailRnaErrors(
+                    manifest, output_dir, intermediate_dir=intermediate_dir,
+                    force=force, aws_exe=aws_exe, profile=profile,
+                    region=region, verbose=verbose
                 )
-        while any([not asyncresult.ready() for asyncresult in asyncresults]):
-            time.sleep(1e-1)
-        asyncexceptions = defaultdict(set)
-        for asyncresult in asyncresults:
-            try:
-                asyncdict = asyncresult.get_dict()
-            except Exception as e:
-                asyncexceptions[format_exc()].add(
-                        asyncresult.metadata['engine_id']
-                    )
-        if asyncexceptions:
-            runtimeerror_message = []
-            for exc in asyncexceptions:
-                runtimeerror_message.extend(
-                        ['Engine(s) %s report(s) the following exception.'
-                            % list(asyncexceptions[exc]),
-                         exc]
-                     )
-            raise RuntimeError('\n'.join(runtimeerror_message))
-        asyncresults = []
+        apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
+            check_manifest=check_manifest, num_processes=num_processes,
+            gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
+            keep_intermediates=keep_intermediates, local=False, parallel=True,
+            ansible=ab.Ansible())
+        apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
+            bowtie1_exe=bowtie1_exe,
+            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
+            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
+            samtools_exe=samtools_exe,
+            bedgraphtobigwig_exe=bedgraphtobigwig_exe,
+            genome_partition_length=genome_partition_length,
+            max_readlet_size=max_readlet_size,
+            readlet_config_size=readlet_config_size,
+            min_readlet_size=min_readlet_size,
+            readlet_interval=readlet_interval,
+            cap_size_multiplier=cap_size_multiplier,
+            max_intron_size=max_intron_size,
+            min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            search_filter=search_filter,
+            motif_search_window_size=motif_search_window_size,
+            max_gaps_mismatches=max_gaps_mismatches,
+            motif_radius=motif_radius,
+            genome_bowtie1_args=genome_bowtie1_args,
+            transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            count_multiplier=count_multiplier,
+            intron_confidence_criteria=intron_confidence_criteria,
+            tie_margin=tie_margin,
+            normalize_percentile=normalize_percentile,
+            very_replicable=very_replicable,
+            drop_deletions=drop_deletions,
+            do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            output_sam=output_sam, bam_basename=bam_basename,
+            bed_basename=bed_basename)
+        engine_base_checks = {}
+        for i in rc.ids:
+            engine_base_checks[i] = engine_bases[i].check_program
         if base.check_curl_on_engines:
-            for i in rc.ids:
-                asyncresults.append(
-                        rc[i].apply_async(
-                            engine_bases[i].check_program, 'curl', 'Curl',
-                            '--curl', entered_exe=base.curl_exe,
-                            reason=base.check_curl_on_engines,
-                            is_exe=is_exe,
-                            which=which
-                        )
-                    )
+            apply_async_with_errors(rc, rc.ids, engine_base_checks,
+                'curl', 'Curl', '--curl', entered_exe=base.curl_exe,
+                reason=base.check_curl_on_engines, is_exe=is_exe, which=which)
+        engine_base_checks = {}
+        for i in rc.ids:
+            engine_base_checks[i] = engine_bases[i].check_s3
         if base.check_s3_on_engines:
-            for i in rc.ids:
-                asyncresults.append(
-                        rc[i].apply_async(
-                            engine_bases[i].check_s3,
-                            reason=base.check_curl_on_engines,
-                            is_exe=is_exe,
-                            which=which
-                        )
-                    )
-        if asyncresults:
-            asyncexceptions = defaultdict(set)
-            for asyncresult in asyncresults:
-                try:
-                    asyncdict = asyncresult.get_dict()
-                except Exception as e:
-                    asyncexceptions[format_exc()].add(
-                            asyncresult.metadata['engine_id']
-                        )
-            if asyncexceptions:
-                runtimeerror_message = []
-                for exc in asyncexceptions:
-                    runtimeerror_message.extend(
-                            ['Engine(s) %s report(s) the following exception.'
-                                % list(asyncexceptions[exc]),
-                             exc]
-                         )
-                raise RuntimeError('\n'.join(runtimeerror_message))
-        base.raise_runtime_exception()
+            apply_async_with_errors(rc, rc.ids, engine_base_checks,
+                reason=base.check_curl_on_engines, is_exe=is_exe, which=which)
+        raise_runtime_error(engine_bases)
+        print_to_screen(base.detect_message)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
         prep_dir = path_join(False, base.intermediate_dir,
@@ -4275,7 +4263,7 @@ class RailRnaElasticAllJson(object):
             bed_basename=bed_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
                                         profile=base.profile))
-        base.raise_runtime_exception()
+        raise_runtime_error(base)
         self._json_serial = {}
         if base.core_instance_count > 0:
             reducer_count = base.core_instance_count \

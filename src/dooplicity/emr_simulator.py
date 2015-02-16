@@ -647,27 +647,27 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             balanced_view = rc.load_balanced_view()
             pid_map = direct_view.apply_async(os.getpid).get_dict()
             host_map = direct_view.apply_async(socket.gethostname).get_dict()
-            def interrupt_engines(direct_view, iface):
+            def interrupt_engines(rc, iface):
                 """ Interrupts IPython engines spanned by view
 
                     Taken from:
                     http://mail.scipy.org/pipermail/ipython-dev/
                     2014-March/013426.html
 
-                    direct_view: IPython direct view
+                    rc: IPython Client object
                     iface: instance of DooplicityInterface
 
                     No return value.
                 """
                 iface.status('Interrupting IPython engines...')
                 with open(os.devnull, 'w') as null_stream:
-                    for engine_id in xrange(len(direct_view)):
+                    for engine_id in rc.ids:
                         host = host_map[engine_id]
                         pid = pid_map[engine_id]
                         if host == socket.gethostname():
                             # local
                             print pid
-                            os.kill(pid, signal.SIGINT)
+                            #os.kill(pid, signal.SIGINT)
                         else:
                             subprocess.Popen(
                                 ('ssh -oStrictHostKeyChecking=no '
@@ -1355,7 +1355,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
     except (Exception, GeneratorExit):
         # GeneratorExit added just in case this happens on modifying code
         if 'interrupt_engines' in locals():
-            interrupt_engines(direct_view, iface)
+            interrupt_engines(rc, iface)
         if not failed:
             time.sleep(0.2)
             if 'step_number' in locals():
@@ -1371,7 +1371,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         raise
     except (KeyboardInterrupt, SystemExit):
         if 'interrupt_engines' in locals():
-            interrupt_engines(direct_view, iface)
+            interrupt_engines(rc, iface)
         if 'step_number' in locals():
             iface.fail(steps=(job_flow[step_number:]
                         if step_number != 0 else None),
