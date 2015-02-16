@@ -154,27 +154,39 @@ else:
     else:
         _warning_message = 'Launching Dooplicity runner with PyPy...'
 
-def print_to_screen(message):
+def print_to_screen(message, newline=True, carriage_return=False):
     """ Prints message to stdout as well as stderr if stderr is redirected.
 
         message: message to print
+        newline: True iff newline should be printed
+        carriage_return: True iff carriage return should be printed; also
+            clears line with ANSI escape code
 
         No return value.
     """
-    print >>sys.stderr, message
-    if not sys.stderr.isatty():
+    sys.stderr.write(message + ('\r\x1b[K' if carriage_return else '')
+                        + ('\n' if newline else ''))
+    if sys.stderr.isatty():
+        sys.stderr.flush()
+    else:
         # So the user sees it too
-        print message
+        sys.stdout.write(message + ('\r\x1b[K' if carriage_return else '')
+                        + ('\n' if newline else ''))
+        sys.stdout.flush()
 
 def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     """ apply_async() that cleanly outputs engines responsible for exceptions.
+
+        WARNING: in general, this method requires Dill for pickling.
+        See https://pypi.python.org/pypi/dill
+        and http://matthewrocklin.com/blog/work/2013/12/05
+        /Parallelism-and-Serialization/
 
         rc: IPython parallel Cient object
         ids: IDs of engines where function_to_apply should be run
         function_to_apply: function to run across engines. If this is a
             dictionary whose keys are exactly the engine IDs, each engine ID's
-            value is regarded as a distinct function corresponding to the 
-            key.
+            value is regarded as a distinct function corresponding to the key.
         *args: contains unnamed arguments of function_to_apply. If a given
             argument is a dictionary whose keys are exactly the engine IDs,
             each engine ID's value is regarded as a distinct argument
@@ -184,6 +196,8 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
                exception is a string
             message: message to append to exception raised
             and named arguments of function_to_apply
+            dict_format: if True, returns engine-result key-value dictionary;
+                if False, returns list of results
 
         Return value: list of AsyncResults, one for each engine spanned by
             direct_view
@@ -198,6 +212,11 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     else:
         message = kwargs['message']
         del kwargs['message']
+    if 'dict_format' not in kwargs:
+        dict_format = False
+    else:
+        dict_format = kwargs['dict_format']
+        del kwargs['dict_format']
     id_set = set(ids)
     if not (isinstance(function_to_apply, dict)
             and set(function_to_apply.keys()) == id_set):
@@ -224,39 +243,50 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
             for i in ids:
                 new_kwargs[i][kwarg] = kwargs[kwarg]
     asyncresults = []
+    ids_not_to_return = set()
     for i in ids:
         asyncresults.append(
                 rc[i].apply_async(
                     function_to_apply[i],*new_args[i],**new_kwargs[i]
                 )
             )
-        while any([not asyncresult.ready() for asyncresult in asyncresults]):
-            time.sleep(1e-1)
-        asyncexceptions = defaultdict(set)
-        for asyncresult in asyncresults:
-            try:
-                asyncdict = asyncresult.get_dict()
-            except Exception as e:
-                exc_to_report = format_exc()
-                proceed = False
-                for error_to_ignore in errors_to_ignore:
-                    if error_to_ignore in exc_to_report:
-                        proceed = True
-                if not proceed:
-                    asyncexceptions[format_exc()].add(
-                            asyncresult.metadata['engine_id']
-                        )
-        if asyncexceptions:
-            runtimeerror_message = []
-            for exc in asyncexceptions:
-                runtimeerror_message.extend(
-                        ['Engine(s) %s report(s) the following exception.'
-                            % list(asyncexceptions[exc]),
-                         exc]
-                     )
-            raise RuntimeError('\n'.join(runtimeerror_message
-                                + (['', message] if message else [])))
-    return asyncresults
+    while any([not asyncresult.ready() for asyncresult in asyncresults]):
+        time.sleep(1e-1)
+    asyncexceptions = defaultdict(set)
+    for asyncresult in asyncresults:
+        try:
+            asyncdict = asyncresult.get_dict()
+        except Exception as e:
+            exc_to_report = format_exc()
+            proceed = False
+            for error_to_ignore in errors_to_ignore:
+                if error_to_ignore in exc_to_report:
+                    proceed = True
+                    ids_not_to_return.add(asyncresult.metadata['engine_id'])
+            if not proceed:
+                asyncexceptions[format_exc()].add(
+                        asyncresult.metadata['engine_id']
+                    )
+    if asyncexceptions:
+        runtimeerror_message = []
+        for exc in asyncexceptions:
+            runtimeerror_message.extend(
+                    ['Engine(s) %s report(s) the following exception.'
+                        % list(asyncexceptions[exc]),
+                     exc]
+                 )
+        raise RuntimeError('\n'.join(runtimeerror_message
+                            + (['', message] if message else [])))
+    # Return only those results for which there is no failure
+    if not dict_format:
+        return [asyncresult.get() for asyncresult in asyncresults
+                    if asyncresult.metadata['engine_id']
+                    not in ids_not_to_return]
+    to_return = {}
+    for i, asyncresult in enumerate(asyncresults):
+        if asyncresult.metadata['engine_id'] not in ids_not_to_return:
+            to_return[i] = asyncresult.get()
+    return to_return
 
 def ready_engines(rc, base, prep=False):
     """ Prepares engines for checks and copies index to nodes. 
@@ -267,10 +297,26 @@ def ready_engines(rc, base, prep=False):
 
         No return value.
     """
-    import IPython
+    try:
+        import IPython
+    except ImportError:
+        # Should have been taken care of by a different fxn, but just in case
+        raise RuntimeError(
+               'IPython is required to run Rail-RNA in '
+               '"parallel" mode. Visit ipython.org to '
+               'download it, or simply download the Anaconda '
+               'distribution of Python at '
+               'https://store.continuum.io/cshop/anaconda/; it\'s '
+               'easy to install and comes with IPython and '
+               'several other useful packages.'
+            )
     direct_view = rc[:]
-    current_hostname = socket.gethostname()
-    engine_to_hostnames = rc[:].apply(socket.gethostname).get_dict()
+    all_engines = range(len(rc))
+    #current_hostname = socket.gethostname()
+    engine_to_hostnames = apply_async_with_errors(
+                                rc, all_engines, socket.gethostname,
+                                dict_format=True
+                            )
     hostname_to_engines = defaultdict(set)
     for engine in engine_to_hostnames:
         hostname_to_engines[engine_to_hostnames[engine]].add(engine)
@@ -286,27 +332,24 @@ def ready_engines(rc, base, prep=False):
     with select_view.sync_imports(quiet=True):
         import shutil
         import tarfile
-    pids = direct_view.apply(os.getpid).get()
+    pids = apply_async_with_errors(rc, all_engines, os.getpid)
     # Set random seed so temp directory is reused if restarting Rail
-    random.seed(str(pids))
+    random.seed(str(sorted(pids)))
     # NOT WINDOWS-COMPATIBLE; must be changed if porting Rail to Windows
     temp_dir = '/tmp/railrna-%s' % \
         ''.join(random.choice(string.ascii_uppercase
             + string.digits) for _ in range(12))
-    try:
-        select_view.apply(os.makedirs, temp_dir).get()
-    except IPython.parallel.error.CompositeError as e:
-        if not all([e.elist[i][0] == 'OSError' for i in xrange(len(e.elist))]):
-            raise RuntimeError('Error(s) encountered creating temporary '
-                               'directories for storing Rail on slave nodes. '
-                               'Restart IPython engines and try again.')
-    try:
-        select_view.apply(atexit.register, shutil.rmtree, temp_dir).get()
-    except IPython.parallel.error.CompositeError as e:
-        raise RuntimeError(
+    apply_async_with_errors(rc, engines_for_copying, os.makedirs, temp_dir,
+        message=('Error(s) encountered creating temporary '
+                 'directories for storing Rail on slave nodes. '
+                 'Restart IPython engines and try again.'),
+        errors_to_ignore=['OSError'])
+    apply_async_with_errors(rc, engines_for_copying, atexit.register,
+            shutil.rmtree, temp_dir,
+            message=(
                 'Error scheduling temporary directories on slave nodes '
                 'for deletion. Restart IPython engines and try again.'
-            )
+            ))
     # Compress Rail-RNA and distribute it to nodes
     compressed_rail_file = 'rail.tar.gz'
     compressed_rail_path = os.path.join(base.intermediate_dir,
@@ -318,20 +361,18 @@ def ready_engines(rc, base, prep=False):
         import herd.herd as herd
     except ImportError:
         # Torrent distribution channel for compressed archive not available
-        print_to_screen('Copying Rail-RNA to cluster nodes...')
-        try:
-            select_view.apply(
-                    shutil.copyfile, compressed_rail_path,
-                    compressed_rail_destination
-                ).get()
-        except IPython.parallel.error.CompositeError as e:
-            if any(
-                    [e.elist[i][0] == 'OSError' for i in xrange(len(e.elist))]
-                ):
-                raise RuntimeError('Error(s) encountered copying Rail to '
-                                   'slave nodes. Make sure /tmp is not '
-                                   'out of space on any such node and try '
-                                   'again.')
+        print_to_screen('Copying Rail-RNA to cluster nodes...',
+                            newline=False, carriage_return=True)
+        apply_async_with_errors(rc, engines_for_copying, shutil.copyfile,
+            compressed_rail_path, compressed_rail_destination,
+            message=('Error(s) encountered copying Rail to '
+                     'slave nodes. Refer to the errors above -- and '
+                     'especially make sure /tmp is not out of space on any '
+                     'node supporting an IPython engine '
+                     '-- before trying again.'),
+        )
+        print_to_screen('Copied Rail-RNA to cluster nodes.',
+                            newline=True, carriage_return=False)
     else:
         print_to_screen('Copying Rail-RNA to cluster nodes with Herd...')
         herd.run_with_opts(
@@ -340,17 +381,20 @@ def ready_engines(rc, base, prep=False):
                 hostlist=','.join(hostname_to_engines.keys())
             )
     # Extract Rail
-    print_to_screen('Extracting Rail-RNA on cluster nodes...')
-    select_view.apply(subprocess.Popen, 'tar xzf {} -C {}'.format(
-            compressed_rail_destination, temp_dir
-        ), shell=True).get()
+    print_to_screen('Extracting Rail-RNA on cluster nodes...',
+                            newline=False, carriage_return=True)
+    apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
+            'tar xzf {} -C {}'.format(compressed_rail_destination, temp_dir),
+            shell=True)
+    print_to_screen('Extracted Rail-RNA on cluster nodes.',
+                            newline=True, carriage_return=False)
     # Add Rail to path on every engine
     temp_base_path = os.path.join(temp_dir, 'rail')
     temp_utils_path = os.path.join(temp_base_path, 'rna', 'utils')
     temp_driver_path = os.path.join(temp_base_path, 'rna', 'driver')
-    direct_view.apply(site.addsitedir, temp_base_path).get()
-    direct_view.apply(site.addsitedir, temp_utils_path).get()
-    direct_view.apply(site.addsitedir, temp_driver_path).get()
+    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_base_path)
+    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_utils_path)
+    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_driver_path)
     if not prep and not base.do_not_copy_index_to_nodes:
         # Only copy indexes to nodes if Herd is present since they're big
         try:
@@ -361,7 +405,8 @@ def ready_engines(rc, base, prep=False):
                             'This may slow down alignment.')
         else:
             print_to_screen('Copying Bowtie index files to cluster nodes '
-                            'with Herd...')
+                            'with Herd...',
+                            newline=False, carriage_return=True)
             index_files = ([base.bowtie2_idx + extension
                             for extension in ['.1.bt2', '.2.bt2',
                                               '.3.bt2', '.4.bt2', 
@@ -377,6 +422,9 @@ def ready_engines(rc, base, prep=False):
                         os.path.join(temp_dir, os.path.basename(index_file)),
                         hostlist=','.join(hostname_to_engines.keys())
                     )
+            print_to_screen('Copied Bowtie index files to cluster nodes '
+                            'with Herd.',
+                            newline=True, carriage_return=False)
         base.bowtie1_idx = os.path.join(temp_dir,
                                         os.path.basename(base.bowtie1_idx))
         base.bowtie2_idx = os.path.join(temp_dir,
@@ -3432,11 +3480,11 @@ class RailRnaParallelPreprocessJson(object):
                     force=force, aws_exe=aws_exe, profile=profile,
                     region=region, verbose=verbose
                 )
-        apply_async_with_errors(rc, rc.ids, RailRnaLocal,
-            engine_bases, check_manifest=check_manifest,
-            num_processes=num_processes, gzip_intermediates=gzip_intermediates,
-            gzip_level=gzip_level, keep_intermediates=keep_intermediates,
-            local=False, parallel=True, ansible=ab.Ansible())
+        apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
+            check_manifest=check_manifest, num_processes=num_processes,
+            gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
+            keep_intermediates=keep_intermediates, local=False, parallel=True,
+            ansible=ab.Ansible())
         engine_base_checks = {}
         for i in rc.ids:
             engine_base_checks[i] = engine_bases[i].check_program
