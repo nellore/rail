@@ -174,6 +174,39 @@ def print_to_screen(message, newline=True, carriage_return=False):
                         + ('\n' if newline else ''))
         sys.stdout.flush()
 
+def engine_string_from_list(id_list):
+    """ Pretty-prints list of engine IDs.
+
+        id_list: list of engine IDs
+
+        Return value: string condensing list of engine IDs
+    """
+    id_list = sorted(set(id_list))
+    to_print = []
+    if not id_list: return ''
+    last_id = id_list[0]
+    streak = 0
+    for engine_id in id_list[1:]:
+        if engine_id == last_id + 1:
+            streak += 1
+        else:
+            if streak > 1:
+                to_print.append('%d-%d' % (last_id - streak, last_id))
+            elif streak == 1:
+                to_print.append('%d, %d' % (last_id - 1, last_id))
+            else:
+                to_print.append('%d' % last_id)
+            streak = 0
+        last_id = engine_id
+    if streak > 1:
+        to_print.append('%d-%d' % (last_id - streak, last_id))
+    elif streak == 1:
+        to_print.append('%d, %d' % (last_id - 1, last_id))
+    else:
+        to_print.append('%d' % last_id)
+    to_print[-1] = ' '.join(['and', to_print[-1]])
+    return ', '.join(to_print)
+
 def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     """ apply_async() that cleanly outputs engines responsible for exceptions.
 
@@ -272,7 +305,9 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
         for exc in asyncexceptions:
             runtimeerror_message.extend(
                     ['Engine(s) %s report(s) the following exception.'
-                        % list(asyncexceptions[exc]),
+                        % engine_string_from_list(
+                              list(asyncexceptions[exc])
+                            ),
                      exc]
                  )
         raise RuntimeError('\n'.join(runtimeerror_message
@@ -980,7 +1015,9 @@ def raise_runtime_error(bases):
             for message in errors_to_report:
                 runtimeerror_message.extend(
                     ['Engine(s) %s report(s) the following errors.'
-                        % errors_to_report[message], message]
+                        % engine_string_from_list(
+                              errors_to_report[message]
+                            ), message]
                     )
             raise RuntimeError('\n',join(errors_to_report))
 
