@@ -386,7 +386,12 @@ def ready_engines(rc, base, prep=False):
     temp_dir = '/tmp/railrna-%s' % \
         ''.join(random.choice(string.ascii_uppercase
             + string.digits) for _ in range(12))
-    apply_async_with_errors(rc, engines_for_copying, os.makedirs, temp_dir,
+    if not prep and not base.do_not_copy_index_to_nodes:
+        dir_to_create = os.path.join(temp_dir, 'genome')
+    else:
+        dir_to_create = temp_dir
+    apply_async_with_errors(rc, engines_for_copying, os.makedirs,
+        dir_to_create,
         message=('Error(s) encountered creating temporary '
                  'directories for storing Rail on slave nodes. '
                  'Restart IPython engines and try again.'),
@@ -460,8 +465,7 @@ def ready_engines(rc, base, prep=False):
     apply_async_with_errors(rc, all_engines, site.addsitedir, temp_utils_path)
     apply_async_with_errors(rc, all_engines, site.addsitedir, temp_driver_path)
     # Copy manifest to nodes
-    manifest_destination = os.path.join(temp_dir,
-                                        os.path.basename(base.manifest))
+    manifest_destination = os.path.join(temp_dir, 'MANIFEST')
     try:
         import herd.herd as herd
     except ImportError:
@@ -524,7 +528,8 @@ def ready_engines(rc, base, prep=False):
             for index_file in index_files:
                 apply_async_with_errors(rc, engines_for_copying,
                     shutil.copyfile, os.path.abspath(index_file),
-                    os.path.join(temp_dir, os.path.basename(index_file)),
+                    os.path.join(temp_dir, 'genome',
+                                    os.path.basename(index_file)),
                     message=('Error(s) encountered copying Bowtie indexes to '
                              'slave nodes. Refer to the errors above -- and '
                              'especially make sure /tmp is not out of space '
@@ -539,7 +544,8 @@ def ready_engines(rc, base, prep=False):
                 for index_file in index_files:
                     apply_async_with_errors(rc, engines_for_copying,
                         shutil.copyfile, os.path.abspath(index_file),
-                        os.path.join(temp_dir, os.path.basename(index_file)),
+                        os.path.join(temp_dir, 'genome',
+                                        os.path.basename(index_file)),
                         message=('Error(s) encountered copying Bowtie '
                                  'indexes to local filesystem. Refer to the '
                                  'errors above -- and especially make sure '
@@ -557,16 +563,16 @@ def ready_engines(rc, base, prep=False):
                 for index_file in index_files:
                     herd.run_with_options(
                             os.path.abspath(index_file),
-                            os.path.join(temp_dir,
+                            os.path.join(temp_dir, 'genome',
                                 os.path.basename(index_file)),
                             hostlist=','.join(hostname_to_engines.keys())
                         )
                 print_to_screen('Copied Bowtie index files to cluster nodes '
                                 'with Herd.',
                                 newline=True, carriage_return=False)
-            base.bowtie1_idx = os.path.join(temp_dir,
+            base.bowtie1_idx = os.path.join(temp_dir, 'genome',
                                             os.path.basename(base.bowtie1_idx))
-            base.bowtie2_idx = os.path.join(temp_dir,
+            base.bowtie2_idx = os.path.join(temp_dir, 'genome',
                                             os.path.basename(base.bowtie2_idx))
 
 def step(name, inputs, output,

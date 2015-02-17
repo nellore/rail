@@ -124,8 +124,6 @@ if args.out is not None:
     if not output_url.is_local:
         mover = filemover.FileMover(args=args)
         mover.put(output_filename, output_url.plus(args.normalize_filename))
-        import shutil
-        shutil.rmtree(temp_dir_path)
 
 print >>sys.stderr, 'DONE with coverage_post.py; in = %d; time=%0.3f s' \
                         % (input_line_count, time.time() - start_time)

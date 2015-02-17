@@ -209,7 +209,6 @@ for (sample_label,), xpartition in xstream(sys.stdin, 1):
                 print >>bed_stream, '%s\t%d\t%d\t%d' % (rname,
                     last_pos, reference_index.rname_lengths[rname], coverage)
     # Output normalization factor
-    print >>sys.stderr, coverage_histogram
     print '-\t%s\t%d' % (sample_label, percentile(coverage_histogram,
                                                     args.percentile))
     output_line_count += 1
@@ -248,11 +247,6 @@ for (sample_label,), xpartition in xstream(sys.stdin, 1):
         # bigwig must be uploaded to URL and deleted
         mover.put(bigwig_file_path, output_url.plus(bigwig_filename))
         os.remove(bigwig_file_path)
-
-if not output_url.is_local:
-    # Clean up
-    import shutil
-    shutil.rmtree(temp_dir_path)
 
 print >>sys.stderr, 'DONE with coverage.py; in/out=%d/%d; time=%0.3f s' \
                         % (input_line_count, output_line_count,

@@ -198,7 +198,9 @@ if output_url.is_nfs:
     for extension in ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', 
                                 '.rev.1.bt2', '.rev.2.bt2']:
         mover.put(index_basename + extension, output_url.plus(
-                                                index_basename + extension))
+                                os.path.basename(index_basename) + extension
+                            )
+                )
 
 print >>sys.stderr, 'DONE with intron_index.py; in=%d; time=%0.3f s' \
                         % (input_line_count, time.time() - start_time)
