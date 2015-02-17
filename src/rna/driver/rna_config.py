@@ -387,7 +387,7 @@ def ready_engines(rc, base, prep=False):
             ))
     # Compress Rail-RNA and distribute it to nodes
     compressed_rail_file = 'rail.tar.gz'
-    compressed_rail_path = os.path.join(base.intermediate_dir,
+    compressed_rail_path = os.path.join(os.path.abspath(base.intermediate_dir),
                                             compressed_rail_file)
     compressed_rail_destination = os.path.join(temp_dir, compressed_rail_file)
     with tarfile.open(compressed_rail_path, 'w:gz') as tar_stream:
@@ -415,6 +415,8 @@ def ready_engines(rc, base, prep=False):
                 compressed_rail_destination,
                 hostlist=','.join(hostname_to_engines.keys())
             )
+        print_to_screen('Copied Rail-RNA to cluster nodes with Herd.',
+                            newline=True, carriage_return=False)
     # Extract Rail
     print_to_screen('Extracting Rail-RNA on cluster nodes...',
                             newline=False, carriage_return=True)
@@ -430,27 +432,68 @@ def ready_engines(rc, base, prep=False):
     apply_async_with_errors(rc, all_engines, site.addsitedir, temp_base_path)
     apply_async_with_errors(rc, all_engines, site.addsitedir, temp_utils_path)
     apply_async_with_errors(rc, all_engines, site.addsitedir, temp_driver_path)
+    # Copy manifest to nodes
+    manifest_destination = os.path.join(temp_dir,
+                                        os.path.basename(base.manifest))
+    try:
+        import herd.herd as herd
+    except ImportError:
+        print_to_screen('Copying manifest to cluster nodes...',
+                            newline=False, carriage_return=True)
+        apply_async_with_errors(rc, engines_for_copying, shutil.copyfile,
+            base.manifest, manifest_destination,
+            message=('Error(s) encountered copying manifest to '
+                     'slave nodes. Refer to the errors above -- and '
+                     'especially make sure /tmp is not out of space on any '
+                     'node supporting an IPython engine '
+                     '-- before trying again.'),
+        )
+        print_to_screen('Copied manifest to cluster nodes.',
+                            newline=True, carriage_return=False)
+    else:
+        print_to_screen('Copying manifest to cluster nodes with Herd...')
+        herd.run_with_opts(
+                base.manifest,
+                manifest_destination,
+                hostlist=','.join(hostname_to_engines.keys())
+            )
+        print_to_screen('Copied manifest to cluster nodes with Herd.',
+                            newline=True, carriage_return=False)
+    base.manifest = manifest_destination
     if not prep and not base.do_not_copy_index_to_nodes:
-        # Only copy indexes to nodes if Herd is present since they're big
+        index_files = ([base.bowtie2_idx + extension
+                        for extension in ['.1.bt2', '.2.bt2',
+                                          '.3.bt2', '.4.bt2', 
+                                          '.rev.1.bt2', '.rev.2.bt2']]
+                        + [base.bowtie1_idx + extension
+                            for extension in [
+                                    '.1.ebwt', '.2.ebwt', '.3.ebwt',
+                                    '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt'
+                                ]])
         try:
             import herd.herd as herd
         except ImportError:
-            print_to_screen('Warning: Herd is not installed, so Bowtie '
-                            'indexes will not be copied to cluster nodes. '
-                            'This may slow down alignment.')
+            print_to_screen('Warning: Herd is not installed, so copying '
+                            'Bowtie indexes to nodes may be slow. '
+                            'Install Herd to enable torrent distribution of '
+                            'indexes across nodes, or invoke '
+                            '--do-not-copy-index-to-nodes to avoid copying '
+                            'indexes to slave nodes, which may then slow '
+                            'down alignment.')
+            for index_file in index_files:
+                apply_async_with_errors(rc, engines_for_copying,
+                    shutil.copyfile, os.path.abspath(index_file),
+                    os.path.join(temp_dir, os.path.basename(index_file)),
+                    message=('Error(s) encountered copying Bowtie indexes to '
+                             'slave nodes. Refer to the errors above -- and '
+                             'especially make sure /tmp is not out of space '
+                             'on any node supporting an IPython engine '
+                             '-- before trying again.')
+                )
         else:
             print_to_screen('Copying Bowtie index files to cluster nodes '
                             'with Herd...',
                             newline=False, carriage_return=True)
-            index_files = ([base.bowtie2_idx + extension
-                            for extension in ['.1.bt2', '.2.bt2',
-                                              '.3.bt2', '.4.bt2', 
-                                              '.rev.1.bt2', '.rev.2.bt2']]
-                            + [base.bowtie1_idx + extension
-                                for extension in [
-                                        '.1.ebwt', '.2.ebwt', '.3.ebwt',
-                                        '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt'
-                                    ]])
             for index_file in index_files:
                 herd.run_with_options(
                         os.path.abspath(index_file),
