@@ -164,13 +164,13 @@ def print_to_screen(message, newline=True, carriage_return=False):
 
         No return value.
     """
-    sys.stderr.write(message + ('\r\x1b[K' if carriage_return else '')
+    sys.stderr.write('\x1b[K' + message + ('\r' if carriage_return else '')
                         + ('\n' if newline else ''))
     if sys.stderr.isatty():
         sys.stderr.flush()
     else:
         # So the user sees it too
-        sys.stdout.write(message + ('\r\x1b[K' if carriage_return else '')
+        sys.stdout.write('\x1b[K' + message + ('\r' if carriage_return else '')
                         + ('\n' if newline else ''))
         sys.stdout.flush()
 
@@ -329,7 +329,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     return to_return
 
 def ready_engines(rc, base, prep=False):
-    """ Prepares engines for checks and copies index to nodes. 
+    """ Prepares engines for checks and copies Rail/manifest/index to nodes. 
 
         rc: IPython Client object
         base: instance of RailRnaErrors
@@ -549,7 +549,7 @@ def ready_engines(rc, base, prep=False):
                     )
                 print_to_screen('Copied Bowtie index files to local '
                                 'filesystem.',
-                                newline=False, carriage_return=True)
+                                newline=True, carriage_return=False)
             if remote_hostnames_for_copying:
                 print_to_screen('Copying Bowtie index files to cluster nodes '
                                 'with Herd...',
@@ -2344,9 +2344,7 @@ class RailRnaPreprocess(object):
                                                     base.nucleotides_per_input,
                                                     '--gzip-output' if
                                                     base.gzip_input else '',
-                                                    ab.Url(push_dir).to_url(
-                                                            caps=True
-                                                        ),
+                                                    push_dir,
                                                     base.gzip_level if
                                                     'gzip_level' in
                                                     dir(base) else 3,
@@ -3163,7 +3161,12 @@ class RailRnaAlign(object):
                                                     path_join(elastic,
                                                         base.output_dir,
                                                         'transcript_index')
-                                                    ).to_url(caps=True),
+                                                    ).to_url(caps=True)
+                                                if elastic
+                                                else os.path.join(
+                                                        base.output_dir,
+                                                        'transcript_index'
+                                                    ),
                                                  keep_alive),
                 'inputs' : ['intron_fasta'],
                 'output' : 'intron_index',
@@ -3182,19 +3185,21 @@ class RailRnaAlign(object):
             {
                 'name' : 'Finalize intron cooccurrences on reads',
                 'run' : ('cointron_enum.py --bowtie2-idx={0} --gzip-level {1} '
-                         '--bowtie2-exe={2} {3} {4} -- {5}').format(
+                         '--bowtie2-exe={2} {3} {4} --intermediate-dir {5} '
+                         '-- {6}').format(
                                             'intron/intron'
                                             if elastic else
-                                            path_join(elastic,
+                                            ab.Url(path_join(elastic,
                                                 base.output_dir,
                                                 'transcript_index',
-                                                'intron'),
+                                                'intron')).to_url(),
                                             base.gzip_level
                                             if 'gzip_level' in
                                             dir(base) else 3,
                                             base.bowtie2_exe,
                                             verbose,
                                             keep_alive,
+                                            base.intermediate_dir,
                                             base.transcriptome_bowtie2_args
                                         ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unique')],
@@ -3387,7 +3392,11 @@ class RailRnaAlign(object):
                                                         path_join(elastic,
                                                         base.output_dir,
                                                         'coverage_bigwigs')
-                                                     ).to_url(caps=True),
+                                                     ).to_url(caps=True)
+                                                     if elastic
+                                                     else path_join(elastic,
+                                                        base.output_dir,
+                                                        'coverage_bigwigs'),
                                                      base.bedgraphtobigwig_exe,
                                                      manifest,
                                                      verbose),
@@ -3411,7 +3420,11 @@ class RailRnaAlign(object):
                                                             path_join(elastic,
                                                             base.output_dir,
                                                     'normalization_factors')
-                                                        ).to_url(caps=True),
+                                                        ).to_url(caps=True)
+                                                        if elastic
+                                                        else path_join(elastic,
+                                                            base.output_dir,
+                                                    'normalization_factors'),
                                                         manifest
                                                     ),
                 'inputs' : ['coverage'],
@@ -3458,7 +3471,11 @@ class RailRnaAlign(object):
                                                             path_join(elastic,
                                                             base.output_dir,
                                                         'introns_and_indels')
-                                                         ).to_url(caps=True),
+                                                         ).to_url(caps=True)
+                                                        if elastic
+                                                        else path_join(elastic,
+                                                            base.output_dir,
+                                                        'introns_and_indels'),
                                                         manifest,
                                                         base.bed_basename
                                                     ),
@@ -3483,7 +3500,10 @@ class RailRnaAlign(object):
                                         ab.Url(
                                             path_join(elastic,
                                             base.output_dir, 'alignments')
-                                        ).to_url(caps=True),
+                                        ).to_url(caps=True)
+                                        if elastic
+                                        else path_join(elastic,
+                                            base.output_dir, 'alignments'),
                                         base.bowtie1_idx,
                                         base.samtools_exe,
                                         base.bam_basename,
@@ -3635,6 +3655,12 @@ class RailRnaParallelPreprocessJson(object):
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, keep_intermediates=keep_intermediates,
             local=False, parallel=False)
+        if ab.Url(base.output_dir).is_local:
+            '''Add NFS prefix to ensure tasks first copy files to temp dir and
+            subsequently upload to S3.'''
+            base.output_dir = ''.join(['nfs://', os.path.abspath(
+                                                        base.output_dir
+                                                    )])
         RailRnaPreprocess(base,
             nucleotides_per_input=nucleotides_per_input, gzip_input=gzip_input)
         raise_runtime_error(base)
@@ -3866,6 +3892,12 @@ class RailRnaParallelAlignJson(object):
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, keep_intermediates=keep_intermediates,
             local=False, parallel=False)
+        if ab.Url(base.output_dir).is_local:
+            '''Add NFS prefix to ensure tasks first copy files to temp dir and
+            subsequently upload to S3.'''
+            base.output_dir = ''.join(['nfs://', os.path.abspath(
+                                                        base.output_dir
+                                                    )])
         RailRnaAlign(base, input_dir=input_dir,
             elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -4206,6 +4238,12 @@ class RailRnaParallelAllJson(object):
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, keep_intermediates=keep_intermediates,
             local=False, parallel=False)
+        if ab.Url(base.output_dir).is_local:
+            '''Add NFS prefix to ensure tasks first copy files to temp dir and
+            subsequently upload to S3.'''
+            base.output_dir = ''.join(['nfs://', os.path.abspath(
+                                                        base.output_dir
+                                                    )])
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,

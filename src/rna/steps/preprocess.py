@@ -590,7 +590,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             'Exited with statement; line numbers are %s' 
                             % line_numbers
                         )
-                if (not to_stdout) and (push_url.is_s3 or push_url.is_hdfs) \
+                if (not to_stdout) and (push_url.is_nfs or
+                    push_url.is_s3 or push_url.is_hdfs) \
                     and ((not records_to_consume) or
                          (records_to_consume and perform_push)):
                     print >>sys.stderr, 'Pushing "%s" to "%s" ...' % (

@@ -176,8 +176,9 @@ else:
         raise RuntimeError('Bowtie index construction failed w/ exitlevel %d.'
                                 % bowtie_build_process.returncode)
 
-if not output_url.is_local:
+if not output_url.is_local and not output_url.is_nfs:
     # Compress index files
+    print >>sys.stderr, 'Compressing intron index...'
     intron_index_filename = args.basename + '.tar.gz'
     intron_index_path = os.path.join(temp_dir_path, intron_index_filename)
     index_path = os.path.join(temp_dir_path, 'index')
@@ -186,8 +187,18 @@ if not output_url.is_local:
         tar.add(os.path.join(index_path, index_file), arcname=index_file)
     tar.close()
     # Upload compressed index
+    print >>sys.stderr, 'Uploading compressed index...'
     mover = filemover.FileMover(args=args)
     mover.put(intron_index_path, output_url.plus(intron_index_filename))
+if output_url.is_nfs:
+    # Upload uncompressed index
+    print >>sys.stderr, 'Copying index to common destination for ' \
+                        'subsequent step...'
+    mover = filemover.FileMover(args=args)
+    for extension in ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', 
+                                '.rev.1.bt2', '.rev.2.bt2']:
+        mover.put(index_basename + extension, output_url.plus(
+                                                index_basename + extension))
 
 print >>sys.stderr, 'DONE with intron_index.py; in=%d; time=%0.3f s' \
                         % (input_line_count, time.time() - start_time)

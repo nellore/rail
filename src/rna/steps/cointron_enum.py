@@ -49,7 +49,9 @@ site.addsitedir(base_path)
 
 import bowtie
 from dooplicity.tools import xstream
+from dooplicity.ansibles import Url
 from tempdel import remove_temporary_directories
+import filemover
 
 # Initialize global variable for tracking number of input lines
 _input_line_count = 0
@@ -57,7 +59,7 @@ _input_line_count = 0
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base='genome', bowtie2_args='', verbose=False,
     report_multiplier=1.2, stranded=False, fudge=5, score_min=60,
-    gzip_level=3):
+    gzip_level=3, mover=filemover.FileMover(), intermediate_dir='.'):
     """ Runs Rail-RNA-cointron_enum 
 
         Alignment script for MapReduce pipelines that wraps Bowtie 2. Finds
@@ -108,9 +110,31 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                 to accommodate potential indels
         score_min: Bowtie2 CONSTANT minimum alignment score
         gzip_level: compression level to use for temporary files
+        mover: FileMover object, for use in case Bowtie2 idx needs to be
+            pulled from S3
+        intermediate_dir: where intermediates are stored; for temporarily
+            storing transcript index if it needs to be pulled from S3
 
         No return value.
     """
+    bowtie2_index_base_url = Url(bowtie2_index_base)
+    if bowtie2_index_base_url.is_s3:
+        index_basename = os.path.basename(bowtie2_index_base)
+        index_directory = os.path.join(intermediate_dir, 'transcript_index')
+        if not os.path.exists(os.path.join(index_directory, '_STARTED')):
+            # Download index
+            with open(os.path.join(index_directory, '_STARTED'), 'w') \
+                as started_stream:
+                print >>started_stream, 'STARTED'
+            for extension in ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', 
+                                '.rev.1.bt2', '.rev.2.bt2']:
+                mover.get(bowtie2_index_base_url, index_directory)
+            with open(os.path.join(index_directory, '_SUCCESS'), 'w') \
+                as success_stream:
+                print >>success_stream, 'SUCCESS'
+        while not os.path.exists(os.path.join(index_directory, '_SUCCESS')):
+            time.sleep(0.5)
+        bowtie2_index_base = os.path.join(index_directory, index_basename)  
     global _input_line_count
     temp_dir_path = tempfile.mkdtemp()
     atexit.register(remove_temporary_directories, [temp_dir_path])
@@ -179,9 +203,13 @@ if __name__ == '__main__':
     parser.add_argument('--gzip-level', type=int, required=False,
         default=3,
         help='Gzip compression level to use for temporary Bowtie input file')
+    parser.add_argument('--intermediate-dir', type=str, required=False,
+        default='./',
+        help='Where to put transcript index if it needs to be downloaded')
 
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
+    filemover.add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv
@@ -198,6 +226,7 @@ if __name__ == '__main__':
     global, properties of args are also arguments of the go() function so
     different command-line arguments can be passed to it for unit tests.'''
     args = parser.parse_args(argv[1:])
+    mover = filemover.FileMover(args=args)
 
     # Start keep_alive thread immediately
     if args.keep_alive:
@@ -215,7 +244,9 @@ if __name__ == '__main__' and not args.test:
         report_multiplier=args.report_multiplier,
         stranded=args.stranded,
         fudge=args.fudge,
-        score_min=args.score_min)
+        score_min=args.score_min,
+        mover=mover,
+        intermediate_dir=args.intermediate_dir)
     print >>sys.stderr, ('DONE with cointron_enum.py; in=%d; time=%0.3f s') % \
         (_input_line_count, time.time() - start_time)
 elif __name__ == '__main__':

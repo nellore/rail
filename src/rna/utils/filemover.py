@@ -71,9 +71,9 @@ class FileMover(object):
             command_list.append(url.to_nonnative_url())
         elif url.is_curlable:
             raise RuntimeError('Can\'t upload to http/ftp URLs.')
-        elif url.is_local:
+        elif url.is_local or url.is_nfs:
             try:
-                os.makedirs(url.to_url())
+                os.makedirs(os.path.dirname(url.to_url()))
             except OSError:
                 # Directory exists
                 pass
