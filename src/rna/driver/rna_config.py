@@ -235,6 +235,16 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
         Return value: list of AsyncResults, one for each engine spanned by
             direct_view
     """
+    if 'dict_format' not in kwargs:
+        dict_format = False
+    else:
+        dict_format = kwargs['dict_format']
+        del kwargs['dict_format']
+    if not ids:
+        if dict_format:
+            return {}
+        else:
+            return []
     if 'errors_to_ignore' not in kwargs:
         errors_to_ignore = []
     else:
@@ -245,11 +255,6 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     else:
         message = kwargs['message']
         del kwargs['message']
-    if 'dict_format' not in kwargs:
-        dict_format = False
-    else:
-        dict_format = kwargs['dict_format']
-        del kwargs['dict_format']
     id_set = set(ids)
     if not (isinstance(function_to_apply, dict)
             and set(function_to_apply.keys()) == id_set):
@@ -345,9 +350,8 @@ def ready_engines(rc, base, prep=False):
                'easy to install and comes with IPython and '
                'several other useful packages.'
             )
-    direct_view = rc[:]
     all_engines = rc.ids
-    #current_hostname = socket.gethostname()
+    current_hostname = socket.gethostname()
     engine_to_hostnames = apply_async_with_errors(
                                 rc, all_engines, socket.gethostname,
                                 dict_format=True
@@ -362,6 +366,14 @@ def ready_engines(rc, base, prep=False):
     to perpetuate.'''
     engines_for_copying = [random.choice(list(engines)) 
                             for engines in hostname_to_engines.values()]
+    '''Herd won't work with local engines, work around this by separating
+    engines into two groups: local and remote.'''
+    remote_hostnames_for_copying = list(
+            set(hostname_to_engines.keys()).difference(set([current_hostname]))
+        )
+    local_engines_for_copying = [engine for engines in engines_for_copying
+                                 if engine
+                                 in hostname_to_engines[current_hostname]]
     # Create temporary directories on selected nodes
     select_view = rc[engines_for_copying]
     with select_view.sync_imports(quiet=True):
@@ -409,14 +421,29 @@ def ready_engines(rc, base, prep=False):
         print_to_screen('Copied Rail-RNA to cluster nodes.',
                             newline=True, carriage_return=False)
     else:
-        print_to_screen('Copying Rail-RNA to cluster nodes with Herd...')
-        herd.run_with_opts(
-                compressed_rail_path,
+        if local_engines_for_copying:
+            print_to_screen('Copying Rail-RNA to local filesystem...',
+                            newline=False, carriage_return=True)
+            apply_async_with_errors(rc, local_engines_for_copying,
+                shutil.copyfile, compressed_rail_path,
                 compressed_rail_destination,
-                hostlist=','.join(hostname_to_engines.keys())
+                message=('Error(s) encountered copying Rail to '
+                         'local filesystem. Refer to the errors above -- and '
+                         'especially make sure /tmp is not out of space on '
+                         'any node supporting an IPython engine '
+                         '-- before trying again.'),
             )
-        print_to_screen('Copied Rail-RNA to cluster nodes with Herd.',
-                            newline=True, carriage_return=False)
+            print_to_screen('Copied Rail-RNA to local filesystem.',
+                                newline=True, carriage_return=False)
+        if remote_hostnames_for_copying:
+            print_to_screen('Copying Rail-RNA to remote nodes with Herd...')
+            herd.run_with_opts(
+                    compressed_rail_path,
+                    compressed_rail_destination,
+                    hostlist=','.join(remote_hostnames_for_copying)
+                )
+            print_to_screen('Copied Rail-RNA to remote nodes with Herd.',
+                                newline=True, carriage_return=False)
     # Extract Rail
     print_to_screen('Extracting Rail-RNA on cluster nodes...',
                             newline=False, carriage_return=True)
@@ -451,14 +478,28 @@ def ready_engines(rc, base, prep=False):
         print_to_screen('Copied manifest to cluster nodes.',
                             newline=True, carriage_return=False)
     else:
-        print_to_screen('Copying manifest to cluster nodes with Herd...')
-        herd.run_with_opts(
-                base.manifest,
-                manifest_destination,
-                hostlist=','.join(hostname_to_engines.keys())
+        if local_engines_for_copying:
+            print_to_screen('Copying manifest to local filesystem...',
+                            newline=False, carriage_return=True)
+            apply_async_with_errors(rc, local_engines_for_copying,
+                shutil.copyfile, base.manifest, manifest_destination,
+                message=('Error(s) encountered copying manifest to '
+                         'slave nodes. Refer to the errors above -- and '
+                         'especially make sure /tmp is not out of space on '
+                         'any node supporting an IPython engine '
+                         '-- before trying again.'),
             )
-        print_to_screen('Copied manifest to cluster nodes with Herd.',
-                            newline=True, carriage_return=False)
+            print_to_screen('Copied manifest to local filesystem.',
+                                newline=True, carriage_return=False)
+        if remote_hostnames_for_copying:
+            print_to_screen('Copying manifest to remote nodes with Herd...')
+            herd.run_with_opts(
+                    base.manifest,
+                    manifest_destination,
+                    hostlist=','.join(remote_hostnames_for_copying)
+                )
+            print_to_screen('Copied manifest to remote nodes with Herd.',
+                                newline=True, carriage_return=False)
     base.manifest = manifest_destination
     if not prep and not base.do_not_copy_index_to_nodes:
         index_files = ([base.bowtie2_idx + extension
@@ -474,7 +515,7 @@ def ready_engines(rc, base, prep=False):
             import herd.herd as herd
         except ImportError:
             print_to_screen('Warning: Herd is not installed, so copying '
-                            'Bowtie indexes to nodes may be slow. '
+                            'Bowtie indexes to cluster nodes may be slow. '
                             'Install Herd to enable torrent distribution of '
                             'indexes across nodes, or invoke '
                             '--do-not-copy-index-to-nodes to avoid copying '
@@ -491,18 +532,38 @@ def ready_engines(rc, base, prep=False):
                              '-- before trying again.')
                 )
         else:
-            print_to_screen('Copying Bowtie index files to cluster nodes '
-                            'with Herd...',
-                            newline=False, carriage_return=True)
-            for index_file in index_files:
-                herd.run_with_options(
-                        os.path.abspath(index_file),
+            if local_engines_for_copying:
+                print_to_screen('Copying Bowtie index files to local '
+                                'filesystem...',
+                                newline=False, carriage_return=True)
+                for index_file in index_files:
+                    apply_async_with_errors(rc, engines_for_copying,
+                        shutil.copyfile, os.path.abspath(index_file),
                         os.path.join(temp_dir, os.path.basename(index_file)),
-                        hostlist=','.join(hostname_to_engines.keys())
+                        message=('Error(s) encountered copying Bowtie '
+                                 'indexes to local filesystem. Refer to the '
+                                 'errors above -- and especially make sure '
+                                 '/tmp is not out of space '
+                                 'on any node supporting an IPython engine '
+                                 '-- before trying again.')
                     )
-            print_to_screen('Copied Bowtie index files to cluster nodes '
-                            'with Herd.',
-                            newline=True, carriage_return=False)
+                print_to_screen('Copied Bowtie index files to local '
+                                'filesystem.',
+                                newline=False, carriage_return=True)
+            if remote_hostnames_for_copying:
+                print_to_screen('Copying Bowtie index files to cluster nodes '
+                                'with Herd...',
+                                newline=False, carriage_return=True)
+                for index_file in index_files:
+                    herd.run_with_options(
+                            os.path.abspath(index_file),
+                            os.path.join(temp_dir,
+                                os.path.basename(index_file)),
+                            hostlist=','.join(hostname_to_engines.keys())
+                        )
+                print_to_screen('Copied Bowtie index files to cluster nodes '
+                                'with Herd.',
+                                newline=True, carriage_return=False)
             base.bowtie1_idx = os.path.join(temp_dir,
                                             os.path.basename(base.bowtie1_idx))
             base.bowtie2_idx = os.path.join(temp_dir,
