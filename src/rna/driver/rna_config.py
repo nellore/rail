@@ -374,11 +374,7 @@ def ready_engines(rc, base, prep=False):
     local_engines_for_copying = [engine for engines in engines_for_copying
                                  if engine
                                  in hostname_to_engines[current_hostname]]
-    # Create temporary directories on selected nodes
-    select_view = rc[engines_for_copying]
-    with select_view.sync_imports(quiet=True):
-        import shutil
-        import tarfile
+    # Create temporary directories on selected nodess
     pids = apply_async_with_errors(rc, all_engines, os.getpid)
     # Set random seed so temp directory is reused if restarting Rail
     random.seed(str(sorted(pids)))
@@ -1162,7 +1158,7 @@ def ipython_client(ipython_profile=None, ipcontroller_json=None):
         except ValueError:
             errors.append(
                     'Cluster configuration profile "%s" was not '
-                    'found.' % ipy_profile
+                    'found.' % ipython_profile
                 )
     elif ipcontroller_json:
         try:
