@@ -375,6 +375,7 @@ def ready_engines(rc, base, prep=False):
                                  if engine
                                  in hostname_to_engines[current_hostname]]
     # Create temporary directories on selected nodess
+    import tarfile
     pids = apply_async_with_errors(rc, all_engines, os.getpid)
     # Set random seed so temp directory is reused if restarting Rail
     random.seed(str(sorted(pids)))
