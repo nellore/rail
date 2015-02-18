@@ -1158,7 +1158,7 @@ def ipython_client(ipython_profile=None, ipcontroller_json=None):
                 )
     if ipython_profile:
         try:
-            rc = Client(profile=ipy_profile)
+            rc = Client(profile=ipython_profile)
         except ValueError:
             errors.append(
                     'Cluster configuration profile "%s" was not '
