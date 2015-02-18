@@ -669,13 +669,14 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             print pid
                             #os.kill(pid, signal.SIGINT)
                         else:
-                            subprocess.Popen(
+                            '''subprocess.Popen(
                                 ('ssh -oStrictHostKeyChecking=no '
                                  '-oBatchMode=yes {} kill -SIGINT {}').format(
                                     host, pid
                                 ), bufsize=-1, shell=True, stdout=null_stream,
                                  stderr=null_stream
-                            )
+                            )'''
+                            pass
         else:
             import multiprocessing
         # Serialize JSON configuration
