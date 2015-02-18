@@ -108,8 +108,9 @@ class Launcher(object):
                 os.execv(_executable, runner_args)
             elif mode == 'parallel':
                 print_to_screen('Launching Dooplicity runner with Python...')
+                parallel_executable = which('python')
                 # sys.executable had better find IPython
-                runner_args = [sys.executable, os.path.join(
+                runner_args = [parallel_executable, os.path.join(
                                                     base_path,
                                                     'dooplicity',
                                                     'emr_simulator.py'
