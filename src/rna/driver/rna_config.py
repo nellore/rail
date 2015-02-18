@@ -351,6 +351,47 @@ def ready_engines(rc, base, prep=False):
                'several other useful packages.'
             )
     all_engines = rc.ids
+    '''Test that intermediate directory is accessible from everywhere; create
+    dir in process.'''
+    try:
+        os.makedirs(base.intermediate_dir)
+    except OSError:
+        # Hopefully exists
+        pass
+    # Create dud file in intermediate directory
+    dud_filename = os.path.join(base.intermediate_dir, 
+                            ''.join(random.choice(string.ascii_uppercase
+                                    + string.digits) for _ in xrange(40))
+                        )
+    with open(dud_filename, 'w') as dud_stream:
+        print >>dud_stream, 'DUD'
+    '''Now test for existence of dud file across engines; a dud file with a
+    very random name is created to ensure that the directory being searched for
+    is really the one specified by the user rather than some directory that 
+    only an engine could see, which with high probability is absent this
+    file.'''
+    try:
+        dud_results = apply_async_with_errors(rc, all_engines, os.path.exists,
+                                            dud_filename, dict_format=True,
+                                            message=('Error(s) encountered '
+                                                     'testing that '
+                                                     'the log directory is '
+                                                     'accessible from '
+                                                     'all engines. Restart '
+                                                     'IPython engines '
+                                                     'and try again.')
+                                        )
+    finally:
+        # No matter what, kill the dud
+        os.remove(dud_filename)
+    bad_engines = [engine for engine in dud_results if not dud_results[engine]]
+    if bad_engines:
+        raise RuntimeError(('Engines %s cannot access the log directory %s. '
+                            'Ensure that the log directory is in a location '
+                            'accessible from all engines.') % (
+                                    engine_string_from_list(bad_engines),
+                                    base.intermediate_dir
+                                ))
     current_hostname = socket.gethostname()
     engine_to_hostnames = apply_async_with_errors(
                                 rc, all_engines, socket.gethostname,
@@ -382,7 +423,7 @@ def ready_engines(rc, base, prep=False):
     # NOT WINDOWS-COMPATIBLE; must be changed if porting Rail to Windows
     temp_dir = '/tmp/railrna-%s' % \
         ''.join(random.choice(string.ascii_uppercase
-            + string.digits) for _ in range(12))
+            + string.digits) for _ in xrange(12))
     if not prep and not base.do_not_copy_index_to_nodes:
         dir_to_create = os.path.join(temp_dir, 'genome')
     else:
