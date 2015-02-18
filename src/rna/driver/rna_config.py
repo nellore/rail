@@ -1186,6 +1186,9 @@ def ipython_client(ipython_profile=None, ipcontroller_json=None):
                     'ipcontroller-client.json with the '
                     '--ipcontroller-json command-line parameter.'
                 )
+        except UnboundLocalError:
+            # Client referenced before assignment; arises from ImportError
+            pass
     if errors:
         raise RuntimeError(
                     '\n'.join(
