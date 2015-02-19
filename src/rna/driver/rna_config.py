@@ -437,10 +437,7 @@ def ready_engines(rc, base, prep=False):
         errors_to_ignore=['OSError'])
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
             ('trap "(rm -rf {temp_dir})" EXIT SIGHUP SIGQUIT SIGINT SIGTERM; '
-             'while true; do sleep 10000; done;').format(
-                     temp_dir=temp_dir,
-                     fifo_special_pipe=fifo_special_pipe
-                ),
+             'while true; do sleep 10000; done;'),
             shell=True,
             executable='/bin/bash',
             message=(
