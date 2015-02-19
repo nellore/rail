@@ -436,8 +436,8 @@ def ready_engines(rc, base, prep=False):
                  'Restart IPython engines and try again.'),
         errors_to_ignore=['OSError'])
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
-            ('trap "(rm -rf {temp_dir})" EXIT SIGHUP SIGQUIT SIGINT SIGTERM; '
-             'while true; do sleep 10000; done;'),
+            ('trap "{ rm -rf /tmp/railrna*; exit 0; }" SIGINT SIGTERM SIGHUP; '
+             '(while true; do sleep 100000; done) & wait)'),
             shell=True,
             executable='/bin/bash',
             message=(
