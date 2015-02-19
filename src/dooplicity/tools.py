@@ -36,6 +36,7 @@ from itertools import groupby
 import os
 import threading
 import contextlib
+import signal
 
 class KeepAlive(threading.Thread):
     """ Writes Hadoop status messages to avert task termination. """
@@ -90,6 +91,44 @@ def which(program):
                 if is_exe(candidate):
                     return candidate
     return None
+
+def sig_handler(signum, frame):
+    """ Helper function for register_cleanup that's called on signal. """
+    import sys
+    sys.exit(0)
+
+def register_cleanup(handler, *args, **kwargs):
+    """ Registers cleanup on normal and signal-induced program termination.
+
+        Executes previously registered handler as well as new handler.
+
+        handler: function to execute on program termination
+        args: named arguments of handler
+        kwargs includes keyword args of handler as well as: 
+            signals_to_handle: list of signals to handle, e.g. [signal.SIGTERM,
+                signal.SIGHUP]
+
+        No return value.
+    """
+    if 'signals_to_handle' in kwargs:
+        signals_to_handle = kwargs['signals_to_handle']
+        del kwargs['signals_to_handle']
+    else:
+        signals_to_handle = [signal.SIGTERM, signal.SIGHUP]
+    from atexit import register
+    register(handler, *args)
+    old_handlers = [signal.signal(a_signal, sig_handler)
+                    for a_signal in signals_to_handle]
+    for i, old_handler in enumerate(old_handlers):
+        if (old_handler != signal.SIG_DFL) and (old_handler != sig_handler):
+            def new_handler(signum, frame):
+                try:
+                    sig_handler(signum, frame)
+                finally:
+                    old_handler(signum, frame)
+        else:
+            new_handler = sig_handler
+        signal.signal(signals_to_handle[i], new_handler)
 
 def path_join(unix, *args):
     """ Performs UNIX-like os.path.joins on Windows systems if necessary.

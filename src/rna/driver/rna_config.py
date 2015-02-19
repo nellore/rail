@@ -204,7 +204,8 @@ def engine_string_from_list(id_list):
         to_print.append('%d, %d' % (last_id - 1, last_id))
     else:
         to_print.append('%d' % last_id)
-    to_print[-1] = ' '.join(['and', to_print[-1]])
+    if len(to_print) > 1:
+        to_print[-1] = ' '.join(['and', to_print[-1]])
     return ', '.join(to_print)
 
 def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
@@ -316,7 +317,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
                      exc]
                  )
         raise RuntimeError('\n'.join(runtimeerror_message
-                            + (['', message] if message else [])))
+                            + ([message] if message else [])))
     # Return only those results for which there is no failure
     if not dict_format:
         return [asyncresult.get() for asyncresult in asyncresults
@@ -405,6 +406,9 @@ def ready_engines(rc, base, prep=False):
     second try will be different. IWF = intermittent weird failure, terminology 
     borrowed from a PC repair guide from the nineties that one of us (AN) wants
     to perpetuate.'''
+    pids = apply_async_with_errors(rc, all_engines, os.getpid)
+    # Set random seed so temp directory is reused if restarting Rail
+    random.seed(str(sorted(pids)))
     engines_for_copying = [random.choice(list(engines)) 
                             for engines in hostname_to_engines.values()]
     '''Herd won't work with local engines, work around this by separating
@@ -415,12 +419,8 @@ def ready_engines(rc, base, prep=False):
     local_engines_for_copying = [engine for engines in engines_for_copying
                                  if engine
                                  in hostname_to_engines[current_hostname]]
-    # Create temporary directories on selected nodess
-    import tarfile
-    pids = apply_async_with_errors(rc, all_engines, os.getpid)
-    # Set random seed so temp directory is reused if restarting Rail
-    random.seed(str(sorted(pids)))
-    # NOT WINDOWS-COMPATIBLE; must be changed if porting Rail to Windows
+    '''Create temporary directories on selected nodes; NOT WINDOWS-COMPATIBLE;
+    must be changed if porting Rail to Windows.'''
     temp_dir = '/tmp/railrna-%s' % \
         ''.join(random.choice(string.ascii_uppercase
             + string.digits) for _ in xrange(12))
@@ -434,8 +434,9 @@ def ready_engines(rc, base, prep=False):
                  'directories for storing Rail on slave nodes. '
                  'Restart IPython engines and try again.'),
         errors_to_ignore=['OSError'])
-    apply_async_with_errors(rc, engines_for_copying, atexit.register,
-            shutil.rmtree, temp_dir,
+    apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
+            'trap "(rm -rf %s)" SIGINT SIGTERM; cat;' % temp_dir, shell=True,
+            executable='/bin/bash',
             message=(
                 'Error scheduling temporary directories on slave nodes '
                 'for deletion. Restart IPython engines and try again.'
@@ -445,6 +446,7 @@ def ready_engines(rc, base, prep=False):
     compressed_rail_path = os.path.join(os.path.abspath(base.intermediate_dir),
                                             compressed_rail_file)
     compressed_rail_destination = os.path.join(temp_dir, compressed_rail_file)
+    import tarfile
     with tarfile.open(compressed_rail_path, 'w:gz') as tar_stream:
         tar_stream.add(base_path, arcname='rail')
     try:
@@ -561,8 +563,7 @@ def ready_engines(rc, base, prep=False):
                             'Install Herd to enable torrent distribution of '
                             'indexes across nodes, or invoke '
                             '--do-not-copy-index-to-nodes to avoid copying '
-                            'indexes to slave nodes, which may then slow '
-                            'down alignment.')
+                            'indexes, which may then slow down alignment.')
             for index_file in index_files:
                 apply_async_with_errors(rc, engines_for_copying,
                     shutil.copyfile, os.path.abspath(index_file),
