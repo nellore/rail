@@ -436,8 +436,11 @@ def ready_engines(rc, base, prep=False):
                  'Restart IPython engines and try again.'),
         errors_to_ignore=['OSError'])
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
-            'trap "(rm -rf %s)" EXIT SIGHUP SIGQUIT SIGINT SIGTERM; cat;'
-            % temp_dir,
+            ('trap "(rm -rf {temp_dir})" EXIT SIGHUP SIGQUIT SIGINT SIGTERM; '
+             'while true; do sleep 10000; done;').format(
+                     temp_dir=temp_dir,
+                     fifo_special_pipe=fifo_special_pipe
+                )
             shell=True,
             executable='/bin/bash',
             message=(
