@@ -55,11 +55,10 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
 import bowtie
 import bowtie_index
 import manifest
-import atexit
 # Define string version_number
 from version import version_number
 import filemover
@@ -103,7 +102,7 @@ else:
     import tempfile
     temp_dir_path = tempfile.mkdtemp()
     from tempdel import remove_temporary_directories
-    atexit.register(remove_temporary_directories, [temp_dir_path])
+    register_cleanup(remove_temporary_directories, [temp_dir_path])
 for (line_type, sample_label), xpartition in xstream(sys.stdin, 2):
     assert line_type in 'NID'
     sample_label = manifest_object.index_to_label[sample_label]

@@ -51,7 +51,6 @@ import sys
 import os
 import site
 import tempfile
-import atexit
 import subprocess
 import time
 import string
@@ -65,7 +64,7 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
 import gzip
 import bowtie
 import argparse
@@ -76,7 +75,7 @@ _input_line_count = 0
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 def input_files_from_input_stream(input_stream,
-                                    temp_dir_path=tempfile.mkdtemp(),
+                                    temp_dir_path=None,
                                     verbose=False,
                                     gzip_level=3):
     """ Creates FASTA reference to index, rname file, and file with reads.
@@ -103,6 +102,7 @@ def input_files_from_input_stream(input_stream,
         Return value: tuple (path to FASTA reference file, path to read file)
     """
     global _input_line_count
+    if temp_dir_path is None: temp_dir_path = tempfile.mkdtemp()
     prefasta_filename = os.path.join(temp_dir_path, 'temp.prefa')
     deduped_fasta_filename = os.path.join(temp_dir_path, 'temp.deduped.prefa')
     final_fasta_filename = os.path.join(temp_dir_path, 'temp.fa')
@@ -212,7 +212,7 @@ def handle_temporary_directory(archive, temp_dir_path):
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_build_exe='bowtie2-build', bowtie2_args=None,
-    temp_dir_path=tempfile.mkdtemp(), verbose=False, report_multiplier=1.2,
+    temp_dir_path=None, verbose=False, report_multiplier=1.2,
     replicable=False, count_multiplier=6, gzip_level=3):
     """ Runs Rail-RNA-realign.
 
@@ -284,6 +284,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         No return value.
     """
     start_time = time.time()
+    if temp_dir_path is None: temp_dir_path = tempfile.mkdtemp()
     fasta_file, reads_file, rnames_file = input_files_from_input_stream(
                                                 input_stream,
                                                 verbose=verbose,
@@ -408,7 +409,7 @@ if __name__ == '__main__' and not args.test:
     archive = os.path.join(args.archive,
         str(os.getpid())) if args.archive is not None else None
     # Handle temporary directory if CTRL+C'd
-    atexit.register(handle_temporary_directory, archive, temp_dir_path)
+    register_cleanup(handle_temporary_directory, archive, temp_dir_path)
     if args.verbose:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path

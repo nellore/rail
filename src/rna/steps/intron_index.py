@@ -42,7 +42,6 @@ import site
 import subprocess
 import argparse
 import tarfile
-import atexit
 import threading
 
 base_path = os.path.abspath(
@@ -56,6 +55,7 @@ site.addsitedir(base_path)
 
 import bowtie
 from dooplicity.ansibles import Url
+from dooplicity.tools import register_cleanup
 import filemover
 
 # Print file's docstring if -h is invoked
@@ -101,7 +101,7 @@ output_url = Url(args.out) if args.out is not None \
 import tempfile
 temp_dir_path = tempfile.mkdtemp()
 # For deleting temporary directory, even on unexpected exit
-atexit.register(handle_temporary_directory, temp_dir_path)
+register_cleanup(handle_temporary_directory, temp_dir_path)
 if output_url.is_local:
     # Set up final destination
     try: os.makedirs(output_url.to_url())

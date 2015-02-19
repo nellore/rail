@@ -57,7 +57,7 @@ from alignment_handlers import running_sum, pairwise
 import math
 import time
 from dooplicity.ansibles import Url
-import atexit
+from dooplicity.tools import register_cleanup
 import filemover
 
 # Print file's docstring if -h is invoked
@@ -92,7 +92,7 @@ else:
     import tempfile
     temp_dir_path = tempfile.mkdtemp()
     from tempdel import remove_temporary_directories
-    atexit.register(remove_temporary_directories, [temp_dir_path])
+    register_cleanup(remove_temporary_directories, [temp_dir_path])
 samples = {}
 for input_line_count, line in enumerate(sys.stdin):
     tokens = line.strip().split('\t')

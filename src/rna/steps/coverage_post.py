@@ -43,6 +43,7 @@ site.addsitedir(base_path)
 
 import manifest
 from dooplicity.ansibles import Url
+from dooplicity.tools import register_cleanup
 import filemover
 
 # Print file's docstring if -h is invoked
@@ -100,9 +101,8 @@ if args.out is not None:
     else:
         import tempfile
         temp_dir_path = tempfile.mkdtemp()
-        import atexit
         from tempdel import remove_temporary_directories
-        atexit.register(remove_temporary_directories,
+        register_cleanup(remove_temporary_directories,
                             [temp_dir_path])
         output_filename = args.normalize_filename + '.temp'
         output_filename = os.path.join(temp_dir_path, output_filename)

@@ -28,7 +28,7 @@ site.addsitedir(base_path)
 import dooplicity.ansibles as ab
 import tempfile
 import shutil
-from dooplicity.tools import path_join, is_exe, which
+from dooplicity.tools import path_join, is_exe, which, register_cleanup
 from version import version_number
 import sys
 import argparse
@@ -39,7 +39,6 @@ from collections import defaultdict
 import random
 import string
 import socket
-import atexit
 
 _help_set = set(['--help', '-h'])
 _argv_set = set(sys.argv)
@@ -421,9 +420,11 @@ def ready_engines(rc, base, prep=False):
                                  in hostname_to_engines[current_hostname]]
     '''Create temporary directories on selected nodes; NOT WINDOWS-COMPATIBLE;
     must be changed if porting Rail to Windows.'''
-    temp_dir = '/tmp/railrna-%s' % \
-        ''.join(random.choice(string.ascii_uppercase
-            + string.digits) for _ in xrange(12))
+    if base.scratch is None:
+        scratch_dir = '/tmp'
+    temp_dir = os.path.join(scratch_dir, 'railrna-%s' %
+                            ''.join(random.choice(string.ascii_uppercase
+                                    + string.digits) for _ in xrange(12)))
     if not prep and not base.do_not_copy_index_to_nodes:
         dir_to_create = os.path.join(temp_dir, 'genome')
     else:
@@ -1354,9 +1355,8 @@ class RailRnaLocal(object):
                     '''Download/check manifest only if not an IPython engine
                     (not parallel).'''
                     base.manifest_dir = base.intermediate_dir
-                    import atexit
                     from tempdel import remove_temporary_directories
-                    atexit.register(remove_temporary_directories,
+                    register_cleanup(remove_temporary_directories,
                                         [base.manifest_dir])
                     base.manifest = os.path.join(base.manifest_dir, 'MANIFEST')
                     ansible.get(manifest_url, destination=base.manifest)
@@ -1514,6 +1514,7 @@ class RailRnaLocal(object):
                              'check that it\'s not a file and that '
                              'write permissions are active.') % scratch
                         )
+        base.scratch = scratch
 
     @staticmethod
     def add_args(required_parser, general_parser, output_parser, 
@@ -1573,8 +1574,9 @@ class RailRnaLocal(object):
             general_parser.add_argument(
                 '--scratch', type=str, required=False, metavar='<dir>',
                 default=None,
-                help=('where to write node stdout before copying to '
-                      'intermediate directory (def: securely created '
+                help=('node-local scratch directory for storing Bowtie index '
+                      'and temporary files before they are committed (def: '
+                      'directory in /tmp and/or other securely created '
                       'temporary directory)')
             )
             if not prep:
@@ -1760,9 +1762,8 @@ class RailRnaElastic(object):
         else:
             if not manifest_url.is_local:
                 temp_manifest_dir = tempfile.mkdtemp()
-                import atexit
                 from tempdel import remove_temporary_directories
-                atexit.register(remove_temporary_directories,
+                register_cleanup(remove_temporary_directories,
                                     [temp_manifest_dir])
                 manifest = os.path.join(temp_manifest_dir, 'MANIFEST')
                 ansible.get(base.manifest, destination=manifest)

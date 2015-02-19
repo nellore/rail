@@ -143,7 +143,6 @@ import site
 import subprocess
 import shutil
 import tempfile
-import atexit
 import time
 import gzip
 
@@ -159,7 +158,7 @@ site.addsitedir(base_path)
 import bowtie
 import partition
 import manifest
-from dooplicity.tools import xstream, dlist
+from dooplicity.tools import xstream, dlist, register_cleanup
 
 # Initialize global variables for tracking number of input lines
 _input_line_count = 0
@@ -369,7 +368,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             # A unit test is probably being run
             task_partition = '0'
     temp_dir = tempfile.mkdtemp()
-    atexit.register(handle_temporary_directory, temp_dir)
+    register_cleanup(handle_temporary_directory, temp_dir)
     align_file = os.path.join(temp_dir, 'first_pass_reads.temp.gz')
     other_reads_file = os.path.join(temp_dir, 'other_reads.temp.gz')
     second_pass_file = os.path.join(temp_dir, 'second_pass_reads.temp.gz')

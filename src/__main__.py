@@ -132,6 +132,8 @@ class Launcher(object):
                         os.path.abspath(self.common)])
                 if self.scratch:
                     runner_args.extend(['--scratch', self.scratch])
+                else:
+                    runner_args.extend(['--scratch', '-'])
                 if self.ipython_profile:
                     runner_args.extend(['--ipy-profile', self.ipython_profile])
                 if self.ipcontroller_json:

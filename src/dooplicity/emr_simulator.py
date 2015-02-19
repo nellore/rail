@@ -208,8 +208,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             string, writes to temporary directory; if None, writes directly
             to output directory.
 
-        Return value: Empty tuple if no errors encountered; otherwise
-            (input_files,).
+        Return value: None if no errors encountered; otherwise error string.
     """
     try:
         task_streams = {}
@@ -219,7 +218,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             try:
                 output_dir = tempfile.mkdtemp()
             except OSError:
-                return ('Problem encountered trying to create temporary '
+                return ('Problem encountered creating temporary '
                         'scratch subdirectory.')
         elif scratch:
             # Write to temporary directory in special location
@@ -227,8 +226,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             try:
                 output_dir = tempfile.mkdtemp(dir=scratch)
             except OSError:
-                return ('Problem encountered trying to create temporary '
-                        'scratch subdirectory of %s.' % scratch,)
+                return ('Problem encountered creating temporary '
+                        'scratch subdirectory of %s.' % scratch)
         else:
             final_output_dir = output_dir
         for input_file in input_files:
@@ -274,7 +273,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                 bufsize=-1)
                 if sort_return != 0:
                     return ('Error encountered sorting file %s.' %
-                                unsorted_file,)
+                                unsorted_file)
                 os.remove(unsorted_file)
         else:
             for unsorted_file in glob.glob(os.path.join(
@@ -290,7 +289,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                 bufsize=-1)
                 if sort_return != 0:
                     return ('Error encountered sorting file %s.' %
-                                unsorted_file,)
+                                unsorted_file)
                 os.remove(unsorted_file)
         if final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
@@ -311,7 +310,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             os.path.join(destination, filename)
                         )
             shutil.rmtree(output_dir)
-        return tuple()
+        return None
     except Exception as e:
         # Uncaught miscellaneous exception
         from traceback import format_exc
@@ -319,7 +318,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 '[%s] into tasks.'
                         % (format_exc(),
                             (('%s, '* (len(input_files) - 1) 
-                                       + '%s') % tuple(input_files))),)
+                                       + '%s') % tuple(input_files))))
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
@@ -354,8 +353,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             string, writes to temporary directory; if None, writes directly
             to output directory.
 
-        Return value: empty tuple iff step runs successfully; otherwise, tuple
-            (error message, full streaming command that was run)
+        Return value: None iff step runs successfully; otherwise error message.
     """
     command_to_run = None
     try:
@@ -365,7 +363,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             try:
                 output_dir = tempfile.mkdtemp()
             except OSError:
-                return ('Problem encountered trying to create temporary '
+                return ('Problem encountered creating temporary '
                         'scratch subdirectory.')
         elif scratch:
             # Write to temporary directory in special location
@@ -373,15 +371,15 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             try:
                 output_dir = tempfile.mkdtemp(dir=scratch)
             except OSError:
-                return ('Problem encountered trying to create temporary '
-                        'scratch subdirectory of %s.' % scratch,)
+                return ('Problem encountered creating temporary '
+                        'scratch subdirectory of %s.' % scratch)
         else:
             final_output_dir = output_dir
         input_files = [input_file for input_file in glob.glob(input_glob)
                         if os.path.isfile(input_file)]
         if not input_files:
             # No input!
-            return tuple()
+            return None
         if sort_options is None:
             # Mapper. Check if first input file is gzip'd
             with open(input_files[0], 'rb') as binary_input_stream:
@@ -434,9 +432,10 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                         if os.path.exists(key_dir):
                             pass
                         else:
-                            return (('Problem encountered trying to create '
-                                     'directory %s.') % key_dir,
-                                    command_to_run)
+                            return (('Streaming command "%s" failed: problem '
+                                     'encountered creating output '
+                                     'directory %s.') % (command_to_run,
+                                                          key_dir))
                     if gzip:
                         task_file_streams[key] = yopen(True,
                                 os.path.join(key_dir, str(task_id) + '.gz'),
@@ -449,8 +448,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                     task_file_streams[key].write(line_to_write)
             multiple_output_process_return = multiple_output_process.wait()
             if multiple_output_process_return != 0:
-                return (('Exit level was %d.')
-                        % multiple_output_process_return, command_to_run)
+                return (('Streaming command "%s" failed; exit level was %d.')
+                         % (command_to_run, multiple_output_process_return))
             for key in task_file_streams:
                 task_file_streams[key].close()
         else:
@@ -478,8 +477,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                                     executable='/bin/bash'
                                                 )
             if single_output_process_return != 0:
-                return (('Exit level was %d.')
-                        % single_output_process_return, command_to_run)
+                return (('Streaming command "%s" failed; exit level was %d.')
+                         % (command_to_run, single_output_process_return))
         if final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
@@ -499,12 +498,12 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                             os.path.join(destination, filename)
                         )
             shutil.rmtree(output_dir)
-        return tuple()
+        return None
     except Exception as e:
         # Uncaught miscellaneous exception
         from traceback import format_exc
-        return ('Error\n\n%s\nexecuting task on input %s'
-                % (format_exc(), input_file), command_to_run)
+        return ('Error\n\n%s\nexecuting task on input %s.'
+                % (format_exc(), input_file))
 
 def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
@@ -543,7 +542,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             precedence.
         scratch: scratch directory, typically local. Files are written here by
             tasks before copying to final destination. If None, files are
-            written directory to final destination. If '', files are written
+            written directly to final destination. If '-', files are written
             to safely created temporary directory.
         common: path to directory accessible across nodes in --ipy mode
 
@@ -961,20 +960,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 )
                     pool.close()
                     while len(return_values) < input_file_count:
-                        try:
-                            max_tuple = max(map(len, return_values))
-                        except ValueError:
-                            # return_values is empty
-                            max_tuple = -1
-                            pass
-                        if max_tuple > 0:
+                        errors = [value for value in return_values
+                                    if value is not None]
+                        if errors:
                             '''There are error tuples; could put error message
                             directly in RuntimeError, but then it would be
                             positioned after the Dooplicity message about
                             resuming the job.'''
-                            errors = ['Streaming command "%s" failed: %s' % 
-                                      (error[1], error[0]) for error
-                                      in return_values if len(error) == 2]
                             errors = [(('%d) ' % (i + 1)) + error)
                                         if len(errors) > 1 else errors[0]
                                         for i, error in enumerate(errors)]
@@ -986,20 +978,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         iface.status('    Tasks completed: %d/%d'
                                      % (len(return_values), input_file_count))
                         time.sleep(0.2)
-                    try:
-                        max_tuple = max(map(len, return_values))
-                    except ValueError:
-                        # return_values is empty
-                        max_tuple = -1
-                        pass
-                    if max_tuple > 0:
-                        '''There are error tuples; could put error message
+                    errors = [value for value in return_values
+                                if value is not None]
+                    if errors:
+                        '''There are errors; could put error message
                         directly in RuntimeError, but then it would be
                         positioned after the Dooplicity message about
                         resuming the job.'''
-                        errors = ['Streaming command "%s" failed: %s' % 
-                                  (error[1], error[0]) for error
-                                  in return_values if len(error) == 2]
                         errors = [(('%d) ' % (i + 1)) + error)
                                     if len(errors) > 1 else errors[0]
                                     for i, error in enumerate(errors)]
@@ -1028,10 +1013,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     iface.status('    Tasks completed: 0/%d'
                                      % input_file_count)
                     for i, return_value in enumerate(return_values):
-                        if return_value:
+                        if return_value is not None:
                             # Bails after encountering exactly one error
-                            iface.fail('Streaming command "%s" failed: %s' % 
-                                            (return_value[1], return_value[0]),
+                            iface.fail(return_value,
                                         steps=(job_flow[step_number:]
                                                 if step_number != 0 else None))
                             failed = True
@@ -1095,16 +1079,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             )
                     pool.close()
                     while len(return_values) < input_file_group_count:
-                        try:
-                            max_tuple = max(map(len, return_values))
-                        except ValueError:
-                            # return_values is empty
-                            max_tuple = -1
-                            pass
-                        if max_tuple > 0:
-                            # There are error tuples
-                            errors = [error[0] for error in return_values
-                                        if error]
+                        errors = [value for value in return_values
+                                  if value is not None]
+                        if errors:
                             errors = [(('%d) ' % (i + 1)) + error)
                                         if len(errors) > 1 else errors[0]
                                         for i, error in enumerate(errors)]
@@ -1117,15 +1094,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                      % (len(return_values),
                                             input_file_group_count))
                         time.sleep(0.2)
-                    try:
-                        max_tuple = max(map(len, return_values))
-                    except ValueError:
-                        # return_values is empty
-                        max_tuple = -1
-                        pass
-                    if max_tuple > 0:
-                        # There are error tuples
-                        errors = [error[0] for error in return_values if error]
+                    errors = [value for value in return_values
+                                if value is not None]
+                    if errors:
                         errors = [(('%d) ' % (i + 1)) + error)
                                     if len(errors) > 1 else errors[0]
                                     for i, error in enumerate(errors)]
@@ -1149,9 +1120,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     iface.status('    Inputs partitioned: 0/%d'
                                      % input_file_group_count)
                     for i, return_value in enumerate(return_values):
-                        if return_value:
+                        if return_value is not None:
                             # Bails after encountering exactly one error
-                            iface.fail(return_value[0],
+                            iface.fail(return_value,
                                         steps=(job_flow[step_number:]
                                                 if step_number != 0 else None))
                             failed = True
@@ -1192,17 +1163,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             )
                     pool.close()
                     while len(return_values) < input_file_count:
-                        try:
-                            max_tuple = max(map(len, return_values))
-                        except ValueError:
-                            # return_values is empty
-                            max_tuple = -1
-                            pass
-                        if max_tuple > 0:
+                        errors = [value for value in return_values
+                                  if value is not None]
+                        if errors:
                             # There are error tuples
-                            errors = ['Streaming command "%s" failed: %s' % 
-                                      (error[1], error[0]) for error 
-                                      in return_values if len(error) == 2]
                             errors = [(('%d) ' % (i + 1)) + error)
                                         if len(errors) > 1 else errors[0]
                                         for i, error in enumerate(errors)]
@@ -1214,17 +1178,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         iface.status('    Tasks completed: %d/%d'
                                      % (len(return_values), input_file_count))
                         time.sleep(0.2)
-                    try:
-                        max_tuple = max(map(len, return_values))
-                    except ValueError:
-                        # return_values is empty
-                        max_tuple = -1
-                        pass
-                    if max_tuple > 0:
-                        # There are error tuples
-                        errors = ['Streaming command "%s" failed: %s' % 
-                                  (error[1], error[0]) for error 
-                                  in return_values if len(error) == 2]
+                    errors = [value for value in return_values
+                                  if value is not None]
+                    if errors:
                         errors = [(('%d) ' % (i + 1)) + error)
                                     if len(errors) > 1 else errors[0]
                                     for i, error in enumerate(errors)]
@@ -1248,10 +1204,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     iface.status('    Tasks completed: 0/%d'
                                      % input_file_count)
                     for i, return_value in enumerate(return_values):
-                        if return_value:
+                        if return_value is not None:
                             # Bails after encountering exactly one error
-                            iface.fail('Streaming command "%s" failed: %s' % 
-                                            (return_value[1], return_value[0]),
+                            iface.fail(return_value,
                                         steps=(job_flow[step_number:]
                                                 if step_number != 0 else None))
                             failed = True

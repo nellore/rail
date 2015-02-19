@@ -57,7 +57,7 @@ import bowtie_index
 import filemover
 import itertools
 from collections import defaultdict
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
 from dooplicity.ansibles import Url
 
 # Print file's docstring if -h is invoked
@@ -139,11 +139,10 @@ start_time = time.time()
 # For storing BED files before conversion to bigwig
 import tempfile
 from tempdel import remove_temporary_directories
-import atexit
 
 temp_dir_path = tempfile.mkdtemp()
 # Clean up after script
-atexit.register(remove_temporary_directories, [temp_dir_path])
+register_cleanup(remove_temporary_directories, [temp_dir_path])
 bed_filename = os.path.join(temp_dir_path, 'temp.bed')
 if args.verbose:
     print >>sys.stderr, 'Writing to temporary bed %s .' % bed_filename

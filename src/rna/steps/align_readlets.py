@@ -65,7 +65,6 @@ import os
 import site
 import subprocess
 import tempfile
-import atexit
 import gzip
 
 base_path = os.path.abspath(
@@ -78,7 +77,7 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 import bowtie
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
 from tempdel import remove_temporary_directories
 
 # Initialize global variable for tracking number of input lines
@@ -164,7 +163,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     global _input_line_count
     # For storing long qnames
     temp_dir = tempfile.mkdtemp()
-    atexit.register(remove_temporary_directories, [temp_dir])
+    register_cleanup(remove_temporary_directories, [temp_dir])
     qnames_file = os.path.join(temp_dir, 'qnames.temp.gz')
     readlet_file = os.path.join(temp_dir, 'readlets.temp.gz')
     with gzip.open(qnames_file, 'w', gzip_level) as qname_stream:

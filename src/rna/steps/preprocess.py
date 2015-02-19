@@ -70,7 +70,6 @@ Files are gzipped by default.
 
 import os
 import sys
-import atexit
 import tempfile
 import site
 import string
@@ -85,7 +84,7 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
-from dooplicity.tools import xopen
+from dooplicity.tools import xopen, register_cleanup
 import filemover
 from tempdel import remove_temporary_directories
 
@@ -193,7 +192,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     global _input_line_count, _output_line_count
     temp_dir = tempfile.mkdtemp()
     print >>sys.stderr, 'Created local destination directory "%s".' % temp_dir
-    atexit.register(remove_temporary_directories, [temp_dir])
+    register_cleanup(remove_temporary_directories, [temp_dir])
     input_line_count, output_line_count = 0, 0
     if not to_stdout:
         push_url = Url(push)

@@ -68,6 +68,7 @@ import manifest
 import version
 import filemover
 from dooplicity.ansibles import Url
+from dooplicity.tools import register_cleanup
 import subprocess
 
 # Print file's docstring if -h is invoked
@@ -140,9 +141,8 @@ if args.out is not None:
         # Set up temporary destination
         import tempfile
         temp_dir_path = tempfile.mkdtemp()
-        import atexit
         from tempdel import remove_temporary_directories
-        atexit.register(remove_temporary_directories,
+        register_cleanup(remove_temporary_directories,
                             [temp_dir_path])
 input_line_count = 0
 move_temporary_file = False # True when temporary file should be uploaded
