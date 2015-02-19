@@ -436,7 +436,9 @@ def ready_engines(rc, base, prep=False):
                  'Restart IPython engines and try again.'),
         errors_to_ignore=['OSError'])
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
-            'trap "(rm -rf %s)" SIGINT SIGTERM; cat;' % temp_dir, shell=True,
+            'trap "(rm -rf %s)" EXIT SIGHUP SIGQUIT SIGINT SIGTERM; cat;'
+            % temp_dir,
+            shell=True,
             executable='/bin/bash',
             message=(
                 'Error scheduling temporary directories on slave nodes '
