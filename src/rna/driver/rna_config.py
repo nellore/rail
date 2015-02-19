@@ -440,7 +440,7 @@ def ready_engines(rc, base, prep=False):
              'while true; do sleep 10000; done;').format(
                      temp_dir=temp_dir,
                      fifo_special_pipe=fifo_special_pipe
-                )
+                ),
             shell=True,
             executable='/bin/bash',
             message=(
