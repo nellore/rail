@@ -859,6 +859,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         # Run steps
         step_number = 0
         total_steps = len(steps)
+        if not ipy:
+            # Pool's only for if we're in local mode
+            pool = multiprocessing.Pool(num_processes, init_worker)
         for step in steps:
             step_data = steps[step]
             step_inputs = []
@@ -950,11 +953,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 iface.step('Step %d/%d: %s' % 
                             (step_number + 1, total_steps, step))
                 if not ipy:
-                    pool = multiprocessing.Pool(num_processes, init_worker)
                     return_values = []
                     for i, input_file in enumerate(input_files):
                         if os.path.isfile(input_file):
-                            if not ipy:
                                 pool.apply_async(
                                     step_runner_with_error_return, 
                                     args=(step_data['mapper'], input_file,
@@ -968,7 +969,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                         scratch),
                                     callback=return_values.append
                                 )
-                    pool.close()
                     while len(return_values) < input_file_count:
                         errors = [value for value in return_values
                                     if value is not None]
@@ -1070,7 +1070,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 iface.step('Step %d/%d: %s'
                              % (step_number + 1, total_steps, step))
                 if not ipy:
-                    pool = multiprocessing.Pool(num_processes, init_worker)
                     return_values = []
                     for i, input_file_group in enumerate(input_file_groups):
                         pool.apply_async(
@@ -1087,7 +1086,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     scratch),
                                 callback=return_values.append
                             )
-                    pool.close()
                     while len(return_values) < input_file_group_count:
                         errors = [value for value in return_values
                                   if value is not None]
@@ -1159,7 +1157,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 output_dir = step_data['output']
                 return_values = []
                 if not ipy:
-                    pool = multiprocessing.Pool(num_processes, init_worker)
                     for i, input_file in enumerate(input_files):
                         pool.apply_async(
                                 step_runner_with_error_return, 
@@ -1171,7 +1168,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     memcap, gzip, gzip_level, scratch),
                                  callback=return_values.append
                             )
-                    pool.close()
                     while len(return_values) < input_file_count:
                         errors = [value for value in return_values
                                   if value is not None]
@@ -1279,6 +1275,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 pass
                 iface.step('    Deleted temporary files.')
             step_number += 1
+        if not ipy:
+            pool.close()
         if not keep_last_output and not keep_intermediates:
             try:
                 os.remove(step_data['output'])
