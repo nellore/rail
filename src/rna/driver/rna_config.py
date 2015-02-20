@@ -575,22 +575,41 @@ def ready_engines(rc, base, prep=False):
                             'Install Herd to enable torrent distribution of '
                             'indexes across nodes, or invoke '
                             '--do-not-copy-index-to-nodes to avoid copying '
-                            'indexes, which may then slow down alignment.')
+                            'indexes, which may then slow down alignment.',
+                            newline=True, carriage_return=False)
+            files_copied = 0
+            print_to_screen(
+                    'Copying Bowtie index files to cluster nodes '
+                    '(%d/%d files copied)...'
+                    % (files_copied, len(index_files)),
+                    newline=False, carriage_return=True
+                )
             for index_file in index_files:
                 apply_async_with_errors(rc, engines_for_copying,
                     shutil.copyfile, os.path.abspath(index_file),
                     os.path.join(temp_dir, 'genome',
                                     os.path.basename(index_file)),
                     message=('Error(s) encountered copying Bowtie indexes to '
-                             'slave nodes. Refer to the errors above -- and '
+                             'cluster nodes. Refer to the errors above -- and '
                              'especially make sure /tmp is not out of space '
                              'on any node supporting an IPython engine '
                              '-- before trying again.')
                 )
+                files_copied += 1
+                print_to_screen(
+                    'Copying Bowtie index files to cluster nodes '
+                    '(%d/%d files copied)...'
+                    % (files_copied, len(index_files)),
+                    newline=False, carriage_return=True
+                )
+            print_to_screen('Copied Bowtie index files to cluster nodes.',
+                                newline=True, carriage_return=False)
         else:
             if local_engines_for_copying:
+                files_copied = 0
                 print_to_screen('Copying Bowtie index files to local '
-                                'filesystem...',
+                                'filesystem (%d/%d files copied)...'
+                                % (files_copied, len(index_files)),
                                 newline=False, carriage_return=True)
                 for index_file in index_files:
                     apply_async_with_errors(rc, engines_for_copying,
@@ -603,6 +622,13 @@ def ready_engines(rc, base, prep=False):
                                  '/tmp is not out of space '
                                  'on any node supporting an IPython engine '
                                  '-- before trying again.')
+                    )
+                    files_copied += 1
+                    print_to_screen(
+                        'Copying Bowtie index files to local filesystem '
+                        '(%d/%d files copied)...'
+                        % (files_copied, len(index_files)),
+                        newline=False, carriage_return=True
                     )
                 print_to_screen('Copied Bowtie index files to local '
                                 'filesystem.',
