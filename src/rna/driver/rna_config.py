@@ -436,10 +436,18 @@ def ready_engines(rc, base, prep=False):
                  'Restart IPython engines and try again.'),
         errors_to_ignore=['OSError'])
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
-            ('trap "{ rm -rf /tmp/railrna*; exit 0; }" SIGINT SIGTERM SIGHUP; '
-             '(while true; do sleep 100000; done) & wait'),
-            shell=True,
-            executable='/bin/bash',
+        ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" SIGINT SIGTERM; '
+         '(while true; do sleep 1000000; done) & wait" '
+         '>{temp_dir}/delscript.sh').format(temp_dir=temp_dir),
+        shell=True,
+        executable='/bin/bash',
+        message=(
+                'Error creating script for scheduling temporary directories '
+                'on cluster nodes for deletion. Restart IPython engines '
+                'and try again.'
+            ))
+    apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
+            ['/usr/bin/env', 'bash', '%s/delscript.sh' % temp_dir],
             message=(
                 'Error scheduling temporary directories on slave nodes '
                 'for deletion. Restart IPython engines and try again.'
