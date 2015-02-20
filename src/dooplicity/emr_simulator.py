@@ -866,7 +866,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             for input_file_or_dir in step_data['input'].split(','):
                 if os.path.isfile(input_file_or_dir):
                     step_inputs.append(input_file_or_dir)
-                else:
+                elif os.path.isdir(input_file_or_dir):
                     step_inputs.extend(
                             glob.glob(os.path.join(input_file_or_dir, '*'))
                         )
@@ -923,19 +923,29 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     # Create temporary input files
                     split_input_dir = tempfile.mkdtemp(dir=common)
                     input_files = []
-                    with open(step_inputs[0]) as nline_stream:
-                        for i, line in enumerate(nline_stream):
-                            offset = str(i)
-                            input_files.append(os.path.join(split_input_dir,
-                                                                offset))
-                            with open(input_files[-1], 'w') as output_stream:
-                                print >>output_stream, separator.join([
-                                                            offset, line
-                                                        ])
+                    try:
+                        with open(step_inputs[0]) as nline_stream:
+                            for i, line in enumerate(nline_stream):
+                                offset = str(i)
+                                input_files.append(os.path.join(
+                                                            split_input_dir,
+                                                            offset
+                                                        )
+                                                    )
+                                with open(input_files[-1], 'w') \
+                                    as output_stream:
+                                    print >>output_stream, separator.join([
+                                                                offset, line
+                                                            ])
+                    except IndexError:
+                        raise RuntimeError('No NLineInputFormat input to '
+                                           'step "%s".' % step)
                 else:
                     input_files = [input_file for input_file in step_inputs
                                     if os.path.isfile(input_file)]
                 input_file_count = len(input_files)
+                if not input_file_count:
+                    iface.step('No input found; skipping step.')
                 err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
                 iface.step('Step %d/%d: %s' % 
                             (step_number + 1, total_steps, step))

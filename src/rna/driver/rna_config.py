@@ -555,6 +555,7 @@ def ready_engines(rc, base, prep=False):
                 )
             print_to_screen('Copied manifest to remote nodes with Herd.',
                                 newline=True, carriage_return=False)
+    base.old_manifest = base.manifest
     base.manifest = manifest_destination
     if not prep and not base.do_not_copy_index_to_nodes:
         index_files = ([base.bowtie2_idx + extension
@@ -2370,7 +2371,9 @@ class RailRnaPreprocess(object):
                 {
                     'name' : 'Count lines in input files',
                     'run' : 'count_inputs.py',
-                    'inputs' : [base.manifest],
+                    'inputs' : [base.old_manifest
+                                if hasattr(base, 'old_manifest')
+                                else base.manifest],
                     'no_input_prefix' : True,
                     'output' : 'count_lines',
                     'inputformat' : (
@@ -2442,7 +2445,9 @@ class RailRnaPreprocess(object):
                                                     '--stdout' if elastic
                                                     else ''
                                                 ),
-                    'inputs' : [base.manifest],
+                    'inputs' : [base.old_manifest
+                                if hasattr(base, 'old_manifest')
+                                else base.manifest],
                     'no_input_prefix' : True,
                     'output' : push_dir if elastic else prep_dir,
                     'no_output_prefix' : True,
