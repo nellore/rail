@@ -277,7 +277,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 except subprocess.CalledProcessError as e:
                     return (('Error "%s" encountered sorting file %s; exit '
                              'code was %s.') %
-                                (e.output, unsorted_file, e.returncode))
+                                (e.output.strip(),
+                                    unsorted_file, e.returncode))
                 finally:
                     os.remove(unsorted_file)
         else:
@@ -298,7 +299,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 except subprocess.CalledProcessError as e:
                     return (('Error "%s" encountered sorting file %s; exit '
                              'code was %s.') %
-                                (e.output, unsorted_file, e.returncode))
+                                (e.output.strip(),
+                                    unsorted_file, e.returncode))
                 finally:
                     os.remove(unsorted_file)
         if final_output_dir != output_dir:
