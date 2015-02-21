@@ -436,7 +436,8 @@ def ready_engines(rc, base, prep=False):
                  'Restart IPython engines and try again.'),
         errors_to_ignore=['OSError'])
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
-        ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" SIGINT SIGTERM; '
+        ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
+         'SIGHUP SIGINT SIGTERM EXIT; '
          '(while true; do sleep 1000000; done) & wait" '
          '>{temp_dir}/delscript.sh').format(temp_dir=temp_dir),
         shell=True,
