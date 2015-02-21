@@ -441,9 +441,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                     try:
                         os.makedirs(key_dir)
                     except OSError:
-                        if os.path.exists(key_dir):
-                            pass
-                        else:
+                        if not os.path.exists(key_dir):
                             return (('Streaming command "%s" failed: problem '
                                      'encountered creating output '
                                      'directory %s.') % (command_to_run,
@@ -480,17 +478,16 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                     = prefix + ' | ' + streaming_command + (' >%s 2>%s'
                                                              % (out_file,
                                                                 err_file))
-            # Need bash or zsh for process substitution
-            single_output_process_return = subprocess.call(
-                                                    command_to_run,
-                                                    shell=True,
-                                                    env=new_env,
-                                                    bufsize=-1,
-                                                    executable='/bin/bash'
-                                                )
-            if single_output_process_return != 0:
+            try:
+                # Need bash or zsh for process substitution
+                subprocess.check_output(command_to_run,
+                                            shell=True,
+                                            env=new_env,
+                                            bufsize=-1,
+                                            executable='/bin/bash')
+            except subprocess.CalledProcessError as e:
                 return (('Streaming command "%s" failed; exit level was %d.')
-                         % (command_to_run, single_output_process_return))
+                         % (command_to_run, e.output))
         if final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
