@@ -55,7 +55,6 @@ import hashlib
 import tempfile
 import shutil
 import os
-import StringIO
 
 def add_args(parser):
     """ Adds args relevant to EMR simulator.
@@ -260,7 +259,6 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         for task in task_streams:
             task_streams[task].close()
         # Presort task files
-        error_stream = StringIO.StringIO()
         if gzip:
             for unsorted_file in glob.glob(os.path.join(
                                                     output_dir,
@@ -271,13 +269,16 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                     % (unsorted_file, memcap, sort_options,
                                         gzip_level,
                                         unsorted_file[:-12] + '.gz'))
-                sort_return = subprocess.call(sort_command, shell=True,
-                                                bufsize=-1,
-                                                stderr=error_stream)
-                if sort_return != 0:
+                try:
+                    sort_output = subprocess.check_output(sort_command,
+                                      shell=True,
+                                      bufsize=-1,
+                                      stderr=subprocess.STDOUT)
+                except subprocess.CalledProcessError:
                     return ('Error "%s" encountered sorting file %s.' %
-                                (error_stream.getvalue(), unsorted_file))
-                os.remove(unsorted_file)
+                                (sort_output, unsorted_file))
+                finally:
+                    os.remove(unsorted_file)
         else:
             for unsorted_file in glob.glob(os.path.join(
                                                     output_dir,
@@ -288,13 +289,16 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                             sort_options,
                                                             unsorted_file,
                                                             unsorted_file[:-9])
-                sort_return = subprocess.call(sort_command, shell=True,
-                                                bufsize=-1,
-                                                stderr=error_stream)
-                if sort_return != 0:
+                try:
+                    sort_output = subprocess.check_output(sort_command,
+                                          shell=True,
+                                          bufsize=-1,
+                                          stderr=subprocess.STDOUT)
+                except subprocess.CalledProcessError:
                     return ('Error "%s" encountered sorting file %s.' %
-                                (error_stream.getvalue(), unsorted_file))
-                os.remove(unsorted_file)
+                                (sort_output, unsorted_file))
+                finally:
+                    os.remove(unsorted_file)
         if final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
@@ -637,7 +641,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 import tempfile
                 import shutil
                 import os
-                import StringIO
             direct_view.push(dict(
                     yopen=yopen,
                     step_runner_with_error_return=\
