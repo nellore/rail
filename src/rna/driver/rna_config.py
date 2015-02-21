@@ -647,10 +647,10 @@ def ready_engines(rc, base, prep=False):
                 print_to_screen('Copied Bowtie indexes to cluster nodes '
                                 'with Herd.',
                                 newline=True, carriage_return=False)
-            base.bowtie1_idx = os.path.join(temp_dir, 'genome',
-                                            os.path.basename(base.bowtie1_idx))
-            base.bowtie2_idx = os.path.join(temp_dir, 'genome',
-                                            os.path.basename(base.bowtie2_idx))
+        base.bowtie1_idx = os.path.join(temp_dir, 'genome',
+                                        os.path.basename(base.bowtie1_idx))
+        base.bowtie2_idx = os.path.join(temp_dir, 'genome',
+                                        os.path.basename(base.bowtie2_idx))
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
