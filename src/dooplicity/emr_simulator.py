@@ -270,13 +270,14 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                         gzip_level,
                                         unsorted_file[:-12] + '.gz'))
                 try:
-                    sort_output = subprocess.check_output(sort_command,
-                                      shell=True,
-                                      bufsize=-1,
-                                      stderr=subprocess.STDOUT)
-                except subprocess.CalledProcessError:
-                    return ('Error "%s" encountered sorting file %s.' %
-                                (sort_output, unsorted_file))
+                    subprocess.check_output(sort_command,
+                                            shell=True,
+                                            bufsize=-1,
+                                            stderr=subprocess.STDOUT)
+                except subprocess.CalledProcessError as e:
+                    return (('Error "%s" encountered sorting file %s; exit '
+                             'code was %s.') %
+                                (e.output, unsorted_file, e.returncode))
                 finally:
                     os.remove(unsorted_file)
         else:
@@ -290,13 +291,14 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                             unsorted_file,
                                                             unsorted_file[:-9])
                 try:
-                    sort_output = subprocess.check_output(sort_command,
-                                          shell=True,
-                                          bufsize=-1,
-                                          stderr=subprocess.STDOUT)
-                except subprocess.CalledProcessError:
-                    return ('Error "%s" encountered sorting file %s.' %
-                                (sort_output, unsorted_file))
+                    subprocess.check_output(sort_command,
+                                              shell=True,
+                                              bufsize=-1,
+                                              stderr=subprocess.STDOUT)
+                except subprocess.CalledProcessError as e:
+                    return (('Error "%s" encountered sorting file %s; exit '
+                             'code was %s.') %
+                                (e.output, unsorted_file, e.returncode))
                 finally:
                     os.remove(unsorted_file)
         if final_output_dir != output_dir:
