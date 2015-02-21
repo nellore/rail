@@ -292,7 +292,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                 bufsize=-1)
                 if sort_return != 0:
                     return ('Error "%s" encountered sorting file %s.' %
-                                (error_stream.get_value(), unsorted_file))
+                                (error_stream.getvalue(), unsorted_file))
                 os.remove(unsorted_file)
         if final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
