@@ -95,6 +95,14 @@ def add_args(parser):
             default=3,
             help='Level of gzip compression to use, if applicable.'
         )
+    parser.add_argument('--gzip-level', type=int, required=False,
+            default=3,
+            help='Level of gzip compression to use, if applicable.'
+        )
+    parser.add_argument('--max-attempts', type=int, required=False,
+            default=1,
+            help='Maximum number of attempts per task.'
+        )
     parser.add_argument('--ipy', action='store_const', const=True,
             default=False,
             help=('Uses IPython controller and engines to execute tasks; this '
@@ -311,7 +319,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                         )
             shutil.rmtree(output_dir)
         return None
-    except Exception as e:
+    except Exception:
         # Uncaught miscellaneous exception
         from traceback import format_exc
         return ('Error\n\n%s\nencountered partitioning input files '
@@ -665,8 +673,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         pid = pid_map[engine_id]
                         if host == socket.gethostname():
                             # local
-                            print pid
+                            # print pid
                             #os.kill(pid, signal.SIGINT)
+                            pass
                         else:
                             '''subprocess.Popen(
                                 ('ssh -oStrictHostKeyChecking=no '
