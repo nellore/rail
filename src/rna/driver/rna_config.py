@@ -602,12 +602,12 @@ def ready_engines(rc, base, prep=False):
                     % (files_copied, len(index_files)),
                     newline=False, carriage_return=True
                 )
-            print_to_screen('Copied Bowtie index files to cluster nodes.',
+            print_to_screen('Copied Bowtie indexes to cluster nodes.',
                                 newline=True, carriage_return=False)
         else:
             if local_engines_for_copying:
                 files_copied = 0
-                print_to_screen('Copying Bowtie index files to local '
+                print_to_screen('Copying Bowtie indexes to local '
                                 'filesystem (%d/%d files copied)...'
                                 % (files_copied, len(index_files)),
                                 newline=False, carriage_return=True)
@@ -625,16 +625,16 @@ def ready_engines(rc, base, prep=False):
                     )
                     files_copied += 1
                     print_to_screen(
-                        'Copying Bowtie index files to local filesystem '
+                        'Copying Bowtie indexes to local filesystem '
                         '(%d/%d files copied)...'
                         % (files_copied, len(index_files)),
                         newline=False, carriage_return=True
                     )
-                print_to_screen('Copied Bowtie index files to local '
+                print_to_screen('Copied Bowtie indexes to local '
                                 'filesystem.',
                                 newline=True, carriage_return=False)
             if remote_hostnames_for_copying:
-                print_to_screen('Copying Bowtie index files to cluster nodes '
+                print_to_screen('Copying Bowtie indexes to cluster nodes '
                                 'with Herd...',
                                 newline=False, carriage_return=True)
                 for index_file in index_files:
@@ -644,7 +644,7 @@ def ready_engines(rc, base, prep=False):
                                 os.path.basename(index_file)),
                             hostlist=','.join(hostname_to_engines.keys())
                         )
-                print_to_screen('Copied Bowtie index files to cluster nodes '
+                print_to_screen('Copied Bowtie indexes to cluster nodes '
                                 'with Herd.',
                                 newline=True, carriage_return=False)
             base.bowtie1_idx = os.path.join(temp_dir, 'genome',

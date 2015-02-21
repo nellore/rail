@@ -95,14 +95,6 @@ def add_args(parser):
             default=3,
             help='Level of gzip compression to use, if applicable.'
         )
-    parser.add_argument('--gzip-level', type=int, required=False,
-            default=3,
-            help='Level of gzip compression to use, if applicable.'
-        )
-    parser.add_argument('--max-attempts', type=int, required=False,
-            default=1,
-            help='Maximum number of attempts per task.'
-        )
     parser.add_argument('--ipy', action='store_const', const=True,
             default=False,
             help=('Uses IPython controller and engines to execute tasks; this '
