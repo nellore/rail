@@ -276,7 +276,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                 stderr=error_stream)
                 if sort_return != 0:
                     return ('Error "%s" encountered sorting file %s.' %
-                                (error_stream.getvalue(), unsorted_file)
+                                (error_stream.getvalue(), unsorted_file))
                 os.remove(unsorted_file)
         else:
             for unsorted_file in glob.glob(os.path.join(
