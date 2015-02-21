@@ -289,7 +289,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                             unsorted_file,
                                                             unsorted_file[:-9])
                 sort_return = subprocess.call(sort_command, shell=True,
-                                                bufsize=-1)
+                                                bufsize=-1,
+                                                stderr=error_stream)
                 if sort_return != 0:
                     return ('Error "%s" encountered sorting file %s.' %
                                 (error_stream.getvalue(), unsorted_file))
