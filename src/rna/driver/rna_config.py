@@ -441,7 +441,7 @@ def ready_engines(rc, base, prep=False):
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
         ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
          'SIGHUP SIGINT SIGTERM EXIT; '
-         '(while [ "\$PPID" -gt "1" ]; do sleep 1; done) & wait" '
+         'while [[ $(ps -p $$ -o ppid=) -gt 1 ]]; do sleep 1; done & wait" '
          '>{temp_dir}/delscript.sh').format(temp_dir=temp_dir),
         shell=True,
         executable='/bin/bash',
