@@ -488,7 +488,14 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             except subprocess.CalledProcessError as e:
                 return (('Streaming command "%s" failed; exit level was %d.')
                          % (command_to_run, e.output))
-        if final_output_dir != output_dir:
+        return None
+    except Exception as e:
+        # Uncaught miscellaneous exception
+        from traceback import format_exc
+        return ('Error\n\n%s\nexecuting task on input %s.'
+                % (format_exc(), input_file))
+    finally:
+        if final_output_dir in locals() and final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
                 if not filenames: continue
@@ -507,12 +514,6 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                             os.path.join(destination, filename)
                         )
             shutil.rmtree(output_dir)
-        return None
-    except Exception as e:
-        # Uncaught miscellaneous exception
-        from traceback import format_exc
-        return ('Error\n\n%s\nexecuting task on input %s.'
-                % (format_exc(), input_file))
 
 def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
