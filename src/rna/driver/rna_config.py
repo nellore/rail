@@ -441,7 +441,7 @@ def ready_engines(rc, base, prep=False):
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
         ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
          'SIGHUP SIGINT SIGTERM EXIT; '
-         '(while [ "$PPID" -gt "1" ]; do sleep 1; done) & wait" '
+         '(while [ "\$PPID" -gt "1" ]; do sleep 1; done) & wait" '
          '>{temp_dir}/delscript.sh').format(temp_dir=temp_dir),
         shell=True,
         executable='/bin/bash',
@@ -524,7 +524,7 @@ def ready_engines(rc, base, prep=False):
     try:
         import herd.herd as herd
     except ImportError:
-        print_to_screen('Copying manifest to cluster nodes...',
+        print_to_screen('Copying file manifest to cluster nodes...',
                             newline=False, carriage_return=True)
         apply_async_with_errors(rc, engines_for_copying, shutil.copyfile,
             base.manifest, manifest_destination,
@@ -534,7 +534,7 @@ def ready_engines(rc, base, prep=False):
                      'node supporting an IPython engine '
                      '-- before trying again.'),
         )
-        print_to_screen('Copied manifest to cluster nodes.',
+        print_to_screen('Copied file manifest to cluster nodes.',
                             newline=True, carriage_return=False)
     else:
         if local_engines_for_copying:
