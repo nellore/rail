@@ -435,10 +435,13 @@ def ready_engines(rc, base, prep=False):
                  'directories for storing Rail on slave nodes. '
                  'Restart IPython engines and try again.'),
         errors_to_ignore=['OSError'])
+    '''Only foolproof way to die is by process polling. See
+    http://stackoverflow.com/questions/284325/
+    how-to-make-child-process-die-after-parent-exits for more information.'''
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
         ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
          'SIGHUP SIGINT SIGTERM EXIT; '
-         '(while true; do sleep 1000000; done) & wait" '
+         '(while [ "$PPID" -gt "1" ]; do sleep 1; done) & wait" '
          '>{temp_dir}/delscript.sh').format(temp_dir=temp_dir),
         shell=True,
         executable='/bin/bash',
@@ -449,7 +452,6 @@ def ready_engines(rc, base, prep=False):
             ))
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
             ['/usr/bin/env', 'bash', '%s/delscript.sh' % temp_dir],
-            preexec_fn=os.setsid,
             message=(
                 'Error scheduling temporary directories on slave nodes '
                 'for deletion. Restart IPython engines and try again.'
