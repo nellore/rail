@@ -449,6 +449,7 @@ def ready_engines(rc, base, prep=False):
             ))
     apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
             ['/usr/bin/env', 'bash', '%s/delscript.sh' % temp_dir],
+            preexec_fn=os.setsid,
             message=(
                 'Error scheduling temporary directories on slave nodes '
                 'for deletion. Restart IPython engines and try again.'

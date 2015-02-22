@@ -303,7 +303,17 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                     unsorted_file, e.returncode))
                 finally:
                     os.remove(unsorted_file)
-        if final_output_dir != output_dir:
+        return None
+    except Exception:
+        # Uncaught miscellaneous exception
+        from traceback import format_exc
+        return ('Error\n\n%s\nencountered partitioning input files '
+                '[%s] into tasks.'
+                        % (format_exc(),
+                            (('%s, '* (len(input_files) - 1) 
+                                       + '%s') % tuple(input_files))))
+    finally:
+        if final_output_dir in locals() and final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
                 if not filenames: continue
@@ -322,15 +332,6 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             os.path.join(destination, filename)
                         )
             shutil.rmtree(output_dir)
-        return None
-    except Exception:
-        # Uncaught miscellaneous exception
-        from traceback import format_exc
-        return ('Error\n\n%s\nencountered partitioning input files '
-                '[%s] into tasks.'
-                        % (format_exc(),
-                            (('%s, '* (len(input_files) - 1) 
-                                       + '%s') % tuple(input_files))))
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
