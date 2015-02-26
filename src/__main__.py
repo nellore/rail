@@ -49,7 +49,8 @@ class Launcher(object):
     """ Facilitates replacing the current process with a Dooplicity runner. """
 
     def __init__(self, force=False, num_processes=1, keep_intermediates=False,
-                    gzip_intermediates=False, gzip_level=3, region='us-east-1',
+                    gzip_intermediates=False, gzip_level=3,
+                    sort_memory_cap=0.2, region='us-east-1',
                     log=None, scratch=None, ipython_profile=None,
                     ipcontroller_json=None, common=None, json=False):
         self.force = force
@@ -57,6 +58,7 @@ class Launcher(object):
         self.keep_intermediates = keep_intermediates
         self.gzip_intermediates = gzip_intermediates
         self.gzip_level = gzip_level
+        self.sort_memory_cap = sort_memory_cap
         self.region = region
         self.log = log
         self.scratch = scratch
@@ -92,7 +94,8 @@ class Launcher(object):
                                                 ),
                                 '-p', str(self.num_processes),
                                 '-b', os.path.join(base_path, 
-                                        'rna', 'driver', 'rail-rna.txt')]
+                                        'rna', 'driver', 'rail-rna.txt'),
+                                '--memcap', str(self.sort_memory_cap)]
                 if self.force:
                     runner_args.append('-f')
                 if self.keep_intermediates:
@@ -117,7 +120,8 @@ class Launcher(object):
                                                 ),
                                 '-b', os.path.join(base_path, 
                                         'rna', 'driver', 'rail-rna.txt'),
-                                '--ipy']
+                                '--ipy',
+                                '--memcap', str(self.sort_memory_cap)]
                 if self.force:
                     runner_args.append('-f')
                 if self.keep_intermediates:
@@ -525,6 +529,7 @@ if __name__ == '__main__':
                 num_processes=args.num_processes,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
+                sort_memory_cap=args.sort_memory_cap,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest)
             )
@@ -569,6 +574,7 @@ if __name__ == '__main__':
                 num_processes=args.num_processes,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
+                sort_memory_cap=args.sort_memory_cap,
                 keep_intermediates=args.keep_intermediates
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'local':
@@ -583,6 +589,7 @@ if __name__ == '__main__':
                 num_processes=args.num_processes,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
+                sort_memory_cap=args.sort_memory_cap,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest)
             )
@@ -628,6 +635,7 @@ if __name__ == '__main__':
                 bed_basename=args.bed_basename,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
+                sort_memory_cap=args.sort_memory_cap,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 ipython_profile=args.ipython_profile,
@@ -675,6 +683,7 @@ if __name__ == '__main__':
                 bed_basename=args.bed_basename,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
+                sort_memory_cap=args.sort_memory_cap,
                 keep_intermediates=args.keep_intermediates,
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
@@ -692,6 +701,7 @@ if __name__ == '__main__':
                 gzip_input=(not args.do_not_gzip_input),
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
+                sort_memory_cap=args.sort_memory_cap,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 ipython_profile=args.ipython_profile,
@@ -864,6 +874,11 @@ if __name__ == '__main__':
                                            if mode in ['local', 'parallel']
                                            else 3
                                         ),
+                                        sort_memory_cap=(
+                                            args.sort_memory_cap
+                                            if mode in ['local', 'parallel']
+                                            else 0.2
+                                        ),
                                         log=(
                                             log_file if mode
                                             in ['local', 'parallel']
@@ -914,6 +929,11 @@ if __name__ == '__main__':
                                            args.gzip_level
                                            if mode in ['local', 'parallel']
                                            else 3
+                                        ),
+                                        sort_memory_cap=(
+                                            args.sort_memory_cap
+                                            if mode in ['local', 'parallel']
+                                            else 0.2
                                         ),
                                         log=(
                                             log_file 
