@@ -64,8 +64,9 @@ def add_args(parser):
         No return value.
     """
     parser.add_argument(
-            '-m', '--memcap', type=int, required=False, default=(1024*300),
-            help='Maximum amount of memory to use per UNIX sort instance.'
+            '-m', '--memcap', type=float, required=False, default=.4,
+            help=('Maximum fraction of memory to use '
+                  'across UNIX sort instances.')
         )
     parser.add_argument(
             '-p', '--num-processes', type=int, required=False, default=1,
@@ -200,8 +201,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         separator: separator between successive fields from line.
         streaming_command: streaming command to run.
         task_count: number of tasks in which to partition input.
-        memcap: maximum amount of memory to use per UNIX sort instance;
-            ignored if sort is None.
+        memcap: maximum percent of memory to use per UNIX sort instance.
         gzip: True iff all files written should be gzipped; else False.
         gzip_level: Level of gzip compression to use, if applicable.
         scratch: where to write output before copying to output_dir. If "-"
@@ -265,7 +265,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                     '*.%s.unsorted.gz'
                                                     % process_id
                                                 )):
-                sort_command = ('gzip -cd %s | sort -S %d %s | gzip -c -%d >%s'
+                sort_command = (('gzip -cd %s | sort -S %d\% %s | '
+                                 'gzip -c -%d >%s')
                                     % (unsorted_file, memcap, sort_options,
                                         gzip_level,
                                         unsorted_file[:-12] + '.gz'))
@@ -276,7 +277,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                             stderr=subprocess.STDOUT)
                 except subprocess.CalledProcessError as e:
                     return (('Error "%s" encountered sorting file %s; exit '
-                             'code was %s.') %
+                             'code was %d.') %
                                 (e.output.strip(),
                                     unsorted_file, e.returncode))
                 finally:
@@ -287,7 +288,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                     '*.%s.unsorted'
                                                     % process_id
                                                 )):
-                sort_command = 'sort -S %d %s %s >%s' % (memcap,
+                sort_command = 'sort -S %d\% %s %s >%s' % (memcap,
                                                             sort_options,
                                                             unsorted_file,
                                                             unsorted_file[:-9])
@@ -298,7 +299,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                               stderr=subprocess.STDOUT)
                 except subprocess.CalledProcessError as e:
                     return (('Error "%s" encountered sorting file %s; exit '
-                             'code was %s.') %
+                             'code was %d.') %
                                 (e.output.strip(),
                                     unsorted_file, e.returncode))
                 finally:
@@ -313,7 +314,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             (('%s, '* (len(input_files) - 1) 
                                        + '%s') % tuple(input_files))))
     finally:
-        if final_output_dir in locals() and final_output_dir != output_dir:
+        if 'final_output_dir' in locals() and final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
                 if not filenames: continue
@@ -358,8 +359,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             otherwise, performs merge sort with unix sort -m and the
             specified string of command-line parameters. EACH INPUT FILE
             SHOULD BE PRESORTED.
-        memcap: maximum amount of memory to use per UNIX sort instance;
-            ignored if sort is None.
+        memcap: maximum percent of memory to use per UNIX sort instance.
         gzip: True iff all files written should be gzipped; else False.
         gzip_level: Level of gzip compression to use, if applicable.
         scratch: where to write output before copying to output_dir. If "-"
@@ -405,13 +405,13 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             # Reducer. Merge sort the input glob.
             if gzip:
                 # Use process substitution
-                prefix = '(sort -S %d %s -m %s' % (memcap, sort_options,
+                prefix = '(sort -S %d\% %s -m %s' % (memcap, sort_options,
                           ' '.join(['<(gzip -cd %s)' % input_file
                                     for input_file in input_files]) + ')'
                     )
             else:
                 # Reducer. Merge sort the input glob.
-                prefix = 'sort -S %d %s -m %s' % (memcap, sort_options,
+                prefix = 'sort -S %d\% %s -m %s' % (memcap, sort_options,
                                                     input_glob)
         err_file = os.path.join(err_dir, '%d.log' % task_id)
         new_env = os.environ.copy()
@@ -488,7 +488,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                             executable='/bin/bash')
             except subprocess.CalledProcessError as e:
                 return (('Streaming command "%s" failed; exit level was %d.')
-                         % (command_to_run, e.output))
+                         % (command_to_run, e.returncode))
         return None
     except Exception as e:
         # Uncaught miscellaneous exception
@@ -496,7 +496,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         return ('Error\n\n%s\nexecuting task on input %s.'
                 % (format_exc(), input_file))
     finally:
-        if final_output_dir in locals() and final_output_dir != output_dir:
+        if 'final_output_dir' in locals() and final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
                 if not filenames: continue
@@ -535,7 +535,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             Amazon Elastic MapReduce for formatting information.
         force: True iff all existing directories should be erased when
             writing intermediates.
-        memcap: maximum amount of memory to use per UNIX sort instance.
+        memcap: maximum fraction of memory to use across UNIX sort instances.
         num_processes: number of subprocesses to open at once; applicable only 
             when not in ipy mode
         separator: separator between successive fields in inputs and 
@@ -670,26 +670,29 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     No return value.
                 """
                 iface.status('Interrupting IPython engines...')
-                with open(os.devnull, 'w') as null_stream:
-                    for engine_id in rc.ids:
-                        host = host_map[engine_id]
-                        pid = pid_map[engine_id]
-                        if host == socket.gethostname():
-                            # local
-                            # print pid
-                            #os.kill(pid, signal.SIGINT)
-                            pass
-                        else:
-                            '''subprocess.Popen(
-                                ('ssh -oStrictHostKeyChecking=no '
-                                 '-oBatchMode=yes {} kill -SIGINT {}').format(
-                                    host, pid
-                                ), bufsize=-1, shell=True, stdout=null_stream,
-                                 stderr=null_stream
-                            )'''
-                            pass
+                for engine_id in rc.ids:
+                    host = host_map[engine_id]
+                    kill_command = (
+                          'CPIDS=$(pgrep -P {}); echo $CPIDS;'
+                          '(sleep 33 && kill -9 $CPIDS &); '
+                          'kill -9 $CPIDS'
+                        ).format(pid_map[engine_id])
+                    if host == socket.gethostname():
+                        # local
+                        subprocess.Popen(kill_command,
+                                bufsize=-1, shell=True
+                            )
+                    else:
+                        subprocess.Popen(
+                            ('ssh -oStrictHostKeyChecking=no '
+                             '-oBatchMode=yes {} \'{}\'').format(
+                                host, kill_command
+                            ), bufsize=-1, shell=True
+                        )
         else:
             import multiprocessing
+        # Determine memory percentage per sort instance
+        memcap = int(float(memcap) * 100 / num_processes)
         # Serialize JSON configuration
         if json_config is not None:
             with open(json_config) as json_stream:
