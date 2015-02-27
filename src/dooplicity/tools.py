@@ -153,7 +153,7 @@ def path_join(unix, *args):
         return os.path.join(*args)
 
 @contextlib.contextmanager
-def xgzip_open(filename, mode='rb', compresslevel=9):
+def gzip_open(filename, mode='rb', compresslevel=9):
     """ Functionality almost mimics gzip.open, but uses gzip at command line.
 
         As of PyPy 2.5, gzip.py appears to leak memory when writing to
@@ -207,7 +207,7 @@ def xopen(gzipped, *args):
                 else:
                     gzipped = False
         if gzipped:
-            fh = gzip_open(*args)
+            fh = gzip.open(*args)
         else:
             fh = open(*args)
     try:
@@ -302,115 +302,6 @@ class dlist(object):
     def __exit__(self, type, value, traceback):
         self.tear_down()
  
-class SafeClient(object):
-    """ Wrapper for IPython.parallel.Client adding callbacks for AsyncResults.
-
-        This class is taken from the gist
-        https://gist.github.com/remram44/5902529 by Remi Rampin and is not
-        licensed under the MIT license. It provides an add_callback() method
-        so it is thread-safe to wait on different results from different
-        threads.
-    """
-    def __init__(self, *args, **kwargs):
-        from IPython.parallel import Client
-        self.client = Client(*args, **kwargs)
-        self._callback_thread = None
-        self._callback_condition = threading.Condition()
-        self._callbacks = None
-
-    def add_callback(self, asyncresult, callback):
-        """ Adds a callback for an AsyncResult.
-
-            A single thread is started when this method is first called.
-
-            asyncresult: an AsyncResult object
-            callback: function to be executed after result becomes available
-
-            No return value.
-        """
-        item = (set(asyncresult.msg_ids), asyncresult, callback)
- 
-        self._callback_condition.acquire()
- 
-        if self._callback_thread is None:
-            self._callbacks = [item]
-            self._callback_thread = threading.Thread(
-                    target=self._callback_loop)
-            self._callback_thread.start()
-        else:
-            self._callbacks.append(item)
-            self._callback_condition.notify()
- 
-        self._callback_condition.release()
-
-    def _callback_loop(self):
-        import time
-        while True:
-            self._callback_condition.acquire()
-            if self.client._closed:
-                break
-            if not self._callbacks:
-                self._callback_condition.wait()
- 
-            if self._callbacks:
-                self.client.spin()
-                i = 0
-                while i < len(self._callbacks):
-                    msgs, res, cb = self._callbacks[i]
-                    msgs.intersection_update(self.client.outstanding)
-                    if not msgs:
-                        cb(res)
-                        del self._callbacks[i]
-                    else:
-                        i += 1
- 
-            self._callback_condition.release()
-            time.sleep(1e-3)
- 
-    def close(self):
-        self._callback_condition.acquire()
-        self.client.close()
-        self._callback_condition.notify()
-        self._callback_condition.release()
- 
-    def lock(self):
-        @contextlib.contextmanager
-        def acquirelock():
-            self._callback_condition.acquire()
-            try:
-                yield
-            finally:
-                self._callback_condition.release()
-        return acquirelock()
- 
-    @property
-    def ids(self):
-        return self.client.ids
- 
-    def direct_view(self, targets='all'):
-        @contextlib.contextmanager
-        def wrapper():
-            self._callback_condition.acquire()
-            try:
-                yield self.client.direct_view(targets=targets)
-            finally:
-                self._callback_condition.release()
-        return wrapper()
- 
-    def load_balanced_view(self, targets='all'):
-        @contextlib.contextmanager
-        def wrapper():
-            self._callback_condition.acquire()
-            try:
-                yield self.client.load_balanced_view(targets=targets)
-            finally:
-                self._callback_condition.release()
-        return wrapper()
- 
-    def shutdown(self, *args, **kwargs):
-        self.client.shutdown(*args, **kwargs)
-        self.close()
-
 class xstream(object):
     """ Permits Pythonic iteration through partitioned/sorted input streams.
 
@@ -605,6 +496,42 @@ if __name__ == '__main__':
                 for key, xpartition in xstream(input_stream, 1):
                     for value in xpartition:
                         pass
+
+        def tearDown(self):
+            # Kill temporary directory
+            shutil.rmtree(self.temp_dir_path)
+
+    class TestGzipOpen(unittest.TestCase):
+        """ Tests gzip_open function. """
+        def setUp(self):
+            # Set up temporary directory
+            self.temp_dir_path = tempfile.mkdtemp()
+            self.python_file = os.path.join(self.temp_dir_path, 'py.gz')
+            self.unix_file = os.path.join(self.temp_dir_path, 'unix.gz')
+
+        def test_write_consistency(self):
+            """ Fails if gzip_open disagrees with gzip.open. """
+            import gzip
+            data = os.urandom(128 * 1024) 
+            with gzip.open(self.python_file, 'w') as python_stream:
+                python_stream.write(data)
+            with gzip_open(self.unix_file, 'w') as unix_stream:
+                unix_stream.write(data)
+            output = subprocess.check_output(
+                            'diff <(gzip -cd %s) <(gzip -cd %s)'
+                            % (self.python_file, self.unix_file),
+                            shell=True, executable='/bin/bash'
+                        )
+            self.assertEqual(output, '')
+
+        def test_single_line_read(self):
+            """ Raises exception if single line can't be read from file. """
+            with gzip_open(self.unix_file, 'w') as unix_stream:
+                print >>unix_stream, 'first line'
+                print >>unix_stream, 'second line'
+            with gzip_open(self.unix_file, 'r') as unix_stream:
+                first_line = unix_stream.readline()
+            self.assertEqual(first_line.strip(), 'first line')
 
         def tearDown(self):
             # Kill temporary directory
