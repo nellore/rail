@@ -163,6 +163,8 @@ def xgzip_open(filename, mode='rb', compresslevel=9):
         mode: only 'r' and 'w' are interpreted here as read and write,
             respectively. "b" is "add automatically," as in gzip.py
         compresslevel: compression level
+
+        Yield value: file object
     """
     if 'r' in mode:
         gzip_process = subprocess.Popen(['gzip', '-cd', filename], bufsize=-1,
@@ -205,7 +207,7 @@ def xopen(gzipped, *args):
                 else:
                     gzipped = False
         if gzipped:
-            fh = gzip.open(*args)
+            fh = gzip_open(*args)
         else:
             fh = open(*args)
     try:
