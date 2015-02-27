@@ -37,6 +37,7 @@ import os
 import threading
 import contextlib
 import signal
+import subprocess
 
 class KeepAlive(threading.Thread):
     """ Writes Hadoop status messages to avert task termination. """
@@ -150,6 +151,35 @@ def path_join(unix, *args):
         return ''.join(args_list)
     else:
         return os.path.join(*args)
+
+@contextlib.contextmanager
+def xgzip_open(filename, mode='rb', compresslevel=9):
+    """ Functionality almost mimics gzip.open, but uses gzip at command line.
+
+        As of PyPy 2.5, gzip.py appears to leak memory when writing to
+        a file object created with gzip.open().
+
+        filename: file to open
+        mode: only 'r' and 'w' are interpreted here as read and write,
+            respectively. "b" is "add automatically," as in gzip.py
+        compresslevel: compression level
+    """
+    if 'r' in mode:
+        gzip_process = subprocess.Popen(['gzip', '-cd', filename], bufsize=-1,
+                                            stdout=subprocess.PIPE)
+        yield gzip_process.stdout
+        gzip_process.stdout.close()
+        gzip_process.wait()
+    elif 'w' in mode:
+        with open(filename, 'wb') as output_stream:
+            gzip_process = subprocess.Popen(['gzip'], bufsize=-1,
+                                                stdin=subprocess.PIPE,
+                                                stdout=output_stream)
+            yield gzip_process.stdin
+            gzip_process.stdin.close()
+            gzip_process.wait()
+    else:
+        raise IOError, "Mode " + mode + " not supported"
 
 @contextlib.contextmanager
 def xopen(gzipped, *args):
