@@ -300,7 +300,11 @@ class DooplicityInterface(object):
                     ' -l {0}'.format(os.path.abspath(print_args.log))
                     if ('log' in arg_dir 
                         and print_args.log is not None) else '',
-                    ' '.join(terminal_args)
+                    ' '.join([(terminal_arg if ' '
+                                not in terminal_arg
+                                else ('"%s"' % terminal_arg))
+                                for terminal_arg
+                                in terminal_args])
                 )
             for output_stream in self._write_streams:
                 print >>output_stream, 'To start this job flow from ' \

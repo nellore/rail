@@ -140,7 +140,7 @@ start_time = time.time()
 
 temp_dir_path = make_temp_dir(args.scratch)
 # Clean up after script
-register_cleanup(tempfile.remove_temporary_directories, [temp_dir_path])
+register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 bed_filename = os.path.join(temp_dir_path, 'temp.bed')
 if args.verbose:
     print >>sys.stderr, 'Writing to temporary bed %s .' % bed_filename

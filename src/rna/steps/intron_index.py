@@ -55,7 +55,7 @@ site.addsitedir(base_path)
 
 import bowtie
 from dooplicity.ansibles import Url
-from dooplicity.tools import register_cleanup
+from dooplicity.tools import register_cleanup, make_temp_dir
 import filemover
 import tempdel
 

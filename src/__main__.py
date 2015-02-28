@@ -99,7 +99,7 @@ class Launcher(object):
                                         'rna', 'driver', 'rail-rna.txt'),
                                 '--memcap', str(self.sort_memory_cap)]
                 if self.sort:
-                    runner_args.extend(['--sort', '"%s"' % self.sort])
+                    runner_args.extend(['--sort', self.sort])
                 if self.force:
                     runner_args.append('-f')
                 if self.keep_intermediates:
@@ -127,7 +127,7 @@ class Launcher(object):
                                 '--ipy',
                                 '--memcap', str(self.sort_memory_cap)]
                 if self.sort:
-                    runner_args.extend(['--sort', '"%s"' % self.sort])
+                    runner_args.extend(['--sort', self.sort])
                 if self.force:
                     runner_args.append('-f')
                 if self.keep_intermediates:

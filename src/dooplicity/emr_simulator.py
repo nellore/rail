@@ -612,8 +612,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             log_stream = None
     else:
         log_stream = None
-    # Strip sort of quotes; a workaround so quotes appear if iface fails
-    sort = sort.strip('"')
     iface = dp_iface.DooplicityInterface(branding=branding,
                                          log_stream=log_stream)
     failed = False
