@@ -57,8 +57,9 @@ from alignment_handlers import running_sum, pairwise
 import math
 import time
 from dooplicity.ansibles import Url
-from dooplicity.tools import register_cleanup
+from dooplicity.tools import register_cleanup, make_temp_dir
 import filemover
+import tempdel
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -77,6 +78,9 @@ parser.add_argument(
     help='Output manifest filename'
     )
 
+# Add scratch command-line parameter
+tempdel.add_args(parser)
+
 args = parser.parse_args(sys.argv[1:])
 
 start_time = time.time()
@@ -90,9 +94,9 @@ else:
     mover = filemover.FileMover(args=args)
     # Set up temporary destination
     import tempfile
-    temp_dir_path = tempfile.mkdtemp()
-    from tempdel import remove_temporary_directories
-    register_cleanup(remove_temporary_directories, [temp_dir_path])
+    from dooplicity.tools import make_temp_dir
+    temp_dir_path = make_temp_dir(args.scratch)
+    register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 samples = {}
 for input_line_count, line in enumerate(sys.stdin):
     tokens = line.strip().split('\t')

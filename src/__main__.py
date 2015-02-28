@@ -52,7 +52,8 @@ class Launcher(object):
                     gzip_intermediates=False, gzip_level=3,
                     sort_memory_cap=0.2, region='us-east-1',
                     log=None, scratch=None, ipython_profile=None,
-                    ipcontroller_json=None, common=None, json=False):
+                    ipcontroller_json=None, common=None, json=False,
+                    sort=None):
         self.force = force
         self.num_processes = num_processes
         self.keep_intermediates = keep_intermediates
@@ -66,6 +67,7 @@ class Launcher(object):
         self.ipcontroller_json = ipcontroller_json
         self.common = common
         self.json = json
+        self.sort = sort
 
     def run(self, mode, payload):
         """ Replaces current process, using PyPy if it's available.
@@ -96,6 +98,8 @@ class Launcher(object):
                                 '-b', os.path.join(base_path, 
                                         'rna', 'driver', 'rail-rna.txt'),
                                 '--memcap', str(self.sort_memory_cap)]
+                if self.sort:
+                    runner_args.extend(['--sort', '"%s"' % self.sort])
                 if self.force:
                     runner_args.append('-f')
                 if self.keep_intermediates:
@@ -122,6 +126,8 @@ class Launcher(object):
                                         'rna', 'driver', 'rail-rna.txt'),
                                 '--ipy',
                                 '--memcap', str(self.sort_memory_cap)]
+                if self.sort:
+                    runner_args.extend(['--sort', '"%s"' % self.sort])
                 if self.force:
                     runner_args.append('-f')
                 if self.keep_intermediates:
@@ -401,30 +407,36 @@ if __name__ == '__main__':
                             required_parser=prep_local_required)
     RailRnaLocal.add_args(required_parser=go_local_required,
                             general_parser=go_local_general,
-                            output_parser=go_local_output, 
+                            output_parser=go_local_output,
+                            exec_parser=go_local_exec,
                             prep=False, align=False)
     RailRnaLocal.add_args(required_parser=align_local_required,
                             general_parser=align_local_general,
                             output_parser=align_local_output,
+                            exec_parser=align_local_exec,
                             prep=False, align=True)
     RailRnaLocal.add_args(required_parser=prep_local_required,
                             general_parser=prep_local_general,
                             output_parser=prep_local_output,
+                            exec_parser=prep_local_exec,
                             prep=True, align=False)
     RailRnaErrors.add_args(general_parser=prep_parallel_general,
                             exec_parser=prep_parallel_exec,
                             required_parser=prep_parallel_required)
     RailRnaLocal.add_args(required_parser=go_parallel_required,
                             general_parser=go_parallel_general,
-                            output_parser=go_parallel_output, 
+                            output_parser=go_parallel_output,
+                            exec_parser=go_parallel_exec,
                             prep=False, align=False, parallel=True)
     RailRnaLocal.add_args(required_parser=align_parallel_required,
                             general_parser=align_parallel_general,
                             output_parser=align_parallel_output,
+                            exec_parser=align_parallel_exec,
                             prep=False, align=True, parallel=True)
     RailRnaLocal.add_args(required_parser=prep_parallel_required,
                             general_parser=prep_parallel_general,
                             output_parser=prep_parallel_output,
+                            exec_parser=prep_parallel_exec,
                             prep=True, align=False, parallel=True)
     RailRnaElastic.add_args(required_parser=go_elastic_required,
                             general_parser=go_elastic_general,
@@ -531,7 +543,9 @@ if __name__ == '__main__':
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
                 keep_intermediates=args.keep_intermediates,
-                check_manifest=(not args.do_not_check_manifest)
+                check_manifest=(not args.do_not_check_manifest),
+                sort_exe=args.sort,
+                scratch=args.scratch
             )
     elif args.job_flow == 'align' and args.align_mode == 'local':
         mode = 'local'
@@ -575,7 +589,9 @@ if __name__ == '__main__':
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
-                keep_intermediates=args.keep_intermediates
+                keep_intermediates=args.keep_intermediates,
+                sort_exe=args.sort,
+                scratch=args.scratch
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'local':
         mode = 'local'
@@ -591,7 +607,9 @@ if __name__ == '__main__':
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
                 keep_intermediates=args.keep_intermediates,
-                check_manifest=(not args.do_not_check_manifest)
+                check_manifest=(not args.do_not_check_manifest),
+                sort_exe=args.sort,
+                scratch=args.scratch
             )
     elif args.job_flow == 'go' and args.go_mode == 'parallel':
         mode = 'parallel'
@@ -641,7 +659,8 @@ if __name__ == '__main__':
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
                 scratch=args.scratch,
-                do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes
+                do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes,
+                sort_exe=args.sort
             )
     elif args.job_flow == 'align' and args.align_mode == 'parallel':
         mode = 'parallel'
@@ -688,7 +707,8 @@ if __name__ == '__main__':
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
                 scratch=args.scratch,
-                do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes
+                do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes,
+                sort_exe=args.sort
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'parallel':
         mode = 'parallel'
@@ -706,7 +726,8 @@ if __name__ == '__main__':
                 check_manifest=(not args.do_not_check_manifest),
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
-                scratch=args.scratch
+                scratch=args.scratch,
+                sort_exe=args.sort
             )
     elif args.job_flow == 'go' and args.go_mode == 'elastic':
         mode = 'elastic'
@@ -902,7 +923,12 @@ if __name__ == '__main__':
                                         ),
                                         scratch=(
                                             args.scratch
-                                            if mode == 'parallel'
+                                            if mode in ['local', 'parallel']
+                                            else None
+                                        ),
+                                        sort=(
+                                            json_creator.base.sort_exe
+                                            if mode in ['local', 'parallel']
                                             else None
                                         ),
                                         json=args.json
@@ -957,7 +983,12 @@ if __name__ == '__main__':
                                         ),
                                         scratch=(
                                             args.scratch
-                                            if mode == 'parallel'
+                                            if mode in ['local', 'parallel']
+                                            else None
+                                        ),
+                                        sort=(
+                                            json_creator.base.sort_exe
+                                            if mode in ['local', 'parallel']
                                             else None
                                         ),
                                         json=args.json

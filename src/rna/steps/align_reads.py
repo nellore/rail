@@ -157,19 +157,12 @@ site.addsitedir(base_path)
 import bowtie
 import partition
 import manifest
-from dooplicity.tools import xstream, dlist, register_cleanup, xopen
+import tempdel
+from dooplicity.tools import xstream, dlist, register_cleanup, xopen, \
+    make_temp_dir
 
 # Initialize global variables for tracking number of input lines
 _input_line_count = 0
-
-def handle_temporary_directory(temp_dir_path):
-    """ Deletes temporary directory.
-
-        temp_dir_paths: path to temporary directory to delete
-
-        No return value.
-    """
-    shutil.rmtree(temp_dir_path)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 
@@ -177,7 +170,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
     min_exon_size=8, min_readlet_size=15, max_readlet_size=25,
     readlet_interval=12, capping_multiplier=1.5, drop_deletions=False,
-    gzip_level=3):
+    gzip_level=3, scratch=None):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -352,6 +345,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         drop_deletions: True iff deletions should be dropped from coverage
             vector
         gzip_level: compression level to use for temporary files
+        scratch: scratch directory for storing temporary files or None if 
+            securely created temporary directory
 
         No return value.
     """
@@ -366,8 +361,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         except KeyError:
             # A unit test is probably being run
             task_partition = '0'
-    temp_dir = tempfile.mkdtemp()
-    register_cleanup(handle_temporary_directory, temp_dir)
+    temp_dir = make_temp_dir(scratch)
+    register_cleanup(tempdel.remove_temporary_directories, [temp_dir])
     align_file = os.path.join(temp_dir, 'first_pass_reads.temp.gz')
     other_reads_file = os.path.join(temp_dir, 'other_reads.temp.gz')
     second_pass_file = os.path.join(temp_dir, 'second_pass_reads.temp.gz')
@@ -580,6 +575,7 @@ if __name__ == '__main__':
     partition.add_args(parser)
     bowtie.add_args(parser)
     manifest.add_args(parser)
+    tempdel.add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv

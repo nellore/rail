@@ -76,15 +76,15 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 import bowtie
-from dooplicity.tools import xstream, register_cleanup, xopen
-from tempdel import remove_temporary_directories
+from dooplicity.tools import xstream, register_cleanup, xopen, make_temp_dir
+import tempdel
 
 # Initialize global variable for tracking number of input lines
 _input_line_count = 0
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     bowtie_index_base='genome', bowtie_args='', gzip_level=3, verbose=False,
-    report_multiplier=1.2):
+    report_multiplier=1.2, scratch=None):
     """ Runs Rail-RNA-align_readlets.
 
         Aligns input readlet sequences and writes a single output line per
@@ -155,14 +155,16 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             stderr.
         report_multiplier: if verbose is True, the line number of an alignment
             written to stderr increases exponentially with base
-            report_multiplier.    
+            report_multiplier.
+        scratch: scratch directory for storing temporary files or None if 
+            securely created temporary directory
 
         No return value.
     """
     global _input_line_count
     # For storing long qnames
-    temp_dir = tempfile.mkdtemp()
-    register_cleanup(remove_temporary_directories, [temp_dir])
+    temp_dir = make_temp_dir(scratch)
+    register_cleanup(tempdel.remove_temporary_directories, [temp_dir])
     qnames_file = os.path.join(temp_dir, 'qnames.temp.gz')
     readlet_file = os.path.join(temp_dir, 'readlets.temp.gz')
     with xopen(True, qnames_file, 'w', gzip_level) as qname_stream:
@@ -222,6 +224,7 @@ if __name__ == '__main__':
 
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
+    tempdel.add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv
@@ -253,6 +256,7 @@ if __name__ == '__main__':
         bowtie_args=bowtie_args,
         gzip_level=args.gzip_level,
         verbose=args.verbose,
-        report_multiplier=args.report_multiplier)
+        report_multiplier=args.report_multiplier,
+        scratch=args.scratch)
     print >>sys.stderr, 'DONE with align_readlets.py; in=%d; ' \
         'time=%0.3f s' % (_input_line_count, time.time() - start_time)

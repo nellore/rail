@@ -1119,13 +1119,15 @@ class RailRnaErrors(object):
                     )
             to_return = exe
         elif not is_exe(entered_exe):
-            self.errors.append(
+            which_entered_exe = which(entered_exe)
+            if which_entered_exe is None:
+                self.errors.append(
                     ('The executable "{0}" entered for {1} via {2} was '
                      'either not found or is not executable.').format(exe,
                                                                 program_name,
                                                                 parameter)
                 )
-            to_return = entered_exe
+            to_return = which_entered_exe
         else:
             to_return = entered_exe
         if original_errors_size != len(self.errors) and reason:
@@ -1310,7 +1312,8 @@ class RailRnaLocal(object):
                     gzip_intermediates=False, gzip_level=3,
                     sort_memory_cap=0.2, parallel=False,
                     local=True, scratch=None, ansible=None,
-                    do_not_copy_index_to_nodes=False):
+                    do_not_copy_index_to_nodes=False,
+                    sort_exe=None):
         """ base: instance of RailRnaErrors """
         # Initialize ansible for easy checks
         if not ansible:
@@ -1564,10 +1567,61 @@ class RailRnaLocal(object):
                              'write permissions are active.') % scratch
                         )
         base.scratch = scratch
+        if sort_exe:
+            sort_exe_parameters = [parameter.strip()
+                                    for parameter in sort_exe.split(' ')]
+        else:
+            sort_exe_parameters = []
+        check_scratch = True
+        try:
+            sort_scratch = sort_exe_parameters[
+                    sort_exe_parameters.index('--temporary-directory')+1
+                ]
+        except IndexError:
+            base.errors.append(
+                    ('"--temporary-directory" parameter was passed '
+                     'to sort executable without specifying temporary '
+                     'directory')
+                )
+        except ValueError:
+            try:
+                sort_scratch = sort_exe_parameters[
+                        sort_exe_parameters.index('-T')+1
+                    ]
+            except IndexError:
+                base.errors.append(
+                    ('"-T" parameter was passed '
+                     'to sort executable without specifying temporary '
+                     'directory')
+                )
+            except ValueError:
+                sort_scratch = base.scratch
+                check_scratch = False
+        if check_scratch:
+            if not os.path.exists(sort_scratch):
+                try:
+                    os.makedirs(sort_scratch)
+                except OSError:
+                    base.errors.append(
+                            ('Could not create sort scratch directory %s; '
+                             'check that it\'s not a file and that '
+                             'write permissions are active.')
+                            % sort_scratch
+                        )
+        base.sort_exe = ' '.join(
+                            [base.check_program('sort', 'sort', '--sort',
+                                entered_exe=(sort_exe_parameters[0]
+                                                if sort_exe_parameters
+                                                else None),
+                                is_exe=is_exe,
+                                which=which)] + sort_exe_parameters[1:]
+                             + (['-T', base.scratch] if (not check_scratch
+                                 and base.scratch is not None) else [])
+                        )
 
     @staticmethod
     def add_args(required_parser, general_parser, output_parser, 
-                    prep=False, align=False, parallel=False):
+                    exec_parser, prep=False, align=False, parallel=False):
         """ Adds parameter descriptions relevant to local mode to an object
             of class argparse.ArgumentParser.
 
@@ -1577,6 +1631,12 @@ class RailRnaLocal(object):
 
             No return value.
         """
+        exec_parser.add_argument(
+            '--sort', type=str, required=False, metavar='<exe>',
+            default=None,
+            help=('path to sort executable; include extra sort parameters '
+                  'here (def: sort)')
+        )
         if align:
             required_parser.add_argument(
                 '-i', '--input', type=str, required=True, metavar='<dir>',
@@ -1605,6 +1665,12 @@ class RailRnaLocal(object):
                 metavar='<int>', default=None,
                 help=('number of processes to run simultaneously (def: # cpus '
                       '- 1 if # cpus > 1; else 1)')
+            )
+            general_parser.add_argument(
+                '--scratch', type=str, required=False, metavar='<dir>',
+                default=None,
+                help=('directory for storing temporary files (def: '
+                      'securely created temporary directory)')
             )
         else:
             general_parser.add_argument(
@@ -3720,7 +3786,8 @@ class RailRnaLocalPreprocessJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=0.2, keep_intermediates=False, check_manifest=True):
+        sort_memory_cap=0.2, keep_intermediates=False, check_manifest=True,
+        scratch=None, sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -3728,7 +3795,8 @@ class RailRnaLocalPreprocessJson(object):
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
-            keep_intermediates=keep_intermediates)
+            keep_intermediates=keep_intermediates, scratch=scratch,
+            sort_exe=sort_exe)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
         raise_runtime_error(base)
@@ -3764,11 +3832,11 @@ class RailRnaParallelPreprocessJson(object):
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
-            keep_intermediates=keep_intermediates,
-            local=False, parallel=False)
+            keep_intermediates=keep_intermediates, scratch=scratch,
+            local=False, parallel=False, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
-            subsequently upload to S3.'''
+            subsequently upload to final destination.'''
             base.output_dir = ''.join(['nfs://', os.path.abspath(
                                                         base.output_dir
                                                     )])
@@ -3786,9 +3854,9 @@ class RailRnaParallelPreprocessJson(object):
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
             check_manifest=check_manifest, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
-            sort_memory_cap=sort_memory_cap,
+            sort_memory_cap=sort_memory_cap, scratch=scratch,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
-            ansible=ab.Ansible())
+            ansible=ab.Ansible(), sort_exe=sort_exe)
         engine_base_checks = {}
         for i in rc.ids:
             engine_base_checks[i] = engine_bases[i].check_program
@@ -3919,7 +3987,8 @@ class RailRnaLocalAlignJson(object):
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=0.2, keep_intermediates=False):
+        sort_memory_cap=0.2, keep_intermediates=False, scratch=None,
+        sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -3927,7 +3996,8 @@ class RailRnaLocalAlignJson(object):
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
-            keep_intermediates=keep_intermediates)
+            keep_intermediates=keep_intermediates, scratch=scratch,
+            sort_exe=sort_exe)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -4006,7 +4076,7 @@ class RailRnaParallelAlignJson(object):
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates,
-            local=False, parallel=False)
+            local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
             subsequently upload to S3.'''
@@ -4057,7 +4127,7 @@ class RailRnaParallelAlignJson(object):
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
-            ansible=ab.Ansible())
+            ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
             input_dir=input_dir, elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -4259,7 +4329,8 @@ class RailRnaLocalAllJson(object):
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=0.2, keep_intermediates=False, check_manifest=True):
+        sort_memory_cap=0.2, keep_intermediates=False, check_manifest=True,
+        scratch=None, sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -4269,7 +4340,8 @@ class RailRnaLocalAllJson(object):
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
-            keep_intermediates=keep_intermediates)
+            keep_intermediates=keep_intermediates, scratch=scratch,
+            sort_exe=sort_exe)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
@@ -4355,7 +4427,7 @@ class RailRnaParallelAllJson(object):
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates,
-            local=False, parallel=False)
+            local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
             subsequently upload to S3.'''
@@ -4407,7 +4479,7 @@ class RailRnaParallelAllJson(object):
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
-            ansible=ab.Ansible())
+            ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
             bowtie1_exe=bowtie1_exe,
             bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,

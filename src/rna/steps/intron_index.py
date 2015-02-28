@@ -57,6 +57,7 @@ import bowtie
 from dooplicity.ansibles import Url
 from dooplicity.tools import register_cleanup
 import filemover
+import tempdel
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -77,19 +78,8 @@ parser.add_argument(\
 
 filemover.add_args(parser)
 bowtie.add_args(parser)
+tempdel.add_args(parser)
 args = parser.parse_args()
-
-def handle_temporary_directory(temp_dir_path):
-    """ Deletes temporary directory.
-
-        temp_dir_path: path of temporary directory for storing intermediate
-            alignments; archived if archive is not None.
-
-        No return value.
-    """
-    # Kill temporary directory
-    import shutil
-    shutil.rmtree(temp_dir_path)
 
 import time
 start_time = time.time()
@@ -99,9 +89,9 @@ output_url = Url(args.out) if args.out is not None \
     else Url(os.getcwd())
 # Set up temporary destination
 import tempfile
-temp_dir_path = tempfile.mkdtemp()
+temp_dir_path = make_temp_dir(args.scratch)
 # For deleting temporary directory, even on unexpected exit
-register_cleanup(handle_temporary_directory, temp_dir_path)
+register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 if output_url.is_local:
     # Set up final destination
     try: os.makedirs(output_url.to_url())

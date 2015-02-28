@@ -55,6 +55,7 @@ import hashlib
 import tempfile
 import shutil
 import os
+from tools import make_temp_dir
 
 def add_args(parser):
     """ Adds args relevant to EMR simulator.
@@ -130,6 +131,11 @@ def add_args(parser):
                   'nodes; this is where some temporary files may be stored '
                   'and is not important unless running in --ipy mode; if '
                   'left unspecified, defaults to Python temporary directory'))
+    parser.add_argument('--sort', type=str, required=False,
+            default='sort',
+            help=('Path to sort executable. Add arguments as necessary, '
+                  'e.g. for specifying a directory for storing sort\'s '
+                  'temporary files.'))
 
 def init_worker():
     """ Prevents KeyboardInterrupt from reaching a pool's workers.
@@ -183,7 +189,8 @@ def arglist_as_function(function_name_and_args):
 
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, task_count, memcap,
-                    gzip=False, gzip_level=3, scratch=None):
+                    gzip=False, gzip_level=3, scratch=None,
+                    sort='sort'):
     """ Partitions input data into tasks and presorts them.
 
         Files in output directory are in the format x.y, where x is a task
@@ -208,6 +215,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         scratch: where to write output before copying to output_dir. If "-"
             string, writes to temporary directory; if None, writes directly
             to output directory.
+        sort: path to sort executable
 
         Return value: None if no errors encountered; otherwise error string.
     """
@@ -219,7 +227,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             # Write to temporary directory
             final_output_dir = output_dir
             try:
-                output_dir = tempfile.mkdtemp()
+                output_dir = make_temp_dir()
             except OSError:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory.')
@@ -227,7 +235,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             # Write to temporary directory in special location
             final_output_dir = output_dir
             try:
-                output_dir = tempfile.mkdtemp(dir=scratch)
+                output_dir = make_temp_dir(scratch)
             except OSError:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory of %s.' % scratch)
@@ -275,9 +283,10 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                     % process_id
                                                 )):
                 sort_command = (('set -eo pipefail; gzip -cd %s | '
-                                 'sort -S %d%% %s | '
+                                 '%s -S %d%% %s | '
                                  'gzip -c -%d >%s')
-                                    % (unsorted_file, memcap, sort_options,
+                                    % (sort,
+                                        unsorted_file, memcap, sort_options,
                                         gzip_level,
                                         unsorted_file[:-12] + '.gz'))
                 try:
@@ -288,9 +297,10 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                             stderr=subprocess.STDOUT)
                 except subprocess.CalledProcessError as e:
                     return (('Error "%s" encountered sorting file %s; exit '
-                             'code was %d.') %
+                             'code was %d; command invoked was "%s".') %
                                 (e.output.strip(),
-                                    unsorted_file, e.returncode))
+                                    unsorted_file, e.returncode,
+                                    sort_command))
                 finally:
                     os.remove(unsorted_file)
         else:
@@ -299,7 +309,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                     '*.%s.unsorted'
                                                     % process_id
                                                 )):
-                sort_command = 'sort -S %d%% %s %s >%s' % (memcap,
+                sort_command = '%s -S %d%% %s %s >%s' % (sort, memcap,
                                                             sort_options,
                                                             unsorted_file,
                                                             unsorted_file[:-9])
@@ -310,9 +320,10 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                               stderr=subprocess.STDOUT)
                 except subprocess.CalledProcessError as e:
                     return (('Error "%s" encountered sorting file %s; exit '
-                             'code was %d.') %
+                             'code was %d; command invoked was "%s".') %
                                 (e.output.strip(),
-                                    unsorted_file, e.returncode))
+                                    unsorted_file, e.returncode,
+                                    sort_command))
                 finally:
                     os.remove(unsorted_file)
         return None
@@ -348,7 +359,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
                                   separator, sort_options, memcap,
-                                  gzip=False, gzip_level=3, scratch=None):
+                                  gzip=False, gzip_level=3, scratch=None,
+                                  sort='sort'):
     """ Runs a streaming command on a task, segregating multiple outputs. 
 
         streaming_command: streaming command to run.
@@ -376,6 +388,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         scratch: where to write output before copying to output_dir. If "-"
             string, writes to temporary directory; if None, writes directly
             to output directory.
+        sort: path to sort executable.
 
         Return value: None iff step runs successfully; otherwise error message.
     """
@@ -393,7 +406,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             # Write to temporary directory in special location
             final_output_dir = output_dir
             try:
-                output_dir = tempfile.mkdtemp(dir=scratch)
+                output_dir = make_temp_dir(scratch)
             except OSError:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory of %s.' % scratch)
@@ -416,13 +429,13 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             # Reducer. Merge sort the input glob.
             if gzip:
                 # Use process substitution
-                prefix = '(sort -S %d%% %s -m %s' % (memcap, sort_options,
-                          ' '.join(['<(gzip -cd %s)' % input_file
+                prefix = '(%s -S %d%% %s -m %s' % (sort, memcap, sort_options,
+                        ' '.join(['<(gzip -cd %s)' % input_file
                                     for input_file in input_files]) + ')'
                     )
             else:
                 # Reducer. Merge sort the input glob.
-                prefix = 'sort -S %d%% %s -m %s' % (memcap, sort_options,
+                prefix = '%s -S %d%% %s -m %s' % (sort, memcap, sort_options,
                                                     input_glob)
         err_file = os.path.join(err_dir, '%d.log' % task_id)
         new_env = os.environ.copy()
@@ -544,7 +557,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
                     log, gzip=False, gzip_level=3, ipy=False,
                     ipcontroller_json=None, ipy_profile=None, scratch=None,
-                    common=None):
+                    common=None, sort='sort'):
     """ Runs Hadoop Streaming simulation.
 
         FUNCTIONALITY IS IDIOSYNCRATIC; it is currently confined to those
@@ -580,6 +593,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             written directly to final destination. If '-', files are written
             to safely created temporary directory.
         common: path to directory accessible across nodes in --ipy mode
+        sort: sort executable including command-line arguments
 
         No return value.
     """
@@ -598,6 +612,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             log_stream = None
     else:
         log_stream = None
+    # Strip sort of quotes; a workaround so quotes appear if iface fails
+    sort = sort.strip('"')
     iface = dp_iface.DooplicityInterface(branding=branding,
                                          log_stream=log_stream)
     failed = False
@@ -968,7 +984,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         pass
                 if nline_input:
                     # Create temporary input files
-                    split_input_dir = tempfile.mkdtemp(dir=common)
+                    split_input_dir = make_temp_dir(common)
                     input_files = []
                     try:
                         with open(step_inputs[0]) as nline_stream:
@@ -1010,7 +1026,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                         None,
                                         gzip,
                                         gzip_level,
-                                        scratch),
+                                        scratch,
+                                        sort),
                                     callback=return_values.append
                                 )
                     while len(return_values) < input_file_count:
@@ -1059,7 +1076,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                         None,
                                         gzip,
                                         gzip_level,
-                                        scratch] for i, input_file
+                                        scratch, sort] for i, input_file
                                                  in enumerate(input_files)],
                                     block=False,
                                     ordered=False
@@ -1127,7 +1144,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     memcap,
                                     gzip,
                                     gzip_level,
-                                    scratch),
+                                    scratch, sort),
                                 callback=return_values.append
                             )
                     while len(return_values) < input_file_group_count:
@@ -1164,7 +1181,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 step_data['sort_options'], output_dir,
                                 step_data['key_fields'], separator,
                                 step_data['task_count'], memcap, gzip,
-                                gzip_level, scratch] for i, input_file_group
+                                gzip_level, scratch, sort]
+                                    for i, input_file_group
                                     in enumerate(input_file_groups)],
                             block=False,
                             ordered=False
@@ -1209,7 +1227,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     multiple_outputs,
                                     separator,
                                     step_data['sort_options'],
-                                    memcap, gzip, gzip_level, scratch),
+                                    memcap, gzip, gzip_level, scratch, sort),
                                  callback=return_values.append
                             )
                     while len(return_values) < input_file_count:
@@ -1246,7 +1264,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 step_data['reducer'], input_file, output_dir, 
                                 err_dir, i, multiple_outputs, separator,
                                 step_data['sort_options'], memcap, gzip,
-                                gzip_level, scratch] for i, input_file
+                                gzip_level, scratch, sort] for i, input_file
                                     in enumerate(input_files)],
                             block=False,
                             ordered=False
@@ -1406,4 +1424,4 @@ if __name__ == '__main__':
                     args.keep_intermediates, args.keep_last_output,
                     args.log, args.gzip_outputs, args.gzip_level,
                     args.ipy, args.ipcontroller_json, args.ipy_profile,
-                    args.scratch, args.common)
+                    args.scratch, args.common, args.sort)

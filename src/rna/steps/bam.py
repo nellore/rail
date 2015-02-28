@@ -68,8 +68,9 @@ import manifest
 import version
 import filemover
 from dooplicity.ansibles import Url
-from dooplicity.tools import register_cleanup
+from dooplicity.tools import register_cleanup, make_temp_dir
 import subprocess
+import tempdel
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -109,6 +110,7 @@ parser.add_argument(\
 
 filemover.add_args(parser)
 bowtie.add_args(parser)
+tempdel.add_args(parser)
 args = parser.parse_args()
 
 if not args.output_sam:
@@ -140,9 +142,8 @@ if args.out is not None:
         mover = filemover.FileMover(args=args)
         # Set up temporary destination
         import tempfile
-        temp_dir_path = tempfile.mkdtemp()
-        from tempdel import remove_temporary_directories
-        register_cleanup(remove_temporary_directories,
+        temp_dir_path = make_temp_dir(args.scratch)
+        register_cleanup(tempdel.remove_temporary_directories,
                             [temp_dir_path])
 input_line_count = 0
 move_temporary_file = False # True when temporary file should be uploaded

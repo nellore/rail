@@ -57,8 +57,9 @@ import bowtie_index
 import filemover
 import itertools
 from collections import defaultdict
-from dooplicity.tools import xstream, register_cleanup
+from dooplicity.tools import xstream, register_cleanup, make_temp_dir
 from dooplicity.ansibles import Url
+import tempdel
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -92,6 +93,7 @@ parser.add_argument(\
 
 filemover.add_args(parser)
 bowtie.add_args(parser)
+tempdel.add_args(parser)
 args = parser.parse_args()
 
 # Start keep_alive thread immediately
@@ -136,13 +138,9 @@ def percentile(histogram, percentile=0.75):
 import time
 start_time = time.time()
 
-# For storing BED files before conversion to bigwig
-import tempfile
-from tempdel import remove_temporary_directories
-
-temp_dir_path = tempfile.mkdtemp()
+temp_dir_path = make_temp_dir(args.scratch)
 # Clean up after script
-register_cleanup(remove_temporary_directories, [temp_dir_path])
+register_cleanup(tempfile.remove_temporary_directories, [temp_dir_path])
 bed_filename = os.path.join(temp_dir_path, 'temp.bed')
 if args.verbose:
     print >>sys.stderr, 'Writing to temporary bed %s .' % bed_filename

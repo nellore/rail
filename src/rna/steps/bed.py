@@ -55,13 +55,14 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
-from dooplicity.tools import xstream, register_cleanup
+from dooplicity.tools import xstream, register_cleanup, make_temp_dir
 import bowtie
 import bowtie_index
 import manifest
 # Define string version_number
 from version import version_number
 import filemover
+import tempdel
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -81,6 +82,7 @@ parser.add_argument(\
 
 bowtie.add_args(parser)
 filemover.add_args(parser)
+tempdel.add_args(parser)
 args = parser.parse_args()
 
 import time
@@ -100,9 +102,8 @@ else:
     mover = filemover.FileMover(args=args)
     # Set up temporary destination
     import tempfile
-    temp_dir_path = tempfile.mkdtemp()
-    from tempdel import remove_temporary_directories
-    register_cleanup(remove_temporary_directories, [temp_dir_path])
+    temp_dir_path = make_temp_dir(args.scratch)
+    register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 for (line_type, sample_label), xpartition in xstream(sys.stdin, 2):
     assert line_type in 'NID'
     sample_label = manifest_object.index_to_label[sample_label]

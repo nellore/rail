@@ -46,9 +46,10 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 import bowtie
-from dooplicity.tools import xstream, register_cleanup, xopen
+from dooplicity.tools import xstream, register_cleanup, xopen, \
+    make_temp_dir
 from dooplicity.ansibles import Url
-from tempdel import remove_temporary_directories
+import tempdel
 import filemover
 
 # Initialize global variable for tracking number of input lines
@@ -57,7 +58,8 @@ _input_line_count = 0
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base='genome', bowtie2_args='', verbose=False,
     report_multiplier=1.2, stranded=False, fudge=5, score_min=60,
-    gzip_level=3, mover=filemover.FileMover(), intermediate_dir='.'):
+    gzip_level=3, mover=filemover.FileMover(), intermediate_dir='.',
+    scratch=None):
     """ Runs Rail-RNA-cointron_enum 
 
         Alignment script for MapReduce pipelines that wraps Bowtie 2. Finds
@@ -112,6 +114,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             pulled from S3
         intermediate_dir: where intermediates are stored; for temporarily
             storing transcript index if it needs to be pulled from S3
+        scratch: scratch directory for storing temporary files or None if 
+            securely created temporary directory
 
         No return value.
     """
@@ -134,8 +138,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             time.sleep(0.5)
         bowtie2_index_base = os.path.join(index_directory, index_basename)  
     global _input_line_count
-    temp_dir_path = tempfile.mkdtemp()
-    register_cleanup(remove_temporary_directories, [temp_dir_path])
+    temp_dir_path = make_temp_dir(scratch)
+    register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
     reads_file = os.path.join(temp_dir_path, 'reads.temp.gz')
     with xopen(True, reads_file, 'w', gzip_level) as reads_stream:
         for _input_line_count, line in enumerate(input_stream):
@@ -208,6 +212,7 @@ if __name__ == '__main__':
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
     filemover.add_args(parser)
+    tempdel.add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv
@@ -244,7 +249,8 @@ if __name__ == '__main__' and not args.test:
         fudge=args.fudge,
         score_min=args.score_min,
         mover=mover,
-        intermediate_dir=args.intermediate_dir)
+        intermediate_dir=args.intermediate_dir,
+        scratch=args.scratch)
     print >>sys.stderr, ('DONE with cointron_enum.py; in=%d; time=%0.3f s') % \
         (_input_line_count, time.time() - start_time)
 elif __name__ == '__main__':

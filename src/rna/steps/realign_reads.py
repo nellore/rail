@@ -64,9 +64,11 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream, register_cleanup, xopen
+from dooplicity.tools import xstream, register_cleanup, xopen, \
+    make_temp_dir
 import bowtie
 import argparse
+import tempdel
 
 # Initialize global variable for tracking number of input lines
 _input_line_count = 0
@@ -380,6 +382,7 @@ if __name__ == '__main__':
 
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
+    tempdel.add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv
@@ -404,7 +407,7 @@ if __name__ == '__main__':
         keep_alive_thread.start()
 
 if __name__ == '__main__' and not args.test:
-    temp_dir_path = tempfile.mkdtemp()
+    temp_dir_path = make_temp_dir(args.scratch)
     archive = os.path.join(args.archive,
         str(os.getpid())) if args.archive is not None else None
     # Handle temporary directory if CTRL+C'd

@@ -84,9 +84,9 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
-from dooplicity.tools import xopen, register_cleanup
+from dooplicity.tools import xopen, register_cleanup, make_temp_dir
 import filemover
-from tempdel import remove_temporary_directories
+import tempdel
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -117,7 +117,7 @@ def qname_from_read(original_qname, seq, sample_label):
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         to_stdout=False, push='.', mover=filemover.FileMover(),
-        verbose=False):
+        verbose=False, scratch=None):
     """ Runs Rail-RNA-preprocess
 
         Input (read from stdin)
@@ -186,13 +186,15 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         push: where to send output
         verbose: True iff extra debugging statements should be printed to
             stderr
+        scratch: scratch directory for storing temporary files or None if 
+            securely created temporary directory
 
         No return value
     """
     global _input_line_count, _output_line_count
-    temp_dir = tempfile.mkdtemp()
+    temp_dir = make_temp_dir(scratch)
     print >>sys.stderr, 'Created local destination directory "%s".' % temp_dir
-    register_cleanup(remove_temporary_directories, [temp_dir])
+    register_cleanup(tempdel.remove_temporary_directories, [temp_dir])
     input_line_count, output_line_count = 0, 0
     if not to_stdout:
         push_url = Url(push)
@@ -643,6 +645,7 @@ if __name__ == '__main__':
         default=False,
         help='Print out extra debugging statements')
     filemover.add_args(parser)
+    tempdel.add_args(parser)
     args = parser.parse_args()
 
 if __name__ == '__main__':

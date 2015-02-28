@@ -41,6 +41,7 @@ import sys
 import gzip
 import io
 import contextlib
+import tempfile
 
 class KeepAlive(threading.Thread):
     """ Writes Hadoop status messages to avert task termination. """
@@ -224,6 +225,25 @@ def xopen(gzipped, *args):
             gzip_process.wait()
         if 'output_stream' in locals():
             output_stream.close()
+
+def make_temp_dir(scratch=None):
+    """ Creates temporary directory in some scratch directory.
+
+        Handles case where scratch directory does not exist.
+
+        scratch: directory in which to create temporary directory
+
+        Return value: path to temporary directory
+    """
+    if scratch:
+        try:
+            os.makedirs(scratch)
+        except OSError:
+            if not os.path.isdir(scratch):
+                raise
+        return tempfile.mkdtemp(dir=scratch)
+    else:
+        return tempfile.mkdtemp()
 
 class dlist(object):
     """ List data type that spills to disk if a memlimit is reached.

@@ -7,6 +7,14 @@ For deleting temporary directories on exit from Python script.
 """
 import shutil
 
+def add_args(parser):
+    parser.add_argument(\
+        '--scratch', type=str, required=False,
+        default=None,
+        help='Path to scratch directory for storing temporary files. If left '
+             'unspecified, it\'s taken to be a securely created temporary '
+             'directory.')
+
 def remove_temporary_directories(temp_dir_paths):
     """ Deletes temporary directory.
 

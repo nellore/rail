@@ -43,8 +43,9 @@ site.addsitedir(base_path)
 
 import manifest
 from dooplicity.ansibles import Url
-from dooplicity.tools import register_cleanup
+from dooplicity.tools import register_cleanup, make_temp_dir
 import filemover
+import tempdel
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -63,6 +64,7 @@ parser.add_argument(\
 
 manifest.add_args(parser)
 filemover.add_args(parser)
+tempdel.add_args(parser)
 args = parser.parse_args()
 
 import time
@@ -99,10 +101,8 @@ if args.out is not None:
         except: pass
         output_filename = os.path.join(args.out, args.normalize_filename)
     else:
-        import tempfile
-        temp_dir_path = tempfile.mkdtemp()
-        from tempdel import remove_temporary_directories
-        register_cleanup(remove_temporary_directories,
+        temp_dir_path = make_temp_dir(args.scratch)
+        register_cleanup(tempdel.remove_temporary_directories,
                             [temp_dir_path])
         output_filename = args.normalize_filename + '.temp'
         output_filename = os.path.join(temp_dir_path, output_filename)

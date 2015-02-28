@@ -40,6 +40,7 @@ import json
 import itertools
 import __main__ as main
 import argparse
+import string
 
 def add_args(parser):
     """ Adds relevant arguments to an object of class argparse.ArgumentParser.
@@ -131,6 +132,13 @@ class DooplicityInterface(object):
         self._write_streams = []
         if log_stream is not None:
             self._write_streams.append(log_stream)
+            if os.path.exists(log_stream.name):
+                self.log_dir \
+                    = os.path.dirname(os.path.abspath(log_stream.name))
+            else:
+                self.log_dir = None
+        else:
+            self.log_dir = None
         if sys.stderr.isatty():
             self._write_streams.append(sys.stderr)
         else:
@@ -229,11 +237,34 @@ class DooplicityInterface(object):
                 )
             output_stream.flush()
         if steps:
-            temp_dir = tempfile.mkdtemp()
-            temp_json_file = os.path.join(temp_dir, 'temp.json')
-            with open(temp_json_file, 'w') as json_stream:
+            # Try to create json for resuming in same dir as log
+            if self.log_dir is None:
+                temp_json_file = os.path.join(tempfile.mkdtemp(),
+                                                    'resume_flow.json')
+            else:
+                import random
+                temp_json_file = os.path.join(self.log_dir, 'resume_flow_' + 
+                                  ''.join([random.choice(string.ascii_uppercase
+                                      + string.digits) for _ in xrange(12)])
+                                   + '.json')
+                while os.path.exists(temp_json_file):
+                    temp_json_file = os.path.join(
+                                self.log_dir, 'resume_flow_' + 
+                                ''.join([random.choice(string.ascii_uppercase
+                                        + string.digits) for _ in xrange(12)])
+                                   + '.json'
+                            )
+            try:
+                json_stream = open(temp_json_file, 'w')
+            except IOError:
+                temp_json_file = os.path.join(tempfile.mkdtemp(),
+                                                    'resume_flow.json')
+                json_stream = open(temp_json_file, 'w')
+            finally:
                 steps_to_write = { 'Steps' : steps }
-                json.dump(steps_to_write, json_stream)
+                json.dump(steps_to_write, json_stream, sort_keys=True,
+                             indent=4, separators=(',', ': '))
+                json_stream.close()
             print_parser = argparse.ArgumentParser()
             add_args(print_parser)
             # Capture relevant arguments for simulator/submitter
