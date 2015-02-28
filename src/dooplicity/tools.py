@@ -35,9 +35,12 @@ THE SOFTWARE.
 from itertools import groupby
 import os
 import threading
-import contextlib
 import signal
 import subprocess
+import sys
+import gzip
+import io
+import contextlib
 
 class KeepAlive(threading.Thread):
     """ Writes Hadoop status messages to avert task termination. """
@@ -153,39 +156,14 @@ def path_join(unix, *args):
         return os.path.join(*args)
 
 @contextlib.contextmanager
-def gzip_open(filename, mode='rb', compresslevel=9):
-    """ Functionality almost mimics gzip.open, but uses gzip at command line.
+def xopen(gzipped, *args):
+    """ Passes args on to the appropriate opener, gzip or regular.
+
+        In compressed mode, functionality almost mimics gzip.open,
+        but uses gzip at command line.
 
         As of PyPy 2.5, gzip.py appears to leak memory when writing to
         a file object created with gzip.open().
-
-        filename: file to open
-        mode: only 'r' and 'w' are interpreted here as read and write,
-            respectively. "b" is "add automatically," as in gzip.py
-        compresslevel: compression level
-
-        Yield value: file object
-    """
-    if 'r' in mode:
-        gzip_process = subprocess.Popen(['gzip', '-cd', filename], bufsize=-1,
-                                            stdout=subprocess.PIPE)
-        yield gzip_process.stdout
-        gzip_process.stdout.close()
-        gzip_process.wait()
-    elif 'w' in mode:
-        with open(filename, 'wb') as output_stream:
-            gzip_process = subprocess.Popen(['gzip'], bufsize=-1,
-                                                stdin=subprocess.PIPE,
-                                                stdout=output_stream)
-            yield gzip_process.stdin
-            gzip_process.stdin.close()
-            gzip_process.wait()
-    else:
-        raise IOError, "Mode " + mode + " not supported"
-
-@contextlib.contextmanager
-def xopen(gzipped, *args):
-    """ Passes args on to the appropriate opener, gzip or regular.
 
         gzipped: True iff gzip.open() should be used to open rather than
             open(); False iff open() should be used; None if input should be
@@ -198,6 +176,8 @@ def xopen(gzipped, *args):
     if gzipped == '-':
         fh = sys.stdout
     else:
+        if not args:
+            raise IOError, 'Must provide filename'
         import gzip
         if gzipped is None:
             with open(args[0], 'rb') as binary_input_stream:
@@ -207,7 +187,29 @@ def xopen(gzipped, *args):
                 else:
                     gzipped = False
         if gzipped:
-            fh = gzip.open(*args)
+            try:
+                mode = args[1]
+            except IndexError:
+                mode = 'rb'
+            if 'r' in mode:
+                gzip_process = subprocess.Popen(['gzip', '-cd', args[0]],
+                                                    bufsize=-1,
+                                                    stdout=subprocess.PIPE)
+                fh = gzip_process.stdout
+            elif 'w' in mode:
+                try:
+                    compresslevel = int(args[2])
+                except IndexError:
+                    compresslevel = 9
+                output_stream = open(args[0], 'wb')
+                gzip_process = subprocess.Popen(['gzip',
+                                                    '-%d' % compresslevel],
+                                                    bufsize=-1,
+                                                    stdin=subprocess.PIPE,
+                                                    stdout=output_stream)
+                fh = gzip_process.stdin
+            else:
+                raise IOError, 'Mode ' + mode + ' not supported'
         else:
             fh = open(*args)
     try:
@@ -215,31 +217,10 @@ def xopen(gzipped, *args):
     finally:
         if fh is not sys.stdout:
             fh.close()
-
-def yopen(gzipped, *args):
-    """ Passes args on to the appropriate opener, gzip or regular.
-
-        Just like xopen minus stdout feature and for use without
-        with statement. Could merge xopen and yopen at some point.
-
-        gzipped: True iff gzip.open() should be used to open rather than
-            open(); False iff open() should be used; None if input should be
-            read and guessed
-        *args: unnamed arguments to pass
-
-        Return value: file object
-    """
-    import gzip
-    if gzipped is None:
-        with open(args[0], 'rb') as binary_input_stream:
-            # Check for magic number
-            if binary_input_stream.read(2) == '\x1f\x8b':
-                gzipped = True
-            else:
-                gzipped = False
-    if gzipped:
-        return gzip.open(*args)
-    return open(*args)
+        if 'gzip_process' in locals():
+            gzip_process.wait()
+        if 'output_stream' in locals():
+            output_stream.close()
 
 class dlist(object):
     """ List data type that spills to disk if a memlimit is reached.
@@ -501,8 +482,8 @@ if __name__ == '__main__':
             # Kill temporary directory
             shutil.rmtree(self.temp_dir_path)
 
-    class TestGzipOpen(unittest.TestCase):
-        """ Tests gzip_open function. """
+    class TestXopen(unittest.TestCase):
+        """ Tests xopen function. """
         def setUp(self):
             # Set up temporary directory
             self.temp_dir_path = tempfile.mkdtemp()
@@ -510,12 +491,11 @@ if __name__ == '__main__':
             self.unix_file = os.path.join(self.temp_dir_path, 'unix.gz')
 
         def test_write_consistency(self):
-            """ Fails if gzip_open disagrees with gzip.open. """
-            import gzip
+            """ Fails if xopen compressed write disagrees with gzip.open. """
             data = os.urandom(128 * 1024) 
             with gzip.open(self.python_file, 'w') as python_stream:
                 python_stream.write(data)
-            with gzip_open(self.unix_file, 'w') as unix_stream:
+            with xopen(True, self.unix_file, 'w') as unix_stream:
                 unix_stream.write(data)
             output = subprocess.check_output(
                             'diff <(gzip -cd %s) <(gzip -cd %s)'
@@ -526,10 +506,10 @@ if __name__ == '__main__':
 
         def test_single_line_read(self):
             """ Raises exception if single line can't be read from file. """
-            with gzip_open(self.unix_file, 'w') as unix_stream:
+            with xopen(True, self.unix_file, 'w') as unix_stream:
                 print >>unix_stream, 'first line'
                 print >>unix_stream, 'second line'
-            with gzip_open(self.unix_file, 'r') as unix_stream:
+            with xopen(None, self.unix_file, 'r') as unix_stream:
                 first_line = unix_stream.readline()
             self.assertEqual(first_line.strip(), 'first line')
 
