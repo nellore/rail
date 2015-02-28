@@ -422,6 +422,8 @@ def ready_engines(rc, base, prep=False):
     must be changed if porting Rail to Windows.'''
     if base.scratch is None:
         scratch_dir = '/tmp'
+    else:
+        scratch_dir = base.scratch
     temp_dir = os.path.join(scratch_dir, 'railrna-%s' %
                             ''.join(random.choice(string.ascii_uppercase
                                     + string.digits) for _ in xrange(12)))
@@ -2497,10 +2499,15 @@ class RailRnaPreprocess(object):
                 {
                     'name' : 'Assign reads to preprocessing tasks',
                     'run' : ('assign_splits.py --num-processes {0}'
-                             ' --out {1} --filename {2}').format(
+                             ' --out {1} --filename {2} {3}').format(
                                                         base.num_processes,
                                                         base.intermediate_dir,
-                                                        'split.manifest'
+                                                        'split.manifest',
+                                                        ('--scratch %s' %
+                                                          base.scratch)
+                                                        if base.scratch
+                                                        is not None
+                                                        else ''
                                                     ),
                     'inputs' : ['count_lines'],
                     'output' : 'assign_reads',
@@ -2513,7 +2520,7 @@ class RailRnaPreprocess(object):
                 {
                     'name' : 'Preprocess reads',
                     'run' : ('preprocess.py --nucs-per-file={0} {1} '
-                             '--push={2} --gzip-level {3} {4}').format(
+                             '--push={2} --gzip-level {3} {4} {5}').format(
                                                     base.nucleotides_per_input,
                                                     '--gzip-output' if
                                                     base.gzip_input else '',
@@ -2522,6 +2529,10 @@ class RailRnaPreprocess(object):
                                                     'gzip_level' in
                                                     dir(base) else 3,
                                                     '--stdout' if elastic
+                                                    else '',
+                                                    ('--scratch %s' %
+                                                      base.scratch) if 
+                                                    base.scratch is not None
                                                     else ''
                                                 ),
                     'inputs' : [os.path.join(base.intermediate_dir,
@@ -2541,7 +2552,7 @@ class RailRnaPreprocess(object):
         else:
             steps_to_return = [
                 {
-                    'name' : 'Preprocess input reads',
+                    'name' : 'Preprocess reads',
                     'run' : ('preprocess.py --nucs-per-file={0} {1} '
                              '--push={2} --gzip-level {3} {4}').format(
                                                     base.nucleotides_per_input,
@@ -3162,6 +3173,8 @@ class RailRnaAlign(object):
         verbose = ('--verbose' if base.verbose else '')
         drop_deletions = ('--drop-deletions' if base.drop_deletions else '')
         keep_alive = ('--keep-alive' if elastic else '')
+        scratch  = (('--scratch %s' % base.scratch)
+                    if (base.scratch is not None and not elastic) else '')
         return [  
             {
                 'name' : 'Align reads and segment them into readlets',
@@ -3174,7 +3187,7 @@ class RailRnaAlign(object):
                          '--readlet-interval={7} '
                          '--capping-multiplier={8} '
                          '--gzip-level {9}'
-                         '{10} {11} {12} -- {13}').format(
+                         '{10} {11} {12} {13} -- {14}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
@@ -3190,6 +3203,7 @@ class RailRnaAlign(object):
                                                 drop_deletions,
                                                         verbose,
                                                         keep_alive,
+                                                        scratch,
                                                         base.bowtie2_args),
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
@@ -3208,8 +3222,8 @@ class RailRnaAlign(object):
             {
                 'name' : 'Align unique readlets to genome',
                 'run' : ('align_readlets.py --bowtie-idx={0} '
-                         '--bowtie-exe={1} {2} {3} --gzip-level={4}'
-                         ' -- -t --sam-nohead --startverbose {5}').format(
+                         '--bowtie-exe={1} {2} {3} --gzip-level={4} {5} '
+                         '-- -t --sam-nohead --startverbose {6}').format(
                                                     base.bowtie1_idx,
                                                     base.bowtie1_exe,
                                                     verbose,
@@ -3217,6 +3231,7 @@ class RailRnaAlign(object):
                                                     base.gzip_level
                                                     if 'gzip_level' in
                                                     dir(base) else 3,
+                                                    scratch,
                                                     base.genome_bowtie1_args,
                                                 ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletized')],
@@ -3331,7 +3346,7 @@ class RailRnaAlign(object):
             {
                 'name' : 'Build index of transcriptome elements',
                 'run' : ('intron_index.py --bowtie-build-exe={0} '
-                         '--out={1} {2}').format(base.bowtie2_build_exe,
+                         '--out={1} {2} {3}').format(base.bowtie2_build_exe,
                                                  ab.Url(
                                                     path_join(elastic,
                                                         base.output_dir,
@@ -3342,7 +3357,7 @@ class RailRnaAlign(object):
                                                         base.output_dir,
                                                         'transcript_index'
                                                     ),
-                                                 keep_alive),
+                                                 keep_alive, scratch),
                 'inputs' : ['intron_fasta'],
                 'output' : 'intron_index',
                 'min_tasks' : 1,
@@ -3361,7 +3376,7 @@ class RailRnaAlign(object):
                 'name' : 'Finalize intron cooccurrences on reads',
                 'run' : ('cointron_enum.py --bowtie2-idx={0} --gzip-level {1} '
                          '--bowtie2-exe={2} {3} {4} --intermediate-dir {5} '
-                         '-- {6}').format(
+                         '{6} -- {7}').format(
                                             'intron/intron'
                                             if elastic else
                                             ab.Url(path_join(elastic,
@@ -3375,6 +3390,7 @@ class RailRnaAlign(object):
                                             verbose,
                                             keep_alive,
                                             base.intermediate_dir,
+                                            scratch,
                                             base.transcriptome_bowtie2_args
                                         ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unique')],
@@ -3416,7 +3432,8 @@ class RailRnaAlign(object):
             {
                 'name' : 'Align reads to transcriptome elements',
                 'run' : ('realign_reads.py --bowtie2-exe={0} --gzip-level {1} '
-                         '--count-multiplier {2} {3} {4} {5} -- {6}').format(
+                         '--count-multiplier {2} {3} {4} {5} {6} '
+                         '-- {7}').format(
                                         base.bowtie2_exe,
                                         base.gzip_level
                                         if 'gzip_level' in
@@ -3427,6 +3444,7 @@ class RailRnaAlign(object):
                                         '--replicable'
                                         if base.very_replicable
                                         else '',
+                                        scratch,
                                         base.bowtie2_args
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
@@ -3561,7 +3579,7 @@ class RailRnaAlign(object):
                 'name' : 'Write bigwigs with exome coverage by sample',
                 'run' : ('coverage.py --bowtie-idx={0} --percentile={1} '
                          '--out={2} --bigwig-exe={3} '
-                         '--manifest={4} {5}').format(base.bowtie1_idx,
+                         '--manifest={4} {5} {6}').format(base.bowtie1_idx,
                                                      base.normalize_percentile,
                                                      ab.Url(
                                                         path_join(elastic,
@@ -3574,7 +3592,8 @@ class RailRnaAlign(object):
                                                         'coverage_bigwigs'),
                                                      base.bedgraphtobigwig_exe,
                                                      manifest,
-                                                     verbose),
+                                                     verbose,
+                                                     scratch),
                 'inputs' : [path_join(elastic, 'precoverage', 'coverage')],
                 'output' : 'coverage',
                 'taskx' : 1,
@@ -3590,7 +3609,7 @@ class RailRnaAlign(object):
             },
             {
                 'name' : 'Write normalization factors for sample coverages',
-                'run' : 'coverage_post.py --out={0} --manifest={1}'.format(
+                'run' : 'coverage_post.py --out={0} --manifest={1} {2}'.format(
                                                         ab.Url(
                                                             path_join(elastic,
                                                             base.output_dir,
@@ -3600,7 +3619,8 @@ class RailRnaAlign(object):
                                                         else path_join(elastic,
                                                             base.output_dir,
                                                     'normalization_factors'),
-                                                        manifest
+                                                        manifest,
+                                                        scratch
                                                     ),
                 'inputs' : ['coverage'],
                 'output' : 'coverage_post',
@@ -3640,7 +3660,7 @@ class RailRnaAlign(object):
             {
                 'name' : 'Write beds with intron and indel results by sample',
                 'run' : ('bed.py --bowtie-idx={0} --out={1} '
-                         '--manifest={2} --bed-basename={3}').format(
+                         '--manifest={2} --bed-basename={3} {4}').format(
                                                         base.bowtie1_idx,
                                                         ab.Url(
                                                             path_join(elastic,
@@ -3652,7 +3672,8 @@ class RailRnaAlign(object):
                                                             base.output_dir,
                                                         'introns_and_indels'),
                                                         manifest,
-                                                        base.bed_basename
+                                                        base.bed_basename,
+                                                        scratch
                                                     ),
                 'inputs' : ['prebed'],
                 'output' : 'bed',
@@ -3671,7 +3692,7 @@ class RailRnaAlign(object):
                 'name' : 'Write bams with alignments by sample',
                 'run' : ('bam.py --out={0} --bowtie-idx={1} '
                          '--samtools-exe={2} --bam-basename={3} '
-                         '--manifest={4} {5} {6}').format(
+                         '--manifest={4} {5} {6} {7}').format(
                                         ab.Url(
                                             path_join(elastic,
                                             base.output_dir, 'alignments')
@@ -3686,7 +3707,8 @@ class RailRnaAlign(object):
                                         keep_alive,
                                         '--output-by-chromosome'
                                         if not base.do_not_output_bam_by_chr
-                                        else ''
+                                        else '',
+                                        scratch
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'sam'),
                             path_join(elastic, 'compare_alignments', 'sam'),
@@ -3822,7 +3844,8 @@ class RailRnaParallelPreprocessJson(object):
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=0.2, ipython_profile=None, ipcontroller_json=None,
-        scratch=None, keep_intermediates=False, check_manifest=True):
+        scratch=None, keep_intermediates=False, check_manifest=True,
+        sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 
@@ -4065,7 +4088,7 @@ class RailRnaParallelAlignJson(object):
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         gzip_intermediates=False,
         gzip_level=3, sort_memory_cap=0.2, keep_intermediates=False,
-        do_not_copy_index_to_nodes=False):
+        do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 
@@ -4416,7 +4439,7 @@ class RailRnaParallelAllJson(object):
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=0.2, ipython_profile=None, ipcontroller_json=None,
         scratch=None, keep_intermediates=False, check_manifest=True,
-        do_not_copy_index_to_nodes=False):
+        do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 

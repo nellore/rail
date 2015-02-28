@@ -242,8 +242,7 @@ def make_temp_dir(scratch=None):
             if not os.path.isdir(scratch):
                 raise
         return tempfile.mkdtemp(dir=scratch)
-    else:
-        return tempfile.mkdtemp()
+    return tempfile.mkdtemp()
 
 class dlist(object):
     """ List data type that spills to disk if a memlimit is reached.

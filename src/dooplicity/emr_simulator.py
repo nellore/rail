@@ -227,7 +227,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             # Write to temporary directory
             final_output_dir = output_dir
             try:
-                output_dir = make_temp_dir()
+                output_dir = tempfile.mkdtemp()
             except OSError:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory.')
@@ -235,7 +235,14 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             # Write to temporary directory in special location
             final_output_dir = output_dir
             try:
-                output_dir = make_temp_dir(scratch)
+                os.makedirs(scratch)
+            except OSError:
+                if os.path.isfile(scratch):
+                    return ('Scratch directory %s is a file.' % scratch)
+            except IOError:
+                return ('Scratch directory %s is not writable.' % scratch)
+            try:
+                output_dir = tempfile.mkdtemp(dir=scratch)
             except OSError:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory of %s.' % scratch)
@@ -406,7 +413,14 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             # Write to temporary directory in special location
             final_output_dir = output_dir
             try:
-                output_dir = make_temp_dir(scratch)
+                os.makedirs(scratch)
+            except OSError:
+                if os.path.isfile(scratch):
+                    return ('Scratch directory %s is a file.' % scratch)
+            except IOError:
+                return ('Scratch directory %s is not writable.' % scratch)
+            try:
+                output_dir = tempfile.mkdtemp(dir=scratch)
             except OSError:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory of %s.' % scratch)
@@ -525,8 +539,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
     except Exception as e:
         # Uncaught miscellaneous exception
         from traceback import format_exc
-        return ('Error\n\n%s\nexecuting task on input %s.'
-                % (format_exc(), input_file))
+        return ('Error\n\n%s\nencountered executing task on input %s.'
+                % (format_exc(), input_glob))
     finally:
         if 'task_file_stream_processes' in locals():
             for key in task_file_streams:

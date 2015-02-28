@@ -617,6 +617,7 @@ if __name__ == '__main__':
         readlet_interval=args.readlet_interval,
         capping_multiplier=args.capping_multiplier,
         drop_deletions=args.drop_deletions,
-        gzip_level=args.gzip_level)
+        gzip_level=args.gzip_level,
+        scratch=args.scratch)
     print >>sys.stderr, 'DONE with align_reads.py; in=%d; ' \
         'time=%0.3f s' % (_input_line_count, time.time() - start_time)
