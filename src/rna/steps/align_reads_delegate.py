@@ -9,7 +9,6 @@ import sys
 import os
 import site
 import string
-import gzip
 from collections import defaultdict
 import re
 
@@ -639,7 +638,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
             # Always have a start or end read of length max_readlet_size
             cap_sizes.append(max_readlet_size)
         with xopen(None, other_reads) as other_stream, \
-            gzip.open(second_pass_reads, 'w') as align_stream:
+            xopen(True, second_pass_reads, 'w') as align_stream:
             handle_bowtie_output(
                     input_stream,
                     reference_index,

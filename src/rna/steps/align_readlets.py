@@ -76,7 +76,7 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 import bowtie
-from dooplicity.tools import xstream, register_cleanup, gzip_open
+from dooplicity.tools import xstream, register_cleanup, xopen
 from tempdel import remove_temporary_directories
 
 # Initialize global variable for tracking number of input lines
@@ -165,8 +165,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     register_cleanup(remove_temporary_directories, [temp_dir])
     qnames_file = os.path.join(temp_dir, 'qnames.temp.gz')
     readlet_file = os.path.join(temp_dir, 'readlets.temp.gz')
-    with gzip_open(qnames_file, 'w', gzip_level) as qname_stream:
-        with gzip_open(readlet_file, 'w', gzip_level) as readlet_stream:
+    with xopen(True, qnames_file, 'w', gzip_level) as qname_stream:
+        with xopen(True, readlet_file, 'w', gzip_level) as readlet_stream:
             for (seq_count, ((seq,), xpartition)) \
                 in enumerate(xstream(input_stream, 1)):
                 print >>readlet_stream, \

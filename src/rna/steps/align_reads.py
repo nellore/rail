@@ -144,7 +144,6 @@ import subprocess
 import shutil
 import tempfile
 import time
-import gzip
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -158,7 +157,7 @@ site.addsitedir(base_path)
 import bowtie
 import partition
 import manifest
-from dooplicity.tools import xstream, dlist, register_cleanup
+from dooplicity.tools import xstream, dlist, register_cleanup, xopen
 
 # Initialize global variables for tracking number of input lines
 _input_line_count = 0
@@ -374,8 +373,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     second_pass_file = os.path.join(temp_dir, 'second_pass_reads.temp.gz')
     k_value, _, _ = bowtie.parsed_bowtie_args(bowtie2_args)
     nothing_doing = True
-    with gzip.open(align_file, 'w', gzip_level) as align_stream, \
-        gzip.open(other_reads_file, 'w', gzip_level) as other_stream:
+    with xopen(True, align_file, 'w', gzip_level) as align_stream, \
+        xopen(True, other_reads_file, 'w', gzip_level) as other_stream:
         for seq_number, ((seq,), xpartition) in enumerate(
                                                         xstream(sys.stdin, 1)
                                                     ):

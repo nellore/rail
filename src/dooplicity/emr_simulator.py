@@ -145,8 +145,9 @@ def init_worker():
 def yopen(gzipped, *args):
     """ Passes args on to the appropriate opener, gzip or regular.
 
-        Just like xopen minus stdout feature and for use without
-        with statement. Could merge xopen and yopen at some point.
+        A dooplicity.tools.xopen that uses the gzip module, which is
+        unsafe for writing. See xopen's docstring in dooplicity.tools for
+        more information.
 
         gzipped: True iff gzip.open() should be used to open rather than
             open(); False iff open() should be used; None if input should be
@@ -212,6 +213,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
     """
     try:
         task_streams = {}
+        if gzip:
+            task_stream_processes = {}
         if scratch == '-':
             # Write to temporary directory
             final_output_dir = output_dir
@@ -245,19 +248,25 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             task_file = os.path.join(output_dir, str(task) +
                                                         '.' + str(process_id)
                                                         + '.unsorted.gz')
-                            task_streams[task] = yopen(
-                                True, task_file, 'w', gzip_level
-                            )
+                            task_stream_processes[task] = subprocess.Popen(
+                                    'gzip -%d >%s' % 
+                                    (gzip_level, task_file),
+                                    shell=True, bufsize=-1,
+                                    stdin=subprocess.PIPE
+                                )
+                            task_streams[task] \
+                                = task_stream_processes[task].stdin
                         else:
                             task_file = os.path.join(output_dir, str(task) +
                                                         '.' + str(process_id)
                                                         + '.unsorted')
-                            task_streams[task] = yopen(
-                                False, task_file, 'w'
-                            )
+                            task_streams[task] = open(task_file, 'w')
                         task_streams[task].write(line)
         for task in task_streams:
             task_streams[task].close()
+        if gzip:
+            for task in task_stream_processes:
+                task_stream_processes[task].wait()
         # Presort task files
         if gzip:
             for unsorted_file in glob.glob(os.path.join(
@@ -265,7 +274,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                     '*.%s.unsorted.gz'
                                                     % process_id
                                                 )):
-                sort_command = (('gzip -cd %s | sort -S %d%% %s | '
+                sort_command = (('set -eo pipefail; gzip -cd %s | '
+                                 'sort -S %d%% %s | '
                                  'gzip -c -%d >%s')
                                     % (unsorted_file, memcap, sort_options,
                                         gzip_level,
@@ -273,6 +283,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 try:
                     subprocess.check_output(sort_command,
                                             shell=True,
+                                            executable='/bin/bash',
                                             bufsize=-1,
                                             stderr=subprocess.STDOUT)
                 except subprocess.CalledProcessError as e:
@@ -423,7 +434,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                 = prefix + ' | ' + streaming_command + (' 2>%s' % err_file)
             # Need bash or zsh for process substitution
             multiple_output_process = subprocess.Popen(
-                    command_to_run,
+                    ' '.join(['set -eo pipefail;', command_to_run]),
                     shell=True,
                     stdout=subprocess.PIPE,
                     env=new_env,
@@ -431,6 +442,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                     executable='/bin/bash'
                 )
             task_file_streams = {}
+            if gzip:
+                task_file_stream_processes = {}
             for line in multiple_output_process.stdout:
                 key, _, line_to_write = line.partition(separator)
                 try:
@@ -448,10 +461,15 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                      'directory %s.') % (command_to_run,
                                                           key_dir))
                     if gzip:
-                        task_file_streams[key] = yopen(True,
-                                os.path.join(key_dir, str(task_id) + '.gz'),
-                                    'w', gzip_level
+                        task_file_stream_processes[key] = subprocess.Popen(
+                                'gzip -%d >%s' % 
+                                (gzip_level,
+                                 os.path.join(key_dir, str(task_id) + '.gz')),
+                                shell=True, bufsize=-1,
+                                stdin=subprocess.PIPE
                             )
+                        task_file_streams[key] \
+                            = task_file_stream_processes[key].stdin
                     else:
                         task_file_streams[key] = open(
                                 os.path.join(key_dir, str(task_id)), 'w'
@@ -481,7 +499,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                                                 err_file))
             try:
                 # Need bash or zsh for process substitution
-                subprocess.check_output(command_to_run,
+                subprocess.check_output(' '.join(['set -eo pipefail;',
+                                                  command_to_run]),
                                             shell=True,
                                             env=new_env,
                                             bufsize=-1,
@@ -496,6 +515,11 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         return ('Error\n\n%s\nexecuting task on input %s.'
                 % (format_exc(), input_file))
     finally:
+        if 'task_file_stream_processes' in locals():
+            for key in task_file_streams:
+                task_file_streams[key].close()
+            for key in task_file_stream_processes:
+                task_file_stream_processes[key].wait()
         if 'final_output_dir' in locals() and final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):

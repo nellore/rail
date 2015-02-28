@@ -196,12 +196,15 @@ def xopen(gzipped, *args):
                                                     bufsize=-1,
                                                     stdout=subprocess.PIPE)
                 fh = gzip_process.stdout
-            elif 'w' in mode:
+            elif 'w' in mode or 'a' in mode:
                 try:
                     compresslevel = int(args[2])
                 except IndexError:
                     compresslevel = 9
-                output_stream = open(args[0], 'wb')
+                if 'w' in mode:
+                    output_stream = open(args[0], 'wb')
+                else:
+                    output_stream = open(args[0], 'ab')
                 gzip_process = subprocess.Popen(['gzip',
                                                     '-%d' % compresslevel],
                                                     bufsize=-1,
@@ -512,6 +515,20 @@ if __name__ == '__main__':
             with xopen(None, self.unix_file, 'r') as unix_stream:
                 first_line = unix_stream.readline()
             self.assertEqual(first_line.strip(), 'first line')
+
+        def test_append(self):
+            """ Raises exception if appending to existing gz doesn't work. """
+            with xopen(True, self.unix_file, 'w') as unix_stream:
+                print >>unix_stream, 'first line'
+            with xopen(True, self.unix_file, 'a') as unix_stream:
+                print >>unix_stream, 'second line'
+            with xopen(None, self.unix_file, 'r') as unix_stream:
+                first_line = unix_stream.readline().strip()
+                second_line = unix_stream.readline().strip()
+                third_line = unix_stream.readline()
+            self.assertEqual(first_line.strip(), 'first line')
+            self.assertEqual(second_line.strip(), 'second line')
+            self.assertEqual(third_line, '')
 
         def tearDown(self):
             # Kill temporary directory

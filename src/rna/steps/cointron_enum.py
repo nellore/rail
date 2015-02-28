@@ -35,7 +35,6 @@ import site
 import subprocess
 import tempfile
 from collections import defaultdict
-import gzip
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -47,7 +46,7 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 import bowtie
-from dooplicity.tools import xstream, register_cleanup
+from dooplicity.tools import xstream, register_cleanup, xopen
 from dooplicity.ansibles import Url
 from tempdel import remove_temporary_directories
 import filemover
@@ -138,7 +137,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     temp_dir_path = tempfile.mkdtemp()
     register_cleanup(remove_temporary_directories, [temp_dir_path])
     reads_file = os.path.join(temp_dir_path, 'reads.temp.gz')
-    with gzip.open(reads_file, 'w', gzip_level) as reads_stream:
+    with xopen(True, reads_file, 'w', gzip_level) as reads_stream:
         for _input_line_count, line in enumerate(input_stream):
             seq = line.strip()
             print >>reads_stream, '\t'.join([seq, seq, 'I'*len(seq)])

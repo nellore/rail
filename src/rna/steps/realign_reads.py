@@ -64,8 +64,7 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream, register_cleanup
-import gzip
+from dooplicity.tools import xstream, register_cleanup, xopen
 import bowtie
 import argparse
 
@@ -111,8 +110,8 @@ def input_files_from_input_stream(input_stream,
     if verbose:
         print >>sys.stderr, 'Writing prefasta and input reads...'
     with open(prefasta_filename, 'w') as fasta_stream:
-        with gzip.open(reads_filename, 'w') as read_stream:
-            with gzip.open(rname_filename, 'w', gzip_level) as rname_stream:
+        with xopen(True, reads_filename, 'w') as read_stream:
+            with xopen(True, rname_filename, 'w', gzip_level) as rname_stream:
                 for (read_seq,), xpartition in xstream(input_stream, 1):
                     rnames = []
                     fasta_lines = []
