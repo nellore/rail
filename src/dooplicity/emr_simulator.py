@@ -65,9 +65,9 @@ def add_args(parser):
         No return value.
     """
     parser.add_argument(
-            '-m', '--memcap', type=float, required=False, default=.4,
-            help=('Maximum fraction of memory to use '
-                  'across UNIX sort instances.')
+            '-m', '--memcap', type=int, required=False, default=(1024*300),
+            help=('Maximum amount of memory (in bytes) to use per UNIX sort '
+                  'instance.')
         )
     parser.add_argument(
             '-p', '--num-processes', type=int, required=False, default=1,
@@ -290,7 +290,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                     % process_id
                                                 )):
                 sort_command = (('set -eo pipefail; gzip -cd %s | '
-                                 '%s -S %d%% %s | '
+                                 '%s -S %d %s | '
                                  'gzip -c -%d >%s')
                                     % (sort,
                                         unsorted_file, memcap, sort_options,
@@ -316,7 +316,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                     '*.%s.unsorted'
                                                     % process_id
                                                 )):
-                sort_command = '%s -S %d%% %s %s >%s' % (sort, memcap,
+                sort_command = '%s -S %d %s %s >%s' % (sort, memcap,
                                                             sort_options,
                                                             unsorted_file,
                                                             unsorted_file[:-9])
@@ -443,13 +443,13 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             # Reducer. Merge sort the input glob.
             if gzip:
                 # Use process substitution
-                prefix = '(%s -S %d%% %s -m %s' % (sort, memcap, sort_options,
+                prefix = '(%s -S %d %s -m %s' % (sort, memcap, sort_options,
                         ' '.join(['<(gzip -cd %s)' % input_file
                                     for input_file in input_files]) + ')'
                     )
             else:
                 # Reducer. Merge sort the input glob.
-                prefix = '%s -S %d%% %s -m %s' % (sort, memcap, sort_options,
+                prefix = '%s -S %d %s -m %s' % (sort, memcap, sort_options,
                                                     input_glob)
         err_file = os.path.join(err_dir, '%d.log' % task_id)
         new_env = os.environ.copy()
@@ -743,8 +743,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         )
         else:
             import multiprocessing
-        # Determine memory percentage per sort instance
-        memcap = int(float(memcap) * 100 / num_processes)
         # Serialize JSON configuration
         if json_config is not None:
             with open(json_config) as json_stream:

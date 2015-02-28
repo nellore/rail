@@ -1312,7 +1312,7 @@ class RailRnaLocal(object):
     def __init__(self, base, check_manifest=False,
                     num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3,
-                    sort_memory_cap=0.2, parallel=False,
+                    sort_memory_cap=(300*1024), parallel=False,
                     local=True, scratch=None, ansible=None,
                     do_not_copy_index_to_nodes=False,
                     sort_exe=None):
@@ -1551,10 +1551,10 @@ class RailRnaLocal(object):
                                                     ))
             base.gzip_intermediates = gzip_intermediates
             base.gzip_level = gzip_level
-            if not (0 < sort_memory_cap < 1):
+            if not (sort_memory_cap > 0):
                 base.errors.append('Sort memory cap (--sort-memory-cap) '
-                                   'must take a nonzero value no larger '
-                                   'than 1, but {0} was entered'.format(
+                                   'must take a value larger than 0, '
+                                   'but {0} was entered.'.format(
                                                         sort_memory_cap
                                                     ))
             base.sort_memory_cap = sort_memory_cap
@@ -1725,9 +1725,9 @@ class RailRnaLocal(object):
         general_parser.add_argument(
             '-r', '--sort-memory-cap', type=float, required=False,
             metavar='<dec>',
-            default=0.2,
-            help=('maximum fraction of memory used across '
-                  'UNIX sort subprocesses')
+            default=(300*1024),
+            help=('maximum amount of memory (in bytes) used by UNIX sort '
+                  'per process')
         )
 
 class RailRnaElastic(object):
@@ -3808,7 +3808,7 @@ class RailRnaLocalPreprocessJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=0.2, keep_intermediates=False, check_manifest=True,
+        sort_memory_cap=(300*1024), keep_intermediates=False, check_manifest=True,
         scratch=None, sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
@@ -3843,9 +3843,9 @@ class RailRnaParallelPreprocessJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=0.2, ipython_profile=None, ipcontroller_json=None,
-        scratch=None, keep_intermediates=False, check_manifest=True,
-        sort_exe=None):
+        sort_memory_cap=(300*1024), ipython_profile=None,
+        ipcontroller_json=None, scratch=None, keep_intermediates=False,
+        check_manifest=True, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 
@@ -4010,7 +4010,7 @@ class RailRnaLocalAlignJson(object):
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=0.2, keep_intermediates=False, scratch=None,
+        sort_memory_cap=(300*1024), keep_intermediates=False, scratch=None,
         sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
@@ -4087,7 +4087,7 @@ class RailRnaParallelAlignJson(object):
         bam_basename='alignments', bed_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         gzip_intermediates=False,
-        gzip_level=3, sort_memory_cap=0.2, keep_intermediates=False,
+        gzip_level=3, sort_memory_cap=(300*1024), keep_intermediates=False,
         do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
@@ -4352,8 +4352,8 @@ class RailRnaLocalAllJson(object):
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=0.2, keep_intermediates=False, check_manifest=True,
-        scratch=None, sort_exe=None):
+        sort_memory_cap=(300*1024), keep_intermediates=False,
+        check_manifest=True, scratch=None, sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -4437,9 +4437,9 @@ class RailRnaParallelAllJson(object):
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=0.2, ipython_profile=None, ipcontroller_json=None,
-        scratch=None, keep_intermediates=False, check_manifest=True,
-        do_not_copy_index_to_nodes=False, sort_exe=None):
+        sort_memory_cap=(300*1024), ipython_profile=None,
+        ipcontroller_json=None, scratch=None, keep_intermediates=False,
+        check_manifest=True, do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 
