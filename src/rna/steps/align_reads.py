@@ -104,10 +104,11 @@ Tab-delimited output tuple columns:
 Read whose primary alignment is not end-to-end
 
 Tab-delimited output tuple columns (unmapped):
-1. SEQ
-2. 1 if SEQ is reverse-complemented, else 0
-3. QNAME
-4. QUAL
+1. Transcriptome Bowtie 2 index group number
+2. SEQ
+3. 1 if SEQ is reverse-complemented, else 0
+4. QNAME
+5. QUAL
 
 Tab-delimited output tuple columns (readletized)
 1. Readlet sequence or its reversed complement, whichever is first in
@@ -158,6 +159,7 @@ import bowtie
 import partition
 import manifest
 import tempdel
+import group_reads
 from dooplicity.tools import xstream, dlist, register_cleanup, xopen, \
     make_temp_dir
 
@@ -170,7 +172,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
     min_exon_size=8, min_readlet_size=15, max_readlet_size=25,
     readlet_interval=12, capping_multiplier=1.5, drop_deletions=False,
-    gzip_level=3, scratch=None):
+    gzip_level=3, scratch=None, index_count=1):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -277,10 +279,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         Read whose primary alignment is not end-to-end
 
         Tab-delimited output tuple columns (unmapped):
-        1. SEQ
-        2. 1 if SEQ is reverse-complemented, else 0
-        3. QNAME
-        4. QUAL
+        1. Transcriptome Bowtie 2 index group number
+        2. SEQ
+        3. 1 if SEQ is reverse-complemented, else 0
+        4. QNAME
+        5. QUAL
 
         Tab-delimited output tuple columns (readletized):
         1. Readlet sequence or its reversed complement, whichever is first in
@@ -347,6 +350,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         gzip_level: compression level to use for temporary files
         scratch: scratch directory for storing temporary files or None if 
             securely created temporary directory
+        index_count: number of transcriptome Bowtie 2 indexes to which to
+            assign unmapped reads for later realignment
 
         No return value.
     """
@@ -426,7 +431,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                      '--manifest {manifest_file} '
                      '{exon_differentials} {exon_intervals} '
                      '--gzip-level {gzip_level} '
-                     '--min-exon-size {min_exon_size}').format(
+                     '--min-exon-size {min_exon_size} '
+                     '--index-count {index_count}').format(
                         task_partition=task_partition,
                         other_reads=other_reads_file,
                         second_pass_reads=second_pass_file,
@@ -447,7 +453,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         exon_intervals=('--exon-intervals'
                                         if exon_intervals else ''),
                         gzip_level=gzip_level,
-                        min_exon_size=min_exon_size
+                        min_exon_size=min_exon_size,
+                        index_count=index_count
                      )]
             )
     full_command = ' | '.join([input_command, 
@@ -483,7 +490,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                      '--manifest {manifest_file} '
                      '{exon_differentials} {exon_intervals} '
                      '--gzip-level {gzip_level} '
-                     '--min-exon-size {min_exon_size}').format(
+                     '--min-exon-size {min_exon_size} ' 
+                     '--index-count {index_count}').format(
                         task_partition=task_partition,
                         min_readlet_size=min_readlet_size,
                         drop_deletions=('--drop-deletions' if drop_deletions
@@ -502,7 +510,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         exon_intervals=('--exon-intervals'
                                         if exon_intervals else ''),
                         gzip_level=gzip_level,
-                        min_exon_size=min_exon_size
+                        min_exon_size=min_exon_size,
+                        index_count=index_count
                      )]
             )
     full_command = ' | '.join([input_command, 
@@ -576,6 +585,7 @@ if __name__ == '__main__':
     bowtie.add_args(parser)
     manifest.add_args(parser)
     tempdel.add_args(parser)
+    group_reads.add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv
@@ -599,7 +609,6 @@ if __name__ == '__main__':
         keep_alive_thread = KeepAlive(sys.stderr)
         keep_alive_thread.start()
 
-if __name__ == '__main__':
     start_time = time.time()
     go(bowtie2_exe=args.bowtie2_exe,
         bowtie_index_base=args.bowtie_idx,
@@ -618,6 +627,8 @@ if __name__ == '__main__':
         capping_multiplier=args.capping_multiplier,
         drop_deletions=args.drop_deletions,
         gzip_level=args.gzip_level,
-        scratch=args.scratch)
+        scratch=args.scratch,
+        index_count=args.index_count)
+
     print >>sys.stderr, 'DONE with align_reads.py; in=%d; ' \
         'time=%0.3f s' % (_input_line_count, time.time() - start_time)

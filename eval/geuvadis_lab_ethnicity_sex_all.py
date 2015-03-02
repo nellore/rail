@@ -6,8 +6,8 @@ ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/working/
 20130606_sample_info/20130606_sample_info.xlsx and 
 http://www.ebi.ac.uk/arrayexpress/files/E-GEUV-3/E-GEUV-3.sdrf.txt
 to determine sample metadata for all of GEUVADIS manifest
-(GEUVADIS_all_samples.manifest). Outputs GEUVADIS samples with descriptive names
--- comment lines provide metadata. Some data are missing
+(GEUVADIS_all_samples.manifest). Outputs GEUVADIS samples with descriptive
+names -- comment lines provide metadata. Some data are missing
 from http://www.ebi.ac.uk/arrayexpress/files/E-GEUV-1/E-GEUV-1.sdrf.txt
 
 Make the eval directory the current working directory before executing.

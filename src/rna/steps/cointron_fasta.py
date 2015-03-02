@@ -26,7 +26,7 @@ Input is partitioned by the first two fields.
 Hadoop output (written to stdout)
 ----------------------------
 Tab-delimited tuple columns, one for each read sequence:
-1. Read sequence
+1. Transcriptome Bowtie 2 index group number
 2. '\x1c' + FASTA reference name including '>'. The following format is used:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
@@ -54,6 +54,7 @@ site.addsitedir(base_path)
 import bowtie
 import bowtie_index
 from dooplicity.tools import xstream, dlist
+import group_reads
 
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -61,11 +62,13 @@ parser.add_argument(\
     '--verbose', action='store_const', const=True, default=False,
     help='Print out extra debugging statements')
 bowtie.add_args(parser)
+group_reads.add_args(parser)
 args = parser.parse_args()
 
 start_time = time.time()
 input_line_count = 0
 reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
+group_reads_object = group_reads.IndexGroup(args.index_count)
 for (rname, poses, end_poses), xpartition in xstream(sys.stdin, 3,
                                                         skip_duplicates=True):
     reverse_strand_string = rname[-1]
@@ -123,14 +126,16 @@ for (rname, poses, end_poses), xpartition in xstream(sys.stdin, 3,
         read_seq_count = 0
         for read_seq in read_seqs:
             read_seq_count += 1
-            print '\t'.join([read_seq, fasta_info])
+            print '\t'.join([group_reads_object.index_group(read_seq),
+                                read_seq, fasta_info])
         print >>sys.stderr, ('Printed %d read seqs for transcript fragment '
                              'on %s with introns %s.') % (read_seq_count,
                                                             rname,
                                                             str(intron_combo))
     else:
         for read_seq in read_seqs:
-            print '\t'.join([read_seq, fasta_info])
+            print '\t'.join([group_reads_object.index_group(read_seq),
+                                read_seq, fasta_info])
 
 print >>sys.stderr, 'DONE with cointron_fasta.py; in=%d; ' \
                     'time=%0.3f s' % (input_line_count,

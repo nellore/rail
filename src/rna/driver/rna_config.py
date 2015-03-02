@@ -2621,10 +2621,10 @@ class RailRnaAlign(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=6,
+        transcriptome_bowtie2_args='-k 30', count_multiplier=15,
         intron_confidence_criteria='0.5,5', tie_margin=6,
-        normalize_percentile=0.75, very_replicable=False, drop_deletions=False,
-        do_not_output_bam_by_chr=False, output_sam=False,
+        normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
+        drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', assembly='hg19',
         s3_ansible=None):
         if not elastic:
@@ -2910,6 +2910,7 @@ class RailRnaAlign(object):
                                '{0} was entered.'.format(
                                                     count_multiplier
                                                 ))
+        base.count_multiplier = count_multiplier
         confidence_criteria_split = intron_confidence_criteria.split(',')
         confidence_criteria_error = False
         try:
@@ -2935,10 +2936,15 @@ class RailRnaAlign(object):
                                'an integer >= 1. {0} was entered.'.format(
                                                     intron_confidence_criteria
                                                 ))
-        base.count_multiplier = count_multiplier
         base.drop_deletions = drop_deletions
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
-        base.very_replicable = very_replicable
+        if not (isinstance(transcriptome_indexes_per_sample, int)
+                    and (1000 >= transcriptome_indexes_per_sample >= 1)):
+            base.errors.append('Transcriptome indexes per sample '
+                               '(--transcriptome-indexes-per-sample) must be '
+                               'an integer between 1 and 1000.')
+        base.transcriptome_indexes_per_sample \
+            = transcriptome_indexes_per_sample
         base.output_sam = output_sam
         base.bam_basename = bam_basename
         base.bed_basename = bed_basename
@@ -3131,12 +3137,10 @@ class RailRnaAlign(object):
                   'scores for a 100-bp read when --tie-margin is 6')
         )
         algo_parser.add_argument(
-            '--very-replicable', action='store_const', const=True,
-            default=False,
-            help=('ensures that results are exactly replicable across '
-                  'modes, core counts, and cluster sizes; otherwise, '
-                  'replicability is nearly exact unless same configuration '
-                  'is used')
+            '--transcriptome-indexes-per-sample', type=int,
+            metavar='<int>',
+            default=50,
+            help=argparse.SUPPRESS
         )
         output_parser.add_argument(
             '--drop-deletions', action='store_const', const=True,
@@ -3186,8 +3190,9 @@ class RailRnaAlign(object):
                          '--max-readlet-size={6} '
                          '--readlet-interval={7} '
                          '--capping-multiplier={8} '
-                         '--gzip-level {9}'
-                         '{10} {11} {12} {13} -- {14}').format(
+                         '--gzip-level {9} '
+                         '--index-count {10} '
+                         '{11} {12} {13} {14} -- {15}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
@@ -3200,6 +3205,8 @@ class RailRnaAlign(object):
                                                 base.gzip_level
                                                 if 'gzip_level' in
                                                 dir(base) else 3,
+                                        base.transcriptome_indexes_per_sample *
+                                            base.sample_count,
                                                 drop_deletions,
                                                         verbose,
                                                         keep_alive,
@@ -3412,8 +3419,11 @@ class RailRnaAlign(object):
             },
             {
                 'name' : 'Get transcriptome elements for read realignment',
-                'run' : ('cointron_fasta.py --bowtie-idx={0} {1}').format(
+                'run' : ('cointron_fasta.py --bowtie-idx={0} '
+                         '--index-count {1} {2}').format(
                                                         base.bowtie1_idx,
+                                        base.transcriptome_indexes_per_sample *
+                                            base.sample_count,
                                                         verbose
                                                     ),
                 'inputs' : ['cointron_enum'],
@@ -3432,8 +3442,7 @@ class RailRnaAlign(object):
             {
                 'name' : 'Align reads to transcriptome elements',
                 'run' : ('realign_reads.py --bowtie2-exe={0} --gzip-level {1} '
-                         '--count-multiplier {2} {3} {4} {5} {6} '
-                         '-- {7}').format(
+                         '--count-multiplier {2} {3} {4} {5} -- {6}').format(
                                         base.bowtie2_exe,
                                         base.gzip_level
                                         if 'gzip_level' in
@@ -3441,9 +3450,6 @@ class RailRnaAlign(object):
                                         base.count_multiplier,
                                         verbose,
                                         keep_alive,
-                                        '--replicable'
-                                        if base.very_replicable
-                                        else '',
                                         scratch,
                                         base.bowtie2_args
                                     ),
@@ -3453,7 +3459,7 @@ class RailRnaAlign(object):
                 # Ensure that a single reducer isn't assigned too much fasta
                 'min_tasks' : base.sample_count * 12 if elastic else None,
                 'part' : 1,
-                'keys' : 1,
+                'keys' : 3,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -4004,10 +4010,10 @@ class RailRnaLocalAlignJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
+        transcriptome_bowtie2_args='-k 30', count_multiplier=15,
         intron_confidence_criteria='0.5,5', tie_margin=6,
-        very_replicable=False, normalize_percentile=0.75, drop_deletions=False,
-        do_not_output_bam_by_chr=False, output_sam=False,
+        transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
+        drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), keep_intermediates=False, scratch=None,
@@ -4041,12 +4047,12 @@ class RailRnaLocalAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            count_multiplier=count_multiplier,
             intron_confidence_criteria=intron_confidence_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            count_multiplier=count_multiplier,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
-            very_replicable=very_replicable,
+            transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -4080,10 +4086,10 @@ class RailRnaParallelAlignJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=6, 
+        transcriptome_bowtie2_args='-k 30', count_multiplier=15,
         intron_confidence_criteria='0.5,5', tie_margin=6,
-        very_replicable=False, normalize_percentile=0.75, drop_deletions=False,
-        do_not_output_bam_by_chr=False, output_sam=False,
+        transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
+        drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         gzip_intermediates=False,
@@ -4126,12 +4132,12 @@ class RailRnaParallelAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            count_multiplier=count_multiplier,
             intron_confidence_criteria=intron_confidence_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            count_multiplier=count_multiplier,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
-            very_replicable=very_replicable,
+            transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -4171,12 +4177,12 @@ class RailRnaParallelAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            count_multiplier=count_multiplier,
             intron_confidence_criteria=intron_confidence_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            count_multiplier=count_multiplier,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
-            very_replicable=very_replicable,
+            transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -4223,10 +4229,10 @@ class RailRnaElasticAlignJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=6,
+        transcriptome_bowtie2_args='-k 30', count_multiplier=15,
         intron_confidence_criteria='0.5,5', tie_margin=6,
-        very_replicable=False, normalize_percentile=0.75, drop_deletions=False,
-        do_not_output_bam_by_chr=False,
+        transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
+        drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
         bed_basename='', log_uri=None, ami_version='3.3.1',
         visible_to_all_users=False, tags='',
@@ -4281,12 +4287,12 @@ class RailRnaElasticAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            count_multiplier=count_multiplier,
             intron_confidence_criteria=intron_confidence_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            count_multiplier=count_multiplier,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
-            very_replicable=very_replicable,
+            transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -4346,9 +4352,9 @@ class RailRnaLocalAllJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        count_multiplier=6, intron_confidence_criteria='0.5,5',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6,
-        very_replicable=False, normalize_percentile=0.75,
+        intron_confidence_criteria='0.5,5',
+        transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
+        transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
@@ -4389,7 +4395,7 @@ class RailRnaLocalAllJson(object):
             intron_confidence_criteria=intron_confidence_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
-            very_replicable=very_replicable,
+            transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -4431,9 +4437,9 @@ class RailRnaParallelAllJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        count_multiplier=6, intron_confidence_criteria='0.5,5',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6,
-        very_replicable=False, normalize_percentile=0.75,
+        intron_confidence_criteria='0.5,5',
+        transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
+        transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
@@ -4483,7 +4489,7 @@ class RailRnaParallelAllJson(object):
             intron_confidence_criteria=intron_confidence_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
-            very_replicable=very_replicable,
+            transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -4528,7 +4534,7 @@ class RailRnaParallelAllJson(object):
             intron_confidence_criteria=intron_confidence_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
-            very_replicable=very_replicable,
+            transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,
@@ -4583,9 +4589,9 @@ class RailRnaElasticAllJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=6,
+        transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         intron_confidence_criteria='0.5,5', normalize_percentile=0.75,
-        very_replicable=False, drop_deletions=False,
+        transcriptome_indexes_per_sample=500, drop_deletions=False,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='',
         log_uri=None, ami_version='3.3.1',
@@ -4649,7 +4655,7 @@ class RailRnaElasticAllJson(object):
             intron_confidence_criteria=intron_confidence_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
-            very_replicable=very_replicable,
+            transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, bam_basename=bam_basename,

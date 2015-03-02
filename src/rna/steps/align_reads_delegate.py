@@ -27,6 +27,7 @@ import bowtie_index
 import bowtie
 import manifest
 import partition
+import group_reads
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 _output_line_count = 0
@@ -158,10 +159,10 @@ def print_readletized_output(seq, sample_indexes,
     _output_line_count += len(to_write)
 
 def handle_bowtie_output(input_stream, reference_index, manifest_object,
-        task_partition, cap_sizes, k_value=1, align_stream=None,
-        other_stream=None, output_stream=sys.stdout, exon_differentials=True,
-        exon_intervals=False, verbose=False, bin_size=10000,
-        report_multiplier=1.2, min_exon_size=8,
+        group_reads_object, task_partition, cap_sizes, k_value=1,
+        align_stream=None, other_stream=None, output_stream=sys.stdout,
+        exon_differentials=True, exon_intervals=False, verbose=False,
+        bin_size=10000, report_multiplier=1.2, min_exon_size=8,
         min_readlet_size=8, max_readlet_size=25,
         readlet_interval=5, drop_deletions=False):
     """ Prints end-to-end alignments and selects reads to be realigned.
@@ -172,6 +173,8 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             that permits access to reference
         manifest_object: object of class LabelsAndIndices that maps indices
             to labels and back; used to shorten intermediate output.
+        group_reads_object: object of class IndexGroup for grapping
+            index group for a given read sequence
         task_partition: unique identifier for task; derived from environment
             variable and used for form sequence identifier for unique read
             sequence
@@ -256,8 +259,10 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 next_report_line = max(int(next_report_line
                     * report_multiplier), next_report_line + 1)
             if flag & 4:
+                index_partition = group_reads_object.index_group(seq)
                 print >>output_stream, 'unique\t%s' % seq
-                print >>output_stream, 'unmapped\t%s\t%d\t%s\t%s' % (
+                print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
+                                                            index_partition,
                                                             seq,
                                                             is_reverse,
                                                             qname,
@@ -265,12 +270,15 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                                         )
                 try:
                     for is_reverse, qname, qual in other_xpartition:
-                        print >>output_stream, 'unmapped\t%s\t%s\t%s\t%s' % (
-                                                                seq,
-                                                                is_reverse,
-                                                                qname,
-                                                                qual
-                                                            )
+                        print >>output_stream, (
+                                        'unmapped\t%s\t%s\t%s\t%s\t%s' % (
+                                                            index_partition,
+                                                            seq,
+                                                            is_reverse,
+                                                            qname,
+                                                            qual
+                                                        )
+                                    )
                 except ValueError:
                     pass
                 continue
@@ -450,12 +458,13 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                         print >>output_stream, \
                             '\t'.join(('postponed_sam',) + alignment)
                         _output_line_count += 1
-                print >>output_stream, 'unmapped\t%s\t%d\t%s\t%s' % (
-                                                            seq_to_print,
-                                                            is_reverse,
-                                                            qname,
-                                                            qual_to_print
-                                                        )
+                print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
+                                group_reads_object.index_group(seq_to_print),
+                                seq_to_print,
+                                is_reverse,
+                                qname,
+                                qual_to_print
+                            )
             elif k_value != 1 or tie_present:
                 # Only prepare for second-pass Bowtie 2
                 reversed_complement_seq = seq[::-1].translate(
@@ -504,12 +513,13 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 next_report_line = max(int(next_report_line
                     * report_multiplier), next_report_line + 1)
             if flag & 4:
-                print >>output_stream, 'unmapped\t%s\t%d\t%s\t%s' % (
-                                                            seq,
-                                                            is_reverse,
-                                                            qname,
-                                                            qual
-                                                        )
+                print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
+                                        group_reads_object.index_group(seq),
+                                        seq,
+                                        is_reverse,
+                                        qname,
+                                        qual
+                                    )
                 continue
             multiread = [(qname,) + rest_of_line] + \
                 [(qname,) + next_line for next_line in xpartition]
@@ -554,12 +564,13 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 else:
                     seq_to_print = reversed_complement_seq
                     qual_to_print = qual[::-1]
-                print >>output_stream, 'unmapped\t%s\t%d\t%s\t%s' % (
-                                                            seq_to_print,
-                                                            is_reverse,
-                                                            qname,
-                                                            qual_to_print
-                                                        )
+                print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
+                                group_reads_object.index_group(seq_to_print),
+                                seq_to_print,
+                                is_reverse,
+                                qname,
+                                qual_to_print
+                            )
     output_stream.flush()
 
 def go(task_partition='0', other_reads=None, second_pass_reads=None,
@@ -568,7 +579,8 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
         input_stream=sys.stdin, verbose=False, report_multiplier=1.2,
         k_value=1, bowtie_index_base='genome', bin_size=10000,
         manifest_file='manifest', exon_differentials=True,
-        exon_intervals=False, gzip_level=3, min_exon_size=9):
+        exon_intervals=False, gzip_level=3, min_exon_size=9,
+        index_count=1):
     """ Emits output specified in align_reads.py by processing Bowtie 2 output.
 
         This script containing this function is invoked twice to process each
@@ -620,9 +632,12 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
         drop_deletions: True iff deletions should be dropped from coverage
             vector
         gzip_level: gzip level to use to compress temporary files
+        index_count: number of transcriptome Bowtie 2 indexes to which to
+            assign unmapped reads for later realignment
     """
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
+    group_reads_object = group_reads.IndexGroup(index_count)
     if other_reads is not None:
         # First-pass Bowtie 2
         assert second_pass_reads is not None
@@ -643,6 +658,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
                     input_stream,
                     reference_index,
                     manifest_object,
+                    group_reads_object,
                     task_partition,
                     cap_sizes,
                     k_value=k_value,
@@ -669,6 +685,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
                 input_stream,
                 reference_index,
                 manifest_object,
+                group_reads_object,
                 task_partition,
                 [],
                 k_value=k_value,
@@ -753,6 +770,7 @@ if __name__ == '__main__':
     # Add command-line arguments for dependencies
     partition.add_args(parser)
     bowtie.add_args(parser)
+    group_reads.add_args(parser)
     manifest.add_args(parser)
 
     args = parser.parse_args()
@@ -777,7 +795,8 @@ if __name__ == '__main__' and not args.test:
         exon_differentials=args.exon_differentials,
         exon_intervals=args.exon_intervals,
         min_exon_size=args.min_exon_size,
-        gzip_level=args.gzip_level)
+        gzip_level=args.gzip_level,
+        index_count=args.index_count)
 
 elif __name__ == '__main__':
     # Test units

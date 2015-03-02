@@ -2,18 +2,17 @@
 """
 Rail-RNA-realign_reads
 
-Follows Rail-RNA-cointron_search
+Follows Rail-RNA-cointron_fasta, Rail-RNA-align_reads
 Precedes Rail-RNA-compare_alignments
 
 Realignment script for MapReduce pipelines that wraps Bowtie2. Creates Bowtie2
-index including only sequences framing introns to align only those reads for
-which Bowtie2 did not report alignments in Rail-RNA-align. Reference names in
+indexes including only sequences framing introns to align only those reads for
+which Bowtie2 did not report alignments in Rail-RNA-align. Each group of
+input reads (specified by first field below) is associated with a distinct
+set of transcript fragments to which they are aligned. Reference names in
 the index encode intron sizes and locations in the (presmably) exonic
-sequences it records. Infers exonic chunks and introns from alignments.
-
-THIS CODE ASSUMES THAT BOWTIE RUNS ON JUST ONE THREAD; it exploits that Bowtie
-returns reads in the order in which they were sent, which is guaranteed only
-when on a single thread.
+sequences it records. Exonic chunks and introns are inferred from alignments
+in the next step.
 
 Input (read from stdin)
 ----------------------------
@@ -21,24 +20,27 @@ Tab-delimited input tuple columns:
 (two kinds)
 
 Type 1:
-1. Read sequence
-2. '\x1c' + FASTA reference name including '>'. The following format is used:
+1. Transcriptome Bowtie 2 index group number
+2. Read sequence
+3. '\x1c' + FASTA reference name including '>'. The following format is used:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
     subsequence sizes framing introns + '\x1d' + comma-separated list of intron
     sizes) + '\x1d' + 'p' if derived from primary alignment to genome; 's' if
     derived from secondary alignment to genome; 'i' if derived from cointron
     search
-3. FASTA sequence
+4. FASTA sequence
 
 Type 2:
-1. Read sequence
-2. QNAME
-3. Quality sequence
+1. Transcriptome Bowtie 2 index group number
+2. Read sequence
+3. 1 if SEQ is reverse-complemented, else 0
+4. QNAME
+5. QUAL
 
 Type 1 corresponds to a FASTA line to index to which the read sequence is
 predicted to align. Type 2 corresponds to a distinct read. Input is partitioned
-by field 1.
+by field 1 and sorted by field 2.
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -54,6 +56,7 @@ import tempfile
 import subprocess
 import time
 import string
+import glob
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -69,6 +72,7 @@ from dooplicity.tools import xstream, register_cleanup, xopen, \
 import bowtie
 import argparse
 import tempdel
+import itertools
 
 # Initialize global variable for tracking number of input lines
 _input_line_count = 0
@@ -76,31 +80,23 @@ _input_line_count = 0
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 def input_files_from_input_stream(input_stream,
+                                    output_stream,
                                     temp_dir_path=None,
                                     verbose=False,
                                     gzip_level=3):
-    """ Creates FASTA reference to index, rname file, and file with reads.
+    """ Generates FASTA reference to index and file with reads.
 
         Each line of the read file is in the following format:
 
-        read number + TAB + SEQ + TAB + QUAL
-
-        Each line of the rname file is in the following format:
-
-        (number of qnames associated with rnames) + '\x1e'
-        + ('\x1e'-separated list of valid rnames) .
-
-        The RNAME file contains those RNAMEs to which a given sequence is
-        "allowed" to align. When Bowtie2 is run in -a mode and only these
-        alignments are permitted, this ensures the reproducibility of
-        results regardless of partitioning (and hence # cores).
+        read number <TAB> SEQ <TAB> QUAL
 
         input_stream: where to find Hadoop input
+        output_stream: where to write unmapped reads
         temp_dir_path: where to store files
         verbose: output extra debugging messages
         gzip_level: gzip compression level (0-9)
 
-        Return value: tuple (path to FASTA reference file, path to read file)
+        Yield value: tuple (path to FASTA reference file, path to read file)
     """
     global _input_line_count
     if temp_dir_path is None: temp_dir_path = tempfile.mkdtemp()
@@ -108,69 +104,91 @@ def input_files_from_input_stream(input_stream,
     deduped_fasta_filename = os.path.join(temp_dir_path, 'temp.deduped.prefa')
     final_fasta_filename = os.path.join(temp_dir_path, 'temp.fa')
     reads_filename = os.path.join(temp_dir_path, 'reads.temp')
-    rname_filename = os.path.join(temp_dir_path, 'rnames.temp.gz')
-    if verbose:
-        print >>sys.stderr, 'Writing prefasta and input reads...'
-    with open(prefasta_filename, 'w') as fasta_stream:
-        with xopen(True, reads_filename, 'w') as read_stream:
-            with xopen(True, rname_filename, 'w', gzip_level) as rname_stream:
-                for (read_seq,), xpartition in xstream(input_stream, 1):
-                    rnames = []
-                    fasta_lines = []
-                    read_count = 0
-                    for value in xpartition:
+    for (counter, ((index_group,), xpartition)) in enumerate(
+                                                    xstream(input_stream, 1)
+                                                ):
+        if verbose:
+            print >>sys.stderr, (
+                        'Group %d: Writing prefasta and input reads...'
+                        % counter
+                    )
+        with open(prefasta_filename, 'w') as fasta_stream:
+            with xopen(True, reads_filename, 'w') as read_stream:
+                for read_seq, values in itertools.groupby(xpartition, 
+                                                    key=lambda val: val[0]):
+                    fasta_printed = False
+                    for value in values:
                         _input_line_count += 1
-                        if value[0][0] == '\x1c':
+                        if value[1][0] == '\x1c':
                             # Print FASTA line
-                            fasta_lines.append('\t'.join([value[0][1:-2],
-                                                             value[1]]))
-                            rnames.append(value[0][2:-2])
-                        else:
-                            # Add to temporary seq stream
+                            print >>fasta_stream, '\t'.join([value[1][1:-2],
+                                                                value[2]])
+                            fasta_printed = True
+                        elif fasta_printed:
+                            '''Add to temporary seq stream only if an
+                            associated FASTA line was found.'''
                             if value[0] == '0':
-                                print >>read_stream, '\t'.join([value[1],
+                                print >>read_stream, '\t'.join([value[2],
                                                                     read_seq,
-                                                                    value[2]])
+                                                                    value[3]])
                             else:
                                 print >>read_stream, '\t'.join([
-                                            value[1],
+                                            value[2],
                                             read_seq[::-1].translate(
                                         _reversed_complement_translation_table
                                     ),
-                                            value[2][::-1]])
-                            read_count += 1
-                    if read_count:
-                        # Print FASTA line iff there's a read to align it to
-                        rname_stream.write(str(read_count) + '\x1e')
-                        print >>rname_stream, '\x1e'.join(rnames)
-                        if fasta_lines:
-                            # Print FASTA line iff it exists
-                            print >>fasta_stream, '\n'.join(fasta_lines)
-
-    if verbose:
-        print >>sys.stderr, 'Done! Sorting and deduplicating prefasta...'
-    # Sort prefasta and eliminate duplicate lines
-    dedup_process_return = subprocess.call(
-            r'''sort %s | uniq >%s'''
-            % (prefasta_filename, deduped_fasta_filename), shell=True
-        )
-    if dedup_process_return != 0:
-        raise RuntimeError('Problem encountered deduplicating FASTA reference')
-    if verbose:
-        print >>sys.stderr, 'Done! Writing final FASTA.'
-    with open(final_fasta_filename, 'w') as output_stream:
-        with open(deduped_fasta_filename) as fasta_stream:
-            for line in fasta_stream:
-                rname, seq = line.strip().split('\t')
-                print >>output_stream, rname
-                output_stream.write(
-                    '\n'.join([seq[i:i+80] for i 
-                                in xrange(0, len(seq), 80)])
+                                            value[3][::-1]])
+                        else:
+                            # Print unmapped read
+                            if value[1] == '0':
+                                seq_to_write = read_seq
+                                qual_to_write = value[3]
+                            else:
+                                seq_to_write = read_seq[::-1].translate(
+                                        _reversed_complement_translation_table
+                                    )
+                                qual_to_write = value[3][::-1]
+                            '''Write only essentials; handle "formal" writing
+                            in next step.'''
+                            output_stream.write(
+                                        '%s\t4\t\x1c\t\x1c\t\x1c\t\x1c'
+                                        '\t\x1c\t\x1c\t\x1c\t%s\t%s\n' % (
+                                                                value[2],
+                                                                seq_to_write,
+                                                                qual_to_write
+                                                            )
+                                    )
+        if verbose:
+            print >>sys.stderr, (
+                        'Group %d: Done! Sorting and deduplicating prefasta...'
+                        % counter
+                    )
+        # Sort prefasta and eliminate duplicate lines
+        dedup_process_return = subprocess.call(
+                r'''sort %s | uniq >%s'''
+                % (prefasta_filename, deduped_fasta_filename), shell=True
+            )
+        if dedup_process_return != 0:
+            raise RuntimeError(
+                    'Problem encountered deduplicating FASTA reference'
                 )
-                output_stream.write('\n')
-    os.remove(deduped_fasta_filename)
-    os.remove(prefasta_filename)
-    return final_fasta_filename, reads_filename, rname_filename
+        if verbose:
+            print >>sys.stderr, (
+                    'Group %d Done! Writing final FASTA.' % counter
+                )
+        with open(final_fasta_filename, 'w') as final_fasta_stream:
+            with open(deduped_fasta_filename) as fasta_stream:
+                for line in fasta_stream:
+                    rname, seq = line.strip().split('\t')
+                    print >>final_fasta_stream, rname
+                    final_fasta_stream.write(
+                        '\n'.join([seq[i:i+80] for i 
+                                    in xrange(0, len(seq), 80)])
+                    )
+                    final_fasta_stream.write('\n')
+        os.remove(deduped_fasta_filename)
+        os.remove(prefasta_filename)
+        yield final_fasta_filename, reads_filename
 
 def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
         index_basename):
@@ -182,13 +200,14 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
 
         Return value: return value of bowtie-build process
     """
-    bowtie_build_process = subprocess.Popen(
-                                [args.bowtie2_build_exe,
-                                    fasta_file,
-                                    index_basename],
-                                stderr=sys.stderr,
-                                stdout=sys.stderr
-                            )
+    with open(os.devnull) as null_stream:
+        bowtie_build_process = subprocess.Popen(
+                                    [args.bowtie2_build_exe,
+                                        fasta_file,
+                                        index_basename],
+                                    stderr=null_stream,
+                                    stdout=null_stream
+                                )
     bowtie_build_process.wait()
     return bowtie_build_process.returncode
 
@@ -213,19 +232,19 @@ def handle_temporary_directory(archive, temp_dir_path):
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_build_exe='bowtie2-build', bowtie2_args=None,
-    temp_dir_path=None, verbose=False, report_multiplier=1.2,
-    replicable=False, count_multiplier=6, gzip_level=3):
+    temp_dir_path=None, verbose=False, report_multiplier=1.2, gzip_level=3,
+    count_multiplier=4):
     """ Runs Rail-RNA-realign.
 
-        Uses Bowtie index including only sequences framing introns to align
-        only those reads for which Bowtie did not report at least one alignment
-        in Rail-RNA-align. Referencenames in this index encode intron sizes and
-        locations in the (presmably) exonic sequences it records. Infers exonic
-        chunks and introns from alignments.
-
-        THIS CODE ASSUMES THAT BOWTIE RUNS ON JUST ONE THREAD; it exploits that
-        Bowtie returns reads in the order in which they were sent, which is
-        guaranteed only when on a single thread.
+        Realignment script for MapReduce pipelines that wraps Bowtie2. Creates
+        Bowtie2 indexes including only sequences framing introns to align only
+        those reads for which Bowtie2 did not report alignments in
+        Rail-RNA-align. Each group of input reads (specified by first field
+        below) is associated with a distinct set of transcript fragments to
+        which they are aligned. Reference names in the index encode intron
+        sizes and locations in the (presmably) exonic sequences it records.
+        Exonic chunks and introns are inferred from alignments in the next 
+        step.
 
         Input (read from stdin)
         ----------------------------
@@ -233,8 +252,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         (two kinds)
 
         Type 1:
-        1. Read sequence
-        2. '\x1c' + FASTA reference name including '>'. The following format is
+        1. Transcriptome Bowtie 2 index group number
+        2. Read sequence
+        3. '\x1c' + FASTA reference name including '>'. The following format is
             used: original RNAME + '+' or '-' indicating which strand is the
             sense strand + '\x1d' + start position of sequence + '\x1d'
             + comma-separated list of subsequence sizes framing introns
@@ -242,16 +262,18 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             + 'p' if derived from primary alignment to genome; 's' if derived
             from secondary alignment to genome; 'i' if derived from cointron
             search
-        3. FASTA sequence
+        4. FASTA sequence
 
         Type 2:
-        1. Read sequence
-        2. QNAME
-        3. Quality sequence
+        1. Transcriptome Bowtie 2 index group number
+        2. Read sequence
+        3. 1 if SEQ is reverse-complemented, else 0
+        4. QNAME
+        5. QUAL
 
         Type 1 corresponds to a FASTA line to index to which the read sequence
         is predicted to align. Type 2 corresponds to a distinct read. Input is
-        partitioned by field 1.
+        partitioned by field 1 and sorted by field 2.
 
         Hadoop output (written to stdout)
         ----------------------------
@@ -275,66 +297,70 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         report_multiplier: if verbose is True, the line number of an alignment,
             read, or first readlet of a read written to stderr increases
             exponentially with base report_multiplier.
-        replicable: use bowtie2's -a to ensure results are reproducible.
+        gzip_level: level of gzip compression to use for some temporary files
         count_multiplier: the bowtie2 -k parameter used is
             alignment_count_to_report * count_multiplier, where
-            alignment_count_to_report is the user-specified bowtie2 -k arg.
-            Ignored if replicable = True.
-        gzip_level: level of gzip compression to use for some temporary files
+            alignment_count_to_report is the user-specified bowtie2 -k arg
 
         No return value.
     """
     start_time = time.time()
     if temp_dir_path is None: temp_dir_path = tempfile.mkdtemp()
-    fasta_file, reads_file, rnames_file = input_files_from_input_stream(
+    bowtie2_index_base = os.path.join(temp_dir_path, 'tempidx')
+    alignment_count_to_report, _, _ \
+            = bowtie.parsed_bowtie_args(bowtie2_args)
+    reads_filename = os.path.join(temp_dir_path, 'reads.temp')
+    input_command = 'gzip -cd %s' % reads_filename
+    bowtie_command = ' ' .join([bowtie2_exe,
+        bowtie2_args if bowtie2_args is not None else '',
+        '{0} --local -t --no-hd --mm -x'.format(
+                '-k {0}'.format(alignment_count_to_report * count_multiplier)
+            ),
+        bowtie2_index_base, '--12 -'])
+    delegate_command = ''.join(
+            [sys.executable, ' ', os.path.realpath(__file__)[:-3],
+                '_delegate.py --report-multiplier %08f %s'
+                    % (report_multiplier, '--verbose' if verbose else '')]
+        )
+    # Use grep to kill empty lines terminating python script
+    full_command = ' | '.join([input_command, 
+                                bowtie_command, delegate_command])
+    print >>sys.stderr, 'Bowtie2 command to execute: ' + full_command
+    for fasta_file, reads_file in input_files_from_input_stream(
                                                 input_stream,
+                                                output_stream,
                                                 verbose=verbose,
                                                 temp_dir_path=temp_dir_path,
                                                 gzip_level=gzip_level
-                                            )
-    bowtie2_index_base = os.path.join(temp_dir_path, 'tempidx')
-    bowtie_build_return_code = create_index_from_reference_fasta(
-                                    bowtie2_build_exe,
-                                    fasta_file,
-                                    bowtie2_index_base)
-    if bowtie_build_return_code == 0:
-        try:
-            os.remove(fasta_file)
-        except OSError:
-            pass
-        alignment_count_to_report, _, _ \
-            = bowtie.parsed_bowtie_args(bowtie2_args)
-        input_command = 'gzip -cd %s' % reads_file
-        bowtie_command = ' ' .join([bowtie2_exe,
-            bowtie2_args if bowtie2_args is not None else '',
-            '{0} --local -t --no-hd --mm -x'.format(
-            ('-a' if replicable else 
-            ('-k {0}'.format(alignment_count_to_report * count_multiplier)))),
-            bowtie2_index_base, '--12 -'])
-        delegate_command = ''.join(
-                [sys.executable, ' ', os.path.realpath(__file__)[:-3],
-                    '_delegate.py --report-multiplier %08f --rnames-file %s %s'
-                        % (report_multiplier, rnames_file,
-                            '--verbose' if verbose else '')]
-            )
-        full_command = ' | '.join([input_command, 
-                                    bowtie_command, delegate_command])
-        print >>sys.stderr, 'Starting Bowtie2 with command: ' + full_command
-        bowtie_process = subprocess.Popen(' '.join(
-                    ['set -exo pipefail;', full_command]
-                ), bufsize=-1,
-            stdout=sys.stdout, stderr=sys.stderr, shell=True,
-            executable='/bin/bash')
-        return_code = bowtie_process.wait()
-        if return_code:
-            raise RuntimeError('Error occurred while reading Bowtie 2 output; '
-                               'exitlevel was %d.' % return_code)
-    elif bowtie_build_return_code == 1:
-        print >>sys.stderr, ('Bowtie build failed, but probably because '
-                             'FASTA file was empty. Continuing...')
-    else:
-        raise RuntimeError('Bowtie build process failed with exitlevel %d.'
-                            % bowtie_build_return_code)
+                                            ):
+        bowtie_build_return_code = create_index_from_reference_fasta(
+                                        bowtie2_build_exe,
+                                        fasta_file,
+                                        bowtie2_index_base
+                                    )
+        if bowtie_build_return_code == 0:
+            try:
+                os.remove(fasta_file)
+            except OSError:
+                pass
+            bowtie_process = subprocess.Popen(' '.join(
+                        ['set -exo pipefail;', full_command]
+                    ), bufsize=-1,
+                stdout=sys.stdout, stderr=sys.stderr, shell=True,
+                executable='/bin/bash')
+            return_code = bowtie_process.wait()
+            if return_code:
+                raise RuntimeError(
+                            'Error occurred while reading Bowtie 2 output; '
+                            'exitlevel was %d.' % return_code
+                        )
+        elif bowtie_build_return_code == 1:
+            print >>sys.stderr, ('Bowtie build failed, but probably because '
+                                 'FASTA file was empty. Continuing...')
+        else:
+            raise RuntimeError('Bowtie build process failed with exitlevel %d.'
+                                % bowtie_build_return_code)
+
     print >>sys.stderr, 'DONE with realign_reads.py; in=%d; ' \
         'time=%0.3f s' % (_input_line_count, time.time() - start_time)
 
@@ -355,11 +381,6 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
-    parser.add_argument('--replicable', action='store_const',
-        const=True,
-        default=False, 
-        help='Ensures that results are completely reproducible across '
-             'different cluster configurations.')
     parser.add_argument('--count-multiplier', type=int, required=False,
         default=4,
         help='User-specified bowtie2 -k parameter is multiplied by this '
@@ -421,9 +442,8 @@ if __name__ == '__main__' and not args.test:
         temp_dir_path=temp_dir_path,
         verbose=args.verbose, 
         report_multiplier=args.report_multiplier,
-        replicable=args.replicable,
-        count_multiplier=args.count_multiplier,
-        gzip_level=args.gzip_level)
+        gzip_level=args.gzip_level,
+        count_multiplier=args.count_multiplier)
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
