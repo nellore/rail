@@ -239,13 +239,13 @@ elif __name__ == '__main__':
                 for line in output_stream:
                     output_lines.append(line.strip())
             self.assertTrue(
-                    'chr1+\t0\t100\t140' in output_lines
+                    'chr1+\t0\t%012d\t%012d' % (100, 140) in output_lines
                 )
             self.assertTrue(
-                    'chr2-\t1\t171\t185' in output_lines
+                    'chr2-\t1\t%012d\t%012d' % (171, 185) in output_lines
                 )
             self.assertTrue(
-                    'chr2-\t2\t171\t185' in output_lines
+                    'chr2-\t2\t%012d\t%012d' % (171, 185)in output_lines
                 )
             self.assertEquals(
                     len(output_lines), 3

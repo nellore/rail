@@ -140,16 +140,18 @@ class FileMover(object):
             if self.s3cred is not None:
                 command_list.append('-c')
                 command_list.append(self.s3cred)
-            command_list.append('get')
-            command_list.append(url.to_nonnative_url())
-            command_list.extend([dest, '--force'])
-            command = ' '.join(command_list)
             filename = os.path.join(dest, url.to_url().rpartition('/')[2])
+            command_list.extend(
+                    ['get', url.to_nonnative_url(), '-', '--force', '>%s'
+                                                                    % filename]
+                )
+            command = ' '.join(command_list)
             tries = 0
             while tries < 5:
                 break_outer_loop = False
                 s3cmd_process \
-                    = subprocess.Popen(command_list, stdout=sys.stderr)
+                    = subprocess.Popen(command, stdout=sys.stderr,
+                                            shell=True, exec='/bin/bash')
                 time.sleep(1)
                 last_print_time = time.time()
                 try:
