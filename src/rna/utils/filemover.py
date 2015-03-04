@@ -151,7 +151,7 @@ class FileMover(object):
                 break_outer_loop = False
                 s3cmd_process \
                     = subprocess.Popen(command, stdout=sys.stderr,
-                                            shell=True, exec='/bin/bash')
+                                            shell=True, executable='/bin/bash')
                 time.sleep(1)
                 last_print_time = time.time()
                 try:

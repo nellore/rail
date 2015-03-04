@@ -645,16 +645,47 @@ def ready_engines(rc, base, prep=False):
                 print_to_screen('Copying Bowtie indexes to cluster nodes '
                                 'with Herd...',
                                 newline=False, carriage_return=True)
-                for index_file in index_files:
-                    herd.run_with_options(
-                            os.path.abspath(index_file),
+                try:
+                    for index_file in index_files:
+                        herd.run_with_options(
+                                os.path.abspath(index_file),
+                                os.path.join(temp_dir, 'genome',
+                                    os.path.basename(index_file)),
+                                hostlist=','.join(hostname_to_engines.keys())
+                            )
+                except:
+                    print_to_screen('Herd copy failed; copying without Herd.',
+                                        newline=True, carriage_return=False)
+                    print_to_screen('Copying Bowtie indexes to local '
+                                'filesystem (%d/%d files copied)...'
+                                % (files_copied, len(index_files)),
+                                newline=False, carriage_return=True)
+                    for index_file in index_files:
+                        apply_async_with_errors(rc, engines_for_copying,
+                            shutil.copyfile, os.path.abspath(index_file),
                             os.path.join(temp_dir, 'genome',
-                                os.path.basename(index_file)),
-                            hostlist=','.join(hostname_to_engines.keys())
+                                            os.path.basename(index_file)),
+                            message=('Error(s) encountered copying Bowtie '
+                                     'indexes to local filesystem. Refer to '
+                                     'the errors above -- and especially make '
+                                     'sure /tmp is not out of space '
+                                     'on any node supporting an IPython '
+                                     'engine -- before trying again.')
                         )
-                print_to_screen('Copied Bowtie indexes to cluster nodes '
-                                'with Herd.',
-                                newline=True, carriage_return=False)
+                        files_copied += 1
+                        print_to_screen(
+                            'Copying Bowtie indexes to local filesystem '
+                            '(%d/%d files copied)...'
+                            % (files_copied, len(index_files)),
+                            newline=False, carriage_return=True
+                        )
+                    print_to_screen('Copied Bowtie indexes to local '
+                                    'filesystem.',
+                                    newline=True, carriage_return=False)
+                else:
+                    print_to_screen('Copied Bowtie indexes to cluster nodes '
+                                    'with Herd.',
+                                    newline=True, carriage_return=False)
         base.bowtie1_idx = os.path.join(temp_dir, 'genome',
                                         os.path.basename(base.bowtie1_idx))
         base.bowtie2_idx = os.path.join(temp_dir, 'genome',
