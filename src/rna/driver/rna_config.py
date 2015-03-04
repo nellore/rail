@@ -1245,7 +1245,6 @@ def ipython_client(ipython_profile=None, ipcontroller_json=None):
                 )
     if ipython_profile:
         try:
-            print ipython_profile
             rc = Client(profile=ipython_profile)
         except ValueError:
             errors.append(
