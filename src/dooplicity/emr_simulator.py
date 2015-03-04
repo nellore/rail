@@ -468,6 +468,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                     ' '.join(['set -eo pipefail;', command_to_run]),
                     shell=True,
                     stdout=subprocess.PIPE,
+                    stderr=open(os.devnull, 'w'),
                     env=new_env,
                     bufsize=-1,
                     executable='/bin/bash'
@@ -535,6 +536,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                             shell=True,
                                             env=new_env,
                                             bufsize=-1,
+                                            stderr=subprocess.STDOUT,
                                             executable='/bin/bash')
             except subprocess.CalledProcessError as e:
                 return (('Streaming command "%s" failed; exit level was %d.')
@@ -811,8 +813,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     list(free_engines - forbidden_engines)
                                 )
                         except IndexError:
-                            # No engine to assign yet
-                            pass
+                            # No engine to assign yet; add back to queue
+                            tasks_to_assign.append(task_to_assign)
                         else:
                             asyncresults[task_to_assign[1]] = (
                                 pool[assigned_engine].apply_async(
@@ -853,13 +855,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 # Success
                                 completed_tasks += 1
                                 asyncresults_to_remove.append(task)
-                                iface.status(('    %s: '
-                                              '%d/%d | '
-                                              '\\max_i (task_i fails): '
-                                              '%d/%d')
-                                    % (status_message, completed_tasks,
-                                        task_count, max_task_fails,
-                                        max_attempts - 1))
+                            iface.status(('    %s: '
+                                          '%d/%d | '
+                                          '\\max_i (task_i fails): '
+                                          '%d/%d')
+                                % (status_message, completed_tasks,
+                                    task_count, max_task_fails,
+                                    max_attempts - 1))
                             assert assigned_tasks[task][-1][-1] == \
                                 asyncresults[task].engine_id
                             # Free engine
@@ -879,6 +881,29 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 task_function, task_function_args,
                 status_message='Tasks completed',
                 finish_message='Completed tasks.', max_attempts=4):
+                """ Executes parallel job locally with multiprocessing module.
+
+                    Tasks are added to queue if they fail, and max_attempts-1
+                    failures are permitted per task. 
+
+                    pool: multiprocessing.Pool object
+                    iface: DooplicityInterface object for spewing log messages
+                        to console
+                    task_function: name if function to execute
+                    task_function_args: iterable of lists, each of whose
+                        items are task_function's arguments, WITH THE EXCEPTION
+                        OF A SINGLE KEYWORD ARGUMENT "attempt_count". This
+                        argument must be the final keyword argument of the
+                        function but _excluded_ from the arguments in any item
+                        of task_function_args.
+                    status_message: status message about tasks completed
+                    finish_message: message to output when all tasks are
+                        completed
+                    max_attempts: max number of times to attempt any given
+                        task
+
+                    No return value.
+                """
                 completed_tasks = 0
                 tasks_to_assign = deque([
                         [task_function_arg, i, 0] for i, task_function_arg
@@ -887,12 +912,12 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 task_count = len(tasks_to_assign)
                 assigned_tasks, asyncresults = {}, {}
                 max_task_fails = 0
-                iface.status(('    %s: '
-                              '%d/%d | \\max_i (task_i fails): '
-                              '%d/%d')
-                                % (status_message, completed_tasks,
-                                    task_count, max_task_fails,
-                                    max_attempts - 1))
+                iface.status(('    %s: %d/%d%s')
+                                % (status_message, completed_tasks, task_count,
+                                     (' | \\max_i (task_i fails): %d/%d'
+                                       % (max_task_fails,
+                                            max_attempts - 1)
+                                       if max_attempts > 1 else '')))
                 while completed_tasks < task_count:
                     if tasks_to_assign:
                         task_to_assign = tasks_to_assign.popleft()
@@ -933,13 +958,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 # Success
                                 completed_tasks += 1
                                 asyncresults_to_remove.append(task)
-                                iface.status(('    %s: '
-                                              '%d/%d | '
-                                              '\\max_i (task_i fails): '
-                                              '%d/%d')
+                            iface.status(('    %s: %d/%d%s')
                                     % (status_message, completed_tasks,
-                                        task_count, max_task_fails,
-                                        max_attempts - 1))
+                                        task_count,
+                                        (' | \\max_i (task_i fails): %d/%d'
+                                            % (max_task_fails,
+                                                max_attempts - 1)
+                                            if max_attempts > 1 else '')))
                     for task in asyncresults_to_remove:
                         del asyncresults[task]
                         del assigned_tasks[task]
@@ -1445,7 +1470,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         opener='*****Terminated*****')
         else:
             iface.fail()
-        if 'pool' in locals():
+        if 'pool' in locals() and 'interrupt_engines' not in locals():
             pool.terminate()
             pool.join()
         if 'split_input_dir' in locals():
