@@ -351,6 +351,8 @@ def ready_engines(rc, base, prep=False):
                'several other useful packages.'
             )
     all_engines = rc.ids
+    '''Clear remote namespaces.'''
+    rc[:].clear()
     '''Test that intermediate directory is accessible from everywhere; create
     dir in process.'''
     try:
