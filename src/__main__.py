@@ -50,16 +50,17 @@ class Launcher(object):
 
     def __init__(self, force=False, num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3,
-                    sort_memory_cap=0.2, region='us-east-1',
-                    log=None, scratch=None, ipython_profile=None,
-                    ipcontroller_json=None, common=None, json=False,
-                    sort=None):
+                    sort_memory_cap=0.2, max_task_attempts=4,
+                    region='us-east-1', log=None, scratch=None,
+                    ipython_profile=None, ipcontroller_json=None, common=None,
+                    json=False, sort=None):
         self.force = force
         self.num_processes = num_processes
         self.keep_intermediates = keep_intermediates
         self.gzip_intermediates = gzip_intermediates
         self.gzip_level = gzip_level
         self.sort_memory_cap = sort_memory_cap
+        self.max_task_attempts = max_task_attempts
         self.region = region
         self.log = log
         self.scratch = scratch
@@ -97,7 +98,8 @@ class Launcher(object):
                                 '-p', str(self.num_processes),
                                 '-b', os.path.join(base_path, 
                                         'rna', 'driver', 'rail-rna.txt'),
-                                '--memcap', str(self.sort_memory_cap)]
+                                '--memcap', str(self.sort_memory_cap),
+                                '--max-attempts', str(self.max_task_attempts)]
                 if self.sort:
                     runner_args.extend(['--sort', self.sort])
                 if self.force:
@@ -125,7 +127,8 @@ class Launcher(object):
                                 '-b', os.path.join(base_path, 
                                         'rna', 'driver', 'rail-rna.txt'),
                                 '--ipy',
-                                '--memcap', str(self.sort_memory_cap)]
+                                '--memcap', str(self.sort_memory_cap),
+                                '--max-attempts', str(self.max_task_attempts)]
                 if self.sort:
                     runner_args.extend(['--sort', self.sort])
                 if self.force:
@@ -543,6 +546,7 @@ if __name__ == '__main__':
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
+                max_task_attempts=args.max_task_attempts,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
@@ -591,6 +595,7 @@ if __name__ == '__main__':
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
+                max_task_attempts=args.max_task_attempts,
                 keep_intermediates=args.keep_intermediates,
                 sort_exe=args.sort,
                 scratch=args.scratch
@@ -608,6 +613,7 @@ if __name__ == '__main__':
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
+                max_task_attempts=args.max_task_attempts,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
@@ -657,6 +663,7 @@ if __name__ == '__main__':
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
+                max_task_attempts=args.max_task_attempts,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 ipython_profile=args.ipython_profile,
@@ -707,6 +714,7 @@ if __name__ == '__main__':
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
+                max_task_attempts=args.max_task_attempts,
                 keep_intermediates=args.keep_intermediates,
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
@@ -726,6 +734,7 @@ if __name__ == '__main__':
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
+                max_task_attempts=args.max_task_attempts,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 ipython_profile=args.ipython_profile,
@@ -880,123 +889,72 @@ if __name__ == '__main__':
         # No log file
         log_file = None
     try:
-        launcher = Launcher(force=json_creator.base.force,
-                                        num_processes=(
-                                            json_creator.base.num_processes
-                                            if mode == 'local'
-                                            else None
-                                        ),
-                                        keep_intermediates=(
-                                           args.keep_intermediates
-                                           if mode in ['local', 'parallel']
-                                           else False
-                                        ),
-                                        gzip_intermediates=(
-                                           args.gzip_intermediates
-                                           if mode in ['local', 'parallel']
-                                           else False
-                                        ),
-                                        gzip_level=(
-                                           args.gzip_level
-                                           if mode in ['local', 'parallel']
-                                           else 3
-                                        ),
-                                        sort_memory_cap=(
-                                            args.sort_memory_cap
-                                            if mode in ['local', 'parallel']
-                                            else 0.2
-                                        ),
-                                        log=(
-                                            log_file if mode
-                                            in ['local', 'parallel']
-                                            else None
-                                        ),
-                                        region=args.region,
-                                        common=(
-                                            args.log
-                                            if mode == 'parallel'
-                                            else None
-                                        ),
-                                        ipython_profile=(
-                                            args.ipython_profile
-                                            if mode == 'parallel'
-                                            else None
-                                        ),
-                                        ipcontroller_json=(
-                                            args.ipcontroller_json
-                                            if mode == 'parallel'
-                                            else None
-                                        ),
-                                        scratch=(
-                                            args.scratch
-                                            if mode in ['local', 'parallel']
-                                            else None
-                                        ),
-                                        sort=(
-                                            json_creator.base.sort_exe
-                                            if mode in ['local', 'parallel']
-                                            else None
-                                        ),
-                                        json=args.json
-                                    )
+        region_to_use = args.region
     except AttributeError:
-        # No region specified
-        launcher = Launcher(force=json_creator.base.force,
-                                        num_processes=(
-                                            json_creator.base.num_processes
-                                            if mode == 'local'
-                                            else None
-                                        ),
-                                        keep_intermediates=(
-                                           args.keep_intermediates
-                                           if mode in ['local', 'parallel']
-                                           else False
-                                        ),
-                                        gzip_intermediates=(
-                                           args.gzip_intermediates
-                                           if mode in ['local', 'parallel']
-                                           else False
-                                        ),
-                                        gzip_level=(
-                                           args.gzip_level
-                                           if mode in ['local', 'parallel']
-                                           else 3
-                                        ),
-                                        sort_memory_cap=(
-                                            args.sort_memory_cap
-                                            if mode in ['local', 'parallel']
-                                            else 0.2
-                                        ),
-                                        log=(
-                                            log_file 
-                                            if mode in ['local', 'parallel']
-                                            else None
-                                        ),
-                                        common=(
-                                            args.log
-                                            if mode == 'parallel'
-                                            else None
-                                        ),
-                                        ipython_profile=(
-                                            args.ipython_profile
-                                            if mode == 'parallel'
-                                            else None
-                                        ),
-                                        ipcontroller_json=(
-                                            args.ipcontroller_json
-                                            if mode == 'parallel'
-                                            else None
-                                        ),
-                                        scratch=(
-                                            args.scratch
-                                            if mode in ['local', 'parallel']
-                                            else None
-                                        ),
-                                        sort=(
-                                            json_creator.base.sort_exe
-                                            if mode in ['local', 'parallel']
-                                            else None
-                                        ),
-                                        json=args.json
-                                    )
+        # No region specified; use US Standard
+        region_to_use = 'us-east-1'
+    launcher = Launcher(force=json_creator.base.force,
+                                    num_processes=(
+                                        json_creator.base.num_processes
+                                        if mode == 'local'
+                                        else None
+                                    ),
+                                    keep_intermediates=(
+                                       args.keep_intermediates
+                                       if mode in ['local', 'parallel']
+                                       else False
+                                    ),
+                                    gzip_intermediates=(
+                                       args.gzip_intermediates
+                                       if mode in ['local', 'parallel']
+                                       else False
+                                    ),
+                                    gzip_level=(
+                                       args.gzip_level
+                                       if mode in ['local', 'parallel']
+                                       else 3
+                                    ),
+                                    sort_memory_cap=(
+                                        args.sort_memory_cap
+                                        if mode in ['local', 'parallel']
+                                        else 0.2
+                                    ),
+                                    max_task_attempts=(
+                                        args.max_task_attempts
+                                        if mode in ['local', 'parallel']
+                                        else 1
+                                    ),
+                                    log=(
+                                        log_file if mode
+                                        in ['local', 'parallel']
+                                        else None
+                                    ),
+                                    region=region_to_use,
+                                    common=(
+                                        args.log
+                                        if mode == 'parallel'
+                                        else None
+                                    ),
+                                    ipython_profile=(
+                                        args.ipython_profile
+                                        if mode == 'parallel'
+                                        else None
+                                    ),
+                                    ipcontroller_json=(
+                                        args.ipcontroller_json
+                                        if mode == 'parallel'
+                                        else None
+                                    ),
+                                    scratch=(
+                                        args.scratch
+                                        if mode in ['local', 'parallel']
+                                        else None
+                                    ),
+                                    sort=(
+                                        json_creator.base.sort_exe
+                                        if mode in ['local', 'parallel']
+                                        else None
+                                    ),
+                                    json=args.json
+                                )
     launcher.run(mode, json.dumps(json_creator.json_serial))

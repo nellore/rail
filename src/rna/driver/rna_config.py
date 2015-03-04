@@ -1312,7 +1312,8 @@ class RailRnaLocal(object):
     def __init__(self, base, check_manifest=False,
                     num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3,
-                    sort_memory_cap=(300*1024), parallel=False,
+                    sort_memory_cap=(300*1024), max_task_attempts=4,
+                    parallel=False,
                     local=True, scratch=None, ansible=None,
                     do_not_copy_index_to_nodes=False,
                     sort_exe=None):
@@ -1558,6 +1559,14 @@ class RailRnaLocal(object):
                                                         sort_memory_cap
                                                     ))
             base.sort_memory_cap = sort_memory_cap
+            if not (isinstance(max_task_attempts, int)
+                        and max_task_attempts >= 1):
+                base.errors.append('Max task attempts (--max-task-attempts) '
+                                   'must be an integer greater than 0, but '
+                                   '{0} was entered'.format(
+                                                        max_task_attempts
+                                                    ))
+            base.max_task_attempts = max_task_attempts
         if scratch:
             if not os.path.exists(scratch):
                 try:
@@ -1728,6 +1737,12 @@ class RailRnaLocal(object):
             default=(300*1024),
             help=('maximum amount of memory (in bytes) used by UNIX sort '
                   'per process')
+        )
+        general_parser.add_argument(
+            '--max-task-attempts', type=int, required=False,
+            metavar='<dec>',
+            default=(4 if parallel else 1),
+            help=('maximum number of task attempts')
         )
 
 class RailRnaElastic(object):
@@ -3814,7 +3829,8 @@ class RailRnaLocalPreprocessJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), keep_intermediates=False, check_manifest=True,
+        sort_memory_cap=(300*1024), max_task_attempts=4, 
+        keep_intermediates=False, check_manifest=True,
         scratch=None, sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
@@ -3823,6 +3839,7 @@ class RailRnaLocalPreprocessJson(object):
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
+            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, scratch=scratch,
             sort_exe=sort_exe)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
@@ -3849,7 +3866,7 @@ class RailRnaParallelPreprocessJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), ipython_profile=None,
+        sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
         ipcontroller_json=None, scratch=None, keep_intermediates=False,
         check_manifest=True, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
@@ -3861,6 +3878,7 @@ class RailRnaParallelPreprocessJson(object):
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
+            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, scratch=scratch,
             local=False, parallel=False, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
@@ -3883,7 +3901,8 @@ class RailRnaParallelPreprocessJson(object):
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
             check_manifest=check_manifest, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
-            sort_memory_cap=sort_memory_cap, scratch=scratch,
+            sort_memory_cap=sort_memory_cap,
+            max_task_attempts=max_task_attempts, scratch=scratch,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
             ansible=ab.Ansible(), sort_exe=sort_exe)
         engine_base_checks = {}
@@ -4016,8 +4035,8 @@ class RailRnaLocalAlignJson(object):
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), keep_intermediates=False, scratch=None,
-        sort_exe=None):
+        sort_memory_cap=(300*1024), max_task_attempts=4,
+        keep_intermediates=False, scratch=None, sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -4025,6 +4044,7 @@ class RailRnaLocalAlignJson(object):
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
+            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, scratch=scratch,
             sort_exe=sort_exe)
         RailRnaAlign(base, input_dir=input_dir,
@@ -4093,8 +4113,9 @@ class RailRnaParallelAlignJson(object):
         bam_basename='alignments', bed_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         gzip_intermediates=False,
-        gzip_level=3, sort_memory_cap=(300*1024), keep_intermediates=False,
-        do_not_copy_index_to_nodes=False, sort_exe=None):
+        gzip_level=3, sort_memory_cap=(300*1024), max_task_attempts=4,
+        keep_intermediates=False, do_not_copy_index_to_nodes=False,
+        sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 
@@ -4104,6 +4125,7 @@ class RailRnaParallelAlignJson(object):
         RailRnaLocal(base, check_manifest=False,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
+            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates,
             local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
@@ -4155,6 +4177,7 @@ class RailRnaParallelAlignJson(object):
             check_manifest=False, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
+            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
             ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
@@ -4358,8 +4381,9 @@ class RailRnaLocalAllJson(object):
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), keep_intermediates=False,
-        check_manifest=True, scratch=None, sort_exe=None):
+        sort_memory_cap=(300*1024), max_task_attempts=4,
+        keep_intermediates=False, check_manifest=True, scratch=None,
+        sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -4369,6 +4393,7 @@ class RailRnaLocalAllJson(object):
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
+            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, scratch=scratch,
             sort_exe=sort_exe)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
@@ -4443,7 +4468,7 @@ class RailRnaParallelAllJson(object):
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), ipython_profile=None,
+        sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
         ipcontroller_json=None, scratch=None, keep_intermediates=False,
         check_manifest=True, do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
@@ -4455,6 +4480,7 @@ class RailRnaParallelAllJson(object):
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
+            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates,
             local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
@@ -4507,6 +4533,7 @@ class RailRnaParallelAllJson(object):
             check_manifest=check_manifest, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
+            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
             ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
