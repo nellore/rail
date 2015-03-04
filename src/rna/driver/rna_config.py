@@ -1740,7 +1740,7 @@ class RailRnaLocal(object):
         )
         general_parser.add_argument(
             '--max-task-attempts', type=int, required=False,
-            metavar='<dec>',
+            metavar='<int>',
             default=(4 if parallel else 1),
             help=('maximum number of task attempts')
         )
