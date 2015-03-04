@@ -716,6 +716,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             assigned to engines a priori.'''
             pid_map = direct_view.apply_async(os.getpid).get_dict()
             host_map = direct_view.apply_async(socket.gethostname).get_dict()
+            engine_map = defaultdict(list)
+            for engine in host_map:
+                engine_map[host_map[engine]].append(engine)
             def interrupt_engines(pool, iface):
                 """ Interrupts IPython engines spanned by view
 
@@ -799,12 +802,19 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     if tasks_to_assign:
                         task_to_assign = tasks_to_assign.popleft()
                         forbidden_engines = set(task_to_assign[2])
+                        if len(forbidden_engines) >= 2:
+                            # After two fails, do not allow reused nodes
+                            for forbidden_engine in task_to_assign[2]:
+                                forbidden_engines.update(
+                                    engine_map[host_map[forbidden_engine]]
+                                )
                         if all_engines <= forbidden_engines:
                             iface.fail(('No more running IPython engines '
-                                        'on which function-arg combo (%s, %s) '
-                                        'has not failed attempt to execute. '
-                                        'Check the IPython cluster\'s '
-                                        'integrity and resource availability.')
+                                        'and/or nodes on which function-arg '
+                                        'combo (%s, %s) has not failed '
+                                        'attempt to execute. Check the '
+                                        'IPython cluster\'s integrity and '
+                                        'resource availability.')
                                          % (task_function, task_to_assign[0]))
                             failed = True
                             raise RuntimeError
