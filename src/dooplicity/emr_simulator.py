@@ -40,7 +40,7 @@ THE SOFTWARE.
 
 import argparse
 import sys
-from collections import defaultdict, OrderedDict
+from collections import defaultdict, OrderedDict, deque
 import time
 import json
 import interface as dp_iface
@@ -72,6 +72,10 @@ def add_args(parser):
     parser.add_argument(
             '-p', '--num-processes', type=int, required=False, default=1,
             help='Number of subprocesses to open at once.'
+        )
+    parser.add_argument(
+            '-t', '--max-attempts', type=int, required=False, default=4,
+            help=('Maximum number of times to attempt a task.')
         )
     parser.add_argument(
             '-s', '--separator', type=str, required=False, default='\t',
@@ -174,23 +178,10 @@ def yopen(gzipped, *args):
         return gzip.open(*args)
     return open(*args)
 
-def arglist_as_function(function_name_and_args):
-    """ Interprets list as [function_to_be_called, arg_1, arg_2, ...]
-
-        Keyword arguments are forbidden.
-
-        function_name_and_args: a list of the form
-            [function_to_be_called, arg_1, arg_2, ...] .
-
-        Return value: function_to_be_called(arg_1, arg_2, ...)
-    """
-    assert len(function_name_and_args) >= 2
-    return function_name_and_args[0](*function_name_and_args[1:])
-
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, task_count, memcap,
                     gzip=False, gzip_level=3, scratch=None,
-                    sort='sort'):
+                    sort='sort', max_attempts=4):
     """ Partitions input data into tasks and presorts them.
 
         Files in output directory are in the format x.y, where x is a task
@@ -216,6 +207,9 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             string, writes to temporary directory; if None, writes directly
             to output directory.
         sort: path to sort executable
+        max_attempts: maximum number of times to attempt partitioning input.
+            MUST BE FINAL ARG to be compatible with 
+            execute_balanced_job_with_retries().
 
         Return value: None if no errors encountered; otherwise error string.
     """
@@ -367,7 +361,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
                                   separator, sort_options, memcap,
                                   gzip=False, gzip_level=3, scratch=None,
-                                  sort='sort'):
+                                  sort='sort', attempt_number=None):
     """ Runs a streaming command on a task, segregating multiple outputs. 
 
         streaming_command: streaming command to run.
@@ -395,7 +389,10 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         scratch: where to write output before copying to output_dir. If "-"
             string, writes to temporary directory; if None, writes directly
             to output directory.
-        sort: path to sort executable.
+        sort: path to sort executable.f
+        attempt_number: attempt number of current task or None if no retries.
+            MUST BE FINAL ARG to be compatible with 
+            execute_balanced_job_with_retries().
 
         Return value: None iff step runs successfully; otherwise error message.
     """
@@ -451,7 +448,14 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                 # Reducer. Merge sort the input glob.
                 prefix = '%s -S %d %s -m %s' % (sort, memcap, sort_options,
                                                     input_glob)
-        err_file = os.path.join(err_dir, '%d.log' % task_id)
+        err_file = os.path.join(err_dir, (
+                                            ('%d.log' % task_id)
+                                                if attempt_number is None
+                                                else ('%d.%d.log'
+                                                    % (task_id, attempt_number)
+                                                )
+                                            )
+                                        )
         new_env = os.environ.copy()
         new_env['mapreduce_task_partition'] \
             = new_env['mapred_task_partition'] = str(task_id)
@@ -571,7 +575,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
                     log, gzip=False, gzip_level=3, ipy=False,
                     ipcontroller_json=None, ipy_profile=None, scratch=None,
-                    common=None, sort='sort'):
+                    common=None, sort='sort', max_attempts=4):
     """ Runs Hadoop Streaming simulation.
 
         FUNCTIONALITY IS IDIOSYNCRATIC; it is currently confined to those
@@ -608,6 +612,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             to safely created temporary directory.
         common: path to directory accessible across nodes in --ipy mode
         sort: sort executable including command-line arguments
+        max_attempts: maximum number of times to attempt a task in ipy mode.
 
         No return value.
     """
@@ -646,7 +651,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 raise
             if ipy_profile:
                 try:
-                    rc = Client(profile=ipy_profile)
+                    pool = Client(profile=ipy_profile)
                 except ValueError:
                     iface.fail('Cluster configuration profile "%s" was not '
                                'found.' % ipy_profile)
@@ -654,7 +659,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     raise
             elif ipcontroller_json:
                 try:
-                    rc = Client(ipcontroller_json)
+                    pool = Client(ipcontroller_json)
                 except IOError:
                     iface.fail(
                             'Cannot find connection information JSON file %s.'
@@ -664,7 +669,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     raise
             else:
                 try:
-                    rc = Client()
+                    pool = Client()
                 except IOError:
                     iface.fail(
                             'Cannot find ipcontroller-client.json. Ensure '
@@ -678,7 +683,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         )
                     failed = True
                     raise
-            if not rc.ids:
+            if not pool.ids:
                 iface.fail(
                         'An IPython controller is running, but no engines are '
                         'connected to it.'
@@ -686,8 +691,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 failed = True
                 raise RuntimeError
             # Use all engines
-            num_processes = len(rc)
-            direct_view = rc[:]
+            num_processes = len(pool)
+            all_engines = set(pool.ids)
+            direct_view = pool[:]
             iface.status('Loading dependencies on IPython engines...')
             with direct_view.sync_imports(quiet=True):
                 import subprocess
@@ -706,23 +712,22 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             iface.step('Loaded dependencies on IPython engines.')
             '''Use balanced view so scheduling is dynamic: tasks aren't
             assigned to engines a priori.'''
-            balanced_view = rc.load_balanced_view()
             pid_map = direct_view.apply_async(os.getpid).get_dict()
             host_map = direct_view.apply_async(socket.gethostname).get_dict()
-            def interrupt_engines(rc, iface):
+            def interrupt_engines(pool, iface):
                 """ Interrupts IPython engines spanned by view
 
                     Taken from:
                     http://mail.scipy.org/pipermail/ipython-dev/
                     2014-March/013426.html
 
-                    rc: IPython Client object
+                    pool: IPython Client object
                     iface: instance of DooplicityInterface
 
                     No return value.
                 """
                 iface.status('Interrupting IPython engines...')
-                for engine_id in rc.ids:
+                for engine_id in pool.ids:
                     host = host_map[engine_id]
                     kill_command = (
                           'CPIDS=$(pgrep -P {}); echo $CPIDS;'
@@ -730,19 +735,216 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                           'kill -9 $CPIDS'
                         ).format(pid_map[engine_id])
                     if host == socket.gethostname():
+                        pass
                         # local
-                        subprocess.Popen(kill_command,
-                                bufsize=-1, shell=True
-                            )
+                        #subprocess.Popen(kill_command,
+                        #        bufsize=-1, shell=True
+                        #    )
                     else:
-                        subprocess.Popen(
-                            ('ssh -oStrictHostKeyChecking=no '
-                             '-oBatchMode=yes {} \'{}\'').format(
-                                host, kill_command
-                            ), bufsize=-1, shell=True
-                        )
+                        #subprocess.Popen(
+                        #    ('ssh -oStrictHostKeyChecking=no '
+                        #     '-oBatchMode=yes {} \'{}\'').format(
+                        #        host, kill_command
+                        #    ), bufsize=-1, shell=True
+                        #)
+                        pass
+            import random
+            def execute_balanced_job_with_retries(pool, iface,
+                task_function, task_function_args,
+                status_message='Tasks completed',
+                finish_message='Completed tasks.', max_attempts=4):
+                """ Executes parallel job over IPython engines with retries.
+
+                    Tasks are assigned to free engines as they become
+                    available. If a task fails on one engine, it is retried on
+                    another engine. If a task has been tried on all engines but
+                    fails before max_attempts is exceeded, the step is failed.
+
+                    pool: IPython Client object; all engines it spans are used
+                    iface: DooplicityInterface object for spewing log messages
+                        to console
+                    task_function: name if function to execute
+                    task_function_args: iterable of lists, each of whose
+                        items are task_function's arguments, WITH THE EXCEPTION
+                        OF A SINGLE KEYWORD ARGUMENT "attempt_count". This
+                        argument must be the final keyword argument of the
+                        function but _excluded_ from the arguments in any item
+                        of task_function_args.
+                    status_message: status message about tasks completed
+                    finish_message: message to output when all tasks are
+                        completed
+                    max_attempts: max number of times to attempt any given
+                        task
+
+                    No return value.
+                """
+                random.seed(pool.ids[-1])
+                used_engines, free_engines = set(), set(pool.ids)
+                completed_tasks = 0
+                tasks_to_assign = deque([
+                        [task_function_arg, i, []] for i, task_function_arg
+                        in enumerate(task_function_args)
+                    ])
+                task_count = len(tasks_to_assign)
+                assigned_tasks, asyncresults = {}, {}
+                max_task_fails = 0
+                iface.status(('    %s: '
+                              '%d/%d | \\max_i (task_i fails): %d/%d')
+                                % (status_message, completed_tasks,
+                                    task_count, max_task_fails,
+                                    max_attempts - 1))
+                while completed_tasks < task_count:
+                    if tasks_to_assign:
+                        task_to_assign = tasks_to_assign.popleft()
+                        forbidden_engines = set(task_to_assign[2])
+                        if all_engines <= forbidden_engines:
+                            iface.fail(('No more running IPython engines '
+                                        'on which function-arg combo (%s, %s) '
+                                        'has not failed attempt to execute. '
+                                        'Check the IPython cluster\'s '
+                                        'integrity and resource availability.')
+                                         % (task_function, task_to_assign[0]))
+                            failed = True
+                            raise RuntimeError
+                        try:
+                            assigned_engine = random.choice(
+                                    list(free_engines - forbidden_engines)
+                                )
+                        except IndexError:
+                            # No engine to assign yet
+                            pass
+                        else:
+                            asyncresults[task_to_assign[1]] = (
+                                pool[assigned_engine].apply_async(
+                                    task_function,
+                                    *(task_to_assign[0] +
+                                      [len(task_to_assign[2])])
+                                )
+                            )
+                            assigned_tasks[task_to_assign[1]] = [
+                                    task_to_assign[0], task_to_assign[1],
+                                    task_to_assign[2] + [assigned_engine]
+                                ]
+                            used_engines.add(assigned_engine)
+                            free_engines.remove(assigned_engine)
+                    asyncresults_to_remove = []
+                    for task in asyncresults:
+                        if asyncresults[task].ready():
+                            return_value = asyncresults[task].get()
+                            if return_value is not None:
+                                if max_attempts > len(assigned_tasks[task][2]):
+                                    # Add to queue for reattempt
+                                    tasks_to_assign.append(
+                                            assigned_tasks[task]
+                                        )
+                                    max_task_fails = max(
+                                            len(assigned_tasks[task][2]),
+                                            max_task_fails
+                                        )
+                                    asyncresults_to_remove.append(task)
+                                else:
+                                    # Bail if max_attempts is saturated
+                                    iface.fail(return_value,
+                                    steps=(job_flow[step_number:]
+                                            if step_number != 0 else None))
+                                    failed = True
+                                    raise RuntimeError
+                            else:
+                                # Success
+                                completed_tasks += 1
+                                asyncresults_to_remove.append(task)
+                                iface.status(('    %s: '
+                                              '%d/%d | '
+                                              '\\max_i (task_i fails): '
+                                              '%d/%d')
+                                    % (status_message, completed_tasks,
+                                        task_count, max_task_fails,
+                                        max_attempts - 1))
+                            assert assigned_tasks[task][-1][-1] == \
+                                asyncresults[task].engine_id
+                            # Free engine
+                            used_engines.remove(
+                                    assigned_tasks[task][-1][-1]
+                                )
+                            free_engines.add(assigned_tasks[task][-1][-1])
+                    for task in asyncresults_to_remove:
+                        del asyncresults[task]
+                        del assigned_tasks[task]
+                    time.sleep(0.1)
+                assert not used_engines
+                iface.step(finish_message)
         else:
             import multiprocessing
+            def execute_balanced_job_with_retries(pool, iface,
+                task_function, task_function_args,
+                status_message='Tasks completed',
+                finish_message='Completed tasks.', max_attempts=4):
+                completed_tasks = 0
+                tasks_to_assign = deque([
+                        [task_function_arg, i, 0] for i, task_function_arg
+                        in enumerate(task_function_args)
+                    ])
+                task_count = len(tasks_to_assign)
+                assigned_tasks, asyncresults = {}, {}
+                max_task_fails = 0
+                iface.status(('    %s: '
+                              '%d/%d | \\max_i (task_i fails): '
+                              '%d/%d')
+                                % (status_message, completed_tasks,
+                                    task_count, max_task_fails,
+                                    max_attempts - 1))
+                while completed_tasks < task_count:
+                    if tasks_to_assign:
+                        task_to_assign = tasks_to_assign.popleft()
+                        asyncresults[task_to_assign[1]] = (
+                                pool.apply_async(
+                                    task_function,
+                                    args=(task_to_assign[0] +
+                                            [task_to_assign[2]])
+                                )
+                            )
+                        assigned_tasks[task_to_assign[1]] = [
+                                task_to_assign[0], task_to_assign[1],
+                                task_to_assign[2] + 1
+                            ]
+                    asyncresults_to_remove = []
+                    for task in asyncresults:
+                        if asyncresults[task].ready():
+                            return_value = asyncresults[task].get()
+                            if return_value is not None:
+                                if max_attempts > assigned_tasks[task][2]:
+                                    # Add to queue for reattempt
+                                    tasks_to_assign.append(
+                                            assigned_tasks[task]
+                                        )
+                                    max_task_fails = max(
+                                            assigned_tasks[task][2],
+                                            max_task_fails
+                                        )
+                                    asyncresults_to_remove.append(task)
+                                else:
+                                    # Bail if max_attempts is saturated
+                                    iface.fail(return_value,
+                                    steps=(job_flow[step_number:]
+                                            if step_number != 0 else None))
+                                    failed = True
+                                    raise RuntimeError
+                            else:
+                                # Success
+                                completed_tasks += 1
+                                asyncresults_to_remove.append(task)
+                                iface.status(('    %s: '
+                                              '%d/%d | '
+                                              '\\max_i (task_i fails): '
+                                              '%d/%d')
+                                    % (status_message, completed_tasks,
+                                        task_count, max_task_fails,
+                                        max_attempts - 1))
+                    for task in asyncresults_to_remove:
+                        del asyncresults[task]
+                        del assigned_tasks[task]
+                    time.sleep(0.1)
+                iface.step(finish_message)
         # Serialize JSON configuration
         if json_config is not None:
             with open(json_config) as json_stream:
@@ -1022,89 +1224,24 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
                 iface.step('Step %d/%d: %s' % 
                             (step_number + 1, total_steps, step))
-                if not ipy:
-                    return_values = []
-                    for i, input_file in enumerate(input_files):
-                        if os.path.isfile(input_file):
-                                pool.apply_async(
-                                    step_runner_with_error_return, 
-                                    args=(step_data['mapper'], input_file,
-                                        output_dir, err_dir, i,
-                                        multiple_outputs, 
-                                        separator,
-                                        None,
-                                        None,
-                                        gzip,
-                                        gzip_level,
-                                        scratch,
-                                        sort),
-                                    callback=return_values.append
-                                )
-                    while len(return_values) < input_file_count:
-                        errors = [value for value in return_values
-                                    if value is not None]
-                        if errors:
-                            '''There are error tuples; could put error message
-                            directly in RuntimeError, but then it would be
-                            positioned after the Dooplicity message about
-                            resuming the job.'''
-                            errors = [(('%d) ' % (i + 1)) + error)
-                                        if len(errors) > 1 else errors[0]
-                                        for i, error in enumerate(errors)]
-                            iface.fail('\n'.join(errors),
-                                        steps=(job_flow[step_number:]
-                                                if step_number != 0 else None))
-                            failed = True
-                            raise RuntimeError
-                        iface.status('    Tasks completed: %d/%d'
-                                     % (len(return_values), input_file_count))
-                        time.sleep(0.2)
-                    errors = [value for value in return_values
-                                if value is not None]
-                    if errors:
-                        '''There are errors; could put error message
-                        directly in RuntimeError, but then it would be
-                        positioned after the Dooplicity message about
-                        resuming the job.'''
-                        errors = [(('%d) ' % (i + 1)) + error)
-                                    if len(errors) > 1 else errors[0]
-                                    for i, error in enumerate(errors)]
-                        iface.fail('\n'.join(errors),
-                                    steps=(job_flow[step_number:]
-                                            if step_number != 0 else None))
-                        failed = True
-                        raise RuntimeError
-                else:
-                    return_values = balanced_view.map(
-                                    arglist_as_function,
-                                    [[step_runner_with_error_return,
-                                        step_data['mapper'], input_file,
-                                        output_dir, err_dir, i,
-                                        multiple_outputs,
-                                        separator,
-                                        None,
-                                        None,
-                                        gzip,
-                                        gzip_level,
-                                        scratch, sort] for i, input_file
-                                                 in enumerate(input_files)],
-                                    block=False,
-                                    ordered=False
-                                )
-                    iface.status('    Tasks completed: 0/%d'
-                                     % input_file_count)
-                    for i, return_value in enumerate(return_values):
-                        if return_value is not None:
-                            # Bails after encountering exactly one error
-                            iface.fail(return_value,
-                                        steps=(job_flow[step_number:]
-                                                if step_number != 0 else None))
-                            failed = True
-                            raise RuntimeError
-                        iface.status('    Tasks completed: %d/%d'
-                                         % (i+1, input_file_count))
-                iface.step('    Completed %s.'
-                           % dp_iface.inflected(input_file_count, 'task'))
+                iface.status('    Starting step runner...')
+                execute_balanced_job_with_retries(
+                        pool, iface, step_runner_with_error_return,
+                                   [[step_data['mapper'], input_file,
+                                     output_dir, err_dir,
+                                     i, multiple_outputs,
+                                     separator, None, None, gzip,
+                                     gzip_level, scratch, sort]
+                                     for i, input_file
+                                     in enumerate(input_files)
+                                     if os.path.isfile(input_file)],
+                        status_message='Tasks completed',
+                        finish_message=(
+                            '    Completed %s.'
+                            % dp_iface.inflected(input_file_count, 'task')
+                        ),
+                        max_attempts=max_attempts
+                    )
                 # Adjust step inputs in case a reducer follows
                 step_inputs = [input_file for input_file 
                                 in glob.glob(output_dir)
@@ -1140,78 +1277,23 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 input_file_group_count = len(input_file_groups)
                 iface.step('Step %d/%d: %s'
                              % (step_number + 1, total_steps, step))
-                if not ipy:
-                    return_values = []
-                    for i, input_file_group in enumerate(input_file_groups):
-                        pool.apply_async(
-                                presorted_tasks,
-                                args=(input_file_group, i,
-                                    step_data['sort_options'],
-                                    output_dir,
-                                    step_data['key_fields'],
-                                    separator,
-                                    step_data['task_count'],
-                                    memcap,
-                                    gzip,
-                                    gzip_level,
-                                    scratch, sort),
-                                callback=return_values.append
-                            )
-                    while len(return_values) < input_file_group_count:
-                        errors = [value for value in return_values
-                                  if value is not None]
-                        if errors:
-                            errors = [(('%d) ' % (i + 1)) + error)
-                                        if len(errors) > 1 else errors[0]
-                                        for i, error in enumerate(errors)]
-                            iface.fail('\n'.join(errors),
-                                       (job_flow[step_number:]
-                                        if step_number != 0 else None))
-                            failed = True
-                            raise RuntimeError
-                        iface.status(('    Inputs partitioned: %d/%d\r')
-                                     % (len(return_values),
-                                            input_file_group_count))
-                        time.sleep(0.2)
-                    errors = [value for value in return_values
-                                if value is not None]
-                    if errors:
-                        errors = [(('%d) ' % (i + 1)) + error)
-                                    if len(errors) > 1 else errors[0]
-                                    for i, error in enumerate(errors)]
-                        iface.fail('\n'.join(errors),
-                                   (job_flow[step_number:]
-                                    if step_number != 0 else None))
-                        failed = True
-                        raise RuntimeError
-                else:
-                    return_values = balanced_view.map(
-                            arglist_as_function,
-                            [[presorted_tasks, input_file_group, i,
-                                step_data['sort_options'], output_dir,
-                                step_data['key_fields'], separator,
-                                step_data['task_count'], memcap, gzip,
-                                gzip_level, scratch, sort]
-                                    for i, input_file_group
-                                    in enumerate(input_file_groups)],
-                            block=False,
-                            ordered=False
-                        )
-                    iface.status('    Inputs partitioned: 0/%d'
-                                     % input_file_group_count)
-                    for i, return_value in enumerate(return_values):
-                        if return_value is not None:
-                            # Bails after encountering exactly one error
-                            iface.fail(return_value,
-                                        steps=(job_flow[step_number:]
-                                                if step_number != 0 else None))
-                            failed = True
-                            raise RuntimeError
-                        iface.status('    Inputs partitioned: %d/%d'
-                                         % (i+1, input_file_group_count))
-                iface.step('    Partitioned %s into tasks.'
+                execute_balanced_job_with_retries(
+                        pool, iface, presorted_tasks,
+                        [[input_file_group, i,
+                            step_data['sort_options'], output_dir,
+                            step_data['key_fields'], separator,
+                            step_data['task_count'], memcap, gzip,
+                            gzip_level, scratch, sort]
+                                for i, input_file_group
+                                in enumerate(input_file_groups)],
+                        status_message='Inputs partitioned',
+                        finish_message=(
+                            '    Partitioned %s into tasks.'
                             % dp_iface.inflected(input_file_group_count,
-                                                 'input'))
+                                                 'input')
+                        ),
+                        max_attempts=max_attempts
+                    )
                 iface.status('    Starting step runner...')
                 input_files = [os.path.join(output_dir, '%d.*' % i) 
                                for i in xrange(step_data['task_count'])]
@@ -1228,71 +1310,20 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 err_dir = os.path.join(steps[step]['output'], 'dp.reduce.log')
                 output_dir = step_data['output']
                 return_values = []
-                if not ipy:
-                    for i, input_file in enumerate(input_files):
-                        pool.apply_async(
-                                step_runner_with_error_return, 
-                                args=(step_data['reducer'], input_file,
-                                    output_dir, err_dir, i, 
-                                    multiple_outputs,
-                                    separator,
-                                    step_data['sort_options'],
-                                    memcap, gzip, gzip_level, scratch, sort),
-                                 callback=return_values.append
-                            )
-                    while len(return_values) < input_file_count:
-                        errors = [value for value in return_values
-                                  if value is not None]
-                        if errors:
-                            # There are error tuples
-                            errors = [(('%d) ' % (i + 1)) + error)
-                                        if len(errors) > 1 else errors[0]
-                                        for i, error in enumerate(errors)]
-                            iface.fail('\n'.join(errors),
-                                       (job_flow[step_number:]
-                                        if step_number != 0 else None))
-                            failed = True
-                            raise RuntimeError
-                        iface.status('    Tasks completed: %d/%d'
-                                     % (len(return_values), input_file_count))
-                        time.sleep(0.2)
-                    errors = [value for value in return_values
-                                  if value is not None]
-                    if errors:
-                        errors = [(('%d) ' % (i + 1)) + error)
-                                    if len(errors) > 1 else errors[0]
-                                    for i, error in enumerate(errors)]
-                        iface.fail('\n'.join(errors),
-                                   (job_flow[step_number:]
-                                    if step_number != 0 else None))
-                        failed = True
-                        raise RuntimeError
-                else:
-                    return_values = balanced_view.map(
-                            arglist_as_function,
-                            [[step_runner_with_error_return,
-                                step_data['reducer'], input_file, output_dir, 
-                                err_dir, i, multiple_outputs, separator,
-                                step_data['sort_options'], memcap, gzip,
-                                gzip_level, scratch, sort] for i, input_file
-                                    in enumerate(input_files)],
-                            block=False,
-                            ordered=False
-                        )
-                    iface.status('    Tasks completed: 0/%d'
-                                     % input_file_count)
-                    for i, return_value in enumerate(return_values):
-                        if return_value is not None:
-                            # Bails after encountering exactly one error
-                            iface.fail(return_value,
-                                        steps=(job_flow[step_number:]
-                                                if step_number != 0 else None))
-                            failed = True
-                            raise RuntimeError
-                        iface.status('    Tasks completed: %d/%d'
-                                         % (i+1, input_file_count))
-                iface.step('    Completed %s.'
-                           % dp_iface.inflected(input_file_count, 'task'))
+                execute_balanced_job_with_retries(
+                        pool, iface, step_runner_with_error_return,
+                            [[step_data['reducer'], input_file, output_dir, 
+                            err_dir, i, multiple_outputs, separator,
+                            step_data['sort_options'], memcap, gzip,
+                            gzip_level, scratch, sort] for i, input_file
+                                in enumerate(input_files)],
+                        status_message='Tasks completed',
+                        finish_message=(
+                            '    Completed %s.'
+                            % dp_iface.inflected(input_file_count, 'task')
+                        ),
+                        max_attempts=max_attempts
+                    )
             # Really close open file handles in PyPy
             gc.collect()
             if not keep_intermediates:
@@ -1391,7 +1422,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
     except (Exception, GeneratorExit):
         # GeneratorExit added just in case this happens on modifying code
         if 'interrupt_engines' in locals():
-            interrupt_engines(rc, iface)
+            interrupt_engines(pool, iface)
         if not failed:
             time.sleep(0.2)
             if 'step_number' in locals():
@@ -1407,7 +1438,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         raise
     except (KeyboardInterrupt, SystemExit):
         if 'interrupt_engines' in locals():
-            interrupt_engines(rc, iface)
+            interrupt_engines(pool, iface)
         if 'step_number' in locals():
             iface.fail(steps=(job_flow[step_number:]
                         if step_number != 0 else None),
@@ -1434,4 +1465,4 @@ if __name__ == '__main__':
                     args.keep_intermediates, args.keep_last_output,
                     args.log, args.gzip_outputs, args.gzip_level,
                     args.ipy, args.ipcontroller_json, args.ipy_profile,
-                    args.scratch, args.common, args.sort)
+                    args.scratch, args.common, args.sort, args.max_attempts)
