@@ -23,7 +23,7 @@ reduced_redundancy = False
 send_chunk = 4096
 EOF
 
-s3cmd get s3://rail-emr/bin/bowtie2-2.2.3-linux-x86_64.zip|| { echo 's3cmd get failed' ; exit 1; }
-unzip bowtie2-2.2.3-linux-x86_64.zip || { echo 'unzip failed' ; exit 1; }
-sudo ln -s `pwd`/bowtie2-2.2.3/bowtie2 /usr/local/bin
-sudo ln -s `pwd`/bowtie2-2.2.3/bowtie2-build /usr/local/bin
+s3cmd get s3://rail-emr/bin/bowtie2-2.2.4-linux-x86_64.zip|| { echo 's3cmd get failed' ; exit 1; }
+unzip bowtie2-2.2.4-linux-x86_64.zip || { echo 'unzip failed' ; exit 1; }
+sudo ln -s `pwd`/bowtie2-2.2.4/bowtie2 /usr/local/bin
+sudo ln -s `pwd`/bowtie2-2.2.4/bowtie2-build /usr/local/bin
