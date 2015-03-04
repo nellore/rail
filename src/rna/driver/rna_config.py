@@ -3189,7 +3189,7 @@ class RailRnaAlign(object):
         algo_parser.add_argument(
             '--transcriptome-indexes-per-sample', type=int,
             metavar='<int>',
-            default=50,
+            default=100,
             help=argparse.SUPPRESS
         )
         output_parser.add_argument(
