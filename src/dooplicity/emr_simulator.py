@@ -222,27 +222,51 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             final_output_dir = output_dir
             try:
                 output_dir = tempfile.mkdtemp()
-            except OSError:
+            except OSError as e:
                 return ('Problem encountered creating temporary '
-                        'scratch subdirectory.')
+                        'scratch subdirectory: %s' % e)
+            # Stream from temp directory
+            try:
+                input_dir = tempfile.mkdtemp()
+            except OSError as e:
+                return ('Problem encountered creating temporary '
+                        'input subdirectory: %s' % e)
         elif scratch:
             # Write to temporary directory in special location
             final_output_dir = output_dir
             try:
                 os.makedirs(scratch)
-            except OSError:
+            except OSError as e:
                 if os.path.isfile(scratch):
                     return ('Scratch directory %s is a file.' % scratch)
-            except IOError:
-                return ('Scratch directory %s is not writable.' % scratch)
+            except IOError as e:
+                return ('Scratch directory %s is not writable: %s' % (scratch,
+                                                                        e))
             try:
                 output_dir = tempfile.mkdtemp(dir=scratch)
+            except OSError as e:
+                return ('Problem encountered creating temporary '
+                        'scratch subdirectory of %s: %s' % (scratch, e))
+            try:
+                input_dir = tempfile.mkdtemp(dir=scratch)
             except OSError:
                 return ('Problem encountered creating temporary '
-                        'scratch subdirectory of %s.' % scratch)
+                        'input subdirectory of %s: %s' % (scratch, e))
         else:
             final_output_dir = output_dir
         for input_file in input_files:
+            if scratch:
+                # Copy input to temporary directory
+                new_input_file = os.path.join(
+                                    input_dir,
+                                    os.path.basename(input_file)
+                                )
+                try:
+                    shutil.copyfile(input_file, new_input_file)
+                except IOError as e:
+                    return ('Problem encountered copying input file to '
+                            'temporary directory: %s' % e)
+                input_file = new_input_file
             with yopen(None, input_file) as input_stream:
                 for line in input_stream:
                     key = separator.join(
@@ -271,6 +295,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                         + '.unsorted')
                             task_streams[task] = open(task_file, 'w')
                         task_streams[task].write(line)
+            if scratch:
+                os.remove(input_file)
         for task in task_streams:
             task_streams[task].close()
         if gzip:
@@ -337,6 +363,9 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             (('%s, '* (len(input_files) - 1) 
                                        + '%s') % tuple(input_files))))
     finally:
+        if 'input_dir' in locals():
+            # Kill input directory
+            shutil.rmtree(input_dir)
         if 'final_output_dir' in locals() and final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
@@ -403,28 +432,55 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             final_output_dir = output_dir
             try:
                 output_dir = tempfile.mkdtemp()
-            except OSError:
+            except OSError as e:
                 return ('Problem encountered creating temporary '
-                        'scratch subdirectory.')
+                        'scratch subdirectory: %s' % e)
+            # Stream from temp directory
+            try:
+                input_dir = tempfile.mkdtemp()
+            except OSError as e:
+                return ('Problem encountered creating temporary '
+                        'input subdirectory: %s' % e)
         elif scratch:
             # Write to temporary directory in special location
             final_output_dir = output_dir
             try:
                 os.makedirs(scratch)
-            except OSError:
+            except OSError as e:
                 if os.path.isfile(scratch):
                     return ('Scratch directory %s is a file.' % scratch)
-            except IOError:
-                return ('Scratch directory %s is not writable.' % scratch)
+            except IOError as e:
+                return ('Scratch directory %s is not writable: %s' % (scratch,
+                                                                        e))
             try:
                 output_dir = tempfile.mkdtemp(dir=scratch)
+            except OSError as e:
+                return ('Problem encountered creating temporary '
+                        'scratch subdirectory of %s: %s' % (scratch, e))
+            try:
+                input_dir = tempfile.mkdtemp(dir=scratch)
             except OSError:
                 return ('Problem encountered creating temporary '
-                        'scratch subdirectory of %s.' % scratch)
+                        'input subdirectory of %s: %s' % (scratch, e))
         else:
             final_output_dir = output_dir
-        input_files = [input_file for input_file in glob.glob(input_glob)
-                        if os.path.isfile(input_file)]
+        if scratch:
+            input_files = []
+            # Copy input files to temporary directory
+            for input_file in glob.glob(input_glob):
+                new_input_file = os.path.join(
+                                    input_dir,
+                                    os.path.basename(input_file)
+                                )
+                try:
+                    shutil.copyfile(input_file, new_input_file)
+                except IOError as e:
+                    return ('Problem encountered copying input file to '
+                            'temporary directory: %s' % e)
+                input_files.append(new_input_file)
+        else:
+            input_files = [input_file for input_file in glob.glob(input_glob)
+                            if os.path.isfile(input_file)]
         if not input_files:
             # No input!
             return None
@@ -548,6 +604,9 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         return ('Error\n\n%s\nencountered executing task on input %s.'
                 % (format_exc(), input_glob))
     finally:
+        if 'input_dir' in locals():
+            # Kill input directory
+            shutil.rmtree(input_dir)
         if 'task_file_stream_processes' in locals():
             for key in task_file_streams:
                 task_file_streams[key].close()
