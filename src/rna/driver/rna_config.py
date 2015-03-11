@@ -2417,6 +2417,7 @@ class RailRnaElastic(object):
                         '-m',
                         'mapreduce.reduce.maxattempts=%d' 
                         % base.max_task_attempts,
+                        '-m',
                         'mapreduce.map.maxattempts=%d'
                         % base.max_task_attempts,
                         '-m',
