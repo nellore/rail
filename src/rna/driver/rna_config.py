@@ -981,7 +981,7 @@ class RailRnaErrors(object):
     def __init__(self, manifest, output_dir,
             intermediate_dir='./intermediate', force=False, aws_exe=None,
             profile='default', region='us-east-1', verbose=False,
-            curl_exe=None
+            curl_exe=None, max_task_attempts=4
         ):
         '''Store all errors uncovered in a list, then output. This prevents the
         user from having to rerun Rail-RNA to find what else is wrong with
@@ -998,6 +998,14 @@ class RailRnaErrors(object):
         self.curl_exe = curl_exe
         self.verbose = verbose
         self.profile = profile
+        if not (isinstance(max_task_attempts, int)
+                        and max_task_attempts >= 1):
+            self.errors.append('Max task attempts (--max-task-attempts) '
+                               'must be an integer greater than 0, but '
+                               '{0} was entered'.format(
+                                                    max_task_attempts
+                                                ))
+        self.max_task_attempts = max_task_attempts
 
     def check_s3(self, reason=None, is_exe=None, which=None):
         """ Checks for AWS CLI and configuration file.
@@ -1209,8 +1217,8 @@ class RailRnaErrors(object):
             help='Myrna-style manifest file; Google "Myrna manifest" for ' \
                  'help'
         )
-        '''--region's help looks different from mode to mode; don't include it
-        here.'''
+        '''--region and --max-task-attempts help looks different from mode to '
+        ' mode; don't include them here.'''
 
 def raise_runtime_error(bases):
     """ Raises RuntimeError if any base.errors is nonempty.
@@ -1345,8 +1353,7 @@ class RailRnaLocal(object):
     def __init__(self, base, check_manifest=False,
                     num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3,
-                    sort_memory_cap=(300*1024), max_task_attempts=4,
-                    parallel=False,
+                    sort_memory_cap=(300*1024), parallel=False,
                     local=True, scratch=None, ansible=None,
                     do_not_copy_index_to_nodes=False,
                     sort_exe=None):
@@ -1592,14 +1599,6 @@ class RailRnaLocal(object):
                                                         sort_memory_cap
                                                     ))
             base.sort_memory_cap = sort_memory_cap
-            if not (isinstance(max_task_attempts, int)
-                        and max_task_attempts >= 1):
-                base.errors.append('Max task attempts (--max-task-attempts) '
-                                   'must be an integer greater than 0, but '
-                                   '{0} was entered'.format(
-                                                        max_task_attempts
-                                                    ))
-            base.max_task_attempts = max_task_attempts
         if scratch:
             if not os.path.exists(scratch):
                 try:
@@ -1775,7 +1774,7 @@ class RailRnaLocal(object):
             '--max-task-attempts', type=int, required=False,
             metavar='<int>',
             default=(4 if parallel else 1),
-            help=('maximum number of task attempts')
+            help=('maximum number of attempts per task')
         )
 
 class RailRnaElastic(object):
@@ -2316,7 +2315,14 @@ class RailRnaElastic(object):
             required=False,
             default='us-east-1',
             help=('Amazon data center in which to run job flow. Google '
-                  '"Elastic MapReduce regions" for recent list of centers ')
+                  '"Elastic MapReduce regions" for recent list of centers')
+        )
+        general_parser.add_argument(
+            '--max-task-attempts', type=int, required=False,
+            metavar='<int>',
+            default=4,
+            help=('maximum number of attempts per task; sets both '
+                  'mapreduce.map.maxattempts and mapreduce.reduce.maxattempts')
         )
 
     @staticmethod
@@ -2408,6 +2414,11 @@ class RailRnaElastic(object):
                         'mapreduce.reduce.cpu.vcores=1',
                         '-m',
                         'mapred.output.compress=true',
+                        '-m',
+                        'mapreduce.reduce.maxattempts=%d' 
+                        % base.max_task_attempts,
+                        'mapreduce.map.maxattempts=%d'
+                        % base.max_task_attempts,
                         '-m',
                         ('mapreduce.output.fileoutputformat.compress.codec='
                          'com.hadoop.compression.lzo.LzopCodec'),
@@ -3868,11 +3879,11 @@ class RailRnaLocalPreprocessJson(object):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose)
+            region=region, verbose=verbose,
+            max_task_attempts=max_task_attempts)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
-            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, scratch=scratch,
             sort_exe=sort_exe)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
@@ -3907,11 +3918,11 @@ class RailRnaParallelPreprocessJson(object):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose)
+            region=region, verbose=verbose,
+            max_task_attempts=max_task_attempts)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
-            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, scratch=scratch,
             local=False, parallel=False, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
@@ -3929,13 +3940,13 @@ class RailRnaParallelPreprocessJson(object):
             engine_bases[i] = RailRnaErrors(
                     manifest, output_dir, intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
-                    region=region, verbose=verbose
+                    region=region, verbose=verbose,
+                    max_task_attempts=max_task_attempts
                 )
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
             check_manifest=check_manifest, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
-            sort_memory_cap=sort_memory_cap,
-            max_task_attempts=max_task_attempts, scratch=scratch,
+            sort_memory_cap=sort_memory_cap, scratch=scratch,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
             ansible=ab.Ansible(), sort_exe=sort_exe)
         engine_base_checks = {}
@@ -3983,11 +3994,13 @@ class RailRnaElasticPreprocessJson(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, no_consistent_view=False,
-        check_manifest=True, intermediate_lifetime=4):
+        check_manifest=True, intermediate_lifetime=4,
+        max_task_attempts=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose)
+            region=region, verbose=verbose,
+            max_task_attempts=max_task_attempts)
         RailRnaElastic(base, check_manifest=check_manifest,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
@@ -4073,11 +4086,11 @@ class RailRnaLocalAlignJson(object):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose)
+            region=region, verbose=verbose,
+            max_task_attempts=max_task_attempts)
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
-            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, scratch=scratch,
             sort_exe=sort_exe)
         RailRnaAlign(base, input_dir=input_dir,
@@ -4154,11 +4167,11 @@ class RailRnaParallelAlignJson(object):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose)
+            region=region, verbose=verbose,
+            max_task_attempts=max_task_attempts)
         RailRnaLocal(base, check_manifest=False,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
-            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates,
             local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
@@ -4204,13 +4217,13 @@ class RailRnaParallelAlignJson(object):
             engine_bases[i] = RailRnaErrors(
                     manifest, output_dir, intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
-                    region=region, verbose=verbose
+                    region=region, verbose=verbose,
+                    max_task_attempts=max_task_attempts
                 )
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
             check_manifest=False, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
-            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
             ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
@@ -4301,11 +4314,11 @@ class RailRnaElasticAlignJson(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, no_consistent_view=False,
-        intermediate_lifetime=4):
+        intermediate_lifetime=4, max_task_attempts=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose)
+            region=region, verbose=verbose, max_task_attempts=4)
         RailRnaElastic(base, check_manifest=False,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
@@ -4420,13 +4433,13 @@ class RailRnaLocalAllJson(object):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose)
+            region=region, verbose=verbose,
+            max_task_attempts=max_task_attempts)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
-            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, scratch=scratch,
             sort_exe=sort_exe)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
@@ -4509,11 +4522,11 @@ class RailRnaParallelAllJson(object):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose)
+            region=region, verbose=verbose,
+            max_task_attempts=max_task_attempts)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
-            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates,
             local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
@@ -4560,13 +4573,13 @@ class RailRnaParallelAllJson(object):
             engine_bases[i] = RailRnaErrors(
                     manifest, output_dir, intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
-                    region=region, verbose=verbose
+                    region=region, verbose=verbose,
+                    max_task_attempts=max_task_attempts
                 )
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
             check_manifest=check_manifest, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
-            max_task_attempts=max_task_attempts,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
             ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
@@ -4665,11 +4678,13 @@ class RailRnaElasticAllJson(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, check_manifest=True,
-        no_consistent_view=False, intermediate_lifetime=4):
+        no_consistent_view=False, intermediate_lifetime=4,
+        max_task_attempts=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose)
+            region=region, verbose=verbose,
+            max_task_attempts=max_task_attempts)
         RailRnaElastic(base, check_manifest=check_manifest, 
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,

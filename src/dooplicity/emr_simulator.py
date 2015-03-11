@@ -225,12 +225,12 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             except OSError as e:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory: %s' % e)
-            # Stream from temp directory
+            '''# Stream from temp directory
             try:
                 input_dir = tempfile.mkdtemp()
             except OSError as e:
                 return ('Problem encountered creating temporary '
-                        'input subdirectory: %s' % e)
+                        'input subdirectory: %s' % e)'''
         elif scratch:
             # Write to temporary directory in special location
             final_output_dir = output_dir
@@ -247,15 +247,15 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             except OSError as e:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory of %s: %s' % (scratch, e))
-            try:
+            '''try:
                 input_dir = tempfile.mkdtemp(dir=scratch)
             except OSError:
                 return ('Problem encountered creating temporary '
-                        'input subdirectory of %s: %s' % (scratch, e))
+                        'input subdirectory of %s: %s' % (scratch, e))'''
         else:
             final_output_dir = output_dir
         for input_file in input_files:
-            if scratch:
+            '''if scratch:
                 # Copy input to temporary directory
                 new_input_file = os.path.join(
                                     input_dir,
@@ -266,7 +266,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 except IOError as e:
                     return ('Problem encountered copying input file to '
                             'temporary directory: %s' % e)
-                input_file = new_input_file
+                input_file = new_input_file'''
             with yopen(None, input_file) as input_stream:
                 for line in input_stream:
                     key = separator.join(
@@ -363,9 +363,9 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             (('%s, '* (len(input_files) - 1) 
                                        + '%s') % tuple(input_files))))
     finally:
-        if 'input_dir' in locals():
+        '''if 'input_dir' in locals():
             # Kill input directory
-            shutil.rmtree(input_dir)
+            shutil.rmtree(input_dir)'''
         if 'final_output_dir' in locals() and final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
@@ -435,12 +435,12 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             except OSError as e:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory: %s' % e)
-            # Stream from temp directory
+            '''# Stream from temp directory
             try:
                 input_dir = tempfile.mkdtemp()
             except OSError as e:
                 return ('Problem encountered creating temporary '
-                        'input subdirectory: %s' % e)
+                        'input subdirectory: %s' % e)'''
         elif scratch:
             # Write to temporary directory in special location
             final_output_dir = output_dir
@@ -457,14 +457,14 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             except OSError as e:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory of %s: %s' % (scratch, e))
-            try:
+            '''try:
                 input_dir = tempfile.mkdtemp(dir=scratch)
             except OSError:
                 return ('Problem encountered creating temporary '
-                        'input subdirectory of %s: %s' % (scratch, e))
+                        'input subdirectory of %s: %s' % (scratch, e))'''
         else:
             final_output_dir = output_dir
-        if scratch:
+        '''if scratch:
             input_files = []
             # Copy input files to temporary directory
             for input_file in glob.glob(input_glob):
@@ -478,8 +478,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                     return ('Problem encountered copying input file to '
                             'temporary directory: %s' % e)
                 input_files.append(new_input_file)
-        else:
-            input_files = [input_file for input_file in glob.glob(input_glob)
+        else:'''
+        input_files = [input_file for input_file in glob.glob(input_glob)
                             if os.path.isfile(input_file)]
         if not input_files:
             # No input!
@@ -604,9 +604,9 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         return ('Error\n\n%s\nencountered executing task on input %s.'
                 % (format_exc(), input_glob))
     finally:
-        if 'input_dir' in locals():
+        '''if 'input_dir' in locals():
             # Kill input directory
-            shutil.rmtree(input_dir)
+            shutil.rmtree(input_dir)'''
         if 'task_file_stream_processes' in locals():
             for key in task_file_streams:
                 task_file_streams[key].close()
