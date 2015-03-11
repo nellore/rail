@@ -26,9 +26,9 @@ EOF
 
 sudo ln -s /home/hadoop/.s3cfg /home/.s3cfg
 
-s3cmd get s3://rail-emr/bin/pypy-2.2.1-linux_x86_64-portable.tar.bz2 || { echo 's3cmd failed' ; exit 1; }
+s3cmd get s3://rail-emr/bin/pypy-2.5-linux_x86_64-portable.tar.bz2 || { echo 's3cmd failed' ; exit 1; }
 
 # wget --no-check-certificate -t 3 https://bitbucket.org/squeaky/portable-pypy/downloads/pypy-2.2.1-linux_x86_64-portable.tar.bz2 || { echo 'wget failed' ; exit 1; }
-tar xvjf pypy-2.2.1-linux_x86_64-portable.tar.bz2 || { echo 'unzipping failed' ; exit 1; }
-sudo mv pypy-2.2.1-linux_x86_64-portable /opt/pypy || { echo 'sudo mv failed' ; exit 1; }
+tar xvjf pypy-2.5-linux_x86_64-portable.tar.bz2 || { echo 'unzipping failed' ; exit 1; }
+sudo mv pypy-2.5-linux_x86_64-portable /opt/pypy || { echo 'sudo mv failed' ; exit 1; }
 sudo ln -s /opt/pypy/bin/pypy /usr/local/bin || { echo 'sudo ln failed' ; exit 1; }
