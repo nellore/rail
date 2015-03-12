@@ -2364,7 +2364,7 @@ class RailRnaElastic(object):
             {
                 'Name' : 'Patch EMRFS',
                 'ScriptBootstrapAction' : {
-                    'Path' : 's3://rail-emr/bootstrap/patch_emrfs.sh'
+                    'Path' : 's3://rail-emr/bootstrap/patch-emrfs.sh'
                 }
             },
             {
