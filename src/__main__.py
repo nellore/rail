@@ -850,7 +850,7 @@ if __name__ == '__main__':
                 termination_protected=args.termination_protected,
                 no_consistent_view=args.no_consistent_view,
                 intermediate_lifetime=args.intermediate_lifetime,
-                max_task_attempt=args.max_task_attempts
+                max_task_attempts=args.max_task_attempts
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'elastic':
         mode = 'elastic'

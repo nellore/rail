@@ -2161,9 +2161,9 @@ class RailRnaElastic(object):
         base.original_no_consistent_view = no_consistent_view
         if no_consistent_view and base.region != 'us-east-1':
             # Read-after-write consistency is guaranteed
-            base.no_consistent_view = False
-        else:
             base.no_consistent_view = True
+        else:
+            base.no_consistent_view = False
 
     @staticmethod
     def add_args(general_parser, required_parser, output_parser, 
@@ -2361,6 +2361,12 @@ class RailRnaElastic(object):
     @staticmethod
     def bootstrap(base):
         return [
+            {
+                'Name' : 'Patch EMRFS',
+                'ScriptBootstrapAction' : {
+                    'Path' : 's3://rail-emr/bootstrap/patch_emrfs.sh'
+                }
+            },
             {
                 'Name' : 'Allocate swap space',
                 'ScriptBootstrapAction' : {
@@ -3238,7 +3244,9 @@ class RailRnaAlign(object):
         drop_deletions = ('--drop-deletions' if base.drop_deletions else '')
         keep_alive = ('--keep-alive' if elastic else '')
         scratch  = (('--scratch %s' % base.scratch)
-                    if (base.scratch is not None and not elastic) else '')
+                    if (((not hasattr(base, 'scratch'))
+                            or base.scratch is not None)
+                         and not elastic) else '')
         return [  
             {
                 'name' : 'Align reads and segment them into readlets',
@@ -3456,7 +3464,9 @@ class RailRnaAlign(object):
                                             base.bowtie2_exe,
                                             verbose,
                                             keep_alive,
-                                            base.intermediate_dir,
+                                            ab.Url(
+                                                    base.intermediate_dir
+                                                ).to_url(caps=True),
                                             scratch,
                                             base.transcriptome_bowtie2_args
                                         ),
@@ -4319,7 +4329,8 @@ class RailRnaElasticAlignJson(object):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose, max_task_attempts=4)
+            region=region, verbose=verbose,
+            max_task_attempts=max_task_attempts)
         RailRnaElastic(base, check_manifest=False,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
