@@ -337,6 +337,7 @@ public class MultipartUploadManager {
                     } else {
                       MultipartUploadManager.LOG.info("[PATCHNOTE] uploadPart error " + e + " on try " + (tries + 1) + "; retrying...");
                       tries++;
+                      Thread.sleep(2000);
                       continue;
                     }
                   }
