@@ -9,6 +9,7 @@ package com.amazon.ws.emr.hadoop.fs.s3;
 
 import com.amazon.ws.emr.hadoop.fs.cse.CSEUtils;
 import com.amazonaws.AmazonClientException;
+import com.amazonaws.AbortedException;
 import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.event.ProgressListener;
 import com.amazonaws.services.s3.AmazonS3;
@@ -55,7 +56,7 @@ public class MultipartUploadManager {
     private static final double DEFAULT_TH_FRACTION_PARTS_COMPLETED = 0.5;
     private static final double DEFAULT_FRACTION_PART_AVG_COMPLETION_TIME = 1.0;
     private static final int MIN_PART_ATTEMPTS = 2;
-    private static final int DEFAULT_PART_ATTEMPTS = 100;
+    private static final int DEFAULT_PART_ATTEMPTS = 5;
     private static final double TH_FRACTION_MAX_PART_SIZE = 0.7;
     private String bucketName;
     private String key;
@@ -211,6 +212,7 @@ public class MultipartUploadManager {
                 throw ioe;
             }
             MultipartUploadCallable newMultiPartUploadCallable = new MultipartUploadCallable(multipartUploadCallable.getPartNumber(), clonePartFile, multipartUploadCallable.getStart());
+            newMultiPartUploadCallable.setIsAnOriginalPartFile(false);
             MultiPartUploadFuture newMultipartUploadFuture = this.createMultiPartUploadFuture(multiPartUploadFuture.getPartSize(), newMultiPartUploadCallable, partNum);
             multiPartUploadFutures.add(newMultipartUploadFuture);
         }
@@ -255,6 +257,7 @@ public class MultipartUploadManager {
 
     public void addPartFromFile(File contents, long start, long length) throws IOException {
         MultipartUploadCallable multipartUploadCallable = new MultipartUploadCallable(this.partNumber, contents, start);
+        multipartUploadCallable.setIsAnOriginalPartFile(true);
         MultiPartUploadFuture multiPartUploadFuture = this.createMultiPartUploadFuture(length, multipartUploadCallable, this.partNumber);
         ArrayList<MultiPartUploadFuture> multiPartUploadFutures = new ArrayList<MultiPartUploadFuture>();
         multiPartUploadFutures.add(multiPartUploadFuture);
@@ -295,9 +298,14 @@ public class MultipartUploadManager {
         private final File partFile;
         private final long start;
         private boolean shouldCallAbortOnCompletion;
+        private boolean isAnOriginalPartFile;
 
         public void setShouldCallAbortOnCompletion(boolean shouldCallAbortOnCompletion) {
             this.shouldCallAbortOnCompletion = shouldCallAbortOnCompletion;
+        }
+
+        public void setIsAnOriginalPartFile(boolean isAnOriginalPartFile) {
+            this.isAnOriginalPartFile = isAnOriginalPartFile;
         }
 
         public int getPartNumber() {
@@ -323,36 +331,29 @@ public class MultipartUploadManager {
             UploadPartResult result;
             BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(this.partFile));
             inputStream.skip(this.start);
-            MultipartUploadManager.LOG.info("[PATCHNOTE] starting upload loop.");
             UploadPartRequest request = (UploadPartRequest)new UploadPartRequest().withBucketName(MultipartUploadManager.this.bucketName).withKey(MultipartUploadManager.this.key).withPartNumber(this.partNumber).withInputStream((InputStream)inputStream).withUploadId(MultipartUploadManager.this.uploadId).withPartSize(this.partFile.length()).withGeneralProgressListener(MultipartUploadManager.this.progressListener);
+            boolean doNotDeletePartFile = false;
             try {
-                MultipartUploadManager.LOG.debug("[PATCHNOTE] uploadPart " + this.partFile.getPath() + " " + this.partFile.length());
-                int tries = 0;
-                while(true) {
-                  try {
-                    result = MultipartUploadManager.this.s3.uploadPart(request);
-                  } catch (Exception e) {
-                    if (tries >= DEFAULT_PART_ATTEMPTS) {
-                      throw e;
-                    } else {
-                      MultipartUploadManager.LOG.info("[PATCHNOTE] uploadPart error " + e + " on try " + (tries + 1) + "; retrying...");
-                      tries++;
-                      Thread.sleep(2000);
-                      continue;
-                    }
-                  }
-                  break;
-                }
+                MultipartUploadManager.LOG.info("[PATCHNOTE] uploadPart " + this.partFile.getPath() + " " + this.partFile.length());
+                result = MultipartUploadManager.this.s3.uploadPart(request);
                 if (MultipartUploadManager.this.closed && this.shouldCallAbortOnCompletion) {
                     MultipartUploadManager.this.s3.abortMultipartUpload(new AbortMultipartUploadRequest(MultipartUploadManager.this.bucketName, MultipartUploadManager.this.key, MultipartUploadManager.this.uploadId));
                 }
             }
+            catch (AbortedException e) {
+                throw e;
+            }
             catch (Exception e) {
-                MultipartUploadManager.LOG.info("uploadPart error " + e);
+                MultipartUploadManager.LOG.info("[PATCHNOTE] uploadPart error " + e);
+                doNotDeletePartFile = true;
                 throw e;
             }
             finally {
-                this.partFile.delete();
+                if (!(this.isAnOriginalPartFile && doNotDeletePartFile)) {
+                    this.partFile.delete();
+                } else {
+                    MultipartUploadManager.LOG.info("[PATCHNOTE] Deletion of uploadPart " + this.partFile.getPath() + " averted!");
+                }
             }
             return result;
         }
