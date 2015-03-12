@@ -349,10 +349,10 @@ public class MultipartUploadManager {
                 throw e;
             }
             finally {
-                if (!(this.isAnOriginalPartFile && doNotDeletePartFile)) {
-                    this.partFile.delete();
-                } else {
+                if (this.isAnOriginalPartFile && doNotDeletePartFile) {
                     MultipartUploadManager.LOG.info("[PATCHNOTE] Deletion of uploadPart " + this.partFile.getPath() + " averted!");
+                } else {
+                    this.partFile.delete();
                 }
             }
             return result;
