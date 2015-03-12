@@ -323,9 +323,10 @@ public class MultipartUploadManager {
             UploadPartResult result;
             BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(this.partFile));
             inputStream.skip(this.start);
+            MultipartUploadManager.LOG.info("[PATCHNOTE] starting upload loop.");
             UploadPartRequest request = (UploadPartRequest)new UploadPartRequest().withBucketName(MultipartUploadManager.this.bucketName).withKey(MultipartUploadManager.this.key).withPartNumber(this.partNumber).withInputStream((InputStream)inputStream).withUploadId(MultipartUploadManager.this.uploadId).withPartSize(this.partFile.length()).withGeneralProgressListener(MultipartUploadManager.this.progressListener);
             try {
-                MultipartUploadManager.LOG.debug("uploadPart " + this.partFile.getPath() + " " + this.partFile.length());
+                MultipartUploadManager.LOG.debug("[PATCHNOTE] uploadPart " + this.partFile.getPath() + " " + this.partFile.length());
                 int tries = 0;
                 while(true) {
                   try {
@@ -334,7 +335,7 @@ public class MultipartUploadManager {
                     if (tries >= DEFAULT_PART_ATTEMPTS) {
                       throw e;
                     } else {
-                      MultipartUploadManager.LOG.info("[PATCHERROR] uploadPart error " + e + " on try " + (tries + 1) + "; retrying...");
+                      MultipartUploadManager.LOG.info("[PATCHNOTE] uploadPart error " + e + " on try " + (tries + 1) + "; retrying...");
                       tries++;
                       continue;
                     }
