@@ -59,7 +59,12 @@ class KeepAlive(threading.Thread):
     def run(self):
         import time
         while True:
-            self.status_stream.write('reporter:status:alive')
+            print >>status_stream, ('writing keep alive message to '
+                                    'status stream')
+            self.status_stream.flush()
+            print >>status_stream, 'reporter:status:alive'
+            self.status_stream.flush()
+            print >>status_stream, 'wrote keep alive message to status stream'
             self.status_stream.flush()
             time.sleep(self.period)
 
