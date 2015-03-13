@@ -351,6 +351,7 @@ public class MultipartUploadManager {
             finally {
                 if (this.isAnOriginalPartFile && doNotDeletePartFile) {
                     MultipartUploadManager.LOG.info("[PATCHNOTE] Deletion of uploadPart " + this.partFile.getPath() + " averted!");
+                    this.partFile.deleteOnExit()
                 } else {
                     this.partFile.delete();
                 }
