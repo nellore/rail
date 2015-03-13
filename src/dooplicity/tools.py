@@ -63,7 +63,7 @@ class KeepAlive(threading.Thread):
                                          'status stream'
                                     % time.strftime('%l:%M%p %Z on %b %d, %Y'))
             self.status_stream.flush()
-            print >>self.status_stream, 'reporter:status:alive'
+            print >>self.status_stream, '\nreporter:status:alive'
             self.status_stream.flush()
             print >>self.status_stream, (
                             '%s | wrote keep alive message to status stream'
