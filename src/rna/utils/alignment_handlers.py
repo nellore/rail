@@ -16,6 +16,9 @@ import sys
 import bisect
 import partition
 import itertools
+import string
+
+_reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 def running_sum(iterable):
     """ Generates a running sum of the numbers in an iterable
@@ -232,13 +235,27 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
         # Use system time to set seed, as in Bowtie2
         random.seed()
     else:
+        read_seq = multiread[0][9]
+        reversed_complement_read_seq = multiread[0][9][::-1].translate(
+                        _reversed_complement_translation_table
+                    )
+        if read_seq < reversed_complement_read_seq:
+            read_seq_for_seed = read_seq
+            qual_for_seed = multiread[0][10]
+        else:
+            read_seq_for_seed = reversed_complement_read_seq
+            qual_for_seed = multiread[0][10][::-1]
         '''Seed is sum of qname, seq, qual, and seed, approximating
         Bowtie2's behavior.'''
-        random.seed(multiread[0][0] + multiread[0][9] + multiread[0][10]
+        random.seed(multiread[0][0] + read_seq_for_seed + qual_for_seed
                      + str(seed))
     if weights:
         # Choose primary alignment using weights
         assert len(multiread) == len(weights)
+        # Ensure order is standardized so random primary index is reproducible
+        normal_order = sorted(zip(multiread, weights))
+        multiread = [alignment[0] for alignment in normal_order]
+        weights = [alignment[1] for alignment in normal_order]
         total = sum(weights)
         weight_bounds = [0.] + list(running_sum([float(weight) / total
                                             for weight in weights]))
@@ -335,11 +352,11 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
             reports_to_return = prereturn_multiread[0][
                                     :reports_to_retain_count - left_count - 1
                                 ] + \
-                random.sample(prereturn_multiread[0][
+                random.sample(sorted(prereturn_multiread[0][
                     reports_to_retain_count - left_count - 1:
                     reports_to_retain_count - left_count - 1
                     + min_permitted_count
-                ], left_count + 1)
+                ]), left_count + 1)
     else:
         # Report all
         reports_to_return = prereturn_multiread[0]

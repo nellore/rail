@@ -124,7 +124,7 @@ class S3Ansible(object):
                                             '--region', 'us-east-1']),
                                     bufsize=-1,
                                     shell=True,
-                                    stderr=self._osdevnull)
+                                    stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             if 'BucketAlreadyOwnedByYou' not in e.output:
                 raise
@@ -303,7 +303,8 @@ class S3Ansible(object):
         # Create bucket if it doesn't exist
         try:
             self.create_bucket(bucket)
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
+            print dir(e)
             raise RuntimeError(('Bucket %s already exists on S3. Change '
                                 'affected output directories in job flow '
                                 'and try again. The more distinctive the '

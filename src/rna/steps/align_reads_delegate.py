@@ -295,13 +295,10 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                     for alignment in multiread
                                 ]
             if exact_match and not clip_present:
-                # All alignments for all read sequences can be written
                 NH_field = 'NH:i:%d' % len(multiread)
                 reversed_flags = None
-                '''First set count=0 to avoid printing exon_diffs and indels;
-                then set count = k + 1 to print presummed exon_diffs and indels
-                so fewer lines are written to disk.'''
                 if k_value == 1 and not tie_present:
+                    # All alignments for all read sequences can be written
                     try:
                         for current_is_reverse, current_qname, current_qual \
                             in other_xpartition:

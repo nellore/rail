@@ -615,7 +615,7 @@ def selected_readlet_alignments_by_clustering(readlets):
                                         for alignment in multireadlet]
     '''Sort alignments so closest multireadlet from given group can be found
     easily.'''
-    alignments.sort()
+    alignments.sort(key=lambda alignment: alignment[:-1])
     multireadlet_groups = [alignment[-1] for alignment in alignments]
     unclustered_alignments = range(len(alignments))
     clustered_alignments = []

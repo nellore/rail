@@ -1784,7 +1784,7 @@ class RailRnaElastic(object):
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-        log_uri=None, ami_version='3.4.0',
+        log_uri=None, ami_version='3.5.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2207,7 +2207,7 @@ class RailRnaElastic(object):
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='3.4.0',
+            default='3.5.0',
             help='Amazon Machine Image to use'
         )
         elastic_parser.add_argument('--visible-to-all-users',
@@ -2361,12 +2361,6 @@ class RailRnaElastic(object):
     @staticmethod
     def bootstrap(base):
         return [
-            {
-                'Name' : 'Patch EMRFS',
-                'ScriptBootstrapAction' : {
-                    'Path' : 's3://rail-emr/bootstrap/patch-emrfs.sh'
-                }
-            },
             {
                 'Name' : 'Allocate swap space',
                 'ScriptBootstrapAction' : {
@@ -3994,7 +3988,7 @@ class RailRnaElasticPreprocessJson(object):
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        log_uri=None, ami_version='3.4.0',
+        log_uri=None, ami_version='3.5.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -4314,7 +4308,7 @@ class RailRnaElasticAlignJson(object):
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
-        bed_basename='', log_uri=None, ami_version='3.4.0',
+        bed_basename='', log_uri=None, ami_version='3.5.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -4679,7 +4673,7 @@ class RailRnaElasticAllJson(object):
         transcriptome_indexes_per_sample=500, drop_deletions=False,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='',
-        log_uri=None, ami_version='3.4.0',
+        log_uri=None, ami_version='3.5.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
