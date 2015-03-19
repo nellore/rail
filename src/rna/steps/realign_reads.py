@@ -22,7 +22,7 @@ Tab-delimited input tuple columns:
 Type 1:
 1. Transcriptome Bowtie 2 index group number
 2. Read sequence
-3. '\x1c' + FASTA reference name including '>'. The following format is used:
+3. '0' + FASTA reference name including '>'. The following format is used:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
     subsequence sizes framing introns + '\x1d' + comma-separated list of intron
@@ -34,7 +34,7 @@ Type 1:
 Type 2:
 1. Transcriptome Bowtie 2 index group number
 2. Read sequence
-3. 1 if SEQ is reverse-complemented, else 0
+3. 2 if SEQ is reverse-complemented, else 1
 4. QNAME
 5. QUAL
 
@@ -103,7 +103,7 @@ def input_files_from_input_stream(input_stream,
     prefasta_filename = os.path.join(temp_dir_path, 'temp.prefa')
     deduped_fasta_filename = os.path.join(temp_dir_path, 'temp.deduped.prefa')
     final_fasta_filename = os.path.join(temp_dir_path, 'temp.fa')
-    reads_filename = os.path.join(temp_dir_path, 'reads.temp')
+    reads_filename = os.path.join(temp_dir_path, 'reads.temp.gz')
     for (counter, ((index_group,), xpartition)) in enumerate(
                                                     xstream(input_stream, 1)
                                                 ):
@@ -119,15 +119,16 @@ def input_files_from_input_stream(input_stream,
                     fasta_printed = False
                     for value in values:
                         _input_line_count += 1
-                        if value[1][0] == '\x1c':
+                        if value[1][0] == '0':
                             # Print FASTA line
                             print >>fasta_stream, '\t'.join([value[1][1:-2],
                                                                 value[2]])
                             fasta_printed = True
                         elif fasta_printed:
+                            print >>sys.stderr, value
                             '''Add to temporary seq stream only if an
                             associated FASTA line was found.'''
-                            if value[0] == '0':
+                            if value[1] == '1':
                                 print >>read_stream, '\t'.join([value[2],
                                                                     read_seq,
                                                                     value[3]])
@@ -140,7 +141,7 @@ def input_files_from_input_stream(input_stream,
                                             value[3][::-1]])
                         else:
                             # Print unmapped read
-                            if value[1] == '0':
+                            if value[1] == '1':
                                 seq_to_write = read_seq
                                 qual_to_write = value[3]
                             else:

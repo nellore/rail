@@ -27,7 +27,7 @@ Hadoop output (written to stdout)
 ----------------------------
 Tab-delimited tuple columns, one for each read sequence:
 1. Transcriptome Bowtie 2 index group number
-2. '\x1c' + FASTA reference name including '>'. The following format is used:
+2. '0' + FASTA reference name including '>'. The following format is used:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
     subsequence sizes framing introns + '\x1d' + comma-separated list of intron
@@ -115,7 +115,7 @@ for (rname, poses, end_poses), xpartition in xstream(sys.stdin, 3,
     + ';' + start position of sequence + ';' + comma-separated list of
     subsequence sizes framing introns + ';' + comma-separated list of intron
     sizes'''
-    fasta_info = ('\x1c>' + rname + reverse_strand_string 
+    fasta_info = ('0>' + rname + reverse_strand_string 
                  + '\x1d' + str(left_start) + '\x1d'
                  + ','.join([str(len(subseq)) for subseq in subseqs])
                  + '\x1d' + ','.join([str(intron_end_pos - intron_pos)

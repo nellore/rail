@@ -264,17 +264,18 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
                                                             index_partition,
                                                             seq,
-                                                            is_reverse,
+                                                            is_reverse + 1,
                                                             qname,
                                                             qual
                                                         )
                 try:
                     for is_reverse, qname, qual in other_xpartition:
                         print >>output_stream, (
-                                        'unmapped\t%s\t%s\t%s\t%s\t%s' % (
+                                        'unmapped\t%s\t%s\t%d\t%s\t%s' % (
                                                             index_partition,
                                                             seq,
-                                                            is_reverse,
+                                                            int(is_reverse)
+                                                                + 1,
                                                             qname,
                                                             qual
                                                         )
@@ -458,7 +459,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
                                 group_reads_object.index_group(seq_to_print),
                                 seq_to_print,
-                                is_reverse,
+                                is_reverse + 1,
                                 qname,
                                 qual_to_print
                             )
@@ -513,7 +514,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
                                         group_reads_object.index_group(seq),
                                         seq,
-                                        is_reverse,
+                                        is_reverse + 1,
                                         qname,
                                         qual
                                     )
@@ -564,7 +565,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
                                 group_reads_object.index_group(seq_to_print),
                                 seq_to_print,
-                                is_reverse,
+                                is_reverse + 1,
                                 qname,
                                 qual_to_print
                             )

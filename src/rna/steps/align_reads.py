@@ -106,7 +106,7 @@ Read whose primary alignment is not end-to-end
 Tab-delimited output tuple columns (unmapped):
 1. Transcriptome Bowtie 2 index group number
 2. SEQ
-3. 1 if SEQ is reverse-complemented, else 0
+3. 2 if SEQ is reverse-complemented, else 1
 4. QNAME
 5. QUAL
 
@@ -379,8 +379,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                                         xstream(sys.stdin, 1)
                                                     ):
             nothing_doing = False
-            # Select highest-quality read for first-pass alignment
-            best_mean_qual, best_qual_index, i = None, 0, 0
+            '''Select highest-quality read with alphabetically last qname
+            for first-pass alignment.'''
+            best_name, best_mean_qual, best_qual_index, i = None, None, 0, 0
             others_to_print = dlist()
             for is_reversed, name, qual in xpartition:
                 _input_line_count += 1
@@ -392,9 +393,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                 mean_qual = (
                         float(sum([ord(score) for score in qual])) / len(qual)
                     )
-                if mean_qual > best_mean_qual:
+                if mean_qual >= best_mean_qual and name > best_name:
                     best_qual_index = i
                     best_mean_qual = mean_qual
+                    best_name = name
                     to_align = '\t'.join([
                                         '%s\x1d%s' % (is_reversed, name),
                                         seq, qual

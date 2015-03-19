@@ -677,6 +677,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
 
         No return value.
     """
+    global failed
     import shutil
     import os
     import tempfile
@@ -842,6 +843,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
 
                     No return value.
                 """
+                global failed
                 random.seed(pool.ids[-1])
                 used_engines, free_engines = set(), set(pool.ids)
                 completed_tasks = 0
@@ -973,6 +975,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
 
                     No return value.
                 """
+                global failed
                 completed_tasks = 0
                 tasks_to_assign = deque([
                         [task_function_arg, i, 0] for i, task_function_arg

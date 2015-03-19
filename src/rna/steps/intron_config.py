@@ -2,7 +2,7 @@
 """
 Rail-RNA-intron_config
 
-Follows Rail-RNA-intron
+Follows Rail-RNA-intron_filter
 Precedes Rail-RNA-intron_fasta
 
 Reduce step in MapReduce pipelines that outputs all possible configurations of
