@@ -234,7 +234,7 @@ def handle_temporary_directory(archive, temp_dir_path):
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_build_exe='bowtie2-build', bowtie2_args=None,
     temp_dir_path=None, verbose=False, report_multiplier=1.2, gzip_level=3,
-    count_multiplier=4):
+    count_multiplier=4, tie_margin=0):
     """ Runs Rail-RNA-realign.
 
         Realignment script for MapReduce pipelines that wraps Bowtie2. Creates
@@ -302,6 +302,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         count_multiplier: the bowtie2 -k parameter used is
             alignment_count_to_report * count_multiplier, where
             alignment_count_to_report is the user-specified bowtie2 -k arg
+        tie_margin: allowed score difference per 100 bases among ties in 
+             max alignment score.
 
         No return value.
     """
@@ -320,8 +322,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         bowtie2_index_base, '--12 -'])
     delegate_command = ''.join(
             [sys.executable, ' ', os.path.realpath(__file__)[:-3],
-                '_delegate.py --report-multiplier %08f %s'
-                    % (report_multiplier, '--verbose' if verbose else '')]
+                ('_delegate.py --report-multiplier %08f '
+                 '--alignment-count-to-report %d '
+                 '--tie-margin %d %s')
+                    % (report_multiplier, alignment_count_to_report,
+                        tie_margin, '--verbose' if verbose else '')]
         )
     # Use grep to kill empty lines terminating python script
     full_command = ' | '.join([input_command, 
@@ -401,6 +406,11 @@ if __name__ == '__main__':
     parser.add_argument('--gzip-level', type=int, required=False,
         default=3,
         help='Level of gzip compression to use, if applicable')
+    parser.add_argument('--tie-margin', type=int, required=False,
+        default=6,
+        help='Allowed score difference per 100 bases among ties in '
+             'max score. For example, 150 and 144 are tied alignment scores '
+             'for a 100-bp read when --tie-margin is 6.')
 
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
@@ -444,7 +454,8 @@ if __name__ == '__main__' and not args.test:
         verbose=args.verbose, 
         report_multiplier=args.report_multiplier,
         gzip_level=args.gzip_level,
-        count_multiplier=args.count_multiplier)
+        count_multiplier=args.count_multiplier
+        tie_margin=args.tie_margin)
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters

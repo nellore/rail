@@ -24,8 +24,13 @@ import string
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 def go(output_stream=sys.stdout, input_stream=sys.stdin,
-        verbose=False, report_multiplier=1.2):
+        verbose=False, report_multiplier=1.2,
+        alignment_count_to_report=1, tie_margin=0):
     """ Processes Bowtie 2 alignments, emitting filtered SAM output.
+
+        Only max(# tied alignments, alignment_count_to_report) alignments
+        are printed. This way, the compare_alignments step always has enough
+        information to fill the XS field.
 
         output_stream: where to emit exon and intron tuples; typically, this is
             sys.stdout.
@@ -34,31 +39,48 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin,
         report_multiplier: if verbose is True, the line number of an
             alignment written to stderr increases exponentially with base
             report_multiplier.
+        alignment_count_to_report: argument of Bowtie 2's -k field
+        tie_margin: allowed score difference per 100 bases among ties in 
+             max alignment score.
     """
-    output_line_count, next_report_line, i = 0, 0, 0
+    output_line_count, next_report_line = 0, 0
+    threshold_alignment_count = max(2, alignment_count_to_report)
     for (qname,), xpartition in xstream(input_stream, 1):
+        max_score, alignments_output, current_tie_margin = None, 0, None
         for rest_of_line in xpartition:
-            i += 1
-            flag = int(rest_of_line[0])
-            if verbose and next_report_line == i:
-                print >>sys.stderr, \
-                    'SAM output record %d: rdname="%s", flag=%d' \
-                    % (i, qname, flag)
-                next_report_line = max(int(next_report_line
-                    * report_multiplier), next_report_line + 1)
-            print >>output_stream, \
-                '\t'.join((qname,) + rest_of_line)
-            output_line_count += 1
-        if flag & 4:
-            '''Unmapped read; write only essentials, and handle "formal"
-            writing in next step.'''
-            print >>output_stream, ('%s\t4\t\x1c\t\x1c\t\x1c\t\x1c'
+            # Note Bowtie 2 outputs alignments in order of descending score
+            try:
+                score = int([field[5:] for field in rest_of_line
+                                if field[:5] == 'AS:i:'][0])
+            except IndexError:
+                # Unmapped read; flag should be 4. Print only essentials.
+                assert int(rest_of_line[0]) == 4
+                print >>output_stream, ('%s\t4\t\x1c\t\x1c\t\x1c\t\x1c'
                                          '\t\x1c\t\x1c\t\x1c\t%s\t%s') % (
                                                 qname,
                                                 rest_of_line[8],
                                                 rest_of_line[9]
                                             )
-            output_line_count += 1
+                output_line_count += 1
+            else:
+                if current_tie_margin is None:
+                    current_tie_margin = round(
+                            tie_margin * float(len(rest_of_line[8])) / 100
+                        )
+                if score + current_tie_margin >= max_score:
+                    max_score = max(max_score, score)
+                elif alignments_output >= threshold_alignment_count:
+                    break
+                print >>output_stream, '\t'.join((qname,) + rest_of_line)
+                alignments_output += 1
+                output_line_count += 1
+                if verbose and next_report_line == output_line_count:
+                    print >>sys.stderr, \
+                        'SAM output record %d: rdname="%s", flag=%d' \
+                        % (output_line_count, qname, int(rest_of_line[0]))
+                    next_report_line = max(int(next_report_line
+                        * report_multiplier), next_report_line + 1)
+                print >>output_stream, '\t'.join((qname,) + rest_of_line)
     output_stream.flush()
     print >>sys.stderr, ('realign_reads_delegate.py reports %d output lines.'
                             % output_line_count)
@@ -75,7 +97,17 @@ if __name__ == '__main__':
         help='When --verbose is also invoked, the only lines of lengthy '
              'intermediate output written to stderr have line number that '
              'increases exponentially with this base')
+    parser.add_argument('--alignment-count-to-report', type=int,
+        required=False, default=1,
+        help='Argument of Bowtie 2\'s -k parameter')
+    parser.add_argument('--tie-margin', type=int, required=False,
+        default=6,
+        help='Allowed score difference per 100 bases among ties in '
+             'max score. For example, 150 and 144 are tied alignment scores '
+             'for a 100-bp read when --tie-margin is 6.')
     args = parser.parse_args()
 
     go(verbose=args.verbose,
-        report_multiplier=args.report_multiplier)
+        report_multiplier=args.report_multiplier
+        alignment_count_to_report=args.alignment_count_to_report
+        tie_margin=args.tie_margin)

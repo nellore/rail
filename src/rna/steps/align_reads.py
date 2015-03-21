@@ -393,7 +393,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                 mean_qual = (
                         float(sum([ord(score) for score in qual])) / len(qual)
                     )
-                if mean_qual >= best_mean_qual and name > best_name:
+                if (mean_qual > best_mean_qual
+                        or mean_qual == best_mean_qual and name > best_name):
                     best_qual_index = i
                     best_mean_qual = mean_qual
                     best_name = name

@@ -3543,12 +3543,14 @@ class RailRnaAlign(object):
             {
                 'name' : 'Align reads to transcriptome elements',
                 'run' : ('realign_reads.py --bowtie2-exe={0} --gzip-level {1} '
-                         '--count-multiplier {2} {3} {4} {5} -- {6}').format(
+                         '--count-multiplier {2} '
+                         '--tie-margin {3} {4} {5} {6} -- {7}').format(
                                         base.bowtie2_exe,
                                         base.gzip_level
                                         if 'gzip_level' in
                                         dir(base) else 3,
                                         base.count_multiplier,
+                                        base.tie_margin,
                                         verbose,
                                         keep_alive,
                                         scratch,
