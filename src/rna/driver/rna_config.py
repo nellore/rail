@@ -39,6 +39,7 @@ from collections import defaultdict
 import random
 import string
 import socket
+import exe_paths
 
 _help_set = set(['--help', '-h'])
 _argv_set = set(sys.argv)
@@ -69,7 +70,8 @@ class RailHelpFormatter(argparse.HelpFormatter):
                 defaulting_nargs = [argparse.OPTIONAL, argparse.ZERO_OR_MORE]
                 if action.option_strings or action.nargs in defaulting_nargs:
                     help += ' (def: %(default)s)'
-        return help
+        # Take out the "def: "
+        return help.replace('(def: ', '(')
 
     def _format_action_invocation(self, action):
         if not action.option_strings:
@@ -124,7 +126,14 @@ if 'pypy 2.' in sys.version.lower():
     _warning_message = 'Launching Dooplicity runner with PyPy...'
     _executable = sys.executable
 else:
-    _pypy_exe = which('pypy')
+    if exe_paths.pypy is None:
+        _pypy_exe = which('pypy')
+    else:
+        candidate_pypy_exe = which(exe_paths.pypy)
+        if candidate_pypy_exe is not None:
+            _pypy_exe = exe_paths.pypy
+        else:
+            _pypy_exe = which('pypy')
     _print_warning = False
     if _pypy_exe is not None:
         try:
@@ -1189,13 +1198,19 @@ class RailRnaErrors(object):
     def add_args(general_parser, exec_parser, required_parser):
         exec_parser.add_argument(
             '--aws', type=str, required=False, metavar='<exe>',
-            default=None,
-            help='path to AWS CLI executable (def: aws)'
+            default=exe_paths.aws,
+            help=('path to AWS CLI executable (def: %s)'
+                    % (exe_paths.aws
+                        if exe_paths.aws is not None
+                        else 'aws'))
         )
         exec_parser.add_argument(
             '--curl', type=str, required=False, metavar='<exe>',
-            default=None,
-            help='path to Curl executable (def: curl)'
+            default=exe_paths.curl,
+            help=('path to Curl executable (def: %s)'
+                    % (exe_paths.curl
+                        if exe_paths.curl is not None
+                        else 'curl'))
         )
         general_parser.add_argument(
             '--profile', type=str, required=False, metavar='<str>',
@@ -1676,9 +1691,10 @@ class RailRnaLocal(object):
         """
         exec_parser.add_argument(
             '--sort', type=str, required=False, metavar='<exe>',
-            default=None,
+            default=exe_paths.sort,
             help=('path to sort executable; include extra sort parameters '
-                  'here (def: sort)')
+                  'here (def: %s)'
+                    % (exe_paths.sort if exe_paths is not None else 'sort'))
         )
         if align:
             required_parser.add_argument(
@@ -2208,7 +2224,7 @@ class RailRnaElastic(object):
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
             default='3.5.0',
-            help='Amazon Machine Image to use'
+            help='Amazon Machine Image version'
         )
         elastic_parser.add_argument('--visible-to-all-users',
             action='store_const',
@@ -2672,24 +2688,30 @@ class RailRnaPreprocess(object):
 class RailRnaAlign(object):
     """ Sets parameters relevant to just the "align" job flow. """
     def __init__(self, base, input_dir=None, elastic=False,
-        bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
-        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
-        genome_partition_length=5000, max_readlet_size=25,
+        bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
+        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_args='',
+        samtools_exe=None, bedgraphtobigwig_exe=None,
+        partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_confidence_criteria='0.5,5', tie_margin=6,
+        intron_criteria='0.5,5', tie_margin=6,
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', assembly='hg19',
         s3_ansible=None):
         if not elastic:
             '''Programs and Bowtie indices should be checked only in local
-            mode.'''
+            mode. First grab Bowtie index paths.'''
+            if ',' in bowtie_idx:
+                bowtie1_idx, _, bowtie2_idx = bowtie_idx.partition(',')
+            else:
+                bowtie1_idx = bowtie2_idx = bowtie_idx
+            bowtie1_idx = os.path.expandvars(os.path.expanduser(bowtie1_idx))
+            bowtie2_idx = os.path.expandvars(os.path.expanduser(bowtie2_idx))
             base.bowtie1_exe = base.check_program('bowtie', 'Bowtie 1',
                                 '--bowtie1', entered_exe=bowtie1_exe,
                                 is_exe=is_exe, which=which)
@@ -2836,14 +2858,14 @@ class RailRnaAlign(object):
 
         # Assume bowtie2 args are kosher for now
         base.bowtie2_args = bowtie2_args
-        if not (isinstance(genome_partition_length, int) and
-                genome_partition_length > 0):
+        if not (isinstance(partition_length, int) and
+                partition_length > 0):
             base.errors.append('Genome partition length '
-                               '(--genome-partition-length) must be an '
+                               '(--partition-length) must be an '
                                'integer > 0, but {0} was entered.'.format(
-                                                        genome_partition_length
+                                                        partition_length
                                                     ))
-        base.genome_partition_length = genome_partition_length
+        base.partition_length = partition_length
         if not (isinstance(min_readlet_size, int) and min_readlet_size > 0):
             base.errors.append('Minimum readlet size (--min-readlet-size) '
                                'must be an integer > 0, but '
@@ -2971,7 +2993,7 @@ class RailRnaAlign(object):
                                                     count_multiplier
                                                 ))
         base.count_multiplier = count_multiplier
-        confidence_criteria_split = intron_confidence_criteria.split(',')
+        confidence_criteria_split = intron_criteria.split(',')
         confidence_criteria_error = False
         try:
             base.sample_fraction = float(confidence_criteria_split[0])
@@ -2989,12 +3011,12 @@ class RailRnaAlign(object):
                 confidence_criteria_error = True
         if confidence_criteria_error:
             base.errors.append('Intron confidence criteria '
-                               '(--intron-confidence-criteria) must be a '
+                               '(--intron-criteria) must be a '
                                'comma-separated list of two elements: the '
                                'first should be a decimal value between 0 '
                                'and 1 inclusive, and the second should be '
                                'an integer >= 1. {0} was entered.'.format(
-                                                    intron_confidence_criteria
+                                                    intron_criteria
                                                 ))
         base.drop_deletions = drop_deletions
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
@@ -3019,49 +3041,64 @@ class RailRnaAlign(object):
             exec_parser.add_argument(
                 '--bowtie1', type=str, required=False,
                 metavar='<exe>',
-                default=None,
-                help=('path to Bowtie 1 executable (def: bowtie)')
+                default=exe_paths.bowtie1,
+                help=('path to Bowtie 1 executable (def: %s)'
+                        % (exe_paths.bowtie1
+                            if exe_paths.bowtie1 is not None
+                            else 'bowtie'))
             )
             exec_parser.add_argument(
                 '--bowtie1-build', type=str, required=False,
                 metavar='<exe>',
-                default=None,
-                help=('path to Bowtie 1 Build executable (def: bowtie-build)')
+                default=exe_paths.bowtie1_build,
+                help=('path to Bowtie 1 Build executable (def: %s)'
+                        % (exe_paths.bowtie1_build
+                            if exe_paths.bowtie1_build is not None
+                            else 'bowtie-build'))
             )
             required_parser.add_argument(
-                '-1', '--bowtie1-idx', type=str, required=True,
-                metavar='<idx>',
-                help='path to Bowtie 1 index; include basename'
+                '-x', '--bowtie-idx', type=str, required=True,
+                metavar='<idx/idx,idx>',
+                help=('Bowtie 1 and 2 index basenames if they share the '
+                      'same path; otherwise, Bowtie 1 index basename '
+                      'and Bowtie 2 index basename separated by comma')
             )
             exec_parser.add_argument(
                 '--bowtie2', type=str, required=False,
                 metavar='<exe>',
-                default=None,
-                help=('path to Bowtie 2 executable (def: bowtie2)')
+                default=exe_paths.bowtie2,
+                help=('path to Bowtie 2 executable (def: %s)'
+                        % (exe_paths.bowtie2
+                            if exe_paths.bowtie2 is not None
+                            else 'bowtie2'))
             )
             exec_parser.add_argument(
                 '--bowtie2-build', type=str, required=False,
                 metavar='<exe>',
-                default=None,
-                help=('path to Bowtie 2 Build executable (def: bowtie2-build)')
-            )
-            required_parser.add_argument(
-                '-2', '--bowtie2-idx', type=str, required=True,
-                metavar='<idx>',
-                help='path to Bowtie 2 index; include basename'
+                default=exe_paths.bowtie2_build,
+                help=('path to Bowtie 2 Build executable (def: %s)'
+                        % (exe_paths.bowtie2_build
+                            if exe_paths.bowtie2_build is not None
+                            else 'bowtie2-build'))
             )
             exec_parser.add_argument(
                 '--samtools', type=str, required=False,
                 metavar='<exe>',
-                default=None,
-                help=('path to SAMTools executable (def: samtools)')
+                default=exe_paths.samtools,
+                help=('path to SAMTools executable (def: %s)'
+                        % (exe_paths.samtools
+                            if exe_paths.samtools is not None
+                            else 'samtools'))
             )
             exec_parser.add_argument(
                 '--bedgraphtobigwig', type=str, required=False,
                 metavar='<exe>',
-                default=None,
+                default=exe_paths.bedgraphtobigwig,
                 help=('path to BedGraphToBigWig executable '
-                      '(def: bedGraphToBigWig)')
+                      '(def: %s)' 
+                        % (exe_paths.bedgraphtobigwig
+                            if exe_paths.bedgraphtobigwig is not None
+                            else 'bedGraphToBigWig'))
             )
         else:
             required_parser.add_argument(
@@ -3079,7 +3116,7 @@ class RailRnaAlign(object):
                       '"--local" mode (def: Bowtie 2 defaults)')
             )
         algo_parser.add_argument(
-            '--genome-partition-length', type=int, required=False,
+            '--partition-length', type=int, required=False,
             metavar='<int>',
             default=5000,
             help=('smallest unit of genome addressable by single task when '
@@ -3144,8 +3181,8 @@ class RailRnaAlign(object):
                   'or select <choice> from {"strict", "mild", "none"}')
         )
         algo_parser.add_argument(
-            '--intron-confidence-criteria', type=str, required=False,
-            metavar='<dec>,<int>',
+            '--intron-criteria', type=str, required=False,
+            metavar='<dec,int>',
             default='0.05,5',
             help=('if parameter is "f,c", filter out introns that are not '
                   'either present in at least a fraction f of samples or '
@@ -3258,7 +3295,7 @@ class RailRnaAlign(object):
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
-                                                base.genome_partition_length,
+                                                base.partition_length,
                                                 base.search_filter,
                                                         manifest,
                                                         base.max_readlet_size,
@@ -3324,7 +3361,7 @@ class RailRnaAlign(object):
                          '--search-window-size={5} {6} '
                          '--motif-radius={7} {8}').format(
                                                 base.bowtie1_idx,
-                                                base.genome_partition_length,
+                                                base.partition_length,
                                                 base.max_intron_size,
                                                 base.min_intron_size,
                                                 base.min_exon_size,
@@ -3539,7 +3576,7 @@ class RailRnaAlign(object):
                          '--tie-margin {2} --manifest={3} '
                          '{4} {5} -- {6}').format(
                                         base.bowtie1_idx,
-                                        base.genome_partition_length,
+                                        base.partition_length,
                                         base.tie_margin,
                                         manifest,
                                         drop_deletions,
@@ -3587,7 +3624,7 @@ class RailRnaAlign(object):
                             '--bowtie-idx {0} --partition-length {1} '
                             '--manifest {2} {3} -- {4}').format(
                                     base.bowtie1_idx,
-                                    base.genome_partition_length,
+                                    base.partition_length,
                                     manifest,
                                     drop_deletions,
                                     base.bowtie2_args
@@ -4071,17 +4108,17 @@ class RailRnaLocalAlignJson(object):
         intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, bowtie1_exe=None,
-        bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
-        bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
-        genome_partition_length=5000, max_readlet_size=25,
+        bowtie_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
+        bowtie2_build_exe=None, bowtie2_args='',
+        samtools_exe=None, bedgraphtobigwig_exe=None,
+        partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_confidence_criteria='0.5,5', tie_margin=6,
+        intron_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', num_processes=1,
@@ -4100,12 +4137,11 @@ class RailRnaLocalAlignJson(object):
             sort_exe=sort_exe)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=False, bowtie1_exe=bowtie1_exe,
-            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe,
+            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
-            genome_partition_length=genome_partition_length,
+            partition_length=partition_length,
             max_readlet_size=max_readlet_size,
             readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
@@ -4118,7 +4154,7 @@ class RailRnaLocalAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            intron_confidence_criteria=intron_confidence_criteria,
+            intron_criteria=intron_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             tie_margin=tie_margin,
@@ -4148,17 +4184,17 @@ class RailRnaParallelAlignJson(object):
         intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, bowtie1_exe=None,
-        bowtie1_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
-        bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
-        genome_partition_length=5000, max_readlet_size=25,
+        bowtie_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
+        bowtie2_build_exe=None, bowtie2_args='',
+        samtools_exe=None, bedgraphtobigwig_exe=None,
+        partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_confidence_criteria='0.5,5', tie_margin=6,
+        intron_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='', num_processes=1,
@@ -4187,12 +4223,11 @@ class RailRnaParallelAlignJson(object):
                                                     )])
         RailRnaAlign(base, input_dir=input_dir,
             elastic=False, bowtie1_exe=bowtie1_exe,
-            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe,
+            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
-            genome_partition_length=genome_partition_length,
+            partition_length=partition_length,
             max_readlet_size=max_readlet_size,
             readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
@@ -4205,7 +4240,7 @@ class RailRnaParallelAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            intron_confidence_criteria=intron_confidence_criteria,
+            intron_criteria=intron_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             tie_margin=tie_margin,
@@ -4233,12 +4268,11 @@ class RailRnaParallelAlignJson(object):
             ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
             input_dir=input_dir, elastic=False, bowtie1_exe=bowtie1_exe,
-            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe,
+            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
-            genome_partition_length=genome_partition_length,
+            partition_length=partition_length,
             max_readlet_size=max_readlet_size,
             readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
@@ -4251,7 +4285,7 @@ class RailRnaParallelAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            intron_confidence_criteria=intron_confidence_criteria,
+            intron_criteria=intron_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             tie_margin=tie_margin,
@@ -4293,18 +4327,18 @@ class RailRnaElasticAlignJson(object):
     def __init__(self, manifest, output_dir, input_dir, 
         intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
-        verbose=False, bowtie1_exe=None, bowtie1_idx='genome',
+        verbose=False, bowtie1_exe=None, bowtie_idx='genome',
         bowtie1_build_exe=None, bowtie2_exe=None,
-        bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
-        genome_partition_length=5000, max_readlet_size=25,
+        bowtie2_build_exe=None, bowtie2_args='',
+        samtools_exe=None, bedgraphtobigwig_exe=None,
+        partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_confidence_criteria='0.5,5', tie_margin=6,
+        intron_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
@@ -4344,12 +4378,11 @@ class RailRnaElasticAlignJson(object):
             intermediate_lifetime=intermediate_lifetime)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=True, bowtie1_exe=bowtie1_exe,
-            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe,
+            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
-            genome_partition_length=genome_partition_length,
+            partition_length=partition_length,
             max_readlet_size=max_readlet_size,
             readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
@@ -4362,7 +4395,7 @@ class RailRnaElasticAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            intron_confidence_criteria=intron_confidence_criteria,
+            intron_criteria=intron_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             tie_margin=tie_margin,
@@ -4418,16 +4451,16 @@ class RailRnaLocalAllJson(object):
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
-        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
-        genome_partition_length=5000, max_readlet_size=25,
+        bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
+        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_args='',
+        samtools_exe=None, bedgraphtobigwig_exe=None,
+        partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        intron_confidence_criteria='0.5,5',
+        intron_criteria='0.5,5',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
@@ -4449,12 +4482,11 @@ class RailRnaLocalAllJson(object):
             keep_intermediates=keep_intermediates, scratch=scratch,
             sort_exe=sort_exe)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
-            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe,
+            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
-            genome_partition_length=genome_partition_length,
+            partition_length=partition_length,
             max_readlet_size=max_readlet_size,
             readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
@@ -4469,7 +4501,7 @@ class RailRnaLocalAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
-            intron_confidence_criteria=intron_confidence_criteria,
+            intron_criteria=intron_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
@@ -4505,16 +4537,16 @@ class RailRnaParallelAllJson(object):
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
-        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
-        genome_partition_length=5000, max_readlet_size=25,
+        bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
+        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_args='',
+        samtools_exe=None, bedgraphtobigwig_exe=None,
+        partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        intron_confidence_criteria='0.5,5',
+        intron_criteria='0.5,5',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
@@ -4544,12 +4576,11 @@ class RailRnaParallelAllJson(object):
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
-            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe,
+            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
-            genome_partition_length=genome_partition_length,
+            partition_length=partition_length,
             max_readlet_size=max_readlet_size,
             readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
@@ -4564,7 +4595,7 @@ class RailRnaParallelAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
-            intron_confidence_criteria=intron_confidence_criteria,
+            intron_criteria=intron_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
@@ -4590,12 +4621,11 @@ class RailRnaParallelAllJson(object):
             ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
             bowtie1_exe=bowtie1_exe,
-            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe,
+            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
-            genome_partition_length=genome_partition_length,
+            partition_length=partition_length,
             max_readlet_size=max_readlet_size,
             readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
@@ -4610,7 +4640,7 @@ class RailRnaParallelAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
-            intron_confidence_criteria=intron_confidence_criteria,
+            intron_criteria=intron_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
@@ -4659,17 +4689,17 @@ class RailRnaElasticAllJson(object):
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        bowtie1_exe=None, bowtie1_idx='genome', bowtie1_build_exe=None,
-        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_idx='genome',
-        bowtie2_args='', samtools_exe=None, bedgraphtobigwig_exe=None,
-        genome_partition_length=5000, max_readlet_size=25,
+        bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
+        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_args='',
+        samtools_exe=None, bedgraphtobigwig_exe=None,
+        partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
-        intron_confidence_criteria='0.5,5', normalize_percentile=0.75,
+        intron_criteria='0.5,5', normalize_percentile=0.75,
         transcriptome_indexes_per_sample=500, drop_deletions=False,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='',
@@ -4712,12 +4742,11 @@ class RailRnaElasticAllJson(object):
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
         RailRnaAlign(base, elastic=True, bowtie1_exe=bowtie1_exe,
-            bowtie1_idx=bowtie1_idx, bowtie1_build_exe=bowtie1_build_exe,
+            bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_idx=bowtie2_idx, bowtie2_args=bowtie2_args,
-            samtools_exe=samtools_exe,
+            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
-            genome_partition_length=genome_partition_length,
+            partition_length=partition_length,
             max_readlet_size=max_readlet_size,
             readlet_config_size=readlet_config_size,
             min_readlet_size=min_readlet_size,
@@ -4733,7 +4762,7 @@ class RailRnaElasticAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
-            intron_confidence_criteria=intron_confidence_criteria,
+            intron_criteria=intron_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,

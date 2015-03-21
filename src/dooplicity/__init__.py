@@ -1,7 +1,7 @@
 """
 Dooplicity: a Python and command-line framework for MapReduce programming
 
-Currently only local mode and Elastic MapReduce are supported.
+Currently only local, parallel and Elastic MapReduce modes are supported.
 
 Licensed under the MIT License:
 
