@@ -218,7 +218,7 @@ if __name__ == '__main__':
                                     'local',
                                     usage=general_usage('align local',
                                         '-m <file> -i <dir> '
-                                        '-x <idx/idx,idx> '),
+                                        '-x <idx | idx,idx> '),
                                     formatter_class=rail_help_wrapper,
                                     add_help=False
                                 )
@@ -226,7 +226,7 @@ if __name__ == '__main__':
                                     'parallel',
                                     usage=general_usage('align parallel',
                                         '-m <file> -i <dir> '
-                                        '-x <idx/idx,idx> '),
+                                        '-x <idx | idx,idx> '),
                                     formatter_class=rail_help_wrapper,
                                     add_help=False
                                 )
@@ -234,7 +234,7 @@ if __name__ == '__main__':
                                     'elastic',
                                     usage=general_usage('align elastic',
                                         '-m <file> -i <s3_dir> -a '
-                                        '<choice/tgz> \r\n       '
+                                        '<choice | tgz> \r\n       '
                                         '-c <int> -o <s3_dir> '),
                                     formatter_class=rail_help_wrapper,
                                     add_help=False
@@ -243,14 +243,14 @@ if __name__ == '__main__':
     go_local_parser = go_parsers.add_parser(
                                     'local',
                                     usage=general_usage('go local',
-                                        '-m <file> -x <idx/idx,idx> '),
+                                        '-m <file> -x <idx | idx,idx> '),
                                     formatter_class=rail_help_wrapper,
                                     add_help=False
                                 )
     go_parallel_parser = go_parsers.add_parser(
                                     'parallel',
                                     usage=general_usage('go parallel',
-                                        '-m <file> -x <idx/idx,idx> '),
+                                        '-m <file> -x <idx | idx,idx> '),
                                     formatter_class=rail_help_wrapper,
                                     add_help=False
                                 )

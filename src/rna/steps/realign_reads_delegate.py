@@ -108,6 +108,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     go(verbose=args.verbose,
-        report_multiplier=args.report_multiplier
-        alignment_count_to_report=args.alignment_count_to_report
+        report_multiplier=args.report_multiplier,
+        alignment_count_to_report=args.alignment_count_to_report,
         tie_margin=args.tie_margin)

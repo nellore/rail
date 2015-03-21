@@ -3103,7 +3103,7 @@ class RailRnaAlign(object):
         else:
             required_parser.add_argument(
                 '-a', '--assembly', type=str, required=True,
-                metavar='<choice/tgz>',
+                metavar='<choice | tgz>',
                 help=('assembly to use for alignment. <choice> can be in '
                       '{"hg19"}. otherwise, specify path to tar.gz Rail '
                       'archive on S3')

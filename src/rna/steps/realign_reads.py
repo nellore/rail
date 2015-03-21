@@ -125,7 +125,6 @@ def input_files_from_input_stream(input_stream,
                                                                 value[2]])
                             fasta_printed = True
                         elif fasta_printed:
-                            print >>sys.stderr, value
                             '''Add to temporary seq stream only if an
                             associated FASTA line was found.'''
                             if value[1] == '1':
@@ -454,7 +453,7 @@ if __name__ == '__main__' and not args.test:
         verbose=args.verbose, 
         report_multiplier=args.report_multiplier,
         gzip_level=args.gzip_level,
-        count_multiplier=args.count_multiplier
+        count_multiplier=args.count_multiplier,
         tie_margin=args.tie_margin)
 elif __name__ == '__main__':
     # Test units
