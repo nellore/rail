@@ -3,12 +3,12 @@
 generate_bioreps.py
 Abhi Nellore / July 14, 2014
 
-Generates 20 bioreps for Rail paper using Flux Simulator by:
+Generates 112 bioreps for Rail paper using Flux Simulator by:
 
 1) starting a single Flux simulation and interrupting the pipeline after
     6 columns of a PRO file P have been written.
 2) reading RPKMs from Geuvadis data for by default a group a 20 YRI samples.
-3) writing 20 files, each a copy of P except with a different coverage
+3) writing 112 files, each a copy of P except with a different coverage
     distribution. The coverage distribution is specified as follows: column 6
     of P has the absolute number of RNA molecules associated with each
     transcript. To recompute this value, an RPKM for a given transcript from
@@ -20,8 +20,9 @@ Generates 20 bioreps for Rail paper using Flux Simulator by:
     for samples.
 
 The default locations of files from command-line parameters are on the Hopkins
-Homewood High-Performance Cluster. Command-line parameter help specifies where
-on the web to grab them and what parameters are used in the paper.
+Homewood High-Performance Compute Cluster. Command-line parameter help
+specifies where on the web to grab them and what parameters are used in the
+paper.
 
 REQUIRES PANDAS. Download the Anaconda distribution of Python to simplify
 getting it.
@@ -184,26 +185,24 @@ if __name__ == '__main__':
     parser.add_argument('--fasta', type=str,
         default='/scratch0/langmead-fs1/shared/references/hg19/fasta',
         help='Where to find reference FASTAs for chrs. Use GRCh37.')
-    parser.add_argument('-s', '--samples', type=str,
-        default=('NA18508.1.M_111124_1,NA18510.3.M_120202_7,'
-                 'NA18511.1.M_120209_1,NA18517.1.M_120209_7,'
-                 'NA18519.1.M_111124_3,NA18520.1.M_111124_1,'
-                 'NA18858.1.M_120209_7,NA18861.1.M_120209_2,'
-                 'NA18907.1.M_120209_1,NA18908.7.M_120219_7,'
-                 'NA18909.1.M_120209_8,NA18910.1.M_120209_5,'
-                 'NA18912.1.M_120209_5,NA18916.1.M_120209_7,'
-                 'NA18917.1.M_111124_5,NA18923.2.M_111216_5,'
-                 'NA18933.1.M_111124_2,NA18934.1.M_120209_3,'
-                 'NA19092.1.M_111124_3,NA19093.7.M_120219_7'),
-        help=('Comma-separated list of sample names from RPKM file whose '
-              'expression profiles are to be mimicked. Defaults to list of '
-              'sample names used in Rail paper (some YRIs) and determines '
-              'number of simulations to perform. Be sure to exclude samples '
-              'mentioned at http://geuvadiswiki.crg.es/index.php/'
-              'QC_sample_info. Sample information is available at '
+    parser.add_argument('--manifest', type=str,
+        default='GEUVADIS_112.manifest',
+        help=('Rail-RNA manifest file listing a subset of GEUVADIS samples '
+              'whose coverage distributions are to be mimicked. The '
+              'fastq.gz files listed contain sample names that '
+              'mirror those in the RPKM file (specified with --rpkm). '
+              'Defaults to GEUVADIS_112.manifest -- a random sample with 112 '
+              'GEUVADIS samples, 16 from each of 7 labs -- as generated '
+              'by geuvadis_lab_ethnicity_sex.py. Sample information is '
+              'available at '
               'http://www.ebi.ac.uk/arrayexpress/experiments/E-GEUV-1/'
-              'samples/')
-        )
+              'samples/'))
+    parser.add_argument('--metadata', type=str,
+        default='E-GEUV-3.sdrf.txt'
+        help=('File containing metadata on GEUVADIS samples available at '
+              'http://www.ebi.ac.uk/arrayexpress/files/E-GEUV-3/'
+              'E-GEUV-3.sdrf.txt; used to associate sample names from RPKM '
+              'file with sample names from manifest file'))
     parser.add_argument('-c', '--read-count', type=int,
             default=40000000,
             help='Number of reads to generate per sample')
@@ -220,6 +219,29 @@ if __name__ == '__main__':
     print >>sys.stderr, 'Reading RPKMs...'
     rpkms = pd.DataFrame.from_csv(args.rpkm, sep='\t')
     relevant_samples = args.samples.strip().split(',')
+
+    print >>sys.stderr, 'Reading sample metadata...'
+    with open('E-GEUV-3.sdrf.txt') as geuvadis_data_stream:
+        geuvadis_data_stream.readline() # labels
+        for line in geuvadis_data_stream:
+            tokens = line.strip().split('\t')
+            fastq_to_sample[
+                    tokens[29].rpartition('/')[-1].partition('_')[0]
+                ] = tokens[23]
+
+    print >>sys.stderr, 'Reading manifest file...'
+    relevant_samples = []
+    with open(args.manifest) as manifest_stream:
+        for line in manifest_stream:
+            line = line.strip()
+            if line[0] == '#' or not line:
+                continue
+            tokens = line.strip().split('\t')
+            sample_name = tokens[-1]
+            sample_fastq = tokens[-2].rpartition('/')[-1].partition('_')[0]
+            relevant_samples.append(
+                    (sample_name, fastq_to_sample[sample_fastq])
+                )
 
     temp_dir = tempfile.mkdtemp()
     atexit.register(kill_dir, temp_dir)
@@ -272,11 +294,11 @@ if __name__ == '__main__':
     print >>sys.stderr, 'Creating PAR and PRO files for bioreplicate sims...'
     pool = multiprocessing.Pool(args.num_processes)
     return_values = []
-    for i, sample in enumerate(relevant_samples):
+    for i, (sample_name, rpkm_name) in enumerate(relevant_samples):
         pool.apply_async(write_par_and_pro,
                        (expression_par, expression_pro,
-                            os.path.join(args.output, sample + '_sim'),
-                            i, rpkms, sample),
+                            os.path.join(args.output, sample_name + '_sim'),
+                            i, rpkms, rpkm_name),
                        callback=return_values.append)
     pool.close()
     relevant_count = len(relevant_samples)
