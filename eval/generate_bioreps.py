@@ -180,7 +180,7 @@ if __name__ == '__main__':
               'analysis_results/GD660.TrQuantRPKM.txt')
         )
     parser.add_argument('-p', '--num-processes', type=int,
-        default=32,
+        default=5,
         help=('Number of instances of Flux Simulator to run simultaneously; '
               'set this to below 10 so it doesn\'t choke.')
         )
@@ -247,7 +247,7 @@ if __name__ == '__main__':
 
     temp_dir = tempfile.mkdtemp()
     atexit.register(kill_dir, temp_dir)
-    """expression_par = os.path.join(temp_dir, 'sim.par')
+    expression_par = os.path.join(temp_dir, 'sim.par')
     par_template = [
         ('NB_MOLECULES', '5000000'),
         ('LOAD_NONCODING', 'YES'),
@@ -293,9 +293,9 @@ if __name__ == '__main__':
     if not os.path.exists(expression_pro):
         raise RuntimeError('PRO template with same basename as PAR template '
                            'was not created.')
-    print >>sys.stderr, 'Creating PAR and PRO files for bioreplicate sims...'"""
+    print >>sys.stderr, 'Creating PAR and PRO files for bioreplicate sims...'
     pool = multiprocessing.Pool(args.num_processes)
-    """return_values = []
+    return_values = []
     try:
         os.makedirs(args.output)
     except OSError:
@@ -305,14 +305,14 @@ if __name__ == '__main__':
                        (expression_par, expression_pro,
                             os.path.join(args.output, sample_name + '_sim'),
                             i, rpkms, rpkm_name),
-                       callback=return_values.append)"""
+                       callback=return_values.append)
     relevant_count = len(relevant_samples)
-    """while len(return_values) != relevant_count:
+    while len(return_values) != relevant_count:
         sys.stdout.write('Created %d/%d PAR/PRO pairs.\r' \
                             % (len(return_values), relevant_count))
         sys.stdout.flush()
         time.sleep(.2)
-    print >>sys.stderr, 'Created all PAR/PRO pairs.'"""
+    print >>sys.stderr, 'Created all PAR/PRO pairs.'
     print >>sys.stderr, 'Running sims...'
     return_values = []
     for sample_name, _ in relevant_samples:
