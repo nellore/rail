@@ -198,7 +198,7 @@ if __name__ == '__main__':
               'http://www.ebi.ac.uk/arrayexpress/experiments/E-GEUV-1/'
               'samples/'))
     parser.add_argument('--metadata', type=str,
-        default='E-GEUV-3.sdrf.txt'
+        default='E-GEUV-3.sdrf.txt',
         help=('File containing metadata on GEUVADIS samples available at '
               'http://www.ebi.ac.uk/arrayexpress/files/E-GEUV-3/'
               'E-GEUV-3.sdrf.txt; used to associate sample names from RPKM '
@@ -294,6 +294,10 @@ if __name__ == '__main__':
     print >>sys.stderr, 'Creating PAR and PRO files for bioreplicate sims...'
     pool = multiprocessing.Pool(args.num_processes)
     return_values = []
+    try:
+        os.makedirs(args.output)
+    except OSError:
+        pass
     for i, (sample_name, rpkm_name) in enumerate(relevant_samples):
         pool.apply_async(write_par_and_pro,
                        (expression_par, expression_pro,
