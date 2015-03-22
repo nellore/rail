@@ -8,6 +8,17 @@ mode arguments {local, cloud} and flow arguments {preprocess, align, all}.
 Command-line interface is inspired by git's and bowtie's.
 """
 
+import sys
+# Check for Python 2.7 immediately
+if not (2 == sys.version_info[0] and sys.version_info[1] >= 7):
+    print >>sys.stderr, ('Rail-RNA requires a version of Python >= 2.7 but '
+                         '< 3.0. If an appropriate version of Python is '
+                         'available at some path P that is not in PATH, try '
+                         'running "P {0}". Otherwise, install an '
+                         'appropriate version of Python and rerun.').format(
+                                ' '.join(sys.argv)
+                            )
+    sys.exit(1)
 import os
 base_path = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 driver_path = os.path.join(base_path, 'rna', 'driver')
@@ -17,12 +28,10 @@ site.addsitedir(base_path)
 from rna_config import *
 from rna_config import _warning_message, _executable
 from dooplicity.tools import which
-from version import version_number
-import argparse
-import sys
 import json
 import subprocess
 from argparse import SUPPRESS
+from version import version_number
 import datetime
 
 _usage_message = \
