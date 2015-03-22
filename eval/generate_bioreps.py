@@ -245,7 +245,7 @@ if __name__ == '__main__':
 
     temp_dir = tempfile.mkdtemp()
     atexit.register(kill_dir, temp_dir)
-    expression_par = os.path.join(temp_dir, 'sim.par')
+    """expression_par = os.path.join(temp_dir, 'sim.par')
     par_template = [
         ('NB_MOLECULES', '5000000'),
         ('LOAD_NONCODING', 'YES'),
@@ -304,7 +304,6 @@ if __name__ == '__main__':
                             os.path.join(args.output, sample_name + '_sim'),
                             i, rpkms, rpkm_name),
                        callback=return_values.append)
-    pool.close()
     relevant_count = len(relevant_samples)
     while len(return_values) != relevant_count:
         sys.stdout.write('Created %d/%d PAR/PRO pairs.\r' \
@@ -312,8 +311,7 @@ if __name__ == '__main__':
         sys.stdout.flush()
         time.sleep(.2)
     print >>sys.stderr, 'Created all PAR/PRO pairs.'
-    print >>sys.stderr, 'Running sims...'
-    pool = multiprocessing.Pool(args.num_processes)
+    print >>sys.stderr, 'Running sims...'"""
     return_values = []
     for sample_name, _ in relevant_samples:
         pool.apply_async(run_flux,
