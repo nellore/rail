@@ -142,7 +142,7 @@ def run_flux(par, flux, num_threads):
         Return value: Flux exitlevel.
     """
     with open(par + '.log', 'w') as log_stream:
-        return_value = subprocess.call([flux, '--threads', num_threads,
+        return_value = subprocess.call([flux, '--threads', str(num_threads),
                                             '-l', '-s', '-p', par],
                                         stderr=log_stream,
                                         stdout=open(os.devnull, 'w'))
