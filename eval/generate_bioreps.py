@@ -303,9 +303,9 @@ if __name__ == '__main__':
                        (expression_par, expression_pro,
                             os.path.join(args.output, sample_name + '_sim'),
                             i, rpkms, rpkm_name),
-                       callback=return_values.append)
+                       callback=return_values.append)"""
     relevant_count = len(relevant_samples)
-    while len(return_values) != relevant_count:
+    """while len(return_values) != relevant_count:
         sys.stdout.write('Created %d/%d PAR/PRO pairs.\r' \
                             % (len(return_values), relevant_count))
         sys.stdout.flush()
