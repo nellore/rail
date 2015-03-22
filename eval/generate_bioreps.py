@@ -131,17 +131,19 @@ def write_par_and_pro(par_template, pro_template, basename,
             print >>write_stream, 'SEED\t%d' % seed
     return 0
 
-def run_flux(par, flux):
+def run_flux(par, flux, num_threads):
     """ Runs Flux pipeline after creation of PRO file.
 
         par: PAR file; there must be a corresponding PRO file in the
             same directory
         flux: flux executable
+        num_threads: number of threads to run Flux on
 
         Return value: Flux exitlevel.
     """
     with open(par + '.log', 'w') as log_stream:
-        return_value = subprocess.call([flux, '-l', '-s', '-p', par],
+        return_value = subprocess.call([flux, '--threads', num_threads,
+                                            '-l', '-s', '-p', par],
                                         stderr=log_stream,
                                         stdout=open(os.devnull, 'w'))
     return return_value
@@ -177,10 +179,9 @@ if __name__ == '__main__':
               'http://www.ebi.ac.uk/arrayexpress/experiments/E-GEUV-3/files/'
               'analysis_results/GD660.TrQuantRPKM.txt')
         )
-    parser.add_argument('-p', '--num-processes', type=int,
-        default=7,
-        help=('Number of instances of Flux Simulator to run simultaneously; '
-              'set this to below 10 so it doesn\'t choke.')
+    parser.add_argument('-p', '--num-threads', type=int,
+        default=32,
+        help=('Number of threads to use simultaneously')
         )
     parser.add_argument('--fasta', type=str,
         default='/scratch0/langmead-fs1/shared/references/hg19/fasta',
@@ -245,7 +246,7 @@ if __name__ == '__main__':
 
     temp_dir = tempfile.mkdtemp()
     atexit.register(kill_dir, temp_dir)
-    expression_par = os.path.join(temp_dir, 'sim.par')
+    """expression_par = os.path.join(temp_dir, 'sim.par')
     par_template = [
         ('NB_MOLECULES', '5000000'),
         ('LOAD_NONCODING', 'YES'),
@@ -310,18 +311,16 @@ if __name__ == '__main__':
                             % (len(return_values), relevant_count))
         sys.stdout.flush()
         time.sleep(.2)
-    print >>sys.stderr, 'Created all PAR/PRO pairs.'
-    print >>sys.stderr, 'Running sims...'
-    return_values = []
-    for sample_name, _ in relevant_samples:
-        pool.apply_async(run_flux,
-                         (os.path.join(args.output, sample_name + '_sim.par'),
-                          args.flux),
-                         callback=return_values.append)
     pool.close()
-    while len(return_values) != relevant_count:
-        sys.stdout.write('Completed %d/%d sims.\r'
-                            % (len(return_values), relevant_count))
+    print >>sys.stderr, 'Created all PAR/PRO pairs.'"""
+    print >>sys.stderr, 'Running sims...'
+    i = 0
+    for sample_name, _ in relevant_samples:
+        sys.stdout.write('Completed %d/%d sims.\r' % (i, relevant_count))
         sys.stdout.flush()
-        time.sleep(.2)
+        run_flux(os.path.join(args.output, sample_name + '_sim.par'),
+                    args.flux, args.num_threads)
+        i += 1
+    sys.stdout.write('Completed %d/%d sims.\r' % (i, relevant_count))
+    sys.stdout.flush()
     print >>sys.stderr, 'Done.'
