@@ -218,7 +218,6 @@ if __name__ == '__main__':
 
     print >>sys.stderr, 'Reading RPKMs...'
     rpkms = pd.DataFrame.from_csv(args.rpkm, sep='\t')
-    relevant_samples = args.samples.strip().split(',')
 
     print >>sys.stderr, 'Reading sample metadata...'
     with open('E-GEUV-3.sdrf.txt') as geuvadis_data_stream:
