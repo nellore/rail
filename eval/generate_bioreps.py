@@ -142,7 +142,7 @@ def run_flux(par, flux):
     """
     with open(par + '.log', 'w') as log_stream:
         return_value = subprocess.call([flux,
-                                            '-l', '-s', '-p', par
+                                            '-l', '-s', '-p', par,
                                             '--threads' '1'],
                                         stderr=log_stream,
                                         stdout=open(os.devnull, 'w'))
