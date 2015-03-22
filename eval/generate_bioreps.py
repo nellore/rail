@@ -291,9 +291,9 @@ if __name__ == '__main__':
     if not os.path.exists(expression_pro):
         raise RuntimeError('PRO template with same basename as PAR template '
                            'was not created.')
-    print >>sys.stderr, 'Creating PAR and PRO files for bioreplicate sims...'
+    print >>sys.stderr, 'Creating PAR and PRO files for bioreplicate sims...'"""
     pool = multiprocessing.Pool(args.num_processes)
-    return_values = []
+    """return_values = []
     try:
         os.makedirs(args.output)
     except OSError:
@@ -310,8 +310,8 @@ if __name__ == '__main__':
                             % (len(return_values), relevant_count))
         sys.stdout.flush()
         time.sleep(.2)
-    print >>sys.stderr, 'Created all PAR/PRO pairs.'
-    print >>sys.stderr, 'Running sims...'"""
+    print >>sys.stderr, 'Created all PAR/PRO pairs.'"""
+    print >>sys.stderr, 'Running sims...'
     return_values = []
     for sample_name, _ in relevant_samples:
         pool.apply_async(run_flux,
