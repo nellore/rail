@@ -172,7 +172,8 @@ class RailRnaInstaller(object):
         else:
             install_dir = os.path.abspath(os.path.expanduser('~/.local'))
             local = True
-        rail_exe = os.path.join(install_dir, 'bin', 'rail-rna')
+        bin_dir = os.path.join(install_dir, 'bin')
+        rail_exe = os.path.join(bin_dir, 'rail-rna')
         final_install_dir = os.path.join(install_dir, 'rail-rna')
         # Install in a temporary directory first, then move to final dest
         temp_install_dir = tempfile.mkdtemp()
@@ -300,7 +301,23 @@ bedgraphtobigwig = {bedgraphtobigwig}
                 ).format(python_executable=sys.executable,
                             install_dir=final_install_dir)
         if local:
-            # Have to add Rail to PATH
+            '''Have to add Rail to PATH. Do this in bashrc and bash_profile
+            contingent on whether it's present already because of
+            inconsistent behavior across Mac OS and Linux distros.'''
+            to_print = (
+"""
+
+if [ -d "{bin_dir}" ] && [[ ":$PATH:" != *":{bin_dir}:"* ]]; then
+    PATH="${{PATH:+"$PATH:"}}{bin_dir}"
+fi
+"""
+                ).format(bin_dir=bin_dir)
+            with open(os.path.expanduser('~/.bashrc'), 'a') as bashrc_stream:
+                print >>bashrc_stream, to_print
+            with open(
+                    os.path.expanduser('~/.bash_profile'), 'a'
+                ) as bash_profile_stream:
+                print >>bash_profile_stream, to_print
         self._print_to_screen_and_log(
             'Rail-RNA installation complete.')
         if not which('aws') and self._yes_to_query(
