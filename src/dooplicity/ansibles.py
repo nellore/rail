@@ -822,7 +822,7 @@ class WebAnsible(object):
         else:
             final_file = os.path.join(destination, source_filename)
         os.chdir(destination)
-        command_list = ['curl', '-O', '--connect-timeout', '60', source]
+        command_list = [self.curl, '-O', '--connect-timeout', '60', source]
         command = ' '.join(command_list)
         while True:
             curl_thread = CommandThread(command_list)
