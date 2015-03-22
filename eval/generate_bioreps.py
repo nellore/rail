@@ -220,6 +220,7 @@ if __name__ == '__main__':
     rpkms = pd.DataFrame.from_csv(args.rpkm, sep='\t')
 
     print >>sys.stderr, 'Reading sample metadata...'
+    fastq_to_sample = {}
     with open('E-GEUV-3.sdrf.txt') as geuvadis_data_stream:
         geuvadis_data_stream.readline() # labels
         for line in geuvadis_data_stream:
@@ -233,11 +234,11 @@ if __name__ == '__main__':
     with open(args.manifest) as manifest_stream:
         for line in manifest_stream:
             line = line.strip()
-            if line[0] == '#' or not line:
+            if not line or line[0] == '#':
                 continue
             tokens = line.strip().split('\t')
             sample_name = tokens[-1]
-            sample_fastq = tokens[-2].rpartition('/')[-1].partition('_')[0]
+            sample_fastq = tokens[-3].rpartition('/')[-1].partition('_')[0]
             relevant_samples.append(
                     (sample_name, fastq_to_sample[sample_fastq])
                 )
