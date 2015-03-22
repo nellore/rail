@@ -315,9 +315,9 @@ if __name__ == '__main__':
     print >>sys.stderr, 'Running sims...'
     pool = multiprocessing.Pool(args.num_processes)
     return_values = []
-    for sample in relevant_samples:
+    for sample_name, _ in relevant_samples:
         pool.apply_async(run_flux,
-                         (os.path.join(args.output, sample + '_sim.par'),
+                         (os.path.join(args.output, sample_name + '_sim.par'),
                           args.flux),
                          callback=return_values.append)
     pool.close()
