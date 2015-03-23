@@ -12,7 +12,7 @@ Rail-RNA's distinguishing features are
 Outputs include
 * Alignment BAMs
 * Genome coverage bigWigs
-* [TopHat](http://ccb.jhu.edu/software/tophat/index.shtml)-like indel and splice junction BEDs .
+* [TopHat](http://ccb.jhu.edu/software/tophat/index.shtml)-like indel and splice junction BEDs.
 
 Read the [preprint](http://www.shouldreallyfinishthis.com/) for more details.
 
