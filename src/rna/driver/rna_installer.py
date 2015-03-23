@@ -51,10 +51,8 @@ class RailRnaInstaller(object):
                                     )
         if sys.platform in ['linux', 'linux2']:
             self.depends = dependency_urls.linux_dependencies
-            self.linux = True
         elif sys.platform == 'darwin':
             self.depends = dependency_urls.mac_dependencies
-            self.linux = False
         else:
             print_to_screen(
                     'Rail-RNA cannot be installed because it is not supported '
@@ -69,6 +67,7 @@ class RailRnaInstaller(object):
         log_dir = tempfile.mkdtemp()
         self.log_file = os.path.join(log_dir, 'rail-rna_install.log')
         self.log_stream = open(self.log_file, 'w')
+        self.finished = False
         register_cleanup(remove_temporary_directories, [log_dir])
 
     def __enter__(self):
@@ -80,7 +79,8 @@ class RailRnaInstaller(object):
 
     def _bail(self):
         """ Copy log to some temporary dir and GTFO. """
-        new_log_file = os.path.join(tempfile.mkdtemp(), 'rail-rna_install_log')
+        new_log_file = os.path.join(tempfile.mkdtemp(),
+                                            'rail-rna_installer.log')
         shutil.copyfile(self.log_file, new_log_file)
         print_to_screen('Installation log may be found at %s.' % new_log_file)
         sys.exit(1)
@@ -192,32 +192,32 @@ class RailRnaInstaller(object):
                                 'for all users.')
                 sys.exit(0)
             install_dir = '/usr/local'
-            local = False
+            self.local = False
         else:
             install_dir = os.path.abspath(os.path.expanduser('~/'))
-            local = True
+            self.local = True
         bin_dir = os.path.join(install_dir, 'bin')
         rail_exe = os.path.join(bin_dir, 'rail-rna')
         if self.install_dir is None:
-            final_install_dir = os.path.join(install_dir, 'rail-rna')
+            self.final_install_dir = os.path.join(install_dir, 'rail-rna')
         else:
             # User specified an installation directory
-            final_install_dir = self.install_dir
+            self.final_install_dir = self.install_dir
         # Install in a temporary directory first, then move to final dest
         temp_install_dir = tempfile.mkdtemp()
         register_cleanup(remove_temporary_directories, [temp_install_dir])
-        if os.path.exists(final_install_dir):
+        if os.path.exists(self.final_install_dir):
             if self._yes_no_query(
                     ('The installation path {dir} already exists.\n    '
-                    '* Overwrite {dir}?').format(dir=final_install_dir)
+                    '* Overwrite {dir}?').format(dir=self.final_install_dir)
                 ):
                 try:
-                    shutil.rmtree(final_install_dir)
+                    shutil.rmtree(self.final_install_dir)
                 except OSError:
                     # Handle this later if directory creation fails
                     pass
                 try:
-                    os.remove(final_install_dir)
+                    os.remove(self.final_install_dir)
                 except OSError:
                     pass
             else:
@@ -230,17 +230,17 @@ class RailRnaInstaller(object):
                                         newline=False,
                                         carriage_return=True)
         try:
-            os.makedirs(final_install_dir)
+            os.makedirs(self.final_install_dir)
         except OSError as e:
             self._print_to_screen_and_log(
                             ('Problem encountered trying to create '
                              'directory %s for installation. May need '
-                             'sudo permissions.') % final_install_dir
+                             'sudo permissions.') % self.final_install_dir
                         )
             self._bail()
         else:
             # So it's possible to move temp installation dir there
-            os.rmdir(final_install_dir)
+            os.rmdir(self.final_install_dir)
             pass
         if not self.no_dependencies:
             with cd(temp_install_dir):
@@ -275,25 +275,27 @@ class RailRnaInstaller(object):
                                 (e.returncode, ' '.join(samtools_command))
                         )
                     self._bail()
-            samtools = os.path.join(final_install_dir,
+            samtools = os.path.join(self.final_install_dir,
                             self.depends['samtools'].rpartition('/')[2][:-8],
                             'samtools')
             bowtie1_base = '-'.join(
                     self.depends['bowtie1'].rpartition('/')[2].split('-')[:2]
                 )
-            bowtie1 = os.path.join(final_install_dir, bowtie1_base, 'bowtie')
-            bowtie1_build = os.path.join(final_install_dir, bowtie1_base,
+            bowtie1 = os.path.join(self.final_install_dir, bowtie1_base,
+                                    'bowtie')
+            bowtie1_build = os.path.join(self.final_install_dir, bowtie1_base,
                                             'bowtie-build')
             bowtie2_base = '-'.join(
                     self.depends['bowtie2'].rpartition('/')[2].split('-')[:2]
                 )
-            bowtie2 = os.path.join(final_install_dir, bowtie2_base, 'bowtie2')
-            bowtie2_build = os.path.join(final_install_dir, bowtie2_base,
+            bowtie2 = os.path.join(self.final_install_dir, bowtie2_base,
+                                    'bowtie2')
+            bowtie2_build = os.path.join(self.final_install_dir, bowtie2_base,
                                             'bowtie2-build')
-            pypy = os.path.join(final_install_dir,
+            pypy = os.path.join(self.final_install_dir,
                     self.depends['pypy'].rpartition('/')[2][:-8], 'bin', 'pypy'
                 )
-            bedgraphtobigwig = os.path.join(final_install_dir,
+            bedgraphtobigwig = os.path.join(self.final_install_dir,
                                                 'bedGraphToBigWig')
             # Write paths to exe_paths
             with open(
@@ -325,13 +327,13 @@ bedgraphtobigwig = '{bedgraphtobigwig}'
                             bedgraphtobigwig=bedgraphtobigwig)
         # Move to final directory
         try:
-            os.renames(temp_install_dir, final_install_dir)
+            os.renames(temp_install_dir, self.final_install_dir)
         except OSError:
             self._print_to_screen_and_log(('Problem encountered moving '
                                            'temporary installation %s to '
                                            'final destination %s.') % (
                                                 temp_install_dir,
-                                                final_install_dir
+                                                self.final_install_dir
                                             ))
             self._bail()
         # Create shell-script executable
@@ -350,8 +352,8 @@ bedgraphtobigwig = '{bedgraphtobigwig}'
 {python_executable} {install_dir} $@
 """
                 ).format(python_executable=sys.executable,
-                            install_dir=final_install_dir)
-        if local:
+                            install_dir=self.final_install_dir)
+        if self.local:
             '''Have to add Rail to PATH. Do this in bashrc and bash_profile
             contingent on whether it's present already because of
             inconsistent behavior across Mac OS and Linux distros.'''
@@ -396,9 +398,9 @@ fi
                 with open(bash_profile, 'a') as bash_profile_stream:
                     print >>bash_profile_stream, to_print
         # Set 755 permissions across Rail's dirs and 644 across files
-        dir_command = ['find', final_install_dir, '-type', 'd',
+        dir_command = ['find', self.final_install_dir, '-type', 'd',
                             '-exec', 'chmod', '755', '{}', ';']
-        file_command = ['find', final_install_dir, '-type', 'f',
+        file_command = ['find', self.final_install_dir, '-type', 'f',
                             '-exec', 'chmod', '644', '{}', ';']
         try:
             subprocess.check_output(dir_command,
@@ -446,7 +448,7 @@ fi
                                 [temp_aws_install_dir])
             with cd(temp_aws_install_dir):
                 self._grab_and_explode(self.depends['aws'], 'AWS CLI')
-                if local:
+                if self.local:
                     # Local install
                     aws_command = ['./awscli-bundle/install', '-b',
                                     os.path.abspath(
@@ -472,14 +474,23 @@ fi
             print_to_screen('Visit http://docs.aws.amazon.com/cli/latest/'
                             'userguide/installing.html to install the '
                             'AWS CLI later.')
-        if not local:
-            print_to_screen('Start using Rail by entering "rail-rna".')
-        else:
-            print_to_screen('Enter "source ~/.bash_profile", then start '
-                            'using Rail by entering "rail-rna".')
+        self.finished = True
 
     def __exit__(self, type, value, traceback):
         try:
             self.log_stream.close()
         except:
             pass
+        if self.finished:
+            # Stuck around, so bailing did not happen; put in rail dir
+            assert hasattr(self, 'final_install_dir')
+            new_log_file = os.path.join(self.final_install_dir,
+                                            'rail-rna_installer.log')
+            shutil.copyfile(self.log_file, new_log_file)
+            print_to_screen('Installation log may be found at %s.'
+                                                        % new_log_file)
+            if not self.local:
+                print_to_screen('Start using Rail by entering "rail-rna".')
+            else:
+                print_to_screen('Enter "source ~/.bash_profile", then start '
+                                'using Rail by entering "rail-rna".')
