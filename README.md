@@ -1,9 +1,23 @@
 Rail
 ====
-----UPDATE THIS BY MAY 19----
-
 This is the source repository for the Rail-*, which currently includes just
 the Rail-RNA suite of RNA-seq analysis software.
+
+Install
+-----
+Download [`installers/rail-rna-1.0.0`](https://github.com/buci/rail/blob/master/installers/rail-rna-1.0.0_installer?raw=true), change to the directory containing it, and run
+```
+sudo ./rail-rna-1.0.0
+```
+to install for all users or
+```
+./rail-rna-1.0.0
+```
+to install for just you. Check
+```
+./rail-rna-1.0.0 -h
+```
+for more installation options.
 
 Design
 ------
