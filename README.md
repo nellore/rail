@@ -4,17 +4,17 @@ This is the source repository for the Rail-*, which currently includes just the 
 
 Install
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`installers/rail-rna-1.0.0`](https://github.com/buci/rail/blob/master/installers/rail-rna-1.0.0_installer?raw=true), change to the directory containing it, and run
+Start with a recent (>= 2009) Mac OS or Linux box. Download [`installers/rail-rna-1.0.0_installer`](https://github.com/buci/rail/blob/master/installers/rail-rna-1.0.0_installer?raw=true), change to the directory containing it, and run
 ```
-sudo ./rail-rna-1.0.0
+sudo ./rail-rna-1.0.0_installer
 ```
 to install for all users or
 ```
-./rail-rna-1.0.0
+./rail-rna-1.0.0_installer
 ```
 to install for just you. Check
 ```
-./rail-rna-1.0.0 -h
+./rail-rna-1.0.0_installer -h
 ```
 for more installation options. If the executable doesn't work, you may need [Python](http://www.python.org).
 
