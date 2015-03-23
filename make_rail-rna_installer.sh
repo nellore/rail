@@ -5,7 +5,7 @@ cd src
 VER=$(python -c "import version; print version.version_number,")
 INTERMEDIATE=rail-rna_installer.zip
 rm -rf ../rail-rna*installer*
-zip ../rail-rna_installer.zip $(find . -name \*.py | xargs)
+zip ../rail-rna_installer.zip $(find . -not -name \*.pyc -not -name .DS\_Store | xargs)
 cd ..
 mkdir -p installers
 TARGET=installers/rail-rna-${VER}_installer

@@ -24,6 +24,7 @@ import multiprocessing
 import tempfile
 from tempdel import remove_temporary_directories
 from rna_config import print_to_screen
+import glob
 
 @contextlib.contextmanager
 def cd(dir_name):
@@ -277,18 +278,18 @@ class RailRnaInstaller(object):
             samtools = os.path.join(final_install_dir,
                             self.depends['samtools'].rpartition('/')[2][:-8],
                             'samtools')
-            bowtie1 = os.path.join(final_install_dir,
-                            self.depends['bowtie1'].rpartition('/')[2][:-4],
-                            'bowtie')
-            bowtie1_build = os.path.join(final_install_dir,
-                            self.depends['bowtie1'].rpartition('/')[2][:-4],
-                            'bowtie-build')
-            bowtie2 = os.path.join(final_install_dir,
-                            self.depends['bowtie2'].rpartition('/')[2][:-4],
-                            'bowtie2')
-            bowtie2_build = os.path.join(final_install_dir,
-                            self.depends['bowtie2'].rpartition('/')[2][:-4],
-                            'bowtie2-build')
+            bowtie1_base = '-'.join(
+                    self.depends['bowtie1'].rpartition('/')[2].split('-')[:2]
+                )
+            bowtie1 = os.path.join(final_install_dir, bowtie1_base, 'bowtie')
+            bowtie1_build = os.path.join(final_install_dir, bowtie1_base,
+                                            'bowtie-build')
+            bowtie2_base = '-'.join(
+                    self.depends['bowtie2'].rpartition('/')[2].split('-')[:2]
+                )
+            bowtie2 = os.path.join(final_install_dir, bowtie2_base, 'bowtie2')
+            bowtie2_build = os.path.join(final_install_dir, bowtie2_base,
+                                            'bowtie2-build')
             pypy = os.path.join(final_install_dir,
                     self.depends['pypy'].rpartition('/')[2][:-8], 'bin', 'pypy'
                 )
@@ -299,8 +300,7 @@ class RailRnaInstaller(object):
                             os.path.join(temp_install_dir, 'exe_paths.py'), 'w'
                         ) as exe_paths_stream:
                 print >>exe_paths_stream, (
-"""
-\"""
+"""\"""
 exe_paths.py
 Part of Rail-RNA
 
@@ -345,14 +345,12 @@ bedgraphtobigwig = '{bedgraphtobigwig}'
                 self._bail()
         with open(rail_exe, 'w') as rail_exe_stream:
             print >>rail_exe_stream, (
-"""
-#!/usr/bin/env bash
+"""#!/usr/bin/env bash
 
 {python_executable} {install_dir} $@
 """
                 ).format(python_executable=sys.executable,
                             install_dir=final_install_dir)
-        os.chmod(rail_exe, 0755)
         if local:
             '''Have to add Rail to PATH. Do this in bashrc and bash_profile
             contingent on whether it's present already because of
@@ -364,7 +362,6 @@ if [ -d "{bin_dir}" ] && [[ ":$PATH:" != *":{bin_dir}:"* ]]; then
 fi
 """
                 ).format(bin_dir=bin_dir)
-            os.environ['PATH'] = os.environ['PATH'] + ':' + bin_dir
             import mmap
             bashrc = os.path.expanduser('~/.bashrc')
             bash_profile = os.path.expanduser('~/.bash_profile')
@@ -376,7 +373,7 @@ fi
                         print_to_bashrc = True
                     else:
                         print_to_bashrc = False
-            except IOError:
+            except (IOError, ValueError):
                 # No file
                 print_to_bashrc = True
             try:
@@ -387,7 +384,7 @@ fi
                         print_to_bash_profile = True
                     else:
                         print_to_bash_profile = False
-            except IOError:
+            except (IOError, ValueError):
                 # No file
                 print_to_bash_profile = True
             if print_to_bashrc:
@@ -396,34 +393,45 @@ fi
             if print_to_bash_profile:
                 with open(bash_profile, 'a') as bash_profile_stream:
                     print >>bash_profile_stream, to_print
-        else:
-            # Set 755 permissions across Rail's dirs and 644 across files
-            dir_command = ['find', final_install_dir, '-type', 'd',
-                                '-exec', 'chmod', '755', '{}', ';']
-            file_command = ['find', final_install_dir, '-type', 'f',
-                                '-exec', 'chmod', '644', '{}', ';']
-            try:
-                subprocess.check_output(dir_command,
-                                            stderr=self.log_stream)
-            except subprocess.CalledProcessError as e:
-                self._print_to_screen_and_log(
-                            ('Error encountered changing directory '
-                             'permissions; exit code was %d; command invoked '
-                             'was "%s".') %
-                                (e.returncode, ' '.join(dir_command))
-                        )
-                self._bail()
-            try:
-                subprocess.check_output(file_command,
-                                            stderr=self.log_stream)
-            except subprocess.CalledProcessError as e:
-                self._print_to_screen_and_log(
-                            ('Error encountered changing file '
-                             'permissions; exit code was %d; command invoked '
-                             'was "%s".') %
-                                (e.returncode, ' '.join(file_command))
-                        )
-                self._bail()
+        # Set 755 permissions across Rail's dirs and 644 across files
+        dir_command = ['find', final_install_dir, '-type', 'd',
+                            '-exec', 'chmod', '755', '{}', ';']
+        file_command = ['find', final_install_dir, '-type', 'f',
+                            '-exec', 'chmod', '644', '{}', ';']
+        try:
+            subprocess.check_output(dir_command,
+                                        stderr=self.log_stream)
+        except subprocess.CalledProcessError as e:
+            self._print_to_screen_and_log(
+                        ('Error encountered changing directory '
+                         'permissions; exit code was %d; command invoked '
+                         'was "%s".') %
+                            (e.returncode, ' '.join(dir_command))
+                    )
+            self._bail()
+        try:
+            subprocess.check_output(file_command,
+                                        stderr=self.log_stream)
+        except subprocess.CalledProcessError as e:
+            self._print_to_screen_and_log(
+                        ('Error encountered changing file '
+                         'permissions; exit code was %d; command invoked '
+                         'was "%s".') %
+                            (e.returncode, ' '.join(file_command))
+                    )
+            self._bail()
+        # Go back and set 755 permissions for executables
+        for program in [rail_exe, bowtie1, bowtie1_build,
+                            bowtie2, bowtie2_build, samtools,
+                            bedgraphtobigwig]:
+            os.chmod(program, 0755)
+        # Also for misc. Bowtie executables
+        for program in glob.glob(os.path.join(os.path.dirname(bowtie1),
+                                    'bowtie-*')):
+            os.chmod(program, 0755)
+        for program in glob.glob(os.path.join(os.path.dirname(bowtie2),
+                                    'bowtie2-*')):
+            os.chmod(program, 0755)
         self._print_to_screen_and_log('Installed Rail-RNA.')
         install_aws = (not self.no_dependencies and not which('aws'))
         if install_aws and self._yes_no_query(
@@ -462,7 +470,11 @@ fi
             print_to_screen('Visit http://docs.aws.amazon.com/cli/latest/'
                             'userguide/installing.html to install the '
                             'AWS CLI later.')
-        print_to_screen('Start using Rail by entering "rail-rna".')
+        if not local:
+            print_to_screen('Start using Rail by entering "rail-rna".')
+        else:
+            print_to_screen('Enter "source ~/.bash_profile", then start '
+                            'using Rail by entering "rail-rna".')
 
     def __exit__(self, type, value, traceback):
         try:
