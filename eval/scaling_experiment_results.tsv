@@ -1,0 +1,11 @@
+# Results of scaling experiments executed with run_scaling_experiments.sh
+# Wall clock running time including provisioning+bootstrap is the "Elapsed time" from the EMR console.
+# Wall clock running time excluding provisioning+bootstrap is the 
+# Cost per sample excluding DynamoDB charges is computed by rounding up 3rd column to the nearest # hours and charging ($0.11/instance/hr (that is, the spot price) + $0.105/instance/hr).
+# Note that the first column is off by 1 from the number of instances reserved; there's always one additional master instance.
+c3.2xlarge instance count - 1	geuvadis sample count	wall clock running time (min; including provisioning and bootstrap)	wall clock running time (min; excluding provisioning and bootstrap)	cost per sample (estimated; excluding DynamoDB charges)
+40	112	720	690	$0.92
+40	56	495	463	$1.22
+40	28	320	287	$1.53
+20	28	592	561	$1.38
+10	28	840	827	$1.08
