@@ -357,9 +357,11 @@ bedgraphtobigwig = '{bedgraphtobigwig}'
             inconsistent behavior across Mac OS and Linux distros.'''
             to_print = (
 """
+## Rail-RNA additions
 if [ -d "{bin_dir}" ] && [[ ":$PATH:" != *":{bin_dir}:"* ]]; then
     PATH="${{PATH:+"$PATH:"}}{bin_dir}"
 fi
+## End Rail-RNA additions
 """
                 ).format(bin_dir=bin_dir)
             import mmap
