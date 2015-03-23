@@ -63,15 +63,15 @@ class RailHelpFormatter(argparse.HelpFormatter):
     """
 
     def _get_help_string(self, action):
-        help = action.help
+        action_help = action.help
         if '(def: ' not in action.help and not action.required \
             and not action.const:
             if action.default is not argparse.SUPPRESS:
                 defaulting_nargs = [argparse.OPTIONAL, argparse.ZERO_OR_MORE]
                 if action.option_strings or action.nargs in defaulting_nargs:
-                    help += ' (def: %(default)s)'
+                    action_help += ' (def: %(default)s)'
         # Take out the "def: "
-        return help.replace('(def: ', '(')
+        return action_help.replace('(def: ', '(')
 
     def _format_action_invocation(self, action):
         if not action.option_strings:
@@ -1147,7 +1147,7 @@ class RailRnaErrors(object):
                 (e.g., --bowtie)
             entered_exe: None if the user didn't enter an executable; otherwise
                 whatever the user entered
-            reason: FOR CURL ONLY: raise RuntimeError _immediately_ if Curl
+            reason: FOR CURL ONLY: raise RuntimeError _immediately_ if cURL
                 not found but needed
             is_exe: is_exe function
             which: which function
@@ -1187,9 +1187,9 @@ class RailRnaErrors(object):
                                 for i, error
                                 in enumerate(self.errors)])
                                 if len(self.errors) > 1 else self.errors[0]) + 
-                                '\n\nNote that Curl is needed because {0}.'
+                                '\n\nNote that cURL is needed because {0}.'
                                 ' If all dependence on web resources is '
-                                'removed from the pipeline, Curl need '
+                                'removed from the pipeline, cURL need '
                                 'not be installed.').format(reason))
         self.checked_programs.add(program_name)
         return to_return
@@ -1207,7 +1207,7 @@ class RailRnaErrors(object):
         exec_parser.add_argument(
             '--curl', type=str, required=False, metavar='<exe>',
             default=exe_paths.curl,
-            help=('path to Curl executable (def: %s)'
+            help=('path to cURL executable (def: %s)'
                     % (exe_paths.curl
                         if exe_paths.curl is not None
                         else 'curl'))
@@ -1442,8 +1442,8 @@ class RailRnaLocal(object):
                 ansible.aws_exe = base.aws_exe
                 ansible.profile = base.profile
             elif manifest_url.is_curlable \
-                and 'Curl' not in base.checked_programs:
-                base.curl_exe = base.check_program('curl', 'Curl', '--curl',
+                and 'cURL' not in base.checked_programs:
+                base.curl_exe = base.check_program('curl', 'cURL', '--curl',
                                     entered_exe=base.curl_exe,
                                     reason='the manifest file is on the web',
                                     is_exe=is_exe,
@@ -1535,10 +1535,10 @@ class RailRnaLocal(object):
                                     ansible.aws_exe = base.aws_exe
                                     ansible.profile = base.profile
                             elif filename_url.is_curlable \
-                                and 'Curl' not in base.checked_programs:
+                                and 'cURL' not in base.checked_programs:
                                 if local:
                                     base.curl_exe = base.check_program('curl',
-                                                    'Curl',
+                                                    'cURL',
                                                     '--curl',
                                                     entered_exe=base.curl_exe,
                                                     reason=(
@@ -1694,7 +1694,8 @@ class RailRnaLocal(object):
             default=exe_paths.sort,
             help=('path to sort executable; include extra sort parameters '
                   'here (def: %s)'
-                    % (exe_paths.sort if exe_paths is not None else 'sort'))
+                    % (exe_paths.sort
+                        if exe_paths.sort is not None else 'sort'))
         )
         if align:
             required_parser.add_argument(
@@ -1937,8 +1938,8 @@ class RailRnaElastic(object):
         # Check manifest; download it if necessary
         manifest_url = ab.Url(base.manifest)
         if manifest_url.is_curlable \
-            and 'Curl' not in base.checked_programs:
-            base.curl_exe = base.check_program('curl', 'Curl', '--curl',
+            and 'cURL' not in base.checked_programs:
+            base.curl_exe = base.check_program('curl', 'cURL', '--curl',
                                     entered_exe=base.curl_exe,
                                     reason='the manifest file is on the web')
             ansible.curl_exe = base.curl_exe
@@ -2006,8 +2007,8 @@ class RailRnaElastic(object):
                             sys.stdout.flush()
                         filename_url = ab.Url(filename)
                         if filename_url.is_curlable \
-                            and 'Curl' not in base.checked_programs:
-                            base.curl_exe = base.check_program('curl', 'Curl',
+                            and 'cURL' not in base.checked_programs:
+                            base.curl_exe = base.check_program('curl', 'cURL',
                                                 '--curl',
                                                 entered_exe=base.curl_exe,
                                                 reason=('at least one sample '
@@ -3998,7 +3999,7 @@ class RailRnaParallelPreprocessJson(object):
             engine_base_checks[i] = engine_bases[i].check_program
         if base.check_curl_on_engines:
             apply_async_with_errors(rc, rc.ids, engine_base_checks,
-                'curl', 'Curl', '--curl', entered_exe=base.curl_exe,
+                'curl', 'cURL', '--curl', entered_exe=base.curl_exe,
                 reason=base.check_curl_on_engines, is_exe=is_exe, which=which)
         engine_base_checks = {}
         for i in rc.ids:
@@ -4302,7 +4303,7 @@ class RailRnaParallelAlignJson(object):
             engine_base_checks[i] = engine_bases[i].check_program
         if base.check_curl_on_engines:
             apply_async_with_errors(rc, rc.ids, engine_base_checks,
-                'curl', 'Curl', '--curl', entered_exe=base.curl_exe,
+                'curl', 'cURL', '--curl', entered_exe=base.curl_exe,
                 reason=base.check_curl_on_engines, is_exe=is_exe, which=which)
         engine_base_checks = {}
         for i in rc.ids:
@@ -4655,7 +4656,7 @@ class RailRnaParallelAllJson(object):
             engine_base_checks[i] = engine_bases[i].check_program
         if base.check_curl_on_engines:
             apply_async_with_errors(rc, rc.ids, engine_base_checks,
-                'curl', 'Curl', '--curl', entered_exe=base.curl_exe,
+                'curl', 'cURL', '--curl', entered_exe=base.curl_exe,
                 reason=base.check_curl_on_engines, is_exe=is_exe, which=which)
         engine_base_checks = {}
         for i in rc.ids:

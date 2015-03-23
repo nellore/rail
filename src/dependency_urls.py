@@ -9,28 +9,28 @@ version.
 
 linux_dependencies = {
     'bowtie1' : ('http://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie/1.1.1/bowtie-1.1.1-linux-x86_64.zip')
+                 'bowtie/1.1.1/bowtie-1.1.1-linux-x86_64.zip'),
     'bowtie2' : ('http://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie2/2.2.5/bowtie2-2.2.5-linux-x86_64.zip')
+                 'bowtie2/2.2.5/bowtie2-2.2.5-linux-x86_64.zip'),
     'bedgraphtobigwig' : ('http://hgdownload.cse.ucsc.edu/admin/exe/'
-                          'linux.x86_64/bedGraphToBigWig')
-    'aws_cli' : 'http://s3.amazonaws.com/aws-cli/awscli-bundle.zip'
+                          'linux.x86_64/bedGraphToBigWig'),
+    'aws_cli' : 'http://s3.amazonaws.com/aws-cli/awscli-bundle.zip',
     'samtools' : ('http://downloads.sourceforge.net/project/samtools/samtools/'
-                  '1.2/samtools-1.2.tar.bz2')
+                  '1.2/samtools-1.2.tar.bz2'),
     'pypy' : ('https://bitbucket.org/squeaky/portable-pypy/downloads/'
-              'pypy-2.5-linux_x86_64-portable.tar.bz2')
+              'pypy-2.5-linux_x86_64-portable.tar.bz2'),
 }
 
 mac_dependencies = {
     'bowtie1' : ('http://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie/1.1.1/bowtie-1.1.1-macos-x86_64.zip')
+                 'bowtie/1.1.1/bowtie-1.1.1-macos-x86_64.zip'),
     'bowtie2' : ('http://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie2/2.2.5/bowtie2-2.2.5-macos-x86_64.zip')
+                 'bowtie2/2.2.5/bowtie2-2.2.5-macos-x86_64.zip'),
     'bedgraphtobigwig' : ('http://hgdownload.cse.ucsc.edu/admin/exe/'
-                          'macOSX.x86_64/bedGraphToBigWig')
-    'aws_cli' : 'http://s3.amazonaws.com/aws-cli/awscli-bundle.zip'
+                          'macOSX.x86_64/bedGraphToBigWig'),
+    'aws_cli' : 'http://s3.amazonaws.com/aws-cli/awscli-bundle.zip',
     'samtools' : ('http://downloads.sourceforge.net/project/samtools/samtools/'
-                  '1.2/samtools-1.2.tar.bz2')
+                  '1.2/samtools-1.2.tar.bz2'),
     'pypy' : ('http://bitbucket.org/pypy/pypy/downloads/'
               'pypy-2.5.0-osx64.tar.bz2')
 }

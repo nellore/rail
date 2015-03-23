@@ -24,6 +24,45 @@ base_path = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 driver_path = os.path.join(base_path, 'rna', 'driver')
 import site
 site.addsitedir(driver_path)
+
+'''Is this the installer? Assumed to be if Rail-RNA's zipped up. Check if the
+currently executing script is in a zip.'''
+import zipfile
+containing_dir = os.path.abspath(os.path.dirname(__file__))
+if zipfile.is_zipfile(containing_dir):
+    # In a zip; use install parser
+    import argparse
+    import exe_paths
+    from rna_config import rail_help_wrapper
+    parser = argparse.ArgumentParser(
+                    formatter_class=rail_help_wrapper,
+                    add_help=True
+                )
+    parser.add_argument('-i', '--install-dir', type=str, required=False,
+            metavar='<dir>',
+            default=None,
+            help=('directory in which to install Rail-RNA (def: '
+                  '"/usr/local/rail-rna" if installing for all users and '
+                  '"~/.local/rail-rna" if installing for current user)')
+        )
+    parser.add_argument('-n', '--no-dependencies', action='store_const',
+            const=True,
+            default=False,
+            help='installs Rail-RNA without any of its dependencies'
+        )
+    parser.add_argument('--curl', type=str, required=False, metavar='<exe>',
+            default=exe_paths.curl,
+            help=('path to cURL executable (def: %s)'
+                    % (exe_paths.curl if exe_paths.curl is not None
+                        else 'curl')))
+    args = parser.parse_args()
+    from rna_installer import RailRnaInstaller
+    with RailRnaInstaller(containing_dir, curl_exe=args.curl,
+                            install_dir=args.install_dir,
+                            no_dependencies=False) as railrna_installer:
+        railrna_installer.install()
+    sys.exit(0)
+
 site.addsitedir(base_path)
 from rna_config import *
 from rna_config import _warning_message, _executable

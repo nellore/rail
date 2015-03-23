@@ -23,6 +23,7 @@ from version import version_number
 import multiprocessing
 import tempfile
 from tempdel import remove_temporary_directories
+from rna_config import print_to_screen
 
 @contextlib.contextmanager
 def cd(dir_name):
@@ -42,9 +43,10 @@ class RailRnaInstaller(object):
         archive_name: path to (currently executing) zip containing Rail-RNA
     """
 
-    def __init__(self, zip_name, curl_exe=None):
-        print_to_screen('{0} Rail-RNA v{1} Installer'.format(
-                                        , version_number)
+    def __init__(self, zip_name, curl_exe=None, install_dir=None,
+                    no_dependencies=False):
+        print_to_screen(u"""{0} Rail-RNA v{1} Installer""".format(
+                                        u'\u2200', version_number)
                                     )
         if sys.platform in ['linux', 'linux2']:
             self.depends = dependency_urls.linux_dependencies
@@ -59,17 +61,19 @@ class RailRnaInstaller(object):
                     'Linux.'
                 )
             sys.exit(1)
+        self.install_dir = install_dir
+        self.no_dependencies = no_dependencies
         self.zip_name = os.path.abspath(zip_name)
         self.curl_exe = curl_exe
         log_dir = tempfile.mkdtemp()
         self.log_file = os.path.join(log_dir, 'rail-rna_install.log')
-        self.log_stream = open(log_file, 'w')
+        self.log_stream = open(self.log_file, 'w')
         register_cleanup(remove_temporary_directories, [log_dir])
 
     def __enter__(self):
         return self
 
-    def _print_to_screen_and_log(message, **kwargs):
+    def _print_to_screen_and_log(self, message, **kwargs):
         print >>self.log_stream, message
         print_to_screen(message, **kwargs)
 
@@ -90,9 +94,13 @@ class RailRnaInstaller(object):
         while True:
             sys.stdout.write('%s [y/n]: ' % question)
             try:
-                return strtobool(raw_input().lower())
+                try:
+                    return strtobool(raw_input().lower())
+                except KeyboardInterrupt:
+                    sys.stdout.write('\n')
+                    sys.exit(0)
             except ValueError:
-                sys.stdout.write('\nPlease enter \'y\' or \'n\'.\n')
+                sys.stdout.write('Please enter \'y\' or \'n\'.\n')
 
     def _grab_and_explode(self, url, name):
         """ Special method for grabbing and exploding a package, if necessary.
@@ -105,9 +113,11 @@ class RailRnaInstaller(object):
 
             No return value
         """
-        self._print_to_screen_and_log('Downloading %s...' % name)
+        self._print_to_screen_and_log('[Installing] Downloading %s...' % name,
+                                        newline=False,
+                                        carriage_return=True)
         command = [self.curl_exe, '-L', '-O', url]
-        filename = url.partition('/')[2]
+        filename = url.rpartition('/')[2]
         try:
             subprocess.check_output(command, stderr=self.log_stream)
         except subprocess.CalledProcessError as e:
@@ -120,23 +130,32 @@ class RailRnaInstaller(object):
             self._bail()
         else:
             # Explode
-            self._print_to_screen_and_log('Exploding %s...' % name)
             explode_command = None
-            if url[:-8] == '.tar.bz2':
+            if url[-8:] == '.tar.bz2':
                 explode_command = ['tar', 'xvjf', filename]
-            elif url[:-7] == '.tar.gz' or url[:-4] == '.tgz':
+            elif url[-7:] == '.tar.gz' or url[-4:] == '.tgz':
                 explode_command = ['tar', 'xvjf', filename]
-            elif url[:-4] == '.zip':
+            elif url[-4:] == '.zip':
+                self._print_to_screen_and_log(
+                        '[Installing] Extracting %s...' % name,
+                        newline=False,
+                        carriage_return=True)
                 try:
-                    zipfile.extractall(filename)
+                    with zipfile.ZipFile(filename) as zip_object:
+                        zip_object.extractall()
                 except Exception as e:
                     self._print_to_screen_and_log(
-                            'Error encountered exploding %s.' % filename
+                            'Error encountered exploding %s.'
+                                % filename
                         )
                     self._bail()
                 finally:
                     os.remove(filename)
             if explode_command is not None:
+                self._print_to_screen_and_log(
+                        '[Installing] Extracting %s...' % name,
+                        newline=False,
+                        carriage_return=True)
                 try:
                     subprocess.check_output(explode_command,
                                             stderr=self.log_stream)
@@ -152,16 +171,20 @@ class RailRnaInstaller(object):
 
     def install(self):
         """ Installs Rail-RNA and all its dependencies. """
-        if self.curl_exe is None:
+        if not self.no_dependencies and self.curl_exe is None:
             self.curl_exe = which('curl')
             if self.curl_exe is None:
-                print_to_screen('Rail-RNA\'s installer requires Curl. '
+                print_to_screen('Rail-RNA\'s installer requires Curl if '
+                                'dependencies are to be installed. '
                                 'Download it at '
-                                'http://curl.haxx.se/download.html.')
+                                'http://curl.haxx.se/download.html and use '
+                                '--curl to specify its path, or '
+                                'disable installing dependencies with '
+                                '--no-dependencies.')
                 sys.exit(1)
         if self._yes_no_query(
-                'Rail-RNA can be installed for all users or for just the '
-                'current user. Install for all users?'
+                'Rail-RNA can be installed for all users or just the '
+                'current user.\n    * Install for all users?'
             ):
             if os.getuid():
                 print_to_screen('Rerun with sudo privileges to install '
@@ -170,92 +193,112 @@ class RailRnaInstaller(object):
             install_dir = '/usr/local'
             local = False
         else:
-            install_dir = os.path.abspath(os.path.expanduser('~/.local'))
+            install_dir = os.path.abspath(os.path.expanduser('~/'))
             local = True
         bin_dir = os.path.join(install_dir, 'bin')
         rail_exe = os.path.join(bin_dir, 'rail-rna')
-        final_install_dir = os.path.join(install_dir, 'rail-rna')
+        if self.install_dir is None:
+            final_install_dir = os.path.join(install_dir, 'rail-rna')
+        else:
+            # User specified an installation directory
+            final_install_dir = self.install_dir
         # Install in a temporary directory first, then move to final dest
         temp_install_dir = tempfile.mkdtemp()
         register_cleanup(remove_temporary_directories, [temp_install_dir])
         if os.path.exists(final_install_dir):
             if self._yes_no_query(
-                    'An installation exists at %s. Overwrite?'
-                    % final_install_dir
+                    ('The installation path {dir} already exists.\n    '
+                    '* Overwrite {dir}?').format(dir=final_install_dir)
                 ):
                 try:
                     shutil.rmtree(final_install_dir)
                 except OSError:
-                    # Handle this if directory creation fails
+                    # Handle this later if directory creation fails
+                    pass
+                try:
+                    os.remove(final_install_dir)
+                except OSError:
                     pass
             else:
-                print_to_screen('Exiting.')
+                print_to_screen(
+                        'Specify a different installation directory with '
+                        '--install-dir.'
+                    )
                 sys.exit(0)
-        self._print_to_screen_and_log('Extracting Rail-RNA...')
+        self._print_to_screen_and_log('[Installing] Extracting Rail-RNA...',
+                                        newline=False,
+                                        carriage_return=True)
         try:
             os.makedirs(final_install_dir)
-        except OSError:
+        except OSError as e:
             self._print_to_screen_and_log(
                             ('Problem encountered trying to create '
-                             'directory %s for installation.')
+                             'directory %s for installation. May need '
+                             'sudo permissions.') % final_install_dir
                         )
             self._bail()
         else:
             # So it's possible to move temp installation dir there
             os.rmdir(final_install_dir)
             pass
-        with cd(temp_install_dir):
-            zipfile.extractall(zip_name)
-            self._print_to_screen_and_log('Installing dependencies.')
-            self._grab_and_explode(self.depends['bowtie1'], 'Bowtie 1')
-            self._grab_and_explode(self.depends['bowtie2'], 'Bowtie 2')
-            self._grab_and_explode(self.depends['bedgraphtobigwig'],
-                                    'BedGraphToBigWig')
-            self._grab_and_explode(self.depends['pypy'], 'PyPy')
-            self._grab_and_explode(self.depends['samtools'], 'SAMTools')
-        # Have to make SAMTools (annoying; maybe change this)
-        samtools_dir = os.path.join(temp_install_dir,
-                self.depends['samtools'].partition('/')[2].split('.')[0]
-            )
-        with cd(samtools_dir):
-            # Make on all but one cylinder
-            thread_count = max(1, multiprocessing.cpu_count() - 1)
-            samtools_command = ['make', '-j%d' % thread_count]
-            self._print_to_screen_and_log('Making SAMTools...')
-            try:
-                subprocess.check_output(samtools_command,
-                                            stderr=self.log_stream)
-            except subprocess.CalledProcessError as e
+        if not self.no_dependencies:
+            with cd(temp_install_dir):
+                with zipfile.ZipFile(self.zip_name) as zip_object:
+                    zip_object.extractall()
+                self._grab_and_explode(self.depends['bowtie1'], 'Bowtie 1')
+                self._grab_and_explode(self.depends['bowtie2'], 'Bowtie 2')
+                self._grab_and_explode(self.depends['bedgraphtobigwig'],
+                                        'BedGraphToBigWig')
+                self._grab_and_explode(self.depends['pypy'], 'PyPy')
+                self._grab_and_explode(self.depends['samtools'], 'SAMTools')
+            # Have to make SAMTools (annoying; maybe change this)
+            samtools_dir = os.path.join(temp_install_dir,
+                    self.depends['samtools'].rpartition('/')[2][:-8]
+                )
+            with cd(samtools_dir):
+                # Make on all but one cylinder
+                thread_count = max(1, multiprocessing.cpu_count() - 1)
+                samtools_command = ['make', '-j%d' % thread_count]
                 self._print_to_screen_and_log(
-                        ('Error encountered making SAMTools; exit '
-                         'code was %d; command invoked was "%s".') %
-                            (e.returncode, ' '.join(samtools_command))
-                    )
-                self._bail()
-        samtools = os.path.join(samtools_dir, 'samtools')
-        bowtie1 = os.path.join(temp_install_dir,
-                                self.depends['bowtie1'][:-8],
-                                'bowtie')
-        bowtie1_build = os.path.join(temp_install_dir,
-                                self.depends['bowtie1'][:-8],
-                                'bowtie-build')
-        bowtie2 = os.path.join(temp_install_dir,
-                                self.depends['bowtie2'][:-8],
-                                'bowtie2')
-        bowtie2_build = os.path.join(temp_install_dir,
-                                self.depends['bowtie2'][:-8],
-                                'bowtie2-build')
-        pypy = os.path.join(temp_install_dir,
-                                self.depends['pypy'][:-8], 'bin', 'pypy'
+                            '[Installing] Making SAMTools...',
+                            newline=False,
+                            carriage_return=True
                         )
-        bedgraphtobigwig = os.path.join(bedgraphtobigwig, 'bedGraphToBigWig')
-        os.renames(os.path.join(temp_install_dir, 'bedGraphToBigWig'),
-                        bedgraphtobigwig)
-        # Write paths to exe_paths
-        with open(
-                        os.path.join(temp_install_dir, 'exe_paths.py'), 'w'
-                    ) as exe_paths_stream:
-            print >>exe_paths_stream, (
+                try:
+                    subprocess.check_output(samtools_command,
+                                                stderr=self.log_stream)
+                except subprocess.CalledProcessError as e:
+                    self._print_to_screen_and_log(
+                            ('Error encountered making SAMTools; exit '
+                             'code was %d; command invoked was "%s".') %
+                                (e.returncode, ' '.join(samtools_command))
+                        )
+                    self._bail()
+            samtools = os.path.join(final_install_dir,
+                            self.depends['samtools'].rpartition('/')[2][:-8],
+                            'samtools')
+            bowtie1 = os.path.join(final_install_dir,
+                            self.depends['bowtie1'].rpartition('/')[2][:-4],
+                            'bowtie')
+            bowtie1_build = os.path.join(final_install_dir,
+                            self.depends['bowtie1'].rpartition('/')[2][:-4],
+                            'bowtie-build')
+            bowtie2 = os.path.join(final_install_dir,
+                            self.depends['bowtie2'].rpartition('/')[2][:-4],
+                            'bowtie2')
+            bowtie2_build = os.path.join(final_install_dir,
+                            self.depends['bowtie2'].rpartition('/')[2][:-4],
+                            'bowtie2-build')
+            pypy = os.path.join(final_install_dir,
+                    self.depends['pypy'].rpartition('/')[2][:-8], 'bin', 'pypy'
+                )
+            bedgraphtobigwig = os.path.join(final_install_dir,
+                                                'bedGraphToBigWig')
+            # Write paths to exe_paths
+            with open(
+                            os.path.join(temp_install_dir, 'exe_paths.py'), 'w'
+                        ) as exe_paths_stream:
+                print >>exe_paths_stream, (
 """
 \"""
 exe_paths.py
@@ -265,20 +308,21 @@ Defines default paths of Rail-RNA's executable dependencies. Set a given
 variable equal to None if the default path should be in PATH.
 \"""
 
-pypy = {pypy}
+pypy = '{pypy}'
 aws = None
 curl = None
 sort = None
-bowtie1 = {bowtie1}
-bowtie1_build = {bowtie1_build}
-bowtie2 = {bowtie2}
-bowtie2_build = {bowtie2_build}
-samtools = {samtools}
-bedgraphtobigwig = {bedgraphtobigwig}
+bowtie1 = '{bowtie1}'
+bowtie1_build = '{bowtie1_build}'
+bowtie2 = '{bowtie2}'
+bowtie2_build = '{bowtie2_build}'
+samtools = '{samtools}'
+bedgraphtobigwig = '{bedgraphtobigwig}'
 """
-            ).format(pypy=pypy, bowtie1=bowtie1, bowtie1_build=bowtie1_build,
-                        bowtie2=bowtie2, bowtie2_build=bowtie2_build,
-                        samtools=samtools, bedgraphtobigwig=bedgraphtobigwig)
+                ).format(pypy=pypy, bowtie1=bowtie1,
+                            bowtie1_build=bowtie1_build, bowtie2=bowtie2,
+                            bowtie2_build=bowtie2_build, samtools=samtools,
+                            bedgraphtobigwig=bedgraphtobigwig)
         # Move to final directory
         try:
             os.renames(temp_install_dir, final_install_dir)
@@ -291,44 +335,105 @@ bedgraphtobigwig = {bedgraphtobigwig}
                                             ))
             self._bail()
         # Create shell-script executable
+        try:
+            os.makedirs(bin_dir)
+        except OSError:
+            if not os.path.isdir(bin_dir):
+                self._print_to_screen_and_log(('Problem encountered creating '
+                                               'directory %s.') % bin_dir
+                                            )
+                self._bail()
         with open(rail_exe, 'w') as rail_exe_stream:
             print >>rail_exe_stream, (
 """
 #!/usr/bin/env bash
 
-{python_executable} {install_dir} \$@
+{python_executable} {install_dir} $@
 """
                 ).format(python_executable=sys.executable,
                             install_dir=final_install_dir)
+        os.chmod(rail_exe, 0755)
         if local:
             '''Have to add Rail to PATH. Do this in bashrc and bash_profile
             contingent on whether it's present already because of
             inconsistent behavior across Mac OS and Linux distros.'''
             to_print = (
 """
-
 if [ -d "{bin_dir}" ] && [[ ":$PATH:" != *":{bin_dir}:"* ]]; then
     PATH="${{PATH:+"$PATH:"}}{bin_dir}"
 fi
 """
                 ).format(bin_dir=bin_dir)
-            with open(os.path.expanduser('~/.bashrc'), 'a') as bashrc_stream:
-                print >>bashrc_stream, to_print
-            with open(
-                    os.path.expanduser('~/.bash_profile'), 'a'
-                ) as bash_profile_stream:
-                print >>bash_profile_stream, to_print
-        self._print_to_screen_and_log(
-            'Rail-RNA installation complete.')
-        if not which('aws') and self._yes_to_query(
+            os.environ['PATH'] = os.environ['PATH'] + ':' + bin_dir
+            import mmap
+            bashrc = os.path.expanduser('~/.bashrc')
+            bash_profile = os.path.expanduser('~/.bash_profile')
+            try:
+                with open(bashrc) as bashrc_stream:
+                    mmapped = mmap.mmap(bashrc_stream.fileno(), 0, 
+                                            access=mmap.ACCESS_READ)
+                    if mmapped.find(to_print) == -1:
+                        print_to_bashrc = True
+                    else:
+                        print_to_bashrc = False
+            except IOError:
+                # No file
+                print_to_bashrc = True
+            try:
+                with open(bash_profile) as bash_profile_stream:
+                    mmapped = mmap.mmap(bash_profile_stream.fileno(), 0, 
+                                            access=mmap.ACCESS_READ)
+                    if mmapped.find(to_print) == -1:
+                        print_to_bash_profile = True
+                    else:
+                        print_to_bash_profile = False
+            except IOError:
+                # No file
+                print_to_bash_profile = True
+            if print_to_bashrc:
+                with open(bashrc, 'a') as bashrc_stream:
+                    print >>bashrc_stream, to_print
+            if print_to_bash_profile:
+                with open(bash_profile, 'a') as bash_profile_stream:
+                    print >>bash_profile_stream, to_print
+        else:
+            # Set 755 permissions across Rail's dirs and 644 across files
+            dir_command = ['find', final_install_dir, '-type', 'd',
+                                '-exec', 'chmod', '755', '{}', ';']
+            file_command = ['find', final_install_dir, '-type', 'f',
+                                '-exec', 'chmod', '644', '{}', ';']
+            try:
+                subprocess.check_output(dir_command,
+                                            stderr=self.log_stream)
+            except subprocess.CalledProcessError as e:
+                self._print_to_screen_and_log(
+                            ('Error encountered changing directory '
+                             'permissions; exit code was %d; command invoked '
+                             'was "%s".') %
+                                (e.returncode, ' '.join(dir_command))
+                        )
+                self._bail()
+            try:
+                subprocess.check_output(file_command,
+                                            stderr=self.log_stream)
+            except subprocess.CalledProcessError as e:
+                self._print_to_screen_and_log(
+                            ('Error encountered changing file '
+                             'permissions; exit code was %d; command invoked '
+                             'was "%s".') %
+                                (e.returncode, ' '.join(file_command))
+                        )
+                self._bail()
+        self._print_to_screen_and_log('Installed Rail-RNA.')
+        install_aws = (not self.no_dependencies and not which('aws'))
+        if install_aws and self._yes_no_query(
                 'AWS CLI is not installed but required for Rail-RNA to work '
-                'in its "elastic" mode, on Amazon Elastic MapReduce. '
-                'Install now?'
-            )
+                'in its "elastic" mode, on Amazon Elastic MapReduce.\n'
+                '    * Install AWS CLI now?'
+            ):
             temp_aws_install_dir = tempfile.mkdtemp()
             register_cleanup(remove_temporary_directories,
                                 [temp_aws_install_dir])
-            self._print_to_screen_and_log('Installing AWS CLI...')
             with cd(temp_aws_install_dir):
                 self._grab_and_explode(self.depends['aws'], 'AWS CLI')
                 if local:
@@ -344,7 +449,7 @@ fi
                 try:
                     subprocess.check_output(aws_command,
                                                 stderr=self.log_stream)
-                except subprocess.CalledProcessError as e
+                except subprocess.CalledProcessError as e:
                     self._print_to_screen_and_log(
                             ('Error encountered installing AWS CLI; exit '
                              'code was %d; command invoked was "%s".') %
@@ -353,7 +458,7 @@ fi
                     self._bail()
             print_to_screen('Configure the AWS CLI by running '
                             '"aws configure".')
-        else:
+        elif install_aws:
             print_to_screen('Visit http://docs.aws.amazon.com/cli/latest/'
                             'userguide/installing.html to install the '
                             'AWS CLI later.')
