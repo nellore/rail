@@ -19,6 +19,8 @@ linux_dependencies = {
                   '1.2/samtools-1.2.tar.bz2'),
     'pypy' : ('https://bitbucket.org/squeaky/portable-pypy/downloads/'
               'pypy-2.5-linux_x86_64-portable.tar.bz2'),
+    'ipython' : ('https://github.com/ipython/ipython/releases/download/'
+                 'rel-3.0.0/ipython-3.0.0.zip')
 }
 
 mac_dependencies = {
@@ -32,5 +34,7 @@ mac_dependencies = {
     'samtools' : ('http://downloads.sourceforge.net/project/samtools/samtools/'
                   '1.2/samtools-1.2.tar.bz2'),
     'pypy' : ('http://bitbucket.org/pypy/pypy/downloads/'
-              'pypy-2.5.0-osx64.tar.bz2')
+              'pypy-2.5.0-osx64.tar.bz2'),
+    'ipython' : ('https://github.com/ipython/ipython/releases/download/'
+                 'rel-3.0.0/ipython-3.0.0.zip')
 }

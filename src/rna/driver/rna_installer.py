@@ -437,6 +437,32 @@ fi
                                     'bowtie2-*')):
             os.chmod(program, 0755)
         self._print_to_screen_and_log('Installed Rail-RNA.')
+        # IPython much?
+        try:
+            import IPython
+        except ImportError:
+            # Guess not
+            if self_yes_no_query(
+                    'IPython is not installed but required for Rail-RNA to '
+                    'work in its "parallel" mode.\n'
+                    '    * Install IPython now?'
+                ):
+                temp_ipython_install_dir = tempfile.mkdtemp()
+                register_cleanup(remove_temporary_directories,
+                                    [temp_ipython_install_dir])
+                with cd(temp_ipython_install_dir):
+                    self._grab_and_explode(self.depends['ipython'], 'IPython')
+                    ipython_command = [sys.executable, 'setup.py', 'install']
+                    try:
+                        subprocess.check_output(ipython_command,
+                                                    stderr=self.log_stream)
+                    except subprocess.CalledProcessError as e:
+                        self._print_to_screen_and_log(
+                            ('Error encountered installing IPython; exit '
+                             'code was %d; command invoked was "%s".') %
+                                (e.returncode, ' '.join(ipython_command))
+                        )
+                        self._bail()
         install_aws = (not self.no_dependencies and not which('aws'))
         if install_aws and self._yes_no_query(
                 'AWS CLI is not installed but required for Rail-RNA to work '
