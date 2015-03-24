@@ -342,11 +342,12 @@ bedgraphtobigwig = '{bedgraphtobigwig}'
                             bedgraphtobigwig=bedgraphtobigwig)
         # Move to final directory
         try:
-            os.renames(temp_install_dir, self.final_install_dir)
-        except OSError:
-            self._print_to_screen_and_log(('Problem encountered moving '
-                                           'temporary installation %s to '
-                                           'final destination %s.') % (
+            shutil.move(temp_install_dir, self.final_install_dir)
+        except Exception as e:
+            self._print_to_screen_and_log(('Problem "%s" encountered moving '
+                                           'temporary installation directory '
+                                           '%s to final destination %s.') % (
+                                                e,
                                                 temp_install_dir,
                                                 self.final_install_dir
                                             ))
@@ -354,10 +355,13 @@ bedgraphtobigwig = '{bedgraphtobigwig}'
         # Create shell-script executable
         try:
             os.makedirs(bin_dir)
-        except OSError:
+        except Exception as e:
             if not os.path.isdir(bin_dir):
-                self._print_to_screen_and_log(('Problem encountered creating '
-                                               'directory %s.') % bin_dir
+                self._print_to_screen_and_log(('Problem "%s" encountered '
+                                               'creating directory %s.') % (
+                                                    e,
+                                                    bin_dir
+                                                )
                                             )
                 self._bail()
         with open(rail_exe, 'w') as rail_exe_stream:
