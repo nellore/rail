@@ -262,7 +262,8 @@ class RailRnaInstaller(object):
                 which may be a general problem with portability. See
                 https://github.com/samtools/htslib/commit/
                 0ec5202de5691b27917ce828a9d24c9c729a9b81'''
-                cram_io_file = glob.glob('htslib*/cram_io.c')[0]
+                cram_io_file = os.path.join(glob.glob('./htslib-*')[0],
+                                                'cram', 'cram_io.c')
                 with open(cram_io_file) as cram_io_stream:
                     all_cram_io = cram_io_stream.read()
                 if '<unistd.h>' not in all_cram_io:
