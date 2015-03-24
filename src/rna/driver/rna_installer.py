@@ -265,7 +265,7 @@ class RailRnaInstaller(object):
                 with open(glob.glob('htslib*/cram_io.c')) as cram_io_stream:
                     all_cram_io = cram_io_stream.read()
                 if '<unistd.h>' not in all_cram_io:
-                    with open(glob.glob('htslib*/cram_io.c'), 'w') \
+                    with open(glob.glob('htslib*/cram_io.c')[0], 'w') \
                         as cram_io_out_stream:
                         cram_io_out_stream.write(all_cram_io.replace(
                                 '#include <string.h>',
