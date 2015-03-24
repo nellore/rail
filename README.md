@@ -18,17 +18,17 @@ Read the [preprint](http://www.shouldreallyfinishthis.com/) for more details.
 
 Install
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`releases/install_rail-rna-1.0.0`](https://github.com/buci/rail/blob/master/releases/install_rail-rna-1.0.0?raw=true), change to the directory containing it, and run
+Start with a recent (>= 2009) Mac OS or Linux box. Download [`releases/install_rail-rna-0.1.0`](https://github.com/buci/rail/blob/master/releases/install_rail-rna-0.1.0?raw=true), change to the directory containing it, and run
 ```
-sudo ./install_rail-rna-1.0.0
+sudo ./install_rail-rna-0.1.0
 ```
 to install for all users or
 ```
-./install_rail-rna-1.0.0
+./install_rail-rna-0.1.0
 ```
 to install for just you. Check
 ```
-./install_rail-rna-1.0.0 -h
+./install_rail-rna-0.1.0 -h
 ```
 for more installation options. If the executable doesn't work, you may need [Python](http://www.python.org).
 
