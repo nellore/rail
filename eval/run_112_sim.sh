@@ -21,8 +21,8 @@ ls *.fastq | python -c "import sys
 for line in sys.stdin:
     sample_name = list(line.strip().rpartition('_')[0].partition('-'))
     sample_name[0] = sample_name[0] + '_sim'
-    print '\t'.join(['${S3STAGED}/' + line.strip() + '.gz', '0', ''.join(sample_name)])" >$MANIFEST
-for i in *.fastq; do (cat $i | gzip -2 >temp.gz); aws s3 cp temp.gz $S3STAGED/$i.gz; done
+    print '\t'.join(['${S3STAGED}/' + line.strip(), '0', ''.join(sample_name)])" >$MANIFEST
+for i in *.fastq; do aws s3 cp $i $S3STAGED/$i; done
 # Submit job to EMR
 rm -rf temp.gz
 python $RAILSRC go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST --core-instance-bid-price 0.11 --master-instance-bid-price 0.11
