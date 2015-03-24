@@ -18,7 +18,7 @@ Read the [preprint](http://www.shouldreallyfinishthis.com/) for more details.
 
 Install
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`installers/rail-rna-1.0.0_installer`](https://github.com/buci/rail/blob/master/releases/install_rail-rna-1.0.0?raw=true), change to the directory containing it, and run
+Start with a recent (>= 2009) Mac OS or Linux box. Download [`releases/install_rail-rna-1.0.0`](https://github.com/buci/rail/blob/master/releases/install_rail-rna-1.0.0?raw=true), change to the directory containing it, and run
 ```
 sudo ./install_rail-rna-1.0.0
 ```
