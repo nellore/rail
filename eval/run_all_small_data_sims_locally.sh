@@ -2,6 +2,7 @@
 # RUN WITH TASKSET to limit CPU usage on multicore system for benchmarking!
 # $1: number of cores
 # $2: output directory -- SPECIFY FULL PATH
+# $3: where to find sample fastqs from generate_bioreps.py
 # Ex: taskset -c 0,1,2,3 sh run_all_small_data_sims_locally.sh 4 ./myoutput
 # Select two sample names for analysis. See generate_bioreps.py for how sample data was generated.
 SAMPLE1=NA19129_female_YRI_UU_6-1-1_sim
@@ -9,7 +10,7 @@ SAMPLE2=NA07048_male_CEU_UU_6-1-2_sim
 
 # Specify data directory; fastqs should be of the form [SAMPLE NAME]_sim.fastq; Flux beds should be
 # of form [SAMPLE_NAME]_sim.bed
-DATADIR=/scratch0/langmead-fs1/geuvadis_sim
+DATADIR=$3
 
 ## Specify locations of executables
 # Used version 2.0.12 of TopHat; wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
