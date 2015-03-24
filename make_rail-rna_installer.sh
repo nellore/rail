@@ -12,5 +12,5 @@ TARGET=releases/install_rail-rna-${VER}
 rm -rf $TARGET
 echo '#!/usr/bin/env python' | cat - $INTERMEDIATE >$TARGET
 rm -rf $INTERMEDIATE
-chmod +x $TARGET
+chmod 755 $TARGET
 cd $CWD
