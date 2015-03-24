@@ -5,9 +5,9 @@
 # $3: where to find sample fastqs from generate_bioreps.py
 # Ex: taskset -c 0,1,2,3 sh run_all_small_data_sims_locally.sh 4 ./myoutput
 # Select two sample names for analysis. See generate_bioreps.py for how sample data was generated.
-# We ran taskset -c 0,1,2,3,4,5,6,7 sh run_all_small_data_sims_locally.sh /scratch0/langmead-fs1/geuvadis_sims_for_paper/8coreout /scratch0/langmead-fs1/geuvadis_sims_for_paper
-SAMPLE1=NA19129_female_YRI_UU_6-1-1_sim
-SAMPLE2=NA07048_male_CEU_UU_6-1-2_sim
+# We ran taskset -c 0,1,2,3,4,5,6,7 sh run_all_small_data_sims_locally.sh 8 /scratch0/langmead-fs1/geuvadis_sims_for_paper/8core /scratch0/langmead-fs1/geuvadis_sims_for_paper
+SAMPLE1=NA19129_female_YRI_UU_6-1-1
+SAMPLE2=NA07048_male_CEU_UU_6-1-2
 
 # Specify data directory; fastqs should be of the form [SAMPLE NAME]_sim.fastq; Flux beds should be
 # of form [SAMPLE_NAME]_sim.bed
