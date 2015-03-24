@@ -12,7 +12,8 @@ S3STAGED=$2
 S3DEST=$3
 MANIFEST=$4
 cd $FASTQDIR
-ls *.fastq | python -c "import sys; for line in sys.stdin:
+ls *.fastq | python -c "import sys
+for line in sys.stdin:
     sample_name = list(line.strip().rpartition('_')[0].partition('-'))
     sample_name[0] = sample_name[0] + '_sim'
     print '\t'.join([${S3STAGED}/line.strip(), '0', ''.join(sample_name)])"
