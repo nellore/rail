@@ -16,5 +16,5 @@ ls *.fastq | python -c "import sys
 for line in sys.stdin:
     sample_name = list(line.strip().rpartition('_')[0].partition('-'))
     sample_name[0] = sample_name[0] + '_sim'
-    print '\t'.join([${S3STAGED}/line.strip(), '0', ''.join(sample_name)])"
+    print '\t'.join(['${S3STAGED}/' + line.strip(), '0', ''.join(sample_name)])"
 #for i in *.fastq; do cat $i | gzip | s3cmd put - $S3DEST/$i.gz; done
