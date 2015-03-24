@@ -257,6 +257,20 @@ class RailRnaInstaller(object):
                     self.depends['samtools'].rpartition('/')[2][:-8]
                 )
             with cd(samtools_dir):
+                '''Make sure unistd.h is #included cram_io.c ... it's some bug
+                in some SAMTools that prevents compilation on langmead-fs1,
+                which may be a general problem with portability. See
+                https://github.com/samtools/htslib/commit/
+                0ec5202de5691b27917ce828a9d24c9c729a9b81'''
+                with open(glob.glob('htslib*/cram_io.c')) as cram_io_stream:
+                    all_cram_io = cram_io_stream.read()
+                if '<unistd.h>' not in all_cram_io:
+                    with open(glob.glob('htslib*/cram_io.c'), 'w') \
+                        as cram_io_out_stream:
+                        cram_io_out_stream.write(all_cram_io.replace(
+                                '#include <string.h>',
+                                '#include <string.h>\n#include <unistd.h>'
+                            ))
                 # Make on all but one cylinder
                 thread_count = max(1, multiprocessing.cpu_count() - 1)
                 samtools_command = ['make', '-j%d' % thread_count]
