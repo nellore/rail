@@ -6,9 +6,10 @@
 ## $1: directory with fastqs
 ## $2: where on S3 to stage fastq.gzs
 ## $3: where on S3 to output Rail results
-## $4: path to Rail source directory
+## $4: path to Rail source directory (wherever rail/src is)
 ## $5: path to manifest file to write (taken in our experiments to be eval/GEUVADIS_112_sim.manifest)
 ## Requires s3cmd
+## Full command we ran was sh run_112_sim.sh /scratch0/langmead-fs1/geuvadis_sims_for_paper s3://rail-results/geuv112sim /scratch0/langmead-fs1/rail/src /scratch0/langmead-fs1/rail/src/eval/GEUVADIS_112_sim.manifest
 FASTQDIR=$1
 S3STAGED=$2
 S3DEST=$3
