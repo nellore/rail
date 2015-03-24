@@ -110,14 +110,10 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                                         current_sample_indexes.split('\x1f')
                                     ):
                 sample_indexes[sample_index] += int(current_sample_counts[i])
-                if len(sample_indexes) >= min_sample_count \
-                    or sample_indexes[sample_index] >= coverage_threshold:
-                    print_intron = True
-                    break
         sample_count = len(sample_indexes)
         max_coverage = max(sample_indexes.values())
-        if print_intron or sample_count >= min_sample_count \
-            or max_coverage >= coverage_threshold:
+        if (sample_count >= min_sample_count
+            or max_coverage >= coverage_threshold):
             for sample_index in sample_indexes:
                 print >>output_stream, '%s\t%s\t%012d\t%012d' % (
                         rname_and_strand, sample_index, int(pos), int(end_pos)
@@ -198,7 +194,7 @@ elif __name__ == '__main__':
             self.manifest_file = os.path.join(self.temp_dir_path,
                                                     'sample.manifest')
 
-        def test_output(self):
+        def test_output_1(self):
             """ Fails if output of go() is wrong. """
             manifest_content = (
                     'file1.fastq\t0\tfile2.fastq\t0\t0\n'
@@ -249,6 +245,58 @@ elif __name__ == '__main__':
                 )
             self.assertEquals(
                     len(output_lines), 3
+                )
+
+        def test_output_2(self):
+            """ Fails if output of go() is wrong. """
+            manifest_content = (
+                    'file1.fastq\t0\tfile2.fastq\t0\t0\n'
+                    'file3.fastq\t0\tfile4.fastq\t0\t1\n'
+                    'file5.fastq\t0\tfile6.fastq\t0\t2\n'
+                    'file7.fastq\t0\tfile8.fastq\t0\t3\n'
+                    'file9.fastq\t0\tfile10.fastq\t0\t4\n'
+                )
+            with open(self.manifest_file, 'w') as manifest_stream:
+                manifest_stream.write(manifest_content)
+            introns = (
+                    'chr1+\t100\t140\t0\t6\n'
+                    'chr2-\t171\t185\t1\x1f2\t2\x1f3\n'
+                    'chr3+\t23\t85\t1\t2\n'
+                    'chr3+\t23\t85\t1\t5\n'
+                )
+            '''Above, for a coverage_threshold 5 and a sample_fraction 0.5,
+            the intron on chr2- should NOT pass while the rest should.'''
+            with open(self.input_file, 'w') as output_stream:
+                output_stream.write(introns)
+            manifest_object = manifest.LabelsAndIndices(self.manifest_file)
+            with open(self.input_file) as input_stream, \
+                open(self.output_file, 'w') as output_stream:
+                input_line_count, output_line_count = go(
+                    manifest_object=manifest_object,
+                    input_stream=input_stream,
+                    output_stream=output_stream,
+                    sample_fraction=0.5,
+                    coverage_threshold=5,
+                    verbose=False
+                )
+            self.assertEquals(
+                    input_line_count, 4
+                )
+            self.assertEquals(
+                    output_line_count, 2
+                )
+            output_lines = []
+            with open(self.output_file) as output_stream:
+                for line in output_stream:
+                    output_lines.append(line.strip())
+            self.assertTrue(
+                    'chr1+\t0\t%012d\t%012d' % (100, 140) in output_lines
+                )
+            self.assertTrue(
+                    'chr3+\t1\t%012d\t%012d' % (23, 85)in output_lines
+                )
+            self.assertEquals(
+                    len(output_lines), 2
                 )
 
         def tearDown(self):
