@@ -1744,7 +1744,7 @@ class RailRnaLocal(object):
                 '--ipython-profile', type=str, required=False, metavar='<str>',
                 default=None,
                 help=('connects to this IPython profile (def: default IPython '
-                      'profile')
+                      'profile)')
             )
             general_parser.add_argument(
                 '--scratch', type=str, required=False, metavar='<dir>',
@@ -3059,7 +3059,7 @@ class RailRnaAlign(object):
             )
             required_parser.add_argument(
                 '-x', '--bowtie-idx', type=str, required=True,
-                metavar='<idx/idx,idx>',
+                metavar='<idx | idx/idx>',
                 help=('Bowtie 1 and 2 index basenames if they share the '
                       'same path; otherwise, Bowtie 1 index basename '
                       'and Bowtie 2 index basename separated by comma')
