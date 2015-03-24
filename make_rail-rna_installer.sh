@@ -7,8 +7,8 @@ INTERMEDIATE=rail-rna_installer.zip
 rm -rf ../rail-rna*installer*
 zip ../rail-rna_installer.zip $(find . -not -name \*.pyc -not -name .DS\_Store | xargs)
 cd ..
-mkdir -p installers
-TARGET=installers/rail-rna-${VER}_installer
+mkdir -p releases
+TARGET=releases/install_rail-rna-${VER}
 rm -rf $TARGET
 echo '#!/usr/bin/env python' | cat - $INTERMEDIATE >$TARGET
 rm -rf $INTERMEDIATE
