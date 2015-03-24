@@ -14,3 +14,7 @@ lib
 .DS_Store
 *.sublime-project
 *.sublime-workspace
+
+!rail-rna*.tar.gz
+
+!*/
