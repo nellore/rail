@@ -22,4 +22,4 @@ for line in sys.stdin:
     print '\t'.join(['${S3STAGED}/' + line.strip() + '.gz', '0', ''.join(sample_name)])" >$MANIFEST
 for i in *.fastq; do cat $i | gzip | s3cmd put - $S3STAGED/$i.gz; done
 # Submit job to EMR
-python $RAILSRC -c 40 -a hg19 -m $MANIFEST -o $S3DEST --core-instance-bid-price 0.11 --master-instance-bid-price 0.11
+python $RAILSRC go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST --core-instance-bid-price 0.11 --master-instance-bid-price 0.11
