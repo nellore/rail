@@ -492,7 +492,7 @@ fi
             register_cleanup(remove_temporary_directories,
                                 [temp_aws_install_dir])
             with cd(temp_aws_install_dir):
-                self._grab_and_explode(self.depends['aws'], 'AWS CLI')
+                self._grab_and_explode(self.depends['aws_cli'], 'AWS CLI')
                 if self.local:
                     # Local install
                     aws_command = ['./awscli-bundle/install', '-b',
