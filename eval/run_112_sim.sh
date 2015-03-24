@@ -15,7 +15,7 @@ S3STAGED=$2
 S3DEST=$3
 RAILSRC=$4
 MANIFEST=$5
-ORIGINAL = $(pwd)
+ORIGINAL=$(pwd)
 cd $FASTQDIR
 ls *.fastq | python -c "import sys
 for line in sys.stdin:
