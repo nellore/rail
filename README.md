@@ -1,6 +1,6 @@
 Rail
 ====
-This is the official repo for Rail-*, which currently includes just the Rail-RNA pipeline for spliced alignment of RNA-seq data. Check `installers/` for releases.
+This is the official repo for Rail-*, which currently includes just the Rail-RNA pipeline for spliced alignment of RNA-seq data. Check `releases/` for releases.
 
 Get interested
 -----
@@ -18,17 +18,17 @@ Read the [preprint](http://www.shouldreallyfinishthis.com/) for more details.
 
 Install
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`installers/rail-rna-1.0.0_installer`](https://github.com/buci/rail/blob/master/installers/rail-rna-1.0.0_installer?raw=true), change to the directory containing it, and run
+Start with a recent (>= 2009) Mac OS or Linux box. Download [`installers/rail-rna-1.0.0_installer`](https://github.com/buci/rail/blob/master/releases/install_rail-rna-1.0.0?raw=true), change to the directory containing it, and run
 ```
-sudo ./rail-rna-1.0.0_installer
+sudo ./install_rail-rna-1.0.0
 ```
 to install for all users or
 ```
-./rail-rna-1.0.0_installer
+./install_rail-rna-1.0.0
 ```
 to install for just you. Check
 ```
-./rail-rna-1.0.0_installer -h
+./install_rail-rna-1.0.0 -h
 ```
 for more installation options. If the executable doesn't work, you may need [Python](http://www.python.org).
 
