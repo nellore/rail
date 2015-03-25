@@ -2,7 +2,7 @@
 ## A script that:
 ## (1) Compresses the FASTQs and stages them on S3
 ## (2) Creates a manifest file for the FASTQs
-## (3) Runs Rail-RNA on the 112 datasets on Elastic MapReduce
+## (3) Runs Rail-RNA on the 112 datasets on Elastic MapReduce WITH AND WITHOUT intron filter of 0.5,5
 ## $1: directory with fastqs
 ## $2: where on S3 to stage fastq.gzs
 ## $3: where on S3 to output Rail results
@@ -25,4 +25,5 @@ for line in sys.stdin:
 for i in $(find . -name \*.fastq ! -name \*right\*.fastq ! -name \*left\*.fastq | cut -c3-); do aws s3 cp $i $S3STAGED/$i; done
 # Submit job to EMR
 python $RAILSRC go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST --core-instance-bid-price 0.11 --master-instance-bid-price 0.11
+python $RAILSRC go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST.nofilter --core-instance-bid-price 0.11 --master-instance-bid-price 0.11
 cd $ORIGINAL
