@@ -38,6 +38,8 @@ MAINOUTPUT=$2
 mkdir -p $MAINOUTPUT
 
 SAMPLE=$SAMPLE1
+BOWTIE1IDX=/scratch0/langmead-fs1/indexes_for_paper/genome
+BOWTIE2IDX=/scratch0/langmead-fs1/indexes_for_paper/genome
 echo 'Running Rail-RNA on sample '${SAMPLE}'...'
 # Write manifest file
 echo -e $DATADIR/${SAMPLE}_sim.fastq'\t0\t'${SAMPLE} >$MAINOUTPUT/${SAMPLE}.manifest
