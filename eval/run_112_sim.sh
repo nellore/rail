@@ -9,7 +9,7 @@
 ## $4: path to Rail source directory (wherever rail/src is)
 ## $5: path to manifest file to write (taken in our experiments to be eval/GEUVADIS_112_sim.manifest)
 ## Requires AWS CLI
-## Full command we ran was sh run_112_sim.sh /scratch0/langmead-fs1/geuvadis_sims_for_paper s3://rail-results/geuv112sim s3://rail-results/geuv112sim.out /scratch0/langmead-fs1/rail/src /scratch0/langmead-fs1/rail/src/eval/GEUVADIS_112_sim.manifest
+## Full command we ran was sh run_112_sim.sh /scratch0/langmead-fs1/geuvadis_sims_for_paper s3://rail-results/geuv112sim s3://rail-results/geuv112sim.out /scratch0/langmead-fs1/rail/src /scratch0/langmead-fs1/rail/eval/GEUVADIS_112_sim.manifest
 FASTQDIR=$1
 S3STAGED=$2
 S3DEST=$3
@@ -25,5 +25,5 @@ for line in sys.stdin:
 #for i in $(find . -name \*.fastq ! -name \*right\*.fastq ! -name \*left\*.fastq | cut -c3-); do aws s3 cp $i $S3STAGED/$i; done
 # Submit job to EMR
 #python $RAILSRC go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST --core-instance-bid-price 0.11 --master-instance-bid-price 0.11
-python $RAILSRC go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST.nofilter --core-instance-bid-price 0.11 --master-instance-bid-price 0.11 --intron-criteria 0,0 --json
+python $RAILSRC go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST.nofilter --core-instance-bid-price 0.11 --master-instance-bid-price 0.11 --intron-criteria 0,0
 cd $ORIGINAL
