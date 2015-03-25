@@ -39,10 +39,9 @@ mkdir -p $MAINOUTPUT
 
 SAMPLE=$SAMPLE1
 echo 'Running Rail-RNA on sample '${SAMPLE}'...'
-echo '#'${SAMPLE}' Rail-RNA' >>$TIMELOG
 # Write manifest file
 echo -e $DATADIR/${SAMPLE}_sim.fastq'\t0\t'${SAMPLE} >$MAINOUTPUT/${SAMPLE}.manifest
-time ($RAILRNA go local -p $CORES -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -x $BOWTIE1IDX,$BOWTIE2IDX -f >/dev/null 2>&1) 2>>$TIMELOG
+$RAILRNA go local -p $CORES -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -x $BOWTIE1IDX,$BOWTIE2IDX -f >/dev/null 2>&1
 echo 'Computing precision and recall...'
 (for i in $OUTPUT/rail/alignments/*.bam; do $SAMTOOLS view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail/$PERFORMANCE 2>$OUTPUT/rail/${PERFORMANCE}_summary) &
 (for i in $OUTPUT/rail/alignments/*.bam; do $SAMTOOLS view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail/${PERFORMANCE}_intron_recovery_summary) &
