@@ -43,7 +43,7 @@ BOWTIE2IDX=/scratch0/langmead-fs1/indexes_for_paper/genome
 echo 'Running Rail-RNA on sample '${SAMPLE}'...'
 # Write manifest file
 echo -e $DATADIR/${SAMPLE}_sim.fastq'\t0\t'${SAMPLE} >$MAINOUTPUT/${SAMPLE}.manifest
-$RAILRNA go local -p $CORES -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -x $BOWTIE1IDX,$BOWTIE2IDX -f
+$RAILRNA go local -p $CORES -m $MAINOUTPUT/${SAMPLE}.manifest -o ~/rail --log ~/rail.log -x $BOWTIE1IDX,$BOWTIE2IDX -f
 echo 'Computing precision and recall...'
 (for i in $OUTPUT/rail/alignments/*.bam; do $SAMTOOLS view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail/$PERFORMANCE 2>$OUTPUT/rail/${PERFORMANCE}_summary) &
 (for i in $OUTPUT/rail/alignments/*.bam; do $SAMTOOLS view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail/${PERFORMANCE}_intron_recovery_summary) &
