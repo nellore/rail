@@ -6,12 +6,15 @@
 # is that we want to be sure we're using Amazon Hadoop 2.4.0's classes,
 # including its particular hadoop-lzo
 
+CWD=$(pwd)
 cd $(dirname "${BASH_SOURCE[0]}")
-rm -f relevantelephant.tar.gz relevantelephant.jar multiple-files.jar multiple-files.tar.gz
+rm -f relevantelephant.tar.gz relevantelephant.jar multiple-files.jar multiple-files.tar.gz mod-partitioner.jar mod-partitioner.tar.gz
 tar cvzf relevant-elephant.tar.gz relevant-elephant
 tar cvzf multiple-files.tar.gz multiple-files
+tar cvzf mod-partitioner.tar.gz mod-partitioner
 scp -i $2 relevant-elephant.tar.gz hadoop@$1:~/relevant-elephant.tar.gz
 scp -i $2 multiple-files.tar.gz hadoop@$1:~/multiple-files.tar.gz
+scp -i $2 mod-partitioner.tar.gz hadoop@$1:~/mod-partitioner.tar.gz
 ssh -t -t -i $2 hadoop@${1} <<ENDSSH
 tar xvzf relevant-elephant.tar.gz
 rm -rf relevant-elephant_out
@@ -23,11 +26,19 @@ rm -rf multiple-files_out
 mkdir -p multiple-files_out
 javac -classpath \$(find ~/share/ *.jar | tr '\n' ':') -d multiple-files_out multiple-files/*.java
 jar -cvf multiple-files.jar -C multiple-files_out .
+tar xvzf mod-partitioner.tar.gz
+rm -rf mod-partitioner_out
+mkdir -p mod-partitioner_out
+javac -classpath \$(find ~/share/ *.jar | tr '\n' ':') -d mod-partitioner_out mod-partitioner/*.java
+jar -cvf mod-partitioner.jar -C mod-partitioner_out .
 logout
 ENDSSH
 scp -i $2 hadoop@$1:~/multiple-files.jar ./
 scp -i $2 hadoop@$1:~/relevant-elephant.jar ./
+scp -i $2 hadoop@$1:~/mod-partitioner.jar ./
 rm -rf ../lib
 mkdir -p ../lib
 cp multiple-files.jar ../lib/
 cp relevant-elephant.jar ../lib/
+cp mod-partitioner.jar ../lib/
+cd $CWD

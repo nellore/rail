@@ -19,7 +19,8 @@ Tab-delimited tuple columns:
     iff sample contains intron combo
 3. Sequence
 
-Input is partitioned by the first column and needs no sort.
+Input is partitioned by the first column and sorted on the second column to ensure
+that exactly the same FASTA file is indexed every time.
 
 Hadoop output (written to stdout)
 ----------------------------

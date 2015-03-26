@@ -106,6 +106,7 @@ on EMR depending on bootstraps.'''
 _hadoop_streaming_jar = '/home/hadoop/contrib/streaming/hadoop-streaming.jar'
 _multiple_files_jar = '/mnt/lib/multiple-files.jar'
 _relevant_elephant_jar = '/mnt/lib/relevant-elephant.jar'
+_mod_partitioner_jar = '/mnt/lib/mod-partitioner.jar'
 _hadoop_lzo_jar = ('/home/hadoop/.versions/2.4.0/share/hadoop'
                    '/common/lib/hadoop-lzo.jar')
 _s3distcp_jar = '/home/hadoop/lib/emr-s3distcp-1.0.jar'
@@ -705,7 +706,8 @@ def step(name, inputs, output,
     reducer='org.apache.hadoop.mapred.lib.IdentityReducer', 
     action_on_failure='TERMINATE_JOB_FLOW', jar=_hadoop_streaming_jar,
     tasks=0, partition_field_count=None, key_fields=None, archives=None,
-    multiple_outputs=False, inputformat=None, extra_args=[]):
+    multiple_outputs=False, mod_partitioner=False, inputformat=None,
+    extra_args=[]):
     """ Outputs JSON for a given step.
 
         name: name of step
@@ -719,6 +721,8 @@ def step(name, inputs, output,
         key fields: number of key fields
         archives: -archives option
         multiple_outputs: True iff there are multiple outputs; else False
+        mod_partitioner: True iff the mod partitioner should be used for
+            the step; this partitioner assumes the key is a tuple of integers
         inputformat: -inputformat option
         extra_args: extra '-D' args
 
@@ -762,14 +766,23 @@ def step(name, inputs, output,
     if multiple_outputs:
         to_return['HadoopJarStep']['Args'][-1] \
             +=  (',%s' % _multiple_files_jar)
+    if mod_partitioner:
+        to_return['HadoopJarStep']['Args'][-1] \
+            +=  (',%s' % _mod_partitioner_jar)
     if archives is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-archives', archives
             ])
-    to_return['HadoopJarStep']['Args'].extend([
-            '-partitioner',
-            'org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner',
-        ])
+    if mod_partitioner:
+        to_return['HadoopJarStep']['Args'].extend([
+                '-partitioner',
+                'edu.jhu.cs.ModPartitioner',
+            ])
+    else:
+        to_return['HadoopJarStep']['Args'].extend([
+                '-partitioner',
+                'org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner',
+            ])
     to_return['HadoopJarStep']['Args'].extend([
                 '-input', ','.join([an_input.strip() for an_input in inputs])
             ])
@@ -923,7 +936,14 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                 archives=(protostep['archives']
                     if 'archives' in protostep else None),
                 multiple_outputs=(True if 'multiple_outputs'
-                        in protostep else False
+                        in protostep 
+                        and protostep['multiple_outputs']
+                        else False
+                    ),
+                mod_partitioner=(True if 'mod_partitioner'
+                        in protostep
+                        and protostep['mod_partitioner']
+                        else False
                     ),
                 inputformat=(protostep['inputformat']
                     if 'inputformat' in protostep else None),
@@ -1801,7 +1821,7 @@ class RailRnaElastic(object):
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-        log_uri=None, ami_version='3.5.0',
+        log_uri=None, ami_version='3.6.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2224,7 +2244,7 @@ class RailRnaElastic(object):
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='3.5.0',
+            default='3.6.0',
             help='Amazon Machine Image version'
         )
         elastic_parser.add_argument('--visible-to-all-users',
@@ -3470,7 +3490,7 @@ class RailRnaAlign(object):
                 'min_tasks' : 1,
                 'max_tasks' : 1,
                 'part' : 1,
-                'keys' : 1,
+                'keys' : 2, # not 1; ensures ref names are in uniform order!
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3559,6 +3579,7 @@ class RailRnaAlign(object):
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
                             'cointron_fasta'],
+                'mod_partitioner' : True,
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
                 'min_tasks' : base.sample_count * 12 if elastic else None,
@@ -3705,6 +3726,7 @@ class RailRnaAlign(object):
                                                      verbose,
                                                      scratch),
                 'inputs' : [path_join(elastic, 'precoverage', 'coverage')],
+                'mod_partitioner' : True,
                 'output' : 'coverage',
                 'taskx' : 1,
                 'part' : 1,
@@ -3823,18 +3845,20 @@ class RailRnaAlign(object):
                 'inputs' : [path_join(elastic, 'align_reads', 'sam'),
                             path_join(elastic, 'compare_alignments', 'sam'),
                             path_join(elastic, 'break_ties', 'sam')],
+                'mod_partitioner' : (True if base.do_not_output_bam_by_chr
+                                        else False),
                 'output' : 'bam',
                 'taskx' : 1,
                 'part' : (1 if base.do_not_output_bam_by_chr else 2),
                 'keys' : 3,
                 'extra_args' : [
-                        'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
-                        'mapreduce.reduce.shuffle.merge.percent=0.4',
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
+                    ] + (['mapreduce.reduce.shuffle.input.buffer.percent=0.4',
+                          'mapreduce.reduce.shuffle.merge.percent=0.4']
+                          if base.do_not_output_bam_by_chr else []),
                 'direct_copy' : True
             }]
 
@@ -4028,7 +4052,7 @@ class RailRnaElasticPreprocessJson(object):
     def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        log_uri=None, ami_version='3.5.0',
+        log_uri=None, ami_version='3.6.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -4345,7 +4369,7 @@ class RailRnaElasticAlignJson(object):
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, bam_basename='alignments',
-        bed_basename='', log_uri=None, ami_version='3.5.0',
+        bed_basename='', log_uri=None, ami_version='3.6.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -4706,7 +4730,7 @@ class RailRnaElasticAllJson(object):
         transcriptome_indexes_per_sample=500, drop_deletions=False,
         do_not_output_bam_by_chr=False, output_sam=False,
         bam_basename='alignments', bed_basename='',
-        log_uri=None, ami_version='3.5.0',
+        log_uri=None, ami_version='3.6.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',

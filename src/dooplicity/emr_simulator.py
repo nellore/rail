@@ -181,7 +181,7 @@ def yopen(gzipped, *args):
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, task_count, memcap,
                     gzip=False, gzip_level=3, scratch=None,
-                    sort='sort', max_attempts=4):
+                    sort='sort', mod_partition=False, max_attempts=4):
     """ Partitions input data into tasks and presorts them.
 
         Files in output directory are in the format x.y, where x is a task
@@ -207,6 +207,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             string, writes to temporary directory; if None, writes directly
             to output directory.
         sort: path to sort executable
+        mod_partition: if True, task is assigned according to formula
+            (product of fields) % task_count
         max_attempts: maximum number of times to attempt partitioning input.
             MUST BE FINAL ARG to be compatible with 
             execute_balanced_job_with_retries().
@@ -214,6 +216,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         Return value: None if no errors encountered; otherwise error string.
     """
     try:
+        from operator import mul
         task_streams = {}
         if gzip:
             task_stream_processes = {}
@@ -269,10 +272,20 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 input_file = new_input_file'''
             with yopen(None, input_file) as input_stream:
                 for line in input_stream:
-                    key = separator.join(
-                                line.strip().split(separator)[:key_fields]
-                            )
-                    task = int(hashlib.md5(key).hexdigest(), 16) % task_count
+                    key = line.strip().split(separator)[:key_fields]
+                    if mod_partition and len(key) <= 1:
+                        try:
+                            task = abs(int(key[0])) % task_count
+                        except (IndexError, ValueError):
+                            # Null key or some field doesn't work with this
+                            task = int(
+                                hashlib.md5(separator.join(key)).hexdigest(),
+                                16
+                            ) % task_count
+                    else:
+                        task = int(
+                            hashlib.md5(separator.join(key)).hexdigest(), 16
+                        ) % task_count
                     try:
                         task_streams[task].write(line)
                     except KeyError:
@@ -1254,7 +1267,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 except KeyError:
                     # No multiple outputs
                     multiple_outputs = False
-                    pass
                 try:
                     if step_data['inputformat'] \
                         == 'org.apache.hadoop.mapred.lib.NLineInputFormat':
@@ -1344,6 +1356,16 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 in glob.glob(output_dir)
                                 if os.path.isfile(input_file)]
             if step_data['reducer'] not in identity_reducers:
+                '''Determine whether to use "mod" partitioner that uses product
+                of key fields % reducer count to assign tasks.'''
+                try:
+                    if step_data['partitioner'] == 'edu.jhu.cs.ModPartitioner':
+                        mod_partition = True
+                    else:
+                        mod_partition = False
+                except KeyError:
+                    # Default to no mod partition
+                    mod_partition = False
                 # Partition inputs into tasks, presorting
                 output_dir = os.path.join(step_data['output'], 'dp.tasks')
                 try:
@@ -1380,7 +1402,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             step_data['sort_options'], output_dir,
                             step_data['key_fields'], separator,
                             step_data['task_count'], memcap, gzip,
-                            gzip_level, scratch, sort]
+                            gzip_level, scratch, sort, mod_partition]
                                 for i, input_file_group
                                 in enumerate(input_file_groups)],
                         status_message='Inputs partitioned',

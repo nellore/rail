@@ -11,7 +11,7 @@ cd src
 VER=$(python -c "import version; print version.version_number,")
 # Change version number in rail-rna.txt
 cd rna/driver
-echo -ne "\xe2\x88\x80 Rail-RNA v${VER}\n" >rail-rna.txt
+python -c "print '\xe2\x88\x80 Rail-RNA v${VER}'" >rail-rna.txt
 cd ../..
 # Create installer
 INTERMEDIATE=rail-rna_installer.zip
