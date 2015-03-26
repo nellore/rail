@@ -23,7 +23,8 @@ for line in sys.stdin:
     sample_name[0] = sample_name[0] + '_sim'
     print '\t'.join(['${S3STAGED}/' + line.strip(), '0', ''.join(sample_name)])" >$MANIFEST
 #for i in $(find . -name \*.fastq ! -name \*right\*.fastq ! -name \*left\*.fastq | cut -c3-); do aws s3 cp $i $S3STAGED/$i; done
-# Submit job to EMR
+# Submit jobs to EMR
 #python $RAILSRC go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST --core-instance-bid-price 0.11 --master-instance-bid-price 0.11
+# WITHOUT intron filter
 python $RAILSRC go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST.nofilter --core-instance-bid-price 0.11 --master-instance-bid-price 0.11 --intron-criteria 0,0
 cd $ORIGINAL
