@@ -555,12 +555,47 @@ def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
     new_exons.append(last_exon)
     return insertions, deletions, introns, new_exons
 
+class SampleAndRnameIndexes(object):
+    """ Assigns sample-RNAME combination to index to improve load balance.
+
+        If outputting BAMs by chromosome, a single index is assigned, and
+        the output written is <index> <TAB> 0. If outputting BAMs by sample,
+        simply the tab-separated sample and rname indexes are written.
+    """
+
+    def __init__(self, manifest_object, output_bam_by_chr=True):
+        self.columns = len(manifest_object.label_to_index)
+        self.output_bam_by_chr = output_bam_by_chr
+
+    def index(self, sample_index, rname_index):
+        if self.output_bam_by_chr:
+            sample_index = int(sample_index)
+            rname_index = int(rname_index)
+            return '\t'.join(
+                    [str(int(rname_index) * self.columns + int(sample_index)),
+                        '0']
+                )
+        else:
+            return '\t'.join([str(sample_index), '%012d' % int(rname_index)])
+
+    def sample_and_rname_indexes(self, index):
+        """ Gets properly formatted sample/rname idxes from sample-rname idx.
+
+            index: sample-rname index
+
+            Return value: tuple (sample index, rname index); both are strings
+        """
+        assert self.output_bam_by_chr
+        index = int(index)
+        return (str(index % self.columns), '%012d' % (index / self.columns))
+
 class AlignmentPrinter(object):
     """ Encapsulates methods for printing alignment information. """
 
     def __init__(self, manifest_object, reference_index,
                  output_stream=sys.stdout, bin_size=5000, exon_ivals=False,
-                 exon_diffs=True, drop_deletions=False):
+                 exon_diffs=True, drop_deletions=False,
+                 output_bam_by_chr=True):
         """
             manifest_object: object of type LabelsAndIndices; see manifest.py
             reference_index: object of type BowtieIndexReference; see bowtie.py
@@ -576,6 +611,12 @@ class AlignmentPrinter(object):
         self.bin_size = bin_size
         self.output_stream = output_stream
         self.drop_deletions = drop_deletions
+        '''To improve load balance, assign a unique ID to each sample-RNAME
+        combination when outputting BAMs by chromosome'''
+        self.sample_and_rname_indexes = SampleAndRnameIndexes(
+                                                    manifest_object,
+                                                    output_bam_by_chr
+                                                )
 
     def print_unmapped_read(self, qname, seq, qual):
         """ Prints an unmapped read from a qname, qual, and seq.
@@ -595,11 +636,13 @@ class AlignmentPrinter(object):
             Return value: 1, the number of lines output
         """
         print >>self.output_stream, (
-                'sam\t%s\t%s\t%012d\t%s\t4\t0\t*\t*\t0\t0\t%s\t%s\tYT:Z:UU'
-            ) % (self.manifest_object.label_to_index[
-                        qname.rpartition('\x1d')[2]
-                    ], self.reference_index.rname_to_string['*'],
-                    0, qname.partition('\x1d')[0], seq, qual)
+                'sam\t%s\t%012d\t%s\t4\t0\t*\t*\t0\t0\t%s\t%s\tYT:Z:UU'
+            ) % (self.sample_and_rname_indexes.index(
+                            self.manifest_object.label_to_index[
+                                qname.rpartition('\x1d')[2]
+                            ],
+                            self.reference_index.rname_to_string['*']
+                        ), 0, qname.partition('\x1d')[0], seq, qual)
         return 1
 
     def print_alignment_data(self, multiread_reports_and_ties, count=1):
@@ -649,9 +692,11 @@ class AlignmentPrinter(object):
             Standard SAM output except fields are in different order to
             faciliate partitioning by sample/RNAME and coordinate sorting. The
             order of the fields is as follows.
-            1. Sample index
-            2. Number string representing RNAME; see BowtieIndexReference class
-                in bowtie_index for conversion information
+            1. Sample index if outputting BAMs by sample OR
+                sample-rname index if outputting BAMs by chr
+            2. (Number string representing RNAME; see BowtieIndexReference
+                class in bowtie_index for conversion information) OR
+                '0' if outputting BAMs by chr
             3. POS
             4. QNAME
             5. FLAG
@@ -852,10 +897,12 @@ class AlignmentPrinter(object):
             for alignment in multiread_reports_and_ties[0]:
                 print >>self.output_stream, 'sam\t' \
                         + '\t'.join(
-                            (sample_index,
-                                self.reference_index.rname_to_string[
+                            (self.sample_and_rname_indexes.index(
+                                    sample_index,
+                                    self.reference_index.rname_to_string[
                                         alignment[2]
-                                    ], '%012d' % int(alignment[3]),
+                                    ]
+                                ), '%012d' % int(alignment[3]),
                                 alignment[0].partition('\x1d')[0],
                                 alignment[1]) + alignment[4:]
                         )

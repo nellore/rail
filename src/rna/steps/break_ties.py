@@ -64,9 +64,10 @@ partitioning by sample name/RNAME and sorting by POS.) Each line corresponds to
 read overlapping at least one intron in the reference. The CIGAR string
 represents intronic bases with N's and exonic bases with M's.
 The order of the fields is as follows.
-1. Sample label
-2. Number string representing RNAME; see BowtieIndexReference class in
-    bowtie_index for conversion information
+1. Sample index if outputting BAMs by sample OR sample-rname index if
+    outputting BAMs by chr
+2. (Number string representing RNAME; see BowtieIndexReference class in
+    bowtie_index for conversion information) OR '0' if outputting BAMs by chr
 3. POS
 4. QNAME
 5. FLAG
@@ -143,6 +144,10 @@ parser.add_argument('--drop-deletions', action='store_const',
         const=True,
         default=False, 
         help='Drop deletions from coverage vectors')
+parser.add_argument('--output-bam-by-chr', action='store_const',
+        const=True,
+        default=False, 
+        help='Final BAMs will be output by chromosome')
 
 bowtie.add_args(parser)
 manifest.add_args(parser)
@@ -169,13 +174,16 @@ manifest_object = manifest.LabelsAndIndices(args.manifest)
 alignment_count_to_report, seed, non_deterministic \
     = bowtie.parsed_bowtie_args(bowtie_args)
 
-alignment_printer = AlignmentPrinter(manifest_object,
-                                        reference_index,
-                                        output_stream=sys.stdout,
-                                        bin_size=args.partition_length,
-                                        exon_ivals=args.exon_intervals,
-                                        exon_diffs=args.exon_differentials,
-                                        drop_deletions=args.drop_deletions)
+alignment_printer = AlignmentPrinter(
+                                manifest_object,
+                                reference_index,
+                                output_stream=sys.stdout,
+                                bin_size=args.partition_length,
+                                exon_ivals=args.exon_intervals,
+                                exon_diffs=args.exon_differentials,
+                                drop_deletions=args.drop_deletions,
+                                output_bam_by_chr=args.output_bam_by_chr
+                            )
 input_line_count, output_line_count = 0, 0
 start_time = time.time()
 

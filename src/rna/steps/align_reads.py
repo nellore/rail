@@ -69,9 +69,10 @@ Standard SAM output except fields are in different order, and the first field
 corresponds to sample label. (Fields are reordered to facilitate partitioning
 by sample name/RNAME and sorting by POS.) Each line corresponds to a
 spliced alignment. The order of the fields is as follows.
-1. Sample label
-2. Number string representing RNAME; see BowtieIndexReference class in
-    bowtie_index for conversion information
+1. Sample index if outputting BAMs by sample OR sample-rname index if
+    outputting BAMs by chr
+2. (Number string representing RNAME; see BowtieIndexReference class in
+    bowtie_index for conversion information) OR '0' if outputting BAMs by chr
 3. POS
 4. QNAME
 5. FLAG
@@ -172,7 +173,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
     min_exon_size=8, min_readlet_size=15, max_readlet_size=25,
     readlet_interval=12, capping_multiplier=1.5, drop_deletions=False,
-    gzip_level=3, scratch=None, index_count=1):
+    gzip_level=3, scratch=None, index_count=1, output_bam_by_chr=False):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -243,9 +244,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         partitioning by sample name/RNAME and sorting by POS.) Each line
         corresponds to a spliced alignment. The order of the fields is as
         follows.
-        1. Sample label
-        2. Number string representing RNAME; see BowtieIndexReference class in
-            bowtie_index for conversion information
+        1. Sample index if outputting BAMs by sample OR
+                sample-rname index if outputting BAMs by chr
+        2. (Number string representing RNAME; see BowtieIndexReference
+            class in bowtie_index for conversion information) OR
+            '0' if outputting BAMs by chr
         3. POS
         4. QNAME
         5. FLAG
@@ -352,6 +355,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             securely created temporary directory
         index_count: number of transcriptome Bowtie 2 indexes to which to
             assign unmapped reads for later realignment
+        output_bam_by_chr: True iff final output BAMs will be by chromosome
 
         No return value.
     """
@@ -435,7 +439,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                      '{exon_differentials} {exon_intervals} '
                      '--gzip-level {gzip_level} '
                      '--min-exon-size {min_exon_size} '
-                     '--index-count {index_count}').format(
+                     '--index-count {index_count} '
+                     '{output_bam_by_chr}').format(
                         task_partition=task_partition,
                         other_reads=other_reads_file,
                         second_pass_reads=second_pass_file,
@@ -457,7 +462,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                         if exon_intervals else ''),
                         gzip_level=gzip_level,
                         min_exon_size=min_exon_size,
-                        index_count=index_count
+                        index_count=index_count,
+                        output_bam_by_chr=('--output-bam-by-chr'
+                                            if output_bam_by_chr
+                                            else '')
                      )]
             )
     full_command = ' | '.join([input_command, 
@@ -494,7 +502,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                      '{exon_differentials} {exon_intervals} '
                      '--gzip-level {gzip_level} '
                      '--min-exon-size {min_exon_size} ' 
-                     '--index-count {index_count}').format(
+                     '--index-count {index_count} '
+                     '{output_bam_by_chr}').format(
                         task_partition=task_partition,
                         min_readlet_size=min_readlet_size,
                         drop_deletions=('--drop-deletions' if drop_deletions
@@ -514,7 +523,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                         if exon_intervals else ''),
                         gzip_level=gzip_level,
                         min_exon_size=min_exon_size,
-                        index_count=index_count
+                        index_count=index_count,
+                        output_bam_by_chr=('--output-bam-by-chr'
+                                            if output_bam_by_chr
+                                            else '')
                      )]
             )
     full_command = ' | '.join([input_command, 
@@ -553,6 +565,10 @@ if __name__ == '__main__':
         const=True,
         default=False, 
         help='Drop deletions from coverage vectors')
+    parser.add_argument('--output-bam-by-chr', action='store_const',
+        const=True,
+        default=False, 
+        help='Final BAMs will be output by chromosome')
     parser.add_argument('--exon-differentials', action='store_const',
         const=True,
         default=True, 
@@ -631,7 +647,8 @@ if __name__ == '__main__':
         drop_deletions=args.drop_deletions,
         gzip_level=args.gzip_level,
         scratch=args.scratch,
-        index_count=args.index_count)
+        index_count=args.index_count,
+        output_bam_by_chr=args.output_bam_by_chr)
 
     print >>sys.stderr, 'DONE with align_reads.py; in=%d; ' \
         'time=%0.3f s' % (_input_line_count, time.time() - start_time)

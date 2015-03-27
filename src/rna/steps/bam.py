@@ -16,9 +16,10 @@ corresponds to sample label. (Fields are reordered to facilitate partitioning
 by sample name/RNAME and sorting by POS.) Each line corresponds to an
 end-to-end alignment or an alignment overlapping at least one intron in the 
 reference. The order of the fields is as follows.
-1. Sample label
-2. Number string representing RNAME; see BowtieIndexReference class in
-    bowtie_index for conversion information
+1. Sample index if outputting BAMs by sample OR sample-rname index if
+    outputting BAMs by chr
+2. (Number string representing RNAME; see BowtieIndexReference class in
+    bowtie_index for conversion information) OR '0' if outputting BAMs by chr
 3. POS
 4. QNAME
 5. FLAG
@@ -69,6 +70,7 @@ import version
 import filemover
 from dooplicity.ansibles import Url
 from dooplicity.tools import register_cleanup, make_temp_dir
+from alignment_handlers import SampleAndRnameIndexes
 import subprocess
 import tempdel
 
@@ -127,6 +129,11 @@ sorted_rnames = [reference_index.string_to_rname['%012d' % i]
                     for i in xrange(len(reference_index.string_to_rname) - 1)]
 # For mapping sample indices back to original sample labels
 manifest_object = manifest.LabelsAndIndices(args.manifest)
+# To convert sample-rname index to sample index-rname index tuple
+sample_and_rname_indexes = SampleAndRnameIndexes(
+                                                    manifest_object,
+                                                    args.output_by_chromosome
+                                                )
 
 keep_alive_interval = 60
 keep_alive_next = time.time() + keep_alive_interval
@@ -174,6 +181,11 @@ while True:
     else:
         tokens = line.rstrip().split('\t')
         sample_label, rname, pos, qname, flag = tokens[:5]
+        if args.output_by_chromosome:
+            (sample_label, rname) \
+                = sample_and_rname_indexes.sample_and_rname_indexes(
+                        sample_label
+                    )
         sample_label = manifest_object.index_to_label[sample_label]
         rname = reference_index.string_to_rname[rname]
     if move_temporary_file and last_sample_label is not None \

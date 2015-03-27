@@ -81,9 +81,11 @@ partitioning by sample name/RNAME and sorting by POS.) Each line corresponds to
 read overlapping at least one intron in the reference. The CIGAR string
 represents intronic bases with N's and exonic bases with M's.
 The order of the fields is as follows.
-1. Sample label
-2. Number string representing RNAME; see BowtieIndexReference class in
-    bowtie_index for conversion information
+1. Sample index if outputting BAMs by sample OR sample-rname index if
+    outputting BAMs by chr
+2. (Number string representing RNAME; see BowtieIndexReference class
+    in bowtie_index for conversion information) OR '0' if outputting
+    BAMs by chr
 3. POS
 4. QNAME
 5. FLAG
@@ -172,6 +174,10 @@ if __name__ == '__main__':
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
              'in output have terminal + and - indicating sense strand')
+    parser.add_argument('--output-bam-by-chr', action='store_const',
+        const=True,
+        default=False, 
+        help='Final BAMs will be output by chromosome')
     parser.add_argument('--drop-deletions', action='store_const',
         const=True,
         default=False, 
@@ -207,7 +213,8 @@ if __name__ == '__main__':
                     output_stream=sys.stdout,
                     exon_ivals=args.exon_intervals,
                     exon_diffs=args.exon_differentials,
-                    drop_deletions=args.drop_deletions
+                    drop_deletions=args.drop_deletions,
+                    output_bam_by_chr=args.output_bam_by_chr
                 )
     alignment_count_to_report, seed, non_deterministic \
                 = bowtie.parsed_bowtie_args(bowtie_args)

@@ -3299,6 +3299,9 @@ class RailRnaAlign(object):
                     if (((not hasattr(base, 'scratch'))
                             or base.scratch is not None)
                          and not elastic) else '')
+        output_by_chr = ('--output-bam-by-chr'
+                            if not base.do_not_output_bam_by_chr
+                            else '')
         return [  
             {
                 'name' : 'Align reads and segment them into readlets',
@@ -3312,7 +3315,7 @@ class RailRnaAlign(object):
                          '--capping-multiplier={8} '
                          '--gzip-level {9} '
                          '--index-count {10} '
-                         '{11} {12} {13} {14} -- {15}').format(
+                         '{11} {12} {13} {14} {15} -- {16}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
@@ -3331,6 +3334,7 @@ class RailRnaAlign(object):
                                                         verbose,
                                                         keep_alive,
                                                         scratch,
+                                                        output_by_chr,
                                                         base.bowtie2_args),
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
@@ -3598,13 +3602,14 @@ class RailRnaAlign(object):
                 'run' : ('compare_alignments.py --bowtie-idx={0} '
                          '--partition-length={1} --exon-differentials '
                          '--tie-margin {2} --manifest={3} '
-                         '{4} {5} -- {6}').format(
+                         '{4} {5} {6} -- {7}').format(
                                         base.bowtie1_idx,
                                         base.partition_length,
                                         base.tie_margin,
                                         manifest,
                                         drop_deletions,
                                         verbose,
+                                        output_by_chr,
                                         base.bowtie2_args
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'postponed_sam'),
@@ -3646,11 +3651,12 @@ class RailRnaAlign(object):
                 'name' : 'Finalize primary alignments of spliced reads',
                 'run' : ('break_ties.py --exon-differentials '
                             '--bowtie-idx {0} --partition-length {1} '
-                            '--manifest {2} {3} -- {4}').format(
+                            '--manifest {2} {3} {4} -- {5}').format(
                                     base.bowtie1_idx,
                                     base.partition_length,
                                     manifest,
                                     drop_deletions,
+                                    output_by_chr,
                                     base.bowtie2_args
                                 ),
                 'inputs' : ['intron_coverage',
@@ -3845,20 +3851,19 @@ class RailRnaAlign(object):
                 'inputs' : [path_join(elastic, 'align_reads', 'sam'),
                             path_join(elastic, 'compare_alignments', 'sam'),
                             path_join(elastic, 'break_ties', 'sam')],
-                'mod_partitioner' : (True if base.do_not_output_bam_by_chr
-                                        else False),
+                'mod_partitioner' : True,
                 'output' : 'bam',
                 'taskx' : 1,
-                'part' : (1 if base.do_not_output_bam_by_chr else 2),
+                'part' : 1,
                 'keys' : 3,
                 'extra_args' : [
+                        'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
+                        'mapreduce.reduce.shuffle.merge.percent=0.4',
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ] + (['mapreduce.reduce.shuffle.input.buffer.percent=0.4',
-                          'mapreduce.reduce.shuffle.merge.percent=0.4']
-                          if base.do_not_output_bam_by_chr else []),
+                    ],
                 'direct_copy' : True
             }]
 

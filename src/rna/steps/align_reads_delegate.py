@@ -164,7 +164,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
         exon_differentials=True, exon_intervals=False, verbose=False,
         bin_size=10000, report_multiplier=1.2, min_exon_size=8,
         min_readlet_size=8, max_readlet_size=25,
-        readlet_interval=5, drop_deletions=False):
+        readlet_interval=5, drop_deletions=False, output_bam_by_chr=False):
     """ Prints end-to-end alignments and selects reads to be realigned.
 
         input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -212,6 +212,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             the read
         drop_deletions: True iff deletions should be dropped from coverage
             vector
+        output_bam_by_chr: True iff final BAMs are to be output by chromosome
 
         No return value.
     """
@@ -225,7 +226,8 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             output_stream=output_stream,
             exon_ivals=exon_intervals,
             exon_diffs=exon_differentials,
-            drop_deletions=drop_deletions
+            drop_deletions=drop_deletions,
+            output_bam_by_chr=output_bam_by_chr
         )
     if other_stream:
         # First-pass alignment
@@ -578,7 +580,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
         k_value=1, bowtie_index_base='genome', bin_size=10000,
         manifest_file='manifest', exon_differentials=True,
         exon_intervals=False, gzip_level=3, min_exon_size=9,
-        index_count=1):
+        index_count=1, output_bam_by_chr=False):
     """ Emits output specified in align_reads.py by processing Bowtie 2 output.
 
         This script containing this function is invoked twice to process each
@@ -632,6 +634,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
         gzip_level: gzip level to use to compress temporary files
         index_count: number of transcriptome Bowtie 2 indexes to which to
             assign unmapped reads for later realignment
+        output_bam_by_chr: True iff final BAM output should be by chr
     """
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
@@ -672,7 +675,8 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
                     min_readlet_size=min_readlet_size,
                     max_readlet_size=max_readlet_size,
                     readlet_interval=readlet_interval,
-                    drop_deletions=drop_deletions
+                    drop_deletions=drop_deletions,
+                    output_bam_by_chr=output_bam_by_chr
                 )
         print >>sys.stderr, (
             'align_reads_delegate.py reports %d output lines on first pass.'
@@ -694,7 +698,8 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
                 output_stream=output_stream,
                 report_multiplier=report_multiplier,
                 min_exon_size=min_exon_size,
-                drop_deletions=drop_deletions
+                drop_deletions=drop_deletions,
+                output_bam_by_chr=output_bam_by_chr
             )
         print >>sys.stderr, (
             'align_reads_delegate.py reports %d output lines on second pass.'
@@ -724,6 +729,10 @@ if __name__ == '__main__':
         const=True,
         default=False, 
         help='Drop deletions from coverage vectors')
+    parser.add_argument('--output-bam-by-chr', action='store_const',
+        const=True,
+        default=False, 
+        help='Final BAMs will be output by chromosome')
     parser.add_argument('--exon-differentials', action='store_const',
         const=True,
         default=True, 
@@ -794,7 +803,8 @@ if __name__ == '__main__' and not args.test:
         exon_intervals=args.exon_intervals,
         min_exon_size=args.min_exon_size,
         gzip_level=args.gzip_level,
-        index_count=args.index_count)
+        index_count=args.index_count,
+        output_bam_by_chr=args.output_bam_by_chr)
 
 elif __name__ == '__main__':
     # Test units
