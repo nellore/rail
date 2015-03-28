@@ -32,8 +32,8 @@ def introns_from_bed_stream(bed):
             denoting an intron on RNAME. Each tuple is of the form
             (start position, end position).
     """
+    introns = set()
     with open(bed) as bed_stream:
-        introns = set()
         for line in bed_stream:
             tokens = line.rstrip().split('\t')
             if len(tokens) < 12:
@@ -350,7 +350,7 @@ if __name__ == '__main__':
     true_introns = set()
     import glob
     import multiprocessing
-    pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
+    pool = multiprocessing.Pool(5)
     pool.map_async(introns_from_bed_stream,
                 glob.glob(
                             os.path.join(args.true_introns_bed_dir, '*.bed')
