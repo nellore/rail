@@ -4,7 +4,7 @@
 ## and computes performance measures on only those two samples considered
 ## in run_all_small_data_sims_locally.sh. Also grabs transcript indexes
 ## and counts numbers of introns in each index with count_introns.py
-## Requires AWS CLI, Bowtie 2 in PATH
+## Requires s3cmd, Bowtie 2 in PATH
 ## $1: output directory of job WITH FILTER on S3
 ## $2: output directory of job WITHOUT FILTER on S3
 ## $3: directory in which to dump output
@@ -27,8 +27,8 @@ mkdir -p withfilter
 cd withfilter
 for SAMPLE in {$SAMPLE1, $SAMPLE2}
 do 
-	aws s3 cp $1/alignments/alignments.$SAMPLE*.bam ./
-	aws s3 cp $1/transcript_index/* ./
+	s3cmd get $1/alignments/alignments.$SAMPLE*.bam
+	s3cmd get $1/transcript_index/*
 	tar xvzf *.tar.gz
 	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
 	(for i in $SAMPLE*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
@@ -40,8 +40,8 @@ mkdir -p withoutfilter
 cd withoutfilter
 for SAMPLE in {$SAMPLE1, $SAMPLE2}
 do 
-	aws s3 cp $1/alignments/alignments.$SAMPLE*.bam ./
-	aws s3 cp $1/transcript_index/* ./
+	s3cmd get $1/alignments/alignments.$SAMPLE*.bam
+	s3cmd get $1/transcript_index/*
 	tar xvzf *.tar.gz
 	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
 	(for i in $SAMPLE*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
