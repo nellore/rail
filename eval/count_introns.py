@@ -22,54 +22,54 @@ from operator import itemgetter
 from bisect import bisect_right
 from collections import defaultdict
 
-def introns_from_bed_stream(bed_stream):
+def introns_from_bed_stream(bed):
     """ Converts BED to dictionary that maps RNAMES to sets of introns.
 
-        bed_stream: input stream containing lines of a BED file characterizing
-            splice junctions.
+        bed: input BED file characterizing splice junctions
 
         Return value: a dictionary. Each key is an RNAME, typically a
             chromosome, and its corresponding value is a set of tuples, each
             denoting an intron on RNAME. Each tuple is of the form
             (start position, end position).
     """
-    introns = set()
-    for line in bed_stream:
-        tokens = line.rstrip().split('\t')
-        if len(tokens) < 12:
-            continue
-        chrom = tokens[0]
-        chrom_start = int(tokens[1])
-        chrom_end = int(tokens[2])
-        block_sizes = tokens[10].split(',')
-        block_starts = tokens[11].split(',')
-        # Handle trailing commas
-        try:
-            int(block_sizes[-1])
-        except ValueError:
-            block_sizes = block_sizes[:-1]
-        try:
-            int(block_starts[-1])
-        except ValueError:
-            block_starts = block_starts[:-1]
-        block_count = len(block_sizes)
-        if block_count < 2:
-            # No introns
-            continue
-        assert block_count == len(block_starts)
-        junctions = []
-        # First block characterizes junction on left side of intron
-        junctions.append(chrom_start + int(block_starts[0]) 
-                                + int(block_sizes[0]))
-        for i in xrange(1, block_count - 1):
-            # Any intervening blocks characterize two junctions
-            intron_start = chrom_start + int(block_starts[i])
-            junctions.append(intron_start)
-            junctions.append(intron_start + int(block_sizes[i]))
-        # Final block characterizes junction on right side of intron
-        junctions.append(chrom_start + int(block_starts[-1]))
-        for i in xrange(len(junctions)/2):
-            introns.add((chrom, junctions[2*i]+1, junctions[2*i+1]+1))
+    with open(bed) as bed_stream:
+        introns = set()
+        for line in bed_stream:
+            tokens = line.rstrip().split('\t')
+            if len(tokens) < 12:
+                continue
+            chrom = tokens[0]
+            chrom_start = int(tokens[1])
+            chrom_end = int(tokens[2])
+            block_sizes = tokens[10].split(',')
+            block_starts = tokens[11].split(',')
+            # Handle trailing commas
+            try:
+                int(block_sizes[-1])
+            except ValueError:
+                block_sizes = block_sizes[:-1]
+            try:
+                int(block_starts[-1])
+            except ValueError:
+                block_starts = block_starts[:-1]
+            block_count = len(block_sizes)
+            if block_count < 2:
+                # No introns
+                continue
+            assert block_count == len(block_starts)
+            junctions = []
+            # First block characterizes junction on left side of intron
+            junctions.append(chrom_start + int(block_starts[0]) 
+                                    + int(block_sizes[0]))
+            for i in xrange(1, block_count - 1):
+                # Any intervening blocks characterize two junctions
+                intron_start = chrom_start + int(block_starts[i])
+                junctions.append(intron_start)
+                junctions.append(intron_start + int(block_sizes[i]))
+            # Final block characterizes junction on right side of intron
+            junctions.append(chrom_start + int(block_starts[-1]))
+            for i in xrange(len(junctions)/2):
+                introns.add((chrom, junctions[2*i]+1, junctions[2*i+1]+1))
     return introns
 
 class BowtieIndexReference(object):
@@ -352,10 +352,9 @@ if __name__ == '__main__':
     import multiprocessing
     pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
     pool.map_async(introns_from_bed_stream,
-                [open(bed) for bed in
-                    glob.glob(
+                glob.glob(
                             os.path.join(args.true_introns_bed_dir, '*.bed')
-                        )],
+                        ),
                 callback=true_introns.update)
     pool.close()
     pool.join()
