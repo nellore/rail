@@ -351,10 +351,12 @@ if __name__ == '__main__':
     import glob
     import multiprocessing
     pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
-    for bed in glob.glob(os.path.join(args.true_introns_bed_dir, '*.bed')):
-        with open(bed) as bed_stream:
-            pool.apply_async(introns_from_bed_stream, bed_stream,
-                                callback=true_introns.update)
+    pool.map_async(introns_from_bed_stream,
+                [open(bed) for bed in
+                    glob.glob(
+                            os.path.join(args.true_introns_bed_dir, '*.bed')
+                        )],
+                callback=true_introns.update)
     pool.close()
     pool.join()
     retrieved = intron_count
