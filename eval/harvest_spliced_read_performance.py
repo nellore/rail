@@ -48,7 +48,8 @@ if __name__ == '__main__':
                             in files_in_dir(os.path.abspath(args.input))
                             if 'perform' in a_file]
     args.output = os.path.abspath(args.output)
+    root_size = len(args.output)
     for a_file in performance_files:
         new_name = os.path.join(args.output,
-                                    a_file.replace('/', '.'))
+                                    a_file.replace('/', '.'))[root_size+1:]
         shutil.copy(a_file, new_name)
