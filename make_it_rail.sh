@@ -5,7 +5,6 @@
 ## is respected.
 PACKAGES=packages
 RELEASES=releases
-CWD=$(pwd)
 cd $(cd -P -- "$(dirname -- "$0")" && pwd -P)
 cd src
 VER=$(python -c "import version; print version.version_number,")
@@ -32,7 +31,5 @@ mkdir -p $PACKAGES
 mv $ARNAME ${PACKAGES}/$ARNAME
 cd $PACKAGES
 FULLPACK=$(pwd)
-# Return to original dir
-cd $CWD
 echo "Run this to upload to S3."
 echo "s3cmd put --acl-public ${FULLPACK}/${ARNAME} s3://rail-emr/bin/"
