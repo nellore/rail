@@ -3423,7 +3423,8 @@ class RailRnaAlign(object):
                                     ),
                 'inputs' : ['intron_search'],
                 'output' : 'intron_filter',
-                'taskx' : 1,
+                'min_tasks' : (max(base.sample_count / 10, 1)
+                                if elastic else None),
                 'part' : 3,
                 'keys' : 3,
                 'extra_args' : [

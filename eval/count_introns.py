@@ -22,7 +22,7 @@ from operator import itemgetter
 from bisect import bisect_right
 from collections import defaultdict
 
-def introns_from_bed_stream(bed):
+def introns_from_bed(bed):
     """ Converts BED to dictionary that maps RNAMES to sets of introns.
 
         bed: input BED file characterizing splice junctions
@@ -282,10 +282,12 @@ if __name__ == '__main__':
                   'fragments')
         )
     parser.add_argument('-t', '--true-introns-bed-dir', type=str,
-        required=True,
+        required=False,
+        default=None,
         help=('Path to directory containing Flux Simulator BEDs. The only '
               'BEDs in the directory (subdirectories excluded) must be '
-              'from the Flux sim of 112 bioreps.'))
+              'from the Flux sim of 112 bioreps. Exclude if precision/recall '
+              'are not to be computed.'))
     parser.add_argument('--print-introns-to-stderr', action='store_const',
                             const=True, default=False,
                             help=('Prints introns to stderr in format '
@@ -346,29 +348,32 @@ if __name__ == '__main__':
     print 'AT-AC count: %d\tproportion: %08f' % (much_less_canonicals,
                                         float(much_less_canonicals)
                                                                 / intron_count)
-    # Read Flux BEDs
-    true_introns = set()
-    import glob
-    import multiprocessing
-    pool = multiprocessing.Pool(5)
-    pool.map_async(introns_from_bed_stream,
-                glob.glob(
+    if args.true_introns_bed_dir is not None:
+        # Read Flux BEDs
+        true_introns = set()
+        import glob
+        import multiprocessing
+        pool = multiprocessing.Pool(5)
+        pool.map_async(introns_from_bed,
+                    glob.glob(
                             os.path.join(args.true_introns_bed_dir, '*.bed')
                         ),
-                callback=true_introns.update)
-    pool.close()
-    pool.join()
-    retrieved = intron_count
-    relevant = len(true_introns)
-    relevant_and_retrieved = len(introns.intersection(true_introns))
-    print 'true intron count\t%d' % relevant
-    print 'retrieved intron count\t%d' % retrieved
-    print 'overlap\t%d' % relevant_and_retrieved
-    print 'precision\t%.9f' % (float(relevant_and_retrieved) / retrieved)
-    print 'recall\t%.9f' % (float(relevant_and_retrieved) / relevant)
+                    callback=true_introns.update)
+        pool.close()
+        pool.join()
+        retrieved = intron_count
+        relevant = len(true_introns)
+        relevant_and_retrieved = len(introns.intersection(true_introns))
+        print 'true intron count\t%d' % relevant
+        print 'retrieved intron count\t%d' % retrieved
+        print 'overlap\t%d' % relevant_and_retrieved
+        print 'precision\t%.9f' % (float(relevant_and_retrieved) / retrieved)
+        print 'recall\t%.9f' % (float(relevant_and_retrieved) / relevant)
     if args.print_introns_to_stderr:
-        introns = sorted(list(introns),
-                            key=lambda intron: (intron[0][:-1], intron[2]) )
+        introns = sorted(
+                            list(introns),
+                            key=lambda intron: (intron[0][:-1], intron[2])
+                    )
         for rname, start, end in introns:
             print '\t'.join([rname[:-1], rname[-1],
                              str(start), str(end)])
