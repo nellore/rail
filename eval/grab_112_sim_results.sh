@@ -49,8 +49,8 @@ cd $SAMPLE2MOD
 cd ../..
 mkdir -p withoutfilter
 cd withoutfilter
-for SAMPLE in {$SAMPLE1, $SAMPLE2}
-do 
+for SAMPLE in {$SAMPLE1,$SAMPLE2}
+do
 	s3cmd get $2/alignments/alignments.${SAMPLE}.* --force
 	s3cmd get $2/transcript_index/* --force
 	tar xvzf *.tar.gz
