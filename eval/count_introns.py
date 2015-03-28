@@ -233,7 +233,11 @@ if __name__ == '__main__':
         )
     parser.add_argument('--print-introns-to-stderr', action='store_const',
                             const=True, default=False,
-                            help='Prints introns to stderr')
+                            help=('Prints introns to stderr in format '
+                                  'RNAME <TAB> sense <TAB> intron start <TAB> '
+                                  'intron end. Coordinates are '
+                                  '1-based; start coordinate is inclusive '
+                                  'while end coordinate is exclusive.'))
 
     args = parser.parse_args()
 
@@ -289,6 +293,8 @@ if __name__ == '__main__':
                                         float(much_less_canonicals)
                                                                 / intron_count)
     if args.print_introns_to_stderr:
-        for intron in introns:
-            print '\t'.join([intron[0][:-1], intron[0][-1],
-                             intron[1], intron[2]])
+        introns = sorted(list(introns),
+                            key=lambda intron: (intron[0][:-1], intron[2]) )
+        for rname, start, end in introns:
+            print '\t'.join([rname[:-1], rname[-1],
+                             str(start), str(end)])
