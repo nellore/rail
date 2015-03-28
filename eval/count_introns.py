@@ -355,6 +355,7 @@ if __name__ == '__main__':
         with open(bed) as bed_stream:
             pool.apply_async(introns_from_bed_stream, bed_stream,
                                 callback=true_introns.update)
+    pool.close()
     pool.join()
     retrieved = intron_count
     relevant = len(true_introns)
