@@ -26,11 +26,11 @@ if __name__ == '__main__':
 
     inspect_process = subprocess.Popen(
                             [args.bowtie2_inspect, '-n', args.basename],
-                            stdout=subprocess.STDOUT
+                            stdout=subprocess.PIPE
                         )
     introns = set()
     for line in inspect_process.stdout:
-        rname, sense, seq_start, subseq_sizes, intron_sizes, _, _ = \
+        rname_and_sense, seq_start, subseq_sizes, intron_sizes, _, _ = \
             line.split('\x1d')
         seq_start = int(seq_start)
         subseq_sizes = [int(size) for size in subseq_sizes.split(',')]
@@ -39,9 +39,10 @@ if __name__ == '__main__':
         start = seq_start
         for i, size in enumerate(subseq_sizes[:-1]):
             introns.add((
-                       rname, start + size, start + size + intron_sizes[i]
+                       rname_and_sense,
+                       start + size, start + size + intron_sizes[i]
                     )
             )
             start += (size + intron_sizes[i])
     inspect_process.wait()
-    print 'Intron count: %d' % len(introns)
+    print 'intron count: %d' % len(introns)
