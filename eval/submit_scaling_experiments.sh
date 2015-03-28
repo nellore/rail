@@ -12,4 +12,4 @@ python $RAILHOME/src align elastic -i $BUCKET/28preprocessed -a hg19 -o $BUCKET/
 
 # Submit 56 and 112 at 40 cores
 python $RAILHOME/src align elastic -i $BUCKET/56preprocessed -a hg19 -o $BUCKET/ge56out.40cores -c 40 --master-instance-type c3.2xlarge --core-instance-type c3.2xlarge -m $RAILHOME/eval/GEUVADIS_56_with_112_sample_labels.manifest --ec2-key-name rail2 --master-instance-bid-price 0.11 --core-instance-bid-price 0.11
-python $RAILHOME/src align elastic -i $BUCKET/geuv112_ami_3_4_0e -a hg19 -o $BUCKET/ge112out.40cores -c 40 --master-instance-type c3.2xlarge --core-instance-type c3.2xlarge -m $RAILHOME/eval/GEUVADIS_112.manifest --ec2-key-name rail2 --master-instance-bid-price 0.11 --core-instance-bid-price 0.11
+python $RAILHOME/src align elastic -i $BUCKET/128preprocessed -a hg19 -o $BUCKET/ge112out.40cores -c 40 --master-instance-type c3.2xlarge --core-instance-type c3.2xlarge -m $RAILHOME/eval/GEUVADIS_112.manifest --ec2-key-name rail2 --master-instance-bid-price 0.11 --core-instance-bid-price 0.11

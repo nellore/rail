@@ -22,7 +22,7 @@ STAR=/scratch0/langmead-fs1/shared/STAR-STAR_2.4.0j/bin/Linux_x86_64_static/STAR
 HISAT=/scratch0/langmead-fs1/shared/hisat-0.1.5-beta/hisat
 # Use HISAT's tool for extracting splice sites for its junction database
 HISATSPLICE=/scratch0/langmead-fs1/shared/hisat-0.1.5-beta/extract_splice_sites.py
-# Used version 1.0.0 of Rail-RNA; wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
+# Used version 0.1.0 of Rail-RNA, but wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
 # Specify Python executable/loc of get_junctions.py; PyPy 2.4.0 was used
 PYTHON=pypy
 RAILHOME=/scratch0/langmead-fs1/rail
