@@ -32,10 +32,10 @@ mkdir -p withfilter
 cd withfilter
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
-	#s3cmd get $1/alignments/alignments.${SAMPLE}.* --force
-	#s3cmd get $1/transcript_index/* --force
-	#tar xvzf *.tar.gz
-	#$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
+	s3cmd get $1/alignments/alignments.${SAMPLE}.* --force
+	s3cmd get $1/transcript_index/* --force
+	tar xvzf *.tar.gz
+	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
 done
 mkdir -p $SAMPLE1MOD
 cd $SAMPLE1MOD
