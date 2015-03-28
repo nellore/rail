@@ -15,7 +15,7 @@ OUTPUT=$INPUT/harvest
 
 mkdir -p $OUTPUT
 
-for perform in $INPUT/*.perform
+for perform in $INPUT/*perform
 do
 	awk '{ 
 			for (i = 1; i <= '$TRUETHRESHOLD'; i++) {
