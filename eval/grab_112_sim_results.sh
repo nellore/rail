@@ -25,14 +25,14 @@ mkdir -p $3
 cd $3
 mkdir -p withfilter
 cd withfilter
-for $SAMPLE in {$SAMPLE1, $SAMPLE2}
-do 
-	s3cmd get $1/alignments/alignments.$SAMPLE.* --force
+for SAMPLE in {$SAMPLE1, $SAMPLE2}
+do
+	s3cmd get $1/alignments/alignments.${SAMPLE}.* --force
 	s3cmd get $1/transcript_index/* --force
 	tar xvzf *.tar.gz
 	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
-	(for i in $SAMPLE*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(for i in $SAMPLE*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+	(for i in ${SAMPLE}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+	(for i in ${SAMPLE}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 done
 wait
 cd ..
@@ -40,11 +40,11 @@ mkdir -p withoutfilter
 cd withoutfilter
 for SAMPLE in {$SAMPLE1, $SAMPLE2}
 do 
-	s3cmd get $1/alignments/alignments.$SAMPLE.* --force
+	s3cmd get $1/alignments/alignments.${SAMPLE}.* --force
 	s3cmd get $1/transcript_index/* --force
 	tar xvzf *.tar.gz
 	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
-	(for i in $SAMPLE*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(for i in $SAMPLE*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+	(for i in ${SAMPLE}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+	(for i in ${SAMPLE}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 done
 cd $CWD
