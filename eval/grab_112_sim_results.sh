@@ -9,7 +9,7 @@
 ## $2: output directory of job WITHOUT FILTER on S3
 ## $3: directory in which to dump output
 ## $4: where to find Flux BED storing true read alignments from simulation
-## Command we ran was s3://rail-results/geuv112sim.out s3://rail-results/geuv112sim.out.nofilter /scratch0/langmead-fs1/geuvadis_sims_for_paper/fromemr /scratch0/langmead-fs1/geuvadis_sims_for_paper
+## Command we ran was sh grab_112_sim_results.sh s3://rail-results/geuv112sim.out s3://rail-results/geuv112sim.out.nofilter /scratch0/langmead-fs1/geuvadis_sims_for_paper/fromemr /scratch0/langmead-fs1/geuvadis_sims_for_paper
 
 SAMPLE1=NA19129_female_YRI_UU_6-1-1
 SAMPLE2=NA07048_male_CEU_UU_6-1-2
