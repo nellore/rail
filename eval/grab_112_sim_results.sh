@@ -37,8 +37,13 @@ do
 	tar xvzf *.tar.gz
 	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
 done
+mkdir -p $SAMPLE1MOD
+cd $SAMPLE1MOD
 (for i in ${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (for i in ${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) 
+cd ..
+mkdir -p $SAMPLE2MOD
+cd $SAMPLE2MOD
 (for i in ${SAMPLE2}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE2MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (for i in ${SAMPLE2}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE2MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 cd ..
@@ -51,8 +56,13 @@ do
 	tar xvzf *.tar.gz
 	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
 done
+mkdir -p $SAMPLE1MOD
+cd $SAMPLE1MOD
 (for i in ${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (for i in ${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) 
+cd ..
+mkdir -p $SAMPLE2MOD
+cd $SAMPLE2MOD
 (for i in ${SAMPLE2}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE2MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (for i in ${SAMPLE2}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE2MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 cd $CWD
