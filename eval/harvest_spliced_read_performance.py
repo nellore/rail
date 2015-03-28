@@ -47,6 +47,8 @@ if __name__ == '__main__':
     performance_files = [os.path.abspath(a_file) for a_file 
                             in files_in_dir(os.path.abspath(args.input))
                             if 'perform' in a_file]
+    print performance_files 
+    quit()
     args.output = os.path.abspath(args.output)
     for a_file in performance_files:
         new_name = os.path.join(args.output,
