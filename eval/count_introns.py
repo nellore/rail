@@ -20,6 +20,7 @@ import struct
 import mmap
 from operator import itemgetter
 from bisect import bisect_right
+from collections import defaultdict
 
 def introns_from_bed_stream(bed_stream):
     """ Converts BED to dictionary that maps RNAMES to sets of introns.
