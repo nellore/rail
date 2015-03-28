@@ -46,7 +46,7 @@ if __name__ == '__main__':
         pass
     performance_files = [a_file for a_file 
                             in files_in_dir(os.path.abspath(args.input))
-                            if 'perform']
+                            if 'perform' in a_file]
     root_size = len(os.path.abspath(args.output))
     args.output = os.path.abspath(args.output)
     for a_file in performance_files:
