@@ -40,7 +40,7 @@ done
 mkdir -p $SAMPLE1MOD
 cd $SAMPLE1MOD
 (for i in ../alignments.${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-(for i in ../alignments.${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) 
+(for i in ../alignments.${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 cd ..
 mkdir -p $SAMPLE2MOD
 cd $SAMPLE2MOD
@@ -59,7 +59,7 @@ done
 mkdir -p $SAMPLE1MOD
 cd $SAMPLE1MOD
 (for i in ../alignments.${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-(for i in ../alignments.${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) 
+(for i in ../alignments.${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 cd ..
 mkdir -p $SAMPLE2MOD
 cd $SAMPLE2MOD
