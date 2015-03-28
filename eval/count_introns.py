@@ -370,7 +370,7 @@ if __name__ == '__main__':
         print 'precision\t%.9f' % (float(relevant_and_retrieved) / retrieved)
         print 'recall\t%.9f' % (float(relevant_and_retrieved) / relevant)
     else:
-        print 'true intron count\t%d' % intron_count
+        print 'intron count\t%d' % intron_count
     if args.print_introns_to_stderr:
         introns = sorted(
                             list(introns),
