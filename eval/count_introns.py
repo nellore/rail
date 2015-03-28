@@ -8,6 +8,11 @@ this index is in intron_fasta.py.
 Once introns are grabbed, counts how many have canonical and noncanonical
 splice sites using BowtieIndexReference, a class from Rail-RNA pasted here so
 the evaluation code is independent of Rail-RNA's source.
+
+This script may be useful to users who want to interpret the results in
+the transcript_index subdirectory of the output directory of a Rail-RNA run;
+it provides a list of the introns uncovered by Rail-RNA before any realignment
+steps.
 """
 
 import os
@@ -226,6 +231,9 @@ if __name__ == '__main__':
             help=('Path to basename of Bowtie 2 index containing transcript '
                   'fragments')
         )
+    parser.add_argument('--print-introns-to-stderr', action='store_const',
+                            const=True, default=False,
+                            help='Prints introns to stderr')
 
     args = parser.parse_args()
 
@@ -280,3 +288,7 @@ if __name__ == '__main__':
     print 'AT-AC count: %d\tproportion: %08f' % (much_less_canonicals,
                                         float(much_less_canonicals)
                                                                 / intron_count)
+    if args.print_introns_to_stderr:
+        for intron in introns:
+            print '\t'.join([intron[0][:-1], intron[0][-1],
+                             intron[1], intron[2]])
