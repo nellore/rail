@@ -25,7 +25,7 @@ mkdir -p $3
 cd $3
 mkdir -p withfilter
 cd withfilter
-for SAMPLE in {$SAMPLE1, $SAMPLE2}
+for $SAMPLE in {$SAMPLE1, $SAMPLE2}
 do 
 	s3cmd get $1/alignments/alignments.$SAMPLE.* --force
 	s3cmd get $1/transcript_index/* --force
