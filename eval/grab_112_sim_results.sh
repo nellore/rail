@@ -46,7 +46,7 @@ mkdir -p $SAMPLE2MOD
 cd $SAMPLE2MOD
 (for i in ../alignments.${SAMPLE2}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE2MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (for i in ../alignments.${SAMPLE2}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE2MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-cd ..
+cd ../..
 mkdir -p withoutfilter
 cd withoutfilter
 for SAMPLE in {$SAMPLE1, $SAMPLE2}
