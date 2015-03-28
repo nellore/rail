@@ -9,7 +9,8 @@
 ## $2: output directory of job WITHOUT FILTER on S3
 ## $3: directory in which to dump output
 ## $4: where to find Flux BED storing true read alignments from simulation
-## Command we ran was sh grab_112_sim_results.sh s3://rail-results/geuv112sim.out s3://rail-results/geuv112sim.out.nofilter /scratch0/langmead-fs1/geuvadis_sims_for_paper/fromemr /scratch0/langmead-fs1/geuvadis_sims_for_paper
+## $5: where to find Bowtie 1 index basename of genome
+## Command we ran was sh grab_112_sim_results.sh s3://rail-results/geuv112sim.out s3://rail-results/geuv112sim.out.nofilter /scratch0/langmead-fs1/geuvadis_sims_for_paper/fromemr /scratch0/langmead-fs1/geuvadis_sims_for_paper /scratch0/langmead-fs1/indexes_for_paper/genome
 
 
 # position of "sim" is in different places because of formatting inconsistency
@@ -35,7 +36,7 @@ do
 	s3cmd get $1/alignments/alignments.${SAMPLE}.* --force
 	s3cmd get $1/transcript_index/* --force
 	tar xvzf *.tar.gz
-	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
+	$PYTHON $RAILHOME/eval/count_introns.py --bowtie1-idx $5 --bowtie2-idx intron >intron_count
 done
 mkdir -p $SAMPLE1MOD
 cd $SAMPLE1MOD
@@ -54,7 +55,7 @@ do
 	s3cmd get $2/alignments/alignments.${SAMPLE}.* --force
 	s3cmd get $2/transcript_index/* --force
 	tar xvzf *.tar.gz
-	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
+	$PYTHON $RAILHOME/eval/count_introns.py --bowtie1-idx $5 --bowtie2-idx intron >intron_count
 done
 mkdir -p $SAMPLE1MOD
 cd $SAMPLE1MOD
