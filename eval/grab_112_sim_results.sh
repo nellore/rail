@@ -11,8 +11,13 @@
 ## $4: where to find Flux BED storing true read alignments from simulation
 ## Command we ran was sh grab_112_sim_results.sh s3://rail-results/geuv112sim.out s3://rail-results/geuv112sim.out.nofilter /scratch0/langmead-fs1/geuvadis_sims_for_paper/fromemr /scratch0/langmead-fs1/geuvadis_sims_for_paper
 
+
+# position of "sim" is in different places because of formatting inconsistency
 SAMPLE1=NA19129_female_YRI_UU_6_sim-1-1
 SAMPLE2=NA07048_male_CEU_UU_6_sim-1-2
+
+SAMPLE1MOD=NA19129_female_YRI_UU_6-1-1
+SAMPLE2MOD=NA07048_male_CEU_UU_6-1-2
 
 DATADIR=$4
 
@@ -31,10 +36,11 @@ do
 	s3cmd get $1/transcript_index/* --force
 	tar xvzf *.tar.gz
 	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
-	(for i in ${SAMPLE}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(for i in ${SAMPLE}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 done
-wait
+(for i in ${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(for i in ${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) 
+(for i in ${SAMPLE2}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE2MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(for i in ${SAMPLE2}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE2MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 cd ..
 mkdir -p withoutfilter
 cd withoutfilter
@@ -44,7 +50,9 @@ do
 	s3cmd get $1/transcript_index/* --force
 	tar xvzf *.tar.gz
 	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
-	(for i in ${SAMPLE}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(for i in ${SAMPLE}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 done
+(for i in ${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(for i in ${SAMPLE1}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE1MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) 
+(for i in ${SAMPLE2}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE2MOD}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(for i in ${SAMPLE2}*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE2MOD}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 cd $CWD
