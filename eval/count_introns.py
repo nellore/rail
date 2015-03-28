@@ -21,6 +21,7 @@ from collections import defaultdict
 import mmap
 from operator import itemgetter
 from bisect import bisect_right
+from intron_recovery_performance import introns_from_bed_stream
 
 class BowtieIndexReference(object):
     """
@@ -231,6 +232,11 @@ if __name__ == '__main__':
             help=('Path to basename of Bowtie 2 index containing transcript '
                   'fragments')
         )
+    parser.add_argument('-t', '--true-introns-bed-dir', type=str,
+        required=True,
+        help=('Path to directory containing Flux Simulator BEDs. The only '
+              'BEDs in the directory (subdirectories excluded) must be '
+              'from the Flux sim of 112 bioreps.'))
     parser.add_argument('--print-introns-to-stderr', action='store_const',
                             const=True, default=False,
                             help=('Prints introns to stderr in format '
@@ -257,7 +263,7 @@ if __name__ == '__main__':
         for i, size in enumerate(subseq_sizes[1:]):
             introns.add((
                        rname_and_sense,
-                       start, start + intron_sizes[i]
+                       start - 1, start + intron_sizes[i] - 1
                     )
             )
             start += (size + intron_sizes[i])
@@ -273,8 +279,8 @@ if __name__ == '__main__':
     canonicals, less_canonicals, much_less_canonicals = 0, 0, 0
     for rname, start, end in introns:
         rname = rname[:-1]
-        left = reference_index.get_stretch(rname, start - 1, 2)
-        right = reference_index.get_stretch(rname, end - 3, 2)
+        left = reference_index.get_stretch(rname, start, 2)
+        right = reference_index.get_stretch(rname, end - 2, 2)
         assert (left, right) in possible_combos, (left, right)
         if (left, right) in canonical:
             canonicals += 1
@@ -284,7 +290,6 @@ if __name__ == '__main__':
             much_less_canonicals += 1
 
     intron_count = len(introns)
-    print 'intron count: %d' % intron_count
     print 'GT-AG count: %d\tproportion: %08f' % (canonicals, float(canonicals)
                                                                 / intron_count)
     print 'GC-AG count: %d\tproportion: %08f' % (less_canonicals,
@@ -292,6 +297,23 @@ if __name__ == '__main__':
     print 'AT-AC count: %d\tproportion: %08f' % (much_less_canonicals,
                                         float(much_less_canonicals)
                                                                 / intron_count)
+    # Read Flux BEDs
+    true_introns = set()
+    import glob
+    for bed in glob.glob(os.path.join(args.true_introns_bed_dir, '*')):
+        with open(bed) as bed_stream:
+            intron_dict = introns_from_bed_stream(bed_stream)
+        for chrom in intron_dict:
+            for intron in intron_dict[chrom]:
+                true_introns.add((chrom,) + intron)
+    retrieved = intron_count
+    relevant = len(true_introns)
+    relevant_and_retrieved = len(introns.intersection(true_introns))
+    print 'true intron count\t%d' % relevant
+    print 'retrieved intron count\t%d' % retrieved
+    print 'overlap\t%d' % relevant_and_retrieved
+    print 'precision\t%.9f' % (float(relevant_and_retrieved) / retrieved)
+    print 'recall\t%.9f' % (float(relevant_and_retrieved) / relevant)
     if args.print_introns_to_stderr:
         introns = sorted(list(introns),
                             key=lambda intron: (intron[0][:-1], intron[2]) )
