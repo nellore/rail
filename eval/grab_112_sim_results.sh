@@ -11,8 +11,8 @@
 ## $4: where to find Flux BED storing true read alignments from simulation
 ## Command we ran was sh grab_112_sim_results.sh s3://rail-results/geuv112sim.out s3://rail-results/geuv112sim.out.nofilter /scratch0/langmead-fs1/geuvadis_sims_for_paper/fromemr /scratch0/langmead-fs1/geuvadis_sims_for_paper
 
-SAMPLE1=NA19129_female_YRI_UU_6-1-1
-SAMPLE2=NA07048_male_CEU_UU_6-1-2
+SAMPLE1=NA19129_female_YRI_UU_6_sim-1-1
+SAMPLE2=NA07048_male_CEU_UU_6_sim-1-2
 
 DATADIR=$4
 
@@ -27,8 +27,8 @@ mkdir -p withfilter
 cd withfilter
 for SAMPLE in {$SAMPLE1, $SAMPLE2}
 do 
-	s3cmd get $1/alignments/alignments.$SAMPLE*.bam
-	s3cmd get $1/transcript_index/*
+	s3cmd get $1/alignments/alignments.$SAMPLE*.bam --force
+	s3cmd get $1/transcript_index/* --force
 	tar xvzf *.tar.gz
 	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
 	(for i in $SAMPLE*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
@@ -40,8 +40,8 @@ mkdir -p withoutfilter
 cd withoutfilter
 for SAMPLE in {$SAMPLE1, $SAMPLE2}
 do 
-	s3cmd get $1/alignments/alignments.$SAMPLE*.bam
-	s3cmd get $1/transcript_index/*
+	s3cmd get $1/alignments/alignments.$SAMPLE*.bam --force
+	s3cmd get $1/transcript_index/* --force
 	tar xvzf *.tar.gz
 	$PYTHON $RAILHOME/eval/count_introns.py --basename intron >intron_count
 	(for i in $SAMPLE*.bam; do samtools view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
