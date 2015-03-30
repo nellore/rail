@@ -57,7 +57,7 @@ Renting AWS resources costs money, regardless of whether your run ultimately suc
 
 License
 -----
-[GNU GPL v3.0](http://choosealicense.com/licenses/gpl-3.0/) unless otherwise specified. See `LICENSE` for the full text. Dooplicity, which is in `src/dooplicity`, is [MIT-licensed](http://choosealicense.com/licenses/mit/).
+[GNU GPL v3.0](http://choosealicense.com/licenses/gpl-3.0/) unless otherwise specified. [Dooplicity](https://github.com/buci/rail/tree/master/src/dooplicity), for example, is [MIT-licensed](http://choosealicense.com/licenses/mit/).
 
 Contributors
 -----
