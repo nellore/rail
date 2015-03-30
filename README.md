@@ -1,7 +1,7 @@
 Rail
 ====
 
-This is the official repo for Rail-RNA, software for RNA-seq analysis. Download the latest release at [`releases/install_rail-rna-0.1.0`](https://github.com/buci/rail/blob/master/releases/install_rail-rna-0.1.0?raw=true). Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/buci/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/buci/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .
+This is the official repo for Rail-RNA, software for RNA-seq analysis. Download the latest release at [`releases/install_rail-rna-0.1.0`](https://github.com/buci/rail/blob/master/releases/install_rail-rna-0.1.0?raw=true). **Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/buci/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/buci/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
 
 Get interested
 -----
@@ -36,22 +36,18 @@ for more installation options. If the executable doesn't work, you may need [Pyt
 
 Get started
 -----
-Rail-RNA takes as input a [Myrna](http://bowtie-bio.sourceforge.net/myrna/)-style manifest file, which describes a set of input FASTQs that may be on the local filesystem in local and parallel modes; or on the web or Amazon [Simple Storage Service](http://aws.amazon.com/s3/) (S3) in local, parallel, and elastic modes. Each line takes one of the following two forms. For a set of unpaired input reads:
+Rail-RNA takes as input a [Myrna](http://bowtie-bio.sourceforge.net/myrna/)-style manifest file, which describes a set of input FASTQs that may be on the local filesystem in local and parallel modes; or on the web or Amazon [Simple Storage Service](http://aws.amazon.com/s3/) (S3) in local, parallel, and elastic modes. Each line takes one of the following two forms.
 
-```<FASTQ URL>(tab)<optional MD5>(tab)<sample label>```.
+1. (for a set of unpaired input reads) `<FASTQ URL>(tab)<optional MD5>(tab)<sample label>`
+2. (for a set of paired input reads) `<FASTQ URL 1>(tab)<optional MD5 1>(tab)<FASTQ URL 2>(tab)<optional MD5 2>(tab)<sample label>`
 
-For a set of paired input reads:
+`<sample label>` must be formatted as `<group ID>-<biorep ID>-<techrep ID>`.
 
-```<FASTQ URL 1>(tab)<optional MD5 1>(tab)<FASTQ URL 2>(tab)<optional MD5 2>(tab)<sample label>```.
-
-`<sample label>` must be formatted as
-```<group ID>-<biorep ID>-<techrep ID>```.
-
-Find some data, create a manifest file, run
+**Find some data, create a manifest file, run**
 ```
 rail-rna
 ```
-and follow the instructions. A manual will be posted shortly.
+**and follow the instructions.** A manual will be posted shortly.
 
 Contributors
 -----
