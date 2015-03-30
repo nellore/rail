@@ -55,6 +55,10 @@ Disclaimer
 -----
 Renting AWS resources costs money, regardless of whether your run ultimately succeeds or fails. In some cases, Rail-RNA or its documentation may be partially to blame for a failed run. While we are happy to review bug reports, we do not accept responsibility for financial damage caused by these errors. Rail-RNA is provided "as is" with no warranty.
 
+License
+-----
+[GNU GPL v3.0](http://choosealicense.com/licenses/gpl-3.0/) unless otherwise specified. See `LICENSE` for the full text. Dooplicity, which is in `src/dooplicity`, is [MIT-licensed](http://choosealicense.com/licenses/mit/).
+
 Contributors
 -----
 * [Abhi Nellore]
