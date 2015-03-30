@@ -2,7 +2,7 @@
 ## Makes Rail-RNA package downloaded by EC2 nodes in Elastic MapReduce job
 ## and Rail-RNA installer executable. The former is placed in packages/ and
 ## the latter is placed in releases/. The version number in src/version.py
-## is respected.
+## is respected. This script should not be run by Rail-RNA users.
 PACKAGES=packages
 RELEASES=releases
 cd $(cd -P -- "$(dirname -- "$0")" && pwd -P)
@@ -31,5 +31,12 @@ mkdir -p $PACKAGES
 mv $ARNAME ${PACKAGES}/$ARNAME
 cd $PACKAGES
 FULLPACK=$(pwd)
-echo "Run this to upload to S3."
+cd ..
+cd $RELEASES
+FULLRELEASE=$(pwd)
+echo "The following messages are not for users."
+echo "Run this to upload package to S3."
 echo "s3cmd put --acl-public ${FULLPACK}/${ARNAME} s3://rail-emr/bin/"
+echo "Run this to upload executable to S3."
+echo "s3cmd put --acl-public ${FULLRELEASE}/install_rail-rna-${VER} s3://rail-emr/bin/"
+echo "Then the executable will be available at http://rail-emr.s3.amazonaws.com/bin/install_rail-rna-${VER} ."

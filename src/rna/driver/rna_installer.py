@@ -446,7 +446,7 @@ fi
         # Go back and set 755 permissions for executables
         for program in [rail_exe, bowtie1, bowtie1_build,
                             bowtie2, bowtie2_build, samtools,
-                            bedgraphtobigwig]:
+                            bedgraphtobigwig, pypy]:
             os.chmod(program, 0755)
         # Also for misc. Bowtie executables
         for program in glob.glob(os.path.join(os.path.dirname(bowtie1),
