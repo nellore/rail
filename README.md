@@ -23,7 +23,11 @@ Read the [preprint](https://youtu.be/6ZPZUtE6RgA) for more details.
 
 Get set up
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.0`](https://github.com/buci/rail/releases/download/v0.1.0/install_rail-rna-0.1.0), change to the directory containing it, and run
+Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.0`](https://github.com/buci/rail/releases/download/v0.1.0/install_rail-rna-0.1.0), change to the directory containing it, and make the installer executable with
+```
+chmod +x install_rail-rna-0.1.0
+```
+Now run
 ```
 sudo ./install_rail-rna-0.1.0
 ```
