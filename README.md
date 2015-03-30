@@ -1,7 +1,7 @@
 Rail-RNA
 ====
 
-This is the official repo for Rail-RNA, software for RNA-seq analysis. Download the latest release at [`releases/install_rail-rna-0.1.0`](https://github.com/buci/rail/blob/master/releases/install_rail-rna-0.1.0?raw=true). **Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/buci/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/buci/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
+This is the official repo for Rail-RNA, software for RNA-seq analysis. Download the latest stable release at [`releases/install_rail-rna-0.1.0`](https://github.com/buci/rail/blob/master/releases/install_rail-rna-0.1.0?raw=true). **Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/buci/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/buci/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
 
 Get interested
 -----
