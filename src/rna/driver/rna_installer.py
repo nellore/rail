@@ -496,9 +496,12 @@ fi
                 if self.local:
                     # Local install
                     aws_command = ['./awscli-bundle/install', '-b',
-                                    os.path.abspath(
-                                            os.path.expanduser('~/bin/aws')
-                                        )]
+                            os.path.abspath(
+                                    os.path.expanduser('~/aws_install/aws')
+                                ),
+                            '-i', os.path.abspath(
+                                    os.path.expanduser('~/aws_install/lib/aws')
+                                )]
                 else:
                     # All users
                     aws_command = ['./awscli-bundle/install', '-i',
