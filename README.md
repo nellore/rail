@@ -6,9 +6,11 @@ This is the official repo for Rail-RNA, software for RNA-seq analysis. [Download
 Get interested
 -----
 Rail-RNA's distinguishing features are
-* Scalability: built on MapReduce, the software scales to analyze hundreds of RNA-seq samples at the same time. Moreover, through reduced-redundancy analysis, the end-to-end analysis time per sample *decreases* for fixed computer cluster size as the number of samples increases.
+* Scalability: built on MapReduce, the software scales to analyze hundreds of RNA-seq samples at the same time.
+* Reduced-redundancy analysis: the software identifies and eliminates redundant alignment work, making the end-to-end analysis time per sample *decrease* for fixed computer cluster size as the number of samples increases.
 * Integrative analysis: the software borrows strength across replicates to achieve more accurate splice junction detection, especially in genomic regions with low levels of coverage.
-* Mode agnosticism: Rail-RNA integrates its own parallel abstraction layer that allows it to be run in various distributed computing environments, including the Amazon Web Services (AWS) [Elastic MapReduce (EMR) service](http://aws.amazon.com/elasticmapreduce/), or any distributed environment supported by [IPython](http://ipython.org/), including clusters using batch schedulers like PBS or SGE, Message Passing Interface (MPI), or any cluster with a shared filesystem and mutual SSH access. Alternately, Rail-RNA can be run on a single multi-core computer, without the aid of a batch system or MapReduce implementation.
+* Mode agnosticism: the software integrates its own parallel abstraction layer that allows it to be run in various distributed computing environments, including the Amazon Web Services (AWS) [Elastic MapReduce (EMR) service](http://aws.amazon.com/elasticmapreduce/), or any distributed environment supported by [IPython](http://ipython.org/), including clusters using batch schedulers like PBS or SGE, Message Passing Interface (MPI), or any cluster with a shared filesystem and mutual SSH access. Alternately, Rail-RNA can be run on a single multi-core computer, without the aid of a batch system or MapReduce implementation.
+* Inexpensive cloud implementation: a run costs < $1/sample when running on over about a hundred samples on EMR.
 
 Outputs currently include
 * Alignment BAMs
@@ -48,6 +50,10 @@ Rail-RNA takes as input a [Myrna](http://bowtie-bio.sourceforge.net/myrna/)-styl
 rail-rna
 ```
 **and follow the instructions.** A manual will be posted shortly.
+
+Disclaimer
+-----
+Renting AWS resources costs money, regardless of whether your run ultimately succeeds or fails. In some cases, Rail-RNA or its documentation may be partially to blame for a failed run. While we are happy to review bug reports, we do not accept responsibility for financial damage caused by these errors. Rail-RNA is provided "as is" with no warranty.
 
 Contributors
 -----
