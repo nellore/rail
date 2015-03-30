@@ -1,5 +1,7 @@
 Rail
 ====
+
+[![Join the chat at https://gitter.im/buci/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/buci/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 This is the official repo for Rail-*, which currently includes just the Rail-RNA pipeline for spliced alignment of RNA-seq data. Check `releases/` for releases.
 
 Get interested
