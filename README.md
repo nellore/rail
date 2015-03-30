@@ -13,7 +13,7 @@ Rail-RNA's distinguishing features are
 * Inexpensive cloud implementation: an EMR run on > ~100 samples costs < $1/sample with spot instances.
 
 Outputs currently include
-* Alignment BAMs with only primary alignments by default (for more, use `--bowtie2-args "-k <N>"`, where <N> is the maximum number of alignments to report per read)
+* Alignment BAMs with only primary alignments by default (for more, use `--bowtie2-args "-k <N>"`, where `<N>` is the maximum number of alignments to report per read)
 * Genome coverage bigWigs
 * [TopHat](http://ccb.jhu.edu/software/tophat/index.shtml)-like indel and splice junction BEDs
 
@@ -56,7 +56,7 @@ Disclaimer
 -----
 Renting AWS resources costs money, regardless of whether your run ultimately succeeds or fails. In some cases, Rail-RNA or its documentation may be partially to blame for a failed run. While we are happy to review bug reports, we do not accept responsibility for financial damage caused by these errors. Rail-RNA is provided "as is" with no warranty.
 
-License
+Licenses
 -----
 [GNU GPL v3.0](http://choosealicense.com/licenses/gpl-3.0/) unless otherwise specified. [Dooplicity](https://github.com/buci/rail/tree/master/src/dooplicity), for example, is [MIT-licensed](http://choosealicense.com/licenses/mit/).
 
