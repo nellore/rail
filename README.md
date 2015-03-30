@@ -1,4 +1,4 @@
-Rail-RNA
+![Rail-RNA logo](https://github.com/buci/rail/blob/master/assets/railrnalogodark.png)
 ====
 
 This is the official repo for Rail-RNA, software for RNA-seq analysis. [Download](https://github.com/buci/rail/releases/download/v0.1.0/install_rail-rna-0.1.0) the latest stable release. **Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/buci/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/buci/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
@@ -13,9 +13,10 @@ Rail-RNA's distinguishing features are
 * Inexpensive cloud implementation: an EMR run on > ~100 samples costs < $1/sample with spot instances.
 
 Outputs currently include
-* Alignment BAMs
+* Alignment BAMs with only primary alignments by default (for more, use `--bowtie2-args "-k <N>"`, where <N> is the maximum number of alignments to report per read)
 * Genome coverage bigWigs
 * [TopHat](http://ccb.jhu.edu/software/tophat/index.shtml)-like indel and splice junction BEDs
+
 and will likely expand in future versions.
 
 Read the [preprint](https://youtu.be/6ZPZUtE6RgA) for more details.
