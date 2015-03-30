@@ -1,4 +1,4 @@
-Rail
+Rail-RNA
 ====
 
 This is the official repo for Rail-RNA, software for RNA-seq analysis. Download the latest release at [`releases/install_rail-rna-0.1.0`](https://github.com/buci/rail/blob/master/releases/install_rail-rna-0.1.0?raw=true). **Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/buci/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/buci/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
@@ -43,7 +43,7 @@ Rail-RNA takes as input a [Myrna](http://bowtie-bio.sourceforge.net/myrna/)-styl
 
 `<sample label>` must be formatted as `<group ID>-<biorep ID>-<techrep ID>`.
 
-**Find some data, create a manifest file, run**
+**Find some RNA-seq data, create a manifest file, run**
 ```
 rail-rna
 ```
