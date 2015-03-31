@@ -10,7 +10,6 @@ example/sim_simple/eg1.states
 drivers/chrom.sizes
 drivers/run.sh
 refs
-lib
 .DS_Store
 *.sublime-project
 *.sublime-workspace

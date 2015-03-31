@@ -5,6 +5,6 @@
 RAILHOME=~/rail
 
 # Set output directory here -- must be on S3!
-OUTPUT=s3://rail-west-2/geuvprepped
+OUTPUT=s3://rail-eu-west-1/geuvprepped
 
-python $RAILHOME/src prep elastic -m GEUVADIS_all_descriptive_staged.manifest -c 84 --core-instance-bid-price 0.11 --master-instance-bid-price 0.11 --core-instance-type c3.2xlarge --master-instance-type c3.2xlarge -o $OUTPUT --ec2-key-name westernpacificrail --no-consistent-view -f --region us-west-2 --do-not-check-manifest
+python $RAILHOME/src prep elastic -m GEUVADIS_all_descriptive_staged.manifest -c 21 --core-instance-bid-price 0.35 --master-instance-bid-price 0.35 --core-instance-type c3.2xlarge --master-instance-type c3.8xlarge -o $OUTPUT --ec2-key-name raileuwest1 --no-consistent-view -f --region eu-west-1 --do-not-check-manifest
