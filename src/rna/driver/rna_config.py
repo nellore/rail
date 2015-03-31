@@ -4070,7 +4070,6 @@ class RailRnaElasticPreprocessJson(object):
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True,
-                    no_consistent_view=base.no_consistent_view,
                     no_direct_copy=base.no_direct_copy
                 )
         self._json_serial['AmiVersion'] = base.ami_version
@@ -4416,7 +4415,6 @@ class RailRnaElasticAlignJson(object):
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True,
-                    no_consistent_view=base.no_consistent_view,
                     no_direct_copy=base.no_direct_copy
                 )
         self._json_serial['AmiVersion'] = base.ami_version
@@ -4787,7 +4785,6 @@ class RailRnaElasticAllJson(object):
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True,
-                    no_consistent_view=base.no_consistent_view,
                     no_direct_copy=base.no_direct_copy
                 ) + \
                 steps(
@@ -4795,7 +4792,6 @@ class RailRnaElasticAllJson(object):
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True,
-                    no_consistent_view=base.no_consistent_view,
                     no_direct_copy=base.no_direct_copy
                 )
         self._json_serial['AmiVersion'] = base.ami_version
