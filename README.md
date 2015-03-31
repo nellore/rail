@@ -7,7 +7,7 @@ Get interested
 -----
 Rail-RNA's distinguishing features are
 * **Scalability**. Built on MapReduce, the software scales to analyze hundreds of RNA-seq samples at the same time.
-* **Reduced redundancy**. the software identifies and eliminates redundant alignment work, making the end-to-end analysis time per sample *decrease* for fixed computer cluster size as the number of samples increases.
+* **Reduced redundancy**. The software identifies and eliminates redundant alignment work, making the end-to-end analysis time per sample *decrease* for fixed computer cluster size as the number of samples increases.
 * **Integrative analysis**. The software borrows strength across replicates to achieve more accurate splice junction detection, especially in genomic regions with low coverage.
 * **Mode agnosticism**. The software integrates its own parallel abstraction layer that allows it to be run in various distributed computing environments, including the Amazon Web Services (AWS) [Elastic MapReduce (EMR) service](http://aws.amazon.com/elasticmapreduce/), or any distributed environment supported by [IPython](http://ipython.org/), including clusters using batch schedulers like PBS or SGE, Message Passing Interface (MPI), or any cluster with a shared filesystem and mutual SSH access. Alternately, Rail-RNA can be run on a single multi-core computer, without the aid of a batch system or MapReduce implementation.
 * **Inexpensive cloud implementation**. An EMR run on > ~100 samples costs < $1/sample with spot instances.
