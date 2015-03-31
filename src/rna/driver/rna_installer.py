@@ -461,7 +461,7 @@ fi
             import IPython
         except ImportError:
             # Guess not
-            if self.yes_no_query(
+            if self._yes_no_query(
                     'IPython is not installed but required for Rail-RNA to '
                     'work in its "parallel" mode.\n'
                     '    * Install IPython now?'
