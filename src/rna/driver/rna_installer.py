@@ -506,6 +506,7 @@ fi
                             )
                             self._bail()
         install_aws = (not self.no_dependencies and not which('aws'))
+        self.installed_aws = False
         if install_aws and self._yes_no_query(
                 'AWS CLI is not installed but required for Rail-RNA to work '
                 'in its "elastic" mode, on Amazon Elastic MapReduce.\n'
@@ -539,14 +540,11 @@ fi
                                 (e.returncode, ' '.join(aws_command))
                         )
                     self._bail()
-            installed_aws = True
+            self.installed_aws = True
         elif install_aws:
             print_to_screen('Visit http://docs.aws.amazon.com/cli/latest/'
                             'userguide/installing.html to install the '
                             'AWS CLI later.')
-            installed_aws = False
-        else:
-            installed_aws = False
         self.finished = True
 
     def __exit__(self, type, value, traceback):
@@ -565,7 +563,7 @@ fi
             if self.local:
                 print_to_screen('*Before running any commands below, enter '
                                 '"source ~/.bash_profile".*')
-            if installed_aws:
+            if self.installed_aws:
                 print_to_screen('Configure the AWS CLI by running '
                                 '"aws configure".')
             print_to_screen('Start using Rail by entering "rail-rna".')
