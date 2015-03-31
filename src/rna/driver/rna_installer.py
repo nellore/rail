@@ -489,7 +489,7 @@ fi
                 with cd(temp_ipython_install_dir):
                     self._grab_and_explode(self.depends['ipython'], 'IPython')
                     ipython_command = [
-                            sys.executable, find('setup.py', './'), 'install']
+                            sys.executable, find('setup.py', './'), 'install'
                         ]
                     try:
                         subprocess.check_output(ipython_command,
