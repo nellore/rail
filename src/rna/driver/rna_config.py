@@ -812,7 +812,7 @@ def step(name, inputs, output,
 # TODO: Flesh out specification of protostep and migrate to Dooplicity
 def steps(protosteps, action_on_failure, jar, step_dir, 
             reducer_count, intermediate_dir, extra_args=[], unix=False,
-            no_consistent_view=False):
+            no_direct_copy=False):
     """ Turns list with "protosteps" into well-formed StepConfig list.
 
         A protostep looks like this:
@@ -838,8 +838,6 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                     outputs
                 'index_output' : key that's present iff output LZOs should be
                     indexed after step; applicable only in Hadoop modes
-                'direct_copy' : if output directory is s3, copy outputs there 
-                    directly; do not use hdfs
                 'extra_args' : list of '-D' args
             }
 
@@ -850,8 +848,10 @@ def steps(protosteps, action_on_failure, jar, step_dir,
         reducer_count: number of reducers; determines number of tasks
         unix: performs UNIX-like path joins; also inserts pypy in for
             executable since unix=True only on EMR
-        no_consistent_view: True iff consistent view should be switched off;
-            adds s3distcp commands when there are multiple outputs
+        no_direct_copy: True iff output of a step should not be written
+            directly to S3; this may be turned on if there are missing-
+            intermediate-data issues when speculative execution is
+            also turned on
 
         Return value: list of StepConfigs (see Elastic MapReduce API docs)
     """
@@ -863,25 +863,19 @@ def steps(protosteps, action_on_failure, jar, step_dir,
     for protostep in protosteps:
         assert ('keys' in protostep and 'part' in protostep) or \
                 ('keys' not in protostep and 'part' not in protostep)
-        assert not (('direct_copy' in protostep) and ('multiple_outputs'
-                        in protostep))
         identity_mapper = ('cut -f 2-' if unix else 'cat')
         final_output = (path_join(unix, intermediate_dir,
                                         protostep['output'])
                         if 'no_output_prefix' not in
                         protostep else protostep['output'])
         final_output_url = ab.Url(final_output)
-        if (not ('direct_copy' in protostep) and unix
-            and final_output_url.is_s3 and no_consistent_view):
+        no_direct_copy_for_step = (
+                    unix and final_output_url.is_s3 and no_direct_copy
+                )
+        if no_direct_copy_for_step:
             intermediate_output = _hdfs_temp_dir + final_output_url.suffix[1:]
         else:
             intermediate_output = final_output
-        try:
-            if not protostep['direct_copy']:
-                intermediate_output \
-                    = _hdfs_temp_dir + final_output_url.suffix[1:]
-        except KeyError:
-            pass
         assert 'taskx' in protostep or 'min_tasks' in protostep
         if 'taskx' in protostep:
             if protostep['taskx'] is None:
@@ -967,25 +961,7 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                         }
                     }
                 )
-        try:
-            if not protostep['direct_copy']:
-                true_steps.append(
-                    {
-                        'Name' : ('Copy output of "'
-                                    + protostep['name'] + '" to S3'),
-                        'ActionOnFailure' : action_on_failure,
-                        'HadoopJarStep' : {
-                            'Jar' : _s3distcp_jar,
-                            'Args' : ['--src', intermediate_output,
-                                      '--dest', final_output,
-                                      '--deleteOnSuccess']
-                        }
-                    }
-                )
-        except KeyError:
-            pass
-        if (not ('direct_copy' in protostep) and unix
-            and final_output_url.is_s3 and no_consistent_view):
+        if no_direct_copy_for_step:
             # s3distcp intermediates over
             true_steps.append(
                     {
@@ -1832,7 +1808,7 @@ class RailRnaElastic(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, no_consistent_view=False,
-        intermediate_lifetime=4):
+        no_direct_copy=False, intermediate_lifetime=4):
 
         # CLI is REQUIRED in elastic mode
         base.check_s3(reason='Rail-RNA is running in "elastic" mode')
@@ -2195,12 +2171,8 @@ class RailRnaElastic(object):
         base.ec2_key_name = ec2_key_name
         base.keep_alive = keep_alive
         base.termination_protected = termination_protected
-        base.original_no_consistent_view = no_consistent_view
-        if no_consistent_view and base.region != 'us-east-1':
-            # Read-after-write consistency is guaranteed
-            base.no_consistent_view = True
-        else:
-            base.no_consistent_view = False
+        base.no_consistent_view = no_consistent_view
+        base.no_direct_copy = no_direct_copy
 
     @staticmethod
     def add_args(general_parser, required_parser, output_parser, 
@@ -2463,7 +2435,7 @@ class RailRnaElastic(object):
                         '-m',
                         'mapreduce.job.maps=%d' % base.total_cores,
                     ] + (['-e', 'fs.s3.consistent=true']
-                            if not base.original_no_consistent_view
+                            if not base.no_consistent_view
                             else ['-e', 'fs.s3.consistent=false']),
                     'Path' : ('s3://%s.elasticmapreduce/bootstrap-actions/'
                               'configure-hadoop' % base.region)
@@ -2590,8 +2562,7 @@ class RailRnaPreprocess(object):
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
                         ),
                     'min_tasks' : 0,
-                    'max_tasks' : 0,
-                    'direct_copy' : True
+                    'max_tasks' : 0
                 },
                 {
                     'name' : 'Assign reads to preprocessing tasks',
@@ -2611,8 +2582,7 @@ class RailRnaPreprocess(object):
                     'min_tasks' : 1,
                     'max_tasks' : 1,
                     'keys' : 1,
-                    'part' : 1,
-                    'direct_copy' : True
+                    'part' : 1
                 },
                 {
                     'name' : 'Preprocess reads',
@@ -2641,9 +2611,7 @@ class RailRnaPreprocess(object):
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
                         ),
                     'min_tasks' : 0,
-                    'max_tasks' : 0,
-                    'index_output' : True,
-                    'direct_copy' : True
+                    'max_tasks' : 0
                 },
             ]
         else:
@@ -2674,8 +2642,7 @@ class RailRnaPreprocess(object):
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
                         ),
                     'min_tasks' : 0,
-                    'max_tasks' : 0,
-                    'direct_copy' : True
+                    'max_tasks' : 0
                 },
             ]
         return steps_to_return
@@ -3375,8 +3342,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Search for introns using readlet alignments',
@@ -3408,8 +3374,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Filter out introns that violate confidence criteria',
@@ -3432,8 +3397,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Enumerate possible intron cooccurrences on readlets',
@@ -3452,8 +3416,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Get transcriptome elements for realignment',
@@ -3471,12 +3434,11 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Build index of transcriptome elements',
-                'run' : ('intron_index.py --bowtie-build-exe={0} '
+                'run' : ('intron_index.py --bowtie2-build-exe={0} '
                          '--out={1} {2} {3}').format(base.bowtie2_build_exe,
                                                  ab.Url(
                                                     path_join(elastic,
@@ -3500,8 +3462,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Finalize intron cooccurrences on reads',
@@ -3540,8 +3501,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Get transcriptome elements for read realignment',
@@ -3562,8 +3522,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Align reads to transcriptome elements',
@@ -3594,8 +3553,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Collect and compare read alignments',
@@ -3644,8 +3602,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Finalize primary alignments of spliced reads',
@@ -3692,8 +3649,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Compile sample coverages from exon differentials',
@@ -3742,8 +3698,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Write normalization factors for sample coverages',
@@ -3771,8 +3726,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Aggregate intron and indel results by sample',
@@ -3792,8 +3746,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Write beds with intron and indel results by sample',
@@ -3823,8 +3776,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             },
             {
                 'name' : 'Write bams with alignments by sample',
@@ -3863,8 +3815,7 @@ class RailRnaAlign(object):
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
-                    ],
-                'direct_copy' : True
+                    ]
             }]
 
     @staticmethod
@@ -4068,7 +4019,7 @@ class RailRnaElasticPreprocessJson(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, no_consistent_view=False,
-        check_manifest=True, intermediate_lifetime=4,
+        no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
         max_task_attempts=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
@@ -4092,6 +4043,7 @@ class RailRnaElasticPreprocessJson(object):
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected,
             no_consistent_view=no_consistent_view,
+            no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
@@ -4111,7 +4063,8 @@ class RailRnaElasticPreprocessJson(object):
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True,
-                    no_consistent_view=base.no_consistent_view
+                    no_consistent_view=base.no_consistent_view,
+                    no_direct_copy=base.no_direct_copy
                 )
         self._json_serial['AmiVersion'] = base.ami_version
         if base.log_uri is not None:
@@ -4385,7 +4338,7 @@ class RailRnaElasticAlignJson(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, no_consistent_view=False,
-        intermediate_lifetime=4, max_task_attempts=4):
+        no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -4407,6 +4360,7 @@ class RailRnaElasticAlignJson(object):
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected,
             no_consistent_view=no_consistent_view,
+            no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=True, bowtie1_exe=bowtie1_exe,
@@ -4455,7 +4409,8 @@ class RailRnaElasticAlignJson(object):
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True,
-                    no_consistent_view=base.no_consistent_view
+                    no_consistent_view=base.no_consistent_view,
+                    no_direct_copy=base.no_direct_copy
                 )
         self._json_serial['AmiVersion'] = base.ami_version
         if base.log_uri is not None:
@@ -4746,8 +4701,8 @@ class RailRnaElasticAllJson(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, check_manifest=True,
-        no_consistent_view=False, intermediate_lifetime=4,
-        max_task_attempts=4):
+        no_direct_copy=False, no_consistent_view=False,
+        intermediate_lifetime=4, max_task_attempts=4):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -4770,6 +4725,7 @@ class RailRnaElasticAllJson(object):
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected,
             no_consistent_view=no_consistent_view,
+            no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input)
@@ -4824,14 +4780,16 @@ class RailRnaElasticAllJson(object):
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True,
-                    no_consistent_view=base.no_consistent_view
+                    no_consistent_view=base.no_consistent_view,
+                    no_direct_copy=base.no_direct_copy
                 ) + \
                 steps(
                     RailRnaAlign.protosteps(base, push_dir, elastic=True),
                     base.action_on_failure,
                     base.hadoop_jar, '/mnt/src/rna/steps',
                     reducer_count, base.intermediate_dir, unix=True,
-                    no_consistent_view=base.no_consistent_view
+                    no_consistent_view=base.no_consistent_view,
+                    no_direct_copy=base.no_direct_copy
                 )
         self._json_serial['AmiVersion'] = base.ami_version
         if base.log_uri is not None:

@@ -841,6 +841,7 @@ if __name__ == '__main__':
                 keep_alive=args.keep_alive,
                 termination_protected=args.termination_protected,
                 no_consistent_view=args.no_consistent_view,
+                no_direct_copy=args.no_direct_copy,
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime,
                 max_task_attempts=args.max_task_attempts
@@ -897,6 +898,7 @@ if __name__ == '__main__':
                 keep_alive=args.keep_alive,
                 termination_protected=args.termination_protected,
                 no_consistent_view=args.no_consistent_view,
+                no_direct_copy=args.no_direct_copy,
                 intermediate_lifetime=args.intermediate_lifetime,
                 max_task_attempts=args.max_task_attempts
             )
@@ -926,6 +928,7 @@ if __name__ == '__main__':
                 keep_alive=args.keep_alive,
                 termination_protected=args.termination_protected,
                 no_consistent_view=args.no_consistent_view,
+                no_direct_copy=args.no_direct_copy,
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime,
                 max_task_attempts=args.max_task_attempts
