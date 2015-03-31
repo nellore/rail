@@ -28,13 +28,30 @@ import glob
 
 @contextlib.contextmanager
 def cd(dir_name):
-    """ Changes directory in a context only. Borrowed from AWS CLI code. """
+    """ Changes directory in a context only. Borrowed from AWS CLI code.
+
+        dir_name: directory name to which to change
+
+        No return value.
+    """
     original_dir = os.getcwd()
     os.chdir(dir_name)
     try:
         yield
     finally:
         os.chdir(original_dir)
+
+def find(name, path):
+    """ Finds first file matching name in a given path.
+
+        name: name of file
+        path: path in which to search
+
+        Return value: path to first match
+    """
+    for root, dirs, files in os.walk(path):
+        if name in files:
+            return os.path.join(root, name)
 
 class RailRnaInstaller(object):
     """ Installs Rail-RNA and its assorted dependencies.
@@ -471,7 +488,9 @@ fi
                                     [temp_ipython_install_dir])
                 with cd(temp_ipython_install_dir):
                     self._grab_and_explode(self.depends['ipython'], 'IPython')
-                    ipython_command = [sys.executable, 'setup.py', 'install']
+                    ipython_command = [
+                            sys.executable, find('setup.py', './'), 'install']
+                        ]
                     try:
                         subprocess.check_output(ipython_command,
                                                     stderr=self.log_stream)
