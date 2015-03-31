@@ -2240,6 +2240,13 @@ class RailRnaElastic(object):
             help=('do not use "consistent view," which incurs DynamoDB '
                  'charges; some intermediate data may then (very rarely) '
                  'be lost'))
+        elastic_parser.add_argument('--no-direct-copy',
+            action='store_const',
+            const=True,
+            default=False,
+            help=('writes intermediate data to HDFS before copying to S3; '
+                  'helps ensure that low-probability data loss between steps '
+                  'does not occur'))
         elastic_parser.add_argument('--hadoop-jar', type=str, required=False,
             metavar='<jar>',
             default=None,
