@@ -488,19 +488,23 @@ fi
                                     [temp_ipython_install_dir])
                 with cd(temp_ipython_install_dir):
                     self._grab_and_explode(self.depends['ipython'], 'IPython')
-                    ipython_command = [
-                            sys.executable, find('setup.py', './'), 'install'
-                        ]
-                    try:
-                        subprocess.check_output(ipython_command,
-                                                    stderr=self.log_stream)
-                    except subprocess.CalledProcessError as e:
-                        self._print_to_screen_and_log(
-                            ('Error encountered installing IPython; exit '
-                             'code was %d; command invoked was "%s".') %
-                                (e.returncode, ' '.join(ipython_command))
-                        )
-                        self._bail()
+                    setup_dir = os.path.dirname(find('setup.py', './'))
+                    with cd(setup_dir):
+                        ipython_command = [
+                                    sys.executable, 'setup.py', 'install',
+                                ]
+                        if self.local:
+                            ipython_command.append('--user')
+                        try:
+                            subprocess.check_output(ipython_command,
+                                                        stderr=self.log_stream)
+                        except subprocess.CalledProcessError as e:
+                            self._print_to_screen_and_log(
+                                ('Error encountered installing IPython; exit '
+                                 'code was %d; command invoked was "%s".') %
+                                    (e.returncode, ' '.join(ipython_command))
+                            )
+                            self._bail()
         install_aws = (not self.no_dependencies and not which('aws'))
         if install_aws and self._yes_no_query(
                 'AWS CLI is not installed but required for Rail-RNA to work '
@@ -512,35 +516,35 @@ fi
                                 [temp_aws_install_dir])
             with cd(temp_aws_install_dir):
                 self._grab_and_explode(self.depends['aws_cli'], 'AWS CLI')
+                os.chmod('./awscli-bundle/install', 0755)
                 if self.local:
                     # Local install
                     aws_command = ['./awscli-bundle/install', '-b',
-                            os.path.abspath(
-                                    os.path.expanduser('~/aws_install/aws')
-                                ),
-                            '-i', os.path.abspath(
-                                    os.path.expanduser('~/aws_install/lib/aws')
-                                )]
+                                    os.path.join(bin_dir, 'aws'),
+                                   '-i', os.path.abspath(
+                                        os.path.expanduser('~/.local/lib/aws')
+                                    )]
                 else:
                     # All users
-                    aws_command = ['./awscli-bundle/install', '-i',
-                                '/usr/local/aws', '-b', '/usr/local/bin/aws']
+                    aws_command = ['./awscli-bundle/install',
+                                    '-i', '/usr/local/aws',
+                                    '-b', '/usr/local/bin/aws']
                 try:
                     subprocess.check_output(aws_command,
                                                 stderr=self.log_stream)
-                except subprocess.CalledProcessError as e:
+                except (OSError, subprocess.CalledProcessError) as e:
                     self._print_to_screen_and_log(
                             ('Error encountered installing AWS CLI; exit '
                              'code was %d; command invoked was "%s".') %
                                 (e.returncode, ' '.join(aws_command))
                         )
                     self._bail()
-            print_to_screen('Configure the AWS CLI by running '
-                            '"aws configure".')
+            installed_aws = True
         elif install_aws:
             print_to_screen('Visit http://docs.aws.amazon.com/cli/latest/'
                             'userguide/installing.html to install the '
                             'AWS CLI later.')
+            installed_aws = False
         self.finished = True
 
     def __exit__(self, type, value, traceback):
@@ -556,8 +560,10 @@ fi
             shutil.copyfile(self.log_file, new_log_file)
             print_to_screen('Installation log may be found at %s.'
                                                         % new_log_file)
-            if not self.local:
-                print_to_screen('Start using Rail by entering "rail-rna".')
-            else:
-                print_to_screen('Enter "source ~/.bash_profile", then start '
-                                'using Rail by entering "rail-rna".')
+            if self.local:
+                print_to_screen('*Before running any commands below, enter '
+                                '"source ~/.bash_profile".*')
+            if installed_aws:
+                print_to_screen('Configure the AWS CLI by running '
+                                '"aws configure".')
+            print_to_screen('Start using Rail by entering "rail-rna".')
