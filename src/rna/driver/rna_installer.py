@@ -545,6 +545,8 @@ fi
                             'userguide/installing.html to install the '
                             'AWS CLI later.')
             installed_aws = False
+        else:
+            installed_aws = False
         self.finished = True
 
     def __exit__(self, type, value, traceback):
