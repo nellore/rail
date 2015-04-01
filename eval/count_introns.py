@@ -353,7 +353,7 @@ if __name__ == '__main__':
         true_introns = set()
         import glob
         import multiprocessing
-        pool = multiprocessing.Pool(5)
+        pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
         pool.map_async(introns_from_bed,
                     glob.glob(
                             os.path.join(args.true_introns_bed_dir, '*.bed')
