@@ -313,8 +313,8 @@ if __name__ == '__main__':
         start = seq_start + subseq_sizes[0]
         for i, size in enumerate(subseq_sizes[1:]):
             introns.add((
-                       rname_and_sense,
-                       start - 1, start + intron_sizes[i] - 1
+                       rname_and_sense[:-1],
+                       start, start + intron_sizes[i]
                     )
             )
             start += (size + intron_sizes[i])
@@ -329,9 +329,8 @@ if __name__ == '__main__':
 
     canonicals, less_canonicals, much_less_canonicals = 0, 0, 0
     for rname, start, end in introns:
-        rname = rname[:-1]
-        left = reference_index.get_stretch(rname, start, 2)
-        right = reference_index.get_stretch(rname, end - 2, 2)
+        left = reference_index.get_stretch(rname, start - 1, 2)
+        right = reference_index.get_stretch(rname, end - 3, 2)
         assert (left, right) in possible_combos, (left, right)
         if (left, right) in canonical:
             canonicals += 1
@@ -389,5 +388,4 @@ if __name__ == '__main__':
                             key=lambda intron: (intron[0][:-1], intron[2])
                     )
         for rname, start, end in introns:
-            print '\t'.join([rname[:-1], rname[-1],
-                             str(start), str(end)])
+            print '\t'.join([rname[:-1], str(start), str(end)])
