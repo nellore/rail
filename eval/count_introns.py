@@ -359,7 +359,7 @@ if __name__ == '__main__':
                 No return value.
             """
             global true_introns
-            for item in list_to_add:
+            for item in list_of_sets:
                 true_introns.update(item)
         import glob
         import multiprocessing
