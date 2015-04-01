@@ -70,7 +70,7 @@ def introns_from_bed(bed):
             junctions.append(chrom_start + int(block_starts[-1]))
             for i in xrange(len(junctions)/2):
                 introns.add((chrom, junctions[2*i]+1, junctions[2*i+1]+1))
-    return introns
+    return list(introns)
 
 class BowtieIndexReference(object):
     """
