@@ -351,14 +351,26 @@ if __name__ == '__main__':
     if args.true_introns_bed_dir is not None:
         # Read Flux BEDs
         true_introns = set()
+        def add_list(list_to_add):
+            """ Workaround for malfunctioning set.update in callback
+
+                list_to_add: list to add to true_introns
+
+                No return value.
+            """
+            global true_introns
+            for item in list_to_add:
+                true_introns.add(item)
         import glob
         import multiprocessing
         pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
-        pool.map_async(introns_from_bed,
+        pool.map_async(
+                    introns_from_bed,
                     glob.glob(
                             os.path.join(args.true_introns_bed_dir, '*.bed')
                         ),
-                    callback=true_introns.update)
+                    callback=add_list
+                )
         pool.close()
         pool.join()
         retrieved = intron_count
