@@ -70,7 +70,7 @@ def introns_from_bed(bed):
             junctions.append(chrom_start + int(block_starts[-1]))
             for i in xrange(len(junctions)/2):
                 introns.add((chrom, junctions[2*i]+1, junctions[2*i+1]+1))
-    return list(introns)
+    return introns
 
 class BowtieIndexReference(object):
     """
@@ -351,16 +351,16 @@ if __name__ == '__main__':
     if args.true_introns_bed_dir is not None:
         # Read Flux BEDs
         true_introns = set()
-        def add_list(list_to_add):
-            """ Workaround for malfunctioning set.update in callback
+        def add_sets(list_of_sets):
+            """ For updating set with sets in list
 
-                list_to_add: list to add to true_introns
+                list_of_sets: list to sets to add to true_introns
 
                 No return value.
             """
             global true_introns
             for item in list_to_add:
-                true_introns.add(item)
+                true_introns.update(item)
         import glob
         import multiprocessing
         pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
@@ -369,7 +369,7 @@ if __name__ == '__main__':
                     glob.glob(
                             os.path.join(args.true_introns_bed_dir, '*.bed')
                         ),
-                    callback=add_list
+                    callback=add_sets
                 )
         pool.close()
         pool.join()
