@@ -7,7 +7,7 @@ Generates 112 bioreps for Rail paper using Flux Simulator by:
 
 1) starting a single Flux simulation and interrupting the pipeline after
     6 columns of a PRO file P have been written.
-2) reading RPKMs from Geuvadis data for by default a group a 20 YRI samples.
+2) reading RPKMs from Geuvadis data for by default a group of 112 samples.
 3) writing 112 files, each a copy of P except with a different coverage
     distribution. The coverage distribution is specified as follows: column 6
     of P has the absolute number of RNA molecules associated with each

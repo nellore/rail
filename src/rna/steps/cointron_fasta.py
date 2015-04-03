@@ -21,7 +21,7 @@ Tab-delimited tuple columns:
     reference should extend
 6. Read sequence
 
-Input is partitioned by the first two fields.
+Input is partitioned by the first three fields.
 
 Hadoop output (written to stdout)
 ----------------------------
