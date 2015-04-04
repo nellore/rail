@@ -130,7 +130,7 @@ with open(fasta_file, 'w') as fasta_stream:
         fasta_stream.write('\n')
 
 # Build index
-print >>sys.stderr, 'Running bowtie-build....'
+print >>sys.stderr, 'Running bowtie2-build....'
 
 if args.keep_alive:
     class BowtieBuildThread(threading.Thread):
@@ -143,7 +143,7 @@ if args.keep_alive:
         def run(self):
             self.bowtie_build_process = subprocess.Popen(self.command_list,
                                             stdout=sys.stderr).wait()
-    bowtie_build_thread = BowtieBuildThread([args.bowtie_build_exe,
+    bowtie_build_thread = BowtieBuildThread([args.bowtie2_build_exe,
                                                 fasta_file,
                                                 index_basename])
     bowtie_build_thread.start()
