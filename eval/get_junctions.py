@@ -71,7 +71,7 @@ if __name__ == '__main__':
                     continue
                 intron = (exons_from_transcript[i][0],
                             exons_from_transcript[i-1][2] + 1,
-                            exons_from_transcript[i][1] - 1))
+                            exons_from_transcript[i][1] - 1)
                 print '\t'.join(intron)
                 if args.bowtie2_idx is not None:
                     length = intron[2] - intron[1] + 1
