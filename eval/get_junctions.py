@@ -60,6 +60,7 @@ if __name__ == '__main__':
                 (tokens[0], int(tokens[3]), int(tokens[4]))
             )
 
+    introns = set()
     for transcript_id in exons:
         exons_from_transcript = sorted(list(exons[transcript_id]))
         # Recall that GTF is end-inclusive, and so is STAR's junctions.txt
@@ -73,18 +74,19 @@ if __name__ == '__main__':
                             exons_from_transcript[i-1][2] + 1,
                             exons_from_transcript[i][1] - 1)
                 print '\t'.join((intron[0], str(intron[1]), str(intron[2])))
-                if args.bowtie2_idx is not None:
-                    length = intron[2] - intron[1] + 1
-                    motif = (reference_index.get_stretch(intron[0],
-                                                            intron[1] - 1,
-                                                            2),
-                             reference_index.get_stretch(intron[0],
-                                                            intron[1]
-                                                            + length - 3,
-                                                            2))
-                    intron_lengths[length] += 1
-                    motif_counts[motif] += 1
+                introns.add(intron)
     if args.bowtie2_idx is not None:
+        for intron in introns:
+            length = intron[2] - intron[1] + 1
+            motif = (reference_index.get_stretch(intron[0],
+                                                    intron[1] - 1,
+                                                    2),
+                     reference_index.get_stretch(intron[0],
+                                                    intron[1]
+                                                    + length - 3,
+                                                    2))
+            intron_lengths[length] += 1
+            motif_counts[motif] += 1
         for length, frequency in sorted(intron_lengths.items()):
             print >>sys.stderr, '%d\t%d' % (length, frequency)
         all_motifs = set([('GT', 'AG'), ('GC', 'AG'), ('AT', 'AC'),
