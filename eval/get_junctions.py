@@ -29,7 +29,7 @@ if __name__ == '__main__':
                   'whether junctions are canonical. Canonical/'
                   'noncanonical status and intron length '
                   'distribution are output only if this '
-                  'is specified.'))
+                  'is specified.')
         )
     args = parser.parse_args()
     if args.bowtie2_idx is not None:
