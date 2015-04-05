@@ -87,5 +87,30 @@ if __name__ == '__main__':
     if args.bowtie2_idx is not None:
         for length, frequency in sorted(intron_lengths.items()):
             print >>sys.stderr, '%d\t%d' % (length, frequency)
+        all_motifs = set([('GT', 'AG'), ('GC', 'AG'), ('AT', 'AC'),
+                          ('CT', 'AC'), ('CT', 'GC'), ('GT', 'AT')])
+        canonicals = set([('GT', 'AG'), ('CT', 'AC')])
+        less_canonicals = set([('GC', 'AG'), ('CT', 'GC')])
+        much_less_canonicals = set([('AT', 'AC'), ('GT', 'AT')])
+        canonical = 0
+        less_canonical = 0
+        much_less_canonical = 0
+        other = 0
         for motif, frequency in motif_counts.items():
-            print >>sys.stderr, '%s\t%s' % (motif, frequency)
+            if motif in canonicals:
+                canonical += 1
+            elif motif in less_canonicals:
+                less_canonical += 1
+            elif motif in much_less_canonicals:
+                much_less_canonical += 1
+            else:
+                other += 1
+        total = canonical + less_canonical + much_less_canonical + other
+        print >>sys.stderr, 'GT-AG\t%d\t%08f' % (canonical,
+                                                    float(canonical) / total)
+        print >>sys.stderr, 'GC-AG\t%d\t%08f' % (less_canonical,
+                                                 float(less_canonical) / total)
+        print >>sys.stderr, 'AT-AC\t%d\t%08f' % (much_less_canonical,
+                                                    float(much_less_canonical)
+                                                            / total)
+        print >>sys.stderr, 'Other\t%d\t%08f' % (other, float(other) / total)
