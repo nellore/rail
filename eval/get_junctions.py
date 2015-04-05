@@ -87,5 +87,5 @@ if __name__ == '__main__':
     if args.bowtie2_idx is not None:
         for length, frequency in sorted(intron_lengths.items()):
             print >>sys.stderr, '%d\t%d' % (length, frequency)
-        for motif, frequency in motif_counts:
+        for motif, frequency in motif_counts.items():
             print >>sys.stderr, '%s\t%s' % (motif, frequency)
