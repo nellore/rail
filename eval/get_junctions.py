@@ -80,7 +80,7 @@ if __name__ == '__main__':
                                                             2),
                              reference_index.get_stretch(intron[0],
                                                             intron[1]
-                                                            + length - 2,
+                                                            + length - 3,
                                                             2))
                     intron_lengths[length] += 1
                     motif_counts[motif] += 1
