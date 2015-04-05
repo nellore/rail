@@ -107,7 +107,8 @@ if __name__ == '__main__':
             elif motif in much_less_canonicals:
                 much_less_canonical += frequency
             else:
-                off = max([[motif[i] == ''.join(compared_motif)[i]
+                joined_motif = ''.join(motif)
+                off = max([[joined_motif[i] == ''.join(compared_motif)[i]
                             for i in range(4)].count(True)
                      for compared_motif in all_motifs])
                 if off == 1:
