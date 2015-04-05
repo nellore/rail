@@ -111,7 +111,7 @@ if __name__ == '__main__':
                 joined_motif = ''.join(motif)
                 off = max([[joined_motif[i] == ''.join(compared_motif)[i]
                             for i in range(4)].count(True)
-                     for compared_motif in all_motifs])
+                            for compared_motif in all_motifs])
                 if off == 1:
                     one_off_other += frequency
                 elif off == 2:
@@ -119,7 +119,7 @@ if __name__ == '__main__':
                 elif off == 3:
                     three_off_other += frequency
                 else:
-                    assert off == 4
+                    assert off == 4, off
                     four_off_other += frequency
                 other += frequency
         total = canonical + less_canonical + much_less_canonical + other
