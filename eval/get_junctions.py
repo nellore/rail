@@ -83,7 +83,7 @@ if __name__ == '__main__':
                                                             + length - 2,
                                                             2))
                     intron_lengths[length] += 1
-                    motif_counts[motif_count] += 1
+                    motif_counts[motif] += 1
     if args.bowtie2_idx is not None:
         for length, frequency in sorted(intron_lengths.items()):
             print >>sys.stderr, '%d\t%d' % (length, frequency)
