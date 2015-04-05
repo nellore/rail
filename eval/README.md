@@ -1,6 +1,6 @@
 Reproducing preprint results
 -----
-To reproduce results from the [preprint](http://finishit.com), perform the following steps. *Use Rail-RNA v0.1.0a.* Note that input and output directories in scripts may need to be changed.
+To reproduce results from the [preprint](http://finishit.com), perform the following steps. **Use Rail-RNA v0.1.0a.** Note that input and output directories in scripts may need to be changed.
 
 Generating genome indexes for all experiments
 -----
