@@ -128,13 +128,13 @@ if __name__ == '__main__':
         print >>sys.stderr, 'AT-AC\t%d\t%08f' % (much_less_canonical,
                                                     float(much_less_canonical)
                                                             / total)
-        print >>sys.stderr, '1 mismatch other\t%d\t%08f'
+        print >>sys.stderr, '1 mismatch other\t%d\t%08f' \
                                 % (one_off_other, float(one_off_other) / total)
-        print >>sys.stderr, '2 mismatch other\t%d\t%08f'
+        print >>sys.stderr, '2 mismatch other\t%d\t%08f' \
                                 % (two_off_other, float(two_off_other) / total)
-        print >>sys.stderr, '3 mismatch other\t%d\t%08f'
+        print >>sys.stderr, '3 mismatch other\t%d\t%08f' \
                                 % (three_off_other,
                                     float(three_off_other) / total)
-        print >>sys.stderr, '4 mismatch other\t%d\t%08f'
+        print >>sys.stderr, '4 mismatch other\t%d\t%08f' \
                                 % (four_off_other,
                                     float(four_off_other) / total)
