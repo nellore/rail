@@ -99,6 +99,7 @@ if __name__ == '__main__':
         two_off_other = 0
         three_off_other = 0
         four_off_other = 0
+        other = 0
         for motif, frequency in motif_counts.items():
             if motif in canonicals:
                 canonical += frequency
@@ -112,14 +113,14 @@ if __name__ == '__main__':
                             for i in range(4)].count(True)
                      for compared_motif in all_motifs])
                 if off == 1:
-                    one_off_other += 1
+                    one_off_other += frequency
                 elif off == 2:
-                    two_off_other += 1
+                    two_off_other += frequency
                 elif off == 3:
-                    three_off_other += 1
+                    three_off_other += frequency
                 else:
                     assert off == 4
-                    four_off_other += 1
+                    four_off_other += frequency
                 other += frequency
         total = canonical + less_canonical + much_less_canonical + other
         print >>sys.stderr, 'GT-AG\t%d\t%08f' % (canonical,
