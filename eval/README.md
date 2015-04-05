@@ -2,6 +2,10 @@ Reproducing preprint results
 -----
 To reproduce results from the [preprint](http://finishit.com), perform the following steps. Note that input and output directories in scripts may need to be changed.
 
+Generating genome indexes for all experiments
+-----
+Refer to `create_indexes.sh`. 
+
 Scaling experiments
 -----
 1. Start with the Myrna-style manifest file GEUVADIS_all_samples.manifest composed of the URLs of all GEUVADIS samples. Invoke
@@ -45,3 +49,8 @@ to view instructions on how to regenerate the 112 simulated bioreplicates whose 
 5. Apply `consolidate_performances.sh` to copy all performance results from `run_all_small_data_sims_locally.sh` and `grab_112_sim_results.sh` in the same directory, giving them filenames that indicate which results correspond to which experiments.
 6. Use `harvest_coverages_from_performance.sh` to obtain tables that give spliced alignment accuracy metrics at various read coverages of introns. This data is used to generate Figure XX from the preprint.
 7. Open `performance.nb` in [Mathematica](http://www.wolfram.com/mathematica/) >=9 to read this performance data and generate plots from the preprint. Where plots are unannotated, Keynote was used to add back annotations.
+
+All-of-GEUVADIS run
+-----
+1. Change the output bucket and argument of `--ec2-key-name` in `preprocess_all_of_GEUVADIS.sh`, and run the preprocess job flow contained in that script.
+2. Change the output bucket and argument of `--ec2-key-name` in `submit_all_of_geuvadis_job.sh`, and run the alignment job flow contained in that script.
