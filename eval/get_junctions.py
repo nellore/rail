@@ -72,7 +72,7 @@ if __name__ == '__main__':
                 intron = (exons_from_transcript[i][0],
                             exons_from_transcript[i-1][2] + 1,
                             exons_from_transcript[i][1] - 1)
-                print '\t'.join(intron[0], str(intron[1]), str(intron[2]))
+                print '\t'.join((intron[0], str(intron[1]), str(intron[2])))
                 if args.bowtie2_idx is not None:
                     length = intron[2] - intron[1] + 1
                     motif = (reference_index.get_stretch(intron[0],
