@@ -98,13 +98,13 @@ if __name__ == '__main__':
         other = 0
         for motif, frequency in motif_counts.items():
             if motif in canonicals:
-                canonical += 1
+                canonical += frequency
             elif motif in less_canonicals:
-                less_canonical += 1
+                less_canonical += frequency
             elif motif in much_less_canonicals:
-                much_less_canonical += 1
+                much_less_canonical += frequency
             else:
-                other += 1
+                other += frequency
         total = canonical + less_canonical + much_less_canonical + other
         print >>sys.stderr, 'GT-AG\t%d\t%08f' % (canonical,
                                                     float(canonical) / total)
