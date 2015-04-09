@@ -56,6 +56,8 @@ rail-rna
 ```
 **and follow the instructions.** A manual will be posted shortly.
 
+To use Rail-RNA in elastic mode, you'll need an account with [AWS](http://aws.amazon.com/). For an introduction to cloud computing with AWS, refer to [this](https://github.com/griffithlab/rnaseq_tutorial/wiki/Intro-to-AWS-Cloud-Computing) excellent tutorial by the [Griffith Lab](http://genome.wustl.edu/people/groups/detail/griffith-lab/) at Wash U.
+
 Disclaimer
 -----
 Renting AWS resources costs money, regardless of whether your run ultimately succeeds or fails. In some cases, Rail-RNA or its documentation may be partially to blame for a failed run. While we are happy to review bug reports, we do not accept responsibility for financial damage caused by these errors. Rail-RNA is provided "as is" with no warranty.
