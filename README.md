@@ -70,12 +70,12 @@ Contributors
 -----
 * [Abhi Nellore]
 * Mark Pritt
-* Leo Collado-Torres
+* [Leo Collado-Torres]
 * Jamie Morton
 * [Jeff Leek]
 * [Ben Langmead]
 
 [Abhi Nellore]: https://scholar.google.com/citations?user=XxPWj5oAAAAJ&hl=en
-[Leo Collado-Torres]: https://github.com/lcolladotor
-[Ben Langmead]: http://www.cs.jhu.edu/~langmea/index.shtml
-[Jeff Leek]: http://www.biostat.jhsph.edu/~jleek/
+[Leo Collado-Torres]: http://www.biostat.jhsph.edu/~lcollado/
+[Ben Langmead]: http://www.langmead-lab.org/
+[Jeff Leek]: http://jtleek.com/
