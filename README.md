@@ -69,13 +69,15 @@ Licenses
 Contributors
 -----
 * [Abhi Nellore]
-* Mark Pritt
+* [Jacob Pritt]
 * [Leo Collado-Torres]
 * Jamie Morton
 * [Jeff Leek]
 * [Ben Langmead]
 
 [Abhi Nellore]: https://scholar.google.com/citations?user=XxPWj5oAAAAJ&hl=en
+[Jacob Pritt]: https://github.com/jpritt
+[Jamie Morton]: https://github.com/mortonjt
 [Leo Collado-Torres]: http://www.biostat.jhsph.edu/~lcollado/
 [Ben Langmead]: http://www.langmead-lab.org/
 [Jeff Leek]: http://jtleek.com/
