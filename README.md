@@ -71,7 +71,7 @@ Contributors
 * [Abhi Nellore]
 * [Jacob Pritt]
 * [Leo Collado-Torres]
-* Jamie Morton
+* [Jamie Morton]
 * [Jeff Leek]
 * [Ben Langmead]
 
