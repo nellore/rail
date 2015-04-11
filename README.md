@@ -75,7 +75,7 @@ Contributors
 * [Jeff Leek]
 * [Ben Langmead]
 
-[Abhi Nellore]: https://scholar.google.com/citations?user=XxPWj5oAAAAJ&hl=en
+[Abhi Nellore]: http://nellore.github.io/
 [Jacob Pritt]: https://github.com/jpritt
 [Jamie Morton]: https://github.com/mortonjt
 [Leo Collado-Torres]: http://www.biostat.jhsph.edu/~lcollado/
