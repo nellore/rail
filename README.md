@@ -1,6 +1,8 @@
 ![Rail-RNA logo](https://github.com/buci/rail/blob/master/assets/railrnalogodark.png)
 ====
 
+[![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 This is the official repo for Rail-RNA, software for RNA-seq analysis. [Download](https://github.com/buci/rail/releases/download/v0.1.0a/install_rail-rna-0.1.0a) the latest stable release. **Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/buci/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/buci/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
 
 Get interested
