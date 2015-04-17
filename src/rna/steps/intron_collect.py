@@ -107,7 +107,11 @@ if args.out is not None:
 else:
     # Default --out is stdout
     for line in sys.stdin:
-        sys.stdout.write(line)
+        tokens = line.strip().split('\t')
+        # Remove leading zeros from ints
+        sys.stdout.write('\t'.join([tokens[0], str(int(tokens[1])),
+                                    str(int(tokens[2])), tokens[3],
+                                    tokens[4]]))
         input_line_count += 1
 
 if args.out is not None and not output_url.is_local:
