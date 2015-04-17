@@ -2684,7 +2684,7 @@ class RailRnaAlign(object):
     """ Sets parameters relevant to just the "align" job flow. """
     def __init__(self, base, input_dir=None, elastic=False,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
-        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_args='',
+        bowtie2_exe=None, bowtie2_build_exe=None, k=1, bowtie2_args='',
         samtools_exe=None, bedgraphtobigwig_exe=None,
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
@@ -2851,8 +2851,19 @@ class RailRnaAlign(object):
             base.bowtie1_build_exe = _elastic_bowtie1_build_exe
             base.bowtie2_build_exe = _elastic_bowtie2_build_exe
 
-        # Assume bowtie2 args are kosher for now
-        base.bowtie2_args = bowtie2_args
+        # Replace -k value in bowtie2 args with -k arg
+        bowtie2_arg_tokens = [token.strip() for token in
+                                bowtie2_args.replace('=', ' ').split(' ')]
+        try:
+            bowtie2_arg_tokens[bowtie2_arg_tokens.index('-k') + 1] = str(k)
+        except ValueError:
+            if bowtie2_arg_tokens[0] == '':
+                bowtie2_arg_tokens = ['-k', str(k)]
+            else:
+                bowtie2_arg_tokens.extend(['-k', str(k)])
+        except IndexError:
+            bowtie2_arg_tokens.append(str(k))
+        base.bowtie2_args = ' '.join(bowtie2_arg_tokens)
         if not (isinstance(partition_length, int) and
                 partition_length > 0):
             base.errors.append('Genome partition length '
@@ -3105,12 +3116,19 @@ class RailRnaAlign(object):
                       'archive on S3')
             )
         algo_parser.add_argument(
-                '--bowtie2-args', type=str, required=False,
-                default='',
-                metavar='<str>',
-                help=('arguments to pass to Bowtie 2, which is always run in '
-                      '"--local" mode (def: Bowtie 2 defaults)')
-            )
+            '-k', type=int, required=False,
+            metavar='<int>',
+            default=1,
+            help=('report up to <int> alignments per read; takes precedence '
+                  'over any -k value specified in --bowtie2-args')
+        )
+        algo_parser.add_argument(
+            '--bowtie2-args', type=str, required=False,
+            default='',
+            metavar='<str>',
+            help=('arguments to pass to Bowtie 2, which is always run in '
+                  '"--local" mode (def: Bowtie 2 defaults)')
+        )
         algo_parser.add_argument(
             '--partition-length', type=int, required=False,
             metavar='<int>',
@@ -4161,7 +4179,7 @@ class RailRnaLocalAlignJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, bowtie1_exe=None,
         bowtie_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
-        bowtie2_build_exe=None, bowtie2_args='',
+        bowtie2_build_exe=None, k=1, bowtie2_args='',
         samtools_exe=None, bedgraphtobigwig_exe=None,
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
@@ -4191,7 +4209,7 @@ class RailRnaLocalAlignJson(object):
             elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
+            k=k, bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             partition_length=partition_length,
             max_readlet_size=max_readlet_size,
@@ -4237,7 +4255,7 @@ class RailRnaParallelAlignJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, bowtie1_exe=None,
         bowtie_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
-        bowtie2_build_exe=None, bowtie2_args='',
+        bowtie2_build_exe=None, k=1, bowtie2_args='',
         samtools_exe=None, bedgraphtobigwig_exe=None,
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
@@ -4277,7 +4295,7 @@ class RailRnaParallelAlignJson(object):
             elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
+            k=k, bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             partition_length=partition_length,
             max_readlet_size=max_readlet_size,
@@ -4322,7 +4340,7 @@ class RailRnaParallelAlignJson(object):
             input_dir=input_dir, elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
+            k=k, bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             partition_length=partition_length,
             max_readlet_size=max_readlet_size,
@@ -4381,7 +4399,7 @@ class RailRnaElasticAlignJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, bowtie1_exe=None, bowtie_idx='genome',
         bowtie1_build_exe=None, bowtie2_exe=None,
-        bowtie2_build_exe=None, bowtie2_args='',
+        bowtie2_build_exe=None, k=1, bowtie2_args='',
         samtools_exe=None, bedgraphtobigwig_exe=None,
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
@@ -4433,7 +4451,7 @@ class RailRnaElasticAlignJson(object):
             elastic=True, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
+            k=k, bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             partition_length=partition_length,
             max_readlet_size=max_readlet_size,
@@ -4505,7 +4523,7 @@ class RailRnaLocalAllJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
-        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_args='',
+        bowtie2_exe=None, bowtie2_build_exe=None, k=1, bowtie2_args='',
         samtools_exe=None, bedgraphtobigwig_exe=None,
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
@@ -4538,7 +4556,7 @@ class RailRnaLocalAllJson(object):
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
+            k=k, bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             partition_length=partition_length,
             max_readlet_size=max_readlet_size,
@@ -4592,7 +4610,7 @@ class RailRnaParallelAllJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
-        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_args='',
+        bowtie2_exe=None, bowtie2_build_exe=None, k=1, bowtie2_args='',
         samtools_exe=None, bedgraphtobigwig_exe=None,
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
@@ -4633,7 +4651,7 @@ class RailRnaParallelAllJson(object):
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
+            k=k, bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             partition_length=partition_length,
             max_readlet_size=max_readlet_size,
@@ -4678,7 +4696,7 @@ class RailRnaParallelAllJson(object):
             bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
+            k=k, bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             partition_length=partition_length,
             max_readlet_size=max_readlet_size,
@@ -4745,7 +4763,7 @@ class RailRnaElasticAllJson(object):
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
-        bowtie2_exe=None, bowtie2_build_exe=None, bowtie2_args='',
+        bowtie2_exe=None, bowtie2_build_exe=None, k=1, bowtie2_args='',
         samtools_exe=None, bedgraphtobigwig_exe=None,
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
@@ -4800,7 +4818,7 @@ class RailRnaElasticAllJson(object):
         RailRnaAlign(base, elastic=True, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
-            bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
+            k=k, bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
             bedgraphtobigwig_exe=bedgraphtobigwig_exe,
             partition_length=partition_length,
             max_readlet_size=max_readlet_size,

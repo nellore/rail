@@ -93,6 +93,13 @@ Rail-RNA is a scalable MapReduce pipeline that can analyze many RNA-seq
 datasets at once. To view help for a given combination of <job flow> and
 <mode>, specify both, then add -h/--help.""".format(u'\u2200', version_number)
 
+if sys.stdout.encoding != 'UTF-8':
+    # Correct for consoles that don't support UTF-8
+    import unicodedata
+    _usage_message = unicodedata.normalize(
+                            'NFKD', _usage_message
+                        ).encode('ascii', 'ignore')
+
 class Launcher(object):
     """ Facilitates replacing the current process with a Dooplicity runner. """
 
@@ -562,7 +569,7 @@ if __name__ == '__main__':
                 bowtie1_exe=args.bowtie1, bowtie2_exe=args.bowtie2,
                 bowtie1_build_exe=args.bowtie1_build,
                 bowtie2_build_exe=args.bowtie2_build,
-                bowtie2_args=args.bowtie2_args,
+                k=args.k, bowtie2_args=args.bowtie2_args,
                 samtools_exe=args.samtools,
                 bedgraphtobigwig_exe=args.bedgraphtobigwig,
                 partition_length=args.partition_length,
@@ -612,7 +619,7 @@ if __name__ == '__main__':
                 bowtie1_exe=args.bowtie1, bowtie2_exe=args.bowtie2,
                 bowtie1_build_exe=args.bowtie1_build,
                 bowtie2_build_exe=args.bowtie2_build,
-                bowtie2_args=args.bowtie2_args,
+                k=args.k, bowtie2_args=args.bowtie2_args,
                 samtools_exe=args.samtools,
                 bedgraphtobigwig_exe=args.bedgraphtobigwig,
                 partition_length=args.partition_length,
@@ -682,7 +689,7 @@ if __name__ == '__main__':
                 bowtie1_exe=args.bowtie1, bowtie2_exe=args.bowtie2,
                 bowtie1_build_exe=args.bowtie1_build,
                 bowtie2_build_exe=args.bowtie2_build,
-                bowtie2_args=args.bowtie2_args,
+                k=args.k, bowtie2_args=args.bowtie2_args,
                 samtools_exe=args.samtools,
                 bedgraphtobigwig_exe=args.bedgraphtobigwig,
                 partition_length=args.partition_length,
@@ -734,7 +741,7 @@ if __name__ == '__main__':
                 bowtie1_exe=args.bowtie1, bowtie2_exe=args.bowtie2,
                 bowtie1_build_exe=args.bowtie1_build,
                 bowtie2_build_exe=args.bowtie2_build,
-                bowtie2_args=args.bowtie2_args,
+                k=args.k, bowtie2_args=args.bowtie2_args,
                 samtools_exe=args.samtools,
                 bedgraphtobigwig_exe=args.bedgraphtobigwig,
                 partition_length=args.partition_length,
@@ -801,7 +808,7 @@ if __name__ == '__main__':
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 region=args.region, verbose=args.verbose,
-                bowtie2_args=args.bowtie2_args,
+                k=args.k, bowtie2_args=args.bowtie2_args,
                 partition_length=args.partition_length,
                 max_readlet_size=args.max_readlet_size,
                 readlet_config_size=args.readlet_config_size,
@@ -859,7 +866,7 @@ if __name__ == '__main__':
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 region=args.region, verbose=args.verbose,
                 input_dir=args.input,
-                bowtie2_args=args.bowtie2_args,
+                k=args.k, bowtie2_args=args.bowtie2_args,
                 partition_length=args.partition_length,
                 max_readlet_size=args.max_readlet_size,
                 readlet_config_size=args.readlet_config_size,

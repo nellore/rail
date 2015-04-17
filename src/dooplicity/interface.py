@@ -122,10 +122,19 @@ class DooplicityInterface(object):
         sys.stdout.write('\n')
         try:
             with open(branding) as branding_stream:
-                sys.stdout.write(branding_stream.read())
+                branding_to_print = branding_stream.read()
         except TypeError:
             # No branding
             print 'Dooplicity v%s' % _version
+        else:
+            try:
+                sys.stdout.write(branding_to_print)
+            except UnicodeEncodeError:
+                import unicodedata
+                branding_to_print = unicodedata.normalize(
+                        'NFKD', branding_to_print
+                    ).encode('ascii', 'ignore')
+                sys.stdout.write(branding_to_print)
         sys.stdout.flush()
         self._start_time = time.time()
         self._date_format = '%A, %b %d, %Y at %I:%M:%S %p %Z'
