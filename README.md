@@ -1,7 +1,7 @@
-![Rail-RNA logo](https://github.com/buci/rail/blob/master/assets/railrnalogodark.png)
+![Rail-RNA logo](https://github.com/nellore/rail/blob/master/assets/railrnalogodark.png)
 ====
 
-This is the official repo for Rail-RNA, software for RNA-seq analysis. [Download](https://github.com/buci/rail/releases/download/v0.1.0a/install_rail-rna-0.1.0a) the latest stable release. **Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
+This is the official repo for Rail-RNA, software for RNA-seq analysis. [Download](https://github.com/nellore/rail/releases/download/v0.1.0a/install_rail-rna-0.1.0a) the latest stable release. **Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
 
 Get interested
 -----
@@ -23,7 +23,7 @@ Read the [preprint](https://youtu.be/6ZPZUtE6RgA) for more details.
 
 Get set up
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.0a`](https://github.com/buci/rail/releases/download/v0.1.0a/install_rail-rna-0.1.0a), change to the directory containing it, and make the installer executable with
+Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.0a`](https://github.com/nellore/rail/releases/download/v0.1.0a/install_rail-rna-0.1.0a), change to the directory containing it, and make the installer executable with
 ```
 chmod +x install_rail-rna-0.1.0a
 ```
@@ -64,7 +64,7 @@ Renting AWS resources costs money, regardless of whether your run ultimately suc
 
 Licenses
 -----
-[GNU GPL v3.0](http://choosealicense.com/licenses/gpl-3.0/) unless otherwise specified. [Dooplicity](https://github.com/buci/rail/tree/master/src/dooplicity), for example, is [MIT-licensed](http://choosealicense.com/licenses/mit/).
+[GNU GPL v3.0](http://choosealicense.com/licenses/gpl-3.0/) unless otherwise specified. [Dooplicity](https://github.com/nellore/rail/tree/master/src/dooplicity), for example, is [MIT-licensed](http://choosealicense.com/licenses/mit/).
 
 Contributors
 -----
@@ -81,3 +81,7 @@ Contributors
 [Leo Collado-Torres]: http://www.biostat.jhsph.edu/~lcollado/
 [Ben Langmead]: http://www.langmead-lab.org/
 [Jeff Leek]: http://jtleek.com/
+
+This product was developed primarily at
+
+<a href="http://www.jhu.edu/"><img src="https://github.com/nellore/rail/blob/master/assets/university.logo.small.horizontal.blue.png" align="left" width="300" alt="Hopkins logo"></a>
