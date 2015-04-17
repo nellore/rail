@@ -197,8 +197,18 @@ def multiread_with_introns(multiread, stranded=False):
     XS_field = 'XS:i:%d' % sorted_alignment_scores[1]
     for i in xrange(len(multiread_to_return)):
         for j in xrange(10, len(multiread_to_return[i])):
-            if multiread_to_return[i][j][:5] == 'XS:i:':
-                multiread_to_return[i][j] = XS_field
+            if multiread_to_return[i][j][:5] == 'AS:i:':
+                # add XS field if it's not there
+                try:
+                    if multiread_to_return[i][j+1][:5] == 'XS:i:':
+                        multiread_to_return[i][j+1] = XS_field
+                    else:
+                        # Insert XS:i: field
+                        multiread_to_return[i].insert(j+1, XS_field)
+                except IndexError:
+                    # AS:i is the last field
+                    multiread_to_return[i].append(XS_field)
+                break
     return [tuple(alignment) for alignment in multiread_to_return]
 
 def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
