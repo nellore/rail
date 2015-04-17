@@ -7,7 +7,8 @@ Precedes Rail-RNA-coverage
 
 Reduce step in MapReduce pipelines that takes count differentials (exon_diff)
 from Hadoop output of Rail-RNA-align and compiles per-sample coverage 
-information.
+information, both for "uniquely mapping" reads only and for all primary
+alignments.
 
 Input (read from stdin)
 ----------------------------
@@ -15,7 +16,9 @@ Tab-delimited input tuple columns:
 1. Reference name (RNAME in SAM format) + ';' + bin number
 2. Sample label
 3. Position at which diff should be subtracted or added to coverage
-4. A diff -- that is, by how much coverage increases or decreases at the 
+4. '1' if alignment from which diff originates is "unique" according to
+    --tie-margin criterion; else '0'
+5. A diff -- that is, by how much coverage increases or decreases at the 
     given genomic position: +n or -n for some natural number n.
 Input is partitioned by sample genome partition (fields 1-2) and sorted by
 position (field 3).
@@ -29,8 +32,10 @@ Tab-delimited output tuple columns:
 2. Number string representing reference name (RNAME in SAM format; see 
     BowtieIndexReference class in bowtie_index for conversion information)
 3. Position
-4. Coverage (that is, the number of called ECs in the sample
-    overlapping the position)
+4. Coverage counting all primary alignments (that is, the number of called ECs
+    in the sample overlapping the position)
+5. Coverage counting only "uniquely mapping" reads; here, unique mappings are
+    defined according to the criteria implied in --tie-margin
 
 Partition statistics (partition_stats)
 1. Number of exon_diff lines contributing to partition
@@ -85,15 +90,17 @@ for (partition_id, sample_label), xpartition in xstream(sys.stdin, 2):
     rname = reference_index.rname_to_string[
                     partition_id.rpartition(';')[0]
                 ]
-    coverage = 0
+    coverage, unique_coverage = 0, 0
     for pos, diffs in itertools.groupby(xpartition, lambda val: val[0]):
         input_line_count += 1
         pos = int(pos)
-        for _, diff in diffs:
+        for _, uniqueness, diff in diffs:
             coverage += int(diff)
+            if uniqueness == '1':
+                unique_coverage += int(diff)
             bin_diff_count += 1
-        print 'coverage\t%s\t%s\t%012d\t%d' % (sample_label, 
-                rname, pos, coverage)
+        print 'coverage\t%s\t%s\t%012d\t%d\t%d' % (sample_label, 
+                rname, pos, coverage, unique_coverage)
         output_line_count += 1
     if args.partition_stats:
         print 'partition_stats\t%d\t%s' % (bin_diff_count, 

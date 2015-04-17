@@ -605,7 +605,7 @@ class AlignmentPrinter(object):
     def __init__(self, manifest_object, reference_index,
                  output_stream=sys.stdout, bin_size=5000, exon_ivals=False,
                  exon_diffs=True, drop_deletions=False,
-                 output_bam_by_chr=True):
+                 output_bam_by_chr=True, tie_margin=0):
         """
             manifest_object: object of type LabelsAndIndices; see manifest.py
             reference_index: object of type BowtieIndexReference; see bowtie.py
@@ -613,6 +613,10 @@ class AlignmentPrinter(object):
             exon_ivals: True iff exon_ivals should be output
             exon_diffs: True iff exon_diffs should be output
             drop_deletions: counts deletions in coverage vectors iff False
+            tie_margin: score difference from primary alignment per
+                100 bases under which a primary alignment should be considered
+                unique; this affects classifying whether an exon_diff
+                originates from a unique alignment
         """
         self.manifest_object = manifest_object
         self.reference_index = reference_index
@@ -621,6 +625,7 @@ class AlignmentPrinter(object):
         self.bin_size = bin_size
         self.output_stream = output_stream
         self.drop_deletions = drop_deletions
+        self.tie_margin = tie_margin
         '''To improve load balance, assign a unique ID to each sample-RNAME
         combination when outputting BAMs by chromosome'''
         self.sample_and_rname_indexes = SampleAndRnameIndexes(
@@ -739,7 +744,9 @@ class AlignmentPrinter(object):
                 is negative
             2. Bin number
             3. Sample label
-            4. +1 or -1 * count, the number of instances of a read sequence
+            4. '1' if alignment from which diff originates is "unique"
+                according to --tie-margin criterion; else '0'
+            5. +1 or -1 * count, the number of instances of a read sequence
                 for which to print exonic chunks
 
             Introns (intron_bed) / insertions/deletions (indel_bed);
@@ -851,6 +858,27 @@ class AlignmentPrinter(object):
                                         sample_index)
                                 output_line_count += 1
                 if self.exon_diffs:
+                    '''Compare arguments of AS:i: and XS:i: to determine
+                    whether an alignment is unique.'''
+                    first_place_score = [int(field[5:]) for field in alignment
+                                            if field[:5] == 'AS:i:'][0]
+                    try:
+                        second_place_score = [int(field[5:]) for field in
+                                                alignment
+                                                if field[:5] == 'XS:i:'][0]
+                    except IndexError:
+                        # No XS field; assume uniqueness
+                        uniqueness = '1' 
+                    else:
+                        current_tie_margin = round(
+                                self.tie_margin
+                                * float(len(alignment[9])) / 100
+                            )
+                        if (second_place_score + current_tie_margin
+                                >= first_place_score):
+                            uniqueness = '0'
+                        else:
+                            uniqueness = '1'
                     for exon_pos, exon_end_pos in exons:
                         partitions = partition.partition(
                                 rname, exon_pos, exon_end_pos, self.bin_size
@@ -860,10 +888,11 @@ class AlignmentPrinter(object):
                             assert exon_pos <= partition_end
                             # Print increment at interval start
                             print >>self.output_stream, \
-                                'exon_diff\t%s\t%s\t%012d\t%d' \
+                                'exon_diff\t%s\t%s\t%012d\t%s\t%d' \
                                 % (partition_id,
                                     sample_index,
                                     max(partition_start, exon_pos),
+                                    uniqueness,
                                     count)
                             output_line_count += 1
                             assert exon_end_pos > partition_start
@@ -873,10 +902,11 @@ class AlignmentPrinter(object):
                                 ends.'''
                                 print >>self.output_stream, \
                                     'exon_diff\t%s\t%s\t' \
-                                    '%012d\t-%d' \
+                                    '%012d\t%s\t-%d' \
                                     % (partition_id, 
                                         sample_index,
                                         exon_end_pos,
+                                        uniqueness,
                                         count)
                                 output_line_count += 1
                 try:

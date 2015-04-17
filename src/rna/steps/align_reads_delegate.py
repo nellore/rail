@@ -164,7 +164,8 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
         exon_differentials=True, exon_intervals=False, verbose=False,
         bin_size=10000, report_multiplier=1.2, min_exon_size=8,
         min_readlet_size=8, max_readlet_size=25,
-        readlet_interval=5, drop_deletions=False, output_bam_by_chr=False):
+        readlet_interval=5, drop_deletions=False, output_bam_by_chr=False,
+        tie_margin=0):
     """ Prints end-to-end alignments and selects reads to be realigned.
 
         input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -213,6 +214,9 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
         drop_deletions: True iff deletions should be dropped from coverage
             vector
         output_bam_by_chr: True iff final BAMs are to be output by chromosome
+        tie_margin: allowed score difference per 100 bases among ties in
+            max score. For example, 150 and 144 are tied alignment scores
+            for a 100-bp read when --tie-margin is 6.
 
         No return value.
     """
@@ -227,7 +231,8 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             exon_ivals=exon_intervals,
             exon_diffs=exon_differentials,
             drop_deletions=drop_deletions,
-            output_bam_by_chr=output_bam_by_chr
+            output_bam_by_chr=output_bam_by_chr,
+            tie_margin=tie_margin
         )
     if other_stream:
         # First-pass alignment
@@ -290,6 +295,8 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             scores = \
                 [field[5:] for field in multiread if field[:5] == 'XS:i:'] + \
                 [field[5:] for field in multiread if field[:5] == 'AS:i:']
+            # Note: needs to be changed to accommodate --tie-margin
+            # extra keywords for grepping: tie margin tie_margin break
             tie_present = (len(scores) == 2) and (scores[0] == scores[1])
             clip_present = 'S' in cigar
             exact_match = 'NM:i:0' in multiread[0]
@@ -580,7 +587,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
         k_value=1, bowtie_index_base='genome', bin_size=10000,
         manifest_file='manifest', exon_differentials=True,
         exon_intervals=False, gzip_level=3, min_exon_size=9,
-        index_count=1, output_bam_by_chr=False):
+        index_count=1, output_bam_by_chr=False, tie_margin=0):
     """ Emits output specified in align_reads.py by processing Bowtie 2 output.
 
         This script containing this function is invoked twice to process each
@@ -635,6 +642,9 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
         index_count: number of transcriptome Bowtie 2 indexes to which to
             assign unmapped reads for later realignment
         output_bam_by_chr: True iff final BAM output should be by chr
+        tie_margin: allowed score difference per 100 bases among ties in
+            max score. For example, 150 and 144 are tied alignment scores
+            for a 100-bp read when --tie-margin is 6.
     """
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
@@ -676,7 +686,8 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
                     max_readlet_size=max_readlet_size,
                     readlet_interval=readlet_interval,
                     drop_deletions=drop_deletions,
-                    output_bam_by_chr=output_bam_by_chr
+                    output_bam_by_chr=output_bam_by_chr,
+                    tie_margin=tie_margin
                 )
         print >>sys.stderr, (
             'align_reads_delegate.py reports %d output lines on first pass.'
@@ -699,7 +710,8 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
                 report_multiplier=report_multiplier,
                 min_exon_size=min_exon_size,
                 drop_deletions=drop_deletions,
-                output_bam_by_chr=output_bam_by_chr
+                output_bam_by_chr=output_bam_by_chr,
+                tie_margin=tie_margin
             )
         print >>sys.stderr, (
             'align_reads_delegate.py reports %d output lines on second pass.'
@@ -773,6 +785,11 @@ if __name__ == '__main__':
     parser.add_argument('--gzip-level', type=int, required=False,
         default=3,
         help='Level of gzip compression to use for temporary files')
+    parser.add_argument('--tie-margin', type=int, required=False,
+        default=6,
+        help='Allowed score difference per 100 bases among ties in '
+             'max score. For example, 150 and 144 are tied alignment scores '
+             'for a 100-bp read when --tie-margin is 6.')
 
     # Add command-line arguments for dependencies
     partition.add_args(parser)
@@ -804,7 +821,8 @@ if __name__ == '__main__' and not args.test:
         min_exon_size=args.min_exon_size,
         gzip_level=args.gzip_level,
         index_count=args.index_count,
-        output_bam_by_chr=args.output_bam_by_chr)
+        output_bam_by_chr=args.output_bam_by_chr,
+        tie_margin=args.tie_margin)
 
 elif __name__ == '__main__':
     # Test units

@@ -59,7 +59,9 @@ Format 2 (exon_diff); tab-delimited output tuple columns:
 2. Sample label
 3. max(EC start, bin start) (inclusive) on forward strand IFF diff is
     positive and EC end (exclusive) on forward strand IFF diff is negative
-4. +1 or -1 * count, the number of instances of a read sequence for which to
+4. '1' if alignment from which diff originates is "unique" according to
+    --tie-margin criterion; else '0'
+5. +1 or -1 * count, the number of instances of a read sequence for which to
     print exonic chunks
 
 Note that only unique alignments are currently output as ivals and/or diffs.
@@ -173,7 +175,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
     min_exon_size=8, min_readlet_size=15, max_readlet_size=25,
     readlet_interval=12, capping_multiplier=1.5, drop_deletions=False,
-    gzip_level=3, scratch=None, index_count=1, output_bam_by_chr=False):
+    gzip_level=3, scratch=None, index_count=1, output_bam_by_chr=False,
+    tie_margin=0):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -356,6 +359,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         index_count: number of transcriptome Bowtie 2 indexes to which to
             assign unmapped reads for later realignment
         output_bam_by_chr: True iff final output BAMs will be by chromosome
+        tie_margin: allowed score difference per 100 bases among ties in
+            max score. For example, 150 and 144 are tied alignment scores
+            for a 100-bp read when --tie-margin is 6.
 
         No return value.
     """
@@ -440,6 +446,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                      '--gzip-level {gzip_level} '
                      '--min-exon-size {min_exon_size} '
                      '--index-count {index_count} '
+                     '--tie-margin {tie_margin} '
                      '{output_bam_by_chr}').format(
                         task_partition=task_partition,
                         other_reads=other_reads_file,
@@ -463,6 +470,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         gzip_level=gzip_level,
                         min_exon_size=min_exon_size,
                         index_count=index_count,
+                        tie_margin=tie_margin,
                         output_bam_by_chr=('--output-bam-by-chr'
                                             if output_bam_by_chr
                                             else '')
@@ -503,6 +511,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                      '--gzip-level {gzip_level} '
                      '--min-exon-size {min_exon_size} ' 
                      '--index-count {index_count} '
+                     '--tie-margin {tie_margin} '
                      '{output_bam_by_chr}').format(
                         task_partition=task_partition,
                         min_readlet_size=min_readlet_size,
@@ -524,6 +533,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         gzip_level=gzip_level,
                         min_exon_size=min_exon_size,
                         index_count=index_count,
+                        tie_margin=tie_margin,
                         output_bam_by_chr=('--output-bam-by-chr'
                                             if output_bam_by_chr
                                             else '')
@@ -598,6 +608,11 @@ if __name__ == '__main__':
     parser.add_argument('--gzip-level', type=int, required=False,
         default=3,
         help='Level of gzip compression to use for temporary files')
+    parser.add_argument('--tie-margin', type=int, required=False,
+        default=6,
+        help='Allowed score difference per 100 bases among ties in '
+             'max score. For example, 150 and 144 are tied alignment scores '
+             'for a 100-bp read when --tie-margin is 6.')
 
     # Add command-line arguments for dependencies
     partition.add_args(parser)
@@ -648,7 +663,8 @@ if __name__ == '__main__':
         gzip_level=args.gzip_level,
         scratch=args.scratch,
         index_count=args.index_count,
-        output_bam_by_chr=args.output_bam_by_chr)
+        output_bam_by_chr=args.output_bam_by_chr,
+        tie_margin=args.tie_margin)
 
     print >>sys.stderr, 'DONE with align_reads.py; in=%d; ' \
         'time=%0.3f s' % (_input_line_count, time.time() - start_time)

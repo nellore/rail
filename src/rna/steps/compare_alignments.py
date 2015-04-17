@@ -37,7 +37,9 @@ Format 2 (exon_diff); tab-delimited output tuple columns:
     positive and EC end (exclusive) on forward strand IFF diff is negative
 2. Bin number
 3. Sample label
-4. +1 or -1.
+4. '1' if alignment from which diff originates is "unique" according to
+    --tie-margin criterion; else '0'
+5. +1 or -1.
 
 Note that only unique alignments are currently output as ivals and/or diffs.
 
@@ -214,7 +216,8 @@ if __name__ == '__main__':
                     exon_ivals=args.exon_intervals,
                     exon_diffs=args.exon_differentials,
                     drop_deletions=args.drop_deletions,
-                    output_bam_by_chr=args.output_bam_by_chr
+                    output_bam_by_chr=args.output_bam_by_chr,
+                    tie_margin=args.tie_margin
                 )
     alignment_count_to_report, seed, non_deterministic \
                 = bowtie.parsed_bowtie_args(bowtie_args)

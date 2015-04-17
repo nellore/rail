@@ -51,6 +51,8 @@ Format 2 (exon_diff); tab-delimited output tuple columns:
     positive and EC end (exclusive) on forward strand IFF diff is negative
 2. Bin number
 3. Sample label
+4. '1' if alignment from which diff originates is "unique" according to
+    --tie-margin criterion; else '0'
 4. +1 or -1.
 
 Note that only unique alignments are currently output as ivals and/or diffs.
@@ -148,6 +150,11 @@ parser.add_argument('--output-bam-by-chr', action='store_const',
         const=True,
         default=False, 
         help='Final BAMs will be output by chromosome')
+parser.add_argument('--tie-margin', type=int, required=False,
+        default=6,
+        help='Allowed score difference per 100 bases among ties in '
+             'max score. For example, 150 and 144 are tied alignment scores '
+             'for a 100-bp read when --tie-margin is 6.')
 
 bowtie.add_args(parser)
 manifest.add_args(parser)
@@ -182,7 +189,8 @@ alignment_printer = AlignmentPrinter(
                                 exon_ivals=args.exon_intervals,
                                 exon_diffs=args.exon_differentials,
                                 drop_deletions=args.drop_deletions,
-                                output_bam_by_chr=args.output_bam_by_chr
+                                output_bam_by_chr=args.output_bam_by_chr,
+                                tie_margin=args.tie_margin
                             )
 input_line_count, output_line_count = 0, 0
 start_time = time.time()

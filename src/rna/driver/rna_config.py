@@ -3313,7 +3313,8 @@ class RailRnaAlign(object):
                          '--capping-multiplier={8} '
                          '--gzip-level {9} '
                          '--index-count {10} '
-                         '{11} {12} {13} {14} {15} -- {16}').format(
+                         '--tie-margin {11} '
+                         '{12} {13} {14} {15} {16} -- {17}').format(
                                                         base.bowtie1_idx,
                                                         base.bowtie2_idx,
                                                         base.bowtie2_exe,
@@ -3328,6 +3329,7 @@ class RailRnaAlign(object):
                                                 dir(base) else 3,
                                         base.transcriptome_indexes_per_sample *
                                             base.sample_count,
+                                                base.tie_margin,
                                                 drop_deletions,
                                                         verbose,
                                                         keep_alive,
@@ -3641,10 +3643,12 @@ class RailRnaAlign(object):
                 'name' : 'Finalize primary alignments of spliced reads',
                 'run' : ('break_ties.py --exon-differentials '
                             '--bowtie-idx {0} --partition-length {1} '
-                            '--manifest {2} {3} {4} -- {5}').format(
+                            '--manifest {2} --tie-margin {3} {4} '
+                            '{5} -- {6}').format(
                                     base.bowtie1_idx,
                                     base.partition_length,
                                     manifest,
+                                    base.tie_margin,
                                     drop_deletions,
                                     output_by_chr,
                                     base.bowtie2_args
@@ -3675,8 +3679,8 @@ class RailRnaAlign(object):
                             path_join(elastic, 'break_ties', 'exon_diff')],
                 'output' : 'collapse',
                 'min_tasks' : base.sample_count * 12 if elastic else None,
-                'part' : 3,
-                'keys' : 3,
+                'part' : 4,
+                'keys' : 4,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'

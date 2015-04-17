@@ -12,7 +12,8 @@ Input (read from stdin)
 ----------------------------
 Tab-delimited input tuple columns (just 1 per sample label):
 1. Sample label
-2. Normalization factor
+2. Normalization factor for primary alignments
+3. Normalization factor for unique alignments
 No binning/sorting before this step.
 
 Hadoop output (written to stdout)
@@ -25,7 +26,8 @@ File whose name is normalization_factors.tsv by default.
 Tab-delimited tuple columns:
 1. The character '-', ensuring there's exactly one partition
 2. Sample name
-3. Normalization factor
+3. Normalization factor for primary alignments
+4. Normalization factor for unique alignments
 """
 import os
 import sys
@@ -86,7 +88,7 @@ normalization_factors = {}
 
 for line in sys.stdin:
     tokens = line.rstrip().split('\t')[1:] # Kill partition
-    assert len(tokens) == 2, 'Bad input line: %s' % line
+    assert len(tokens) == 3, 'Bad input line: %s' % line
     sample_label, normalization_factor = tokens[0], int(tokens[1])
     normalization_factors[sample_label] = normalization_factor
     input_line_count += 1
