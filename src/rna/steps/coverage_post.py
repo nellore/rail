@@ -111,7 +111,7 @@ else:
     # Default --out is stdout
     output_stream = sys.stdout
 
-# Write normaliation factors where available; otherwise write N/A
+# Write normalization factors where available; otherwise write N/A
 for sample_label in sample_labels:
     if sample_label in normalization_factors:
         print >>output_stream, '%s\t%d' % (sample_label,
