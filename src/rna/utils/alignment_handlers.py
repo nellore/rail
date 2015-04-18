@@ -198,7 +198,7 @@ def multiread_with_introns(multiread, stranded=False):
     for i in xrange(len(multiread_to_return)):
         for j in xrange(10, len(multiread_to_return[i])):
             if multiread_to_return[i][j][:5] == 'AS:i:':
-                # add XS field if it's not there
+                # Add XS field if it's not there
                 try:
                     if multiread_to_return[i][j+1][:5] == 'XS:i:':
                         multiread_to_return[i][j+1] = XS_field
