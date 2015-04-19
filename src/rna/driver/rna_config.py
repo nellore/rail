@@ -2851,19 +2851,20 @@ class RailRnaAlign(object):
             base.bowtie1_build_exe = _elastic_bowtie1_build_exe
             base.bowtie2_build_exe = _elastic_bowtie2_build_exe
 
-        # Replace -k value in bowtie2 args with -k arg
-        bowtie2_arg_tokens = [token.strip() for token in
-                                bowtie2_args.replace('=', ' ').split(' ')]
-        try:
-            bowtie2_arg_tokens[bowtie2_arg_tokens.index('-k') + 1] = str(k)
-        except ValueError:
-            if bowtie2_arg_tokens[0] == '':
-                bowtie2_arg_tokens = ['-k', str(k)]
-            else:
-                bowtie2_arg_tokens.extend(['-k', str(k)])
-        except IndexError:
-            bowtie2_arg_tokens.append(str(k))
-        base.bowtie2_args = ' '.join(bowtie2_arg_tokens)
+        if k is not None:
+            # Replace -k value in bowtie2 args with -k arg
+            bowtie2_arg_tokens = [token.strip() for token in
+                                    bowtie2_args.replace('=', ' ').split(' ')]
+            try:
+                bowtie2_arg_tokens[bowtie2_arg_tokens.index('-k') + 1] = str(k)
+            except ValueError:
+                if bowtie2_arg_tokens[0] == '':
+                    bowtie2_arg_tokens = ['-k', str(k)]
+                else:
+                    bowtie2_arg_tokens.extend(['-k', str(k)])
+            except IndexError:
+                bowtie2_arg_tokens.append(str(k))
+            base.bowtie2_args = ' '.join(bowtie2_arg_tokens)
         if not (isinstance(partition_length, int) and
                 partition_length > 0):
             base.errors.append('Genome partition length '
@@ -3118,9 +3119,9 @@ class RailRnaAlign(object):
         algo_parser.add_argument(
             '-k', type=int, required=False,
             metavar='<int>',
-            default=1,
+            default=None,
             help=('report up to <int> alignments per read; takes precedence '
-                  'over any -k value specified in --bowtie2-args')
+                  'over any -k value specified in --bowtie2-args (def: no k)')
         )
         algo_parser.add_argument(
             '--bowtie2-args', type=str, required=False,
