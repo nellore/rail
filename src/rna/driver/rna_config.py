@@ -2850,7 +2850,6 @@ class RailRnaAlign(object):
             base.bowtie2_exe = _elastic_bowtie2_exe
             base.bowtie1_build_exe = _elastic_bowtie1_build_exe
             base.bowtie2_build_exe = _elastic_bowtie2_build_exe
-
         if k is not None:
             # Replace -k value in bowtie2 args with -k arg
             bowtie2_arg_tokens = [token.strip() for token in
@@ -2865,6 +2864,8 @@ class RailRnaAlign(object):
             except IndexError:
                 bowtie2_arg_tokens.append(str(k))
             base.bowtie2_args = ' '.join(bowtie2_arg_tokens)
+        else:
+            base.bowtie2_args = bowtie2_args
         if not (isinstance(partition_length, int) and
                 partition_length > 0):
             base.errors.append('Genome partition length '
