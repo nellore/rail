@@ -3785,7 +3785,7 @@ class RailRnaAlign(object):
             },
             {
                 'name' : 'Aggregate intron/indel results',
-                'run' : 'bed_pre.py --manifest={0} '
+                'run' : ('bed_pre.py --manifest={0} '
                          '--sample-fraction={1} --coverage-threshold={2} '
                          '{3}').format(
                                         manifest,
