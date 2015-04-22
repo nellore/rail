@@ -2693,7 +2693,7 @@ class RailRnaAlign(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_criteria='0.5,5', tie_margin=6,
+        intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         collect_introns=False, bam_basename='alignments', bed_basename='',
@@ -3015,16 +3015,45 @@ class RailRnaAlign(object):
         except ValueError:
             confidence_criteria_error = True
         else:
-            if not (base.coverage_threshold >= 0):
+            if not (base.coverage_threshold >= 0
+                    or base.coverage_threshold == -1):
                 confidence_criteria_error = True
         if confidence_criteria_error:
             base.errors.append('Intron confidence criteria '
                                '(--intron-criteria) must be a '
                                'comma-separated list of two elements: the '
                                'first should be a decimal value between 0 '
-                               'and 1 inclusive, and the second should be '
-                               'an integer >= 1. {0} was entered.'.format(
+                               'and 1 inclusive; the second should be '
+                               'an integer >= 1 or -1 to disable filtering '
+                               'by read count. {0} was entered.'.format(
                                                     intron_criteria
+                                                ))
+        confidence_criteria_split = indel_criteria.split(',')
+        confidence_criteria_error = False
+        try:
+            base.indel_sample_fraction = float(confidence_criteria_split[0])
+        except ValueError:
+            confidence_criteria_error = True
+        else:
+            if not (0 <= base.indel_sample_fraction <= 1):
+                confidence_criteria_error = True
+        try:
+            base.indel_coverage_threshold = int(confidence_criteria_split[1])
+        except ValueError:
+            confidence_criteria_error = True
+        else:
+            if not (base.indel_coverage_threshold >= 0
+                    or base.indel_coverage_threshold == -1):
+                confidence_criteria_error = True
+        if confidence_criteria_error:
+            base.errors.append('Indel confidence criteria '
+                               '(--indel-criteria) must be a '
+                               'comma-separated list of two elements: the '
+                               'first should be a decimal value between 0 '
+                               'and 1 inclusive; the second should be '
+                               'an integer >= 1 or -1 to disable filtering '
+                               'by read count. {0} was entered.'.format(
+                                                    indel_criteria
                                                 ))
         base.drop_deletions = drop_deletions
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
@@ -3271,6 +3300,14 @@ class RailRnaAlign(object):
             '--output-sam', action='store_const', const=True,
             default=False,
             help='output SAM instead of BAM'
+        )
+        output_parser.add_argument(
+            '--indel-criteria', type=str, required=False,
+            metavar='<dec,int>',
+            default='0.05,5',
+            help=('if parameter is "f,c", suppress indels from cross-sample '
+                  'TSVs that are not either present in at least a fraction f '
+                  'of samples or detected in at least c reads of one sample')
         )
         output_parser.add_argument(
             '--collect-introns', action='store_const', const=True,
@@ -3748,7 +3785,14 @@ class RailRnaAlign(object):
             },
             {
                 'name' : 'Aggregate intron/indel results',
-                'run' : 'bed_pre.py',
+                'run' : 'bed_pre.py --manifest={0} '
+                         '--sample-fraction={1} --coverage-threshold={2} '
+                         '{3}').format(
+                                        manifest,
+                                        base.indel_sample_fraction,
+                                        base.indel_coverage_threshold,
+                                        verbose
+                                    ),
                 'inputs' : [path_join(elastic, 'compare_alignments',
                                                'indel_bed'),
                             path_join(elastic, 'break_ties', 'indel_bed'),
@@ -4210,7 +4254,7 @@ class RailRnaLocalAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_criteria='0.5,5', tie_margin=6,
+        intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         collect_introns=False, bam_basename='alignments', bed_basename='',
@@ -4247,6 +4291,7 @@ class RailRnaLocalAlignJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             intron_criteria=intron_criteria,
+            indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             tie_margin=tie_margin,
@@ -4287,7 +4332,7 @@ class RailRnaParallelAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_criteria='0.5,5', tie_margin=6,
+        intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         collect_introns=False, bam_basename='alignments', bed_basename='',
@@ -4334,6 +4379,7 @@ class RailRnaParallelAlignJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             intron_criteria=intron_criteria,
+            indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             tie_margin=tie_margin,
@@ -4380,6 +4426,7 @@ class RailRnaParallelAlignJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             intron_criteria=intron_criteria,
+            indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             tie_margin=tie_margin,
@@ -4433,7 +4480,7 @@ class RailRnaElasticAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_criteria='0.5,5', tie_margin=6,
+        intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, collect_introns=False, bam_basename='alignments',
@@ -4492,6 +4539,7 @@ class RailRnaElasticAlignJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             intron_criteria=intron_criteria,
+            indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             tie_margin=tie_margin,
@@ -4557,7 +4605,7 @@ class RailRnaLocalAllJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        intron_criteria='0.5,5',
+        intron_criteria='0.5,5', indel_criteria='0.5,5',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
@@ -4600,6 +4648,7 @@ class RailRnaLocalAllJson(object):
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             intron_criteria=intron_criteria,
+            indel_criteria=indel_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
@@ -4645,7 +4694,7 @@ class RailRnaParallelAllJson(object):
         min_exon_size=9, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        intron_criteria='0.5,5',
+        intron_criteria='0.5,5', indel_criteria='0.5,5',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
@@ -4696,6 +4745,7 @@ class RailRnaParallelAllJson(object):
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             intron_criteria=intron_criteria,
+            indel_criteria=indel_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
@@ -4742,6 +4792,7 @@ class RailRnaParallelAllJson(object):
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             intron_criteria=intron_criteria,
+            indel_criteria=indel_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
@@ -4801,11 +4852,11 @@ class RailRnaElasticAllJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
-        intron_criteria='0.5,5', normalize_percentile=0.75,
-        transcriptome_indexes_per_sample=500, drop_deletions=False,
-        do_not_output_bam_by_chr=False, collect_introns=False,
-        output_sam=False, bam_basename='alignments', bed_basename='',
-        tsv_basename='', log_uri=None, ami_version='3.6.0',
+        intron_criteria='0.5,5', indel_criteria='0.5,5',
+        normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
+        drop_deletions=False, do_not_output_bam_by_chr=False,
+        collect_introns=False, output_sam=False, bam_basename='alignments',
+        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.6.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -4866,6 +4917,7 @@ class RailRnaElasticAllJson(object):
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
             intron_criteria=intron_criteria,
+            indel_criteria=indel_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,

@@ -111,6 +111,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
         input_stream: where to find input introns
+        output_stream: where to write output
         manifest_object: object of class LabelsAndIndices that maps indices
             to labels and back; used to count number of samples.
         sample_fraction: fraction of samples in which an intron must appear
@@ -120,6 +121,9 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
             satisfied
         collect_introns: collects and outputs introns across samples; ignores
             sample_fraction and coverage_threshold
+        verbose: output extra debugging statements
+
+        Return value: tuple (input line count, output line count)
     """
     input_line_count, output_line_count = 0, 0
     min_sample_count = int(round(
@@ -129,7 +133,6 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                                                                 input_stream, 3
                                                             ):
         sample_indexes = defaultdict(int)
-        print_intron = False
         for current_sample_indexes, current_sample_counts in xpartition:
             input_line_count += 1
             current_sample_counts = current_sample_counts.split('\x1f')
@@ -150,7 +153,8 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
             sample_count = len(sample_indexes)
             max_coverage = max(sample_indexes.values())
             if (sample_count >= min_sample_count
-                or max_coverage >= coverage_threshold):
+                or (max_coverage >= coverage_threshold
+                    and coverage_threshold != -1)):
                 for sample_index in sample_indexes:
                     print >>output_stream, '%s\t%s\t%012d\t%012d' % (
                             rname_and_strand, sample_index,
@@ -193,7 +197,7 @@ if __name__ == '__main__':
         help=('An intron passes the filter if it is covered by at least this '
               'many reads in a single sample; if the intron meets neither '
               'this criterion nor the --sample-fraction criterion, it is '
-              'filtered out'))
+              'filtered out; use -1 to disable'))
 
     # Add command-line arguments for dependencies
     manifest.add_args(parser)
@@ -226,7 +230,7 @@ elif __name__ == '__main__':
     import tempfile
 
     class TestGo(unittest.TestCase):
-        """ Tests print_readletized_output(). """
+        """ Tests go(). """
         def setUp(self):
             # For storing output of print_readletized_output()
             self.temp_dir_path = tempfile.mkdtemp()

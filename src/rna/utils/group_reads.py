@@ -10,7 +10,7 @@ import hashlib
 def add_args(parser):
     parser.add_argument(
         '--index-count', type=int, required=False,
-        default=50,
+        default=100,
         help=('Number of transcriptome Bowtie 2 indexes to which reads '
               'are to be assigned.')
     )
