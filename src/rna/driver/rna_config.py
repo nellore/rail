@@ -2697,7 +2697,7 @@ class RailRnaAlign(object):
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         collect_introns=False, bam_basename='alignments', bed_basename='',
-        assembly='hg19', s3_ansible=None):
+        tsv_basename='', assembly='hg19', s3_ansible=None):
         if not elastic:
             '''Programs and Bowtie indices should be checked only in local
             mode. First grab Bowtie index paths.'''
@@ -3039,6 +3039,7 @@ class RailRnaAlign(object):
         base.collect_introns = collect_introns
         base.bam_basename = bam_basename
         base.bed_basename = bed_basename
+        base.tsv_basename = tsv_basename
 
     @staticmethod
     def add_args(required_parser, exec_parser, output_parser, algo_parser, 
@@ -3287,6 +3288,12 @@ class RailRnaAlign(object):
             metavar='<str>',
             default='',
             help='basename for BED output (def: *empty*)'
+        )
+        output_parser.add_argument(
+            '--tsv-basename', type=str, required=False,
+            metavar='<str>',
+            default='',
+            help='basename for TSV output (def: *empty*)'
         )
 
     @staticmethod
@@ -3708,7 +3715,7 @@ class RailRnaAlign(object):
                     ]
             },
             {
-                'name' : 'Write bigwigs with exome coverage by sample',
+                'name' : 'Write bigWigs with exome coverage by sample',
                 'run' : ('coverage.py --bowtie-idx={0} --percentile={1} '
                          '--out={2} --bigwig-exe={3} '
                          '--manifest={4} {5} {6}').format(base.bowtie1_idx,
@@ -3740,35 +3747,7 @@ class RailRnaAlign(object):
                     ]
             },
             {
-                'name' : 'Write normalization factors for sample coverages',
-                'run' : 'coverage_post.py --out={0} --manifest={1} {2}'.format(
-                                                        ab.Url(
-                                                            path_join(elastic,
-                                                            base.output_dir,
-                                                    'normalization_factors')
-                                                        ).to_url(caps=True)
-                                                        if elastic
-                                                        else path_join(elastic,
-                                                            base.output_dir,
-                                                    'normalization_factors'),
-                                                        manifest,
-                                                        scratch
-                                                    ),
-                'inputs' : ['coverage'],
-                'output' : 'coverage_post',
-                'min_tasks' : 1,
-                'max_tasks' : 1,
-                'part' : 1,
-                'keys' : 2,
-                'extra_args' : [
-                        'elephantbird.use.combine.input.format=true',
-                        'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size),
-                        'elephantbird.combined.split.count={task_count}'
-                    ]
-            },
-            {
-                'name' : 'Aggregate intron and indel results by sample',
+                'name' : 'Aggregate intron/indel results',
                 'run' : 'bed_pre.py',
                 'inputs' : [path_join(elastic, 'compare_alignments',
                                                'indel_bed'),
@@ -3777,8 +3756,9 @@ class RailRnaAlign(object):
                                                'intron_bed'),
                             path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
+                'multiple_outputs' : True,
                 'min_tasks' : base.sample_count * 12 if elastic else None,
-                'part' : 6,
+                'part' : 5,
                 'keys' : 6,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -3788,7 +3768,43 @@ class RailRnaAlign(object):
                     ]
             },
             {
-                'name' : 'Write beds with intron and indel results by sample',
+                'name' : 'Write TSVs with intron/indel results across samples',
+                'run' : ('tsv.py --bowtie-idx={0} --out={1} '
+                         '--manifest={2} --gzip-level={3} '
+                         '--tsv-basename={4} {5}').format(
+                                                        base.bowtie1_idx,
+                                                        ab.Url(
+                                                            path_join(elastic,
+                                                            base.output_dir,
+                                                        'cross_sample_tables')
+                                                         ).to_url(caps=True)
+                                                        if elastic
+                                                        else path_join(elastic,
+                                                            base.output_dir,
+                                                        'cross_sample_tables'),
+                                                        manifest,
+                                                        base.gzip_level
+                                                        if 'gzip_level' in
+                                                        dir(base) else 3,
+                                                        base.tsv_basename,
+                                                        scratch
+                                                    ),
+                'inputs' : ['coverage',
+                                path_join(elastic, 'prebed', 'collect')],
+                'output' : 'tsv',
+                'mod_partitioner' : True,
+                'taskx' : 1,
+                'part' : 1,
+                'keys' : 5,
+                'extra_args' : [
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
+                    ]
+            },
+            {
+                'name' : 'Write BEDs with intron/indel results by sample',
                 'run' : ('bed.py --bowtie-idx={0} --out={1} '
                          '--manifest={2} --bed-basename={3} {4}').format(
                                                         base.bowtie1_idx,
@@ -3805,7 +3821,7 @@ class RailRnaAlign(object):
                                                         base.bed_basename,
                                                         scratch
                                                     ),
-                'inputs' : ['prebed'],
+                'inputs' : [path_join(elastic, 'prebed', 'bed')],
                 'output' : 'bed',
                 'taskx' : 1,
                 'part' : 2,
@@ -3818,7 +3834,7 @@ class RailRnaAlign(object):
                     ]
             },
             {
-                'name' : 'Write bams with alignments by sample',
+                'name' : 'Write BAMs with alignments by sample',
                 'run' : ('bam.py --out={0} --bowtie-idx={1} '
                          '--samtools-exe={2} --bam-basename={3} '
                          '--manifest={4} {5} {6} {7}').format(
@@ -4198,8 +4214,8 @@ class RailRnaLocalAlignJson(object):
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         collect_introns=False, bam_basename='alignments', bed_basename='',
-        num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), max_task_attempts=4,
+        tsv_basename='', num_processes=1, gzip_intermediates=False,
+        gzip_level=3, sort_memory_cap=(300*1024), max_task_attempts=4,
         keep_intermediates=False, scratch=None, sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
@@ -4239,7 +4255,8 @@ class RailRnaLocalAlignJson(object):
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, collect_introns=collect_introns,
-            bam_basename=bam_basename, bed_basename=bed_basename)
+            bam_basename=bam_basename, bed_basename=bed_basename,
+            tsv_basename=tsv_basename)
         raise_runtime_error(base)
         print_to_screen(base.detect_message)
         self._json_serial = {}
@@ -4274,8 +4291,8 @@ class RailRnaParallelAlignJson(object):
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
         collect_introns=False, bam_basename='alignments', bed_basename='',
-        num_processes=1, ipython_profile=None, ipcontroller_json=None,
-        scratch=None, gzip_intermediates=False,
+        tsv_basename='', num_processes=1, ipython_profile=None,
+        ipcontroller_json=None, scratch=None, gzip_intermediates=False,
         gzip_level=3, sort_memory_cap=(300*1024), max_task_attempts=4,
         keep_intermediates=False, do_not_copy_index_to_nodes=False,
         sort_exe=None):
@@ -4325,7 +4342,8 @@ class RailRnaParallelAlignJson(object):
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, collect_introns=collect_introns,
-            bam_basename=bam_basename, bed_basename=bed_basename)
+            bam_basename=bam_basename, tsv_basename=tsv_basename,
+            bed_basename=bed_basename)
         raise_runtime_error(base)
         ready_engines(rc, base, prep=False)
         engine_bases = {}
@@ -4370,7 +4388,8 @@ class RailRnaParallelAlignJson(object):
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, collect_introns=collect_introns,
-            bam_basename=bam_basename, bed_basename=bed_basename)
+            bam_basename=bam_basename, tsv_basename=tsv_basename,
+            bed_basename=bed_basename)
         engine_base_checks = {}
         for i in rc.ids:
             engine_base_checks[i] = engine_bases[i].check_program
@@ -4418,7 +4437,7 @@ class RailRnaElasticAlignJson(object):
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, collect_introns=False, bam_basename='alignments',
-        bed_basename='', log_uri=None, ami_version='3.6.0',
+        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.6.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -4481,7 +4500,8 @@ class RailRnaElasticAlignJson(object):
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, collect_introns=collect_introns,
-            bam_basename=bam_basename, bed_basename=bed_basename,
+            bam_basename=bam_basename, tsv_basename=tsv_basename,
+            bed_basename=bed_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
                                         profile=base.profile))
         raise_runtime_error(base)
@@ -4542,7 +4562,7 @@ class RailRnaLocalAllJson(object):
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, collect_introns=False, 
-        bam_basename='alignments', bed_basename='',
+        bam_basename='alignments', bed_basename='', tsv_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4,
         keep_intermediates=False, check_manifest=True, scratch=None,
@@ -4586,7 +4606,8 @@ class RailRnaLocalAllJson(object):
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, collect_introns=collect_introns,
-            bam_basename=bam_basename, bed_basename=bed_basename)
+            bam_basename=bam_basename, bed_basename=bed_basename,
+            tsv_basename=tsv_basename)
         raise_runtime_error(base)
         print_to_screen(base.detect_message)
         self._json_serial = {}
@@ -4629,10 +4650,10 @@ class RailRnaParallelAllJson(object):
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         output_sam=False, collect_introns=False, bam_basename='alignments',
-        bed_basename='', num_processes=1, gzip_intermediates=False,
-        gzip_level=3, sort_memory_cap=(300*1024), max_task_attempts=4,
-        ipython_profile=None, ipcontroller_json=None, scratch=None,
-        keep_intermediates=False, check_manifest=True,
+        bed_basename='', tsv_basename='', num_processes=1,
+        gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
+        max_task_attempts=4, ipython_profile=None, ipcontroller_json=None,
+        scratch=None, keep_intermediates=False, check_manifest=True,
         do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
@@ -4681,7 +4702,8 @@ class RailRnaParallelAllJson(object):
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, collect_introns=collect_introns,
-            bam_basename=bam_basename, bed_basename=bed_basename)
+            bam_basename=bam_basename, bed_basename=bed_basename,
+            tsv_basename=tsv_basename)
         raise_runtime_error(base)
         ready_engines(rc, base, prep=False)
         engine_bases = {}
@@ -4726,7 +4748,8 @@ class RailRnaParallelAllJson(object):
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, collect_introns=collect_introns,
-            bam_basename=bam_basename, bed_basename=bed_basename)
+            bam_basename=bam_basename, bed_basename=bed_basename,
+            tsv_basename=tsv_basename)
         engine_base_checks = {}
         for i in rc.ids:
             engine_base_checks[i] = engine_bases[i].check_program
@@ -4782,7 +4805,7 @@ class RailRnaElasticAllJson(object):
         transcriptome_indexes_per_sample=500, drop_deletions=False,
         do_not_output_bam_by_chr=False, collect_introns=False,
         output_sam=False, bam_basename='alignments', bed_basename='',
-        log_uri=None, ami_version='3.6.0',
+        tsv_basename='', log_uri=None, ami_version='3.6.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -4850,6 +4873,7 @@ class RailRnaElasticAllJson(object):
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
             output_sam=output_sam, collect_introns=collect_introns,
             bam_basename=bam_basename, bed_basename=bed_basename,
+            tsv_basename=tsv_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
                                         profile=base.profile))
         raise_runtime_error(base)

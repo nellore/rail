@@ -752,15 +752,15 @@ class AlignmentPrinter(object):
             Introns (intron_bed) / insertions/deletions (indel_bed);
             tab-delimited output tuple columns:
             1. 'I', 'D', or 'N' for insertion, deletion, or intron line
-            2. Sample index
-            3. Number string representing RNAME
-            4. Start position (Last base before insertion, first base of
+            2. Number string representing RNAME
+            3. Start position (Last base before insertion, first base of
                                 deletion, or first base of intron)
-            5. End position (Last base before insertion, last base of deletion
+            4. End position (Last base before insertion, last base of deletion
                 (exclusive), or last base of intron (exclusive))
-            6. '+' or '-' indicating which strand is the sense strand for
+            5. '+' or '-' indicating which strand is the sense strand for
                 introns, inserted sequence for insertions, or deleted sequence
                 for deletions
+            6. Sample index
             ----Next fields are for introns only; they are '\x1c' for indels---
             7. Number of nucleotides between 5' end of intron and 5' end of
                 read from which it was inferred, ASSUMING THE SENSE STRAND IS
@@ -822,24 +822,20 @@ class AlignmentPrinter(object):
                 # Output indels
                 for insert_pos, insert_seq in insertions:
                     print >>self.output_stream, (
-                           ('indel_bed\tI\t%s\t%s\t%012d\t%012d\t%s'
+                           ('indel_bed\tI\t%s\t%012d\t%012d\t%s\t%s'
                             '\t\x1c\t\x1c\t%d')
-                            % (sample_index, self.reference_index.\
-                                rname_to_string[rname],
-                                insert_pos, insert_pos,
-                                insert_seq,
-                                count)
+                            % (self.reference_index.rname_to_string[rname],
+                                insert_pos, insert_pos, insert_seq,
+                                sample_index, count)
                         )
                     output_line_count += 1
                 for del_pos, del_seq in deletions:
                     print >>self.output_stream, (
-                           ('indel_bed\tD\t%s\t%s\t%012d\t%012d\t%s'
+                           ('indel_bed\tD\t%s\t%012d\t%012d\t%s\t%s'
                             '\t\x1c\t\x1c\t%d')
-                            % (sample_index, self.reference_index.\
-                                rname_to_string[rname],
+                            % (self.reference_index.rname_to_string[rname],
                                 del_pos, del_pos + len(del_seq),
-                                del_seq,
-                                count)
+                                del_seq, sample_index, count)
                         )
                     output_line_count += 1
                 # Output exonic chunks
@@ -921,15 +917,13 @@ class AlignmentPrinter(object):
                             left_displacement, right_displacement) \
                         in introns:
                         print >>self.output_stream, (
-                                ('intron_bed\tN\t%s\t%s\t%012d\t%012d\t%s\t'
+                                ('intron_bed\tN\t%s\t%012d\t%012d\t%s\t%s\t'
                                  '%d\t%d\t%d')
-                                 % (sample_index, 
-                                    self.reference_index.\
+                                 % (self.reference_index.\
                                     rname_to_string[rname],
                                     intron_pos, intron_end_pos,
-                                    reverse_strand_string,
-                                    left_displacement,
-                                    right_displacement,
+                                    reverse_strand_string, sample_index,
+                                    left_displacement, right_displacement,
                                     count)
                             )
                         output_line_count += 1
@@ -972,14 +966,17 @@ class AlignmentPrinter(object):
                 if introns:
                     for intron in introns:
                         print >>self.output_stream, (
-                                        ('sam_intron_ties\tN\t%s\t%s\t'
-                                         '%012d\t%012d\t%s\t_'
+                                        ('sam_intron_ties\tN\t%s\t'
+                                         '%012d\t%012d\t%s\t%s\t_'
                                          '\t%012d\t%s\t%s\t') % (
-                                self.manifest_object.label_to_index[
-                                    qname.rpartition('\x1d')[2]
-                                ], self.reference_index.rname_to_string[rname],
-                                intron[0], intron[1], sense, pos,
-                                qname, flag)) + '\t'.join(alignment[4:])
+                                    self.reference_index.rname_to_string[
+                                                                        rname
+                                                                    ],
+                                    intron[0], intron[1], sense,
+                                    self.manifest_object.label_to_index[
+                                                qname.rpartition('\x1d')[2]
+                                            ], pos, qname, flag)
+                                ) + '\t'.join(alignment[4:])
                 else:
                     print >>self.output_stream, '\t'.join(('sam_clip_ties',) \
                                                             + alignment)

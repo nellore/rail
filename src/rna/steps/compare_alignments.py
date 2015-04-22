@@ -105,14 +105,14 @@ Introns (intron_bed), insertions/deletions (indel_bed)
 
 Format 6; tab-delimited output tuple columns:
 1. 'I', 'D', or 'N' for insertion, deletion, or intron line
-2. Sample label
-3. Number string representing RNAME
-4. Start position (Last base before insertion, first base of deletion,
+2. Number string representing RNAME
+3. Start position (Last base before insertion, first base of deletion,
                     or first base of intron)
-5. End position (Last base before insertion, last base of deletion (exclusive),
+4. End position (Last base before insertion, last base of deletion (exclusive),
                     or last base of intron (exclusive))
-6. '+' or '-' indicating which strand is the sense strand for introns,
+5. '+' or '-' indicating which strand is the sense strand for introns,
    inserted sequence for insertions, or deleted sequence for deletions
+6. Sample index
 ----Next fields are for introns only; they are '\x1c' for indels----
 7. Number of nucleotides between 5' end of intron and 5' end of read from which
     it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND. That is,

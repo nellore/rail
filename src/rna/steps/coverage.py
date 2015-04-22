@@ -30,10 +30,13 @@ Input is partitioned first by sample label, then sorted by fields 2-3.
 Hadoop output (written to stdout)
 ----------------------------
 Tab-delimited output tuple columns (only 1 per sample):
-1. The character '-', ensuring there's exactly one partition
-2. Original sample label
-3. Normalization factor for coverage vector counting all primary alignments
-4. Normalization factor for coverage vector counting only "uniquely mapping"
+1. '3' to denote the output is a normalization factor
+2. Sample index
+3. '\x1c'
+4. '\x1c'
+5. '\x1c'
+6. Normalization factor for coverage vector counting all primary alignments
+7. Normalization factor for coverage vector counting only "uniquely mapping"
     reads
 
 Other output (written to directory specified by command-line parameter --out)
@@ -181,9 +184,9 @@ mover = filemover.FileMover(args=args)
 track_line = ('track type=bedGraph name="{name}" '
          'description="{description}" visibility=full '
          'color=227,29,118 altColor=0,179,220 priority=400')
-for (sample_label,), xpartition in xstream(sys.stdin, 1):
+for (sample_index,), xpartition in xstream(sys.stdin, 1):
     try:
-        sample_label = manifest_object.index_to_label[sample_label]
+        sample_label = manifest_object.index_to_label[sample_index]
     except KeyError:
         raise RuntimeError('Sample label index "%s" was not recorded.'
                                 % sample_label)
@@ -259,11 +262,12 @@ for (sample_label,), xpartition in xstream(sys.stdin, 1):
                         unique_coverage
                     )
     # Output normalization factors
-    print '-\t%s\t%d\t%d' % (
-                    sample_label,
-                    percentile(coverage_histogram, args.percentile),
-                    percentile(unique_coverage_histogram, args.percentile)
-                )
+    print '3\t%s\t\x1c\t\x1c\t\x1c\t%d\t%d' % (sample_index,
+                                            percentile(coverage_histogram,
+                                                        args.percentile),
+                                            percentile(
+                                                unique_coverage_histogram,
+                                                args.percentile))
     output_line_count += 1
     # Write bigwigs
     assert os.path.exists(sizes_filename)

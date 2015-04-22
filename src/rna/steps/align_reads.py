@@ -91,12 +91,12 @@ Insertions/deletions (indel_bed)
 
 Tab-delimited output tuple columns:
 1. 'I' or 'D' insertion or deletion line
-2. Sample label
-3. Number string representing RNAME
-4. Start position (Last base before insertion or first base of deletion)
-5. End position (Last base before insertion or last base of deletion 
+2. Number string representing RNAME
+3. Start position (Last base before insertion or first base of deletion)
+4. End position (Last base before insertion or last base of deletion 
                     (exclusive))
-6. Inserted sequence for insertions or deleted sequence for deletions
+5. Inserted sequence for insertions or deleted sequence for deletions'
+6. Sample index
 ----Next fields are for introns only; they are '\x1c' for indels----
 7. '\x1c'
 8. '\x1c'
@@ -268,13 +268,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
 
         tab-delimited output tuple columns:
         1. 'I' or 'D' insertion or deletion line
-        2. Sample label
-        3. Number string representing RNAME
-        4. Start position (Last base before insertion or 
+        2. Number string representing RNAME
+        3. Start position (Last base before insertion or 
             first base of deletion)
-        5. End position (Last base before insertion or last base of deletion 
+        4. End position (Last base before insertion or last base of deletion 
                             (exclusive))
-        6. Inserted sequence for insertions or deleted sequence for deletions
+        5. Inserted sequence for insertions or deleted sequence for deletions
+        6. Sample index
         ----Next fields are for introns only; they are '\x1c' for indels----
         7. '\x1c'
         8. '\x1c'
