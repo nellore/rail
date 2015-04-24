@@ -2696,8 +2696,8 @@ class RailRnaAlign(object):
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
-        collect_introns=False, bam_basename='alignments', bed_basename='',
-        tsv_basename='', assembly='hg19', s3_ansible=None):
+        deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
+        bed_basename='', tsv_basename='', assembly='hg19', s3_ansible=None):
         if not elastic:
             '''Programs and Bowtie indices should be checked only in local
             mode. First grab Bowtie index paths.'''
@@ -3065,7 +3065,71 @@ class RailRnaAlign(object):
         base.transcriptome_indexes_per_sample \
             = transcriptome_indexes_per_sample
         base.output_sam = output_sam
-        base.collect_introns = collect_introns
+        deliverable_choices = set(['idx', 'bam', 'bed', 'tsv', 'bw', 'itn'])
+        split_deliverables = set([deliverable.strip() for deliverable
+                                    in deliverables.split(',')])
+        undeliverables = split_deliverables - deliverable_choices
+        if undeliverables:
+            base.errors.append('Some deliverables (--deliverables) specified '
+                               'are invalid. Valid choices are in {"idx", '
+                               '"bam", "bed", "tsv", "bw", "itn"}, but '
+                               '"{0}" was entered.'.format(deliverables))
+        elif not split_deliverables:
+            base.errors.append('At least one deliverable (--deliverables) '
+                               'must be specified, but none were entered.')
+        base.tsv = 'tsv' in split_deliverables
+        base.idx = 'idx' in split_deliverables
+        base.bam = 'bam' in split_deliverables
+        base.bed = 'bed' in split_deliverables
+        base.bw = 'bw' in split_deliverables
+        base.itn = 'itn' in split_deliverables
+        if base.idx:
+            # Place transcript index in output directory
+            if elastic:
+                base.transcript_out = ab.Url(
+                    path_join(elastic, base.output_dir, 'transcript_index')
+                ).to_url(caps=True)
+                base.transcript_archive = ab.Url(path_join(elastic,
+                                                    base.output_dir,
+                                                    'transcript_index',
+                                                    'intron.tar.gz#intron')
+                                            ).to_native_url()
+                base.transcript_in = 'intron/intron'
+            else:
+                base.transcript_out = os.path.join(
+                        base.output_dir, 'transcript_index'
+                    )
+                base.transcript_in = ab.Url(
+                        path_join(
+                            elastic, base.output_dir, 'transcript_index',
+                            'intron')
+                    ).to_url()
+                base.transcript_archive = ''
+        else:
+            # Place transcript index in intermediate directory
+            if elastic:
+                base.transcript_out = ab.Url(
+                    path_join(elastic, base.intermediate_dir,
+                                'transcript_index')
+                ).to_url(caps=True)
+                base.transcript_archive = ab.Url(path_join(elastic,
+                                                    base.intermediate_dir,
+                                                    'transcript_index',
+                                                    'intron.tar.gz#intron')
+                                            ).to_native_url()
+                base.transcript_in = 'intron/intron'
+            else:
+                # Put it in cointron_enum so it's deleted after use
+                base.transcript_out = os.path.join(
+                        base.intermediate_dir, 'cointron_enum',
+                        'transcript_index'
+                    )
+                base.transcript_in = ab.Url(
+                        path_join(
+                            elastic, base.intermediate_dir, 'cointron_enum',
+                            'transcript_index', 'intron')
+                    ).to_url()
+                base.transcript_archive = ''
         base.bam_basename = bam_basename
         base.bed_basename = bed_basename
         base.tsv_basename = tsv_basename
@@ -3285,10 +3349,16 @@ class RailRnaAlign(object):
             default=100,
             help=argparse.SUPPRESS
         )
+        output_parser.add_argument('-d', '--deliverables', required=False,
+            metavar='<choice,...>',
+            default='idx,tsv,bed,bam,bw',
+            help=('comma-separated list of desired outputs. Choose from among '
+                  '{"idx", "tsv", "bed", "bam", "bw", "itn"}.')
+        )
         output_parser.add_argument(
             '--drop-deletions', action='store_const', const=True,
             default=False,
-            help=('drop deletions from coverage vectors encoded in bigwigs')
+            help='drop deletions from coverage vectors encoded in bigWigs'
         )
         output_parser.add_argument(
             '--do-not-output-bam-by-chr', action='store_const', const=True,
@@ -3308,11 +3378,6 @@ class RailRnaAlign(object):
             help=('if parameter is "f,c", suppress indels from cross-sample '
                   'TSVs that are not either present in at least a fraction f '
                   'of samples or detected in at least c reads of one sample')
-        )
-        output_parser.add_argument(
-            '--collect-introns', action='store_const', const=True,
-            default=False,
-            help=argparse.SUPPRESS
         )
         output_parser.add_argument(
             '--bam-basename', type=str, required=False,
@@ -3346,6 +3411,7 @@ class RailRnaAlign(object):
         output_by_chr = ('--output-bam-by-chr'
                             if not base.do_not_output_bam_by_chr
                             else '')
+        realign = (base.bam or base.tsv or base.bed or base.bw)
         steps_to_return = [
             {
                 'name' : 'Align reads and segment them into readlets',
@@ -3454,21 +3520,22 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            }
-        ]
-        if not base.collect_introns: steps_to_return.extend(
-            [{
+            },
+            {
                 'name' : 'Filter out introns that violate confidence criteria',
                 'run' : ('intron_filter.py --manifest={0} '
                          '--sample-fraction={1} --coverage-threshold={2} '
-                         '{3}').format(
+                         '{3} {4}').format(
                                         manifest,
                                         base.sample_fraction,
                                         base.coverage_threshold,
-                                        verbose
+                                        verbose,
+                                        '--collect-introns'
+                                        if base.itn else ''
                                     ),
                 'inputs' : ['intron_search'],
                 'output' : 'intron_filter',
+                'multiple_outputs' : True,
                 'min_tasks' : (max(base.sample_count / 10, 1)
                                 if elastic else None),
                 'part' : 3,
@@ -3481,13 +3548,44 @@ class RailRnaAlign(object):
                     ]
             },
             {
+                'name' : 'Write all detected introns',
+                'run' : ('intron_collect.py --out={0} '
+                         '--gzip-level {1} {2}').format(
+                                                        ab.Url(
+                                                            path_join(elastic,
+                                                            base.output_dir,
+                                                    'collected_introns')
+                                                        ).to_url(caps=True)
+                                                        if elastic
+                                                        else path_join(elastic,
+                                                            base.output_dir,
+                                                    'collected_introns'),
+                                                        base.gzip_level
+                                                        if 'gzip_level' in
+                                                        dir(base) else 3,
+                                                        scratch
+                                                    ),
+                'inputs' : [path_join(elastic, 'intron_filter', 'collect')],
+                'output' : 'intron_collect',
+                'min_tasks' : 1,
+                'max_tasks' : 1,
+                'part' : 3,
+                'keys' : 3,
+                'extra_args' : [
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
+                    ]
+            } if base.itn else {},
+            {
                 'name' : 'Enumerate possible intron cooccurrences on readlets',
                 'run' : ('intron_config.py '
                          '--readlet-size={0} {1}').format(
                                                     base.readlet_config_size,
                                                     verbose
                                                 ),
-                'inputs' : ['intron_filter'],
+                'inputs' : [path_join(elastic, 'intron_filter', 'filter')],
                 'output' : 'intron_config',
                 'taskx' : 1,
                 'part' : 2,
@@ -3521,16 +3619,7 @@ class RailRnaAlign(object):
                 'name' : 'Build index of transcriptome elements',
                 'run' : ('intron_index.py --bowtie2-build-exe={0} '
                          '--out={1} {2} {3}').format(base.bowtie2_build_exe,
-                                                 ab.Url(
-                                                    path_join(elastic,
-                                                        base.output_dir,
-                                                        'transcript_index')
-                                                    ).to_url(caps=True)
-                                                if elastic
-                                                else os.path.join(
-                                                        base.output_dir,
-                                                        'transcript_index'
-                                                    ),
+                                                 base.transcript_out,
                                                  keep_alive, scratch),
                 'inputs' : ['intron_fasta'],
                 'output' : 'intron_index',
@@ -3550,12 +3639,7 @@ class RailRnaAlign(object):
                 'run' : ('cointron_enum.py --bowtie2-idx={0} --gzip-level {1} '
                          '--bowtie2-exe={2} {3} {4} --intermediate-dir {5} '
                          '{6} -- {7}').format(
-                                            'intron/intron'
-                                            if elastic else
-                                            ab.Url(path_join(elastic,
-                                                base.output_dir,
-                                                'transcript_index',
-                                                'intron')).to_url(),
+                                            base.transcript_in,
                                             base.gzip_level
                                             if 'gzip_level' in
                                             dir(base) else 3,
@@ -3571,10 +3655,7 @@ class RailRnaAlign(object):
                 'inputs' : [path_join(elastic, 'align_reads', 'unique')],
                 'output' : 'cointron_enum',
                 'min_tasks' : base.sample_count * 10 if elastic else None,
-                'archives' : ab.Url(path_join(elastic,
-                                    base.output_dir,
-                                    'transcript_index',
-                                    'intron.tar.gz#intron')).to_native_url(),
+                'archives' : base.transcript_archive,
                 'part' : 1,
                 'keys' : 1,
                 'extra_args' : [
@@ -3583,7 +3664,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if realign else {},
             {
                 'name' : 'Get transcriptome elements for read realignment',
                 'run' : ('cointron_fasta.py --bowtie-idx={0} '
@@ -3604,7 +3685,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if realign else {},
             {
                 'name' : 'Align reads to transcriptome elements',
                 'run' : ('realign_reads.py --bowtie2-exe={0} --gzip-level {1} '
@@ -3635,7 +3716,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if realign else {},
             {
                 'name' : 'Collect and compare read alignments',
                 'run' : ('compare_alignments.py --bowtie-idx={0} '
@@ -3664,7 +3745,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if realign else {},
             {
                 'name' : 'Associate spliced alignments with intron coverages',
                 'run' : 'intron_coverage.py --bowtie-idx {0}'.format(
@@ -3684,7 +3765,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if realign else {},
             {
                 'name' : 'Finalize primary alignments of spliced reads',
                 'run' : ('break_ties.py --exon-differentials '
@@ -3713,7 +3794,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if realign else {},
             {
                 'name' : 'Merge exon differentials at same genomic positions',
                 'run' : 'sum.py {0}'.format(
@@ -3733,7 +3814,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.bw else {},
             {
                 'name' : 'Compile sample coverages from exon differentials',
                 'run' : ('coverage_pre.py --bowtie-idx={0} '
@@ -3750,7 +3831,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.bw else {},
             {
                 'name' : 'Write bigWigs with exome coverage by sample',
                 'run' : ('coverage.py --bowtie-idx={0} --percentile={1} '
@@ -3782,7 +3863,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.bw else {},
             {
                 'name' : 'Aggregate intron/indel results',
                 'run' : ('bed_pre.py --manifest={0} '
@@ -3810,7 +3891,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if (base.tsv or base.bed) else {},
             {
                 'name' : 'Write TSVs with intron/indel results across samples',
                 'run' : ('tsv.py --bowtie-idx={0} --out={1} '
@@ -3846,7 +3927,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.tsv else {},
             {
                 'name' : 'Write BEDs with intron/indel results by sample',
                 'run' : ('bed.py --bowtie-idx={0} --out={1} '
@@ -3876,7 +3957,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.bed else {},
             {
                 'name' : 'Write BAMs with alignments by sample',
                 'run' : ('bam.py --out={0} --bowtie-idx={1} '
@@ -3915,60 +3996,8 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            }])
-        else: steps_to_return.extend([
-            {
-                'name' : 'Count introns detected across samples',
-                'run' : ('intron_filter.py --manifest={0} '
-                         '--collect-introns {1}').format(
-                                        manifest,
-                                        verbose
-                                    ),
-                'inputs' : ['intron_search'],
-                'output' : 'intron_filter',
-                'min_tasks' : (max(base.sample_count / 10, 1)
-                                if elastic else None),
-                'part' : 3,
-                'keys' : 3,
-                'extra_args' : [
-                        'elephantbird.use.combine.input.format=true',
-                        'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size),
-                        'elephantbird.combined.split.count={task_count}'
-                    ]
-            },
-            {
-                'name' : 'Write all detected introns',
-                'run' : ('intron_collect.py --out={0} '
-                         '--gzip-level {1} {2}').format(
-                                                        ab.Url(
-                                                            path_join(elastic,
-                                                            base.output_dir,
-                                                    'collected_introns')
-                                                        ).to_url(caps=True)
-                                                        if elastic
-                                                        else path_join(elastic,
-                                                            base.output_dir,
-                                                    'collected_introns'),
-                                                        base.gzip_level
-                                                        if 'gzip_level' in
-                                                        dir(base) else 3,
-                                                        scratch
-                                                    ),
-                'inputs' : ['intron_filter'],
-                'output' : 'intron_collect',
-                'min_tasks' : 1,
-                'max_tasks' : 1,
-                'part' : 3,
-                'keys' : 3,
-                'extra_args' : [
-                        'elephantbird.use.combine.input.format=true',
-                        'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size),
-                        'elephantbird.combined.split.count={task_count}'
-                    ]
-            }])
-        return steps_to_return
+            } if base.bam else {}]
+        return [step for step in steps_to_return if step != {}]
 
     @staticmethod
     def bootstrap(base):
@@ -4257,10 +4286,11 @@ class RailRnaLocalAlignJson(object):
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
-        collect_introns=False, bam_basename='alignments', bed_basename='',
-        tsv_basename='', num_processes=1, gzip_intermediates=False,
-        gzip_level=3, sort_memory_cap=(300*1024), max_task_attempts=4,
-        keep_intermediates=False, scratch=None, sort_exe=None):
+        deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
+        bed_basename='', tsv_basename='', num_processes=1,
+        gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
+        max_task_attempts=4, keep_intermediates=False, scratch=None,
+        sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, 
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -4299,7 +4329,7 @@ class RailRnaLocalAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, collect_introns=collect_introns,
+            output_sam=output_sam, deliverables=deliverables,
             bam_basename=bam_basename, bed_basename=bed_basename,
             tsv_basename=tsv_basename)
         raise_runtime_error(base)
@@ -4335,12 +4365,12 @@ class RailRnaParallelAlignJson(object):
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
-        collect_introns=False, bam_basename='alignments', bed_basename='',
-        tsv_basename='', num_processes=1, ipython_profile=None,
-        ipcontroller_json=None, scratch=None, gzip_intermediates=False,
-        gzip_level=3, sort_memory_cap=(300*1024), max_task_attempts=4,
-        keep_intermediates=False, do_not_copy_index_to_nodes=False,
-        sort_exe=None):
+        deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
+        bed_basename='', tsv_basename='', num_processes=1,
+        ipython_profile=None, ipcontroller_json=None, scratch=None,
+        gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
+        max_task_attempts=4, keep_intermediates=False,
+        do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 
@@ -4387,7 +4417,7 @@ class RailRnaParallelAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, collect_introns=collect_introns,
+            output_sam=output_sam, deliverables=deliverables,
             bam_basename=bam_basename, tsv_basename=tsv_basename,
             bed_basename=bed_basename)
         raise_runtime_error(base)
@@ -4434,7 +4464,7 @@ class RailRnaParallelAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, collect_introns=collect_introns,
+            output_sam=output_sam, deliverables=deliverables,
             bam_basename=bam_basename, tsv_basename=tsv_basename,
             bed_basename=bed_basename)
         engine_base_checks = {}
@@ -4483,9 +4513,9 @@ class RailRnaElasticAlignJson(object):
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, collect_introns=False, bam_basename='alignments',
-        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.6.0',
-        visible_to_all_users=False, tags='',
+        output_sam=False, deliverables='idx,tsv,bed,bam,bw',
+        bam_basename='alignments', bed_basename='', tsv_basename='',
+        log_uri=None, ami_version='3.6.0', visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
         hadoop_jar=None,
@@ -4547,7 +4577,7 @@ class RailRnaElasticAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, collect_introns=collect_introns,
+            output_sam=output_sam, deliverables=deliverables,
             bam_basename=bam_basename, tsv_basename=tsv_basename,
             bed_basename=bed_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
@@ -4609,7 +4639,7 @@ class RailRnaLocalAllJson(object):
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, collect_introns=False, 
+        output_sam=False, deliverables='idx,tsv,bed,bam,bw', 
         bam_basename='alignments', bed_basename='', tsv_basename='',
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4,
@@ -4654,7 +4684,7 @@ class RailRnaLocalAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, collect_introns=collect_introns,
+            output_sam=output_sam, deliverables=deliverables,
             bam_basename=bam_basename, bed_basename=bed_basename,
             tsv_basename=tsv_basename)
         raise_runtime_error(base)
@@ -4698,12 +4728,12 @@ class RailRnaParallelAllJson(object):
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, collect_introns=False, bam_basename='alignments',
-        bed_basename='', tsv_basename='', num_processes=1,
-        gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
-        max_task_attempts=4, ipython_profile=None, ipcontroller_json=None,
-        scratch=None, keep_intermediates=False, check_manifest=True,
-        do_not_copy_index_to_nodes=False, sort_exe=None):
+        output_sam=False, deliverables='idx,tsv,bed,bam,bw',
+        bam_basename='alignments', bed_basename='', tsv_basename='',
+        num_processes=1, gzip_intermediates=False, gzip_level=3,
+        sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
+        ipcontroller_json=None, scratch=None, keep_intermediates=False,
+        check_manifest=True, do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 
@@ -4751,7 +4781,7 @@ class RailRnaParallelAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, collect_introns=collect_introns,
+            output_sam=output_sam, deliverables=deliverables,
             bam_basename=bam_basename, bed_basename=bed_basename,
             tsv_basename=tsv_basename)
         raise_runtime_error(base)
@@ -4798,7 +4828,7 @@ class RailRnaParallelAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, collect_introns=collect_introns,
+            output_sam=output_sam, deliverables=deliverables,
             bam_basename=bam_basename, bed_basename=bed_basename,
             tsv_basename=tsv_basename)
         engine_base_checks = {}
@@ -4855,9 +4885,9 @@ class RailRnaElasticAllJson(object):
         intron_criteria='0.5,5', indel_criteria='0.5,5',
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False,
-        collect_introns=False, output_sam=False, bam_basename='alignments',
-        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.6.0',
-        visible_to_all_users=False, tags='',
+        deliverables='idx,tsv,bed,bam,bw', output_sam=False,
+        bam_basename='alignments', bed_basename='', tsv_basename='',
+        log_uri=None, ami_version='3.6.0', visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
         hadoop_jar=None,
@@ -4923,7 +4953,7 @@ class RailRnaElasticAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, collect_introns=collect_introns,
+            output_sam=output_sam, deliverables=deliverables,
             bam_basename=bam_basename, bed_basename=bed_basename,
             tsv_basename=tsv_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,

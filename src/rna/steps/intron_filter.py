@@ -27,15 +27,14 @@ Input is partitioned by fields 1-3.
 
 Hadoop output (written to stdout)
 ----------------------------
-If --collect-introns is False:
-Tab-delimited tuple columns:
+Tab-delimited tuple columns (filter):
 1. Reference name (RNAME in SAM format) +
     '+' or '-' indicating which strand is the sense strand
 2. Sample index
 3. Intron start position (inclusive)
 4. Intron end position (exclusive)
 
-If --collect-introns is True:
+If --collect-introns is True (collect):
 Tab-delimited tuple columns:
 1. Reference name (RNAME in SAM format) +
     '+' or '-' indicating which strand is the sense strand
@@ -90,8 +89,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
 
         Hadoop output (written to stdout)
         ----------------------------
-        If --collect-introns is False:
-        Tab-delimited tuple columns:
+        Tab-delimited tuple columns (filter):
         1. Reference name (RNAME in SAM format) +
             '+' or '-' indicating which strand is the sense strand
         2. Sample index
@@ -99,7 +97,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         4. Intron end position (exclusive)
 
         If --collect-introns is True:
-        Tab-delimited tuple columns:
+        Tab-delimited tuple columns (collect):
         1. Reference name (RNAME in SAM format) +
             '+' or '-' indicating which strand is the sense strand
         2. Intron start position (inclusive)
@@ -143,31 +141,30 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         if collect_introns:
             samples_to_dump = sorted(sample_indexes.items(),
                                         key=lambda sample: sample[0])
-            print >>output_stream, '%s\t%012d\t%012d\t%s\t%s' % (
+            print >>output_stream, 'collect\t%s\t%012d\t%012d\t%s\t%s' % (
                     rname_and_strand, int(pos), int(end_pos),
                     ','.join([sample[0] for sample in samples_to_dump]),
                     ','.join([str(sample[1]) for sample in samples_to_dump])
                 )
             output_line_count += 1
-        else:
-            sample_count = len(sample_indexes)
-            max_coverage = max(sample_indexes.values())
-            if (sample_count >= min_sample_count
-                or (max_coverage >= coverage_threshold
-                    and coverage_threshold != -1)):
-                for sample_index in sample_indexes:
-                    print >>output_stream, '%s\t%s\t%012d\t%012d' % (
-                            rname_and_strand, sample_index,
-                            int(pos), int(end_pos)
-                        )
-                    output_line_count += 1
-            elif verbose:
-                print >>sys.stderr, (
-                        'Intron (%s, %s, %s) filtered out; it appeared in %d '
-                        'sample(s), and its coverage in any one sample did '
-                        'not exceed %d.'
-                    ) % (rname_and_strand, pos, end_pos,
-                            sample_count, max_coverage)
+        sample_count = len(sample_indexes)
+        max_coverage = max(sample_indexes.values())
+        if (sample_count >= min_sample_count
+            or (max_coverage >= coverage_threshold
+                and coverage_threshold != -1)):
+            for sample_index in sample_indexes:
+                print >>output_stream, 'filter%s\t%s\t%012d\t%012d' % (
+                        rname_and_strand, sample_index,
+                        int(pos), int(end_pos)
+                    )
+                output_line_count += 1
+        elif verbose:
+            print >>sys.stderr, (
+                    'Intron (%s, %s, %s) filtered out; it appeared in %d '
+                    'sample(s), and its coverage in any one sample did '
+                    'not exceed %d.'
+                ) % (rname_and_strand, pos, end_pos,
+                        sample_count, max_coverage)
     return input_line_count, output_line_count
 
 if __name__ == '__main__':
