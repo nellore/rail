@@ -153,7 +153,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
             or (max_coverage >= coverage_threshold
                 and coverage_threshold != -1)):
             for sample_index in sample_indexes:
-                print >>output_stream, 'filter%s\t%s\t%012d\t%012d' % (
+                print >>output_stream, 'filter\t%s\t%s\t%012d\t%012d' % (
                         rname_and_strand, sample_index,
                         int(pos), int(end_pos)
                     )
