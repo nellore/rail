@@ -292,9 +292,13 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 continue
             multiread = [(qname,) + rest_of_line] + \
                 [(qname,) + next_line for next_line in xpartition]
-            scores = \
-                [field[5:] for field in multiread if field[:5] == 'XS:i:'] + \
-                [field[5:] for field in multiread if field[:5] == 'AS:i:']
+            scores = [
+                    field[5:] for field in multiread[0]
+                    if field[:5] == 'XS:i:'
+                ] + [
+                    field[5:] for field in multiread[0]
+                    if field[:5] == 'AS:i:'
+                ]
             # Note: needs to be changed to accommodate --tie-margin
             # extra keywords for grepping: tie margin tie_margin break
             tie_present = (len(scores) == 2) and (scores[0] == scores[1])
@@ -304,10 +308,10 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                     int(alignment[1]) & 16
                                     for alignment in multiread
                                 ]
-            if exact_match and not clip_present:
+            if k_value == 1 and exact_match and not clip_present:
                 NH_field = 'NH:i:%d' % len(multiread)
                 reversed_flags = None
-                if k_value == 1 and not tie_present:
+                if not tie_present:
                     # All alignments for all read sequences can be written
                     try:
                         for current_is_reverse, current_qname, current_qual \
@@ -373,6 +377,15 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                             )
             else:
                 print >>output_stream, 'unique\t%s' % seq
+            reversed_complement_seq = seq[::-1].translate(
+                _reversed_complement_translation_table
+            )
+            if seq < reversed_complement_seq:
+                seq_to_print = seq
+                qual_to_print = qual
+            else:
+                seq_to_print = reversed_complement_seq
+                qual_to_print = qual[::-1]
             if not (exact_match and not clip_present):
                 # Prep for second-pass Bowtie 2 and print output
                 split_cigar = re.split(r'([MINDS])', cigar)[:-1]
@@ -386,15 +399,6 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                         search_for_introns = False
                 except IndexError:
                     search_for_introns = False
-                reversed_complement_seq = seq[::-1].translate(
-                    _reversed_complement_translation_table
-                )
-                if seq < reversed_complement_seq:
-                    seq_to_print = seq
-                    qual_to_print = qual
-                else:
-                    seq_to_print = reversed_complement_seq
-                    qual_to_print = qual[::-1]
                 if search_for_introns:
                     sample_indexes, reversed_complement_sample_indexes = (
                             defaultdict(int), defaultdict(int)
@@ -452,6 +456,20 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                     except ValueError:
                         # No other reads
                         pass
+            elif k_value != 1 or tie_present:
+                # Only prepare for second-pass Bowtie 2
+                try:
+                    for current_is_reverse, current_qname, current_qual \
+                        in other_xpartition:
+                        print >>align_stream, '\t'.join([
+                                '%s\x1d%s' % (
+                                        current_is_reverse, current_qname
+                                    ), seq_to_print, current_qual
+                            ])
+                except ValueError:
+                    # No other reads
+                    pass
+            if k_value != 1 or not (exact_match and not clip_present):
                 # Write "postponed" SAM/unmapped lines
                 if is_reverse:
                     for alignment in multiread:
@@ -472,28 +490,6 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                 qname,
                                 qual_to_print
                             )
-            elif k_value != 1 or tie_present:
-                # Only prepare for second-pass Bowtie 2
-                reversed_complement_seq = seq[::-1].translate(
-                    _reversed_complement_translation_table
-                )
-                if seq < reversed_complement_seq:
-                    seq_to_print = seq
-                    qual_to_print = qual
-                else:
-                    seq_to_print = reversed_complement_seq
-                    qual_to_print = qual[::-1]
-                try:
-                    for current_is_reverse, current_qname, current_qual \
-                        in other_xpartition:
-                        print >>align_stream, '\t'.join([
-                                '%s\x1d%s' % (
-                                        current_is_reverse, current_qname
-                                    ), seq_to_print, current_qual
-                            ])
-                except ValueError:
-                    # No other reads
-                    pass
     else:
         # Second-pass alignment
         if verbose:
@@ -532,7 +528,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 [(qname,) + next_line for next_line in xpartition]
             clip_present = 'S' in cigar
             exact_match = 'NM:i:0' in multiread[0]
-            if exact_match and not clip_present:
+            if k_value == 1 and exact_match and not clip_present:
                 # All alignments for all read sequences can be written
                 NH_field = 'NH:i:%d' % len(multiread)
                 if is_reverse:

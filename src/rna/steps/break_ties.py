@@ -198,13 +198,12 @@ start_time = time.time()
 for (qname,), xpartition in xstream(sys.stdin, 1):
     alignments = [(qname,) + alignment for alignment in xpartition]
     input_line_count += len(alignments)
-    '''Separate into alignments that overlap the fewest introns and
-    alignments that don't.'''
     intron_counts = [alignment[5].count('N') for alignment in alignments]
     min_intron_count = min(intron_counts)
     if not min_intron_count:
         '''There is at least one alignment that overlaps no introns; report 
-        an alignment with highest score at random.'''
+        an alignment with the highest score at random. Separate into alignments
+        that overlap the fewest introns and alignments that don't.'''
         clipped_alignments = [alignments[i] for i in xrange(len(intron_counts))
                                 if intron_counts[i] == 0]
         alignments_and_scores = [(alignment, [int(tokens[5:])

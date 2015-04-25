@@ -2851,21 +2851,30 @@ class RailRnaAlign(object):
             base.bowtie1_build_exe = _elastic_bowtie1_build_exe
             base.bowtie2_build_exe = _elastic_bowtie2_build_exe
         if k is not None:
-            # Replace -k value in bowtie2 args with -k arg
-            bowtie2_arg_tokens = [token.strip() for token in
-                                    bowtie2_args.replace('=', ' ').split(' ')]
-            try:
-                bowtie2_arg_tokens[bowtie2_arg_tokens.index('-k') + 1] = str(k)
-            except ValueError:
-                if bowtie2_arg_tokens[0] == '':
-                    bowtie2_arg_tokens = ['-k', str(k)]
-                else:
-                    bowtie2_arg_tokens.extend(['-k', str(k)])
-            except IndexError:
-                bowtie2_arg_tokens.append(str(k))
-            base.bowtie2_args = ' '.join(bowtie2_arg_tokens)
+            if not (isinstance(k, int) and k >= 1):
+                base.errors.append('Number of alignments to report per read '
+                                   '(-k) must be an integer >= 1, but '
+                                   '{0} was entered.'.format(k))
+            else:
+                # Replace -k value in bowtie2 args with -k arg
+                bowtie2_arg_tokens = [
+                        token.strip() for token
+                        in bowtie2_args.replace('=', ' ').split(' ')
+                    ]
+                try:
+                    bowtie2_arg_tokens[bowtie2_arg_tokens.index('-k') + 1] \
+                        = str(k)
+                except ValueError:
+                    if bowtie2_arg_tokens[0] == '':
+                        bowtie2_arg_tokens = ['-k', str(k)]
+                    else:
+                        bowtie2_arg_tokens.extend(['-k', str(k)])
+                except IndexError:
+                    bowtie2_arg_tokens.append(str(k))
+                base.bowtie2_args = ' '.join(bowtie2_arg_tokens)
         else:
             base.bowtie2_args = bowtie2_args
+        base.k = k
         if not (isinstance(partition_length, int) and
                 partition_length > 0):
             base.errors.append('Genome partition length '
@@ -3980,9 +3989,10 @@ class RailRnaAlign(object):
                                         else '',
                                         scratch
                                     ),
-                'inputs' : [path_join(elastic, 'align_reads', 'sam'),
-                            path_join(elastic, 'compare_alignments', 'sam'),
-                            path_join(elastic, 'break_ties', 'sam')],
+                'inputs' : [path_join(elastic, 'compare_alignments', 'sam'),
+                            path_join(elastic, 'break_ties', 'sam')]
+                            + ([path_join(elastic, 'align_reads', 'sam')]
+                                if base.k in [1, None] else []),
                 'mod_partitioner' : True,
                 'output' : 'bam',
                 'taskx' : 1,

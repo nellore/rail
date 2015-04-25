@@ -264,6 +264,7 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
         assert len(multiread) == len(weights)
         # Ensure order is standardized so random primary index is reproducible
         normal_order = sorted(zip(multiread, weights))
+        random.shuffle(normal_order) # To break ties in reported secondaries
         multiread = [alignment[0] for alignment in normal_order]
         weights = [alignment[1] for alignment in normal_order]
         total = sum(weights)
@@ -277,12 +278,15 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
                 sorted([(alignment[0], str(int(alignment[1]) | 256))
                     + alignment[2:] for i, alignment in enumerate(multiread)
                     if i != primary_index],
-                    key=lambda alignment: [int(token[5:]) for token
+                    key=lambda alignment: ([int(token[5:]) for token
                                             in alignment[::-1]
                                             if token[:5] == 'AS:i:'][0],
+                                            -alignment[5].count('N')),
                     reverse=True)
-            ,)
+            ,) # Primary sort by score, secondary sort by # introns
     else:
+        # Shuffle before proceeding so secondary ties are broken randomly
+        random.shuffle(multiread)
         seq_size = len(multiread[0][9])
         tie_margin = round(tie_margin * float(seq_size) / 100)
         # Determine number of "ties" including margin
@@ -290,10 +294,11 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
         alignments_and_scores = [(alignment,
                                     [int(token[5:]) for token
                                      in alignment[::-1]
-                                     if token[:5] == 'AS:i:'][0])
+                                     if token[:5] == 'AS:i:'][0],
+                                     -alignment[5].count('N'))
                                      for alignment in multiread]
         alignments_and_scores.sort(key=lambda alignment_and_score:
-                                        alignment_and_score[1],
+                                        alignment_and_score[1:],
                                         reverse=True)
         min_score = alignments_and_scores[0][1] - tie_margin
         for tie_count in xrange(alignment_count):
@@ -306,7 +311,7 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
                     str(int(alignments_and_scores[0][0][1]) & ~256))
                     + alignments_and_scores[0][0][2:]] +
                 [(alignment[0], str(int(alignment[1]) | 256))
-                    + alignment[2:] for alignment, _
+                    + alignment[2:] for alignment, _, _
                     in alignments_and_scores[1:]]
             ,)
         else:
@@ -317,14 +322,14 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
                 return ([], [(alignment[0], str(int(alignment[1]) | 256))
                                 + alignment[2:] + ('NH:i:%d'
                                     % alignment_count_to_report,)
-                                for alignment, _
+                                for alignment, _, _
                                 in alignments_and_scores[:tie_count]])
             prereturn_multiread = (
                 [(alignment[0], str(int(alignment[1]) | 256))
-                            + alignment[2:] for alignment, _
+                            + alignment[2:] for alignment, _, _
                             in alignments_and_scores[tie_count:]],
                 [(alignment[0], str(int(alignment[1]) | 256))
-                            + alignment[2:] for alignment, _
+                            + alignment[2:] for alignment, _, _
                             in alignments_and_scores[:tie_count]]
             )
     prereturn_multiread_count = len(prereturn_multiread)
@@ -339,34 +344,9 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
                     prereturn_multiread[1]
                 )
         assert reports_to_retain_count > 0
-        scores = [[int(token[5:]) for token in alignment[::-1]
-                   if token[:5] == 'AS:i:'][0] 
-                   for alignment in prereturn_multiread[0]]
-        try:
-            min_permitted_score = scores[reports_to_retain_count - 1]
-        except IndexError:
-            # k value larger than number of alignments; retain all
-            reports_to_return = prereturn_multiread[0]
-        else:
-            left_count = scores[:reports_to_retain_count - 1].count(
-                                min_permitted_score
-                            )
-            min_permitted_count = scores.count(min_permitted_score)
-            if min_permitted_score == scores[0] \
-                and not (int(prereturn_multiread[0][0][1]) & 256):
-                '''Primary alignment has been decided, but its score is the
-                same as the min score. Exclude it from random sample of 
-                min scores.'''
-                left_count -= 1 
-                min_permitted_count -= 1
-            reports_to_return = prereturn_multiread[0][
-                                    :reports_to_retain_count - left_count - 1
-                                ] + \
-                random.sample(sorted(prereturn_multiread[0][
-                    reports_to_retain_count - left_count - 1:
-                    reports_to_retain_count - left_count - 1
-                    + min_permitted_count
-                ]), left_count + 1)
+        '''Shuffle at the beginning has "chosen" any tied minimum-scoring
+        alignments, so there's no need to sample from them separately.'''
+        reports_to_return = prereturn_multiread[0][:reports_to_retain_count]
     else:
         # Report all
         reports_to_return = prereturn_multiread[0]
@@ -375,13 +355,13 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
     reports_to_return = [alignment[:4] + ('255',) + alignment[5:] 
                             for alignment in reports_to_return]
     if prereturn_multiread_count == 1:
-        NH_field = 'NH:i:' + str(len(reports_to_return))
+        NH_field = 'NH:i:%d' % len(reports_to_return)
         return ([(alignment + (NH_field,) if 'NH:i:' not in
                   [alignment[-1][:5], alignment[-2][:5]]
                   else alignment) for alignment in reports_to_return],)
     # prereturn_multiread's length is 2, meaning there are ties
-    NH_field = 'NH:i:'+ str(len(reports_to_return)
-                            + len(prereturn_multiread[1]))
+    NH_field = 'NH:i:%d' % (len(reports_to_return)
+                                + len(prereturn_multiread[1]))
     return ([alignment + (NH_field,) for alignment in reports_to_return],
             [alignment + (NH_field,) for alignment in prereturn_multiread[1]])
 
