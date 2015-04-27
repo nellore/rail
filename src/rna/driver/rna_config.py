@@ -3073,8 +3073,9 @@ class RailRnaAlign(object):
                                'an integer between 1 and 1000.')
         base.transcriptome_indexes_per_sample \
             = transcriptome_indexes_per_sample
-        base.output_sam = output_sam
-        deliverable_choices = set(['idx', 'bam', 'bed', 'tsv', 'bw', 'itn'])
+        deliverable_choices = set(
+                ['idx', 'bam', 'sam', 'bed', 'tsv', 'bw', 'itn']
+            )
         split_deliverables = set([deliverable.strip() for deliverable
                                     in deliverables.split(',')])
         undeliverables = split_deliverables - deliverable_choices
@@ -3086,9 +3087,14 @@ class RailRnaAlign(object):
         elif not split_deliverables:
             base.errors.append('At least one deliverable (--deliverables) '
                                'must be specified, but none were entered.')
+        if 'bam' in split_deliverables and 'sam' in split_deliverables:
+            base.errors.append('Both "bam" and "sam" were entered among '
+                               'deliverables (--deliverables), but only '
+                               'one should be chosen.')
         base.tsv = 'tsv' in split_deliverables
         base.idx = 'idx' in split_deliverables
-        base.bam = 'bam' in split_deliverables
+        base.bam = 'bam' in split_deliverables or 'sam' in split_deliverables
+        base.output_sam = 'sam' in split_deliverables
         base.bed = 'bed' in split_deliverables
         base.bw = 'bw' in split_deliverables
         base.itn = 'itn' in split_deliverables
@@ -3362,7 +3368,7 @@ class RailRnaAlign(object):
             metavar='<choice,...>',
             default='idx,tsv,bed,bam,bw',
             help=('comma-separated list of desired outputs. Choose from among '
-                  '{"idx", "tsv", "bed", "bam", "bw", "itn"}.')
+                  '{"idx", "tsv", "bed", "sam" | "bam", "bw", "itn"}.')
         )
         output_parser.add_argument(
             '--drop-deletions', action='store_const', const=True,
@@ -3374,11 +3380,6 @@ class RailRnaAlign(object):
             default=False,
             help=('place all of a sample\'s alignments in one file rather '
                   'than dividing them up by chromosome')
-        )
-        output_parser.add_argument(
-            '--output-sam', action='store_const', const=True,
-            default=False,
-            help='output SAM instead of BAM'
         )
         output_parser.add_argument(
             '--indel-criteria', type=str, required=False,
@@ -3968,10 +3969,11 @@ class RailRnaAlign(object):
                     ]
             } if base.bed else {},
             {
-                'name' : 'Write BAMs with alignments by sample',
+                'name' : ('Write %s with alignments by sample'
+                            % ('SAMs' if base.output_sam else 'BAMs')),
                 'run' : ('bam.py --out={0} --bowtie-idx={1} '
                          '--samtools-exe={2} --bam-basename={3} '
-                         '--manifest={4} {5} {6} {7}').format(
+                         '--manifest={4} {5} {6} {7} {8}').format(
                                         ab.Url(
                                             path_join(elastic,
                                             base.output_dir, 'alignments')
@@ -3987,7 +3989,9 @@ class RailRnaAlign(object):
                                         '--output-by-chromosome'
                                         if not base.do_not_output_bam_by_chr
                                         else '',
-                                        scratch
+                                        scratch,
+                                        '--output-sam' if base.output_sam
+                                        else ''
                                     ),
                 'inputs' : [path_join(elastic, 'compare_alignments', 'sam'),
                             path_join(elastic, 'break_ties', 'sam')]
@@ -4295,7 +4299,7 @@ class RailRnaLocalAlignJson(object):
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
-        drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
+        drop_deletions=False, do_not_output_bam_by_chr=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
@@ -4339,9 +4343,8 @@ class RailRnaLocalAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, deliverables=deliverables,
-            bam_basename=bam_basename, bed_basename=bed_basename,
-            tsv_basename=tsv_basename)
+            deliverables=deliverables, bam_basename=bam_basename,
+            bed_basename=bed_basename, tsv_basename=tsv_basename)
         raise_runtime_error(base)
         print_to_screen(base.detect_message)
         self._json_serial = {}
@@ -4374,7 +4377,7 @@ class RailRnaParallelAlignJson(object):
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
-        drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
+        drop_deletions=False, do_not_output_bam_by_chr=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
@@ -4427,9 +4430,8 @@ class RailRnaParallelAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, deliverables=deliverables,
-            bam_basename=bam_basename, tsv_basename=tsv_basename,
-            bed_basename=bed_basename)
+            deliverables=deliverables, bam_basename=bam_basename,
+            tsv_basename=tsv_basename, bed_basename=bed_basename)
         raise_runtime_error(base)
         ready_engines(rc, base, prep=False)
         engine_bases = {}
@@ -4474,9 +4476,8 @@ class RailRnaParallelAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, deliverables=deliverables,
-            bam_basename=bam_basename, tsv_basename=tsv_basename,
-            bed_basename=bed_basename)
+            deliverables=deliverables, bam_basename=bam_basename,
+            tsv_basename=tsv_basename, bed_basename=bed_basename)
         engine_base_checks = {}
         for i in rc.ids:
             engine_base_checks[i] = engine_bases[i].check_program
@@ -4523,12 +4524,10 @@ class RailRnaElasticAlignJson(object):
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, deliverables='idx,tsv,bed,bam,bw',
-        bam_basename='alignments', bed_basename='', tsv_basename='',
-        log_uri=None, ami_version='3.6.0', visible_to_all_users=False, tags='',
-        name='Rail-RNA Job Flow',
-        action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar=None,
+        deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
+        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.6.0',
+        visible_to_all_users=False, tags='', name='Rail-RNA Job Flow',
+        action_on_failure='TERMINATE_JOB_FLOW', hadoop_jar=None,
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -4587,9 +4586,8 @@ class RailRnaElasticAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, deliverables=deliverables,
-            bam_basename=bam_basename, tsv_basename=tsv_basename,
-            bed_basename=bed_basename,
+            deliverables=deliverables, bam_basename=bam_basename,
+            tsv_basename=tsv_basename, bed_basename=bed_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
                                         profile=base.profile))
         raise_runtime_error(base)
@@ -4649,9 +4647,9 @@ class RailRnaLocalAllJson(object):
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, deliverables='idx,tsv,bed,bam,bw', 
-        bam_basename='alignments', bed_basename='', tsv_basename='',
-        num_processes=1, gzip_intermediates=False, gzip_level=3,
+        deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
+        bed_basename='', tsv_basename='', num_processes=1,
+        gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4,
         keep_intermediates=False, check_manifest=True, scratch=None,
         sort_exe=None):
@@ -4694,9 +4692,8 @@ class RailRnaLocalAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, deliverables=deliverables,
-            bam_basename=bam_basename, bed_basename=bed_basename,
-            tsv_basename=tsv_basename)
+            deliverables=deliverables, bam_basename=bam_basename,
+            bed_basename=bed_basename, tsv_basename=tsv_basename)
         raise_runtime_error(base)
         print_to_screen(base.detect_message)
         self._json_serial = {}
@@ -4738,12 +4735,12 @@ class RailRnaParallelAllJson(object):
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
-        output_sam=False, deliverables='idx,tsv,bed,bam,bw',
-        bam_basename='alignments', bed_basename='', tsv_basename='',
-        num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
-        ipcontroller_json=None, scratch=None, keep_intermediates=False,
-        check_manifest=True, do_not_copy_index_to_nodes=False, sort_exe=None):
+        deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
+        bed_basename='', tsv_basename='', num_processes=1,
+        gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
+        max_task_attempts=4, ipython_profile=None, ipcontroller_json=None,
+        scratch=None, keep_intermediates=False, check_manifest=True,
+        do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, 
@@ -4791,9 +4788,8 @@ class RailRnaParallelAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, deliverables=deliverables,
-            bam_basename=bam_basename, bed_basename=bed_basename,
-            tsv_basename=tsv_basename)
+            deliverables=deliverables, bam_basename=bam_basename,
+            bed_basename=bed_basename, tsv_basename=tsv_basename)
         raise_runtime_error(base)
         ready_engines(rc, base, prep=False)
         engine_bases = {}
@@ -4838,9 +4834,8 @@ class RailRnaParallelAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, deliverables=deliverables,
-            bam_basename=bam_basename, bed_basename=bed_basename,
-            tsv_basename=tsv_basename)
+            deliverables=deliverables, bam_basename=bam_basename,
+            bed_basename=bed_basename, tsv_basename=tsv_basename)
         engine_base_checks = {}
         for i in rc.ids:
             engine_base_checks[i] = engine_bases[i].check_program
@@ -4895,12 +4890,10 @@ class RailRnaElasticAllJson(object):
         intron_criteria='0.5,5', indel_criteria='0.5,5',
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False,
-        deliverables='idx,tsv,bed,bam,bw', output_sam=False,
-        bam_basename='alignments', bed_basename='', tsv_basename='',
-        log_uri=None, ami_version='3.6.0', visible_to_all_users=False, tags='',
-        name='Rail-RNA Job Flow',
-        action_on_failure='TERMINATE_JOB_FLOW',
-        hadoop_jar=None,
+        deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
+        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.6.0',
+        visible_to_all_users=False, tags='', name='Rail-RNA Job Flow',
+        action_on_failure='TERMINATE_JOB_FLOW', hadoop_jar=None,
         master_instance_count=1, master_instance_type='c1.xlarge',
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
@@ -4963,9 +4956,8 @@ class RailRnaElasticAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
-            output_sam=output_sam, deliverables=deliverables,
-            bam_basename=bam_basename, bed_basename=bed_basename,
-            tsv_basename=tsv_basename,
+            deliverables=deliverables, bam_basename=bam_basename,
+            bed_basename=bed_basename, tsv_basename=tsv_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
                                         profile=base.profile))
         raise_runtime_error(base)
