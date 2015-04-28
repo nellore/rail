@@ -1,6 +1,6 @@
 Reproducing preprint results
 -----
-**Use Rail-RNA v0.1.0a.** Rail-RNA has several dependencies. In the experiments we conducted, Rail-RNA wrapped Bowtie 1 v1.1.1, Bowtie 2 v2.2.4, and SAMTools v0.1.19. When run in its `elastic` mode as described below, Rail-RNA used PyPy v2.2.1. In all other cases, Rail-RNA used PyPy v2.4.0. Version 2.0.12 of TopHat 2 was used and, like Rail-RNA, it wrapped Bowtie 2 v2.2.4 and SAMTools v0.1.19. Version 2.4.0j of STAR was used, and version 0.1.5-beta of HISAT was used.
+**Use Rail-RNA v0.1.0a.** Rail-RNA has several dependencies. In the experiments we conducted, Rail-RNA wrapped Bowtie 1 v1.1.1, Bowtie 2 v2.2.4, and SAMTools v0.1.19. When run in its `elastic` mode as described below, Rail-RNA used PyPy v2.2.1. In all other cases, Rail-RNA used PyPy v2.4.0. Version 2.0.12 of TopHat 2 was used and, like Rail-RNA, it wrapped Bowtie 2 v2.2.4 and SAMTools v0.1.19. Version 2.4.0j of STAR was used, and version 0.1.5-beta of HISAT was used. Flux Simulator 1.2.1 was used to obtain simulated samples as described below.
 
 To reproduce results from the [preprint](http://finishit.com), perform the following steps. Note that input and output directories in scripts may need to be changed.
 
