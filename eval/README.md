@@ -56,3 +56,7 @@ All-of-GEUVADIS run
 -----
 1. Change the output bucket and argument of `--ec2-key-name` in `preprocess_all_of_GEUVADIS.sh`, and run the preprocess job flow contained in that script.
 2. Change the output bucket and argument of `--ec2-key-name` in `submit_all_of_geuvadis_job.sh`, and run the alignment job flow contained in that script.
+
+GEUVADIS Read count histogram (Figure 4 from preprint)
+----
+Download the 666 paired-end GEUVADIS sample FASTQ.gzs contained in `GEUVADIS_all_descriptive.manifest` were downloaded. Run the command `gzip -cd | wc -l` on each file ending with `_1.fastq.gz` from the manifest, and divide the by 2 to obtain the number of reads in the corresponding sample. We generated the histogram in [Wolfram Mathematica](http://www.wolfram.com/mathematica/) v10. 
