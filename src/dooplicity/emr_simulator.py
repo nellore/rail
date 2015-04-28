@@ -1120,6 +1120,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     elif arg_name == 'lazyOutput':
                         # Do nothing
                         j += 1
+                    elif arg_name == 'archives':
+                        step_args['archives'] = D_arg[1]
+                        j += 2
                     else:
                         step_args[step['HadoopJarStep']['Args'][j][1:]] \
                             = step['HadoopJarStep']['Args'][j+1].strip()
