@@ -122,6 +122,9 @@ _elastic_bowtie2_exe = 'bowtie2'
 _elastic_bowtie1_build_exe = 'bowtie-build'
 _elastic_bowtie2_build_exe = 'bowtie2-build'
 
+# Set basename of the transcript fragment index; can't settle on this
+_transcript_fragment_idx_basename = 'isofrags'
+
 # Decide Python executable
 if 'pypy 2.' in sys.version.lower():
     # Executable has the user's desired version of PyPy
@@ -831,7 +834,7 @@ class RailRnaErrors(object):
 
         Checks only those parameters common to all modes/job flows.
     """
-    def __init__(self, manifest, output_dir,
+    def __init__(self, manifest, output_dir, isofrag_idx=None,
             intermediate_dir='./intermediate', force=False, aws_exe=None,
             profile='default', region='us-east-1', verbose=False,
             curl_exe=None, max_task_attempts=4
@@ -842,6 +845,7 @@ class RailRnaErrors(object):
         self.errors = []
         self.manifest_dir = None
         self.manifest = manifest
+        self.isofrag_idx = isofrag_idx
         self.output_dir = output_dir
         self.intermediate_dir = intermediate_dir
         self.aws_exe = aws_exe
@@ -1073,11 +1077,11 @@ class RailRnaErrors(object):
         )
         required_parser.add_argument(
             '-m', '--manifest', type=str, required=True, metavar='<file>',
-            help='Myrna-style manifest file; Google "Myrna manifest" for ' \
-                 'help'
+            help='Myrna-style manifest file'
         )
         '''--region and --max-task-attempts help looks different from mode to '
-        ' mode; don't include them here.'''
+        ' mode; don't include them here. Also postpone inclusion of isofrag
+        index; should be an in algo parser.'''
 
 def raise_runtime_error(bases):
     """ Raises RuntimeError if any base.errors is nonempty.
@@ -1276,6 +1280,42 @@ class RailRnaLocal(object):
                                             )
                 else:
                     ansible.s3ansible.remove_dir(base.output_dir)
+            # Check transcript fragment index
+            if base.isofrag_idx is not None:
+                isofrag_url = ab.Url(base.isofrag_idx)
+                if (isofrag_url.is_s3 and 'AWS CLI'
+                        not in base.checked_programs):
+                    base.check_s3(reason='the isofrag index is on S3',
+                                    is_exe=is_exe,
+                                    which=which)
+                    # Change ansible params
+                    ansible.aws_exe = base.aws_exe
+                    ansible.profile = base.profile
+                elif isofrag_url.is_curlable \
+                    and 'cURL' not in base.checked_programs:
+                    base.curl_exe = base.check_program(
+                                    'curl', 'cURL', '--curl',
+                                    entered_exe=base.curl_exe,
+                                    reason='the isofrag index is on the web',
+                                    is_exe=is_exe,
+                                    which=which
+                                )
+                    ansible.curl_exe = base.curl_exe
+                if not ansible.exists(isofrag_url.to_url()):
+                    base.errors.append(('Isofrag index (--isofrag-idx) {0} '
+                                        'does not exist. Check the URL and '
+                                        'try again.').format(base.isofrag_idx))
+                else:
+                    if not isofrag_url.is_local:
+                        '''Download isofrag index only if not an IPython engine
+                        (not parallel).'''
+                        base.isofrag_dir = base.intermediate_dir
+                        base.isofrag_idx = os.path.join(
+                                            base.isofrag_dir,
+                                            os.path.basename(isofrag_idx)
+                                        )
+                        ansible.get(isofrag_url, destination=base.isofrag_idx)
+                    base.isofrag_idx = os.path.abspath(base.isofrag_idx)
             # Check manifest; download it if necessary
             manifest_url = ab.Url(base.manifest)
             if manifest_url.is_s3 and 'AWS CLI' not in base.checked_programs:
@@ -1302,9 +1342,6 @@ class RailRnaLocal(object):
                     '''Download/check manifest only if not an IPython engine
                     (not parallel).'''
                     base.manifest_dir = base.intermediate_dir
-                    from tempdel import remove_temporary_directories
-                    register_cleanup(remove_temporary_directories,
-                                        [base.manifest_dir])
                     base.manifest = os.path.join(base.manifest_dir, 'MANIFEST')
                     ansible.get(manifest_url, destination=base.manifest)
                 base.manifest = os.path.abspath(base.manifest)
@@ -1779,6 +1816,37 @@ class RailRnaElastic(object):
                                     'overwriting it.').format(base.output_dir))
             else:
                 ansible.s3_ansible.remove_dir(base.output_dir)
+        # Check isofrag index; download+upload it if necessary
+        if base.isofrag_idx is not None:
+            isofrag_url = ab.Url(base.isofrag_idx)
+            if isofrag_url.is_curlable \
+                and 'cURL' not in base.checked_programs:
+                base.curl_exe = base.check_program(
+                                    'curl', 'cURL', '--curl',
+                                    entered_exe=base.curl_exe,
+                                    reason='the isofrag index is on the web'
+                                )
+                ansible.curl_exe = base.curl_exe
+            if not ansible.exists(isofrag_url.to_url()):
+                base.errors.append(('Isofrag index (--isofrag-idx) {0} '
+                                    'does not exist. Check the URL and '
+                                    'try again.').format(base.isofrag_idx))
+            elif isofrag_url.is_curlable:
+                # Now copy to S3
+                temp_isofrag_dir = tempfile.mkdtemp()
+                from tempdel import remove_temporary_directories
+                register_cleanup(remove_temporary_directories,
+                                    [temp_isofrag_dir])
+                isofrag = os.path.join(temp_isofrag_dir,
+                                        os.path.basename(base.isofrag_idx))
+                ansible.get(base.isofrag_idx, destination=isofrag)
+                base.isofrag_idx = path_join(
+                                        True,
+                                        base.output_dir + '.isofrag',
+                                        os.path.basename(base.isofrag_idx)
+                                    )
+                ansible.put(isofrag, base.isofrag_idx)
+                shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
         # Check manifest; download it if necessary
         manifest_url = ab.Url(base.manifest)
         if manifest_url.is_curlable \
@@ -1887,7 +1955,6 @@ class RailRnaElastic(object):
             if not manifest_url.is_local:
                 # Clean up
                 shutil.rmtree(temp_manifest_dir)
-
         actions_on_failure \
             = set(['TERMINATE_JOB_FLOW', 'CANCEL_AND_WAIT', 'CONTINUE',
                     'TERMINATE_CLUSTER'])
@@ -2547,7 +2614,7 @@ class RailRnaAlign(object):
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', assembly='hg19', s3_ansible=None):
         if not elastic:
-            '''Programs and Bowtie indices should be checked only in local
+            '''Programs and Bowtie indexes should be checked only in local
             mode. First grab Bowtie index paths.'''
             if ',' in bowtie_idx:
                 bowtie1_idx, _, bowtie2_idx = bowtie_idx.partition(',')
@@ -2946,32 +3013,58 @@ class RailRnaAlign(object):
         base.bed = 'bed' in split_deliverables
         base.bw = 'bw' in split_deliverables
         base.itn = 'itn' in split_deliverables
-        if base.idx:
+        isofrag_basename = _transcript_fragment_idx_basename
+        if base.isofrag_idx is not None:
+            if not (base.isofrag_idx.endswith('.tar.gz') 
+                    or base.isofrag_idx.endswith('.tgz')):
+                base.errors.append('Isofrag index (--isofrag-idx) must be '
+                                   'a compressed archive whose name ends '
+                                   'with either ".tgz" or ".tar.gz", but '
+                                   '"{0}" was entered'.format(
+                                            base.isofrag_idx
+                                        )
+                                )
+            else:
+                isofrag_basename = (
+                        os.path.basename(base.isofrag_idx)[:-7]
+                        if base.isofrag_idx[-7:] == '.tar.gz'
+                        else os.path.basename(base.isofrag_idx)[:-4]
+                    )
+            base.transcript_archive = ab.Url(
+                                    '{0}#{1}'.format(
+                                            base.isofrag_idx,
+                                            isofrag_basename
+                                        )
+                                ).to_native_url()
+        elif base.idx:
             # Place transcript index in output directory
             base.transcript_out = ab.Url(
                 path_join(elastic, base.output_dir, 'cross_sample_results')
             ).to_url(caps=True)
-            base.transcript_archive = ab.Url(path_join(elastic,
-                                                base.output_dir,
-                                                'cross_sample_results',
-                                                'intron.tar.gz#intron')
-                                        ).to_native_url()
+            base.transcript_archive = ab.Url(
+                path_join(elastic,
+                    base.output_dir,
+                    'cross_sample_results',
+                    '{0}.tar.gz#{0}'.format(isofrag_basename))
+            ).to_native_url()
         else:
             # Place transcript index in intermediate directory
             base.transcript_out = ab.Url(
                 path_join(elastic, base.intermediate_dir,
                             'cointron_enum' if not elastic else '',
-                            'transcript_index')
+                            isofrag_basename)
             ).to_url(caps=True)
-            base.transcript_archive = ab.Url(path_join(elastic,
-                                                base.intermediate_dir,
-                                                'cointron_enum'
-                                                if not elastic
-                                                else '',
-                                                'transcript_index',
-                                                'intron.tar.gz#intron')
+            base.transcript_archive = ab.Url(
+                                    path_join(elastic,
+                                    base.intermediate_dir,
+                                    'cointron_enum'
+                                    if not elastic
+                                    else '',
+                                    _transcript_fragment_idx_basename,
+                                    '{0}.tar.gz#{0}'.format(isofrag_basename))
                                         ).to_native_url()
-        base.transcript_in = 'intron/intron'
+        base.transcript_in = '{0}/{0}'.format(isofrag_basename)
+        # Correct transcript archive in case it's specified by user
         base.bam_basename = bam_basename
         base.bed_basename = bed_basename
         base.tsv_basename = tsv_basename
@@ -3066,6 +3159,14 @@ class RailRnaAlign(object):
             metavar='<str>',
             help=('arguments to pass to Bowtie 2, which is always run in '
                   '"--local" mode (def: Bowtie 2 defaults)')
+        )
+        algo_parser.add_argument(
+            '--isofrag-idx', '-fx', type=str, required=False,
+            metavar='<file>',
+            default=None,
+            help=('tar.gz containing transcript fragment (isofrag) index from '
+                  'previous Rail-RNA run to use in lieu of searching for '
+                  'introns (def: none; search for introns)')
         )
         algo_parser.add_argument(
             '--partition-length', type=int, required=False,
@@ -3234,6 +3335,13 @@ class RailRnaAlign(object):
             default='',
             help='basename for TSV output (def: *empty*)'
         )
+        output_parser.add_argument(
+            '--idx-basename', type=str, required=False,
+            metavar='<str>',
+            default='',
+            help=('basename for transcript fragment index output (def: %s)'
+                    % _transcript_fragment_idx_basename)
+        )
 
     @staticmethod
     def protosteps(base, input_dir, elastic=False):
@@ -3251,7 +3359,9 @@ class RailRnaAlign(object):
         realign = (base.bam or base.tsv or base.bed or base.bw)
         steps_to_return = [
             {
-                'name' : 'Align reads and segment them into readlets',
+                'name' : 'Align reads %s' % ('and segment them into readlets'
+                                                if base.isofrag_idx is None
+                                                else 'to genome'),
                 'run' : ('align_reads.py --bowtie-idx={0} --bowtie2-idx={1} '
                          '--bowtie2-exe={2} '
                          '--exon-differentials --partition-length={3} '
@@ -3325,7 +3435,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.isofrag_idx is None else {},
             {
                 'name' : 'Search for introns using readlet alignments',
                 'run' : ('intron_search.py --bowtie-idx={0} '
@@ -3357,7 +3467,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.isofrag_idx is None else {},
             {
                 'name' : 'Filter out introns that violate confidence criteria',
                 'run' : ('intron_filter.py --manifest={0} '
@@ -3383,7 +3493,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.isofrag_idx is None else {},
             {
                 'name' : 'Write all detected introns',
                 'run' : ('intron_collect.py --out={0} '
@@ -3414,7 +3524,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            } if base.itn else {},
+            } if (base.itn and base.isofrag_idx is None) else {},
             {
                 'name' : 'Enumerate possible intron cooccurrences on readlets',
                 'run' : ('intron_config.py '
@@ -3433,7 +3543,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.isofrag_idx is None else {},
             {
                 'name' : 'Get transcriptome elements for realignment',
                 'run' : ('intron_fasta.py --bowtie-idx={0} {1}').format(
@@ -3451,13 +3561,17 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.isofrag_idx is None else {},
             {
                 'name' : 'Build index of transcriptome elements',
                 'run' : ('intron_index.py --bowtie2-build-exe={0} '
-                         '--out={1} {2} {3}').format(base.bowtie2_build_exe,
-                                                 base.transcript_out,
-                                                 keep_alive, scratch),
+                         '--out={1} --basename {2} {3} {4}').format(
+                                            base.bowtie2_build_exe,
+                                            base.transcript_out,
+                                            _transcript_fragment_idx_basename,
+                                            keep_alive,
+                                            scratch
+                                        ),
                 'inputs' : ['intron_fasta'],
                 'output' : 'intron_index',
                 'min_tasks' : 1,
@@ -3470,7 +3584,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if base.isofrag_idx is None else {},
             {
                 'name' : 'Finalize intron cooccurrences on reads',
                 'run' : ('cointron_enum.py --bowtie2-idx={0} --gzip-level {1} '
@@ -3916,14 +4030,15 @@ class RailRnaAlign(object):
 
 class RailRnaLocalPreprocessJson(object):
     """ Constructs JSON for local mode + preprocess job flow. """
-    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
-        force=False, aws_exe=None, profile='default', region='us-east-1',
-        verbose=False, nucleotides_per_input=8000000, gzip_input=True,
+    def __init__(self, manifest, output_dir, isofrag_idx=None,
+        intermediate_dir='./intermediate', force=False, aws_exe=None,
+        profile='default', region='us-east-1', verbose=False,
+        nucleotides_per_input=8000000, gzip_input=True,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4, 
         keep_intermediates=False, check_manifest=True,
         scratch=None, sort_exe=None):
-        base = RailRnaErrors(manifest, output_dir, 
+        base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
@@ -3953,16 +4068,17 @@ class RailRnaLocalPreprocessJson(object):
 
 class RailRnaParallelPreprocessJson(object):
     """ Constructs JSON for parallel mode + preprocess job flow. """
-    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
-        force=False, aws_exe=None, profile='default', region='us-east-1',
-        verbose=False, nucleotides_per_input=8000000, gzip_input=True,
+    def __init__(self, manifest, output_dir, isofrag_idx=None,
+        intermediate_dir='./intermediate', force=False, aws_exe=None,
+        profile='default', region='us-east-1', verbose=False,
+        nucleotides_per_input=8000000, gzip_input=True,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
         ipcontroller_json=None, scratch=None, keep_intermediates=False,
         check_manifest=True, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
-        base = RailRnaErrors(manifest, output_dir, 
+        base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
@@ -3985,7 +4101,8 @@ class RailRnaParallelPreprocessJson(object):
         engine_bases = {}
         for i in rc.ids:
             engine_bases[i] = RailRnaErrors(
-                    manifest, output_dir, intermediate_dir=intermediate_dir,
+                    manifest, output_dir, isofrag_idx=isofrag_idx,
+                    intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
                     region=region, verbose=verbose,
                     max_task_attempts=max_task_attempts
@@ -4027,8 +4144,9 @@ class RailRnaParallelPreprocessJson(object):
 
 class RailRnaElasticPreprocessJson(object):
     """ Constructs JSON for elastic mode + preprocess job flow. """
-    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
-        force=False, aws_exe=None, profile='default', region='us-east-1',
+    def __init__(self, manifest, output_dir, isofrag_idx=None,
+        intermediate_dir='./intermediate', force=False, aws_exe=None,
+        profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         log_uri=None, ami_version='3.6.0',
         visible_to_all_users=False, tags='',
@@ -4043,7 +4161,7 @@ class RailRnaElasticPreprocessJson(object):
         termination_protected=False, no_consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
         max_task_attempts=4):
-        base = RailRnaErrors(manifest, output_dir, 
+        base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
@@ -4111,7 +4229,7 @@ class RailRnaElasticPreprocessJson(object):
 class RailRnaLocalAlignJson(object):
     """ Constructs JSON for local mode + align job flow. """
     def __init__(self, manifest, output_dir, input_dir,
-        intermediate_dir='./intermediate',
+        isofrag_idx=None, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, bowtie1_exe=None,
         bowtie_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
@@ -4132,7 +4250,7 @@ class RailRnaLocalAlignJson(object):
         gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
         max_task_attempts=4, keep_intermediates=False, scratch=None,
         sort_exe=None):
-        base = RailRnaErrors(manifest, output_dir, 
+        base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
@@ -4189,7 +4307,7 @@ class RailRnaLocalAlignJson(object):
 class RailRnaParallelAlignJson(object):
     """ Constructs JSON for local mode + align job flow. """
     def __init__(self, manifest, output_dir, input_dir,
-        intermediate_dir='./intermediate',
+        isofrag_idx=None, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, bowtie1_exe=None,
         bowtie_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
@@ -4213,7 +4331,7 @@ class RailRnaParallelAlignJson(object):
         do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
-        base = RailRnaErrors(manifest, output_dir, 
+        base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
@@ -4264,7 +4382,8 @@ class RailRnaParallelAlignJson(object):
         engine_bases = {}
         for i in rc.ids:
             engine_bases[i] = RailRnaErrors(
-                    manifest, output_dir, intermediate_dir=intermediate_dir,
+                    manifest, output_dir, isofrag_idx=isofrag_idx,
+                    intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
                     region=region, verbose=verbose,
                     max_task_attempts=max_task_attempts
@@ -4334,8 +4453,8 @@ class RailRnaParallelAlignJson(object):
 
 class RailRnaElasticAlignJson(object):
     """ Constructs JSON for elastic mode + align job flow. """
-    def __init__(self, manifest, output_dir, input_dir, 
-        intermediate_dir='./intermediate',
+    def __init__(self, manifest, output_dir, input_dir,
+        isofrag_idx=None, intermediate_dir='./intermediate',
         force=False, aws_exe=None, profile='default', region='us-east-1',
         verbose=False, bowtie1_exe=None, bowtie_idx='genome',
         bowtie1_build_exe=None, bowtie2_exe=None,
@@ -4362,7 +4481,7 @@ class RailRnaElasticAlignJson(object):
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, no_consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4):
-        base = RailRnaErrors(manifest, output_dir, 
+        base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
@@ -4458,8 +4577,9 @@ class RailRnaElasticAlignJson(object):
 
 class RailRnaLocalAllJson(object):
     """ Constructs JSON for local mode + preprocess+align job flow. """
-    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
-        force=False, aws_exe=None, profile='default', region='us-east-1',
+    def __init__(self, manifest, output_dir, isofrag_idx=None,
+        intermediate_dir='./intermediate', force=False, aws_exe=None,
+        profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
         bowtie2_exe=None, bowtie2_build_exe=None, k=1, bowtie2_args='',
@@ -4480,7 +4600,7 @@ class RailRnaLocalAllJson(object):
         sort_memory_cap=(300*1024), max_task_attempts=4,
         keep_intermediates=False, check_manifest=True, scratch=None,
         sort_exe=None):
-        base = RailRnaErrors(manifest, output_dir, 
+        base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
@@ -4546,8 +4666,9 @@ class RailRnaLocalAllJson(object):
 
 class RailRnaParallelAllJson(object):
     """ Constructs JSON for local mode + preprocess+align job flow. """
-    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
-        force=False, aws_exe=None, profile='default', region='us-east-1',
+    def __init__(self, manifest, output_dir, isofrag_idx=None,
+        intermediate_dir='./intermediate', force=False, aws_exe=None,
+        profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
         bowtie2_exe=None, bowtie2_build_exe=None, k=1, bowtie2_args='',
@@ -4570,7 +4691,7 @@ class RailRnaParallelAllJson(object):
         do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
-        base = RailRnaErrors(manifest, output_dir, 
+        base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
@@ -4622,7 +4743,8 @@ class RailRnaParallelAllJson(object):
         engine_bases = {}
         for i in rc.ids:
             engine_bases[i] = RailRnaErrors(
-                    manifest, output_dir, intermediate_dir=intermediate_dir,
+                    manifest, output_dir, isofrag_idx=isofrag_idx,
+                    intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
                     region=region, verbose=verbose,
                     max_task_attempts=max_task_attempts
@@ -4701,8 +4823,9 @@ class RailRnaParallelAllJson(object):
 
 class RailRnaElasticAllJson(object):
     """ Constructs JSON for elastic mode + preprocess+align job flow. """
-    def __init__(self, manifest, output_dir, intermediate_dir='./intermediate',
-        force=False, aws_exe=None, profile='default', region='us-east-1',
+    def __init__(self, manifest, output_dir, isofrag_idx=None,
+        intermediate_dir='./intermediate', force=False, aws_exe=None,
+        profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
         bowtie2_exe=None, bowtie2_build_exe=None, k=1, bowtie2_args='',
@@ -4729,7 +4852,7 @@ class RailRnaElasticAllJson(object):
         termination_protected=False, check_manifest=True,
         no_direct_copy=False, no_consistent_view=False,
         intermediate_lifetime=4, max_task_attempts=4):
-        base = RailRnaErrors(manifest, output_dir, 
+        base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,

@@ -24,7 +24,8 @@ def remove_temporary_directories(temp_dir_paths):
     """
     for temp_dir_path in temp_dir_paths:
         try:
-            shutil.rmtree(temp_dir_path)
+            shutil.rmtree(temp_dir_path,
+                            ignore_errors=True)
         except Exception as e:
             # Don't know what's up, but forge on
             pass

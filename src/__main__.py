@@ -560,6 +560,7 @@ if __name__ == '__main__':
         mode = 'local'
         json_creator = RailRnaLocalAllJson(
                 args.manifest, args.output,
+                isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 verbose=args.verbose,
@@ -614,6 +615,7 @@ if __name__ == '__main__':
         mode = 'local'
         json_creator = RailRnaLocalAlignJson(
                 args.manifest, args.output, args.input,
+                isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 verbose=args.verbose,
@@ -684,6 +686,7 @@ if __name__ == '__main__':
         mode = 'parallel'
         json_creator = RailRnaParallelAllJson(
                 args.manifest, args.output,
+                isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 verbose=args.verbose,
@@ -740,6 +743,7 @@ if __name__ == '__main__':
         mode = 'parallel'
         json_creator = RailRnaParallelAlignJson(
                 args.manifest, args.output, args.input,
+                isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.log,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 verbose=args.verbose,
@@ -813,6 +817,7 @@ if __name__ == '__main__':
         mode = 'elastic'
         json_creator = RailRnaElasticAllJson(
                 args.manifest, args.output,
+                isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 region=args.region, verbose=args.verbose,
@@ -872,6 +877,7 @@ if __name__ == '__main__':
         mode = 'elastic'
         json_creator = RailRnaElasticAlignJson(
                 args.manifest, args.output,
+                isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 region=args.region, verbose=args.verbose,

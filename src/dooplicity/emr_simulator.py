@@ -1004,7 +1004,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     failed = True
                     raise RuntimeError
                 iface.status('Preparing temporary directories for storing '
-                             '%s on slave nodes.' % file_or_archive)
+                             '%s on slave nodes.' % file_or_archive_basename)
                 '''Select engines to do "heavy lifting"; that is, they remove
                 files copied to hosts on SIGINT/SIGTERM. Do it randomly
                 (NO SEED) so if IWF occurs, second try will be different.
