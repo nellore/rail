@@ -42,6 +42,9 @@ import gzip
 import io
 import contextlib
 import tempfile
+from collections import defaultdict
+import time
+from traceback import format_exc
 
 class KeepAlive(threading.Thread):
     """ Writes Hadoop status messages to avert task termination. """
@@ -130,7 +133,7 @@ def register_cleanup(handler, *args, **kwargs):
     else:
         signals_to_handle = [signal.SIGTERM, signal.SIGHUP]
     from atexit import register
-    register(handler, *args)
+    register(handler, *args, **kwargs)
     old_handlers = [signal.signal(a_signal, sig_handler)
                     for a_signal in signals_to_handle]
     for i, old_handler in enumerate(old_handlers):
@@ -252,6 +255,178 @@ def make_temp_dir(scratch=None):
                 raise
         return tempfile.mkdtemp(dir=scratch)
     return tempfile.mkdtemp()
+
+def make_temp_dir_and_register_cleanup(scratch=None):
+    """ Creates temporary directory and registers its cleanup.
+
+        Handles case where scratch directory does not exist.
+
+        scratch: directory in which to create temporary directory
+
+        Return value: path to temporary directory
+    """
+    import shutil
+    dir_to_cleanup = make_temp_dir(scratch)
+    register_cleanup(shutil.rmtree, dir_to_cleanup,
+                        ignore_errors=True)
+    return dir_to_cleanup
+
+def engine_string_from_list(id_list):
+    """ Pretty-prints list of engine IDs.
+
+        id_list: list of engine IDs
+
+        Return value: string condensing list of engine IDs
+    """
+    id_list = sorted(set(id_list))
+    to_print = []
+    if not id_list: return ''
+    last_id = id_list[0]
+    streak = 0
+    for engine_id in id_list[1:]:
+        if engine_id == last_id + 1:
+            streak += 1
+        else:
+            if streak > 1:
+                to_print.append('%d-%d' % (last_id - streak, last_id))
+            elif streak == 1:
+                to_print.append('%d, %d' % (last_id - 1, last_id))
+            else:
+                to_print.append('%d' % last_id)
+            streak = 0
+        last_id = engine_id
+    if streak > 1:
+        to_print.append('%d-%d' % (last_id - streak, last_id))
+    elif streak == 1:
+        to_print.append('%d, %d' % (last_id - 1, last_id))
+    else:
+        to_print.append('%d' % last_id)
+    if len(to_print) > 1:
+        to_print[-1] = ' '.join(['and', to_print[-1]])
+    return ', '.join(to_print)
+
+def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
+    """ apply_async() that cleanly outputs engines responsible for exceptions.
+
+        For IPython parallel mode.
+
+        WARNING: in general, this method requires Dill for pickling.
+        See https://pypi.python.org/pypi/dill
+        and http://matthewrocklin.com/blog/work/2013/12/05
+        /Parallelism-and-Serialization/
+
+        rc: IPython parallel Client object
+        ids: IDs of engines where function_to_apply should be run
+        function_to_apply: function to run across engines. If this is a
+            dictionary whose keys are exactly the engine IDs, each engine ID's
+            value is regarded as a distinct function corresponding to the key.
+        *args: contains unnamed arguments of function_to_apply. If a given
+            argument is a dictionary whose keys are exactly the engine IDs,
+            each engine ID's value is regarded as a distinct argument
+            corresponding to the key. The same goes for kwargs.
+        **kwargs: includes --
+            errors_to_ignore: list of exceptions to ignore, where each
+               exception is a string
+            message: message to append to exception raised
+            and named arguments of function_to_apply
+            dict_format: if True, returns engine-result key-value dictionary;
+                if False, returns list of results
+
+        Return value: list of AsyncResults, one for each engine spanned by
+            direct_view
+    """
+    if 'dict_format' not in kwargs:
+        dict_format = False
+    else:
+        dict_format = kwargs['dict_format']
+        del kwargs['dict_format']
+    if not ids:
+        if dict_format:
+            return {}
+        else:
+            return []
+    if 'errors_to_ignore' not in kwargs:
+        errors_to_ignore = []
+    else:
+        errors_to_ignore = kwargs['errors_to_ignore']
+        del kwargs['errors_to_ignore']
+    if 'message' not in kwargs:
+        message = None
+    else:
+        message = kwargs['message']
+        del kwargs['message']
+    id_set = set(ids)
+    if not (isinstance(function_to_apply, dict)
+            and set(function_to_apply.keys()) == id_set):
+        function_to_apply_holder = function_to_apply
+        function_to_apply = {}
+        for i in ids:
+            function_to_apply[i] = function_to_apply_holder
+    new_args = defaultdict(list)
+    for arg in args:
+        if (isinstance(arg, dict)
+            and set(arg.keys()) == id_set):
+            for i in arg:
+                new_args[i].append(arg[i])
+        else:
+            for i in ids:
+                new_args[i].append(arg)
+    new_kwargs = defaultdict(dict)
+    for kwarg in kwargs:
+        if (isinstance(kwargs[kwarg], dict)
+            and set(kwargs[kwarg].keys()) == id_set):
+            for i in ids:
+                new_kwargs[i][kwarg] = kwargs[kwarg][i]
+        else:
+            for i in ids:
+                new_kwargs[i][kwarg] = kwargs[kwarg]
+    asyncresults = []
+    ids_not_to_return = set()
+    for i in ids:
+        asyncresults.append(
+                rc[i].apply_async(
+                    function_to_apply[i],*new_args[i],**new_kwargs[i]
+                )
+            )
+    while any([not asyncresult.ready() for asyncresult in asyncresults]):
+        time.sleep(1e-1)
+    asyncexceptions = defaultdict(set)
+    for asyncresult in asyncresults:
+        try:
+            asyncdict = asyncresult.get_dict()
+        except Exception as e:
+            exc_to_report = format_exc()
+            proceed = False
+            for error_to_ignore in errors_to_ignore:
+                if error_to_ignore in exc_to_report:
+                    proceed = True
+                    ids_not_to_return.add(asyncresult.metadata['engine_id'])
+            if not proceed:
+                asyncexceptions[format_exc()].add(
+                        asyncresult.metadata['engine_id']
+                    )
+    if asyncexceptions:
+        runtimeerror_message = []
+        for exc in asyncexceptions:
+            runtimeerror_message.extend(
+                    ['Engine(s) %s report(s) the following exception.'
+                        % engine_string_from_list(
+                              list(asyncexceptions[exc])
+                            ),
+                     exc]
+                 )
+        raise RuntimeError('\n'.join(runtimeerror_message
+                            + ([message] if message else [])))
+    # Return only those results for which there is no failure
+    if not dict_format:
+        return [asyncresult.get() for asyncresult in asyncresults
+                    if asyncresult.metadata['engine_id']
+                    not in ids_not_to_return]
+    to_return = {}
+    for i, asyncresult in enumerate(asyncresults):
+        if asyncresult.metadata['engine_id'] not in ids_not_to_return:
+            to_return[asyncresult.metadata['engine_id']] = asyncresult.get()
+    return to_return
 
 class dlist(object):
     """ List data type that spills to disk if a memlimit is reached.

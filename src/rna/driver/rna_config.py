@@ -28,7 +28,8 @@ site.addsitedir(base_path)
 import dooplicity.ansibles as ab
 import tempfile
 import shutil
-from dooplicity.tools import path_join, is_exe, which, register_cleanup
+from dooplicity.tools import path_join, is_exe, which, register_cleanup, \
+    apply_async_with_errors, engine_string_from_list
 from version import version_number
 import sys
 import argparse
@@ -183,161 +184,6 @@ def print_to_screen(message, newline=True, carriage_return=False):
                         + ('\n' if newline else ''))
         sys.stdout.flush()
 
-def engine_string_from_list(id_list):
-    """ Pretty-prints list of engine IDs.
-
-        id_list: list of engine IDs
-
-        Return value: string condensing list of engine IDs
-    """
-    id_list = sorted(set(id_list))
-    to_print = []
-    if not id_list: return ''
-    last_id = id_list[0]
-    streak = 0
-    for engine_id in id_list[1:]:
-        if engine_id == last_id + 1:
-            streak += 1
-        else:
-            if streak > 1:
-                to_print.append('%d-%d' % (last_id - streak, last_id))
-            elif streak == 1:
-                to_print.append('%d, %d' % (last_id - 1, last_id))
-            else:
-                to_print.append('%d' % last_id)
-            streak = 0
-        last_id = engine_id
-    if streak > 1:
-        to_print.append('%d-%d' % (last_id - streak, last_id))
-    elif streak == 1:
-        to_print.append('%d, %d' % (last_id - 1, last_id))
-    else:
-        to_print.append('%d' % last_id)
-    if len(to_print) > 1:
-        to_print[-1] = ' '.join(['and', to_print[-1]])
-    return ', '.join(to_print)
-
-def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
-    """ apply_async() that cleanly outputs engines responsible for exceptions.
-
-        WARNING: in general, this method requires Dill for pickling.
-        See https://pypi.python.org/pypi/dill
-        and http://matthewrocklin.com/blog/work/2013/12/05
-        /Parallelism-and-Serialization/
-
-        rc: IPython parallel Cient object
-        ids: IDs of engines where function_to_apply should be run
-        function_to_apply: function to run across engines. If this is a
-            dictionary whose keys are exactly the engine IDs, each engine ID's
-            value is regarded as a distinct function corresponding to the key.
-        *args: contains unnamed arguments of function_to_apply. If a given
-            argument is a dictionary whose keys are exactly the engine IDs,
-            each engine ID's value is regarded as a distinct argument
-            corresponding to the key. The same goes for kwargs.
-        **kwargs: includes --
-            errors_to_ignore: list of exceptions to ignore, where each
-               exception is a string
-            message: message to append to exception raised
-            and named arguments of function_to_apply
-            dict_format: if True, returns engine-result key-value dictionary;
-                if False, returns list of results
-
-        Return value: list of AsyncResults, one for each engine spanned by
-            direct_view
-    """
-    if 'dict_format' not in kwargs:
-        dict_format = False
-    else:
-        dict_format = kwargs['dict_format']
-        del kwargs['dict_format']
-    if not ids:
-        if dict_format:
-            return {}
-        else:
-            return []
-    if 'errors_to_ignore' not in kwargs:
-        errors_to_ignore = []
-    else:
-        errors_to_ignore = kwargs['errors_to_ignore']
-        del kwargs['errors_to_ignore']
-    if 'message' not in kwargs:
-        message = None
-    else:
-        message = kwargs['message']
-        del kwargs['message']
-    id_set = set(ids)
-    if not (isinstance(function_to_apply, dict)
-            and set(function_to_apply.keys()) == id_set):
-        function_to_apply_holder = function_to_apply
-        function_to_apply = {}
-        for i in ids:
-            function_to_apply[i] = function_to_apply_holder
-    new_args = defaultdict(list)
-    for arg in args:
-        if (isinstance(arg, dict)
-            and set(arg.keys()) == id_set):
-            for i in arg:
-                new_args[i].append(arg[i])
-        else:
-            for i in ids:
-                new_args[i].append(arg)
-    new_kwargs = defaultdict(dict)
-    for kwarg in kwargs:
-        if (isinstance(kwargs[kwarg], dict)
-            and set(kwargs[kwarg].keys()) == id_set):
-            for i in ids:
-                new_kwargs[i][kwarg] = kwargs[kwarg][i]
-        else:
-            for i in ids:
-                new_kwargs[i][kwarg] = kwargs[kwarg]
-    asyncresults = []
-    ids_not_to_return = set()
-    for i in ids:
-        asyncresults.append(
-                rc[i].apply_async(
-                    function_to_apply[i],*new_args[i],**new_kwargs[i]
-                )
-            )
-    while any([not asyncresult.ready() for asyncresult in asyncresults]):
-        time.sleep(1e-1)
-    asyncexceptions = defaultdict(set)
-    for asyncresult in asyncresults:
-        try:
-            asyncdict = asyncresult.get_dict()
-        except Exception as e:
-            exc_to_report = format_exc()
-            proceed = False
-            for error_to_ignore in errors_to_ignore:
-                if error_to_ignore in exc_to_report:
-                    proceed = True
-                    ids_not_to_return.add(asyncresult.metadata['engine_id'])
-            if not proceed:
-                asyncexceptions[format_exc()].add(
-                        asyncresult.metadata['engine_id']
-                    )
-    if asyncexceptions:
-        runtimeerror_message = []
-        for exc in asyncexceptions:
-            runtimeerror_message.extend(
-                    ['Engine(s) %s report(s) the following exception.'
-                        % engine_string_from_list(
-                              list(asyncexceptions[exc])
-                            ),
-                     exc]
-                 )
-        raise RuntimeError('\n'.join(runtimeerror_message
-                            + ([message] if message else [])))
-    # Return only those results for which there is no failure
-    if not dict_format:
-        return [asyncresult.get() for asyncresult in asyncresults
-                    if asyncresult.metadata['engine_id']
-                    not in ids_not_to_return]
-    to_return = {}
-    for i, asyncresult in enumerate(asyncresults):
-        if asyncresult.metadata['engine_id'] not in ids_not_to_return:
-            to_return[asyncresult.metadata['engine_id']] = asyncresult.get()
-    return to_return
-
 def ready_engines(rc, base, prep=False):
     """ Prepares engines for checks and copies Rail/manifest/index to nodes. 
 
@@ -452,7 +298,8 @@ def ready_engines(rc, base, prep=False):
     '''Only foolproof way to die is by process polling. See
     http://stackoverflow.com/questions/284325/
     how-to-make-child-process-die-after-parent-exits for more information.'''
-    apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
+    apply_async_with_errors(rc, engines_for_copying,
+        subprocess.check_output,
         ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
          'SIGHUP SIGINT SIGTERM EXIT; '
          'while [[ \$(ps -p \$\$ -o ppid=) -gt 1 ]]; do sleep 1; done & wait" '
@@ -521,7 +368,7 @@ def ready_engines(rc, base, prep=False):
     # Extract Rail
     print_to_screen('Extracting Rail-RNA on cluster nodes...',
                             newline=False, carriage_return=True)
-    apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
+    apply_async_with_errors(rc, engines_for_copying, subprocess.check_output,
             'tar xzf {} -C {}'.format(compressed_rail_destination, temp_dir),
             shell=True)
     print_to_screen('Extracted Rail-RNA on cluster nodes.',
@@ -700,6 +547,7 @@ def ready_engines(rc, base, prep=False):
                                         os.path.basename(base.bowtie1_idx))
         base.bowtie2_idx = os.path.join(temp_dir, 'genome',
                                         os.path.basename(base.bowtie2_idx))
+    return temp_base_path
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
@@ -3100,51 +2948,30 @@ class RailRnaAlign(object):
         base.itn = 'itn' in split_deliverables
         if base.idx:
             # Place transcript index in output directory
-            if elastic:
-                base.transcript_out = ab.Url(
-                    path_join(elastic, base.output_dir, 'transcript_index')
-                ).to_url(caps=True)
-                base.transcript_archive = ab.Url(path_join(elastic,
-                                                    base.output_dir,
-                                                    'transcript_index',
-                                                    'intron.tar.gz#intron')
-                                            ).to_native_url()
-                base.transcript_in = 'intron/intron'
-            else:
-                base.transcript_out = os.path.join(
-                        base.output_dir, 'transcript_index'
-                    )
-                base.transcript_in = ab.Url(
-                        path_join(
-                            elastic, base.output_dir, 'transcript_index',
-                            'intron')
-                    ).to_url()
-                base.transcript_archive = ''
+            base.transcript_out = ab.Url(
+                path_join(elastic, base.output_dir, 'cross_sample_results')
+            ).to_url(caps=True)
+            base.transcript_archive = ab.Url(path_join(elastic,
+                                                base.output_dir,
+                                                'cross_sample_results',
+                                                'intron.tar.gz#intron')
+                                        ).to_native_url()
         else:
             # Place transcript index in intermediate directory
-            if elastic:
-                base.transcript_out = ab.Url(
-                    path_join(elastic, base.intermediate_dir,
-                                'transcript_index')
-                ).to_url(caps=True)
-                base.transcript_archive = ab.Url(path_join(elastic,
-                                                    base.intermediate_dir,
-                                                    'transcript_index',
-                                                    'intron.tar.gz#intron')
-                                            ).to_native_url()
-                base.transcript_in = 'intron/intron'
-            else:
-                # Put it in cointron_enum so it's deleted after use
-                base.transcript_out = os.path.join(
-                        base.intermediate_dir, 'cointron_enum',
-                        'transcript_index'
-                    )
-                base.transcript_in = ab.Url(
-                        path_join(
-                            elastic, base.intermediate_dir, 'cointron_enum',
-                            'transcript_index', 'intron')
-                    ).to_url()
-                base.transcript_archive = ''
+            base.transcript_out = ab.Url(
+                path_join(elastic, base.intermediate_dir,
+                            'cointron_enum' if not elastic else '',
+                            'transcript_index')
+            ).to_url(caps=True)
+            base.transcript_archive = ab.Url(path_join(elastic,
+                                                base.intermediate_dir,
+                                                'cointron_enum'
+                                                if not elastic
+                                                else '',
+                                                'transcript_index',
+                                                'intron.tar.gz#intron')
+                                        ).to_native_url()
+        base.transcript_in = 'intron/intron'
         base.bam_basename = bam_basename
         base.bed_basename = bed_basename
         base.tsv_basename = tsv_basename
@@ -3907,23 +3734,23 @@ class RailRnaAlign(object):
                 'run' : ('tsv.py --bowtie-idx={0} --out={1} '
                          '--manifest={2} --gzip-level={3} '
                          '--tsv-basename={4} {5}').format(
-                                                        base.bowtie1_idx,
-                                                        ab.Url(
-                                                            path_join(elastic,
-                                                            base.output_dir,
-                                                        'cross_sample_tables')
-                                                         ).to_url(caps=True)
-                                                        if elastic
-                                                        else path_join(elastic,
-                                                            base.output_dir,
-                                                        'cross_sample_tables'),
-                                                        manifest,
-                                                        base.gzip_level
-                                                        if 'gzip_level' in
-                                                        dir(base) else 3,
-                                                        base.tsv_basename,
-                                                        scratch
-                                                    ),
+                                                    base.bowtie1_idx,
+                                                    ab.Url(
+                                                        path_join(elastic,
+                                                        base.output_dir,
+                                                    'cross_sample_results')
+                                                     ).to_url(caps=True)
+                                                    if elastic
+                                                    else path_join(elastic,
+                                                        base.output_dir,
+                                                    'cross_sample_results'),
+                                                    manifest,
+                                                    base.gzip_level
+                                                    if 'gzip_level' in
+                                                    dir(base) else 3,
+                                                    base.tsv_basename,
+                                                    scratch
+                                                ),
                 'inputs' : ['coverage',
                                 path_join(elastic, 'prebed', 'collect')],
                 'output' : 'tsv',
@@ -4154,7 +3981,7 @@ class RailRnaParallelPreprocessJson(object):
         RailRnaPreprocess(base,
             nucleotides_per_input=nucleotides_per_input, gzip_input=gzip_input)
         raise_runtime_error(base)
-        ready_engines(rc, base, prep=True)
+        temp_base_path = ready_engines(rc, base, prep=True)
         engine_bases = {}
         for i in rc.ids:
             engine_bases[i] = RailRnaErrors(
@@ -4184,7 +4011,7 @@ class RailRnaParallelPreprocessJson(object):
                 reason=base.check_curl_on_engines, is_exe=is_exe, which=which)
         raise_runtime_error(base)
         self._json_serial = {}
-        step_dir = os.path.join(base_path, 'rna', 'steps')
+        step_dir = os.path.join(temp_base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaPreprocess.protosteps(base,
                 os.path.join(base.intermediate_dir, 'preprocess'),
                 base.output_dir, elastic=False),
@@ -4433,7 +4260,7 @@ class RailRnaParallelAlignJson(object):
             deliverables=deliverables, bam_basename=bam_basename,
             tsv_basename=tsv_basename, bed_basename=bed_basename)
         raise_runtime_error(base)
-        ready_engines(rc, base, prep=False)
+        temp_base_path = ready_engines(rc, base, prep=False)
         engine_bases = {}
         for i in rc.ids:
             engine_bases[i] = RailRnaErrors(
@@ -4494,7 +4321,7 @@ class RailRnaParallelAlignJson(object):
         raise_runtime_error(engine_bases)
         print_to_screen(base.detect_message)
         self._json_serial = {}
-        step_dir = os.path.join(base_path, 'rna', 'steps')
+        step_dir = os.path.join(temp_base_path, 'rna', 'steps')
         self._json_serial['Steps'] = steps(RailRnaAlign.protosteps(base,
                 base.input_dir, elastic=False), '', '', step_dir,
                 base.num_processes, base.intermediate_dir, unix=False
@@ -4791,7 +4618,7 @@ class RailRnaParallelAllJson(object):
             deliverables=deliverables, bam_basename=bam_basename,
             bed_basename=bed_basename, tsv_basename=tsv_basename)
         raise_runtime_error(base)
-        ready_engines(rc, base, prep=False)
+        temp_base_path = ready_engines(rc, base, prep=False)
         engine_bases = {}
         for i in rc.ids:
             engine_bases[i] = RailRnaErrors(
@@ -4852,7 +4679,7 @@ class RailRnaParallelAllJson(object):
         raise_runtime_error(engine_bases)
         print_to_screen(base.detect_message)
         self._json_serial = {}
-        step_dir = os.path.join(base_path, 'rna', 'steps')
+        step_dir = os.path.join(temp_base_path, 'rna', 'steps')
         prep_dir = path_join(False, base.intermediate_dir,
                                         'preprocess')
         push_dir = path_join(False, base.intermediate_dir,

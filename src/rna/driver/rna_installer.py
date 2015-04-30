@@ -15,7 +15,7 @@ site.addsitedir(base_path)
 site.addsitedir(utils_path)
 import dependency_urls
 from distutils.util import strtobool
-from dooplicity.tools import which, register_cleanup
+from dooplicity.tools import which, register_cleanup, cd
 import zipfile
 import shutil
 import subprocess
@@ -25,21 +25,6 @@ import tempfile
 from tempdel import remove_temporary_directories
 from rna_config import print_to_screen
 import glob
-
-@contextlib.contextmanager
-def cd(dir_name):
-    """ Changes directory in a context only. Borrowed from AWS CLI code.
-
-        dir_name: directory name to which to change
-
-        No return value.
-    """
-    original_dir = os.getcwd()
-    os.chdir(dir_name)
-    try:
-        yield
-    finally:
-        os.chdir(original_dir)
 
 def find(name, path):
     """ Finds first file matching name in a given path.

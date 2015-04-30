@@ -55,7 +55,11 @@ import hashlib
 import tempfile
 import shutil
 import os
-from tools import make_temp_dir
+import contextlib
+from tools import make_temp_dir, make_temp_dir_and_register_cleanup
+from ansibles import Url
+import site
+import string
 
 def add_args(parser):
     """ Adds args relevant to EMR simulator.
@@ -178,6 +182,26 @@ def yopen(gzipped, *args):
         return gzip.open(*args)
     return open(*args)
 
+@contextlib.contextmanager
+def cd(dir_name):
+    """ Changes directory in a context only. Borrowed from AWS CLI code.
+
+        This is also in tools.py, but IPython has trouble with it.
+
+        dir_name: directory name to which to change
+
+        No return value.
+    """
+    if dir_name is None:
+        yield
+        return
+    original_dir = os.getcwd()
+    os.chdir(dir_name)
+    try:
+        yield
+    finally:
+        os.chdir(original_dir)
+
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, task_count, memcap,
                     gzip=False, gzip_level=3, scratch=None,
@@ -228,12 +252,6 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             except OSError as e:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory: %s' % e)
-            '''# Stream from temp directory
-            try:
-                input_dir = tempfile.mkdtemp()
-            except OSError as e:
-                return ('Problem encountered creating temporary '
-                        'input subdirectory: %s' % e)'''
         elif scratch:
             # Write to temporary directory in special location
             final_output_dir = output_dir
@@ -250,26 +268,9 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             except OSError as e:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory of %s: %s' % (scratch, e))
-            '''try:
-                input_dir = tempfile.mkdtemp(dir=scratch)
-            except OSError:
-                return ('Problem encountered creating temporary '
-                        'input subdirectory of %s: %s' % (scratch, e))'''
         else:
             final_output_dir = output_dir
         for input_file in input_files:
-            '''if scratch:
-                # Copy input to temporary directory
-                new_input_file = os.path.join(
-                                    input_dir,
-                                    os.path.basename(input_file)
-                                )
-                try:
-                    shutil.copyfile(input_file, new_input_file)
-                except IOError as e:
-                    return ('Problem encountered copying input file to '
-                            'temporary directory: %s' % e)
-                input_file = new_input_file'''
             with yopen(None, input_file) as input_stream:
                 for line in input_stream:
                     key = line.strip().split(separator)[:key_fields]
@@ -308,8 +309,6 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                         + '.unsorted')
                             task_streams[task] = open(task_file, 'w')
                         task_streams[task].write(line)
-            if scratch:
-                os.remove(input_file)
         for task in task_streams:
             task_streams[task].close()
         if gzip:
@@ -376,9 +375,6 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             (('%s, '* (len(input_files) - 1) 
                                        + '%s') % tuple(input_files))))
     finally:
-        '''if 'input_dir' in locals():
-            # Kill input directory
-            shutil.rmtree(input_dir)'''
         if 'final_output_dir' in locals() and final_output_dir != output_dir:
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
@@ -403,7 +399,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
                                   separator, sort_options, memcap,
                                   gzip=False, gzip_level=3, scratch=None,
-                                  sort='sort', attempt_number=None):
+                                  sort='sort', dir_to_path=None,
+                                  attempt_number=None):
     """ Runs a streaming command on a task, segregating multiple outputs. 
 
         streaming_command: streaming command to run.
@@ -431,7 +428,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         scratch: where to write output before copying to output_dir. If "-"
             string, writes to temporary directory; if None, writes directly
             to output directory.
-        sort: path to sort executable.f
+        sort: path to sort executable.
+        dir_to_path: path to add to PATH.
         attempt_number: attempt number of current task or None if no retries.
             MUST BE FINAL ARG to be compatible with 
             execute_balanced_job_with_retries().
@@ -448,12 +446,6 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             except OSError as e:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory: %s' % e)
-            '''# Stream from temp directory
-            try:
-                input_dir = tempfile.mkdtemp()
-            except OSError as e:
-                return ('Problem encountered creating temporary '
-                        'input subdirectory: %s' % e)'''
         elif scratch:
             # Write to temporary directory in special location
             final_output_dir = output_dir
@@ -470,28 +462,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             except OSError as e:
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory of %s: %s' % (scratch, e))
-            '''try:
-                input_dir = tempfile.mkdtemp(dir=scratch)
-            except OSError:
-                return ('Problem encountered creating temporary '
-                        'input subdirectory of %s: %s' % (scratch, e))'''
         else:
             final_output_dir = output_dir
-        '''if scratch:
-            input_files = []
-            # Copy input files to temporary directory
-            for input_file in glob.glob(input_glob):
-                new_input_file = os.path.join(
-                                    input_dir,
-                                    os.path.basename(input_file)
-                                )
-                try:
-                    shutil.copyfile(input_file, new_input_file)
-                except IOError as e:
-                    return ('Problem encountered copying input file to '
-                            'temporary directory: %s' % e)
-                input_files.append(new_input_file)
-        else:'''
         input_files = [input_file for input_file in glob.glob(input_glob)
                             if os.path.isfile(input_file)]
         if not input_files:
@@ -517,14 +489,14 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                 # Reducer. Merge sort the input glob.
                 prefix = '%s -S %d %s -m %s' % (sort, memcap, sort_options,
                                                     input_glob)
-        err_file = os.path.join(err_dir, (
+        err_file = os.path.abspath(os.path.join(err_dir, (
                                             ('%d.log' % task_id)
                                                 if attempt_number is None
                                                 else ('%d.%d.log'
                                                     % (task_id, attempt_number)
                                                 )
                                             )
-                                        )
+                                        ))
         new_env = os.environ.copy()
         new_env['mapreduce_task_partition'] \
             = new_env['mapred_task_partition'] = str(task_id)
@@ -533,15 +505,16 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             command_to_run \
                 = prefix + ' | ' + streaming_command + (' 2>%s' % err_file)
             # Need bash or zsh for process substitution
-            multiple_output_process = subprocess.Popen(
-                    ' '.join(['set -eo pipefail;', command_to_run]),
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=open(os.devnull, 'w'),
-                    env=new_env,
-                    bufsize=-1,
-                    executable='/bin/bash'
-                )
+            with cd(dir_to_path):
+                multiple_output_process = subprocess.Popen(
+                        ' '.join(['set -eo pipefail;', command_to_run]),
+                        shell=True,
+                        stdout=subprocess.PIPE,
+                        stderr=open(os.devnull, 'w'),
+                        env=new_env,
+                        bufsize=-1,
+                        executable='/bin/bash'
+                    )
             task_file_streams = {}
             if gzip:
                 task_file_stream_processes = {}
@@ -584,7 +557,9 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                 task_file_streams[key].close()
         else:
             if gzip:
-                out_file = os.path.join(output_dir, str(task_id) + '.gz')
+                out_file = os.path.abspath(
+                                os.path.join(output_dir, str(task_id) + '.gz')
+                            )
                 command_to_run \
                     = prefix + ' | ' + streaming_command + (
                             ' 2>%s | gzip -%d >%s'
@@ -593,20 +568,23 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                     out_file)
                         )
             else:
-                out_file = os.path.join(output_dir, str(task_id))
+                out_file = os.path.abspath(
+                                os.path.join(output_dir, str(task_id))
+                            )
                 command_to_run \
                     = prefix + ' | ' + streaming_command + (' >%s 2>%s'
                                                              % (out_file,
                                                                 err_file))
             try:
                 # Need bash or zsh for process substitution
-                subprocess.check_output(' '.join(['set -eo pipefail;',
-                                                  command_to_run]),
-                                            shell=True,
-                                            env=new_env,
-                                            bufsize=-1,
-                                            stderr=subprocess.STDOUT,
-                                            executable='/bin/bash')
+                with cd(dir_to_path):
+                    subprocess.check_output(' '.join(['set -eo pipefail;',
+                                                      command_to_run]),
+                                                shell=True,
+                                                env=new_env,
+                                                bufsize=-1,
+                                                stderr=subprocess.STDOUT,
+                                                executable='/bin/bash')
             except subprocess.CalledProcessError as e:
                 return (('Streaming command "%s" failed; exit level was %d.')
                          % (command_to_run, e.returncode))
@@ -617,9 +595,6 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         return ('Error\n\n%s\nencountered executing task on input %s.'
                 % (format_exc(), input_glob))
     finally:
-        '''if 'input_dir' in locals():
-            # Kill input directory
-            shutil.rmtree(input_dir)'''
         if 'task_file_stream_processes' in locals():
             for key in task_file_streams:
                 task_file_streams[key].close()
@@ -768,7 +743,20 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             # Use all engines
             num_processes = len(pool)
             all_engines = set(pool.ids)
+            from tools import apply_async_with_errors
             direct_view = pool[:]
+            # Use Dill to permit general serializing
+            try:
+                import dill
+            except ImportError:
+                raise RuntimeError(
+                        'Dooplicity requires Dill. Install it by running '
+                        '"pip install dill", or see the StackOverflow '
+                        'question http://stackoverflow.com/questions/23576969/'
+                        'how-to-install-dill-in-ipython for other leads.'
+                    )
+            else:
+                direct_view.use_dill()
             iface.status('Loading dependencies on IPython engines...')
             with direct_view.sync_imports(quiet=True):
                 import subprocess
@@ -781,17 +769,23 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     yopen=yopen,
                     step_runner_with_error_return=\
                         step_runner_with_error_return,
-                    presorted_tasks=presorted_tasks
+                    presorted_tasks=presorted_tasks,
+                    cd=cd
                 ))
-            direct_view.execute('os.chdir(\'%s\')' % os.getcwd()).get()
             iface.step('Loaded dependencies on IPython engines.')
-            '''Use balanced view so scheduling is dynamic: tasks aren't
-            assigned to engines a priori.'''
-            pid_map = direct_view.apply_async(os.getpid).get_dict()
-            host_map = direct_view.apply_async(socket.gethostname).get_dict()
+            # Get host-to-engine and engine pids relations
+            current_hostname = socket.gethostname()
+            host_map = apply_async_with_errors(
+                                    pool, all_engines, socket.gethostname,
+                                    dict_format=True
+                                )
             engine_map = defaultdict(list)
             for engine in host_map:
                 engine_map[host_map[engine]].append(engine)
+            pid_map = apply_async_with_errors(
+                                    pool, all_engines, os.getpid,
+                                    dict_format=True
+                                )
             def interrupt_engines(pool, iface):
                 """ Interrupts IPython engines spanned by view
 
@@ -889,7 +883,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                         'attempt to execute. Check the '
                                         'IPython cluster\'s integrity and '
                                         'resource availability.')
-                                         % (task_function, task_to_assign[0]))
+                                         % (task_function, task_to_assign[0]),
+                                         steps=(job_flow[step_number:]
+                                            if step_number != 0 else None))
                             failed = True
                             raise RuntimeError
                         try:
@@ -959,6 +955,205 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     time.sleep(0.1)
                 assert not used_engines
                 iface.step(finish_message)
+            @contextlib.contextmanager
+            def cache(pool=None, file_or_archive=None, archive=True):
+                """ Places X.[tar.gz/tgz]#Y in dir Y, unpacked if archive
+
+                    pool: IPython Client object; all engines it spans are used
+                    archive: file in format X.tar.gz#Y; None if nothing should
+                        be done
+
+                    Yields before deleting all files.
+                """
+                global failed
+                if file_or_archive is None:
+                    '''So with statements can be used all the time, even
+                    when there's nothing to be archived'''
+                    assert pool is None
+                    yield None
+                    return
+                try:
+                    (file_or_archive, destination_filename) = \
+                        file_or_archive.split('#')
+                except TypeError:
+                    iface.fail(('%s is an invalid cache argument.'
+                                    % file_or_archive),
+                                steps=(job_flow[step_number:]
+                                            if step_number != 0 else None))
+                    failed = True
+                    raise RuntimeError
+                file_or_archive_url = Url(file_or_archive)
+                if not (file_or_archive_url.is_nfs
+                            or file_or_archive_url.is_local):
+                    iface.fail(('The file %s is not local or on NFS.'
+                                    % file_or_archive),
+                                steps=(job_flow[step_number:]
+                                            if step_number != 0 else None))
+                    failed = True
+                    raise
+                file_or_archive = file_or_archive_url.to_url()
+                file_or_archive_basename = os.path.basename(file_or_archive)
+                if archive:
+                    archive_dir = destination_filename
+                    destination_filename = os.path.basename(file_or_archive)
+                if not os.path.isfile(file_or_archive):
+                    iface.fail(('The file %s does not exist and thus cannot '
+                                'be cached.') % file_or_archive,
+                                steps=(job_flow[step_number:]
+                                            if step_number != 0 else None))
+                    failed = True
+                    raise RuntimeError
+                iface.status('Preparing temporary directories for storing '
+                             '%s on slave nodes.' % file_or_archive)
+                '''Select engines to do "heavy lifting"; that is, they remove
+                files copied to hosts on SIGINT/SIGTERM. Do it randomly
+                (NO SEED) so if IWF occurs, second try will be different.
+                IWF = intermittent weird failure. Set random seed so temp
+                directory is reused if restarting job.'''
+                random.seed(str(sorted(pid_map.keys())))
+                engines_for_copying = [random.choice(list(engines)) 
+                                        for engines in engine_map.values()]
+                '''Herd won't work with local engines; work around this by
+                separating engines into two groups: local and remote.'''
+                remote_hostnames_for_copying = list(
+                        set(engine_map.keys()).difference(
+                            set([current_hostname]))
+                    )
+                local_engines_for_copying = [
+                        engine for engines in engines_for_copying
+                        if engine in engine_map[current_hostname]
+                    ]
+                '''Create temporary directories on selected nodes; NOT
+                WINDOWS-COMPATIBLE; must be changed if porting to Windows.'''
+                if scratch == '-':
+                    scratch_dir = '/tmp'
+                else:
+                    scratch_dir = scratch
+                temp_dir = os.path.join(
+                                scratch_dir,
+                                'dooplicity-%s' % ''.join(
+                                        random.choice(string.ascii_uppercase
+                                                        + string.digits)
+                                        for _ in xrange(12)
+                                    )
+                            )
+                apply_async_with_errors(
+                    pool, engines_for_copying, os.makedirs,
+                    temp_dir,
+                    message=(('Error(s) encountered creating temporary '
+                              'directories for storing {} on slave nodes. '
+                              'Restart IPython engines and try again.').format(
+                                                        file_or_archive
+                                                    )),
+                    errors_to_ignore=['OSError']
+                )
+                # Add temp dirs to path
+                apply_async_with_errors(
+                    pool, engines_for_copying, site.addsitedir,
+                    temp_dir,
+                    message=(('Error(s) encountered adding temporary '
+                              'directories for storing {} to path on '
+                              'slave nodes.').format(
+                                                        file_or_archive
+                                                    ))
+                )
+                '''Only foolproof way to die is by process polling. See
+                http://stackoverflow.com/questions/284325/
+                how-to-make-child-process-die-after-parent-exits for more
+                information.'''
+                apply_async_with_errors(
+                    pool, engines_for_copying, subprocess.call,
+                    ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
+                     'SIGHUP SIGINT SIGTERM EXIT; '
+                     'while [[ \$(ps -p \$\$ -o ppid=) -gt 1 ]]; '
+                     'do sleep 1; done & wait" '
+                     '>{temp_dir}/delscript.sh').format(temp_dir=temp_dir),
+                    shell=True,
+                    executable='/bin/bash',
+                    message=(
+                            'Error creating script for scheduling temporary '
+                            'directories on cluster nodes for deletion. '
+                            'Restart IPython engines and try again.'
+                        )
+                )
+                apply_async_with_errors(
+                    pool, engines_for_copying, subprocess.Popen,
+                    ['/usr/bin/env', 'bash', '%s/delscript.sh' % temp_dir],
+                    message=(
+                        'Error scheduling temporary directories on slave '
+                        'nodes for deletion. Restart IPython engines and try '
+                        'again.'
+                    )
+                )
+                iface.status('Caching %s.' % file_or_archive_basename)
+                destination_path = os.path.join(temp_dir, destination_filename)
+                try:
+                    import herd.herd as herd
+                except ImportError:
+                    '''Torrent distribution channel for compressed archive not
+                    available.'''
+                    apply_async_with_errors(
+                        pool,
+                        engines_for_copying,
+                        shutil.copyfile,
+                        file_or_archive, destination_path,
+                        message=(('Error(s) encountered copying %s to '
+                                  'slave nodes. Refer to the errors above '
+                                  '-- and especially make sure /tmp is not '
+                                  'out of space on any node supporting an '
+                                  'IPython engine -- before trying again.')
+                                    % file_or_archive),
+                    )
+                else:
+                    if local_engines_for_copying:
+                        apply_async_with_errors(pool,
+                            local_engines_for_copying,
+                            shutil.copyfile, file_or_archive,
+                            destination_path,
+                            message=(('Error(s) encountered copying %s to '
+                                      'local filesystem. Refer to the errors '
+                                      'above -- and especially make sure /tmp '
+                                      'is not out of space on any node '
+                                      'supporting an IPython engine '
+                                      '-- before trying again.')
+                                        % file_or_archive),
+                        )
+                    if remote_hostnames_for_copying:
+                        herd.run_with_opts(
+                                file_or_archive,
+                                destination_path,
+                                hostlist=','.join(remote_hostnames_for_copying)
+                            )
+                # Extract if necessary
+                if archive:
+                    apply_async_with_errors(
+                            pool, engines_for_copying,
+                            os.makedirs, os.path.join(temp_dir, archive_dir)
+                    )
+                    apply_async_with_errors(
+                            pool, engines_for_copying, subprocess.check_output,
+                            'tar xzf {} -C {}'.format(
+                                destination_path,
+                                os.path.join(temp_dir, archive_dir)),
+                            shell=True
+                    )
+                    apply_async_with_errors(
+                            pool, engines_for_copying,
+                            os.remove, destination_path
+                    )
+                iface.step('Cached %s.' % file_or_archive_basename)
+                try:
+                    yield temp_dir
+                finally:
+                    # Cleanup
+                    apply_async_with_errors(
+                            pool,
+                            engines_for_copying,
+                            shutil.rmtree,
+                            temp_dir,
+                            message=('Error(s) encountered removing temporary '
+                                     'directories.'),
+                        )
         else:
             import multiprocessing
             def execute_balanced_job_with_retries(pool, iface,
@@ -1055,6 +1250,101 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         del assigned_tasks[task]
                     time.sleep(0.1)
                 iface.step(finish_message)
+            @contextlib.contextmanager
+            def cache(pool=None, file_or_archive=None, archive=True):
+                """ Places X.[tar.gz/tgz]#Y in dir Y, unpacked if archive
+
+                    pool: IPython Client object; all engines it spans are used
+                    archive: file in format X.tar.gz#Y; None if nothing should
+                        be done
+
+                    Yields before deleting all files.
+                """
+                global failed
+                if file_or_archive is None:
+                    '''So with statements can be used all the time, even
+                    when there's nothing to be archived'''
+                    assert pool is None
+                    yield None
+                    return
+                try:
+                    (file_or_archive, destination_filename) = \
+                        file_or_archive.split('#')
+                except TypeError:
+                    iface.fail(('%s is an invalid cache argument.'
+                                    % file_or_archive),
+                                steps=(job_flow[step_number:]
+                                            if step_number != 0 else None))
+                    failed = True
+                    raise
+                file_or_archive_url = Url(file_or_archive)
+                if not file_or_archive_url.is_local:
+                    iface.fail(('The file %s is not local.'
+                                    % file_or_archive),
+                                steps=(job_flow[step_number:]
+                                            if step_number != 0 else None))
+                    failed = True
+                    raise
+                file_or_archive = file_or_archive_url.to_url()
+                file_or_archive_basename = os.path.basename(file_or_archive)
+                if archive:
+                    archive_dir = destination_filename
+                    destination_filename = os.path.basename(file_or_archive)
+                if not os.path.isfile(file_or_archive):
+                    iface.fail(('The file %s does not exist and thus cannot '
+                                'be cached.') % file_or_archive,
+                                steps=(job_flow[step_number:]
+                                            if step_number != 0 else None))
+                    failed = True
+                    raise RuntimeError
+                temp_dir = make_temp_dir_and_register_cleanup(
+                                                    None if scratch == '-'
+                                                    else scratch
+                                                )
+                iface.status('Caching %s.' % file_or_archive_basename)
+                destination_path = os.path.join(temp_dir, destination_filename)
+                shutil.copyfile(file_or_archive, destination_path)
+                try:
+                    os.makedirs(os.path.join(temp_dir, archive_dir))
+                except OSError:
+                    # Hopefully, directory is already created
+                    pass
+                # Extract if necessary
+                if archive:
+                    import subprocess
+                    try:
+                        subprocess.check_output(
+                                        'tar xzf {} -C {}'.format(
+                                            destination_path,
+                                            os.path.join(temp_dir, archive_dir)
+                                        ),
+                                        shell=True,
+                                        bufsize=-1,
+                                        stderr=subprocess.STDOUT,
+                                        executable='/bin/bash'
+                                    )
+                    except subprocess.CalledProcessError as e:
+                        iface.fail(
+                                ('Decompression of archive failed; exit code '
+                                 'was %s, and reason was "%s".') % (
+                                    e.returncode,
+                                    e.output.strip()
+                                ),
+                                steps=(job_flow[step_number:]
+                                            if step_number != 0 else None)
+                            )
+                        failed = True
+                        raise RuntimeError
+                    try:
+                        os.remove(destination_path)
+                    except OSError:
+                        pass
+                iface.step('Cached %s.' % file_or_archive_basename)
+                try:
+                    yield temp_dir
+                finally:
+                    # Cleanup
+                    shutil.rmtree(temp_dir)
         # Serialize JSON configuration
         if json_config is not None:
             with open(json_config) as json_stream:
@@ -1120,9 +1410,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     elif arg_name == 'lazyOutput':
                         # Do nothing
                         j += 1
-                    elif arg_name == 'archives':
-                        step_args['archives'] = D_arg[1]
-                        j += 2
                     else:
                         step_args[step['HadoopJarStep']['Args'][j][1:]] \
                             = step['HadoopJarStep']['Args'][j+1].strip()
@@ -1258,32 +1545,135 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     step_inputs.extend(
                             glob.glob(os.path.join(input_file_or_dir, '*'))
                         )
-            if step_data['mapper'] not in identity_mappers:
-                # Perform map step only if mapper isn't identity
+            # TODO: support cacheArchives and cacheFile simultaneously
+            if 'archives' in step_data or 'cacheArchive' in step_data:
+                # Prefer archives to cacheArchives
                 try:
-                    if ('multiple_outputs' in step_data) or \
-                        step_data['outputformat'] \
-                        == 'edu.jhu.cs.MultipleOutputFormat':
-                        multiple_outputs = True
-                    else:
+                    to_cache = step_data['archives']
+                except KeyError:
+                    to_cache = step_data['cacheArchives']
+            elif 'cacheFile' in step_data:
+                to_cache = step_data['cacheFile']
+            else:
+                to_cache = None
+            with cache(pool if to_cache else None, to_cache,
+                        True if to_cache else False) as dir_to_path:
+                if step_data['mapper'] not in identity_mappers:
+                    # Perform map step only if mapper isn't identity
+                    try:
+                        if ('multiple_outputs' in step_data) or \
+                            step_data['outputformat'] \
+                            == 'edu.jhu.cs.MultipleOutputFormat':
+                            multiple_outputs = True
+                        else:
+                            multiple_outputs = False
+                    except KeyError:
+                        # No multiple outputs
                         multiple_outputs = False
-                except KeyError:
-                    # No multiple outputs
-                    multiple_outputs = False
-                try:
-                    if step_data['inputformat'] \
-                        == 'org.apache.hadoop.mapred.lib.NLineInputFormat':
-                        nline_input = True
-                    else:
+                    try:
+                        if step_data['inputformat'] \
+                            == 'org.apache.hadoop.mapred.lib.NLineInputFormat':
+                            nline_input = True
+                        else:
+                            nline_input = False
+                    except KeyError:
+                        # Don't assign one line per mapper
                         nline_input = False
-                except KeyError:
-                    # Don't assign one line per mapper
-                    nline_input = False
-                output_dir = step_data['output']
+                    output_dir = step_data['output']
+                    if step_data['reducer'] not in identity_reducers:
+                        '''There's a reducer parameter, so input to reducer is
+                        output of mapper. Change output directory.'''
+                        output_dir = os.path.join(output_dir, 'dp.map')
+                        try:
+                            os.makedirs(output_dir)
+                        except OSError:
+                            if os.path.exists(output_dir):
+                                pass
+                            else:
+                                iface.fail(('Problem encountered trying to '
+                                            'create directory %s.')
+                                            % output_dir,
+                                            steps=(job_flow[step_number:]
+                                                       if step_number != 0
+                                                       else None))
+                                failed = True
+                                raise
+                        try:
+                            if ('multiple_outputs' in step_data) or \
+                                step_data['outputformat'] \
+                                == 'edu.jhu.cs.MultipleOutputFormat':
+                                # Multiple outputs apply AFTER reduce step
+                                multiple_outputs = False
+                        except KeyError:
+                            # No outputformat
+                            pass
+                    if nline_input:
+                        # Create temporary input files
+                        split_input_dir = make_temp_dir(common)
+                        input_files = []
+                        try:
+                            with open(step_inputs[0]) as nline_stream:
+                                for i, line in enumerate(nline_stream):
+                                    offset = str(i)
+                                    input_files.append(os.path.join(
+                                                            split_input_dir,
+                                                            offset
+                                                        )
+                                                    )
+                                    with open(input_files[-1], 'w') \
+                                        as output_stream:
+                                        print >>output_stream, separator.join([
+                                                                offset, line
+                                                            ])
+                        except IndexError:
+                            raise RuntimeError('No NLineInputFormat input to '
+                                               'step "%s".' % step)
+                    else:
+                        input_files = [input_file for input_file in step_inputs
+                                        if os.path.isfile(input_file)]
+                    input_file_count = len(input_files)
+                    if not input_file_count:
+                        iface.step('No input found; skipping step.')
+                    err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
+                    iface.step('Step %d/%d: %s' % 
+                                (step_number + 1, total_steps, step))
+                    iface.status('    Starting step runner...')
+                    execute_balanced_job_with_retries(
+                            pool, iface, step_runner_with_error_return,
+                                       [[step_data['mapper'], input_file,
+                                         output_dir, err_dir,
+                                         i, multiple_outputs,
+                                         separator, None, None, gzip,
+                                         gzip_level, scratch, sort,
+                                         dir_to_path]
+                                         for i, input_file
+                                         in enumerate(input_files)
+                                         if os.path.isfile(input_file)],
+                            status_message='Tasks completed',
+                            finish_message=(
+                                '    Completed %s.'
+                                % dp_iface.inflected(input_file_count, 'task')
+                            ),
+                            max_attempts=max_attempts
+                        )
+                    # Adjust step inputs in case a reducer follows
+                    step_inputs = [input_file for input_file 
+                                    in glob.glob(output_dir)
+                                    if os.path.isfile(input_file)]
                 if step_data['reducer'] not in identity_reducers:
-                    '''There's a reducer parameter, so input to reducer is
-                    output of mapper. Change output directory.'''
-                    output_dir = os.path.join(output_dir, 'dp.map')
+                    '''Determine whether to use "mod" partitioner that uses
+                    product of key fields % reducer count to assign tasks.'''
+                    try:
+                        if (step_data['partitioner']
+                                == 'edu.jhu.cs.ModPartitioner'):
+                            mod_partition = True
+                        else:
+                            mod_partition = False
+                    except KeyError:
+                        # Default to no mod partition
+                        mod_partition = False
+                    # Partition inputs into tasks, presorting
+                    output_dir = os.path.join(step_data['output'], 'dp.tasks')
                     try:
                         os.makedirs(output_dir)
                     except OSError:
@@ -1293,159 +1683,79 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             iface.fail(('Problem encountered trying to '
                                         'create directory %s.') % output_dir,
                                         steps=(job_flow[step_number:]
-                                                   if step_number != 0
-                                                   else None))
+                                                if step_number != 0 else None))
                             failed = True
                             raise
-                    try:
-                        if ('multiple_outputs' in step_data) or \
-                            step_data['outputformat'] \
-                            == 'edu.jhu.cs.MultipleOutputFormat':
-                            # Multiple outputs apply AFTER reduce step
-                            multiple_outputs = False
-                    except KeyError:
-                        # No outputformat
-                        pass
-                if nline_input:
-                    # Create temporary input files
-                    split_input_dir = make_temp_dir(common)
-                    input_files = []
-                    try:
-                        with open(step_inputs[0]) as nline_stream:
-                            for i, line in enumerate(nline_stream):
-                                offset = str(i)
-                                input_files.append(os.path.join(
-                                                            split_input_dir,
-                                                            offset
-                                                        )
-                                                    )
-                                with open(input_files[-1], 'w') \
-                                    as output_stream:
-                                    print >>output_stream, separator.join([
-                                                                offset, line
-                                                            ])
-                    except IndexError:
-                        raise RuntimeError('No NLineInputFormat input to '
-                                           'step "%s".' % step)
-                else:
                     input_files = [input_file for input_file in step_inputs
                                     if os.path.isfile(input_file)]
-                input_file_count = len(input_files)
-                if not input_file_count:
-                    iface.step('No input found; skipping step.')
-                err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
-                iface.step('Step %d/%d: %s' % 
-                            (step_number + 1, total_steps, step))
-                iface.status('    Starting step runner...')
-                execute_balanced_job_with_retries(
-                        pool, iface, step_runner_with_error_return,
-                                   [[step_data['mapper'], input_file,
-                                     output_dir, err_dir,
-                                     i, multiple_outputs,
-                                     separator, None, None, gzip,
-                                     gzip_level, scratch, sort]
-                                     for i, input_file
-                                     in enumerate(input_files)
-                                     if os.path.isfile(input_file)],
-                        status_message='Tasks completed',
-                        finish_message=(
-                            '    Completed %s.'
-                            % dp_iface.inflected(input_file_count, 'task')
-                        ),
-                        max_attempts=max_attempts
-                    )
-                # Adjust step inputs in case a reducer follows
-                step_inputs = [input_file for input_file 
-                                in glob.glob(output_dir)
-                                if os.path.isfile(input_file)]
-            if step_data['reducer'] not in identity_reducers:
-                '''Determine whether to use "mod" partitioner that uses product
-                of key fields % reducer count to assign tasks.'''
-                try:
-                    if step_data['partitioner'] == 'edu.jhu.cs.ModPartitioner':
-                        mod_partition = True
+                    input_file_count = len(input_files)
+                    if input_file_count > num_processes:
+                        file_count_per_group = input_file_count / num_processes
+                        input_file_groups = [
+                                input_files[k:k+file_count_per_group]
+                                for k in
+                                xrange(0, input_file_count,
+                                        file_count_per_group)
+                            ]
                     else:
-                        mod_partition = False
-                except KeyError:
-                    # Default to no mod partition
-                    mod_partition = False
-                # Partition inputs into tasks, presorting
-                output_dir = os.path.join(step_data['output'], 'dp.tasks')
-                try:
-                    os.makedirs(output_dir)
-                except OSError:
-                    if os.path.exists(output_dir):
-                        pass
-                    else:
-                        iface.fail(('Problem encountered trying to '
-                                    'create directory %s.') % output_dir,
-                                    steps=(job_flow[step_number:]
-                                               if step_number != 0 else None))
-                        failed = True
-                        raise
-                input_files = [input_file for input_file in step_inputs
-                                if os.path.isfile(input_file)]
-                input_file_count = len(input_files)
-                if input_file_count > num_processes:
-                    file_count_per_group = input_file_count / num_processes
-                    input_file_groups = [
-                            input_files[k:k+file_count_per_group]
-                            for k in
-                            xrange(0, input_file_count, file_count_per_group)
-                        ]
-                else:
-                    input_file_groups = [[input_file]
-                                            for input_file in input_files]
-                input_file_group_count = len(input_file_groups)
-                iface.step('Step %d/%d: %s'
-                             % (step_number + 1, total_steps, step))
-                execute_balanced_job_with_retries(
-                        pool, iface, presorted_tasks,
-                        [[input_file_group, i,
-                            step_data['sort_options'], output_dir,
-                            step_data['key_fields'], separator,
-                            step_data['task_count'], memcap, gzip,
-                            gzip_level, scratch, sort, mod_partition]
-                                for i, input_file_group
-                                in enumerate(input_file_groups)],
-                        status_message='Inputs partitioned',
-                        finish_message=(
-                            '    Partitioned %s into tasks.'
-                            % dp_iface.inflected(input_file_group_count,
-                                                 'input')
-                        ),
-                        max_attempts=max_attempts
-                    )
-                iface.status('    Starting step runner...')
-                input_files = [os.path.join(output_dir, '%d.*' % i) 
-                               for i in xrange(step_data['task_count'])]
-                # Filter out bad globs
-                input_files = [input_file for input_file in input_files
-                                if glob.glob(input_file)]
-                input_file_count = len(input_files)
-                try:
-                    multiple_outputs = (('multiple_outputs' in step_data) or
-                                        step_data['outputformat']
-                                        == 'edu.jhu.cs.MultipleOutputFormat')
-                except KeyError:
-                    multiple_outputs = False
-                err_dir = os.path.join(steps[step]['output'], 'dp.reduce.log')
-                output_dir = step_data['output']
-                return_values = []
-                execute_balanced_job_with_retries(
-                        pool, iface, step_runner_with_error_return,
-                            [[step_data['reducer'], input_file, output_dir, 
-                            err_dir, i, multiple_outputs, separator,
-                            step_data['sort_options'], memcap, gzip,
-                            gzip_level, scratch, sort] for i, input_file
-                                in enumerate(input_files)],
-                        status_message='Tasks completed',
-                        finish_message=(
-                            '    Completed %s.'
-                            % dp_iface.inflected(input_file_count, 'task')
-                        ),
-                        max_attempts=max_attempts
-                    )
+                        input_file_groups = [[input_file]
+                                                for input_file in input_files]
+                    input_file_group_count = len(input_file_groups)
+                    iface.step('Step %d/%d: %s'
+                                 % (step_number + 1, total_steps, step))
+                    execute_balanced_job_with_retries(
+                            pool, iface, presorted_tasks,
+                            [[input_file_group, i,
+                                step_data['sort_options'], output_dir,
+                                step_data['key_fields'], separator,
+                                step_data['task_count'], memcap, gzip,
+                                gzip_level, scratch, sort, mod_partition]
+                                    for i, input_file_group
+                                    in enumerate(input_file_groups)],
+                            status_message='Inputs partitioned',
+                            finish_message=(
+                                '    Partitioned %s into tasks.'
+                                % dp_iface.inflected(input_file_group_count,
+                                                     'input')
+                            ),
+                            max_attempts=max_attempts
+                        )
+                    iface.status('    Starting step runner...')
+                    input_files = [os.path.join(output_dir, '%d.*' % i) 
+                                   for i in xrange(step_data['task_count'])]
+                    # Filter out bad globs
+                    input_files = [input_file for input_file in input_files
+                                    if glob.glob(input_file)]
+                    input_file_count = len(input_files)
+                    try:
+                        multiple_outputs = (
+                                ('multiple_outputs' in step_data) or
+                                step_data['outputformat']
+                                == 'edu.jhu.cs.MultipleOutputFormat'
+                            )
+                    except KeyError:
+                        multiple_outputs = False
+                    err_dir = os.path.join(
+                                    steps[step]['output'],
+                                    'dp.reduce.log'
+                                )
+                    output_dir = step_data['output']
+                    return_values = []
+                    execute_balanced_job_with_retries(
+                            pool, iface, step_runner_with_error_return,
+                                [[step_data['reducer'], input_file, output_dir, 
+                                err_dir, i, multiple_outputs, separator,
+                                step_data['sort_options'], memcap, gzip,
+                                gzip_level, scratch, sort, dir_to_path]
+                                    for i, input_file
+                                    in enumerate(input_files)],
+                            status_message='Tasks completed',
+                            finish_message=(
+                                '    Completed %s.'
+                                % dp_iface.inflected(input_file_count, 'task')
+                            ),
+                            max_attempts=max_attempts
+                        )
             # Really close open file handles in PyPy
             gc.collect()
             if not keep_intermediates:

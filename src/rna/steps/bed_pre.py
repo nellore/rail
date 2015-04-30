@@ -61,7 +61,7 @@ Tab-delimited output tuple columns (collect)
 3. Start position (Last base before insertion, first base of deletion,
                     or first base of intron)
 4. End position (Last base before insertion, last base of deletion (exclusive),
-                    or last base of intron (exclusive))
+                    or last base of intron (INCLUSIVE HERE))
 5. '+' or '-' indicating which strand is the sense strand for introns,
    inserted sequence for insertions, or deleted sequence for deletions
 6. Coverage of feature for sample with index N
@@ -195,7 +195,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
     for (line_type, rname, pos, end_pos, strand_or_seq), xpartition in xstream(
                 input_stream, 5
             ):
-        collect_specs = [rname, pos, end_pos, strand_or_seq]
+        collect_specs = [rname, pos, str(int(end_pos) - 1), strand_or_seq]
         coverages = []
         i = 0
         if line_type == 'N':

@@ -18,7 +18,7 @@ Tab-delimited output tuple columns (collect)
                     or first base of intron)
     or '\x1c' if field 1 is '3'
 4. End position (Last base before insertion, last base of deletion (exclusive),
-                    or last base of intron (exclusive))
+                    or last base of intron (INCLUSIVE))
     or '\x1c' if field 1 is '3'
 5. '+' or '-' indicating which strand is the sense strand for introns,
    inserted sequence for insertions, or deleted sequence for deletions
