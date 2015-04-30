@@ -3844,7 +3844,9 @@ class RailRnaAlign(object):
                     ]
             } if (base.tsv or base.bed) else {},
             {
-                'name' : 'Write TSVs with intron/indel results across samples',
+                'name' : (('Write normalization factors/introns/indels across '
+                           'samples') if base.tsv else
+                           'Write normalization factors'),
                 'run' : ('tsv.py --bowtie-idx={0} --out={1} '
                          '--manifest={2} --gzip-level={3} '
                          '--tsv-basename={4} {5}').format(
@@ -3865,8 +3867,9 @@ class RailRnaAlign(object):
                                                     base.tsv_basename,
                                                     scratch
                                                 ),
-                'inputs' : ['coverage',
-                                path_join(elastic, 'prebed', 'collect')],
+                'inputs' : ['coverage']
+                            + ([path_join(elastic, 'prebed', 'collect')]
+                                if base.tsv else []),
                 'output' : 'tsv',
                 'mod_partitioner' : True,
                 'taskx' : 1,
@@ -3878,7 +3881,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            } if base.tsv else {},
+            } if (base.tsv or base.bw) else {},
             {
                 'name' : 'Write BEDs with intron/indel results by sample',
                 'run' : ('bed.py --bowtie-idx={0} --out={1} '
