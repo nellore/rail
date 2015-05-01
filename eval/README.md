@@ -60,3 +60,11 @@ All-of-GEUVADIS run
 GEUVADIS read count histogram (Figure 4 from preprint)
 ----
 Download the 666 paired-end GEUVADIS sample FASTQ.gzs contained in `GEUVADIS_all_descriptive.manifest` were downloaded. Run the command `gzip -cd | wc -l` on each file ending with `_1.fastq.gz` from the manifest, and divide the by 2 to obtain the number of reads in the corresponding sample. We generated the histogram in [Wolfram Mathematica](http://www.wolfram.com/mathematica/) v10. 
+
+derfinder Analysis
+----
+See derfinder_analysis.R
+
+Junction Comparison Analysis
+----
+See junction_comparison.R
