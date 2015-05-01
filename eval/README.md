@@ -57,14 +57,17 @@ All-of-GEUVADIS run
 1. Change the output bucket and argument of `--ec2-key-name` in `preprocess_all_of_GEUVADIS.sh`, and run the preprocess job flow contained in that script.
 2. Change the output bucket and argument of `--ec2-key-name` in `submit_all_of_geuvadis_job.sh`, and run the alignment job flow contained in that script.
 
+Junction comparison analysis
+----
+1. Download all junction BEDs form the all-of-GEUVADIS run and place them in the same directory `D`.
+2. Run `sh generate_geuvadis_intron_table.sh D`, where `D` is the directory from step 1. Two files are output: one (`intron_table.tsv`) is a list of introns overlapped by Rail-RNA's alignments across all of GEUVADIS; the other (`GEUVADIS_introns_v4.04.2015.tsv.gz`) is a matrix whose (i, j)th element is the number of reads overlapping intron i in sample j.
+3. In `junction_comparison.R`, under `## read in Rail jxns`, write the correct paths to `intron_table.tsv` and `GEUVADIS_introns_v4.04.2015.tsv.gz`.
+4. Run `junction_comparison.R`.
+
+derfinder analysis
+----
+Refer to `derfinder_analysis.R` for details.
+
 GEUVADIS read count histogram (Figure 4 from preprint)
 ----
-Download the 666 paired-end GEUVADIS sample FASTQ.gzs contained in `GEUVADIS_all_descriptive.manifest` were downloaded. Run the command `gzip -cd | wc -l` on each file ending with `_1.fastq.gz` from the manifest, and divide the by 2 to obtain the number of reads in the corresponding sample. We generated the histogram in [Wolfram Mathematica](http://www.wolfram.com/mathematica/) v10. 
-
-derfinder Analysis
-----
-See derfinder_analysis.R
-
-Junction Comparison Analysis
-----
-See junction_comparison.R
+Download the 666 paired-end GEUVADIS sample FASTQ.gzs contained in `GEUVADIS_all_descriptive.manifest`. Run the command `gzip -cd | wc -l` on each file ending with `_1.fastq.gz` from the manifest, and divide the result by 2 to obtain the number of reads in the corresponding sample. We generated the histogram in [Wolfram Mathematica](http://www.wolfram.com/mathematica/) v10.
