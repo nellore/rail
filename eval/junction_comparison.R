@@ -44,6 +44,25 @@ jMapRail$code = ifelse(jMapRail$inEnsembl, "InEns",
 	ifelse(jMapRail$inEnsemblStart & jMapRail$inEnsemblEnd, "NovelTrans",
 	ifelse(jMapRail$inEnsemblStart | jMapRail$inEnsemblEnd, "NovelJxn", "NewJxn")))
 
+######## novel transcripts #######
+## gene ranges ###################
+jList = split(theJunctions, theJunctions$ensemblID)
+geneRanges = unlist(range(jList))
+geneRanges = geneRanges[order(geneRanges)]
+
+oo = findOverlaps(jMapRail, geneRanges,maxgap=100)
+jRailList = CharacterList(split(jMapRail$code[queryHits(oo)], 
+	names(geneRanges)[subjectHits(oo)]))
+jRailTab = as.data.frame(sapply(unique(jMapRail$code), 
+	function(x) sum(jRailList == x)))
+jRailTab$Symbol = theJunctions$symbol[
+	match(rownames(jRailTab), theJunctions$ensemblID)]
+
+theJunctions$symbol[match(names(checkIndex), theJunctions$ensemblID)]
+	
+#### any genes with many novel transcripts?
+	
+	
 ###### compare #####	
 length(jMapTop)	# number of jxns
 length(jMapRail) # number of jxns	
