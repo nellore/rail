@@ -1682,7 +1682,7 @@ class RailRnaElastic(object):
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-        log_uri=None, ami_version='3.6.0',
+        log_uri=None, ami_version='3.7.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -2131,7 +2131,7 @@ class RailRnaElastic(object):
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='3.6.0',
+            default='3.7.0',
             help='Amazon Machine Image version'
         )
         elastic_parser.add_argument('--visible-to-all-users',
@@ -4151,7 +4151,7 @@ class RailRnaElasticPreprocessJson(object):
         intermediate_dir='./intermediate', force=False, aws_exe=None,
         profile='default', region='us-east-1',
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        log_uri=None, ami_version='3.6.0',
+        log_uri=None, ami_version='3.7.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -4474,7 +4474,7 @@ class RailRnaElasticAlignJson(object):
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
-        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.6.0',
+        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.7.0',
         visible_to_all_users=False, tags='', name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW', hadoop_jar=None,
         master_instance_count=1, master_instance_type='c1.xlarge',
@@ -4844,7 +4844,7 @@ class RailRnaElasticAllJson(object):
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
-        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.6.0',
+        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.7.0',
         visible_to_all_users=False, tags='', name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW', hadoop_jar=None,
         master_instance_count=1, master_instance_type='c1.xlarge',
