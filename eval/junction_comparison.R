@@ -58,8 +58,8 @@ jRailTab = as.data.frame(sapply(unique(jMapRail$code),
 jRailTab$Symbol = theJunctions$symbol[
 	match(rownames(jRailTab), theJunctions$ensemblID)]
 
-theJunctions$symbol[match(names(checkIndex), theJunctions$ensemblID)]
-	
+write.csv(jRailTab, file="junctionBreakdown_byLocusRange.csv")
+
 #### any genes with many novel transcripts?
 	
 	
