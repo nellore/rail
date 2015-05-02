@@ -69,16 +69,20 @@ Licenses
 Contributors
 -----
 * [Abhi Nellore]
-* [Jacob Pritt]
 * [Leo Collado-Torres]
+* [Andrew Jaffe]
 * [Jamie Morton]
+* [Jacob Pritt]
+* [José Alquicira-Hernández]
 * [Jeff Leek]
 * [Ben Langmead]
 
 [Abhi Nellore]: http://nellore.github.io/
-[Jacob Pritt]: https://github.com/jpritt
-[Jamie Morton]: https://github.com/mortonjt
 [Leo Collado-Torres]: http://www.biostat.jhsph.edu/~lcollado/
+[Andrew Jaffe]: http://www.aejaffe.com/
+[Jamie Morton]: https://github.com/mortonjt
+[Jacob Pritt]: https://github.com/jpritt
+[José Alquicira-Hernández]: https://github.com/joseah
 [Ben Langmead]: http://www.langmead-lab.org/
 [Jeff Leek]: http://jtleek.com/
 
