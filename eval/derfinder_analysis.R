@@ -9,7 +9,7 @@ pd = read.delim("GD667.QCstats.masterfile.txt",	 as.is=TRUE)
 pd = pd[,1:37]
 
 # ## Load matching IDs
-load("pMatch.Rdata")
+load("/dcs01/ajaffe/Brain/derRuns/railDER/railGEU/fixSampleNames/pMatch.Rdata")
 pd$RailID = pMatch$railName[match(rownames(pd), pMatch$bgName)]
 
 ## Load regions data
