@@ -86,6 +86,7 @@ This will generate the `GRanges` object with the ERs in `railDER/railGEU/fixSamp
     ```
     Rscript derfinder_analysis.R
     ```
+This generates `ssMat_geuvadis.rda` that has for all the 290416 ERs the percent of variance explained by each of the 16 variables: Population, RIN value, RNA extraction batch, RNA concentration, RNA quantity used, Library preparation date, Primer index, Method concentration measure, Library concentration, Library size, Library concentration used, Cluster kit, Sequencing kit, Cluster density, Lane, and Residual variation. It then creates boxplots saved in `r2_boxplots_overall.pdf`.
 
 GEUVADIS read count histogram (Figure 4 from preprint)
 ----
