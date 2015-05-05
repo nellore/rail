@@ -66,7 +66,23 @@ Junction comparison analysis
 
 derfinder analysis
 ----
-Refer to `derfinder_analysis.R` for details.
+
+1. Use `railDER/run-all.sh` to load the coverage from the bigWig files and identify the Expressed Regions (ERs). To run it, use:
+    ```
+    cd railDER
+    sh run-all.sh railGEU
+    ```
+    This will generate the files in `railDER/railGEU/CoverageInfo` and `railDER/railGEU/regionMatrix`. `railDER/run-all.sh` is based on `derSoftware/run-all.sh` described at [derSoftware](http://leekgroup.github.io/derSoftware/) which is the supplementary website for the `derfinder` paper.
+2. Run `railGEU/fixSampleNames/fixSampleNames.R` to match the sample names from the GEUVADIS `ballgown` object and the names used by Rail-RNA in the manifest files.
+    ```
+    cd railDER/railGEU
+    Rscript fixSampleNames.R
+    ```
+    This will generate the `GRanges` object with the ERs in `railDER/railGEU/fixSampleNames/regions.Rdata` and the coverage matrix `railDER/railGEU/fixSampleNames/coverageMatrix.Rdata`.
+3. `derfinder_analysis.R` analyzes the resulting ERs and generates several plots included in the preprint and supplementary material. Use
+    ```
+    Rscript derfinder_analysis.R
+    ```
 
 GEUVADIS read count histogram (Figure 4 from preprint)
 ----
