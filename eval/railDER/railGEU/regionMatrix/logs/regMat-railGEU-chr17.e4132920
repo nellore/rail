@@ -1,0 +1,14 @@
+Using the following user library: ~/R/x86_64-unknown-linux-gnu-library/3.1.x
+2015-04-07 23:14:25
+2015-04-07 23:16:26
+2015-04-07 23:16:26 regionMatrix: processing chr17
+2015-04-07 23:16:26 filterData: normalizing coverage
+2015-04-07 23:22:09 filterData: done normalizing coverage
+2015-04-08 01:12:01 filterData: originally there were 81195210 rows, now there are 3091509 rows. Meaning that 96.19 percent was filtered.
+2015-04-08 01:12:01 findRegions: identifying potential segments
+2015-04-08 01:12:01 findRegions: segmenting F-stats information
+2015-04-08 01:12:02 findRegions: identifying candidate regions
+2015-04-08 01:12:03 findRegions: identifying region clusters
+2015-04-08 01:12:44 getRegionCoverage: processing chr17
+2015-04-08 01:22:26 getRegionCoverage: done processing chr17
+2015-04-08 01:26:34

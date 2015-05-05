@@ -1,0 +1,26 @@
+**** Job starts ****
+Tue Apr  7 23:14:00 EDT 2015
+
+R version 3.1.1 Patched (2014-10-16 r66782) -- "Sock it to Me"
+Copyright (C) 2014 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> maindir <- '/dcs01/ajaffe/Brain/derRuns/railDER/railGEU'; cutoff <- 5; readLen <- 75; chr <- 'chr5'; source('/dcs01/ajaffe/Brain/derRuns/railDER/step6-regionMatrix.R')
+> 
+> 
+**** Job ends ****
+Wed Apr  8 01:34:15 EDT 2015
