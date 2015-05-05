@@ -1,7 +1,8 @@
 ####
 
-library(derfinder)
-library(GenomicRanges)
+library('derfinder')
+library('GenomicRanges')
+library('devtools')
 
 ### phenotype data
 pd = read.delim("GD667.QCstats.masterfile.txt",	 as.is=TRUE)
@@ -91,3 +92,8 @@ for(i in seq(along=annoClassList)) {
 	text(x = 8.5, y= 80, names(annoClassList)[i], cex=1.7)
 }
 dev.off()
+
+## Reproducibility info
+Sys.time() # date generated
+options(width = 120)
+session_info()
