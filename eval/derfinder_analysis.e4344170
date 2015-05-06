@@ -30,8 +30,7 @@ Loading required package: S4Vectors
 Loading required package: stats4
 Loading required package: IRanges
 Loading required package: GenomeInfoDb
-2015-05-05 20:21:21 annotateRegions: counting
-2015-05-05 20:21:28 annotateRegions: annotating
-Error in palette(brewer.pal(7, "Dark2")) : 
-  could not find function "brewer.pal"
-Execution halted
+2015-05-05 20:41:00 annotateRegions: counting
+2015-05-05 20:41:05 annotateRegions: annotating
+Session info -----------------------------------------------------------------------------------------------------------
+Packages ---------------------------------------------------------------------------------------------------------------
