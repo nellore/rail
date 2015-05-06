@@ -3,6 +3,7 @@
 library('derfinder')
 library('GenomicRanges')
 library('devtools')
+library('RColorBrewer')
 
 ### phenotype data
 pd = read.delim("GD667.QCstats.masterfile.txt",	 as.is=TRUE)
