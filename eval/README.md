@@ -91,7 +91,7 @@ Alternatively, submit a SGE cluster job using:
     ```
     qsub derfinder_analysis.sh
     ```
-This generates `ssMat_geuvadis.rda` that has for all the 290416 ERs the percent of variance explained by each of the 16 variables: Population, RIN value, RNA extraction batch, RNA concentration, RNA quantity used, Library preparation date, Primer index, Method concentration measure, Library concentration, Library size, Library concentration used, Cluster kit, Sequencing kit, Cluster density, Lane, and Residual variation. It then creates boxplots saved in `r2_boxplots_overall.pdf`. `derfinder_analysis.o4344170` and `derfinder_analysis.e4344170` are the corresponding log files.
+This generates `ssMat_geuvadis.rda` that has for all the 290416 ERs the percent of variance explained by each of the 16 variables: Population, RIN value, RNA extraction batch, RNA concentration, RNA quantity used, Library preparation date, Primer index, Method concentration measure, Library concentration, Library size, Library concentration used, Cluster kit, Sequencing kit, Cluster density, Lane, and Residual variation. It then creates boxplots saved in `r2_boxplots_overall.pdf` and a venn diagram of the ERs overlapping annotation features from ENSEMBL v75 saved in `ensemblVenn.pdf`. Overlap information is saved in `ensemblAnno.Rdata`. `derfinder_analysis.o4344170` and `derfinder_analysis.e4344170` are the corresponding log files.
 
 GEUVADIS read count histogram (Figure 4 from preprint)
 ----
