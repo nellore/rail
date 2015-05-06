@@ -80,7 +80,7 @@ This will generate the files in `railDER/railGEU/CoverageInfo` and `railDER/rail
     cd railDER/railGEU
     Rscript fixSampleNames.R
     ```
-This will generate the `GRanges` object with the ERs in `railDER/railGEU/fixSampleNames/regions.Rdata` and the coverage matrix `railDER/railGEU/fixSampleNames/coverageMatrix.Rdata`.
+This will generate the `GRanges` object with the ERs in `railDER/railGEU/fixSampleNames/regions.Rdata` and the coverage matrix `railDER/railGEU/fixSampleNames/coverageMatrix.Rdata`. The coverage matrix file is available via Figshare at [dx.doi.org/10.6084/m9.figshare.1405638](http://dx.doi.org/10.6084/m9.figshare.1405638).
 3. `derfinder_analysis.R` analyzes the resulting ERs and generates several plots included in the preprint and supplementary material. Use
 
     ```
