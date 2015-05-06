@@ -216,6 +216,49 @@ for(i in seq(along=annoClassList)) {
 }
 dev.off()
 
+## Without population term
+sumSqList2 = parallel::mclapply(1:nrow(y), function(i) {
+	if(i %% 1000 == 0) cat(".")
+	t(anova(lm(y[i,] ~ RIN + RNAExtractionBatch + 
+		RNAConcentration_ng.ul + RNAQuantityLibraryPrep_ng + 
+		LibraryPrepDate + PrimerIndex + LibraryConcentrationMethod + 
+		LibraryConcentration_ng.ul + BioanalyzerSize_bp + 
+		LibraryQuantitySequencing_pM + ClusterKitBatch + 
+		SequencingKitBatch + ClusterDensityPass + Lane, data=pd))[2])
+}, mc.cores=12)
+
+ssOut2 = do.call("rbind", sumSqList2)
+rownames(ssOut2) = NULL
+bg2 = matrix(rep(rowSums(ssOut2), ncol(ssOut2)), 
+	nc = ncol(ssOut2),nrow = nrow(ssOut2))
+ssMat2 = ssOut2 / bg2
+lab2 = c("RIN value", "RNA extraction batch",
+	"RNA concentration", "RNA quantity used",
+	"Library preparation date", "Primer index",
+	"Method concentration measure", "Library concentration",
+	"Library size", "Library concentration used","Cluster kit",
+	"Sequencing kit", "Cluster density", "Lane", "Residual variation")
+save(ssMat2, lab2, file="ssMat_geuvadis_noPop.rda", compress=TRUE)
+
+## overall boxplot no pop
+pdf("r2_boxplots_overall_noPop.pdf", h = 5, w = 12)
+par(mar=c(9,5,2,2))
+palette(brewer.pal(7, "Dark2"))
+boxplot(100*ssMat2,xaxt="n", ylim = c(0,90), 
+	cex.axis=1.3,cex.lab=1.1, range=2,
+	ylab="Percentage variance explained", cex=0.5)
+text(1:ncol(ssMat2)+0.2, y = -8, lab2, xpd=TRUE, srt=45, pos=2)
+text(x = 8.5, y= 80, "All Regions", cex=1.7)
+for(i in seq(along=annoClassList)) {
+	ii= annoClassList[[i]]
+	boxplot(100*ssMat2[ii,],xaxt="n", ylim = c(0,90), 
+		cex.axis=1.3,cex.lab=1.1,range=2, col = i,
+		ylab="Percentage variance explained", cex=0.5)
+	text(1:ncol(ssMat2)+0.1, y = -8, lab2, xpd=TRUE, srt=45, pos=2)
+	text(x = 8.5, y= 80, names(annoClassList)[i], cex=1.7)
+}
+dev.off()
+
 ## Reproducibility info
 Sys.time() # date generated
 options(width = 120)
