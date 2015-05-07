@@ -19,7 +19,7 @@ Outputs currently include
 
 and will likely expand in future versions.
 
-Read the [preprint](https://youtu.be/6ZPZUtE6RgA) for more details.
+Read the [preprint](http://biorxiv.org/content/early/2015/05/07/019067) for more details.
 
 Get set up
 -----
