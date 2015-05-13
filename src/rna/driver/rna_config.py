@@ -3044,8 +3044,8 @@ class RailRnaAlign(object):
         undeliverables = split_deliverables - deliverable_choices
         if undeliverables:
             base.errors.append('Some deliverables (--deliverables) specified '
-                               'are invalid. Valid choices are in {"idx", '
-                               '"bam", "bed", "tsv", "bw", "itn"}, but '
+                               'are invalid. Valid choices are in {{"idx", '
+                               '"bam", "bed", "tsv", "bw", "itn"}}, but '
                                '"{0}" was entered.'.format(deliverables))
         elif not split_deliverables:
             base.errors.append('At least one deliverable (--deliverables) '
@@ -3593,7 +3593,7 @@ class RailRnaAlign(object):
                     ]
             } if base.isofrag_idx is None else {},
             {
-                'name' : 'Get transcriptome elements for realignment',
+                'name' : 'Get isofrags for index construction'
                 'run' : ('intron_fasta.py --bowtie-idx={0} {1}').format(
                                                         base.bowtie1_idx,
                                                         verbose
@@ -3611,7 +3611,7 @@ class RailRnaAlign(object):
                     ]
             } if base.isofrag_idx is None else {},
             {
-                'name' : 'Build index of transcriptome elements',
+                'name' : 'Build isofrag index',
                 'run' : ('intron_index.py --bowtie2-build-exe={0} '
                          '--out={1} --basename {2} {3} {4}').format(
                                             base.bowtie2_build_exe,
