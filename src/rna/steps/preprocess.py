@@ -92,32 +92,66 @@ _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 _input_line_count, _output_line_count = 0, 0
 
-def qname_from_read(original_qname, seq, sample_label):
+'''Set Bowtie 2's default quality-based mismatch penalties; see
+http://bowtie-bio.sourceforge.net/bowtie2/manual.shtml#bowtie2-options-mp
+for more information.'''
+_MX, _MN = 6, 2
+'''This table depends on _MX, _MN above; it maps mismatch penalties to quality
+scores, each an "exemplar" from a different bin.'''
+_mismatch_penalties_to_quality_scores = string.maketrans('23456', '#05Hh')
+
+_alphabet = string.ascii_uppercase + string.ascii_lowercase + \
+            string.digits + '-_'
+_base = len(_alphabet)
+
+def encode(value):
+    """ Encodes an integer in base (len alphabet) to shorten it.
+
+        This function is used to assign short names to reads by record.
+        Based on http://stackoverflow.com/questions/561486/
+        how-to-convert-an-integer-to-the-shortest-url-safe-string-in-python/
+        561534#561534 . Does not reverse encoded string because it's 
+        unnecessary.
+
+        value: integer
+
+        Return value: base (len alphabet) encoded value
+    """
+    assert value >= 0
+    s = []
+    while True:
+        value, r = divmod(value, _base)
+        s.append(_alphabet[r])
+        if value == 0: break
+    return ''.join(s)
+
+def qname_from_read(qname, seq, sample_label):
     """ Returns QNAME including sample label and ID formed from hash.
 
         New QNAME takes the form:
-            <original_qname> + '\x1d' + 
-            <short hash of original_qname + seq + sample label> + '\x1d' +
-            <sample_label>
+            <qname> + '\x1d'
+            + <short hash of original_qname + seq + sample label> + '\x1d'
+            + <sample_label>
 
         The purpose of the ID is to distinguish reads with the same name in
         the original FASTA/FASTQ. This should never happen in well-formed
         inputs, but can happen in, for example, Flux-generated data.
 
-        original_qname: original name of read
+        qname: original name of read OR a shortened name
         seq: read sequence (+ qual sequence; doesn't matter)
+        short_name: short name to ultimately give read if qname shortening
+            is turned on
         sample_label: sample label
 
         Return value: new QNAME string
     """
-    return ''.join([original_qname,
-                    '\x1d',
-                    hex(hash(original_qname + seq + sample_label))[-12:],
+    return ''.join([qname, '\x1d',
+                    hex(hash(qname + seq + sample_label))[-12:],
                     '\x1d', sample_label])
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         to_stdout=False, push='.', mover=filemover.FileMover(),
-        verbose=False, scratch=None):
+        verbose=False, scratch=None, bin_qualities=True, short_qnames=False):
     """ Runs Rail-RNA-preprocess
 
         Input (read from stdin)
@@ -188,9 +222,42 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             stderr
         scratch: scratch directory for storing temporary files or None if 
             securely created temporary directory
+        bin_qualities: True iff quality string should be binned according to
+            rules in _mismatch_penalties_to_quality_scores
+            and round_quality_string() defined in go()
+        short_qnames: True iff original qname should be killed and a new qname
+            should be written in a short base64-encoded format
 
         No return value
     """
+    if bin_qualities:
+        import math
+        def round_quality_string(qual):
+            """ Bins phred+33 quality string to improve compression.
+
+                Uses 5-bin scheme that does not affect Bowtie 2 alignments
+
+                qual: quality string
+
+                Return value: "binned" quality string.
+            """
+            return ''.join(
+                [str(int(
+                    _MN + math.floor((_MX - _MN) * min(
+                                                    ord(qual_char) - 33.0, 40.0
+                                                ) / 40.0)
+                        )) for qual_char in qual]).translate(
+                                _mismatch_penalties_to_quality_scores
+                            )
+    else:
+        def round_quality_string(qual):
+            """ Leaves quality string unbinned and untouched.
+
+                qual: quality string
+
+                Return value: qual
+            """
+            return qual
     global _input_line_count, _output_line_count
     temp_dir = make_temp_dir(scratch)
     print >>sys.stderr, 'Created local destination directory "%s".' % temp_dir
@@ -227,9 +294,11 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             for i, manifest_line in enumerate(manifest_lines):
                 manifest_line_field_count = len(manifest_line)
                 if manifest_line_field_count == 3:
-                    source_dict[(Url(manifest_line[0]),)] = \
-                        (manifest_line[-1],
-                            int(indexes[i]), int(read_counts[i]))
+                    source_dict[(Url(manifest_line[0]),)] = (
+                            manifest_line[-1],
+                            int(indexes[i]),
+                            int(read_counts[i])
+                        )
                 else:
                     assert manifest_line_field_count == 5
                     source_dict[(Url(manifest_line[0]),
@@ -262,11 +331,15 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     records_to_consume += 1
                 if records_to_consume % 2:
                     records_to_consume -= 1
+                # Index reads according to order in input to shorten read names
+                read_index = skip_count / 2 # Index reads in pairs
             else:
                 records_to_consume = source_dict[source_urls][2]
+                read_index = skip_count
         else:
             skip_count = 0
             records_to_consume = None # Consume all records
+            read_index = 0
         assert (records_to_consume >= 0 or records_to_consume is None), (
                 'Negative value %d of records to consume encountered.'
             ) % records_to_consume
@@ -350,6 +423,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     line_numbers = [0, 0]
                     read_next_line = True
                     nucs_read = 0
+                    pairs_read = 0
                     while True:
                         if read_next_line:
                             # Read next line only if FASTA mode didn't already
@@ -526,23 +600,35 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 right_seq = reversed_complement_seqs[1]
                                 right_qual = quals[1][::-1]
                                 right_reversed = '1'
+                            if short_qnames:
+                                left_qname_to_write = encode(read_index) + '/1'
+                                right_qname_to_write = encode(
+                                                            read_index
+                                                        ) + '/2'
+                            else:
+                                left_qname_to_write = original_qnames[0]
+                                right_qname_to_write = original_qnames[1]
                             print >>output_stream, '\t'.join(
                                         [
                                             left_seq,
                                             left_reversed,
                                             qname_from_read(
-                                                    original_qnames[0],
+                                                    left_qname_to_write,
                                                     seqs[0] + quals[0], 
                                                     sample_label
                                                 ),
-                                            '\n'.join([left_qual, right_seq]),
+                                            '\n'.join([
+                                                round_quality_string(
+                                                    left_qual
+                                                ), right_seq
+                                            ]),
                                             right_reversed,
                                             qname_from_read(
-                                                    original_qnames[1],
+                                                    right_qname_to_write,
                                                     seqs[1] + quals[1], 
                                                     sample_label
                                                 ),
-                                            right_qual
+                                            round_quality_string(right_qual)
                                         ]
                                     )
                             records_printed += 2
@@ -562,20 +648,25 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 seq = reversed_complement_seqs[0]
                                 qual = quals[0][::-1]
                                 is_reversed = '1'
+                            if short_qnames:
+                                qname_to_write = encode(read_index)
+                            else:
+                                qname_to_write = original_qnames[0]
                             print >>output_stream, '\t'.join(
                                         [
                                             seq,
                                             is_reversed,
                                             qname_from_read(
-                                                original_qnames[0],
+                                                qname_to_write,
                                                 seqs[0] + quals[0], 
                                                 sample_label
                                             ),
-                                            qual
+                                            round_quality_string(qual)
                                         ]
                                     )
                             records_printed += 1
                         _output_line_count += 1
+                        read_index += 1
                         for seq in seqs:
                             nucs_read += len(seq)
                         if records_printed == records_to_consume:
@@ -641,6 +732,12 @@ if __name__ == '__main__':
     parser.add_argument('--push', type=str, required=False,
         default='.',
         help='Directory in which to push output files')
+    parser.add_argument('--bin-qualities', action='store_const', const=True,
+        default=False,
+        help='Rounds base quality score, placing it in one of five bins')
+    parser.add_argument('--shorten-read-names', action='store_const',
+        const=True, default=False,
+        help='Gives each read (pair) a unique short read name to save space')
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
@@ -657,6 +754,8 @@ if __name__ == '__main__':
         gzip_level=args.gzip_level,
         to_stdout=args.stdout,
         push=args.push,
+        bin_qualities=args.bin_qualities,
+        short_qnames=args.shorten_read_names,
         verbose=args.verbose,
         mover=mover)
     print >>sys.stderr, 'DONE with preprocess.py; in/out=%d/%d; ' \
