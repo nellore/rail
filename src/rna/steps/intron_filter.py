@@ -279,13 +279,16 @@ elif __name__ == '__main__':
                 for line in output_stream:
                     output_lines.append(line.strip())
             self.assertTrue(
-                    'chr1+\t0\t%012d\t%012d' % (100, 140) in output_lines
+                    'filter\tchr1+\t0\t%012d\t%012d' % (100, 140)
+                    in output_lines
                 )
             self.assertTrue(
-                    'chr2-\t1\t%012d\t%012d' % (171, 185) in output_lines
+                    'filter\tchr2-\t1\t%012d\t%012d' % (171, 185)
+                    in output_lines
                 )
             self.assertTrue(
-                    'chr2-\t2\t%012d\t%012d' % (171, 185)in output_lines
+                    'filter\tchr2-\t2\t%012d\t%012d' % (171, 185)
+                    in output_lines
                 )
             self.assertEquals(
                     len(output_lines), 3
@@ -334,10 +337,12 @@ elif __name__ == '__main__':
                 for line in output_stream:
                     output_lines.append(line.strip())
             self.assertTrue(
-                    'chr1+\t0\t%012d\t%012d' % (100, 140) in output_lines
+                    'filter\tchr1+\t0\t%012d\t%012d' % (100, 140)
+                    in output_lines
                 )
             self.assertTrue(
-                    'chr3+\t1\t%012d\t%012d' % (23, 85)in output_lines
+                    'filter\tchr3+\t1\t%012d\t%012d' % (23, 85)
+                    in output_lines
                 )
             self.assertEquals(
                     len(output_lines), 2

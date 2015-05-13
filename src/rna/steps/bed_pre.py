@@ -195,7 +195,9 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
     for (line_type, rname, pos, end_pos, strand_or_seq), xpartition in xstream(
                 input_stream, 5
             ):
-        collect_specs = [rname, pos, str(int(end_pos) - 1), strand_or_seq]
+        collect_specs = [rname, pos, end_pos if line_type != 'N'
+                                             else str(int(end_pos) - 1),
+                                     strand_or_seq]
         coverages = []
         i = 0
         if line_type == 'N':
@@ -433,7 +435,7 @@ elif __name__ == '__main__':
                     in output_lines
                 )
             self.assertTrue(
-                    'collect\t2\t000000000003\t3567\t3890\t+\t0\t0\t2'
+                    'collect\t2\t000000000003\t3567\t3889\t+\t0\t0\t2'
                     in output_lines
                 )
             self.assertEquals(

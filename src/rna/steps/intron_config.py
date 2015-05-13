@@ -652,11 +652,11 @@ elif __name__ == '__main__':
                 '''Recall that input is partitioned by first column and 
                 sorted by the next three columns.'''
                 input_stream.write(
-                        'chr1\t1\ti\t10\t50\n'
-                        'chr1\t1\ti\t30\t70\n'
-                        'chr1\t1\ti\t75\t101\n'
-                        'chr1\t1\ti\t90\t1300\n'
-                        'chr1\t1\ti\t91\t101\n'
+                        'chr1\t1\t10\t50\n'
+                        'chr1\t1\t30\t70\n'
+                        'chr1\t1\t75\t101\n'
+                        'chr1\t1\t90\t1300\n'
+                        'chr1\t1\t91\t101\n'
                     )
             with open(self.output_file, 'w') as output_stream:
                 with open(self.input_file) as input_stream:
@@ -670,8 +670,8 @@ elif __name__ == '__main__':
                 for line in result_stream:
                     tokens = line.strip().split('\t')
                     intron_configs.add(frozenset(zip(
-                            [int(pos) for pos in tokens[2].split(',')],
-                            [int(end_pos) for end_pos in tokens[3].split(',')]
+                            [int(pos) for pos in tokens[1].split(',')],
+                            [int(end_pos) for end_pos in tokens[2].split(',')]
                         )))
             self.assertEqual(
                     set([
@@ -690,12 +690,12 @@ elif __name__ == '__main__':
                 '''Recall that input is partitioned by first column and 
                 sorted by the next three columns.'''
                 input_stream.write(
-                        'chr1\t1\ti\t11\t200\n'
-                        'chr1\t1\ti\t31\t56\n'
-                        'chr1\t1\ti\t75\t201\n'
-                        'chr1\t1\ti\t91\t101\n'
-                        'chr1\t1\ti\t205\t225\n'
-                        'chr2\t1\ti\t21\t76\n'
+                        'chr1\t1\t11\t200\n'
+                        'chr1\t1\t31\t56\n'
+                        'chr1\t1\t75\t201\n'
+                        'chr1\t1\t91\t101\n'
+                        'chr1\t1\t205\t225\n'
+                        'chr2\t1\t21\t76\n'
                     )
             with open(self.output_file, 'w') as output_stream:
                 with open(self.input_file) as input_stream:
@@ -707,9 +707,9 @@ elif __name__ == '__main__':
             with open(self.output_file) as result_stream:
                 for line in result_stream:
                     tokens = line.strip().split('\t')
-                    intron_configs[tokens[1]].add(frozenset(zip(
-                            [int(pos) for pos in tokens[2].split(',')],
-                            [int(end_pos) for end_pos in tokens[3].split(',')]
+                    intron_configs[tokens[0]].add(frozenset(zip(
+                            [int(pos) for pos in tokens[1].split(',')],
+                            [int(end_pos) for end_pos in tokens[2].split(',')]
                         )))
             self.assertEqual(
                     set([

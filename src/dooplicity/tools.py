@@ -46,6 +46,26 @@ from collections import defaultdict
 import time
 from traceback import format_exc
 
+@contextlib.contextmanager
+def cd(dir_name):
+    """ Changes directory in a context only. Borrowed from AWS CLI code.
+
+        This is also in tools.py, but IPython has trouble with it.
+
+        dir_name: directory name to which to change
+
+        No return value.
+    """
+    if dir_name is None:
+        yield
+        return
+    original_dir = os.getcwd()
+    os.chdir(dir_name)
+    try:
+        yield
+    finally:
+        os.chdir(original_dir)
+
 class KeepAlive(threading.Thread):
     """ Writes Hadoop status messages to avert task termination. """
     def __init__(self, status_stream, period=120):
