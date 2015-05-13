@@ -3593,7 +3593,7 @@ class RailRnaAlign(object):
                     ]
             } if base.isofrag_idx is None else {},
             {
-                'name' : 'Get isofrags for index construction'
+                'name' : 'Get isofrags for index construction',
                 'run' : ('intron_fasta.py --bowtie-idx={0} {1}').format(
                                                         base.bowtie1_idx,
                                                         verbose
