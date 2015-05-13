@@ -1,7 +1,7 @@
 ![Rail-RNA logo](https://github.com/nellore/rail/blob/master/assets/railrnalogodark.png)
 ====
 
-This is the official repo for Rail-RNA, software for RNA-seq analysis. [Download](https://github.com/nellore/rail/releases/download/v0.1.0a/install_rail-rna-0.1.5) the latest stable release. **Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
+This is the official repo for Rail-RNA, software for RNA-seq analysis. [Download](https://github.com/nellore/rail/releases/download/v0.1.5/install_rail-rna-0.1.5) the latest stable release. **Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
 
 Get interested
 -----
@@ -23,7 +23,7 @@ Read the [preprint](http://biorxiv.org/content/early/2015/05/07/019067) for more
 
 Get set up
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.5`](https://github.com/nellore/rail/releases/download/v0.1.0a/install_rail-rna-0.1.5), change to the directory containing it, and make the installer executable with
+Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.5`](https://github.com/nellore/rail/releases/download/v0.1.5/install_rail-rna-0.1.5), change to the directory containing it, and make the installer executable with
 ```
 chmod +x install_rail-rna-0.1.5
 ```
