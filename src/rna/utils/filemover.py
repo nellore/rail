@@ -198,7 +198,7 @@ class FileMover(object):
         elif url.is_curlable:
             oldp = os.getcwd()
             os.chdir(dest)
-            command_list = ['curl', '-s', '-O', '--connect-timeout', '60']
+            command_list = ['curl', '-s', '-O', '--connect-timeout', '600']
             command_list.append(url.to_url())
             command = ' '.join(command_list)
             filename = os.path.join(dest, url.to_url().rpartition('/')[2])
