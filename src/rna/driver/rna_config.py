@@ -4026,10 +4026,10 @@ class RailRnaAlign(object):
                     ]
             },
             {
-                'name' : ('Write mapped read counts'),
+                'name' : 'Write mapped read counts',
                 'run' : ('collect_read_stats.py --bowtie-idx={0} --out={1} '
                          '--manifest={2} --gzip-level={3} '
-                         '--tsv-basename={4} {5}').format(
+                         '--tsv-basename={4} {5} {6}').format(
                                                     base.bowtie1_idx,
                                                     ab.Url(
                                                         path_join(elastic,
@@ -4045,7 +4045,8 @@ class RailRnaAlign(object):
                                                     if 'gzip_level' in
                                                     dir(base) else 3,
                                                     base.tsv_basename,
-                                                    scratch
+                                                    scratch,
+                                                    keep_alive
                                                 ),
                 'inputs' : [path_join(elastic, 'bam', 'counts')],
                 'output' : 'read_counts',
@@ -4059,7 +4060,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            } if (base.bw or base.tsv or base.bam) else {},]
+            } if (base.bw or base.tsv or base.bam) else {}]
         return [step for step in steps_to_return if step != {}]
 
     @staticmethod
