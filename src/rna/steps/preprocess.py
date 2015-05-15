@@ -151,7 +151,8 @@ def qname_from_read(qname, seq, sample_label):
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         to_stdout=False, push='.', mover=filemover.FileMover(),
-        verbose=False, scratch=None, bin_qualities=True, short_qnames=False):
+        verbose=False, scratch=None, bin_qualities=True, short_qnames=False,
+        skip_bad_records=False):
     """ Runs Rail-RNA-preprocess
 
         Input (read from stdin)
@@ -227,6 +228,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             and round_quality_string() defined in go()
         short_qnames: True iff original qname should be killed and a new qname
             should be written in a short base64-encoded format
+        skip_bad_records: True iff bad records should be skipped; otherwise,
+            raises exception if bad record is encountered
 
         No return value
     """
@@ -436,6 +439,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             break
                         line_numbers = [i + 1 for i in line_numbers]
                         lines = [line.strip() for line in lines]
+                        bad_record_skip = False
                         if lines[0][0] in fastq_cues:
                             if records_to_consume and not skipped:
                                 '''Skip lines as necessary; for paired-end
@@ -471,35 +475,64 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                             for source_stream
                                             in source_streams]
                             line_numbers = [i + 1 for i in line_numbers]
-                            assert plus_lines[0][0] == '+', (
-                                    'Malformed read "%s" at line %d of '
-                                    'file "%s".'
-                                ) % (lines[0], line_numbers[0], sources[0])
-                            if plus_lines[1]:
-                                assert plus_lines[1][0] == '+', (
+                            try:
+                                assert plus_lines[0][0] == '+', (
                                         'Malformed read "%s" at line %d of '
                                         'file "%s".'
-                                    ) % (lines[1], line_numbers[1], sources[1])
-                            try:
-                                # Kill spaces in name
-                                original_qnames = [line[1:].replace(' ', '_')
-                                                    for line in lines]
-                            except IndexError:
-                                print >>sys.stderr, 'Error finding QNAME at ' \
-                                    ('line %d of either %s or %s' % (
-                                            sources[0],
-                                            sources[1]
-                                        ))
-                                raise
-                            quals = [source_stream.readline().strip()
-                                        for source_stream in source_streams]
-                            line_numbers = [i + 1 for i in line_numbers]
-                            for i in xrange(2):
-                                assert len(seqs[i]) == len(quals[i]), (
-                                        'Length of read sequence does not '
-                                        'match length of quality string at '
-                                        'line %d of file "%s".'
-                                    ) % (line_numbers[i], sources[i])
+                                    ) % (lines[0], line_numbers[0], sources[0])
+                                if plus_lines[1]:
+                                    assert plus_lines[1][0] == '+', (
+                                            'Malformed read "%s" at line %d '
+                                            'of file "%s".'
+                                        ) % (
+                                        lines[1], line_numbers[1], sources[1]
+                                    )
+                                try:
+                                    # Kill spaces in name
+                                    original_qnames = \
+                                        [line[1:].replace(' ', '_')
+                                            for line in lines]
+                                except IndexError:
+                                    raise RuntimeError(
+                                            'Error finding QNAME at ' 
+                                            'line %d of either %s or %s' % (
+                                                        sources[0],
+                                                        sources[1]
+                                                    )
+                                        )
+                            except (AssertionError, RuntimeError):
+                                if skip_bad_records:
+                                    print >>sys.stderr, ('Error "%" '
+                                            'encountered; skipping bad record.'
+                                        ) % e.message
+                                    for source_stream in source_streams:
+                                        source_stream.readline()
+                                    line_numbers = [
+                                            i + 1 for i in line_numbers
+                                        ]
+                                    bad_record_skip = True
+                                else:
+                                    raise
+                            else:
+                                quals = [source_stream.readline().strip()
+                                         for source_stream in source_streams]
+                                line_numbers = [i + 1 for i in line_numbers]
+                                try: 
+                                    for i in xrange(2):
+                                        assert len(seqs[i]) == len(quals[i]), (
+                                            'Length of read sequence does not '
+                                            'match length of quality string '
+                                            'at line %d of file "%s".'
+                                        ) % (line_numbers[i], sources[i])
+                                except AssertionError as e:
+                                    if skip_bad_records:
+                                        print >>sys.stderr, (
+                                                'Error "%s" encountered; '
+                                                'skipping bad record.'
+                                            ) % e.message
+                                        bad_record_skip = True
+                                    else:
+                                        raise
                         elif lines[0][0] in fasta_cues:
                             if records_to_consume and not skipped:
                                 '''Skip lines as necessary; for paired-end
@@ -538,36 +571,59 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                     next_line = source_stream.readline()
                                     line_numbers[i] += 1
                                 try:
-                                    # Kill spaces in name
-                                    original_qnames.append(
-                                            line[1:].replace(' ', '_')
-                                        )
-                                except IndexError:
-                                    raise RuntimeError(
+                                    try:
+                                        # Kill spaces in name
+                                        original_qnames.append(
+                                                line[1:].replace(' ', '_')
+                                            )
+                                    except IndexError:
+                                        raise RuntimeError(
                                             ('No QNAME for read '
                                              'above line %d in file "%s".') % (
                                                             line_numbers[i],
                                                             sources[i]
                                                         ) 
                                         )
-                                assert next_line not in fasta_cues, (
-                                        'No read sequence for read named "%s" '
-                                        'above line %d in file "%s".'
-                                    ) % (
-                                        original_qnames[i],
-                                        line_numbers[i],
-                                        sources[i]
-                                    )
+                                    assert next_line[0] not in fasta_cues, (
+                                            'No read sequence for read named '
+                                            '"%s" above line %d in file "%s".'
+                                        ) % (
+                                            original_qnames[i],
+                                            line_numbers[i],
+                                            sources[i]
+                                        )
+                                except (RuntimeError, AssertionError) as e:
+                                    if skip_bad_records:
+                                        print >>sys.stderr, (
+                                                'Error "%s" encountered; '
+                                                'skipping bad record.'
+                                            ) % e.message
+                                        while next_line[0] not in fasta_cues:
+                                            next_line \
+                                                = source_stream.readline()
+                                            line_numbers[i] += 1
+                                        lines.append(next_line)
+                                        read_next_line = False
+                                        bad_record_skip = True
+                                    else:
+                                        raise
                                 read_lines = []
                                 while next_line[0] not in fasta_cues:
                                     read_lines.append(next_line.strip())
                                     next_line = source_stream.readline()
                                     line_numbers[i] += 1
                                 seqs.append(''.join(read_lines))
-                                quals.append('I'*len(read_lines))
+                                quals.append('I'*len(seqs[-1]))
                                 lines.append(next_line)
                                 read_next_line = False
-                        if len(original_qnames) == 2 and original_qnames[1]:
+                        if bad_record_skip:
+                            seqs = []
+                            # Fake record-printing to get to records_to_consume
+                            if source_streams[-1] == os.devnull:
+                                records_printed += 1
+                            else:
+                                records_printed += 2
+                        elif len(original_qnames) == 2 and original_qnames[1]:
                             # Paired-end write
                             if original_qnames[0] == original_qnames[1]:
                                 # Add paired-end identifiers
@@ -632,6 +688,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                         ]
                                     )
                             records_printed += 2
+                            _output_line_count += 1
                         else:
                             seqs[0] = seqs[0].upper()
                             reversed_complement_seqs = [
@@ -665,7 +722,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                         ]
                                     )
                             records_printed += 1
-                        _output_line_count += 1
+                            _output_line_count += 1
                         read_index += 1
                         for seq in seqs:
                             nucs_read += len(seq)
@@ -738,6 +795,12 @@ if __name__ == '__main__':
     parser.add_argument('--shorten-read-names', action='store_const',
         const=True, default=False,
         help='Gives each read (pair) a unique short read name to save space')
+    parser.add_argument('--skip-bad-records', action='store_const',
+        const=True, default=False,
+        help=('Skips bad records rather than raising exception; here, '
+              '"bad" could mean that the quality sequence length does '
+              'not match the read length or the record is not in the '
+              'proper format'))
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
@@ -756,6 +819,7 @@ if __name__ == '__main__':
         push=args.push,
         bin_qualities=args.bin_qualities,
         short_qnames=args.shorten_read_names,
+        skip_bad_records=args.skip_bad_records,
         verbose=args.verbose,
         mover=mover)
     print >>sys.stderr, 'DONE with preprocess.py; in/out=%d/%d; ' \

@@ -79,11 +79,21 @@ parser.add_argument(\
     default='',
     help='The basename (excluding path) of all BED output. Basename is '
          'followed by ".[junctions/insertions/deletions].[sample_label].bed"')
+parser.add_argument('--keep-alive', action='store_const', const=True,
+        default=False,
+        help=('Periodically print Hadoop status messages to stderr to keep '
+              'job alive'))
 
 bowtie.add_args(parser)
 filemover.add_args(parser)
 tempdel.add_args(parser)
 args = parser.parse_args()
+
+# Start keep_alive thread immediately
+if args.keep_alive:
+    from dooplicity.tools import KeepAlive
+    keep_alive_thread = KeepAlive(sys.stderr)
+    keep_alive_thread.start()
 
 import time
 start_time = time.time()

@@ -100,11 +100,8 @@ if __name__ == '__main__':
     parser.add_argument('--alignment-count-to-report', type=int,
         required=False, default=1,
         help='Argument of Bowtie 2\'s -k parameter')
-    parser.add_argument('--tie-margin', type=int, required=False,
-        default=6,
-        help='Allowed score difference per 100 bases among ties in '
-             'max score. For example, 150 and 144 are tied alignment scores '
-             'for a 100-bp read when --tie-margin is 6.')
+    from alignment_handlers import add_args as alignment_handlers_add_args
+    alignment_handlers_add_args(parser)
     args = parser.parse_args()
 
     go(verbose=args.verbose,

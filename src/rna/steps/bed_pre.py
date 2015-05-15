@@ -309,6 +309,10 @@ if __name__ == '__main__':
               'many reads in a single sample; if the indel meets neither '
               'this criterion nor the --sample-fraction criterion, it is '
               'filtered out; use -1 to disable'))
+    parser.add_argument('--keep-alive', action='store_const', const=True,
+        default=False,
+        help='Periodically print Hadoop status messages to stderr to keep ' \
+             'job alive')
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
@@ -324,6 +328,12 @@ if __name__ == '__main__':
     global, properties of args are also arguments of the go() function so
     different command-line arguments can be passed to it for unit tests.'''
     args = parser.parse_args(sys.argv[1:])
+
+    # Start keep_alive thread immediately
+    if args.keep_alive:
+        from dooplicity.tools import KeepAlive
+        keep_alive_thread = KeepAlive(sys.stderr)
+        keep_alive_thread.start()
 
 if __name__ == '__main__' and not args.test:
     start_time = time.time()

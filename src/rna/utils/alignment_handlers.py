@@ -20,6 +20,13 @@ import string
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
+def add_args(parser):
+    parser.add_argument('--tie-margin', type=int, required=False,
+        default=6,
+        help='Allowed score difference per 100 bases among ties in '
+             'max score. For example, 150 and 144 are tied alignment scores '
+             'for a 100-bp read when --tie-margin is 6.')
+
 def running_sum(iterable):
     """ Generates a running sum of the numbers in an iterable
 
@@ -545,6 +552,7 @@ def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
     new_exons.append(last_exon)
     return insertions, deletions, introns, new_exons
 
+def 
 class SampleAndRnameIndexes(object):
     """ Assigns sample-RNAME combination to index to improve load balance.
 
@@ -612,6 +620,33 @@ class AlignmentPrinter(object):
                                                     manifest_object,
                                                     output_bam_by_chr
                                                 )
+
+    def unique(self, alignment):
+        """ Returns True iff alignment is unique according to tie_margin.
+
+            Compares arguments of AS:i: and XS:i:.
+
+            alignment: list of SAM fields corresponding to alignment
+
+            Return value: True iff alignment is unique
+        """
+        first_place_score = [int(field[5:]) for field in alignment
+                                if field[:5] == 'AS:i:'][0]
+        try:
+            second_place_score = [int(field[5:]) for field in
+                                    alignment
+                                    if field[:5] == 'XS:i:'][0]
+        except IndexError:
+            # No XS field; assume uniqueness
+            return True
+        current_tie_margin = round(
+                self.tie_margin
+                * float(len(alignment[9])) / 100
+            )
+        if (second_place_score + current_tie_margin
+                >= first_place_score):
+            return False
+        return True
 
     def print_unmapped_read(self, qname, seq, qual):
         """ Prints an unmapped read from a qname, qual, and seq.
@@ -836,25 +871,10 @@ class AlignmentPrinter(object):
                 if self.exon_diffs:
                     '''Compare arguments of AS:i: and XS:i: to determine
                     whether an alignment is unique.'''
-                    first_place_score = [int(field[5:]) for field in alignment
-                                            if field[:5] == 'AS:i:'][0]
-                    try:
-                        second_place_score = [int(field[5:]) for field in
-                                                alignment
-                                                if field[:5] == 'XS:i:'][0]
-                    except IndexError:
-                        # No XS field; assume uniqueness
-                        uniqueness = '1' 
+                    if self.unique(alignment):
+                        uniqueness = '1'
                     else:
-                        current_tie_margin = round(
-                                self.tie_margin
-                                * float(len(alignment[9])) / 100
-                            )
-                        if (second_place_score + current_tie_margin
-                                >= first_place_score):
-                            uniqueness = '0'
-                        else:
-                            uniqueness = '1'
+                        uniqueness = '0'
                     for exon_pos, exon_end_pos in exons:
                         partitions = partition.partition(
                                 rname, exon_pos, exon_end_pos, self.bin_size

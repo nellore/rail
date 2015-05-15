@@ -405,15 +405,12 @@ if __name__ == '__main__':
     parser.add_argument('--gzip-level', type=int, required=False,
         default=3,
         help='Level of gzip compression to use, if applicable')
-    parser.add_argument('--tie-margin', type=int, required=False,
-        default=6,
-        help='Allowed score difference per 100 bases among ties in '
-             'max score. For example, 150 and 144 are tied alignment scores '
-             'for a 100-bp read when --tie-margin is 6.')
 
     # Add command-line arguments for dependencies
     bowtie.add_args(parser)
     tempdel.add_args(parser)
+    from alignment_handlers import add_args as alignment_handlers_add_args
+    alignment_handlers_add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv

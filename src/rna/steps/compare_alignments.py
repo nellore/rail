@@ -156,11 +156,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, 
                 formatter_class=argparse.RawDescriptionHelpFormatter)
     # Add command-line arguments
-    parser.add_argument('--tie-margin', type=int, required=False,
-        default=6,
-        help='Allowed score difference per 100 bases among ties in '
-             'max score. For example, 150 and 144 are tied alignment scores '
-             'for a 100-bp read when --tie-margin is 6.')
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
@@ -189,6 +184,8 @@ if __name__ == '__main__':
     partition.add_args(parser)
     bowtie.add_args(parser)
     manifest.add_args(parser)
+    from alignment_handlers import add_args as alignment_handlers_add_args
+    alignment_handlers_add_args(parser)
 
     # Collect Bowtie arguments, supplied in command line after the -- token
     argv = sys.argv
