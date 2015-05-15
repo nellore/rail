@@ -3984,7 +3984,8 @@ class RailRnaAlign(object):
                             else 'Count mapped reads by contig/sample'),
                 'run' : ('bam.py --out={0} --bowtie-idx={1} '
                          '--samtools-exe={2} --bam-basename={3} '
-                         '--manifest={4} {5} {6} {7} {8} {9}').format(
+                         '--manifest={4} {5} {6} {7} {8} {9} '
+                         '--tie-margin {10}').format(
                                         ab.Url(
                                             path_join(elastic,
                                             base.output_dir, 'alignments')
@@ -4004,7 +4005,8 @@ class RailRnaAlign(object):
                                         '--output-sam' if base.output_sam
                                         else '',
                                         '--suppress-bam' if not base.bam
-                                        else ''
+                                        else '',
+                                        base.tie_margin
                                     ),
                 'inputs' : [path_join(elastic, 'compare_alignments', 'sam'),
                             path_join(elastic, 'break_ties', 'sam')]
