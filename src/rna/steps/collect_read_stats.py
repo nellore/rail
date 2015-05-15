@@ -108,7 +108,7 @@ else:
 
 output_filename = ((args.tsv_basename + '.' 
                           if args.tsv_basename != '' else '')
-                          + type_string + '.tsv.gz')
+                            + 'counts.tsv.gz')
 if output_url.is_local:
     output_path = os.path.join(args.out, output_filename)
 else:
@@ -118,24 +118,25 @@ input_line_count = 0
 # Get RNAMEs in order of descending length
 sorted_rnames = [reference_index.string_to_rname['%012d' % i]
                     for i in xrange(
-                                len(reference_index.string_to_rname) - 1
+                                len(reference_index.string_to_rname)
                             )]
 with xopen(True, output_path, 'w', args.gzip_level) as output_stream:
-    print >>output_stream, '\t'.join([''] + sorted_rnames + 'mapped totals')
+    print >>output_stream, '\t'.join([''] + sorted_rnames + ['mapped totals'])
     for (_, sample_index), xpartition in xstream(sys.stdin, 2):
         sample_label = manifest_object.index_to_label[sample_index]
         total_counts, unique_counts = defaultdict(int), defaultdict(int)
         for rname_index, total_count, unique_count in xpartition:
             rname = reference_index.string_to_rname[rname_index]
-            total_counts[rname] = total_count
-            unique_counts[rname] = unique_count
+            total_counts[rname] = int(total_count)
+            unique_counts[rname] = int(unique_count)
         total_mapped_reads = sum(total_counts.values()) - total_counts['*']
         total_unique_alignments = (
                     sum(unique_counts.values()) - unique_counts['*']
                 )
         print >>output_stream, '\t'.join(
                 [sample_label] + ['%d,%d' % (total_counts[rname],
-                                                unique_counts[rname])]
+                                                unique_counts[rname])
+                                    for rname in sorted_rnames]
                     + ['%d,%d' % (total_mapped_reads, total_unique_alignments)]
             )
 

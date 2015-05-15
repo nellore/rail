@@ -150,7 +150,7 @@ start_time = time.time()
 from alignment_handlers import AlignmentPrinter
 alignment_printer = AlignmentPrinter(manifest_object, reference_index,
                                         tie_margin=args.tie_margin)
-
+input_line_count = 0
 if args.suppress_bam:
     # Just grab stats
     if args.output_by_chromosome:
@@ -160,34 +160,34 @@ if args.suppress_bam:
                 )
             unique_count, total_count = 0, 0
             for record in xpartition:
-                record = record.split('\t')
                 if not (int(record[2]) & 256):
                     total_count += 1
                     try:
-                        if alignment_printer.unique(record):
+                        # seq is at position 8
+                        if alignment_printer.unique(record, seq_index=8):
+                            unique_count += 1
+                    except IndexError:
+                        # Unmapped read
+                        pass
+                input_line_count += 1
+            # Only primary alignments (flag & 256 != 1)
+            print 'counts\t-\t%s\t%s\t%d\t%d' % (sample_index, rname_index,
+                                                 total_count, unique_count)
+    else:
+        for (sample_index, rname_index), xpartition in xstream(sys.stdin, 2):
+            unique_count, total_count = 0, 0
+            for record in xpartition:
+                if not (int(record[2]) & 256):
+                    total_count += 1
+                    try:
+                        if alignment_printer.unique(record, seq_index=8):
                             unique_count += 1
                     except IndexError:
                         # Unmapped read
                         pass
             # Only primary alignments (flag & 256 != 1)
             print 'counts\t-\t%s\t%s\t%d\t%d' % (sample_index, rname_index,
-                                                total_count, unique_count)
-    else:
-        for (sample_index, rname_index), xpartition in xstream(sys.stdin, 2):
-            unique_count, total_count = 0, 0
-            for record in xpartition:
-                record = record.split('\t')
-                if not (int(record[2]) & 256):
-                    total_count += 1
-                    try:
-                        if alignment_printer.unique(record):
-                            unique_count += 1
-                    except IndexError:
-                        # Unmapped read
-                        pass
-            # Only primary alignments (flag & 256 != 1)
-            print 'counts\t%s\t%s\t%d\t%d' % (sample_index, rname_index,
-                                                total_count, unique_count)
+                                                 total_count, unique_count)
 else:
     # Grab stats _and_ output SAM/BAMs
     if not args.output_sam:
@@ -215,7 +215,6 @@ else:
             temp_dir_path = make_temp_dir(args.scratch)
             register_cleanup(tempdel.remove_temporary_directories,
                                 [temp_dir_path])
-    input_line_count = 0
     move_temporary_file = False # True when temporary file should be uploaded
     while True:
         line = sys.stdin.readline()
@@ -259,12 +258,18 @@ else:
                 )
                 os.remove(''.join([last_output_path, '.bai']))
             move_temporary_file = False
-        if not line: break
-        if sample_label != last_sample_label or rname != last_rname:
-            print 'counts\t-\t%s\t%s\t%d\t%d' % (last_sample_index,
-                                                last_rname_index,
-                                                total_count, unique_count)
-            total_count, unique_count = 0, 0
+        try:
+            if (sample_label != last_sample_label or rname != last_rname
+                or not line):
+                print 'counts\t-\t%s\t%s\t%d\t%d' % (last_sample_index,
+                                                     last_rname_index,
+                                                     total_count, unique_count)
+                total_count, unique_count = 0, 0
+        except NameError:
+            # First record
+            pass
+        if not line:
+            break
         if ((sample_label != last_sample_label or 
                 (rname != last_rname and args.output_by_chromosome))
             and args.out is not None) or output_stream is None:
@@ -335,13 +340,18 @@ else:
                                 )
         '''Recall that pos has leading 0's so it is sorted properly; remove
         them below.'''
-        print >>output_stream, ((('%s\t'*4) % (qname[:254], flag, rname,
+        sam_line_to_print = ((('%s\t'*4) % (qname[:254], flag, rname,
                                                 str(int(pos))))
                                                 + '\t'.join(tokens[5:]))
-        if not (flag & 256):
+        print >>output_stream, sam_line_to_print
+        if not (int(flag) & 256):
             total_count += 1
-            if alignment_printer.unique(tokens):
-                unique_count += 1
+            try:
+                if alignment_printer.unique(sam_line_to_print):
+                    unique_count += 1
+            except IndexError:
+                # Unmapped read
+                pass
         last_rname = rname
         last_sample_label = sample_label
         last_rname_index = rname_index

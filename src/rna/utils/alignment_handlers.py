@@ -620,7 +620,7 @@ class AlignmentPrinter(object):
                                                     output_bam_by_chr
                                                 )
 
-    def unique(self, alignment):
+    def unique(self, alignment, seq_index=9):
         """ Returns True iff alignment is unique according to tie_margin.
 
             Compares arguments of AS:i: and XS:i:.
@@ -640,10 +640,9 @@ class AlignmentPrinter(object):
             return True
         current_tie_margin = round(
                 self.tie_margin
-                * float(len(alignment[9])) / 100
+                * float(len(alignment[seq_index])) / 100
             )
-        if (second_place_score + current_tie_margin
-                >= first_place_score):
+        if second_place_score + current_tie_margin >= first_place_score:
             return False
         return True
 
