@@ -552,7 +552,6 @@ def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
     new_exons.append(last_exon)
     return insertions, deletions, introns, new_exons
 
-def 
 class SampleAndRnameIndexes(object):
     """ Assigns sample-RNAME combination to index to improve load balance.
 
