@@ -50,6 +50,23 @@ if zipfile.is_zipfile(containing_dir):
             default=False,
             help='installs Rail-RNA without any of its dependencies'
         )
+    parser.add_argument('-p', '--prep-dependencies', action='store_const',
+            const=True,
+            default=False,
+            help=('installs Rail-RNA with only dependencies required for its '
+                  'preprocess job flow; overrided by --no-dependencies')
+        )
+    parser.add_argument('-y', '--yes', action='store_const',
+            const=True,
+            default=False,
+            help='answers "yes" to all user prompts'
+        )
+    parser.add_argument('-s', '--symlink-dependencies', action='store_const',
+            const=True,
+            default=False,
+            help=('symlinks all installed dependencies to /usr/local/bin if '
+                  'installing for all users')
+        )
     parser.add_argument('--curl', type=str, required=False, metavar='<exe>',
             default=exe_paths.curl,
             help=('path to cURL executable (def: %s)'
@@ -59,7 +76,10 @@ if zipfile.is_zipfile(containing_dir):
     from rna_installer import RailRnaInstaller
     with RailRnaInstaller(containing_dir, curl_exe=args.curl,
                             install_dir=args.install_dir,
-                            no_dependencies=False) as railrna_installer:
+                            no_dependencies=args.no_dependencies,
+                            prep_dependencies=args.prep_dependencies,
+                            add_symlinks=args.symlink_dependencies,
+                            yes=args.yes) as railrna_installer:
         railrna_installer.install()
     sys.exit(0)
 

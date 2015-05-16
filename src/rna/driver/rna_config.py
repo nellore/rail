@@ -105,9 +105,10 @@ def rail_help_wrapper(prog):
 '''These are placed here for convenience; their locations may change
 on EMR depending on bootstraps.'''
 _hadoop_streaming_jar = '/home/hadoop/contrib/streaming/hadoop-streaming.jar'
-_multiple_files_jar = '/mnt/lib/multiple-files.jar'
-_relevant_elephant_jar = '/mnt/lib/relevant-elephant.jar'
-_mod_partitioner_jar = '/mnt/lib/mod-partitioner.jar'
+_jar_target = '/mnt/lib'
+_multiple_files_jar = _jar_target + '/multiple-files.jar'
+_relevant_elephant_jar = _jar_target + '/relevant-elephant.jar'
+_mod_partitioner_jar = _jar_target + '/mod-partitioner.jar'
 _hadoop_lzo_jar = ('/home/hadoop/.versions/2.4.0/share/hadoop'
                    '/common/lib/hadoop-lzo.jar')
 _s3distcp_jar = '/home/hadoop/lib/emr-s3distcp-1.0.jar'
@@ -115,12 +116,13 @@ _hdfs_temp_dir = 'hdfs:///railtemp'
 _base_combine_split_size = 268435456 # 250 MB
 _elastic_bowtie1_idx = '/mnt/index/genome'
 _elastic_bowtie2_idx = '/mnt/index/genome'
-_elastic_bedgraphtobigwig_exe ='/mnt/bin/bedGraphToBigWig'
+_elastic_bedgraphtobigwig_exe = 'bedGraphToBigWig'
 _elastic_samtools_exe = 'samtools'
 _elastic_bowtie1_exe = 'bowtie'
 _elastic_bowtie2_exe = 'bowtie2'
 _elastic_bowtie1_build_exe = 'bowtie-build'
 _elastic_bowtie2_build_exe = 'bowtie2-build'
+_elastic_step_dir = '/usr/local/rail-rna/rna/steps'
 
 # Set basename of the transcript fragment index; can't settle on this
 _transcript_fragment_idx_basename = 'isofrags'
@@ -1847,6 +1849,16 @@ class RailRnaElastic(object):
                                     )
                 ansible.put(isofrag, base.isofrag_idx)
                 shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
+        # Set directory for storing Rail-RNA, bootstraps, and possibly manifest
+        base.dependency_dir = base.output_dir + '.dependencies'
+        dependency_dir_url = ab.Url(base.dependency_dir)
+        if dependency_dir_url.is_s3:
+            # Set up rule on S3 for deleting dependency dir
+            final_dependency_dir = dependency_dir_url.to_url() + '/'
+            while final_dependency_dir[-2] == '/':
+                final_dependency_dir = final_dependency_dir[:-1]
+            ansible.s3_ansible.expire_prefix(final_dependency_dir,
+                                                days=intermediate_lifetime)
         # Check manifest; download it if necessary
         manifest_url = ab.Url(base.manifest)
         if manifest_url.is_curlable \
@@ -1949,16 +1961,235 @@ class RailRnaElastic(object):
                                                     ))
             if not manifest_url.is_s3 and output_dir_url.is_s3:
                 # Copy manifest file to S3 before job flow starts
-                base.manifest = path_join(True, base.output_dir + '.manifest',
+                base.manifest = path_join(True, base.dependency_dir,
                                                 'MANIFEST')
                 ansible.put(manifest, base.manifest)
             if not manifest_url.is_local:
                 # Clean up
                 shutil.rmtree(temp_manifest_dir)
+        # Create and copy bootstraps to S3; compress and copy Rail-RNA to S3
+        temp_dependency_dir = tempfile.mkdtemp()
+        from tempdel import remove_temporary_directories
+        register_cleanup(remove_temporary_directories, [temp_dependency_dir])
+        copy_index_bootstrap = os.path.join(temp_dependency_dir,
+                                                'install-index.sh')
+        with open(copy_index_bootstrap, 'w') as script_stream:
+             print >>script_stream, (
+"""#!/usr/bin/env bash
+set -e
+
+mkdir -p $1
+cd $1
+
+fn=`basename $2`
+
+cat >.download_idx.py <<EOF
+\"""
+.download_idx.py
+
+Checks if file size hasn't changed while downloading idx, and if it hasn't,
+kills subprocess and restarts it.
+\"""
+
+import sys
+import time
+import os
+import subprocess
+
+tries = 0
+url = sys.argv[1]
+filename = sys.argv[2]
+while tries < 5:
+    break_outer_loop = False
+    s3cmd_process \\
+        = subprocess.Popen(['s3cmd', 'get', url, './', '-f'])
+    time.sleep(1)
+    last_check_time = time.time()
+    try:
+        last_size = os.path.getsize(filename)
+    except OSError:
+        last_size = 0
+    while s3cmd_process.poll() is None:
+        now_time = time.time()
+        if now_time - last_check_time > 120:
+            try:
+                new_size = os.path.getsize(filename)
+            except OSError:
+                new_size = 0
+            if new_size == last_size:
+                # Download stalled
+                break_outer_loop = True
+                break
+            else:
+                last_size = new_size
+            last_check_time = now_time
+            time.sleep(1)
+    if break_outer_loop:
+        tries += 1
+        s3cmd_process.kill()
+        try:
+            os.remove(filename)
+        except OSError:
+            pass
+        time.sleep(2)
+        continue
+    if s3cmd_process.poll() > 0:
+        if tries > 5:
+            raise RuntimeError(('Non-zero exitlevel %d from s3cmd '
+                                'get command')  % (
+                                                s3cmd_process.poll()
+                                            ))
+        else:
+            try:
+                os.remove(filename)
+            except OSError:
+                pass
+            tries += 1
+            time.sleep(2)
+            continue                       
+    break
+if tries > 5:
+    raise RuntimeError('Could not download file from S3 '
+                       'within 5 tries.')
+
+EOF
+
+python .download_idx.py $2 $fn
+tar xvzf $fn
+cd index
+ln -s genome.4.bt2 genome.4.ebwt
+cd ..
+"""
+                )
+        base.copy_index_bootstrap = path_join(
+                                        True, base.dependency_dir,
+                                        os.path.basename(copy_index_bootstrap)
+                                    )
+        ansible.put(copy_index_bootstrap, base.copy_index_bootstrap)
+        os.remove(copy_index_bootstrap)
+        install_s3cmd_bootstrap = os.path.join(temp_dependency_dir,
+                                                'install-s3cmd.sh')
+        with open(install_s3cmd_bootstrap, 'w') as script_stream:
+             print >>script_stream, (
+"""#!/usr/bin/env bash
+set -e
+export HOME=/home/hadoop
+
+sudo wget -O/etc/yum.repos.d/s3tools.repo http://s3tools.org/repo/RHEL_6/s3tools.repo || { echo 'wget failed' ; exit 1; }
+sudo yum -y install s3cmd || { echo 's3cmd installation failed' ; exit 1; }
+
+AWS_ACCESS_ID=`grep 'fs.s3.awsAccessKeyId' ~/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
+AWS_ACCESS_KEY=`grep 'fs.s3.awsSecretAccessKey' ~/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
+
+cat >~/.s3cfg <<EOF
+[default]
+access_key = $AWS_ACCESS_ID
+secret_key = $AWS_ACCESS_KEY
+socket_timeout = 300
+multipart_chunk_size_mb = 15
+reduced_redundancy = False
+send_chunk = 4096
+EOF
+"""
+                )
+        base.install_s3cmd_bootstrap = path_join(
+                                        True, base.dependency_dir,
+                                        os.path.basename(
+                                                install_s3cmd_bootstrap
+                                            )
+                                    )
+        ansible.put(install_s3cmd_bootstrap, base.install_s3cmd_bootstrap)
+        os.remove(install_s3cmd_bootstrap)
+        # Zip Rail and put it on S3
+        rail_zipped = os.path.join(temp_dependency_dir, 'rail-rna.zip')
+        target_to_zip = os.path.join(temp_dependency_dir, 'src')
+        shutil.copytree(base_path, target_to_zip,
+                        ignore=shutil.ignore_patterns('*.pyc', '.DS_Store'))
+        with cd(temp_dependency_dir):
+            shutil.make_archive(rail_zipped, 'zip', 'src')
+        base.elastic_rail_path = path_join(
+                                        True, base.dependency_dir,
+                                        os.path.basename(
+                                                rail_zipped
+                                            )
+                                    )
+        install_rail_bootstrap = os.path.join(temp_dependency_dir,
+                                                'install-rail.sh')
+        with open(install_rail_bootstrap, 'w') as script_stream:
+             print >>script_stream, (
+"""#!/usr/bin/env bash
+# Installs Rail-RNA and compiles required classes
+# $1: where to find Rail
+# $2: where JARs should be copied
+# $3 on: args to pass to Rail-RNA installer
+set -e
+export HOME=/home/hadoop
+
+RAILZIP=$1
+JARTARGET=$2
+shift 2
+s3cmd get $RAILZIP
+mkdir -p sandbox
+cd sandbox
+unzip ../{rail_zipped} -d ./
+cd hadoop
+for JAR in relevant-elephant multiple-files mod-partitioner
+do
+    rm -rf $JAR_out
+    mkdir -p $JAR_out
+    javac -classpath \\$(find ~/share/ *.jar | tr '\\n' ':') -d $JAR_out $JAR/*.java
+    jar -cvf $JAR.jar -C $JAR_out .
+    mv $JAR.jar $JARTARGET/
+done
+cd ..
+rm -rf sandbox
+python27 {rail_zipped} $@
+""".format(rail_zipped=os.path.basename(rail_zipped))
+        base.install_rail_bootstrap = path_join(
+                                        True, base.dependency_dir,
+                                        os.path.basename(
+                                                install_rail_bootstrap
+                                            )
+                                    )
+        ansible.put(install_rail_bootstrap, base.install_rail_bootstrap)
+        shutil.rmtree(target_to_zip)
+        copy_bootstrap = os.path.join(temp_dependency_dir,
+                                                's3cmd_s3.sh')
+        with open(copy_bootstrap, 'w') as script_stream:
+             print >>script_stream, (
+"""
+#!/usr/bin/env bash
+# s3cmd_s3.sh
+#
+# Download a file from an S3 bucket to given directory.  Optionally rename it.
+#
+# Arguments are:
+# 1. s3:// URL to copy from
+# 2. Local directory to copy to
+# 3. If specified, name to rename file to
+set -e
+
+mkdir -p ${2}
+cd ${2}
+fn=`basename ${1}`
+s3cmd get ${1} . || { echo 's3cmd get failed' ; exit 1; }
+if [ -n "${3}" ] ; then
+    mv $fn ${3} || true
+fi
+"""
+                )
+        base.copy_bootstrap = path_join(
+                                        True, base.dependency_dir,
+                                        os.path.basename(
+                                                copy_bootstrap
+                                            )
+                                    )
+        ansible.put(copy_bootstrap, base.copy_bootstrap)
+        os.remove(copy_bootstrap)
+        shutil.rmtree(temp_dependency_dir)
         actions_on_failure \
             = set(['TERMINATE_JOB_FLOW', 'CANCEL_AND_WAIT', 'CONTINUE',
                     'TERMINATE_CLUSTER'])
-
         if action_on_failure not in actions_on_failure:
             base.errors.append('Action on failure (--action-on-failure) '
                                'must be one of {{"TERMINATE_JOB_FLOW", '
@@ -2280,7 +2511,7 @@ class RailRnaElastic(object):
                 'ActionOnFailure' : base.action_on_failure,
                 'HadoopJarStep' : {
                     'Args' : [
-                        '--src,s3://rail-emr/index/hg19_UCSC.tar.gz',
+                        '--src,%s' % base.index_archive,
                         '--dest,hdfs:///index/'
                     ],
                     'Jar' : '/home/hadoop/lib/emr-s3distcp-1.0.jar'
@@ -2621,24 +2852,13 @@ class RailRnaPreprocess(object):
     def bootstrap():
         return [
             {
-                'Name' : 'Install PyPy',
+                'Name' : 'Install Rail-RNA and create JAR dependencies',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        ('s3://rail-emr/bin/'
-                         'pypy-2.2.1-linux_x86_64-portable.tar.bz2')
-                    ],  
-                    'Path' : 's3://rail-emr/bootstrap/install-pypy.sh'
-                }
-            },
-            {
-                'Name' : 'Install Rail-RNA',
-                'ScriptBootstrapAction' : {
-                    'Args' : [
-                        's3://rail-emr/bin/rail-rna-%s.tar.gz' 
-                        % version_number,
-                        '/mnt'
-                    ],
-                    'Path' : 's3://rail-emr/bootstrap/install-rail.sh'
+                        base.elastic_rail_path, _jar_target,
+                        '-y', '-p', '-s'
+                    ], # always say yes, only prep dependencies, and symlink  
+                    'Path' : base.install_rail_bootstrap
                 }
             }
         ]
@@ -2807,6 +3027,7 @@ class RailRnaAlign(object):
             # Set up elastic params
             base.bowtie1_idx = _elastic_bowtie1_idx
             base.bowtie2_idx = _elastic_bowtie2_idx
+            # Don't check these dependencies
             base.bedgraphtobigwig_exe = _elastic_bedgraphtobigwig_exe
             base.samtools_exe = _elastic_samtools_exe
             base.bowtie1_exe = _elastic_bowtie1_exe
@@ -4069,51 +4290,12 @@ class RailRnaAlign(object):
     def bootstrap(base):
         return [
             {
-                'Name' : 'Install PyPy',
-                'ScriptBootstrapAction' : {
-                    'Args' : [],
-                    'Path' : 's3://rail-emr/bootstrap/install-pypy.sh'
-                }
-            },
-            {
-                'Name' : 'Install Bowtie 1',
-                'ScriptBootstrapAction' : {
-                    'Args' : [],
-                    'Path' : 's3://rail-emr/bootstrap/install-bowtie.sh'
-                }
-            },
-            {
-                'Name' : 'Install Bowtie 2',
-                'ScriptBootstrapAction' : {
-                    'Args' : [],
-                    'Path' : 's3://rail-emr/bootstrap/install-bowtie2.sh'
-                }
-            },
-            {
-                'Name' : 'Install bedGraphToBigWig',
+                'Name' : 'Install Rail-RNA and create JAR dependencies',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        '/mnt/bin'
-                    ],
-                    'Path' : 's3://rail-emr/bootstrap/install-kenttools.sh'
-                }
-            },
-            {
-                'Name' : 'Install SAMTools',
-                'ScriptBootstrapAction' : {
-                    'Args' : [],
-                    'Path' : 's3://rail-emr/bootstrap/install-samtools.sh'
-                }
-            },
-            {
-                'Name' : 'Install Rail-RNA',
-                'ScriptBootstrapAction' : {
-                    'Args' : [
-                        's3://rail-emr/bin/rail-rna-%s.tar.gz'
-                        % version_number,
-                        '/mnt'
-                    ],
-                    'Path' : 's3://rail-emr/bootstrap/install-rail.sh'
+                        base.elastic_rail_path, _jar_target, '-y', '-s'
+                    ], # always say yes, only prep dependencies, and symlink  
+                    'Path' : base.install_rail_bootstrap
                 }
             },
             {
@@ -4123,7 +4305,7 @@ class RailRnaAlign(object):
                         '/mnt',
                         base.index_archive
                     ],
-                    'Path' : 's3://rail-emr/bootstrap/install-index.sh'
+                    'Path' : base.copy_index_bootstrap
                 }
             },
             {
@@ -4134,7 +4316,7 @@ class RailRnaAlign(object):
                         '/mnt',
                         'MANIFEST'
                     ],
-                    'Path' : 's3://rail-emr/bootstrap/s3cmd_s3.sh'
+                    'Path' : base.copy_bootstrap
                 }
             }
         ]
@@ -4325,7 +4507,7 @@ class RailRnaElasticPreprocessJson(object):
                         path_join(True, base.intermediate_dir, 'preprocess'),
                         base.output_dir, elastic=True),
                     base.action_on_failure,
-                    base.hadoop_jar, '/mnt/src/rna/steps',
+                    base.hadoop_jar, _elastic_step_dir,
                     reducer_count, base.intermediate_dir, unix=True,
                     no_direct_copy=base.no_direct_copy
                 )
@@ -4674,7 +4856,7 @@ class RailRnaElasticAlignJson(object):
                     RailRnaAlign.protosteps(base, base.input_dir,
                                                         elastic=True),
                     base.action_on_failure,
-                    base.hadoop_jar, '/mnt/src/rna/steps',
+                    base.hadoop_jar, _elastic_step_dir,
                     reducer_count, base.intermediate_dir, unix=True,
                     no_direct_copy=base.no_direct_copy
                 )
@@ -5061,14 +5243,14 @@ class RailRnaElasticAllJson(object):
                     RailRnaPreprocess.protosteps(base, prep_dir, push_dir,
                                                     elastic=True),
                     base.action_on_failure,
-                    base.hadoop_jar, '/mnt/src/rna/steps',
+                    base.hadoop_jar, _elastic_step_dir,
                     reducer_count, base.intermediate_dir, unix=True,
                     no_direct_copy=base.no_direct_copy
                 ) + \
                 steps(
                     RailRnaAlign.protosteps(base, push_dir, elastic=True),
                     base.action_on_failure,
-                    base.hadoop_jar, '/mnt/src/rna/steps',
+                    base.hadoop_jar, _elastic_step_dir,
                     reducer_count, base.intermediate_dir, unix=True,
                     no_direct_copy=base.no_direct_copy
                 )

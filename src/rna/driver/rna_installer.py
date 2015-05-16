@@ -43,11 +43,23 @@ class RailRnaInstaller(object):
 
         Init vars
         -------------
-        archive_name: path to (currently executing) zip containing Rail-RNA
+        zip_name: path to (currently executing) zip containing Rail-RNA
+        curl_exe: path to cURL executable; if None, use 'curl'
+        install_dir: path to install dir; if None, use home directory
+            + 'rail-rna' if installing for self and /usr/local/rail-rna if
+            installing for all users
+        no_dependencies: if True, install Rail-RNA and none of its dependencies
+        prep_dependencies: if True, only installs dependencies needed for
+            Rail-RNA's preprocess job flow; overrided by no_dependencies
+        yes: if True, answer yes to all questions automatically
+        add_symlinks: adds symlinks for all installed dependencies
+            to /usr/local/bin if installing for all users. Useful in elastic
+            mode so paths to installed dependencies need not be specified
     """
 
     def __init__(self, zip_name, curl_exe=None, install_dir=None,
-                    no_dependencies=False):
+                    no_dependencies=False, prep_dependencies=False,
+                    yes=False, add_symlinks=False):
         print_to_screen(u"""{0} Rail-RNA v{1} Installer""".format(
                                         u'\u2200', version_number)
                                     )
@@ -71,6 +83,9 @@ class RailRnaInstaller(object):
         self.log_stream = open(self.log_file, 'w')
         self.finished = False
         register_cleanup(remove_temporary_directories, [log_dir])
+        self.yes = yes
+        self.prep_dependencies = prep_dependencies
+        self.add_symlinks = add_symlinks
 
     def __enter__(self):
         return self
@@ -88,12 +103,15 @@ class RailRnaInstaller(object):
         sys.exit(1)
 
     def _yes_no_query(self, question):
-        """ Gets a yes/no answer from the user.
+        """ Gets a yes/no answer from the user if self.yes is not True.
 
             question: string with question to be printed to console
 
             Return value: boolean
         """
+        if self.yes:
+            print '%s [y/n]: y' % question
+            return True
         while True:
             sys.stdout.write('%s [y/n]: ' % question)
             try:
@@ -104,6 +122,24 @@ class RailRnaInstaller(object):
                     sys.exit(0)
             except ValueError:
                 sys.stdout.write('Please enter \'y\' or \'n\'.\n')
+
+    def _add_symlink_to_exe(self, exe_path):
+        """ Adds symlinks to dependency executable; works only if sudo'd
+
+            exe_path: path to executable
+
+            No return value
+        """
+        symlink_command = 'sudo ln -s %s /usr/local/bin' % exe_path
+        try:
+            subprocess.check_output(symlink_command, stderr=self.log_stream)
+        except subprocess.CalledProcessError as e:
+            self._print_to_screen_and_log(
+                        ('Error encountered symlinking; exit code was %d; '
+                         'command invoked was "%s".') %
+                            (e.returncode, ' '.join(dir_command))
+                    )
+            self._bail()
 
     def _grab_and_explode(self, url, name):
         """ Special method for grabbing and exploding a package, if necessary.
@@ -248,72 +284,80 @@ class RailRnaInstaller(object):
             with cd(temp_install_dir):
                 with zipfile.ZipFile(self.zip_name) as zip_object:
                     zip_object.extractall()
-                self._grab_and_explode(self.depends['bowtie1'], 'Bowtie 1')
-                self._grab_and_explode(self.depends['bowtie2'], 'Bowtie 2')
-                self._grab_and_explode(self.depends['bedgraphtobigwig'],
-                                        'BedGraphToBigWig')
                 self._grab_and_explode(self.depends['pypy'], 'PyPy')
-                self._grab_and_explode(self.depends['samtools'], 'SAMTools')
-            # Have to make SAMTools (annoying; maybe change this)
-            samtools_dir = os.path.join(temp_install_dir,
-                    self.depends['samtools'].rpartition('/')[2][:-8]
-                )
-            with cd(samtools_dir):
-                '''Make sure unistd.h is #included cram_io.c ... it's some bug
-                in some SAMTools that prevents compilation on langmead-fs1,
-                which may be a general problem with portability. See
-                https://github.com/samtools/htslib/commit/
-                0ec5202de5691b27917ce828a9d24c9c729a9b81'''
-                cram_io_file = os.path.join(glob.glob('./htslib-*')[0],
-                                                'cram', 'cram_io.c')
-                with open(cram_io_file) as cram_io_stream:
-                    all_cram_io = cram_io_stream.read()
-                if '<unistd.h>' not in all_cram_io:
-                    with open(cram_io_file, 'w') as cram_io_out_stream:
-                        cram_io_out_stream.write(all_cram_io.replace(
-                                '#include <string.h>',
-                                '#include <string.h>\n#include <unistd.h>'
-                            ))
-                # Make on all but one cylinder
-                thread_count = max(1, multiprocessing.cpu_count() - 1)
-                samtools_command = ['make', '-j%d' % thread_count]
-                self._print_to_screen_and_log(
-                            '[Installing] Making SAMTools...',
-                            newline=False,
-                            carriage_return=True
-                        )
-                try:
-                    subprocess.check_output(samtools_command,
-                                                stderr=self.log_stream)
-                except subprocess.CalledProcessError as e:
+                if not self.prep_dependencies:
+                    self._grab_and_explode(self.depends['bowtie1'], 'Bowtie 1')
+                    self._grab_and_explode(self.depends['bowtie2'], 'Bowtie 2')
+                    self._grab_and_explode(self.depends['bedgraphtobigwig'],
+                                            'BedGraphToBigWig')
+                    self._grab_and_explode(self.depends['samtools'],
+                                                                'SAMTools')
+            if not self.prep_dependencies:
+                # Have to make SAMTools (annoying; maybe change this)
+                samtools_dir = os.path.join(temp_install_dir,
+                        self.depends['samtools'].rpartition('/')[2][:-8]
+                    )
+                with cd(samtools_dir):
+                    '''Make sure unistd.h is #included cram_io.c ... it's some
+                    bug in some SAMTools that prevents compilation on
+                    langmead-fs1, which may be a general problem with
+                    portability. See https://github.com/samtools/htslib/commit/
+                    0ec5202de5691b27917ce828a9d24c9c729a9b81'''
+                    cram_io_file = os.path.join(glob.glob('./htslib-*')[0],
+                                                    'cram', 'cram_io.c')
+                    with open(cram_io_file) as cram_io_stream:
+                        all_cram_io = cram_io_stream.read()
+                    if '<unistd.h>' not in all_cram_io:
+                        with open(cram_io_file, 'w') as cram_io_out_stream:
+                            cram_io_out_stream.write(all_cram_io.replace(
+                                    '#include <string.h>',
+                                    '#include <string.h>\n#include <unistd.h>'
+                                ))
+                    # Make on all but one cylinder
+                    thread_count = max(1, multiprocessing.cpu_count() - 1)
+                    samtools_command = ['make', '-j%d' % thread_count]
                     self._print_to_screen_and_log(
-                            ('Error encountered making SAMTools; exit '
-                             'code was %d; command invoked was "%s".') %
-                                (e.returncode, ' '.join(samtools_command))
-                        )
-                    self._bail()
-            samtools = os.path.join(self.final_install_dir,
+                                '[Installing] Making SAMTools...',
+                                newline=False,
+                                carriage_return=True
+                            )
+                    try:
+                        subprocess.check_output(samtools_command,
+                                                    stderr=self.log_stream)
+                    except subprocess.CalledProcessError as e:
+                        self._print_to_screen_and_log(
+                                ('Error encountered making SAMTools; exit '
+                                 'code was %d; command invoked was "%s".') %
+                                    (e.returncode, ' '.join(samtools_command))
+                            )
+                        self._bail()
+                samtools = "'%s'" % os.path.join(self.final_install_dir,
                             self.depends['samtools'].rpartition('/')[2][:-8],
                             'samtools')
-            bowtie1_base = '-'.join(
+                bowtie1_base = '-'.join(
                     self.depends['bowtie1'].rpartition('/')[2].split('-')[:2]
                 )
-            bowtie1 = os.path.join(self.final_install_dir, bowtie1_base,
-                                    'bowtie')
-            bowtie1_build = os.path.join(self.final_install_dir, bowtie1_base,
-                                            'bowtie-build')
-            bowtie2_base = '-'.join(
+                bowtie1 = "'%s'" % os.path.join(self.final_install_dir,
+                                                bowtie1_base, 'bowtie')
+                bowtie1_build = "'%s'" % os.path.join(self.final_install_dir,
+                                                bowtie1_base, 'bowtie-build')
+                bowtie2_base = '-'.join(
                     self.depends['bowtie2'].rpartition('/')[2].split('-')[:2]
                 )
-            bowtie2 = os.path.join(self.final_install_dir, bowtie2_base,
-                                    'bowtie2')
-            bowtie2_build = os.path.join(self.final_install_dir, bowtie2_base,
-                                            'bowtie2-build')
-            pypy = os.path.join(self.final_install_dir,
+                bowtie2 = "'%s'" % os.path.join(self.final_install_dir,
+                                                bowtie2_base, 'bowtie2')
+                bowtie2_build = "'%s'" % os.path.join(self.final_install_dir,
+                                                bowtie2_base, 'bowtie2-build')
+                bedgraphtobigwig = "'%s'" % os.path.join(
+                                                self.final_install_dir,
+                                                'bedGraphToBigWig'
+                                            )
+            else:
+                (bowtie1 = bowtie1_build = bowtie2 = bowtie2_build
+                    = bedgraphtobigwig = samtools = 'None')
+            pypy = "'%s'" % os.path.join(self.final_install_dir,
                     self.depends['pypy'].rpartition('/')[2][:-8], 'bin', 'pypy'
                 )
-            bedgraphtobigwig = os.path.join(self.final_install_dir,
-                                                'bedGraphToBigWig')
             # Write paths to exe_paths
             with open(
                             os.path.join(temp_install_dir, 'exe_paths.py'), 'w'
@@ -327,16 +371,16 @@ Defines default paths of Rail-RNA's executable dependencies. Set a given
 variable equal to None if the default path should be in PATH.
 \"""
 
-pypy = '{pypy}'
+pypy = {pypy}
 aws = None
 curl = None
 sort = None
-bowtie1 = '{bowtie1}'
-bowtie1_build = '{bowtie1_build}'
-bowtie2 = '{bowtie2}'
-bowtie2_build = '{bowtie2_build}'
-samtools = '{samtools}'
-bedgraphtobigwig = '{bedgraphtobigwig}'
+bowtie1 = {bowtie1}
+bowtie1_build = {bowtie1_build}
+bowtie2 = {bowtie2}
+bowtie2_build = {bowtie2_build}
+samtools = {samtools}
+bedgraphtobigwig = {bedgraphtobigwig}
 """
                 ).format(pypy=pypy, bowtie1=bowtie1,
                             bowtie1_build=bowtie1_build, bowtie2=bowtie2,
@@ -446,17 +490,29 @@ fi
                     )
             self._bail()
         # Go back and set 755 permissions for executables
-        for program in [rail_exe, bowtie1, bowtie1_build,
-                            bowtie2, bowtie2_build, samtools,
-                            bedgraphtobigwig, pypy]:
-            os.chmod(program, 0755)
-        # Also for misc. Bowtie executables
-        for program in glob.glob(os.path.join(os.path.dirname(bowtie1),
-                                    'bowtie-*')):
-            os.chmod(program, 0755)
-        for program in glob.glob(os.path.join(os.path.dirname(bowtie2),
-                                    'bowtie2-*')):
-            os.chmod(program, 0755)
+        os.chmod(rail_exe, 0755)
+        if not self.no_dependencies:
+            os.chmod(pypy, 0755)
+            if not self.prep_dependencies:
+                for program in [bowtie1, bowtie1_build, bowtie2, bowtie2_build,
+                                samtools, bedgraphtobigwig]:
+                    os.chmod(program, 0755)
+                    # Also for misc. Bowtie executables
+                    for program in glob.glob(
+                            os.path.join(os.path.dirname(bowtie1), 'bowtie-*')
+                        ):
+                        os.chmod(program, 0755)
+                    for program in glob.glob(
+                            os.path.join(os.path.dirname(bowtie2), 'bowtie2-*')
+                        ):
+                        os.chmod(program, 0755)
+            if self.add_symlinks:
+                # Write appropriate symlinks
+                self._add_symlink_to_exe(pypy)
+                if not self.prep_dependencies:
+                    for program in [bowtie1, bowtie1_build, bowtie2,
+                                    bowtie2_build, samtools, bedgraphtobigwig]:
+                        self._add_symlink_to_exe(program)
         self._print_to_screen_and_log('Installed Rail-RNA.')
         # IPython much?
         try:
