@@ -1967,6 +1967,8 @@ class RailRnaElastic(object):
             if not manifest_url.is_local:
                 # Clean up
                 shutil.rmtree(temp_manifest_dir)
+        print_to_screen('Copying Rail-RNA and bootstraps to S3...',
+                        newline=False, carriage_return=True)
         # Create and copy bootstraps to S3; compress and copy Rail-RNA to S3
         temp_dependency_dir = tempfile.mkdtemp()
         from tempdel import remove_temporary_directories
@@ -2187,6 +2189,8 @@ fi
         ansible.put(copy_bootstrap, base.copy_bootstrap)
         os.remove(copy_bootstrap)
         shutil.rmtree(temp_dependency_dir)
+        print_to_screen('Copied Rail-RNA and bootstraps to S3.',
+                         newline=True, carriage_return=False)
         actions_on_failure \
             = set(['TERMINATE_JOB_FLOW', 'CANCEL_AND_WAIT', 'CONTINUE',
                     'TERMINATE_CLUSTER'])
