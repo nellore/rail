@@ -279,7 +279,6 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     fasta_cues = set(['>', ';'])
     source_dict = {}
     for line in sys.stdin:
-        print >>sys.stderr, line
         if not line.strip() or line[0] == '#': continue
         _input_line_count += 1
         # Kill offset from start of manifest file
