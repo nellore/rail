@@ -115,7 +115,7 @@ for input_line_count, line in enumerate(sys.stdin):
                 'Error\n\n{}\nencountered counting lines with {}.'.format(
                     format_exc(), command_to_run
                 )
-    lines_and_bytes = str(int(lines_and_bytes) / line_divider)
+    lines_and_bytes = str((int(lines_and_bytes) + 1) / line_divider)
     sys.stdout.write(
         '\t'.join(
             ['#!splitload', lines_and_bytes] + [line.partition('\t')[2]]

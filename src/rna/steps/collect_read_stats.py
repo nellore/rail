@@ -120,6 +120,7 @@ sorted_rnames = [reference_index.string_to_rname['%012d' % i]
                     for i in xrange(
                                 len(reference_index.string_to_rname)
                             )]
+sample_indexes_seen = set()
 with xopen(True, output_path, 'w', args.gzip_level) as output_stream:
     print >>output_stream, '\t'.join([''] + sorted_rnames + ['mapped totals'])
     for (_, sample_index), xpartition in xstream(sys.stdin, 2):
@@ -138,6 +139,15 @@ with xopen(True, output_path, 'w', args.gzip_level) as output_stream:
                                                 unique_counts[rname])
                                     for rname in sorted_rnames]
                     + ['%d,%d' % (total_mapped_reads, total_unique_alignments)]
+            )
+        sample_indexes_seen.add(sample_index)
+    unseen_indexes = set(
+            manifest_object.index_to_label.keys()
+        ) - sample_indexes_seen
+    for sample_index in unseen_indexes:
+        print >>output_stream, '\t'.join(
+                [manifest_object.index_to_label[sample_index]]
+                + ['0,0']*(len(sorted_rnames) + 1)
             )
 
 if not output_url.is_local:
