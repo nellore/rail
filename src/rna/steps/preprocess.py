@@ -619,7 +619,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                         if bad_record_skip:
                             seqs = []
                             # Fake record-printing to get to records_to_consume
-                            if source_streams[-1] == os.devnull:
+                            if source_streams[-1].name == os.devnull:
                                 records_printed += 1
                             else:
                                 records_printed += 2
