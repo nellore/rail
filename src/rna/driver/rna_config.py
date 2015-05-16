@@ -2147,6 +2147,7 @@ cd ..
 rm -rf sandbox
 python27 {rail_zipped} $@
 """.format(rail_zipped=os.path.basename(rail_zipped))
+            )
         base.install_rail_bootstrap = path_join(
                                         True, base.dependency_dir,
                                         os.path.basename(
