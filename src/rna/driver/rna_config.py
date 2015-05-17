@@ -2137,11 +2137,11 @@ unzip ../{rail_zipped} -d ./
 cd hadoop
 for JAR in relevant-elephant multiple-files mod-partitioner
 do
-    rm -rf $JAR_out
-    mkdir -p $JAR_out
-    javac -classpath \\$(find ~/share/ *.jar | tr '\\n' ':') -d $JAR_out $JAR/*.java
-    jar -cvf $JAR.jar -C $JAR_out .
-    mv $JAR.jar $JARTARGET/
+    rm -rf ${{JAR}}_out
+    mkdir -p ${{JAR}}_out
+    javac -classpath \\$(find ~/share/ *.jar | tr '\\n' ':') -d ${{JAR}}_out ${{JAR}}/*.java
+    jar -cvf ${{JAR}}.jar -C ${{JAR}}_out .
+    mv ${{JAR}}.jar ${{JARTARGET}}/
 done
 cd ..
 rm -rf sandbox
