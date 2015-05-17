@@ -6,6 +6,7 @@ Defines URLs at which dependencies may be downloaded when installing Rail-RNA.
 Increasing version numbers of dependencies should formally increase Rail-RNA's
 version.
 """
+import os
 
 linux_dependencies = {
     'bowtie1' : ['http://downloads.sourceforge.net/project/bowtie-bio/'
