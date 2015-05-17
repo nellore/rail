@@ -2513,18 +2513,14 @@ fi
         ]
 
     @staticmethod
-    def misc_steps(base):
+    def prebootstrap(base):
         return [
             {
-                'ActionOnFailure' : base.action_on_failure,
-                'HadoopJarStep' : {
-                    'Args' : [
-                        '--src,%s' % base.index_archive,
-                        '--dest,hdfs:///index/'
-                    ],
-                    'Jar' : '/home/hadoop/lib/emr-s3distcp-1.0.jar'
-                },
-                'Name' : 'Copy Bowtie indexes from S3 to HDFS'
+                'Name' : 'Install S3cmd',
+                'ScriptBootstrapAction' : {
+                    'Args' : [],
+                    'Path' : base.install_s3cmd_bootstrap
+                }
             }
         ]
 
@@ -4531,9 +4527,11 @@ class RailRnaElasticPreprocessJson(object):
                 'true' if base.visible_to_all_users else 'false'
             )
         self._json_serial['Instances'] = RailRnaElastic.instances(base)
-        self._json_serial['BootstrapActions'] \
-            = RailRnaPreprocess.bootstrap() \
-            + RailRnaElastic.bootstrap(base)
+        self._json_serial['BootstrapActions'] = (
+                RailRnaElastic.prebootstrap(base)
+                + RailRnaPreprocess.bootstrap()
+                + RailRnaElastic.bootstrap(base)
+            )
         self.base = base
     
     @property
@@ -4880,9 +4878,11 @@ class RailRnaElasticAlignJson(object):
                 'true' if base.visible_to_all_users else 'false'
             )
         self._json_serial['Instances'] = RailRnaElastic.instances(base)
-        self._json_serial['BootstrapActions'] \
-            = RailRnaAlign.bootstrap(base) \
-            + RailRnaElastic.bootstrap(base)
+        self._json_serial['BootstrapActions'] = (
+                RailRnaElastic.prebootstrap(base)
+                + RailRnaAlign.bootstrap(base)
+                + RailRnaElastic.bootstrap(base)
+            )
         self.base = base
     
     @property
@@ -5274,9 +5274,11 @@ class RailRnaElasticAllJson(object):
                 'true' if base.visible_to_all_users else 'false'
             )
         self._json_serial['Instances'] = RailRnaElastic.instances(base)
-        self._json_serial['BootstrapActions'] \
-            = RailRnaAlign.bootstrap(base) \
-            + RailRnaElastic.bootstrap(base)
+        self._json_serial['BootstrapActions'] = (
+                RailRnaElastic.prebootstrap(base)
+                + RailRnaAlign.bootstrap(base)
+                + RailRnaElastic.bootstrap(base)
+            )
         self.base = base
     
     @property
