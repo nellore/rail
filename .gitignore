@@ -13,7 +13,7 @@ refs
 .DS_Store
 *.sublime-project
 *.sublime-workspace
-
+compile_*.log
 !rail-rna*.tar.gz
 
 !*/
