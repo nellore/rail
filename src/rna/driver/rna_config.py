@@ -29,7 +29,7 @@ import dooplicity.ansibles as ab
 import tempfile
 import shutil
 from dooplicity.tools import path_join, is_exe, which, register_cleanup, \
-    apply_async_with_errors, engine_string_from_list
+    apply_async_with_errors, engine_string_from_list, cd
 from version import version_number
 import sys
 import argparse
@@ -1959,6 +1959,8 @@ class RailRnaElastic(object):
                                     'has no valid lines.').format(
                                                         manifest_url.to_url()
                                                     ))
+            # Bail before copying anything to S3
+            raise_runtime_error(base)
             if not manifest_url.is_s3 and output_dir_url.is_s3:
                 # Copy manifest file to S3 before job flow starts
                 base.manifest = path_join(True, base.dependency_dir,
@@ -2108,13 +2110,15 @@ EOF
         shutil.copytree(base_path, target_to_zip,
                         ignore=shutil.ignore_patterns('*.pyc', '.DS_Store'))
         with cd(temp_dependency_dir):
-            shutil.make_archive(rail_zipped, 'zip', 'src')
+            shutil.make_archive(rail_zipped[:-4], 'zip', 'src')
         base.elastic_rail_path = path_join(
                                         True, base.dependency_dir,
                                         os.path.basename(
                                                 rail_zipped
                                             )
                                     )
+        ansible.put(rail_zipped, base.elastic_rail_path)
+        shutil.rmtree(target_to_zip)
         install_rail_bootstrap = os.path.join(temp_dependency_dir,
                                                 'install-rail.sh')
         with open(install_rail_bootstrap, 'w') as script_stream:
@@ -2143,7 +2147,7 @@ do
     jar -cvf ${{JAR}}.jar -C ${{JAR}}_out .
     mv ${{JAR}}.jar ${{JARTARGET}}/
 done
-cd ..
+cd ../..
 rm -rf sandbox
 sudo python27 {rail_zipped} $@
 """.format(rail_zipped=os.path.basename(rail_zipped))
@@ -2155,7 +2159,6 @@ sudo python27 {rail_zipped} $@
                                             )
                                     )
         ansible.put(install_rail_bootstrap, base.install_rail_bootstrap)
-        shutil.rmtree(target_to_zip)
         copy_bootstrap = os.path.join(temp_dependency_dir,
                                                 's3cmd_s3.sh')
         with open(copy_bootstrap, 'w') as script_stream:

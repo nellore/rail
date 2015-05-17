@@ -574,8 +574,7 @@ if __name__ == '__main__':
                           output_parser=go_elastic_output,
                           algo_parser=go_elastic_algo, elastic=True)
     args = parser.parse_args()
-    if not args.json:
-        print '\nLoading...'
+    print_to_screen('Loading...', newline=True, carriage_return=False)
     if args.job_flow == 'go' and args.go_mode == 'local':
         mode = 'local'
         json_creator = RailRnaLocalAllJson(
