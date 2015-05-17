@@ -167,8 +167,8 @@ if args.suppress_bam:
                         if alignment_printer.unique(record, seq_index=8):
                             unique_count += 1
                     except IndexError:
-                        # Unmapped read
-                        pass
+                        # Unmapped read; it's unique
+                        unique_count += 1
                 input_line_count += 1
             # Only primary alignments (flag & 256 != 1)
             print 'counts\t-\t%s\t%s\t%d\t%d' % (sample_index, rname_index,
@@ -183,8 +183,8 @@ if args.suppress_bam:
                         if alignment_printer.unique(record, seq_index=8):
                             unique_count += 1
                     except IndexError:
-                        # Unmapped read
-                        pass
+                        # Unmapped read; it's unique
+                        unique_count += 1
             # Only primary alignments (flag & 256 != 1)
             print 'counts\t-\t%s\t%s\t%d\t%d' % (sample_index, rname_index,
                                                  total_count, unique_count)
@@ -349,8 +349,8 @@ else:
                 if alignment_printer.unique(sam_line_to_print):
                     unique_count += 1
             except IndexError:
-                # Unmapped read
-                pass
+                # Unmapped read; it's unique
+                unique_count += 1
         last_rname = rname
         last_sample_label = sample_label
         last_rname_index = rname_index

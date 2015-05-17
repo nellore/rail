@@ -122,7 +122,10 @@ sorted_rnames = [reference_index.string_to_rname['%012d' % i]
                             )]
 sample_indexes_seen = set()
 with xopen(True, output_path, 'w', args.gzip_level) as output_stream:
-    print >>output_stream, '\t'.join([''] + sorted_rnames + ['mapped totals'])
+    print >>output_stream, '\t'.join(
+                    [''] + sorted_rnames
+                    + ['total # mapped reads', 'total # reads']
+                )
     for (_, sample_index), xpartition in xstream(sys.stdin, 2):
         sample_label = manifest_object.index_to_label[sample_index]
         total_counts, unique_counts = defaultdict(int), defaultdict(int)
@@ -130,15 +133,16 @@ with xopen(True, output_path, 'w', args.gzip_level) as output_stream:
             rname = reference_index.string_to_rname[rname_index]
             total_counts[rname] = int(total_count)
             unique_counts[rname] = int(unique_count)
-        total_mapped_reads = sum(total_counts.values()) - total_counts['*']
-        total_unique_alignments = (
-                    sum(unique_counts.values()) - unique_counts['*']
-                )
+        total_reads = sum(total_counts.values())
+        total_mapped_reads = total_reads - total_counts['*']
+        total_uniques = sum(unique_counts.values())
+        total_mapped_uniques = total_uniques - unique_counts['*']
         print >>output_stream, '\t'.join(
                 [sample_label] + ['%d,%d' % (total_counts[rname],
                                                 unique_counts[rname])
                                     for rname in sorted_rnames]
-                    + ['%d,%d' % (total_mapped_reads, total_unique_alignments)]
+                + ['%d,%d' % (total_mapped_reads, total_mapped_uniques),
+                   '%d,%d' % (total_reads, total_uniques)]
             )
         sample_indexes_seen.add(sample_index)
     unseen_indexes = set(
