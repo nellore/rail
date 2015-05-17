@@ -65,8 +65,8 @@ class RailRnaInstaller(object):
                                         u'\u2200', version_number)
                                     )
         if sys.platform in ['linux', 'linux2']:
-            if 'EC2_HOME' in os.environ:
-                # Assume we're on EC2 and prepend S3 download URLs
+            if os.path.isfile('/mnt/var/lib/info/instance.json'):
+                # Assume an EMR cluster and prepend S3 download URLs
                 self.depends = dependency_urls.ec2_dependencies
             else:
                 self.depends = dependency_urls.linux_dependencies
@@ -182,6 +182,9 @@ class RailRnaInstaller(object):
             url = url_deque.popleft()
             command = [self.curl_exe, '-L', '-O', url]
             filename = url.rpartition('/')[2]
+            print >>self.log_stream, 'Downloading {} from {}...'.format(
+                                                                    name, url
+                                                                )
             try:
                 subprocess.check_output(command, stderr=self.log_stream)
             except subprocess.CalledProcessError as e:

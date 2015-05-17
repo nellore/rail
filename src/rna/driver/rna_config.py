@@ -41,6 +41,7 @@ import random
 import string
 import socket
 import exe_paths
+import unicodedata
 
 _help_set = set(['--help', '-h'])
 _argv_set = set(sys.argv)
@@ -179,15 +180,31 @@ def print_to_screen(message, newline=True, carriage_return=False):
 
         No return value.
     """
-    sys.stderr.write('\x1b[K' + message + ('\r' if carriage_return else '')
+    full_message = ('\x1b[K' + message + ('\r' if carriage_return else '')
                         + ('\n' if newline else ''))
-    if sys.stderr.isatty():
+    try:
+        sys.stderr.write(full_message)
+        if sys.stderr.isatty():
+            sys.stderr.flush()
+        else:
+            try:
+                # So the user sees it too
+                sys.stdout.write(full_message)
+                sys.stdout.flush()
+            except UnicodeEncodeError:
+                sys.stdout.write(
+                                unicodedata.normalize(
+                                        'NFKD', full_message
+                                    ).encode('ascii', 'ignore')
+                            )
+                sys.stdout.flush()
+    except UnicodeEncodeError:
+        sys.stderr.write(
+                        unicodedata.normalize(
+                                'NFKD', full_message
+                            ).encode('ascii', 'ignore')
+                    )
         sys.stderr.flush()
-    else:
-        # So the user sees it too
-        sys.stdout.write('\x1b[K' + message + ('\r' if carriage_return else '')
-                        + ('\n' if newline else ''))
-        sys.stdout.flush()
 
 def ready_engines(rc, base, prep=False):
     """ Prepares engines for checks and copies Rail/manifest/index to nodes. 
@@ -2078,6 +2095,8 @@ cd ..
 """#!/usr/bin/env bash
 set -e
 export HOME=/home/hadoop
+printf '\\nexport HOME=/home/hadoop\\n' >>/home/hadoop/conf/hadoop-user-env.sh
+sudo ln -s /home/hadoop/.s3cfg /home/.s3cfg
 
 sudo wget -O/etc/yum.repos.d/s3tools.repo http://s3tools.org/repo/RHEL_6/s3tools.repo || { echo 'wget failed' ; exit 1; }
 sudo yum -y install s3cmd || { echo 's3cmd installation failed' ; exit 1; }
@@ -2133,6 +2152,7 @@ export HOME=/home/hadoop
 
 RAILZIP=$1
 JARTARGET=$2
+mkdir -p ${{JARTARGET}}
 shift 2
 s3cmd get $RAILZIP
 mkdir -p sandbox
@@ -2143,7 +2163,7 @@ for JAR in relevant-elephant multiple-files mod-partitioner
 do
     rm -rf ${{JAR}}_out
     mkdir -p ${{JAR}}_out
-    javac -classpath \\$(find ~/share/ *.jar | tr '\\n' ':') -d ${{JAR}}_out ${{JAR}}/*.java
+    javac -classpath $(find ~/share/ *.jar | tr '\\n' ':') -d ${{JAR}}_out ${{JAR}}/*.java
     jar -cvf ${{JAR}}.jar -C ${{JAR}}_out .
     mv ${{JAR}}.jar ${{JARTARGET}}/
 done
@@ -4104,7 +4124,7 @@ class RailRnaAlign(object):
                     ]
             } if base.bw else {},
             {
-                'name' : 'Aggregate intron/indel results',
+                'name' : 'Aggregate introns/indels',
                 'run' : ('bed_pre.py --manifest={0} '
                          '--sample-fraction={1} --coverage-threshold={2} '
                          '{3} {4}').format(
@@ -4172,7 +4192,7 @@ class RailRnaAlign(object):
                     ]
             } if (base.tsv or base.bw) else {},
             {
-                'name' : 'Write BEDs with intron/indel results by sample',
+                'name' : 'Write BEDs with introns/indels by sample',
                 'run' : ('bed.py --bowtie-idx={0} --out={1} '
                          '--manifest={2} --bed-basename={3} {4} {5}').format(
                                                         base.bowtie1_idx,
@@ -4224,8 +4244,8 @@ class RailRnaAlign(object):
                                         manifest,
                                         keep_alive,
                                         '--output-by-chromosome'
-                                        if not base.do_not_output_bam_by_chr
-                                        else '',
+                                        if (not base.do_not_output_bam_by_chr
+                                            or not base.bam) else '',
                                         scratch,
                                         '--output-sam' if base.output_sam
                                         else '',
@@ -4251,7 +4271,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            },
+            } if (base.bw or base.tsv or base.bam) else {},
             {
                 'name' : 'Write mapped read counts',
                 'run' : ('collect_read_stats.py --bowtie-idx={0} --out={1} '
