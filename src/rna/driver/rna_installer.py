@@ -25,6 +25,7 @@ import tempfile
 from tempdel import remove_temporary_directories
 from rna_config import print_to_screen
 import glob
+from collections import deque
 
 def find(name, path):
     """ Finds first file matching name in a given path.
@@ -64,7 +65,11 @@ class RailRnaInstaller(object):
                                         u'\u2200', version_number)
                                     )
         if sys.platform in ['linux', 'linux2']:
-            self.depends = dependency_urls.linux_dependencies
+            if 'EC2_HOME' in os.environ:
+                # Assume we're on EC2 and prepend S3 download URLs
+                self.depends = dependency_urls.ec2_dependencies
+            else:
+                self.depends = dependency_urls.linux_dependencies
         elif sys.platform == 'darwin':
             self.depends = dependency_urls.mac_dependencies
         else:
@@ -130,24 +135,41 @@ class RailRnaInstaller(object):
 
             No return value
         """
-        symlink_command = 'sudo ln -s %s /usr/local/bin' % exe_path
+        self._print_to_screen_and_log(
+                    '[Installing] Creating symlinks to dependencies...',
+                    newline=False, carriage_return=True
+                )
+        symlink_command = ['ln', '-s', exe_path, '/usr/local/bin']
         try:
-            subprocess.check_output(symlink_command, stderr=self.log_stream)
+            subprocess.check_output(symlink_command, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
-            self._print_to_screen_and_log(
-                        ('Error encountered symlinking; exit code was %d; '
-                         'command invoked was "%s".') %
-                            (e.returncode, ' '.join(dir_command))
+            if 'file exists' in e.output.lower():
+                self._print_to_screen_and_log(
+                        ('[Warning] /usr/local/bin/%s already exists; '
+                         'skipping symlink creation.')
+                            % os.path.basename(exe_path),
+                        newline=True, carriage_return=False
                     )
-            self._bail()
+                self._print_to_screen_and_log(
+                    '[Installing] Creating symlinks to dependencies...',
+                    newline=False, carriage_return=True
+                )
+            else:
+                print >>self.log_stream, e.output
+                self._print_to_screen_and_log(
+                            ('Error encountered symlinking; exit code was %d; '
+                             'command invoked was "%s".') %
+                                (e.returncode, ' '.join(symlink_command))
+                        )
+                self._bail()
 
-    def _grab_and_explode(self, url, name):
+    def _grab_and_explode(self, urls, name):
         """ Special method for grabbing and exploding a package, if necessary.
 
-            Does not verify URL since these are preverified. Package is
+            Does not verify URLs since these are preverified. Package is
             downloaded to current directory.
 
-            url: url to grab
+            url: list of urls to grab
             name: name of download
 
             No return value
@@ -155,58 +177,84 @@ class RailRnaInstaller(object):
         self._print_to_screen_and_log('[Installing] Downloading %s...' % name,
                                         newline=False,
                                         carriage_return=True)
-        command = [self.curl_exe, '-L', '-O', url]
-        filename = url.rpartition('/')[2]
-        try:
-            subprocess.check_output(command, stderr=self.log_stream)
-        except subprocess.CalledProcessError as e:
-            self._print_to_screen_and_log(
-                    ('Error encountered downloading file %s; exit '
-                     'code was %d; command invoked was "%s".') %
-                        (url, e.returncode, ' '.join(command))
-                )
-            self._print_to_screen_and_log('Make sure web access is available.')
-            self._bail()
-        else:
-            # Explode
-            explode_command = None
-            if url[-8:] == '.tar.bz2':
-                explode_command = ['tar', 'xvjf', filename]
-            elif url[-7:] == '.tar.gz' or url[-4:] == '.tgz':
-                explode_command = ['tar', 'xvjf', filename]
-            elif url[-4:] == '.zip':
-                self._print_to_screen_and_log(
-                        '[Installing] Extracting %s...' % name,
-                        newline=False,
-                        carriage_return=True)
-                try:
-                    with zipfile.ZipFile(filename) as zip_object:
-                        zip_object.extractall()
-                except Exception as e:
+        url_deque = deque(urls)
+        while url_deque:
+            url = url_deque.popleft()
+            command = [self.curl_exe, '-L', '-O', url]
+            filename = url.rpartition('/')[2]
+            try:
+                subprocess.check_output(command, stderr=self.log_stream)
+            except subprocess.CalledProcessError as e:
+                if not url_deque:
                     self._print_to_screen_and_log(
-                            'Error encountered exploding %s.'
-                                % filename
+                            ('Error encountered downloading file %s; exit '
+                             'code was %d; command invoked was "%s".') %
+                                (url, e.returncode, ' '.join(command))
+                        )
+                    self._print_to_screen_and_log(
+                            'Make sure web access is available.'
                         )
                     self._bail()
-                finally:
-                    os.remove(filename)
-            if explode_command is not None:
-                self._print_to_screen_and_log(
-                        '[Installing] Extracting %s...' % name,
-                        newline=False,
-                        carriage_return=True)
-                try:
-                    subprocess.check_output(explode_command,
-                                            stderr=self.log_stream)
-                except subprocess.CalledProcessError as e:
+                else:
                     self._print_to_screen_and_log(
-                        ('Error encountered exploding file %s; exit '
-                         'code was %d; command invoked was "%s".') %
-                            (filename, e.returncode, ' '.join(explode_command))
+                        '[Installing] Download failed; '
+                        'trying alternate URL for %s...' % name,
+                        newline=False,
+                        carriage_return=True
                     )
-                    self._bail()
-                finally:
-                    os.remove(filename)
+            else:
+                # Explode
+                explode_command = None
+                if url[-8:] == '.tar.bz2':
+                    explode_command = ['tar', 'xvjf', filename]
+                elif url[-7:] == '.tar.gz' or url[-4:] == '.tgz':
+                    explode_command = ['tar', 'xvjf', filename]
+                elif url[-4:] == '.zip':
+                    self._print_to_screen_and_log(
+                            '[Installing] Extracting %s...' % name,
+                            newline=False,
+                            carriage_return=True)
+                    try:
+                        with zipfile.ZipFile(filename) as zip_object:
+                            zip_object.extractall()
+                    except Exception as e:
+                        self._print_to_screen_and_log(
+                                'Error encountered exploding %s.'
+                                    % filename
+                            )
+                        self._bail()
+                    finally:
+                        os.remove(filename)
+                if explode_command is not None:
+                    self._print_to_screen_and_log(
+                            '[Installing] Extracting %s...' % name,
+                            newline=False,
+                            carriage_return=True)
+                    try:
+                        subprocess.check_output(explode_command,
+                                                stderr=self.log_stream)
+                    except subprocess.CalledProcessError as e:
+                        self._print_to_screen_and_log(
+                            ('Error encountered exploding file %s; exit '
+                             'code was %d; command invoked was "%s".') %
+                                (filename, e.returncode, ' '.join(explode_command))
+                        )
+                        self._bail()
+                    finally:
+                        os.remove(filename)
+                break
+
+    def _quote(self, path=None):
+        """ Decks path with single quotes if it's not None
+
+            path: path or None
+
+            Return value: None if path is None, else path decked by single
+                quotes
+        """
+        if path is None:
+            return 'None'
+        return "'%s'" % path
 
     def install(self):
         """ Installs Rail-RNA and all its dependencies. """
@@ -295,7 +343,7 @@ class RailRnaInstaller(object):
             if not self.prep_dependencies:
                 # Have to make SAMTools (annoying; maybe change this)
                 samtools_dir = os.path.join(temp_install_dir,
-                        self.depends['samtools'].rpartition('/')[2][:-8]
+                        self.depends['samtools'][0].rpartition('/')[2][:-8]
                     )
                 with cd(samtools_dir):
                     '''Make sure unistd.h is #included cram_io.c ... it's some
@@ -331,32 +379,38 @@ class RailRnaInstaller(object):
                                     (e.returncode, ' '.join(samtools_command))
                             )
                         self._bail()
-                samtools = "'%s'" % os.path.join(self.final_install_dir,
-                            self.depends['samtools'].rpartition('/')[2][:-8],
-                            'samtools')
+                samtools = os.path.join(self.final_install_dir,
+                        self.depends['samtools'][0].rpartition('/')[2][:-8],
+                        'samtools')
                 bowtie1_base = '-'.join(
-                    self.depends['bowtie1'].rpartition('/')[2].split('-')[:2]
+                    self.depends['bowtie1'][0].rpartition(
+                            '/'
+                        )[2].split('-')[:2]
                 )
-                bowtie1 = "'%s'" % os.path.join(self.final_install_dir,
+                bowtie1 = os.path.join(self.final_install_dir,
                                                 bowtie1_base, 'bowtie')
-                bowtie1_build = "'%s'" % os.path.join(self.final_install_dir,
+                bowtie1_build = os.path.join(self.final_install_dir,
                                                 bowtie1_base, 'bowtie-build')
                 bowtie2_base = '-'.join(
-                    self.depends['bowtie2'].rpartition('/')[2].split('-')[:2]
+                    self.depends['bowtie2'][0].rpartition(
+                            '/'
+                        )[2].split('-')[:2]
                 )
-                bowtie2 = "'%s'" % os.path.join(self.final_install_dir,
+                bowtie2 = os.path.join(self.final_install_dir,
                                                 bowtie2_base, 'bowtie2')
-                bowtie2_build = "'%s'" % os.path.join(self.final_install_dir,
+                bowtie2_build = os.path.join(self.final_install_dir,
                                                 bowtie2_base, 'bowtie2-build')
-                bedgraphtobigwig = "'%s'" % os.path.join(
+                bedgraphtobigwig = os.path.join(
                                                 self.final_install_dir,
                                                 'bedGraphToBigWig'
                                             )
             else:
-                (bowtie1 = bowtie1_build = bowtie2 = bowtie2_build
-                    = bedgraphtobigwig = samtools = 'None')
-            pypy = "'%s'" % os.path.join(self.final_install_dir,
-                    self.depends['pypy'].rpartition('/')[2][:-8], 'bin', 'pypy'
+                bowtie1 = bowtie1_build = bowtie2 = bowtie2_build \
+                    = bedgraphtobigwig = samtools = 'None'
+            pypy = os.path.join(self.final_install_dir,
+                    self.depends['pypy'][0].rpartition(
+                            '/'
+                        )[2][:-8], 'bin', 'pypy'
                 )
             # Write paths to exe_paths
             with open(
@@ -382,10 +436,12 @@ bowtie2_build = {bowtie2_build}
 samtools = {samtools}
 bedgraphtobigwig = {bedgraphtobigwig}
 """
-                ).format(pypy=pypy, bowtie1=bowtie1,
-                            bowtie1_build=bowtie1_build, bowtie2=bowtie2,
-                            bowtie2_build=bowtie2_build, samtools=samtools,
-                            bedgraphtobigwig=bedgraphtobigwig)
+                ).format(pypy=self._quote(pypy), bowtie1=self._quote(bowtie1),
+                            bowtie1_build=self._quote(bowtie1_build),
+                            bowtie2=self._quote(bowtie2),
+                            bowtie2_build=self._quote(bowtie2_build),
+                            samtools=self._quote(samtools),
+                            bedgraphtobigwig=self._quote(bedgraphtobigwig))
         # Move to final directory
         try:
             shutil.move(temp_install_dir, self.final_install_dir)
