@@ -4058,7 +4058,7 @@ class RailRnaAlign(object):
                             path_join(elastic, 'compare_alignments',
                                                'sam_clip_ties')],
                 'output' : 'break_ties',
-                'tasks' : 1,
+                'tasks' : '1x',
                 'partition' : '-k1,1',
                 'multiple_outputs' : True,
                 'extra_args' : [
