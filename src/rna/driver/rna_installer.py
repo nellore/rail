@@ -240,7 +240,7 @@ class RailRnaInstaller(object):
                         self._print_to_screen_and_log(
                             ('Error encountered exploding file %s; exit '
                              'code was %d; command invoked was "%s".') %
-                                (filename, e.returncode, ' '.join(explode_command))
+                            (filename, e.returncode, ' '.join(explode_command))
                         )
                         self._bail()
                     finally:

@@ -575,7 +575,7 @@ def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
     reducer='org.apache.hadoop.mapred.lib.IdentityReducer', 
     action_on_failure='TERMINATE_JOB_FLOW', jar=_hadoop_streaming_jar,
-    tasks=0, partition_field_count=None, key_fields=None, archives=None,
+    tasks=0, partition_options=None, sort_options=None, archives=None,
     multiple_outputs=False, mod_partitioner=False, inputformat=None,
     extra_args=[]):
     """ Outputs JSON for a given step.
@@ -587,8 +587,8 @@ def step(name, inputs, output,
         reducer: reducer command
         jar: path to Hadoop Streaming jar; ignored in local mode
         tasks: reduce task count
-        partition field count: number of initial fields on which to partition
-        key fields: number of key fields
+        partition_options: sort-like partition options or None if mapper
+        sort_options: UNIX sort options or None if mapper
         archives: -archives option
         multiple_outputs: True iff there are multiple outputs; else False
         mod_partitioner: True iff the mod partitioner should be used for
@@ -609,21 +609,28 @@ def step(name, inputs, output,
     to_return['HadoopJarStep']['Args'].extend(
             ['-D', 'mapreduce.job.reduces=%d' % tasks]
         )
-    if partition_field_count is not None and key_fields is not None:
-        assert key_fields >= partition_field_count
+    # Get key fields as max of all numbers
+    if partition_options is not None:
+        if sort_options is None:
+            sort_options = ''
+        # number of key fields is max of all numbers passed to both partitioner
+        # and sorter
+        key_fields = max([int(el) for arg in (partition_options.split('-k')
+                                              + sort_options.split('-k'))
+                            if arg.strip() and len(arg.split(',')) <= 2
+                            for el in arg.strip().strip('nr').split(',')])
         to_return['HadoopJarStep']['Args'].extend([
             '-D', 'stream.num.map.output.key.fields=%d' % key_fields,
-            '-D', 'mapreduce.partition.keypartitioner.options=-k1,%d'
-                        % partition_field_count
+            '-D', 'mapreduce.partition.keypartitioner.options=%s'
+                        % partition_options
         ])
-        if key_fields != partition_field_count:
+        if sort_options:
             to_return['HadoopJarStep']['Args'].extend([
                 '-D', 'mapreduce.job.output.key.comparator.class='
                       'org.apache.hadoop.mapred.lib.KeyFieldBasedComparator',
-                '-D', 'mapreduce.partition.keycomparator.options='
-                      '-k1,%d -k%d,%d' % (partition_field_count,
-                                                partition_field_count + 1, 
-                                                key_fields)
+                '-D', 'mapreduce.partition.keycomparator.options=%s' % (
+                                                    sort_options
+                                                )
             ])
     for extra_arg in extra_args:
         to_return['HadoopJarStep']['Args'].extend(
@@ -680,28 +687,34 @@ def step(name, inputs, output,
     return to_return
 
 # TODO: Flesh out specification of protostep and migrate to Dooplicity
-def steps(protosteps, action_on_failure, jar, step_dir, 
-            reducer_count, intermediate_dir, extra_args=[], unix=False,
-            no_direct_copy=False):
+def steps(protosteps, action_on_failure, jar, step_dir, reducer_count,
+            intermediate_dir, extra_args=[], unix=False, no_direct_copy=False):
     """ Turns list with "protosteps" into well-formed StepConfig list.
 
         A protostep looks like this:
-
             {
                 'name' : [name of step]
-                'run' : Python script name; like 'preprocess.py' + args
+                'mapper' : argument of Hadoop Streaming's -mapper; if left
+                    unspecified, use IdentityMapper
+                'reducer' : argument of Hadoop Streaming's -reducer; if left
+                    unspecified, use IdentityReducer
                 'inputs' : list of input directories
                 'no_input_prefix' : key that's present iff intermediate dir
                     should not be prepended to inputs
                 'output' : output directory
                 'no_output_prefix' : key that's present iff intermediate dir
                     should not be prepended to output dir
-                'keys'  : Number of key fields; present only if reducer
-                'part'  : x from KeyFieldBasedPartitioner option -k1,x
-                'min_tasks' : minimum number of reducer tasks
-                'max_tasks' : maximum number of reducer tasks
-                'taskx' : if present, override, min_tasks and max_tasks in
-                    favor off taskx * reducer_count reducer tasks
+                'partition' : sort-like options to pass to
+                    KeyFieldBasedPartitioner; of form -k pos1[,pos2], where pos
+                    is ordinarily of the form f[.c][opts], but only f[opts]
+                    are permitted by Dooplicity's EMR simulator
+                'sort' : sort-like options to pass to sort comparator
+                    KeyFieldBasedComparator; of any form permitted by UNIX
+                    sort. (Hadoop only recognizes n and r though.)
+                'tasks' : exact number of reduce tasks OR 'NUMx' to obtain
+                    NUM * number of "slots" tasks (typically number of
+                        processing cores) OR NUM1,NUM2 to decide
+                    "optimal" number of tasks between NUM1 and NUM2 inclusive
                 'inputformat' : input format; present only if necessary
                 'archives' : archives parameter; present only if necessary
                 'multiple_outputs' : key that's present iff there are multiple
@@ -736,8 +749,9 @@ def steps(protosteps, action_on_failure, jar, step_dir,
         identity_mapper = ('cut -f 2-' if unix else 'cat')
         final_output = (path_join(unix, intermediate_dir,
                                         protostep['output'])
-                        if 'no_output_prefix' not in
-                        protostep else protostep['output'])
+                        if ('no_output_prefix' not in
+                            protostep or not protostep['no_output_prefix'])
+                        else protostep['output'])
         final_output_url = ab.Url(final_output)
         no_direct_copy_for_step = (
                     unix and final_output_url.is_s3 and no_direct_copy
@@ -746,32 +760,39 @@ def steps(protosteps, action_on_failure, jar, step_dir,
             intermediate_output = _hdfs_temp_dir + final_output_url.suffix[1:]
         else:
             intermediate_output = final_output
-        assert 'taskx' in protostep or 'min_tasks' in protostep
-        if 'taskx' in protostep:
-            if protostep['taskx'] is None:
-                reducer_task_count = 1
+        if 'reducer' in protostep:
+            assert 'tasks' in protostep
+            tasks = str(protostep['tasks'])
+            assert (tasks.endswith('x') or len(tasks.split(',')) == 2 or 
+                    float(tasks).is_integer())
+            if tasks.endswith('x'):
+                reducer_task_count = int(tasks[:-1]) * reducer_count
             else:
-                reducer_task_count = reducer_count * protostep['taskx']
-        elif protostep['min_tasks'] is None:
-            reducer_task_count = reducer_count
+                tasks = tasks.split(',')
+                if len(tasks) == 2:
+                    min_tasks = int(tasks[0])
+                    try:
+                        max_tasks = int(tasks[1])
+                    except ValueError:
+                        max_tasks = None
+                    '''Task count logic: number of reduce tasks is equal to
+                    min(minimum number of tasks greater than
+                        min_tasks that's a multiple of the number of reducers,
+                        max_tasks); max_tasks need not be specified'''
+                    if not (min_tasks % reducer_count):
+                        reducer_task_count = min_tasks
+                    else:
+                        reducer_task_count = \
+                            min_tasks + reducer_count - (
+                                (min_tasks + reducer_count) % reducer_count
+                            )
+                    if max_tasks is not None:
+                        reducer_task_count = min(reducer_task_count, max_tasks)
+                else:
+                    # len tasks is 1
+                    reducer_task_count = int(tasks[0])
         else:
-            '''Task count logic: number of reduce tasks is equal to
-            min(minimum number of tasks greater than
-                min_tasks that's a multiple of the number of reducers,
-                max_tasks). min_tasks = 0 and max_tasks = 0 if no reduces are
-            to be performed. min_tasks must be specified, but max_tasks need
-            not be specified.'''
-            if not (protostep['min_tasks'] % reducer_count):
-                reducer_task_count = protostep['min_tasks']
-            else:
-                reducer_task_count = \
-                    protostep['min_tasks'] + reducer_count - (
-                        (protostep['min_tasks'] + reducer_count)
-                        % reducer_count
-                    )
-            if 'max_tasks' in protostep:
-                reducer_task_count = min(reducer_task_count,
-                                            protostep['max_tasks'])
+            reducer_task_count = 0
         true_steps.append(step(
                 name=protostep['name'],
                 inputs=([path_join(unix, intermediate_dir,
@@ -783,20 +804,20 @@ def steps(protosteps, action_on_failure, jar, step_dir,
                 mapper=' '.join(['pypy' if unix
                         else _executable, 
                         path_join(unix, step_dir,
-                                        protostep['run'])])
-                        if 'keys' not in protostep else identity_mapper,
+                                        protostep['mapper'])])
+                        if 'mapper' in protostep else identity_mapper,
                 reducer=' '.join(['pypy' if unix
                         else _executable, 
                         path_join(unix, step_dir,
-                                        protostep['run'])]) 
-                        if 'keys' in protostep else 'cat',
+                                        protostep['reducer'])]) 
+                        if 'reducer' in protostep else 'cat',
                 action_on_failure=action_on_failure,
                 jar=jar,
                 tasks=reducer_task_count,
-                partition_field_count=(protostep['part']
-                    if 'part' in protostep else None),
-                key_fields=(protostep['keys']
-                    if 'keys' in protostep else None),
+                partition_options=(protostep['partition']
+                    if 'partition' in protostep else None),
+                sort_options=(protostep['sort']
+                    if 'sort' in protostep else None),
                 archives=(protostep['archives']
                     if 'archives' in protostep else None),
                 multiple_outputs=(True if 'multiple_outputs'
@@ -874,7 +895,7 @@ class RailRnaErrors(object):
         self.curl_exe = curl_exe
         self.verbose = verbose
         self.profile = profile
-        if not (isinstance(max_task_attempts, int)
+        if not (float(max_task_attempts).is_integer()
                         and max_task_attempts >= 1):
             self.errors.append('Max task attempts (--max-task-attempts) '
                                'must be an integer greater than 0, but '
@@ -1478,7 +1499,7 @@ class RailRnaLocal(object):
                                                     ))
             from multiprocessing import cpu_count
             if num_processes:
-                if not (isinstance(num_processes, int)
+                if not (float(num_processes).is_integer()
                                         and num_processes >= 1):
                     base.errors.append('Number of processes (--num-processes) '
                                        'must be an integer >= 1, '
@@ -1498,7 +1519,7 @@ class RailRnaLocal(object):
                     unresponsive.'''
                     base.num_processes -= 1
             if gzip_intermediates:
-                if not (isinstance(gzip_level, int)
+                if not (float(gzip_level).is_integer()
                                         and 9 >= gzip_level >= 1):
                     base.errors.append('Gzip level (--gzip-level) '
                                        'must be an integer between 1 and 9, '
@@ -1814,7 +1835,7 @@ class RailRnaElastic(object):
                                         base.intermediate_dir
                                     ))
         elif intermediate_dir_url.is_s3:
-            if not (isinstance(intermediate_lifetime, int) and
+            if not (float(intermediate_lifetime).is_integer() and
                         intermediate_lifetime != 0):
                 base.errors.append(('Intermediate lifetime '
                                     '(--intermediate-lifetime) must be '
@@ -2296,7 +2317,7 @@ fi
                                                 ))
             base.spot_task = True
         base.task_instance_bid_price = task_instance_bid_price
-        if not (isinstance(master_instance_count, int)
+        if not (float(master_instance_count).is_integer()
                 and master_instance_count >= 1):
             base.errors.append('Master instance count '
                                '(--master-instance-count) must be an '
@@ -2304,7 +2325,7 @@ fi
                                                     master_instance_count
                                                 ))
         base.master_instance_count = master_instance_count
-        if not (isinstance(core_instance_count, int)
+        if not (float(core_instance_count).is_integer()
                  and core_instance_count >= 1):
             base.errors.append('Core instance count '
                                '(--core-instance-count) must be an '
@@ -2312,7 +2333,7 @@ fi
                                                     core_instance_count
                                                 ))
         base.core_instance_count = core_instance_count
-        if not (isinstance(task_instance_count, int)
+        if not (float(task_instance_count).is_integer()
                 and task_instance_count >= 0):
             base.errors.append('Task instance count '
                                '(--task-instance-count) must be an '
@@ -2690,7 +2711,7 @@ class RailRnaPreprocess(object):
     def __init__(self, base, nucleotides_per_input=8000000, gzip_input=True,
                     do_not_bin_quals=False, short_read_names=False,
                     skip_bad_records=False):
-        if not (isinstance(nucleotides_per_input, int) and
+        if not (float(nucleotides_per_input).is_integer() and
                 nucleotides_per_input > 0):
             base.errors.append('Nucleotides per input '
                                '(--nucleotides-per-input) must be an integer '
@@ -2755,7 +2776,7 @@ class RailRnaPreprocess(object):
             steps_to_return = [
                 {
                     'name' : 'Count lines in input files',
-                    'run' : 'count_inputs.py',
+                    'mapper' : 'count_inputs.py',
                     'inputs' : [base.old_manifest
                                 if hasattr(base, 'old_manifest')
                                 else base.manifest],
@@ -2763,14 +2784,12 @@ class RailRnaPreprocess(object):
                     'output' : 'count_lines',
                     'inputformat' : (
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
-                        ),
-                    'min_tasks' : 0,
-                    'max_tasks' : 0
+                        )
                 },
                 {
                     'name' : 'Assign reads to preprocessing tasks',
-                    'run' : ('assign_splits.py --num-processes {0}'
-                             ' --out {1} --filename {2} {3}').format(
+                    'reducer' : ('assign_splits.py --num-processes {0}'
+                                 ' --out {1} --filename {2} {3}').format(
                                                         base.num_processes,
                                                         base.intermediate_dir,
                                                         'split.manifest',
@@ -2782,16 +2801,14 @@ class RailRnaPreprocess(object):
                                                     ),
                     'inputs' : ['count_lines'],
                     'output' : 'assign_reads',
-                    'min_tasks' : 1,
-                    'max_tasks' : 1,
-                    'keys' : 1,
-                    'part' : 1
+                    'tasks' : 1,
+                    'partition' : '-k1,1'
                 },
                 {
                     'name' : 'Preprocess reads',
-                    'run' : ('preprocess.py --nucs-per-file={0} {1} '
-                             '--push={2} --gzip-level {3} {4} {5} '
-                             '{6} {7} {8}').format(
+                    'mapper' : ('preprocess.py --nucs-per-file={0} {1} '
+                                '--push={2} --gzip-level {3} {4} {5} '
+                                '{6} {7} {8}').format(
                                                 base.nucleotides_per_input,
                                                 '--gzip-output' if
                                                 base.gzip_input else '',
@@ -2823,17 +2840,15 @@ class RailRnaPreprocess(object):
                     'no_output_prefix' : True,
                     'inputformat' : (
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
-                        ),
-                    'min_tasks' : 0,
-                    'max_tasks' : 0
+                        )
                 },
             ]
         else:
             steps_to_return = [
                 {
                     'name' : 'Preprocess reads',
-                    'run' : ('preprocess.py --nucs-per-file={0} {1} '
-                             '--push={2} --gzip-level {3} {4} {5} {6} {7}'
+                    'mapper' : ('preprocess.py --nucs-per-file={0} {1} '
+                                '--push={2} --gzip-level {3} {4} {5} {6} {7}'
                                             ).format(
                                                 base.nucleotides_per_input,
                                                 '--gzip-output' if
@@ -2865,15 +2880,13 @@ class RailRnaPreprocess(object):
                     'no_output_prefix' : True,
                     'inputformat' : (
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
-                        ),
-                    'min_tasks' : 0,
-                    'max_tasks' : 0
+                        )
                 },
             ]
         return steps_to_return
 
     @staticmethod
-    def bootstrap():
+    def bootstrap(base):
         return [
             {
                 'Name' : 'Install Rail-RNA and create JAR dependencies',
@@ -3074,7 +3087,7 @@ class RailRnaAlign(object):
                              and bowtie2_arg_tokens[max(i-1, 0)] != '--mp')]
                     )
         if k is not None:
-            if not (isinstance(k, int) and k >= 1):
+            if not (float(k).is_integer() and k >= 1):
                 base.errors.append('Number of alignments to report per read '
                                    '(-k) must be an integer >= 1, but '
                                    '{0} was entered.'.format(k))
@@ -3098,7 +3111,7 @@ class RailRnaAlign(object):
         else:
             base.bowtie2_args = bowtie2_args
         base.k = k
-        if not (isinstance(partition_length, int) and
+        if not (float(partition_length).is_integer() and
                 partition_length > 0):
             base.errors.append('Genome partition length '
                                '(--partition-length) must be an '
@@ -3106,12 +3119,12 @@ class RailRnaAlign(object):
                                                         partition_length
                                                     ))
         base.partition_length = partition_length
-        if not (isinstance(min_readlet_size, int) and min_readlet_size > 0):
+        if not (float(min_readlet_size).is_integer() and min_readlet_size > 0):
             base.errors.append('Minimum readlet size (--min-readlet-size) '
                                'must be an integer > 0, but '
                                '{0} was entered.'.format(min_readlet_size))
         base.min_readlet_size = min_readlet_size
-        if not (isinstance(max_readlet_size, int) and max_readlet_size
+        if not (float(max_readlet_size).is_integer() and max_readlet_size
                 >= min_readlet_size):
             base.errors.append('Maximum readlet size (--max-readlet-size) '
                                'must be an integer >= minimum readlet size '
@@ -3121,7 +3134,7 @@ class RailRnaAlign(object):
                                                     max_readlet_size
                                                 ))
         base.max_readlet_size = max_readlet_size
-        if not (isinstance(readlet_config_size, int) and readlet_config_size
+        if not (float(readlet_config_size).is_integer() and readlet_config_size
                 >= max_readlet_size):
             base.errors.append('Readlet config size (--readlet-config-size) '
                                'must be an integer >= maximum readlet size '
@@ -3131,8 +3144,7 @@ class RailRnaAlign(object):
                                                     readlet_config_size
                                                 ))
         base.readlet_config_size = readlet_config_size
-        if not (isinstance(readlet_interval, int) and readlet_interval
-                > 0):
+        if not (float(readlet_interval).is_integer() and readlet_interval > 0):
             base.errors.append('Readlet interval (--readlet-interval) '
                                'must be an integer > 0, '
                                'but {0} was entered.'.format(
@@ -3146,12 +3158,12 @@ class RailRnaAlign(object):
                                                     cap_size_multiplier
                                                 ))
         base.cap_size_multiplier = cap_size_multiplier
-        if not (isinstance(min_intron_size, int) and min_intron_size > 0):
+        if not (float(min_intron_size).is_integer() and min_intron_size > 0):
             base.errors.append('Minimum intron size (--min-intron-size) '
                                'must be an integer > 0, but '
                                '{0} was entered.'.format(min_intron_size))
         base.min_intron_size = min_intron_size
-        if not (isinstance(max_intron_size, int) and max_intron_size
+        if not (float(max_intron_size).is_integer() and max_intron_size
                 >= min_intron_size):
             base.errors.append('Maximum intron size (--max-intron-size) '
                                'must be an integer >= minimum intron size '
@@ -3161,7 +3173,7 @@ class RailRnaAlign(object):
                                                     max_intron_size
                                                 ))
         base.max_intron_size = max_intron_size
-        if not (isinstance(min_exon_size, int) and min_exon_size > 0):
+        if not (float(min_exon_size).is_integer() and min_exon_size > 0):
             base.errors.append('Minimum exon size (--min-exon-size) '
                                'must be an integer > 0, but '
                                '{0} was entered.'.format(min_exon_size))
@@ -3184,7 +3196,7 @@ class RailRnaAlign(object):
                                    'must be an integer >= 1 or one of '
                                    '{"none", "mild", "strict"}, but {0} was '
                                    'entered.'.format(search_filter))
-        if not (isinstance(motif_search_window_size, int) and 
+        if not (float(motif_search_window_size).is_integer() and 
                     motif_search_window_size >= 0):
             base.errors.append('Motif search window size '
                                '(--motif-search-window-size) must be an '
@@ -3193,7 +3205,7 @@ class RailRnaAlign(object):
                                                 ))
         base.motif_search_window_size = motif_search_window_size
         if max_gaps_mismatches is not None and not (
-                isinstance(max_gaps_mismatches, int) and 
+                float(max_gaps_mismatches).is_integer() and 
                 max_gaps_mismatches >= 0
             ):
             base.errors.append('Max gaps and mismatches '
@@ -3202,7 +3214,7 @@ class RailRnaAlign(object):
                                                     max_gaps_mismatches
                                                 ))
         base.max_gaps_mismatches = max_gaps_mismatches
-        if not (isinstance(motif_radius, int) and
+        if not (float(motif_radius).is_integer() and
                     motif_radius >= 0):
             base.errors.append('Motif radius (--motif-radius) must be an '
                                'integer >= 0, but {0} was entered.'.format(
@@ -3218,14 +3230,14 @@ class RailRnaAlign(object):
                                                     normalize_percentile
                                                 ))
         base.normalize_percentile = normalize_percentile
-        if not (isinstance(tie_margin, int) and
+        if not (float(tie_margin).is_integer() and
                     tie_margin >= 0):
             base.errors.append('Tie margin (--tie-margin) must be an '
                                'integer >= 0, but {0} was entered.'.format(
                                                     tie_margin
                                                 ))
         base.tie_margin = tie_margin
-        if not (isinstance(count_multiplier, int) and
+        if not (float(count_multiplier).is_integer() and
                     count_multiplier >= 0):
             base.errors.append('Count multiplier (--count-multiplier) must '
                                'be an integer >= 0, but '
@@ -3289,7 +3301,7 @@ class RailRnaAlign(object):
                                                 ))
         base.drop_deletions = drop_deletions
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
-        if not (isinstance(transcriptome_indexes_per_sample, int)
+        if not (float(transcriptome_indexes_per_sample).is_integer()
                     and (1000 >= transcriptome_indexes_per_sample >= 1)):
             base.errors.append('Transcriptome indexes per sample '
                                '(--transcriptome-indexes-per-sample) must be '
@@ -3670,7 +3682,8 @@ class RailRnaAlign(object):
                 'name' : 'Align reads %s' % ('and segment them into readlets'
                                                 if base.isofrag_idx is None
                                                 else 'to genome'),
-                'run' : ('align_reads.py --bowtie-idx={0} --bowtie2-idx={1} '
+                'reducer' : (
+                         'align_reads.py --bowtie-idx={0} --bowtie2-idx={1} '
                          '--bowtie2-exe={2} '
                          '--exon-differentials --partition-length={3} '
                          '--min-exon-size={4} '
@@ -3681,34 +3694,36 @@ class RailRnaAlign(object):
                          '--gzip-level {9} '
                          '--index-count {10} '
                          '--tie-margin {11} '
-                         '{12} {13} {14} {15} {16} -- {17}').format(
-                                                        base.bowtie1_idx,
-                                                        base.bowtie2_idx,
-                                                        base.bowtie2_exe,
-                                                base.partition_length,
-                                                base.search_filter,
-                                                        manifest,
-                                                        base.max_readlet_size,
-                                                        base.readlet_interval,
-                                                base.cap_size_multiplier,
-                                                base.gzip_level
-                                                if 'gzip_level' in
-                                                dir(base) else 3,
-                                        base.transcriptome_indexes_per_sample *
-                                            base.sample_count,
-                                                base.tie_margin,
-                                                drop_deletions,
-                                                        verbose,
-                                                        keep_alive,
-                                                        scratch,
-                                                        output_by_chr,
-                                                        base.bowtie2_args),
+                         '{12} {13} {14} {15} {16} -- {17}'
+                        ).format(
+                                    base.bowtie1_idx,
+                                    base.bowtie2_idx,
+                                    base.bowtie2_exe,
+                                    base.partition_length,
+                                    base.search_filter,
+                                    manifest,
+                                    base.max_readlet_size,
+                                    base.readlet_interval,
+                                    base.cap_size_multiplier,
+                                    base.gzip_level
+                                    if 'gzip_level' in
+                                    dir(base) else 3,
+                                    base.transcriptome_indexes_per_sample *
+                                    base.sample_count,
+                                    base.tie_margin,
+                                    drop_deletions,
+                                    verbose,
+                                    keep_alive,
+                                    scratch,
+                                    output_by_chr,
+                                    base.bowtie2_args
+                                ),
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
-                'min_tasks' : base.sample_count * 12 if elastic else None,
-                'part' : 1,
-                'keys' : 1,
+                'tasks' : ('%d,' % base.sample_count * 12)
+                                if elastic else '1x',
+                'partition' : '-k1,1',
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -3719,7 +3734,8 @@ class RailRnaAlign(object):
             },
             {
                 'name' : 'Align unique readlets to genome',
-                'run' : ('align_readlets.py --bowtie-idx={0} '
+                'reducer' : (
+                         'align_readlets.py --bowtie-idx={0} '
                          '--bowtie-exe={1} {2} {3} --gzip-level={4} {5} '
                          '-- -t --sam-nohead --startverbose {6}').format(
                                                     base.bowtie1_idx,
@@ -3734,9 +3750,9 @@ class RailRnaAlign(object):
                                                 ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletized')],
                 'output' : 'align_readlets',
-                'min_tasks' : base.sample_count * 12 if elastic else None,
-                'part' : 1,
-                'keys' : 1,
+                'tasks' :  ('%d,' % base.sample_count * 12)
+                                if elastic else '1x',
+                'partition' : '-k1,1',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3746,7 +3762,8 @@ class RailRnaAlign(object):
             } if base.isofrag_idx is None else {},
             {
                 'name' : 'Search for introns using readlet alignments',
-                'run' : ('intron_search.py --bowtie-idx={0} '
+                'reducer' : (
+                         'intron_search.py --bowtie-idx={0} '
                          '--partition-length={1} --max-intron-size={2} '
                          '--min-intron-size={3} --min-exon-size={4} '
                          '--search-window-size={5} {6} '
@@ -3766,9 +3783,9 @@ class RailRnaAlign(object):
                                             ),
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
-                'min_tasks' : base.sample_count * 12 if elastic else None,
-                'part' : 1,
-                'keys' : 1,
+                'tasks' : ('%d,' % base.sample_count * 12)
+                                    if elastic else '1x',
+                'partition' : '-k1,1',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3778,7 +3795,8 @@ class RailRnaAlign(object):
             } if base.isofrag_idx is None else {},
             {
                 'name' : 'Filter out introns that violate confidence criteria',
-                'run' : ('intron_filter.py --manifest={0} '
+                'reducer' : (
+                         'intron_filter.py --manifest={0} '
                          '--sample-fraction={1} --coverage-threshold={2} '
                          '{3} {4}').format(
                                         manifest,
@@ -3791,10 +3809,9 @@ class RailRnaAlign(object):
                 'inputs' : ['intron_search'],
                 'output' : 'intron_filter',
                 'multiple_outputs' : True,
-                'min_tasks' : (max(base.sample_count / 10, 1)
-                                if elastic else None),
-                'part' : 3,
-                'keys' : 3,
+                'tasks' : ('%d,' % base.sample_count * 12)
+                                    if elastic else '1x',
+                'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3804,8 +3821,8 @@ class RailRnaAlign(object):
             } if base.isofrag_idx is None else {},
             {
                 'name' : 'Write all detected introns',
-                'run' : ('intron_collect.py --out={0} '
-                         '--gzip-level {1} {2}').format(
+                'reducer' : ('intron_collect.py --out={0} '
+                             '--gzip-level {1} {2}').format(
                                                         ab.Url(
                                                             path_join(elastic,
                                                             base.output_dir,
@@ -3822,10 +3839,8 @@ class RailRnaAlign(object):
                                                     ),
                 'inputs' : [path_join(elastic, 'intron_filter', 'collect')],
                 'output' : 'intron_collect',
-                'min_tasks' : 1,
-                'max_tasks' : 1,
-                'part' : 3,
-                'keys' : 3,
+                'tasks' : 1,
+                'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3835,16 +3850,16 @@ class RailRnaAlign(object):
             } if (base.itn and base.isofrag_idx is None) else {},
             {
                 'name' : 'Enumerate possible intron cooccurrences on readlets',
-                'run' : ('intron_config.py '
-                         '--readlet-size={0} {1}').format(
+                'reducer' : ('intron_config.py '
+                             '--readlet-size={0} {1}').format(
                                                     base.readlet_config_size,
                                                     verbose
                                                 ),
                 'inputs' : [path_join(elastic, 'intron_filter', 'filter')],
                 'output' : 'intron_config',
-                'taskx' : 1,
-                'part' : 2,
-                'keys' : 4,
+                'tasks' : '1x',
+                'partition' : '-k1,2',
+                'sort' : '-k1,2 -k3,4',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3854,15 +3869,14 @@ class RailRnaAlign(object):
             } if base.isofrag_idx is None else {},
             {
                 'name' : 'Get isofrags for index construction',
-                'run' : ('intron_fasta.py --bowtie-idx={0} {1}').format(
+                'reducer' : ('intron_fasta.py --bowtie-idx={0} {1}').format(
                                                         base.bowtie1_idx,
                                                         verbose
                                                     ),
                 'inputs' : ['intron_config'],
                 'output' : 'intron_fasta',
-                'taskx' : 1,
-                'part' : 3,
-                'keys' : 3,
+                'tasks' : '1x',
+                'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3872,8 +3886,8 @@ class RailRnaAlign(object):
             } if base.isofrag_idx is None else {},
             {
                 'name' : 'Build isofrag index',
-                'run' : ('intron_index.py --bowtie2-build-exe={0} '
-                         '--out={1} --basename {2} {3} {4}').format(
+                'reducer' : ('intron_index.py --bowtie2-build-exe={0} '
+                             '--out={1} --basename {2} {3} {4}').format(
                                             base.bowtie2_build_exe,
                                             base.transcript_out,
                                             _transcript_fragment_idx_basename,
@@ -3882,10 +3896,9 @@ class RailRnaAlign(object):
                                         ),
                 'inputs' : ['intron_fasta'],
                 'output' : 'intron_index',
-                'min_tasks' : 1,
-                'max_tasks' : 1,
-                'part' : 1,
-                'keys' : 2, # not 1; ensures ref names are in uniform order!
+                'tasks' : 1,
+                'partition' : '-k1,1',
+                'sort' : '-k1,1 -k2,2', # ensures ref names in uniform order!
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3895,7 +3908,8 @@ class RailRnaAlign(object):
             } if base.isofrag_idx is None else {},
             {
                 'name' : 'Finalize intron cooccurrences on reads',
-                'run' : ('cointron_enum.py --bowtie2-idx={0} --gzip-level {1} '
+                'reducer' : (
+                         'cointron_enum.py --bowtie2-idx={0} --gzip-level {1} '
                          '--bowtie2-exe={2} {3} {4} --intermediate-dir {5} '
                          '{6} -- {7}').format(
                                             base.transcript_in,
@@ -3913,10 +3927,10 @@ class RailRnaAlign(object):
                                         ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unique')],
                 'output' : 'cointron_enum',
-                'min_tasks' : base.sample_count * 10 if elastic else None,
+                'tasks' : ('%d,' % base.sample_count * 10)
+                                if elastic else '1x',
                 'archives' : base.transcript_archive,
-                'part' : 1,
-                'keys' : 1,
+                'partition' : '-k1,1',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3926,8 +3940,8 @@ class RailRnaAlign(object):
             } if realign else {},
             {
                 'name' : 'Get transcriptome elements for read realignment',
-                'run' : ('cointron_fasta.py --bowtie-idx={0} '
-                         '--index-count {1} {2}').format(
+                'reducer' : ('cointron_fasta.py --bowtie-idx={0} '
+                             '--index-count {1} {2}').format(
                                                         base.bowtie1_idx,
                                         base.transcriptome_indexes_per_sample *
                                             base.sample_count,
@@ -3935,9 +3949,9 @@ class RailRnaAlign(object):
                                                     ),
                 'inputs' : ['cointron_enum'],
                 'output' : 'cointron_fasta',
-                'min_tasks' : base.sample_count * 10 if elastic else None,
-                'part' : 3,
-                'keys' : 3,
+                'tasks' : ('%d,' % base.sample_count * 10)
+                                if elastic else '1x',
+                'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3947,28 +3961,29 @@ class RailRnaAlign(object):
             } if realign else {},
             {
                 'name' : 'Align reads to transcriptome elements',
-                'run' : ('realign_reads.py --bowtie2-exe={0} --gzip-level {1} '
-                         '--count-multiplier {2} '
-                         '--tie-margin {3} {4} {5} {6} -- {7}').format(
-                                        base.bowtie2_exe,
-                                        base.gzip_level
-                                        if 'gzip_level' in
-                                        dir(base) else 3,
-                                        base.count_multiplier,
-                                        base.tie_margin,
-                                        verbose,
-                                        keep_alive,
-                                        scratch,
-                                        base.bowtie2_args
-                                    ),
+                'reducer' : ('realign_reads.py --bowtie2-exe={0} '
+                             '--gzip-level {1} --count-multiplier {2} '
+                             '--tie-margin {3} {4} {5} {6} -- {7}').format(
+                                            base.bowtie2_exe,
+                                            base.gzip_level
+                                            if 'gzip_level' in
+                                            dir(base) else 3,
+                                            base.count_multiplier,
+                                            base.tie_margin,
+                                            verbose,
+                                            keep_alive,
+                                            scratch,
+                                            base.bowtie2_args
+                                        ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
                             'cointron_fasta'],
                 'mod_partitioner' : True,
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
-                'min_tasks' : base.sample_count * 12 if elastic else None,
-                'part' : 1,
-                'keys' : 3,
+                'tasks' : ('%d,' % base.sample_count * 12)
+                                 if elastic else '1x',
+                'partition' : '-k1,1',
+                'sort' : '-k1,1 -k2,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -3978,25 +3993,25 @@ class RailRnaAlign(object):
             } if realign else {},
             {
                 'name' : 'Collect and compare read alignments',
-                'run' : ('compare_alignments.py --bowtie-idx={0} '
-                         '--partition-length={1} --exon-differentials '
-                         '--tie-margin {2} --manifest={3} '
-                         '{4} {5} {6} -- {7}').format(
-                                        base.bowtie1_idx,
-                                        base.partition_length,
-                                        base.tie_margin,
-                                        manifest,
-                                        drop_deletions,
-                                        verbose,
-                                        output_by_chr,
-                                        base.bowtie2_args
-                                    ),
+                'reducer' : ('compare_alignments.py --bowtie-idx={0} '
+                             '--partition-length={1} --exon-differentials '
+                             '--tie-margin {2} --manifest={3} '
+                             '{4} {5} {6} -- {7}').format(
+                                            base.bowtie1_idx,
+                                            base.partition_length,
+                                            base.tie_margin,
+                                            manifest,
+                                            drop_deletions,
+                                            verbose,
+                                            output_by_chr,
+                                            base.bowtie2_args
+                                        ),
                 'inputs' : [path_join(elastic, 'align_reads', 'postponed_sam'),
                             'realign_reads'],
                 'output' : 'compare_alignments',
-                'min_tasks' : base.sample_count * 12 if elastic else None,
-                'part' : 1,
-                'keys' : 1,
+                'tasks' : ('%d,' % base.sample_count * 12)
+                                if elastic else '1x',
+                'partition' : '-k1,1',
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -4007,7 +4022,7 @@ class RailRnaAlign(object):
             } if realign else {},
             {
                 'name' : 'Associate spliced alignments with intron coverages',
-                'run' : 'intron_coverage.py --bowtie-idx {0}'.format(
+                'reducer' : 'intron_coverage.py --bowtie-idx {0}'.format(
                                                         base.bowtie1_idx
                                                     ),
                 'inputs' : [path_join(elastic, 'compare_alignments',
@@ -4015,9 +4030,9 @@ class RailRnaAlign(object):
                             path_join(elastic, 'compare_alignments',
                                                'sam_intron_ties')],
                 'output' : 'intron_coverage',
-                'taskx' : 1,
-                'part' : 6,
-                'keys' : 7,
+                'tasks' : '1x',
+                'partition' : '-k1,6',
+                'sort' : '-k1,6 -k7,7',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -4027,7 +4042,7 @@ class RailRnaAlign(object):
             } if realign else {},
             {
                 'name' : 'Finalize primary alignments of spliced reads',
-                'run' : ('break_ties.py --exon-differentials '
+                'reducer' : ('break_ties.py --exon-differentials '
                             '--bowtie-idx {0} --partition-length {1} '
                             '--manifest {2} --tie-margin {3} {4} '
                             '{5} -- {6}').format(
@@ -4043,9 +4058,8 @@ class RailRnaAlign(object):
                             path_join(elastic, 'compare_alignments',
                                                'sam_clip_ties')],
                 'output' : 'break_ties',
-                'taskx' : 1,
-                'part' : 1,
-                'keys' : 1,
+                'tasks' : 1,
+                'partition' : '-k1,1',
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -4056,7 +4070,7 @@ class RailRnaAlign(object):
             } if realign else {},
             {
                 'name' : 'Merge exon differentials at same genomic positions',
-                'run' : 'sum.py {0}'.format(
+                'reducer' : 'sum.py {0}'.format(
                                         keep_alive
                                     ),
                 'inputs' : [path_join(elastic, 'align_reads', 'exon_diff'),
@@ -4064,9 +4078,9 @@ class RailRnaAlign(object):
                                                'exon_diff'),
                             path_join(elastic, 'break_ties', 'exon_diff')],
                 'output' : 'collapse',
-                'min_tasks' : base.sample_count * 12 if elastic else None,
-                'part' : 4,
-                'keys' : 4,
+                'tasks' : ('%d,' % base.sample_count * 12)
+                                if elastic else '1x',
+                'partition' : '-k1,4',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -4076,13 +4090,14 @@ class RailRnaAlign(object):
             } if base.bw else {},
             {
                 'name' : 'Compile sample coverages from exon differentials',
-                'run' : ('coverage_pre.py --bowtie-idx={0} '
-                         '--partition-stats').format(base.bowtie1_idx),
+                'reducer' : ('coverage_pre.py --bowtie-idx={0} '
+                             '--partition-stats').format(base.bowtie1_idx),
                 'inputs' : ['collapse'],
                 'output' : 'precoverage',
-                'min_tasks' : base.sample_count * 12 if elastic else None,
-                'part' : 2,
-                'keys' : 3,
+                'tasks' : ('%d,' % base.sample_count * 12)
+                                if elastic else '1x',
+                'partition' : '-k1,2',
+                'sort' : '-k1,2 -k3,3',
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -4093,7 +4108,8 @@ class RailRnaAlign(object):
             } if base.bw else {},
             {
                 'name' : 'Write bigWigs with exome coverage by sample',
-                'run' : ('coverage.py --bowtie-idx={0} --percentile={1} '
+                'reducer' : (
+                         'coverage.py --bowtie-idx={0} --percentile={1} '
                          '--out={2} --bigwig-exe={3} '
                          '--manifest={4} {5} {6}').format(base.bowtie1_idx,
                                                      base.normalize_percentile,
@@ -4113,9 +4129,9 @@ class RailRnaAlign(object):
                 'inputs' : [path_join(elastic, 'precoverage', 'coverage')],
                 'mod_partitioner' : True,
                 'output' : 'coverage',
-                'taskx' : 1,
-                'part' : 1,
-                'keys' : 3,
+                'tasks' : '1x',
+                'partition' : '-k1,1',
+                'sort' : '-k1,1 -k2,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -4125,9 +4141,9 @@ class RailRnaAlign(object):
             } if base.bw else {},
             {
                 'name' : 'Aggregate introns/indels',
-                'run' : ('bed_pre.py --manifest={0} '
-                         '--sample-fraction={1} --coverage-threshold={2} '
-                         '{3} {4}').format(
+                'reducer' : ('bed_pre.py --manifest={0} '
+                             '--sample-fraction={1} --coverage-threshold={2} '
+                             '{3} {4}').format(
                                         manifest,
                                         base.indel_sample_fraction,
                                         base.indel_coverage_threshold,
@@ -4142,9 +4158,10 @@ class RailRnaAlign(object):
                             path_join(elastic, 'break_ties', 'intron_bed')],
                 'output' : 'prebed',
                 'multiple_outputs' : True,
-                'min_tasks' : base.sample_count * 12 if elastic else None,
-                'part' : 5,
-                'keys' : 6,
+                'tasks' : ('%d,' % base.sample_count * 12)
+                            if elastic else '1x',
+                'partition' : '-k1,5',
+                'sort' : '-k1,5 -k6,6',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -4155,9 +4172,9 @@ class RailRnaAlign(object):
             {
                 'name' : ('Write normalization factors/introns/indels'
                             if base.tsv else 'Write normalization factors'),
-                'run' : ('tsv.py --bowtie-idx={0} --out={1} '
-                         '--manifest={2} --gzip-level={3} '
-                         '--tsv-basename={4} {5} {6}').format(
+                'reducer' : ('tsv.py --bowtie-idx={0} --out={1} '
+                             '--manifest={2} --gzip-level={3} '
+                             '--tsv-basename={4} {5} {6}').format(
                                                     base.bowtie1_idx,
                                                     ab.Url(
                                                         path_join(elastic,
@@ -4181,9 +4198,9 @@ class RailRnaAlign(object):
                                 if base.tsv else []),
                 'output' : 'tsv',
                 'mod_partitioner' : True,
-                'taskx' : 1,
-                'part' : 1,
-                'keys' : 5,
+                'tasks' : '1x',
+                'partition' : '-k1,1',
+                'sort' : '-k1,1 -k2,5',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -4193,7 +4210,8 @@ class RailRnaAlign(object):
             } if (base.tsv or base.bw) else {},
             {
                 'name' : 'Write BEDs with introns/indels by sample',
-                'run' : ('bed.py --bowtie-idx={0} --out={1} '
+                'reducer' : (
+                         'bed.py --bowtie-idx={0} --out={1} '
                          '--manifest={2} --bed-basename={3} {4} {5}').format(
                                                         base.bowtie1_idx,
                                                         ab.Url(
@@ -4212,9 +4230,9 @@ class RailRnaAlign(object):
                                                     ),
                 'inputs' : [path_join(elastic, 'prebed', 'bed')],
                 'output' : 'bed',
-                'taskx' : 1,
-                'part' : 2,
-                'keys' : 5,
+                'tasks' : '1x',
+                'partition' : '-k1,2',
+                'sort' : '-k1,2 -k3,5',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -4227,7 +4245,8 @@ class RailRnaAlign(object):
                             % ('SAMs' if base.output_sam else 'BAMs'))
                             if base.bam
                             else 'Count mapped reads by contig/sample'),
-                'run' : ('bam.py --out={0} --bowtie-idx={1} '
+                'reducer' : (
+                         'bam.py --out={0} --bowtie-idx={1} '
                          '--samtools-exe={2} --bam-basename={3} '
                          '--manifest={4} {5} {6} {7} {8} {9} '
                          '--tie-margin {10}').format(
@@ -4260,9 +4279,9 @@ class RailRnaAlign(object):
                 'multiple_outputs' : True,
                 'mod_partitioner' : True,
                 'output' : 'bam',
-                'taskx' : 1,
-                'part' : 1,
-                'keys' : 3,
+                'tasks' : '1x',
+                'partition' : '-k1,1',
+                'sort' : '-k1,1 -k2,3',
                 'extra_args' : [
                         'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
                         'mapreduce.reduce.shuffle.merge.percent=0.4',
@@ -4274,7 +4293,8 @@ class RailRnaAlign(object):
             } if (base.bw or base.tsv or base.bam) else {},
             {
                 'name' : 'Write mapped read counts',
-                'run' : ('collect_read_stats.py --bowtie-idx={0} --out={1} '
+                'reducer' : (
+                         'collect_read_stats.py --bowtie-idx={0} --out={1} '
                          '--manifest={2} --gzip-level={3} '
                          '--tsv-basename={4} {5} {6}').format(
                                                     base.bowtie1_idx,
@@ -4297,10 +4317,9 @@ class RailRnaAlign(object):
                                                 ),
                 'inputs' : [path_join(elastic, 'bam', 'counts')],
                 'output' : 'read_counts',
-                'min_tasks' : 1,
-                'max_tasks' : 1,
-                'part' : 1,
-                'keys' : 2,
+                'tasks' : 1,
+                'partition' : '-k1,1',
+                'sort' : '-k1,1 -k2,2',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -4549,7 +4568,7 @@ class RailRnaElasticPreprocessJson(object):
         self._json_serial['Instances'] = RailRnaElastic.instances(base)
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
-                + RailRnaPreprocess.bootstrap()
+                + RailRnaPreprocess.bootstrap(base)
                 + RailRnaElastic.bootstrap(base)
             )
         self.base = base

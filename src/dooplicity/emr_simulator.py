@@ -202,9 +202,44 @@ def cd(dir_name):
     finally:
         os.chdir(original_dir)
 
+def parsed_keys(partition_options, key_fields):
+    """ Parses UNIX sort options to figure out what to partition on.
+
+        Returned is a function that takes a line as input and returns a tuple
+        of elements from the line to partition on OR False if the args are
+        invalid.
+
+        partition_options: UNIX sort options like -k1,1 -k3 -k3,4r -k 4 -k 5,3
+        key_fields: number of fields from line to consider key
+
+        Return value: see above
+    """
+    try:
+        # Make list of tuples of start, end indexes
+        parsed_args = [
+                tuple([int(el) - 1 
+                        for el in arg.strip().strip('nr').split(',')])
+                        for arg in partition_options.split('-k')
+                        if arg.strip() and len(arg.split(',')) <= 2
+            ]
+    except Exception:
+        # args are invalid
+        return False
+    else:
+        exec (
+"""def partitioned_key(line, separator):
+    key = line.strip().split(separator)[:{key_fields}]
+    return {return_value}
+""".format(key_fields=key_fields,
+            return_value='+'.join(['key[{}:{}]'.format(
+                                arg[0], arg[1] + 1 if len(arg) == 2 else ''
+                            ) for arg in parsed_args]))
+        )
+        return partitioned_key
+
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
-                    key_fields, separator, task_count, memcap,
-                    gzip=False, gzip_level=3, scratch=None,
+                    key_fields, separator, partition_options, task_count,
+                    memcap, gzip=False, gzip_level=3, scratch=None,
                     sort='sort', mod_partition=False, max_attempts=4):
     """ Partitions input data into tasks and presorts them.
 
@@ -222,6 +257,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         output_dir: directory in which to write output files.
         key_fields: number of fields from a line to consider the key.
         separator: separator between successive fields from line.
+        partition_options: sort-like options to use when partitioning.
         streaming_command: streaming command to run.
         task_count: number of tasks in which to partition input.
         memcap: maximum percent of memory to use per UNIX sort instance.
@@ -270,10 +306,11 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                         'scratch subdirectory of %s: %s' % (scratch, e))
         else:
             final_output_dir = output_dir
+        partitioned_key = parsed_keys(partition_options, separator)
         for input_file in input_files:
             with yopen(None, input_file) as input_stream:
                 for line in input_stream:
-                    key = line.strip().split(separator)[:key_fields]
+                    key = partitioned_key(line, separator)
                     if mod_partition and len(key) <= 1:
                         try:
                             task = abs(int(key[0])) % task_count
@@ -770,7 +807,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     step_runner_with_error_return=\
                         step_runner_with_error_return,
                     presorted_tasks=presorted_tasks,
-                    cd=cd
+                    cd=cd,
+                    parsed_keys=parsed_keys
                 ))
             iface.step('Loaded dependencies on IPython engines.')
             # Get host-to-engine and engine pids relations
@@ -1367,6 +1405,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 step_args = {}
                 j = 0
                 j_max = len(step['HadoopJarStep']['Args'])
+                # Set default options
+                step_args['key_fields'] = 1
+                step_args['partition_options'] = '-k1'
+                step_args['sort_options'] = '-k1'
                 while j < j_max:
                     arg_name = step['HadoopJarStep']['Args'][j][1:].strip()
                     if arg_name == 'D':
@@ -1377,18 +1419,15 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         elif D_arg[0] \
                             in ['mapred.text.key.partitioner.options',
                                 'mapreduce.partition.keypartitioner.options']:
-                            if 'sort_options' not in step_args:
-                                # Simulate TextComparator
-                                step_args['sort_options'] = D_arg[1]
-                            step_args['key_fields'] \
-                                = int(D_arg[1].split(',')[-1])
+                            step_args['partition_options'] = D_arg[1]
                         elif D_arg[0] \
                             == 'stream.num.map.output.key.fields':
-                            if 'key_fields' not in step_args:
-                                '''Set number of key fields only if it's not
-                                already specified by keypartitioner.options'''
-                                step_args['key_fields'] \
-                                    = int(D_arg[1])
+                            step_args['key_fields'] = int(D_arg[1])
+                            # Default sort is now across key fields
+                            if 'sort_options' not in step_args:
+                                step_args['sort_options'] = (
+                                            '-k1,%d' % step_args['key_fields']
+                                        )
                         elif D_arg[0] \
                             in ['mapred.text.key.comparator.options',
                                 'mapreduce.partition.keycomparator.options']:
@@ -1708,6 +1747,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             [[input_file_group, i,
                                 step_data['sort_options'], output_dir,
                                 step_data['key_fields'], separator,
+                                step_data['partition_options'],
                                 step_data['task_count'], memcap, gzip,
                                 gzip_level, scratch, sort, mod_partition]
                                     for i, input_file_group

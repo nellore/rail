@@ -6,7 +6,7 @@ Follows Rail-RNA-collapse
 Precedes Rail-RNA-coverage
 
 Reduce step in MapReduce pipelines that takes count differentials (exon_diff)
-from Hadoop output of Rail-RNA-align and compiles per-sample coverage 
+from Hadoop output of align steps and compiles per-sample coverage 
 information, both for "uniquely mapping" reads only and for all primary
 alignments.
 
