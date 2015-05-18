@@ -3809,7 +3809,7 @@ class RailRnaAlign(object):
                 'inputs' : ['intron_search'],
                 'output' : 'intron_filter',
                 'multiple_outputs' : True,
-                'tasks' : ('%d,' % (base.sample_count * 12))
+                'tasks' : ('%d,' % max(base.sample_count / 10, 1))
                                     if elastic else '1x',
                 'partition' : '-k1,3',
                 'extra_args' : [
