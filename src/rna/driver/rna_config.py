@@ -1293,23 +1293,23 @@ class RailRnaLocal(object):
         base.check_curl_on_engines = None
         base.do_not_copy_index_to_nodes = do_not_copy_index_to_nodes
         if not parallel:
-            if output_dir_url.is_local \
-                and os.path.exists(output_dir_url.to_url()):
-                if not base.force:
-                    base.errors.append(('Output directory {0} exists, '
-                                        'and --force was not invoked to '
-                                        'permit overwriting it.').format(
-                                                base.output_dir)
-                                            )
-                else:
-                    try:
-                        shutil.rmtree(base.output_dir)
-                    except OSError:
+            if output_dir_url.is_local:
+                if os.path.exists(output_dir_url.to_url()):
+                    if not base.force:
+                        base.errors.append(('Output directory {0} exists, '
+                                            'and --force was not invoked to '
+                                            'permit overwriting it.').format(
+                                                    base.output_dir)
+                                                )
+                    else:
                         try:
-                            os.remove(base.output_dir)
+                            shutil.rmtree(base.output_dir)
                         except OSError:
-                            pass
-                    base.output_dir = os.path.abspath(base.output_dir)
+                            try:
+                                os.remove(base.output_dir)
+                            except OSError:
+                                pass
+                base.output_dir = os.path.abspath(base.output_dir)
             elif output_dir_url.is_s3 \
                 and ansible.s3_ansible.is_dir(base.output_dir):
                 if not base.force:
