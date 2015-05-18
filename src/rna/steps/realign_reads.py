@@ -379,7 +379,7 @@ if __name__ == '__main__':
         help='When --verbose is also invoked, the only lines of lengthy '
              'intermediate output written to stderr have line number that '
              'increases exponentially with this base')
-    parser.add_argument(\
+    parser.add_argument(
         '--keep-alive', action='store_const', const=True, default=False,
         help='Prints reporter:status:alive messages to stderr to keep EMR '
              'task alive')
@@ -390,7 +390,7 @@ if __name__ == '__main__':
         default=4,
         help='User-specified bowtie2 -k parameter is multiplied by this '
              'value when enumerating alignments')
-    parser.add_argument(\
+    parser.add_argument(
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
              'in output have terminal + and - indicating sense strand')

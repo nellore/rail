@@ -576,8 +576,8 @@ def step(name, inputs, output,
     reducer='org.apache.hadoop.mapred.lib.IdentityReducer', 
     action_on_failure='TERMINATE_JOB_FLOW', jar=_hadoop_streaming_jar,
     tasks=0, partition_options=None, sort_options=None, archives=None,
-    multiple_outputs=False, mod_partitioner=False, inputformat=None,
-    extra_args=[]):
+    files=None, multiple_outputs=False, mod_partitioner=False,
+    inputformat=None, extra_args=[]):
     """ Outputs JSON for a given step.
 
         name: name of step
@@ -590,6 +590,7 @@ def step(name, inputs, output,
         partition_options: sort-like partition options or None if mapper
         sort_options: UNIX sort options or None if mapper
         archives: -archives option
+        files: -files option
         multiple_outputs: True iff there are multiple outputs; else False
         mod_partitioner: True iff the mod partitioner should be used for
             the step; this partitioner assumes the key is a tuple of integers
@@ -649,6 +650,10 @@ def step(name, inputs, output,
     if archives is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-archives', archives
+            ])
+    if files is not None:
+        to_return['HadoopJarStep']['Args'].extend([
+                '-files', files
             ])
     if mod_partitioner:
         to_return['HadoopJarStep']['Args'].extend([
@@ -717,6 +722,7 @@ def steps(protosteps, action_on_failure, jar, step_dir, reducer_count,
                     "optimal" number of tasks between NUM1 and NUM2 inclusive
                 'inputformat' : input format; present only if necessary
                 'archives' : archives parameter; present only if necessary
+                'files' : files parameter; present only if necessary
                 'multiple_outputs' : key that's present iff there are multiple
                     outputs
                 'index_output' : key that's present iff output LZOs should be
@@ -820,6 +826,8 @@ def steps(protosteps, action_on_failure, jar, step_dir, reducer_count,
                     if 'sort' in protostep else None),
                 archives=(protostep['archives']
                     if 'archives' in protostep else None),
+                files=(protostep['files']
+                    if 'files' in protostep else None),
                 multiple_outputs=(True if 'multiple_outputs'
                         in protostep 
                         and protostep['multiple_outputs']
@@ -2909,13 +2917,14 @@ class RailRnaAlign(object):
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, search_filter='none',
+        min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
-        drop_deletions=False, do_not_output_bam_by_chr=False, output_sam=False,
+        drop_deletions=False, do_not_output_bam_by_chr=False,
+        do_not_output_ave_bw_by_chr=False, output_sam=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', assembly='hg19', s3_ansible=None):
         if not elastic:
@@ -3245,6 +3254,14 @@ class RailRnaAlign(object):
                                                     count_multiplier
                                                 ))
         base.count_multiplier = count_multiplier
+        if not (float(library_size).is_integer() and
+                    library_size >= 0):
+            base.errors.append('Library size in millions of reads '
+                               '(--library-size) must be an integer >= 0, but '
+                               '{0} was entered.'.format(
+                                                    library_size
+                                                ))
+        base.library_size = library_size
         confidence_criteria_split = intron_criteria.split(',')
         confidence_criteria_error = False
         try:
@@ -3301,6 +3318,7 @@ class RailRnaAlign(object):
                                                 ))
         base.drop_deletions = drop_deletions
         base.do_not_output_bam_by_chr = do_not_output_bam_by_chr
+        base.do_not_output_ave_bw_by_chr = do_not_output_ave_bw_by_chr
         if not (float(transcriptome_indexes_per_sample).is_integer()
                     and (1000 >= transcriptome_indexes_per_sample >= 1)):
             base.errors.append('Transcriptome indexes per sample '
@@ -3308,6 +3326,9 @@ class RailRnaAlign(object):
                                'an integer between 1 and 1000.')
         base.transcriptome_indexes_per_sample \
             = transcriptome_indexes_per_sample
+        base.bam_basename = bam_basename
+        base.bed_basename = bed_basename
+        base.tsv_basename = tsv_basename
         deliverable_choices = set(
                 ['idx', 'bam', 'sam', 'bed', 'tsv', 'bw', 'itn']
             )
@@ -3333,6 +3354,35 @@ class RailRnaAlign(object):
         base.bed = 'bed' in split_deliverables
         base.bw = 'bw' in split_deliverables
         base.itn = 'itn' in split_deliverables
+        base.count_filename = (base.tsv_basename + '.' if base.tsv_basename
+                                        else '') + 'counts.tsv.gz'
+        if base.bw or base.tsv or base.bam:
+            # Outputting average coverages too; put read_counts in output dir
+            base.read_counts_out = ab.Url(
+                path_join(elastic, base.output_dir, 'cross_sample_results')
+            ).to_url(caps=True)
+            base.read_counts_file = ab.Url(
+                path_join(elastic,
+                    base.output_dir,
+                    'cross_sample_results',
+                    '{0}#{0}'.format(base.count_filename))
+            ).to_native_url()
+        else:
+            # Place in precoverage intermediate directory
+            base.read_counts_out = ab.Url(
+                path_join(elastic, base.intermediate_dir,
+                            'precoverage' if not elastic else '',
+                            'counts_for_normalize')
+            ).to_url(caps=True)
+            base.read_counts_file = ab.Url(
+                                    path_join(elastic,
+                                    base.intermediate_dir,
+                                    'precoverage'
+                                    if not elastic
+                                    else '',
+                                    'counts_for_normalze',
+                                    '{0}#{0}'.format(base.count_filename))
+                                ).to_native_url()
         isofrag_basename = _transcript_fragment_idx_basename
         if base.isofrag_idx is not None:
             if not (base.isofrag_idx.endswith('.tar.gz') 
@@ -3385,9 +3435,6 @@ class RailRnaAlign(object):
                                         ).to_native_url()
         base.transcript_in = '{0}/{0}'.format(isofrag_basename)
         # Correct transcript archive in case it's specified by user
-        base.bam_basename = bam_basename
-        base.bed_basename = bed_basename
-        base.tsv_basename = tsv_basename
 
     @staticmethod
     def add_args(required_parser, exec_parser, output_parser, algo_parser, 
@@ -3612,6 +3659,13 @@ class RailRnaAlign(object):
             default=100,
             help=argparse.SUPPRESS
         )
+        algo_parser.add_argument(
+            '--library-size', type=int, required=False,
+            default=40,
+            help=('Library size (in millions of reads) to which every '
+                  'sample\'s coverage is normalized when computing '
+                  'average coverage')
+        )
         output_parser.add_argument('-d', '--deliverables', required=False,
             metavar='<choice,...>',
             default='idx,tsv,bed,bam,bw',
@@ -3628,6 +3682,12 @@ class RailRnaAlign(object):
             default=False,
             help=('place all of a sample\'s alignments in one file rather '
                   'than dividing them up by chromosome')
+        )
+        output_parser.add_argument(
+            '--do-not-output-ave-bw-by-chr', action='store_const',
+            const=True, default=False,
+            help=('place all of a sample\'s average coverage values in one '
+                  'file rather than dividing them up by chromosome')
         )
         output_parser.add_argument(
             '--indel-criteria', type=str, required=False,
@@ -4069,6 +4129,85 @@ class RailRnaAlign(object):
                     ]
             } if realign else {},
             {
+                'name' : (('Write %s with alignments by sample'
+                            % ('SAMs' if base.output_sam else 'BAMs'))
+                            if base.bam
+                            else 'Count mapped reads by contig/sample'),
+                'reducer' : (
+                         'bam.py --out={0} --bowtie-idx={1} '
+                         '--samtools-exe={2} --bam-basename={3} '
+                         '--manifest={4} {5} {6} {7} {8} {9} '
+                         '--tie-margin {10}').format(
+                                        ab.Url(
+                                            path_join(elastic,
+                                            base.output_dir, 'alignments')
+                                        ).to_url(caps=True)
+                                        if elastic
+                                        else path_join(elastic,
+                                            base.output_dir, 'alignments'),
+                                        base.bowtie1_idx,
+                                        base.samtools_exe,
+                                        base.bam_basename,
+                                        manifest,
+                                        keep_alive,
+                                        '--output-by-chromosome'
+                                        if (not base.do_not_output_bam_by_chr
+                                            or not base.bam) else '',
+                                        scratch,
+                                        '--output-sam' if base.output_sam
+                                        else '',
+                                        '--suppress-bam' if not base.bam
+                                        else '',
+                                        base.tie_margin
+                                    ),
+                'inputs' : [path_join(elastic, 'compare_alignments', 'sam'),
+                            path_join(elastic, 'break_ties', 'sam')]
+                            + ([path_join(elastic, 'align_reads', 'sam')]
+                                if base.k in [1, None] else []),
+                'multiple_outputs' : True,
+                'mod_partitioner' : True,
+                'output' : 'bam',
+                'tasks' : '1x',
+                'partition' : '-k1,1',
+                'sort' : '-k1,1 -k2,3',
+                'extra_args' : [
+                        'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
+                        'mapreduce.reduce.shuffle.merge.percent=0.4',
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
+                    ]
+            } if (base.bw or base.tsv or base.bam) else {},
+            {
+                'name' : 'Write mapped read counts',
+                'reducer' : (
+                         'collect_read_stats.py --bowtie-idx={0} --out={1} '
+                         '--manifest={2} --gzip-level={3} '
+                         '--tsv-basename={4} {5} {6}').format(
+                                                    base.bowtie1_idx,
+                                                    base.read_counts_out,
+                                                    manifest,
+                                                    base.gzip_level
+                                                    if 'gzip_level' in
+                                                    dir(base) else 3,
+                                                    base.tsv_basename,
+                                                    scratch,
+                                                    keep_alive
+                                                ),
+                'inputs' : [path_join(elastic, 'bam', 'counts')],
+                'output' : 'read_counts',
+                'tasks' : 1,
+                'partition' : '-k1,1',
+                'sort' : '-k1,1 -k2,2',
+                'extra_args' : [
+                        'elephantbird.use.combine.input.format=true',
+                        'elephantbird.combine.split.size=%d'
+                            % (_base_combine_split_size),
+                        'elephantbird.combined.split.count={task_count}'
+                    ]
+            } if (base.bw or base.tsv or base.bam) else {},
+            {
                 'name' : 'Merge exon differentials at same genomic positions',
                 'reducer' : 'sum.py {0}'.format(
                                         keep_alive
@@ -4091,13 +4230,22 @@ class RailRnaAlign(object):
             {
                 'name' : 'Compile sample coverages from exon differentials',
                 'reducer' : ('coverage_pre.py --bowtie-idx={0} '
-                             '--partition-stats').format(base.bowtie1_idx),
+                             '--library-size {1} --read-counts {2} '
+                             '--partition-stats --manifest={3} {4}').format(
+                                    base.bowtie1_idx,
+                                    base.library_size,
+                                    base.count_filename,
+                                    manifest,
+                                    '--output-ave-bigwig-by-chr'
+                                    if not base.do_not_output_ave_bw_by_chr
+                                    else ''),
                 'inputs' : ['collapse'],
                 'output' : 'precoverage',
                 'tasks' : ('%d,' % (base.sample_count * 12))
                                 if elastic else '1x',
-                'partition' : '-k1,2',
-                'sort' : '-k1,2 -k3,3',
+                'partition' : '-k1,1',
+                'sort' : '-k1,1 -k2,3',
+                'files' : base.read_counts_file,
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
@@ -4239,94 +4387,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            } if base.bed else {},
-            {
-                'name' : (('Write %s with alignments by sample'
-                            % ('SAMs' if base.output_sam else 'BAMs'))
-                            if base.bam
-                            else 'Count mapped reads by contig/sample'),
-                'reducer' : (
-                         'bam.py --out={0} --bowtie-idx={1} '
-                         '--samtools-exe={2} --bam-basename={3} '
-                         '--manifest={4} {5} {6} {7} {8} {9} '
-                         '--tie-margin {10}').format(
-                                        ab.Url(
-                                            path_join(elastic,
-                                            base.output_dir, 'alignments')
-                                        ).to_url(caps=True)
-                                        if elastic
-                                        else path_join(elastic,
-                                            base.output_dir, 'alignments'),
-                                        base.bowtie1_idx,
-                                        base.samtools_exe,
-                                        base.bam_basename,
-                                        manifest,
-                                        keep_alive,
-                                        '--output-by-chromosome'
-                                        if (not base.do_not_output_bam_by_chr
-                                            or not base.bam) else '',
-                                        scratch,
-                                        '--output-sam' if base.output_sam
-                                        else '',
-                                        '--suppress-bam' if not base.bam
-                                        else '',
-                                        base.tie_margin
-                                    ),
-                'inputs' : [path_join(elastic, 'compare_alignments', 'sam'),
-                            path_join(elastic, 'break_ties', 'sam')]
-                            + ([path_join(elastic, 'align_reads', 'sam')]
-                                if base.k in [1, None] else []),
-                'multiple_outputs' : True,
-                'mod_partitioner' : True,
-                'output' : 'bam',
-                'tasks' : '1x',
-                'partition' : '-k1,1',
-                'sort' : '-k1,1 -k2,3',
-                'extra_args' : [
-                        'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
-                        'mapreduce.reduce.shuffle.merge.percent=0.4',
-                        'elephantbird.use.combine.input.format=true',
-                        'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size),
-                        'elephantbird.combined.split.count={task_count}'
-                    ]
-            } if (base.bw or base.tsv or base.bam) else {},
-            {
-                'name' : 'Write mapped read counts',
-                'reducer' : (
-                         'collect_read_stats.py --bowtie-idx={0} --out={1} '
-                         '--manifest={2} --gzip-level={3} '
-                         '--tsv-basename={4} {5} {6}').format(
-                                                    base.bowtie1_idx,
-                                                    ab.Url(
-                                                        path_join(elastic,
-                                                        base.output_dir,
-                                                    'cross_sample_results')
-                                                     ).to_url(caps=True)
-                                                    if elastic
-                                                    else path_join(elastic,
-                                                        base.output_dir,
-                                                    'cross_sample_results'),
-                                                    manifest,
-                                                    base.gzip_level
-                                                    if 'gzip_level' in
-                                                    dir(base) else 3,
-                                                    base.tsv_basename,
-                                                    scratch,
-                                                    keep_alive
-                                                ),
-                'inputs' : [path_join(elastic, 'bam', 'counts')],
-                'output' : 'read_counts',
-                'tasks' : 1,
-                'partition' : '-k1,1',
-                'sort' : '-k1,1 -k2,2',
-                'extra_args' : [
-                        'elephantbird.use.combine.input.format=true',
-                        'elephantbird.combine.split.size=%d'
-                            % (_base_combine_split_size),
-                        'elephantbird.combined.split.count={task_count}'
-                    ]
-            } if (base.bw or base.tsv or base.bam) else {}]
+            } if base.bed else {}]
         return [step for step in steps_to_return if step != {}]
 
     @staticmethod
@@ -4589,13 +4650,14 @@ class RailRnaLocalAlignJson(object):
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, search_filter='none',
+        min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
+        do_not_output_ave_bw_by_chr=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
@@ -4625,6 +4687,7 @@ class RailRnaLocalAlignJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            library_size=library_size,
             search_filter=search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
@@ -4639,6 +4702,7 @@ class RailRnaLocalAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            do_not_output_ave_bw_by_chr=do_not_output_ave_bw_by_chr,
             deliverables=deliverables, bam_basename=bam_basename,
             bed_basename=bed_basename, tsv_basename=tsv_basename)
         raise_runtime_error(base)
@@ -4667,13 +4731,14 @@ class RailRnaParallelAlignJson(object):
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, search_filter='none',
+        min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
+        do_not_output_ave_bw_by_chr=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
@@ -4712,6 +4777,7 @@ class RailRnaParallelAlignJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            library_size=library_size,
             search_filter=search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
@@ -4726,6 +4792,7 @@ class RailRnaParallelAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            do_not_output_ave_bw_by_chr=do_not_output_ave_bw_by_chr,
             deliverables=deliverables, bam_basename=bam_basename,
             tsv_basename=tsv_basename, bed_basename=bed_basename)
         raise_runtime_error(base)
@@ -4759,6 +4826,7 @@ class RailRnaParallelAlignJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            library_size=library_size, 
             search_filter=search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
@@ -4773,6 +4841,7 @@ class RailRnaParallelAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            do_not_output_ave_bw_by_chr=do_not_output_ave_bw_by_chr,
             deliverables=deliverables, bam_basename=bam_basename,
             tsv_basename=tsv_basename, bed_basename=bed_basename)
         engine_base_checks = {}
@@ -4814,13 +4883,14 @@ class RailRnaElasticAlignJson(object):
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, search_filter='none',
+        min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
         intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
+        do_not_output_ave_bw_by_chr=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', log_uri=None, ami_version='3.7.0',
         visible_to_all_users=False, tags='', name='Rail-RNA Job Flow',
@@ -4869,6 +4939,7 @@ class RailRnaElasticAlignJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            library_size=library_size, 
             search_filter=search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
@@ -4883,6 +4954,7 @@ class RailRnaElasticAlignJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            do_not_output_ave_bw_by_chr=do_not_output_ave_bw_by_chr,
             deliverables=deliverables, bam_basename=bam_basename,
             tsv_basename=tsv_basename, bed_basename=bed_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,
@@ -4941,13 +5013,14 @@ class RailRnaLocalAllJson(object):
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, search_filter='none',
+        min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         intron_criteria='0.5,5', indel_criteria='0.5,5',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
+        do_not_output_ave_bw_by_chr=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3,
@@ -4981,6 +5054,7 @@ class RailRnaLocalAllJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            library_size=library_size,
             search_filter=search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
@@ -4995,6 +5069,7 @@ class RailRnaLocalAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            do_not_output_ave_bw_by_chr=do_not_output_ave_bw_by_chr,
             deliverables=deliverables, bam_basename=bam_basename,
             bed_basename=bed_basename, tsv_basename=tsv_basename)
         raise_runtime_error(base)
@@ -5033,13 +5108,14 @@ class RailRnaParallelAllJson(object):
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, search_filter='none',
+        min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         intron_criteria='0.5,5', indel_criteria='0.5,5',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
+        do_not_output_ave_bw_by_chr=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
@@ -5081,6 +5157,7 @@ class RailRnaParallelAllJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            library_size=library_size, 
             search_filter=search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
@@ -5095,6 +5172,7 @@ class RailRnaParallelAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            do_not_output_ave_bw_by_chr=do_not_output_ave_bw_by_chr,
             deliverables=deliverables, bam_basename=bam_basename,
             bed_basename=bed_basename, tsv_basename=tsv_basename)
         raise_runtime_error(base)
@@ -5128,6 +5206,7 @@ class RailRnaParallelAllJson(object):
             cap_size_multiplier=cap_size_multiplier,
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size, min_exon_size=min_exon_size,
+            library_size=library_size, 
             search_filter=search_filter,
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
@@ -5142,6 +5221,7 @@ class RailRnaParallelAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            do_not_output_ave_bw_by_chr=do_not_output_ave_bw_by_chr,
             deliverables=deliverables, bam_basename=bam_basename,
             bed_basename=bed_basename, tsv_basename=tsv_basename)
         engine_base_checks = {}
@@ -5193,13 +5273,14 @@ class RailRnaElasticAllJson(object):
         partition_length=5000, max_readlet_size=25,
         readlet_config_size=32, min_readlet_size=15, readlet_interval=4,
         cap_size_multiplier=1.2, max_intron_size=500000, min_intron_size=10,
-        min_exon_size=9, search_filter='none',
+        min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         intron_criteria='0.5,5', indel_criteria='0.5,5',
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False,
+        do_not_output_ave_bw_by_chr=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', log_uri=None, ami_version='3.7.0',
         visible_to_all_users=False, tags='', name='Rail-RNA Job Flow',
@@ -5254,7 +5335,7 @@ class RailRnaElasticAllJson(object):
             max_intron_size=max_intron_size,
             min_intron_size=min_intron_size,
             search_filter=search_filter,
-            min_exon_size=min_exon_size,
+            min_exon_size=min_exon_size, library_size=library_size, 
             motif_search_window_size=motif_search_window_size,
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
@@ -5268,6 +5349,7 @@ class RailRnaElasticAllJson(object):
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
             drop_deletions=drop_deletions,
             do_not_output_bam_by_chr=do_not_output_bam_by_chr,
+            do_not_output_ave_bw_by_chr=do_not_output_ave_bw_by_chr,
             deliverables=deliverables, bam_basename=bam_basename,
             bed_basename=bed_basename, tsv_basename=tsv_basename,
             s3_ansible=ab.S3Ansible(aws_exe=base.aws_exe,

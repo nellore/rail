@@ -32,14 +32,14 @@ Format 1 (exon_ival); tab-delimited output tuple columns:
 4. EC end (exclusive) on forward strand
 
 Format 2 (exon_diff); tab-delimited output tuple columns:
-1. Reference name (RNAME in SAM format) + ';' + 
-    max(EC start, bin start) (inclusive) on forward strand IFF diff is
+1. Reference name (RNAME in SAM format) + ';' + bin number
+2. max(EC start, bin start) (inclusive) on forward strand IFF diff is
     positive and EC end (exclusive) on forward strand IFF diff is negative
-2. Bin number
-3. Sample label
+3. Sample index
 4. '1' if alignment from which diff originates is "unique" according to
     --tie-margin criterion; else '0'
-5. +1 or -1.
+5. +1 or -1 * count, the number of instances of a read sequence for which to
+    print exonic chunks
 
 Note that only unique alignments are currently output as ivals and/or diffs.
 

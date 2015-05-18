@@ -307,6 +307,9 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         else:
             final_output_dir = output_dir
         partitioned_key = parsed_keys(partition_options, separator)
+        if not partitioned_key:
+            # Invalid partition options
+            return ('Partition options "%s" are invalid.' % partition_options)
         for input_file in input_files:
             with yopen(None, input_file) as input_stream:
                 for line in input_stream:
@@ -1293,7 +1296,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 """ Places X.[tar.gz/tgz]#Y in dir Y, unpacked if archive
 
                     pool: IPython Client object; all engines it spans are used
-                    archive: file in format X.tar.gz#Y; None if nothing should
+                    archive: file in format X.tar.gz#Y; False if nothing should
                         be done
 
                     Yields before deleting all files.
@@ -1342,13 +1345,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 iface.status('Caching %s.' % file_or_archive_basename)
                 destination_path = os.path.join(temp_dir, destination_filename)
                 shutil.copyfile(file_or_archive, destination_path)
-                try:
-                    os.makedirs(os.path.join(temp_dir, archive_dir))
-                except OSError:
-                    # Hopefully, directory is already created
-                    pass
                 # Extract if necessary
                 if archive:
+                    try:
+                        os.makedirs(os.path.join(temp_dir, archive_dir))
+                    except OSError:
+                        # Hopefully, directory is already created
+                        pass
                     import subprocess
                     try:
                         subprocess.check_output(
@@ -1590,13 +1593,17 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 try:
                     to_cache = step_data['archives']
                 except KeyError:
-                    to_cache = step_data['cacheArchives']
-            elif 'cacheFile' in step_data:
-                to_cache = step_data['cacheFile']
+                    to_cache = step_data['cacheArchive']
+            elif 'files' in step_data or 'cacheFile' in step_data:
+                try:
+                    to_cache = step_data['files']
+                except KeyError:
+                    to_cache = step_data['cacheFile']
             else:
                 to_cache = None
             with cache(pool if to_cache else None, to_cache,
-                        True if to_cache else False) as dir_to_path:
+                        True if 'archives'
+                        in step_data else False) as dir_to_path:
                 if step_data['mapper'] not in identity_mappers:
                     # Perform map step only if mapper isn't identity
                     try:

@@ -17,15 +17,17 @@ the normalization factors and writes them to a file.
 Input (read from stdin)
 ----------------------------
 Tab-delimited input tuple columns:
-1. Sample label
+1. Sample index OR mean[.RNAME] OR median[.RNAME]
 2. Number string representing reference name (RNAME in SAM format; see 
     BowtieIndexReference class in bowtie_index for conversion information)
 3. Position
 4. Coverage counting all primary alignments (that is, the number of called ECs
-    in the sample overlapping the position)
+    in the sample overlapping the position) (mean or median of sample coverages
+    normalized by --library-size if field 1 specifies)
 5. Coverage counting only "uniquely mapping" reads; here, unique mappings are
-    defined according to the criteria implied in --tie-margin
-Input is partitioned first by sample label, then sorted by fields 2-3.
+    defined according to the criteria implied in --tie-margin (mean or median
+    of sample coverages normalized by --library-size if field 1 specifies)
+Input is partitioned first by sample index, then sorted by fields 2-3.
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -74,32 +76,33 @@ import tempdel
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument(\
+parser.add_argument(
     '--percentile', metavar='FRACTION', type=float, required=False,
     default=0.75,
     help='For a given sample, the per-position percentile to extract as the '
          'normalization factor')
-parser.add_argument(\
+parser.add_argument(
     '--out', metavar='URL', type=str, required=False, default='.',
     help='URL to which bigwig coverage output should be written. '
          'DEFAULT IS CURRENT WORKING DIRECTORY, NOT STDOUT')
 parser.add_argument('--manifest', type=str, required=False,
         default='manifest',
         help='Path to manifest file')
-parser.add_argument(\
+parser.add_argument(
     '--bigwig-exe', type=str, required=False, default='bedGraphToBigWig',
     help='Location of the Kent Tools bedGraphToBigWig executable')
 parser.add_argument('--bigwig-basename', type=str, required=False, default='',
     help='The basename (excluding path) of all bigwig output. Basename is'
          'followed by ".[sample label].bw"; if basename is an empty string, '
          'a sample\'s bigwig filename is simply [sample label].bw')
-parser.add_argument(\
+parser.add_argument(
     '--keep-alive', action='store_const', const=True, default=False,
     help='Prints reporter:status:alive messages to stderr to keep EMR '
          'task alive')
-parser.add_argument(\
-    '--verbose', action='store_const', const=True, default=False,
-    help='Print out extra debugging statements')
+parser.add_argument(
+        '--verbose', action='store_const', const=True, default=False,
+        help='Print out extra debugging statements'
+    )
 
 filemover.add_args(parser)
 bowtie.add_args(parser)
@@ -188,7 +191,11 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
     try:
         sample_label = manifest_object.index_to_label[sample_index]
     except KeyError:
-        raise RuntimeError('Sample label index "%s" was not recorded.'
+        # It's a mean or median
+        if 'mean' in sample_index or 'median' in sample_index:
+            sample_label = sample_index
+        else:
+            raise RuntimeError('Sample label index "%s" was not recorded.'
                                 % sample_label)
     '''Dictionary for which each key is a coverage (i.e., number of ECs
     covering a given base). Its corresponding value is the number of bases with
@@ -224,18 +231,18 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
             for _, pos, coverage, unique_coverage in coverages:
                 # BED is zero-indexed, while input is 1-indexed
                 pos, coverage, unique_coverage = (
-                        int(pos) - 1, int(coverage), int(unique_coverage)
+                        int(pos) - 1, float(coverage), float(unique_coverage)
                     )
                 input_line_count += 1
                 if coverage != last_coverage:
-                    print >>bed_stream, '%s\t%d\t%d\t%d' % (rname,
+                    print >>bed_stream, '%s\t%d\t%d\t%08f' % (rname,
                         last_pos, pos, last_coverage)
                     if last_coverage != 0:
                         # Only care about nonzero-coverage regions
                         coverage_histogram[last_coverage] += pos - last_pos
                     last_pos, last_coverage = pos, coverage
                 if unique_coverage != last_unique_coverage:
-                    print >>unique_bed_stream, '%s\t%d\t%d\t%d' % (rname,
+                    print >>unique_bed_stream, '%s\t%d\t%d\t%08f' % (rname,
                         last_unique_pos, pos, last_unique_coverage)
                     if last_unique_coverage != 0:
                         # Only care about nonzero-coverage regions
@@ -247,7 +254,7 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
                         )
             if last_pos != reference_index.rname_lengths[rname]:
                 # Print coverage up to end of strand
-                print >>bed_stream, '%s\t%d\t%d\t%d' % (
+                print >>bed_stream, '%s\t%d\t%d\t%08f' % (
                         rname,
                         last_pos,
                         reference_index.rname_lengths[rname],
@@ -255,19 +262,20 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
                     )
             if last_unique_pos != reference_index.rname_lengths[rname]:
                 # Print unique coverage up to end of strand
-                print >>unique_bed_stream, '%s\t%d\t%d\t%d' % (
+                print >>unique_bed_stream, '%s\t%d\t%d\t%08f' % (
                         rname,
                         last_unique_pos,
                         reference_index.rname_lengths[rname],
                         unique_coverage
                     )
-    # Output normalization factors
-    print '3\t%s\t\x1c\t\x1c\t\x1c\t%d\t%d' % (sample_index,
-                                            percentile(coverage_histogram,
-                                                        args.percentile),
-                                            percentile(
-                                                unique_coverage_histogram,
-                                                args.percentile))
+    # Output normalization factors iff working with real sample
+    if 'mean' not in sample_label and 'median' not in sample_label:
+        print '3\t%s\t\x1c\t\x1c\t\x1c\t%d\t%d' % (sample_index,
+                                                percentile(coverage_histogram,
+                                                            args.percentile),
+                                                percentile(
+                                                    unique_coverage_histogram,
+                                                    args.percentile))
     output_line_count += 1
     # Write bigwigs
     assert os.path.exists(sizes_filename)

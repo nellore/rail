@@ -744,19 +744,16 @@ class AlignmentPrinter(object):
             Exonic chunks in interval format (exon_ival);
             tab-delimited output tuple columns:
             1. Reference name (RNAME in SAM format) + ';' + bin number
-            2. Sample label
+            2. Sample index
             3. EC start (inclusive) on forward strand
             4. EC end (exclusive) on forward strand
 
             Exonic chunks in diff format (exon_diff) -- only if primary
                 alignment is present among alignments to be reported;
             tab-delimited output tuple columns:
-            1. Reference name (RNAME in SAM format) + ';' + 
-                max(EC start, bin start) (inclusive) on forward strand IFF diff
-                is positive and EC end (exclusive) on forward strand IFF diff
-                is negative
-            2. Bin number
-            3. Sample label
+            1. Reference name (RNAME in SAM format) + ';' + bin number
+            2. Sample index
+            3. Position at which diff should be subtracted or added to coverage
             4. '1' if alignment from which diff originates is "unique"
                 according to --tie-margin criterion; else '0'
             5. +1 or -1 * count, the number of instances of a read sequence
@@ -882,10 +879,10 @@ class AlignmentPrinter(object):
                             assert exon_pos <= partition_end
                             # Print increment at interval start
                             print >>self.output_stream, \
-                                'exon_diff\t%s\t%s\t%012d\t%s\t%d' \
+                                'exon_diff\t%s\t%012d\t%s\t%s\t%d' \
                                 % (partition_id,
-                                    sample_index,
                                     max(partition_start, exon_pos),
+                                    sample_index,
                                     uniqueness,
                                     count)
                             output_line_count += 1
@@ -895,11 +892,11 @@ class AlignmentPrinter(object):
                                 iff exon ends before partition
                                 ends.'''
                                 print >>self.output_stream, \
-                                    'exon_diff\t%s\t%s\t' \
-                                    '%012d\t%s\t-%d' \
-                                    % (partition_id, 
-                                        sample_index,
+                                    'exon_diff\t%s\t%012d\t' \
+                                    '%s\t%s\t-%d' \
+                                    % (partition_id,
                                         exon_end_pos,
+                                        sample_index,
                                         uniqueness,
                                         count)
                                 output_line_count += 1
