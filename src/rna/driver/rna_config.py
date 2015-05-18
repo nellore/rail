@@ -763,7 +763,6 @@ def steps(protosteps, action_on_failure, jar, step_dir, reducer_count,
         if 'reducer' in protostep:
             assert 'tasks' in protostep
             tasks = str(protostep['tasks'])
-            print protostep
             assert (tasks.endswith('x') or len(tasks.split(',')) == 2 or 
                     float(tasks).is_integer())
             if tasks.endswith('x'):
