@@ -45,7 +45,7 @@ def inferred_phred_format(fastq_stream, at_once=500):
                     if char in _uniques[version]:
                         return version
             chars = set()
-        chars.add(set(qual))
+        chars.add(qual)
     for char in qual:
         for version in _uniques:
             if char in _uniques[version]:
