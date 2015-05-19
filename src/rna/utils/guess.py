@@ -26,19 +26,20 @@ for version in _RANGES:
 for version in _uniques:
     _uniques[version] = set([chr(char) for char in _uniques[version]])
 
-def inferred_phred_format(fastq_stream, at_once=500):
+def inferred_phred_format(fastq_stream, at_once=500, allowed_fails=5):
     """ Studies a selection of reads from a sample to determine Phred format.
 
         fastq_stream: where to read input fastq lines or None if format is
             provided
         at_once: number of quality records to read in at once before checking
             for distinguishing characters
+        allowed_fails: number of failed records before giving up
 
         Return value: one of {Sanger, Solexa, Illumina-1.3, Illumina-1.5};
             assumes Sanger if no distinguishing characters are found
     """
     chars = set()
-    seen_seq, seen_plus, seen_name = False, False, False
+    seen_seq, seen_plus, seen_name, fails = False, False, False, 0
     # Be robust to bad records
     for i, line in enumerate(fastq_stream):
         if not (i % at_once):
@@ -56,6 +57,11 @@ def inferred_phred_format(fastq_stream, at_once=500):
             seen_plus = line[0] == '+'
         elif seen_seq and seen_plus and seen_name:
             chars.add(line.strip())
+        else:
+            fails += 1
+            if fails >= allowed_fails:
+                raise RuntimeError('Too many bad records in FASTQ; allowed '
+                                   'number was %d.' % allowed_fails)
     for char in chars:
         for version in _uniques:
             if char in _uniques[version]:
