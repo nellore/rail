@@ -1147,8 +1147,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                 readlet_displacements.append(
                     (int(seq_info[0]), int(seq_info[1]))
                 )
-        assert seq_info_captured, \
-            'Sequence info was not in a collected readlet'
+        assert seq_info_captured, (
+                'Sequence info was not in a collected readlet for seq id %s.'
+            ) % seq_id
         if collected_readlets:
             multireadlets = [[(rname, reverse_strand, pos, pos + seq_size
                                 - readlet_displacements[i][1]

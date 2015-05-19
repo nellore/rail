@@ -4275,7 +4275,6 @@ class RailRnaAlign(object):
                                                      verbose,
                                                      scratch),
                 'inputs' : [path_join(elastic, 'precoverage', 'coverage')],
-                'mod_partitioner' : True,
                 'output' : 'coverage',
                 'tasks' : '1x',
                 'partition' : '-k1,1',
