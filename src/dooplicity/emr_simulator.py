@@ -1457,7 +1457,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     step_args['key_fields'] = 1
                 if 'partition_options' not in step_args:
                     step_args['partition_options'] = '-k1'
-                if 'sort_options' not in step_args
+                if 'sort_options' not in step_args:
                     step_args['sort_options'] = '-k1'
                 steps[step['Name']] = step_args
         except (KeyError, IndexError):
