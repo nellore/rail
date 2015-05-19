@@ -38,7 +38,7 @@ def inferred_phred_format(fastq_stream, at_once=500):
             assumes Sanger if no distinguishing characters are found
     """
     chars = set()
-    for i, qual in enumerate(itertools.islice(fastq_stream, 0, None, 3)):
+    for i, qual in enumerate(itertools.islice(fastq_stream, None, None, 3)):
         if not (i % at_once):
             for char in chars:
                 for version in _uniques:
