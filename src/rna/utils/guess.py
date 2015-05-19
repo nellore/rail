@@ -38,15 +38,25 @@ def inferred_phred_format(fastq_stream, at_once=500):
             assumes Sanger if no distinguishing characters are found
     """
     chars = set()
-    for i, qual in enumerate(itertools.islice(fastq_stream, None, None, 3)):
+    seen_seq, seen_plus, seen_name = False, False, False
+    # Be robust to bad records
+    for i, line in enumerate(fastq_stream):
         if not (i % at_once):
             for char in chars:
                 for version in _uniques:
                     if char in _uniques[version]:
                         return version
             chars = set()
-        chars.add(qual)
-    for char in qual:
+        if not (i % 4):
+            seen_seq, seen_plus = False, False
+            seen_name = line[0] == '@'
+        elif not ((i + 1) % 4):
+            seen_seq = True
+        elif not ((i + 2) % 4):
+            seen_plus = line[0] == '+'
+        elif seen_seq and seen_plus and seen_name:
+            chars.add(line.strip())
+    for char in chars:
         for version in _uniques:
             if char in _uniques[version]:
                 return version
