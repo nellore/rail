@@ -10,9 +10,7 @@ import math
 
 _RANGES = {
     'Sanger': (33, 93),
-    'Solexa': (59, 104),
-    'Illumina-1.3': (64, 104),
-    'Illumina-1.5': (67, 104)
+    'Phred64': (64, 104)
 }
 
 _uniques = {}
@@ -77,14 +75,14 @@ def phred_converter(fastq_stream=None, phred_format=None, at_once=500):
         'Illumina-1.3, Illumina-1.5')
     if phred_format is None:
         phred_format = inferred_phred_format(fastq_stream, at_once)
-    if phred_format == 'Solexa':
-        def final_converter(qual):
-            return ''.join([
-                                chr(round(
-                            10*math.log(1+10**((ord(char)-64)/10.0),10)
-                    )+33) for char in qual]
-                )
-    elif phred_format == 'Sanger':
+    # if phred_format == 'Solexa':
+    #    def final_converter(qual):
+    #        return ''.join([
+    #                            chr(round(
+    #                        10*math.log(1+10**((ord(char)-64)/10.0),10)
+    #                )+33) for char in qual]
+    #            )
+    if phred_format == 'Sanger':
         def final_converter(qual):
             return qual
     else:
