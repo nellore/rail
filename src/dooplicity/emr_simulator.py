@@ -1408,10 +1408,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 step_args = {}
                 j = 0
                 j_max = len(step['HadoopJarStep']['Args'])
-                # Set default options
-                step_args['key_fields'] = 1
-                step_args['partition_options'] = '-k1'
-                step_args['sort_options'] = '-k1'
                 while j < j_max:
                     arg_name = step['HadoopJarStep']['Args'][j][1:].strip()
                     if arg_name == 'D':
@@ -1456,6 +1452,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         step_args[step['HadoopJarStep']['Args'][j][1:]] \
                             = step['HadoopJarStep']['Args'][j+1].strip()
                         j += 2
+                # Set default options
+                if 'key_fields' not in step_args:
+                    step_args['key_fields'] = 1
+                if 'partition_options' not in step_args:
+                    step_args['partition_options'] = '-k1'
+                if 'sort_options' not in step_args
+                    step_args['sort_options'] = '-k1'
                 steps[step['Name']] = step_args
         except (KeyError, IndexError):
             iface.fail(
