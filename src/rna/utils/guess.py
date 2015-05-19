@@ -56,7 +56,7 @@ def inferred_phred_format(fastq_stream, at_once=500, allowed_fails=5):
         elif not ((i - 2) % 4):
             seen_plus = line[0] == '+'
         elif seen_seq and seen_plus and seen_name:
-            chars.add(line.strip())
+            chars.update(line.strip().split())
         else:
             fails += 1
             if fails >= allowed_fails:
