@@ -1412,7 +1412,7 @@ class RailRnaLocal(object):
                                                 'tokens:\n{1}'
                                                 ).format(
                                                         manifest_url.to_url(),
-                                                        line
+                                                        line.strip()
                                                     ))
                             check_sample_label = False
                         if check_sample_label and tokens[-1].count('-') != 2:
@@ -1426,7 +1426,7 @@ class RailRnaLocal(object):
                                                 '<TechRep ID>'
                                                 ).format(
                                                         manifest_url.to_url(),
-                                                        line
+                                                        line.strip()
                                                     ))
                 if files_to_check:
                     if check_manifest:
@@ -1947,7 +1947,7 @@ class RailRnaElastic(object):
                                             'tokens:\n{1}'
                                             ).format(
                                                     manifest_url.to_url(),
-                                                    line
+                                                    line.strip()
                                                 ))
                     if check_sample_label and tokens[-1].count('-') != 2:
                         base.errors.append(('The following line from the '
@@ -1959,7 +1959,7 @@ class RailRnaElastic(object):
                                             '<TechRep ID>'
                                             ).format(
                                                     manifest_url.to_url(),
-                                                    line
+                                                    line.strip()
                                                 ))
             if files_to_check:
                 if check_manifest:
@@ -3926,7 +3926,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            } if base.isofrag_idx is None else {},
+            } if (base.isofrag_idx is None and (realign or base.idx)) else {},
             {
                 'name' : 'Get isofrags for index construction',
                 'reducer' : ('intron_fasta.py --bowtie-idx={0} {1}').format(
@@ -3943,7 +3943,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            } if base.isofrag_idx is None else {},
+            } if (base.isofrag_idx is None and (realign or base.idx)) else {},
             {
                 'name' : 'Build isofrag index',
                 'reducer' : ('intron_index.py --bowtie2-build-exe={0} '
@@ -3965,7 +3965,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            } if base.isofrag_idx is None else {},
+            } if (base.isofrag_idx is None and (realign or base.idx)) else {},
             {
                 'name' : 'Finalize intron cooccurrences on reads',
                 'reducer' : (
