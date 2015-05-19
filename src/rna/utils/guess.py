@@ -25,14 +25,13 @@ for version in _RANGES:
                 )
             )
 
-def phred_format(fastq_stream, sample_size=100000):
+def phred_format(fastq_stream):
     """ Studies a selection of reads from a sample to determine Phred format.
 
         Inspired by https://github.com/brentp/bio-playground/blob/master/
         reads-utils/guess-encoding.py
 
         fastq_stream: where to read input fastq lines
-        sample_size: maximum number of reads to sample from input fastq
 
         Return value: one of (Sanger, Solexa, Illumina-1.3, Illumina-1.5)
     """
