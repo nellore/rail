@@ -124,7 +124,7 @@ sample_indexes_seen = set()
 with xopen(True, output_path, 'w', args.gzip_level) as output_stream:
     print >>output_stream, '\t'.join(
                     [''] + sorted_rnames
-                    + ['total # mapped reads', 'total # reads']
+                    + ['total mapped reads', 'total reads']
                 )
     for (_, sample_index), xpartition in xstream(sys.stdin, 2):
         sample_label = manifest_object.index_to_label[sample_index]
