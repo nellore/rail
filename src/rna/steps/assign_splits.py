@@ -14,7 +14,8 @@ Tab-separated fields:
 1. #!splitload
 2. number of read(s) (pairs) in sample; number of pairs if paired-end and
     number of reads if single-end
-3 ... end. same as manifest line
+3 ... next-to-last. same as manifest line
+4. Phred format (Sanger or Phred64)
 
 ---Otherwise:
 manifest line---
@@ -34,6 +35,7 @@ Tab-separated fields:
     each new file
 3. \x1d-separated list of numbers of reads to include in gzipped files
 4. \x1d-separated list of manifest lines whose tabs are replaced by \x1es
+5. Phred format (Sanger or Phred64)
 
 ---Otherwise:
 same as manifest line
@@ -105,17 +107,17 @@ for input_line_count, line in enumerate(sys.stdin):
         sys.stdout.write(line)
         output_line_count += 1
         continue
-    assert token_count in [5, 7], (
-            'Line {} of input has {} fields, but 5 or 7 are expected.'
-        ).format(input_line_count + 1, token_count)
-    if token_count == 5:
-        samples[(tokens[2], None)] = (int(tokens[1]),) + tuple(tokens[2:])
+    assert token_count in [6, 8], (
+            'Line "{}" of input has {} fields, but 6 or 8 are expected.'
+        ).format(line, token_count)
+    if token_count == 6:
+        samples[(tokens[2], None)] = (int(tokens[1]),) + tuple(tokens[2:-1])
     else:
-        # token_count is 7
+        # token_count is 8
         samples[(tokens[2], tokens[4])] = (int(tokens[1])*2,) \
-                                            + tuple(tokens[2:])
+                                            + tuple(tokens[2:-1])
+    phred_format = tokens[-1]
 input_line_count += 1
-
 critical_sample_values = [
             (critical_value, True) for critical_value in 
             running_sum([sample_data[0] for sample_data in samples.values()])
@@ -170,7 +172,8 @@ else:
                         '\x1d'.join(
                                 '\x1e'.join(samples[line_tuple[0]][1:])
                                 for line_tuple in line_tuples
-                            )
+                            ),
+                        phred_format
                         ))
     if not output_url.is_local:
         mover.put(output_path, output_url.plus(args.filename))

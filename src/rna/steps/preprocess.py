@@ -87,6 +87,7 @@ from dooplicity.ansibles import Url
 from dooplicity.tools import xopen, register_cleanup, make_temp_dir
 import filemover
 import tempdel
+from guess import phred_converter
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -284,11 +285,13 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         # Kill offset from start of manifest file
         tokens = line.strip().split('\t')[1:]
         token_count = len(tokens)
-        if token_count == 4 and tokens[0] == '#!splitload':
+        qual_getter = None
+        if tokens[0] == '#!splitload':
             '''Line specifies precisely how records from files should be
             placed.'''
             assert not to_stdout, ('Split manifest line inconsistent with '
                                    'writing to stdout.')
+            qual_getter = phred_converter(phred_format=tokens[-1])
             indexes = tokens[1].split('\x1d')
             read_counts = tokens[2].split('\x1d')
             manifest_lines = [token.split('\x1e')
@@ -364,6 +367,13 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         loop.'''
         if len(sources) == 1:
             sources.append(os.devnull)
+        if qual_getter is None:
+            # Figure out Phred format
+            with xopen(None, sources[0]) as source_stream:
+                try:
+                    qual_getter = phred_converter(fastq_stream=source_stream)
+                except RuntimeError:
+                    qual_getter = phred_converter(phred_format='Sanger')
         with xopen(None, sources[0]) as source_stream_1, \
             xopen(None, sources[1]) as source_stream_2:
             source_streams = [source_stream_1, source_stream_2]
@@ -514,8 +524,23 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 else:
                                     raise
                             else:
-                                quals = [source_stream.readline().strip()
-                                         for source_stream in source_streams]
+                                try:
+                                    quals = [
+                                        qual_getter(
+                                            source_stream.readline().strip()
+                                          ) for source_stream in source_streams
+                                        ]
+                                except Exception as e:
+                                    if skip_bad_records:
+                                        print >>sys.stderr, (
+                                                'Error "%s" encountered '
+                                                'trying to convert quality '
+                                                'string to Sanger format; '
+                                                'skipping bad record.'
+                                            ) % e.message
+                                        bad_record_skip = True
+                                    else:
+                                        raise
                                 line_numbers = [i + 1 for i in line_numbers]
                                 try: 
                                     for i in xrange(2):

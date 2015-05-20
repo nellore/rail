@@ -38,6 +38,7 @@ def inferred_phred_format(fastq_stream, at_once=500, allowed_fails=5):
         Return value: one of {Sanger, Solexa, Illumina-1.3, Illumina-1.5};
             assumes Sanger if no distinguishing characters are found
     """
+    fasta_cues = set(['>', ';'])
     chars = set()
     seen_seq, seen_plus, seen_name, fails = False, False, False, 0
     # Be robust to bad records
@@ -50,6 +51,9 @@ def inferred_phred_format(fastq_stream, at_once=500, allowed_fails=5):
             chars = set()
         if not (i % 4):
             seen_seq, seen_plus = False, False
+            if line[0] in fasta_cues:
+                # Return Sanger immediately
+                return 'Sanger'
             seen_name = line[0] == '@'
         elif not ((i - 1) % 4):
             seen_seq = True
@@ -84,9 +88,9 @@ def phred_converter(fastq_stream=None, phred_format=None, at_once=500):
 
         Return value: one of (Sanger, Solexa, Illumina-1.3, Illumina-1.5)
     """
-    assert fastq_stream is not None or platform is not None, ('Either a '
-        'fastq stream must be provided to infer platform or a platform '
-        'must be provided directly.')
+    assert fastq_stream is not None or phred_format is not None, (
+        'Either a fastq stream must be provided to infer phred format '
+        'or a phred_format must be provided directly.')
     assert phred_format in _RANGES, ('Platform must be Sanger, Solexa, '
         'Illumina-1.3, Illumina-1.5')
     if phred_format is None:

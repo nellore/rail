@@ -27,6 +27,7 @@ Tab-separated output fields:
 2. number of read(s) (pairs) in sample; number of pairs if paired-end and
     number of reads if single-end
 3 ... end. same as manifest line
+4. Phred format (Sanger or Phred64)
 
 ---Otherwise:
 same as manifest line
@@ -50,6 +51,7 @@ from dooplicity.ansibles import Url
 from dooplicity.tools import xopen
 import subprocess
 import argparse
+from guess import inferred_phred_format
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -94,7 +96,7 @@ for input_line_count, line in enumerate(sys.stdin):
         if first_char in fastq_cues:
             # 4 lines per record
             line_divider = 4
-        elif first_char in fastq_cues:
+        elif first_char in fasta_cues:
             line_divider = 2
         else:
             raise RuntimeError(
@@ -102,6 +104,15 @@ for input_line_count, line in enumerate(sys.stdin):
                             file_to_count
                         )
                 )
+    if first_char in fastq_cues:
+        # Check Phred format
+        with xopen(None, file_to_count) as input_stream:
+            try:
+                phred_format = inferred_phred_format(input_stream)
+            except RuntimeError:
+                phred_format = 'Sanger'
+    else:
+        phred_format = 'Sanger'
     try:
         lines_and_bytes = subprocess.check_output(
                                         command_to_run,
@@ -116,11 +127,10 @@ for input_line_count, line in enumerate(sys.stdin):
                     format_exc(), command_to_run
                 )
     lines_and_bytes = str((int(lines_and_bytes) + 1) / line_divider)
-    sys.stdout.write(
-        '\t'.join(
-            ['#!splitload', lines_and_bytes] + [line.partition('\t')[2]]
+    print '\t'.join(
+            ['#!splitload', lines_and_bytes, line.partition('\t')[2].strip(),
+                phred_format]
         )
-    )
     output_line_count += 1
 
 sys.stdout.flush()
