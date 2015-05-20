@@ -254,7 +254,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                                                 ):
                 sample_index = int(sample_index)
                 while i != sample_index:
-                    # Write 0 coverage for sample indexes reporting 0 introns
+                    # Write 0 coverage for sample indexes reporting 0 indels
                     coverages.append(0)
                     i += 1
                 coverage_sum = 0

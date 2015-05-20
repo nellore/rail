@@ -23,8 +23,7 @@ The seed qname + seq + qual is used.
 
 Input (read from stdin)
 ----------------------------
-Two formats -- format 1's tab-delimited input columns (introns):
-Format 1's tab-deliminted input columns (introns):
+Tab-delimited input columns (introns):
 [ALL SAM FIELDS; see SAM format specification for details]
 Last field (only for alignments overlapping introns): XC:i:(coverage of an
 intron from the read); there are as many lines for a given alignment

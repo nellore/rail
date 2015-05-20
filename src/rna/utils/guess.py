@@ -91,8 +91,9 @@ def phred_converter(fastq_stream=None, phred_format=None, at_once=500):
     assert fastq_stream is not None or phred_format is not None, (
         'Either a fastq stream must be provided to infer phred format '
         'or a phred_format must be provided directly.')
-    assert phred_format in _RANGES, ('Platform must be Sanger, Solexa, '
-        'Illumina-1.3, Illumina-1.5')
+    assert phred_format is None or phred_format in _RANGES, (
+            'Phred format must be Sanger or Phred64'
+        )
     if phred_format is None:
         phred_format = inferred_phred_format(fastq_stream, at_once)
     # if phred_format == 'Solexa':

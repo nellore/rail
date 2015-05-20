@@ -4199,7 +4199,7 @@ class RailRnaAlign(object):
                 'output' : 'read_counts',
                 'tasks' : 1,
                 'partition' : '-k1,1',
-                'sort' : '-k1,1 -k2,2',
+                'sort' : '-k1,1 -k2,2n',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
@@ -4276,6 +4276,7 @@ class RailRnaAlign(object):
                                                      scratch),
                 'inputs' : [path_join(elastic, 'precoverage', 'coverage')],
                 'output' : 'coverage',
+                'mod_partitioner' : True,
                 'tasks' : '1x',
                 'partition' : '-k1,1',
                 'sort' : '-k1,1 -k2,3',
@@ -4308,7 +4309,7 @@ class RailRnaAlign(object):
                 'tasks' : ('%d,' % (base.sample_count * 12))
                             if elastic else '1x',
                 'partition' : '-k1,5',
-                'sort' : '-k1,5 -k6,6',
+                'sort' : '-k1,5 -k6,6n',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'

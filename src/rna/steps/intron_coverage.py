@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Rail-RNA-intron_coverage
-Follows Rail-RNA-realign_reads
+Follows Rail-RNA-compare-alignments
 Precedes Rail-RNA-break_ties
 
 Associates each alignment that overlaps introns with their coverage by reads
@@ -16,10 +16,8 @@ Two formats -- format 1's tab-delimited input columns (introns):
 Format 1's tab-deliminted input columns (introns):
 1. The character 'N'
 2. Number string representing RNAME
-3. Start position (Last base before insertion, first base of
-                    deletion, or first base of intron)
-4. End position (Last base before insertion, last base of deletion
-    (exclusive), or last base of intron (exclusive))
+3. Intron start position
+4. Intron end position
 5. '+' or '-' indicating which strand is the sense strand
 6. Sample index
 7. Number of nucleotides between 5' end of intron and 5' end of

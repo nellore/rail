@@ -10,7 +10,7 @@ Input (read from stdin)
 ----------------------------
 Tab-delimited input tuple columns:
 1. 'I', 'D', or 'N' for insertion, deletion, or intron line
-2. Sample label
+2. Sample index
 3. RNAME
 4. Start position (Last base before insertion, first base of deletion,
                     or first base of intron)
