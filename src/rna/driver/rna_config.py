@@ -3354,6 +3354,7 @@ class RailRnaAlign(object):
         base.bed = 'bed' in split_deliverables
         base.bw = 'bw' in split_deliverables
         base.itn = 'itn' in split_deliverables
+        base.all_final_outs = (base.tsv or base.bam or base.bed or base.bw)
         base.count_filename = (base.tsv_basename + '.' if base.tsv_basename
                                         else '') + 'counts.tsv.gz'
         if base.bw or base.tsv or base.bam:
@@ -3400,6 +3401,12 @@ class RailRnaAlign(object):
                         if base.isofrag_idx[-7:] == '.tar.gz'
                         else os.path.basename(base.isofrag_idx)[:-4]
                     )
+            if not base.all_final_outs:
+                base.errors.append('Isofrag index (--isofrag-idx) was '
+                                   'specified, so the specified deliverables '
+                                   'cannot be obtained. Do not specify '
+                                   'the isofrag index to construct a new '
+                                   'index.')
             base.transcript_archive = ab.Url(
                                     '{0}#{1}'.format(
                                             base.isofrag_idx,
