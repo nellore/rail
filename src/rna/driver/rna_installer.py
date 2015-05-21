@@ -47,7 +47,7 @@ class RailRnaInstaller(object):
         zip_name: path to (currently executing) zip containing Rail-RNA
         curl_exe: path to cURL executable; if None, use 'curl'
         install_dir: path to install dir; if None, use home directory
-            + 'rail-rna' if installing for self and /usr/local/rail-rna if
+            + 'raildotbio' if installing for self and /usr/local/raildotbio if
             installing for all users
         no_dependencies: if True, install Rail-RNA and none of its dependencies
         prep_dependencies: if True, only installs dependencies needed for
@@ -288,7 +288,7 @@ class RailRnaInstaller(object):
         bin_dir = os.path.join(install_dir, 'bin')
         rail_exe = os.path.join(bin_dir, 'rail-rna')
         if self.install_dir is None:
-            self.final_install_dir = os.path.join(install_dir, 'rail-rna')
+            self.final_install_dir = os.path.join(install_dir, 'raildotbio')
         else:
             # User specified an installation directory
             self.final_install_dir = self.install_dir
@@ -331,10 +331,10 @@ class RailRnaInstaller(object):
             # So it's possible to move temp installation dir there
             os.rmdir(self.final_install_dir)
             pass
-        if not self.no_dependencies:
-            with cd(temp_install_dir):
-                with zipfile.ZipFile(self.zip_name) as zip_object:
-                    zip_object.extractall()
+        with cd(temp_install_dir):
+            with zipfile.ZipFile(self.zip_name) as zip_object:
+                zip_object.extractall('./rail-rna')
+            if not self.no_dependencies:
                 self._grab_and_explode(self.depends['pypy'], 'PyPy')
                 if not self.prep_dependencies:
                     self._grab_and_explode(self.depends['bowtie1'], 'Bowtie 1')
@@ -417,7 +417,8 @@ class RailRnaInstaller(object):
                 )
             # Write paths to exe_paths
             with open(
-                            os.path.join(temp_install_dir, 'exe_paths.py'), 'w'
+                            os.path.join(temp_install_dir, 'rail-rna',
+                                            'exe_paths.py'), 'w'
                         ) as exe_paths_stream:
                 print >>exe_paths_stream, (
 """\"""
@@ -476,7 +477,9 @@ bedgraphtobigwig = {bedgraphtobigwig}
 {python_executable} {install_dir} $@
 """
                 ).format(python_executable=sys.executable,
-                            install_dir=self.final_install_dir)
+                            install_dir=os.path.join(
+                                self.final_install_dir, 'rail-rna'
+                            ))
         if self.local:
             '''Have to add Rail to PATH. Do this in bashrc and bash_profile
             contingent on whether it's present already because of

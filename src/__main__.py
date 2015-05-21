@@ -42,8 +42,8 @@ if zipfile.is_zipfile(containing_dir):
             metavar='<dir>',
             default=None,
             help=('directory in which to install Rail-RNA (def: '
-                  '"/usr/local/rail-rna" if installing for all users and '
-                  '"~/.local/rail-rna" if installing for current user)')
+                  '"/usr/local/raildotbio" if installing for all users and '
+                  '"~/.local/raildotbio" if installing for current user)')
         )
     parser.add_argument('-n', '--no-dependencies', action='store_const',
             const=True,
