@@ -123,7 +123,7 @@ _elastic_bowtie1_exe = 'bowtie'
 _elastic_bowtie2_exe = 'bowtie2'
 _elastic_bowtie1_build_exe = 'bowtie-build'
 _elastic_bowtie2_build_exe = 'bowtie2-build'
-_elastic_step_dir = '/usr/local/rail-rna/rna/steps'
+_elastic_step_dir = '/usr/local/raildotbio/rail-rna/rna/steps'
 
 # Set basename of the transcript fragment index; can't settle on this
 _transcript_fragment_idx_basename = 'isofrags'
