@@ -374,8 +374,9 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     qual_getter = phred_converter(fastq_stream=source_stream)
                 except RuntimeError:
                     qual_getter = phred_converter(phred_format='Sanger')
-        with xopen(None, sources[0]) as source_stream_1, \
-            xopen(None, sources[1]) as source_stream_2:
+        with xopen(None, sources[0]) as source_stream_1, xopen(
+                None, sources[1]
+            ) as source_stream_2:
             source_streams = [source_stream_1, source_stream_2]
             break_outer_loop = False
             while True:

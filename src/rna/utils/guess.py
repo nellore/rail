@@ -5,72 +5,62 @@ Part of Rail-RNA
 
 Tools for inferring the properties of samples.
 """
-import itertools
+from itertools import islice
 import math
+import random
+import sys
 
-_RANGES = {
-    'Sanger': (33, 93),
-    'Phred64': (64, 104)
-}
+'''Ranges of possible quality values.
+Sanger : (33, 93)
+Solexa : (59, 104)
+Phred64 : (64, 104) . Check out maxes and mins of ord(chars) in
+phred_converter functions below; they are written to guarantee that the ranges
+of quality chars fall within these ranges of valid chars.'''
 
-_uniques = {}
-for version in _RANGES:
-    _uniques[version] = set(range(_RANGES[version][0], _RANGES[version][1]))
-    for compared_version in _RANGES:
-        if compared_version != version:
-            _uniques[version] -= set(
-                range(
-                    _RANGES[compared_version][0], _RANGES[compared_version][1]
-                )
-            )
-for version in _uniques:
-    _uniques[version] = set([chr(char) for char in _uniques[version]])
-
-def inferred_phred_format(fastq_stream, at_once=500, allowed_fails=5):
+def inferred_phred_format(fastq_stream, sample_size=10000, allowed_fails=5,
+                            verbose=True):
     """ Studies a selection of reads from a sample to determine Phred format.
 
         fastq_stream: where to read input fastq lines or None if format is
             provided
-        at_once: number of quality records to read in at once before checking
-            for distinguishing characters
+        sample_size: number of quality records to sample from file
         allowed_fails: number of failed records before giving up
+        verbose: talk about range of quality values found in FASTQ
 
-        Return value: one of {Sanger, Solexa, Illumina-1.3, Illumina-1.5};
-            assumes Sanger if no distinguishing characters are found
+        Return value: one of {Sanger, Solexa, Phred64}; assumes Sanger if no
+            distinguishing characters are found or if it's a FASTA file
     """
-    fasta_cues = set(['>', ';'])
-    chars = set()
-    seen_seq, seen_plus, seen_name, fails = False, False, False, 0
-    # Be robust to bad records
-    for i, line in enumerate(fastq_stream):
-        if not (i % at_once):
-            for char in chars:
-                for version in _uniques:
-                    if char in _uniques[version]:
-                        return version
-            chars = set()
-        if not (i % 4):
-            seen_seq, seen_plus = False, False
-            if line[0] in fasta_cues:
-                # Return Sanger immediately
-                return 'Sanger'
-            seen_name = line[0] == '@'
-        elif not ((i - 1) % 4):
-            seen_seq = True
-        elif not ((i - 2) % 4):
-            seen_plus = line[0] == '+'
-        elif seen_seq and seen_plus and seen_name:
-            chars.update(list(line.strip()))
-        else:
-            fails += 1
-            if fails >= allowed_fails:
-                raise RuntimeError('Too many bad records in FASTQ; allowed '
-                                   'number was %d.' % allowed_fails)
-    for char in chars:
-        for version in _uniques:
-            if char in _uniques[version]:
-                return version
-    # Still nada? Assume Sanger
+    first_line = fastq_stream.readline()
+    if first_line[0] in ['>', ';']:
+        # It's a FASTA file; return Sanger immediately
+        return 'Sanger'
+    # Now assume FASTQ; use first line as seed
+    random.seed(first_line)
+    quals = []
+    # Grab random sample of sample_size quals
+    for i, qual in enumerate(islice(fastq_stream, 2, None, 4)):
+        if len(quals) < sample_size:
+            quals.append(qual.strip())
+        elif random.random() * (i + 1) < sample_size:
+            quals[random.randint(0, sample_size - 1)] = qual.strip()
+    # Get range of quality scores
+    quals = [ord(char) for char in set(''.join(quals))]
+    qual_range = (min(quals), max(quals))
+    if verbose:
+        print >>sys.stderr, (
+                'Range of quality values found from random sample of {} '
+                'records is ({}, {}).'
+            ).format(sample_size, qual_range[0], qual_range[1])
+    if qual_range[0] >= 64:
+        # Don't even check max; choose Phred64 and round down as necessary
+        return 'Phred64'
+    if qual_range[0] < 59:
+        '''Now we're choosing between Sanger and Solexa, and this means there
+        are Sanger-unique characters.'''
+        return 'Sanger'
+    # Min qual is now on [59, 63]; could still be either Sanger or Solexa
+    if qual_range[1] >= 94:
+        return 'Solexa'
     return 'Sanger'
 
 def phred_converter(fastq_stream=None, phred_format=None, at_once=500):
@@ -86,7 +76,7 @@ def phred_converter(fastq_stream=None, phred_format=None, at_once=500):
         at_once: number of quality records to read in at once before checking
             for distinguishing characters
 
-        Return value: one of (Sanger, Solexa, Illumina-1.3, Illumina-1.5)
+        Return value: one of {Sanger, Solexa, Phred64}
     """
     assert fastq_stream is not None or phred_format is not None, (
         'Either a fastq stream must be provided to infer phred format '
@@ -96,18 +86,21 @@ def phred_converter(fastq_stream=None, phred_format=None, at_once=500):
         )
     if phred_format is None:
         phred_format = inferred_phred_format(fastq_stream, at_once)
-    # if phred_format == 'Solexa':
-    #    def final_converter(qual):
-    #        return ''.join([
-    #                            chr(round(
-    #                        10*math.log(1+10**((ord(char)-64)/10.0),10)
-    #                )+33) for char in qual]
-    #            )
-    if phred_format == 'Sanger':
+    if phred_format == 'Solexa':
+       def final_converter(qual):
+           return ''.join([
+                               chr(round(
+                           10*math.log(1+10**((min(max(ord(char), 59), 104)-64)
+                            /10.0),10)
+                   )+33) for char in qual
+                ])
+    elif phred_format == 'Sanger':
         def final_converter(qual):
-            return qual
+            return ''.join(chr(min(max(ord(char), 33), 93)) for char in qual)
     else:
+        assert phred_format == 'Phred64'
         # It's Phred64
         def final_converter(qual):
-            return ''.join([chr(ord(char) - 31) for char in qual])
+            return ''.join(chr(min(max(ord(char), 64), 104) - 31)
+                                for char in qual)
     return final_converter
