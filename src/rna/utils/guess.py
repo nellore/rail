@@ -31,8 +31,11 @@ def inferred_phred_format(fastq_stream, sample_size=10000, allowed_fails=5,
             distinguishing characters are found or if it's a FASTA file
     """
     first_line = fastq_stream.readline()
-    if first_line[0] in ['>', ';']:
-        # It's a FASTA file; return Sanger immediately
+    try:
+        if first_line[0] in ['>', ';']:
+            # It's a FASTA file; return Sanger immediately
+            return 'Sanger'
+    except IndexError:
         return 'Sanger'
     # Now assume FASTQ; use first line as seed
     random.seed(first_line)
@@ -45,7 +48,11 @@ def inferred_phred_format(fastq_stream, sample_size=10000, allowed_fails=5,
             quals[random.randint(0, sample_size - 1)] = qual.strip()
     # Get range of quality scores
     quals = [ord(char) for char in set(''.join(quals))]
-    qual_range = (min(quals), max(quals))
+    try:
+        qual_range = (min(quals), max(quals))
+    except ValueError:
+        # Empty list; default to Sanger
+        return 'Sanger'
     if verbose:
         print >>sys.stderr, (
                 'Range of quality values found from random sample of {} '
@@ -61,6 +68,7 @@ def inferred_phred_format(fastq_stream, sample_size=10000, allowed_fails=5,
     # Min qual is now on [59, 63]; could still be either Sanger or Solexa
     if qual_range[1] >= 94:
         return 'Solexa'
+    # Default to Sanger
     return 'Sanger'
 
 def phred_converter(fastq_stream=None, phred_format=None, at_once=500):
