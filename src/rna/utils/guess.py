@@ -79,7 +79,7 @@ def inferred_phred_format(fastq_stream, sample_size=10000, allowed_fails=5,
     print >>sys.stderr, message % 'Sanger'
     return 'Sanger'
 
-def phred_converter(fastq_stream=None, phred_format=None, at_once=500):
+def phred_converter(fastq_stream=None, phred_format=None, sample_size=10000):
     """ Provides a function that converts a quality string to Sanger format
 
         Inspired by https://github.com/brentp/bio-playground/blob/master/
@@ -89,17 +89,17 @@ def phred_converter(fastq_stream=None, phred_format=None, at_once=500):
             provided
         phred_format: Phred format from _RANGES or None if fastq_stream is
             provided
-        at_once: number of quality records to read in at once before checking
-            for distinguishing characters
+        sample_size: take random sample of this many quality strings from
+            fastq_stream to determine encoding
 
-        Return value: one of {Sanger, Solexa, Phred64}
+        Return value: a function that converts a quality string in one of
+            {Sanger, Solexa, Phred64} formats to Sanger format. Scores that
+            are not in the expected range are rounded to the nearest acceptable
+            value.
     """
     assert fastq_stream is not None or phred_format is not None, (
         'Either a fastq stream must be provided to infer phred format '
         'or a phred_format must be provided directly.')
-    assert phred_format is None or phred_format in _RANGES, (
-            'Phred format must be Sanger or Phred64'
-        )
     if phred_format is None:
         phred_format = inferred_phred_format(fastq_stream, at_once)
     if phred_format == 'Solexa':
