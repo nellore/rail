@@ -3783,7 +3783,10 @@ class RailRnaAlign(object):
                                     keep_alive,
                                     scratch,
                                     output_by_chr,
-                                    base.bowtie2_args
+                                    base.bowtie2_args + (
+                                            ' -p 2 --reorder '
+                                            if elastic else ''
+                                        ) # 2x threads on EMR cuz reducers/2
                                 ),
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
