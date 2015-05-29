@@ -3744,6 +3744,16 @@ class RailRnaAlign(object):
                             if not base.do_not_output_bam_by_chr
                             else '')
         realign = (base.bam or base.tsv or base.bed or base.bw)
+        nodemanager_mem = (base.nodemanager_mem if hasattr(
+                                                        base, 
+                                                        'nodemanager_mem'
+                                                    )
+                            else 1)
+        max_tasks = (base.max_tasks if hasattr(
+                                                        base, 
+                                                        'nodemanager_mem'
+                                                    )
+                            else 1)
         steps_to_return = [
             {
                 'name' : 'Align reads %s' % ('and segment them into readlets'
@@ -3801,9 +3811,9 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}',
                         'mapreduce.reduce.memory.mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks * 2),
+                        % (nodemanager_mem / max_tasks * 2),
                         'mapreduce.map.java.opts=-Xmx%dm'
-                        % (base.nodemanager_mem / base.max_tasks * 16 / 10)
+                        % (nodemanager_mem / max_tasks * 16 / 10)
                     ]
             },
             {
@@ -4093,9 +4103,9 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}',
                         'mapreduce.reduce.memory.mb=%d'
-                        % (base.nodemanager_mem / base.max_tasks * 2),
+                        % (nodemanager_mem / max_tasks * 2),
                         'mapreduce.map.java.opts=-Xmx%dm'
-                        % (base.nodemanager_mem / base.max_tasks * 16 / 10)
+                        % (nodemanager_mem / max_tasks * 16 / 10)
                     ]
             } if realign else {},
             {
