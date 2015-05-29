@@ -815,6 +815,10 @@ if __name__ == '__main__':
     parser.add_argument('--bin-qualities', action='store_const', const=True,
         default=False,
         help='Rounds base quality score, placing it in one of five bins')
+    parser.add_argument('--keep-alive', action='store_const', const=True,
+        default=False,
+        help='Periodically print Hadoop status messages to stderr to keep ' \
+             'job alive')
     parser.add_argument('--shorten-read-names', action='store_const',
         const=True, default=False,
         help='Gives each read (pair) a unique short read name to save space')
@@ -830,8 +834,11 @@ if __name__ == '__main__':
     filemover.add_args(parser)
     tempdel.add_args(parser)
     args = parser.parse_args()
-
-if __name__ == '__main__':
+    # Start keep_alive thread immediately
+    if args.keep_alive:
+        from dooplicity.tools import KeepAlive
+        keep_alive_thread = KeepAlive(sys.stderr)
+        keep_alive_thread.start()
     import time
     start_time = time.time()
     mover = filemover.FileMover(args=args)
