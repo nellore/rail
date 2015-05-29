@@ -3796,7 +3796,11 @@ class RailRnaAlign(object):
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
-                        'elephantbird.combined.split.count={task_count}'
+                        'elephantbird.combined.split.count={task_count}',
+                        'mapreduce.reduce.memory.mb=%d'
+                        % (base.nodemanager_mem / base.max_tasks * 2),
+                        'mapreduce.map.java.opts=-Xmx%dm'
+                        % (base.nodemanager_mem / base.max_tasks * 16 / 10)
                     ]
             },
             {
@@ -4084,7 +4088,11 @@ class RailRnaAlign(object):
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
-                        'elephantbird.combined.split.count={task_count}'
+                        'elephantbird.combined.split.count={task_count}',
+                        'mapreduce.reduce.memory.mb=%d'
+                        % (base.nodemanager_mem / base.max_tasks * 2),
+                        'mapreduce.map.java.opts=-Xmx%dm'
+                        % (base.nodemanager_mem / base.max_tasks * 16 / 10)
                     ]
             } if realign else {},
             {
