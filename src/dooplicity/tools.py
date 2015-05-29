@@ -251,10 +251,7 @@ def xopen(gzipped, *args):
     try:
         yield fh
     finally:
-        if fh is not sys.stdout:
-            fh.close()
-        if 'gzip_process' in locals():
-            gzip_process.wait()
+        gzip_process.terminate()
         if 'output_stream' in locals():
             output_stream.close()
 
