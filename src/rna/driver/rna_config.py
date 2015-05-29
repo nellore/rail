@@ -2857,7 +2857,7 @@ class RailRnaPreprocess(object):
                     'name' : 'Preprocess reads',
                     'mapper' : ('preprocess.py --nucs-per-file={0} {1} '
                                 '--push={2} --gzip-level {3} {4} {5} {6} {7} '
-                                '{8}').format(
+                                '--keep-alive').format(
                                                 base.nucleotides_per_input,
                                                 '--gzip-output' if
                                                 base.gzip_input else '',
@@ -2878,8 +2878,7 @@ class RailRnaPreprocess(object):
                                                 else '',
                                                 '--skip-bad-records'
                                                 if base.skip_bad_records
-                                                else '',
-                                                keep_alive
+                                                else ''
                                             ),
                     'inputs' : [base.old_manifest
                                 if hasattr(base, 'old_manifest')
