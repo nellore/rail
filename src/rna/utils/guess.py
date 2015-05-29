@@ -104,10 +104,10 @@ def phred_converter(fastq_stream=None, phred_format=None, sample_size=10000):
     if phred_format == 'Solexa':
        def final_converter(qual):
            return ''.join([
-                               chr(round(
+                               chr(int(round(
                            10*math.log(1+10**((min(max(ord(char), 59), 104)-64)
                             /10.0),10)
-                   )+33) for char in qual
+                   )+33)) for char in qual
                 ])
     elif phred_format == 'Sanger':
         def final_converter(qual):
