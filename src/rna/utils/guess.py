@@ -100,7 +100,8 @@ def phred_converter(fastq_stream=None, phred_format=None, sample_size=10000):
         'Either a fastq stream must be provided to infer phred format '
         'or a phred_format must be provided directly.')
     if phred_format is None:
-        phred_format = inferred_phred_format(fastq_stream, at_once)[0]
+        phred_format = inferred_phred_format(fastq_stream,
+                                                sample_size=sample_size)[0]
     if phred_format == 'Solexa':
        def final_converter(qual):
            return ''.join([
