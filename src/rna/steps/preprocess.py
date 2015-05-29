@@ -370,10 +370,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         if qual_getter is None:
             # Figure out Phred format
             with xopen(None, sources[0]) as source_stream:
-                try:
-                    qual_getter = phred_converter(fastq_stream=source_stream)
-                except RuntimeError:
-                    qual_getter = phred_converter(phred_format='Sanger')
+                qual_getter = phred_converter(fastq_stream=source_stream)
         with xopen(None, sources[0]) as source_stream_1, xopen(
                 None, sources[1]
             ) as source_stream_2:

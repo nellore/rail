@@ -17,28 +17,27 @@ Phred64 : (64, 104) . Check out maxes and mins of ord(chars) in
 phred_converter functions below; they are written to guarantee that the ranges
 of quality chars fall within these ranges of valid chars.'''
 
-def inferred_phred_format(fastq_stream, sample_size=10000, allowed_fails=5,
-                            verbose=True):
+def inferred_phred_format(fastq_stream, sample_size=10000, verbose=True):
     """ Studies a selection of reads from a sample to determine Phred format.
 
         fastq_stream: where to read input fastq lines or None if format is
             provided
         sample_size: number of quality records to sample from file
-        allowed_fails: number of failed records before giving up
         verbose: talk about range of quality values found in FASTQ
 
-        Return value: one of {Sanger, Solexa, Phred64}; assumes Sanger if no
-            distinguishing characters are found or if it's a FASTA file
+        Return value: tuple (one of {Sanger, Solexa, Phred64}; assumes Sanger
+            if no distinguishing characters are found or if it's a FASTA file,
+            number of lines in file)
     """
     first_line = fastq_stream.readline()
     try:
-        if first_line[0] in ['>', ';']:
+        if first_line[0] in '>;':
             # It's a FASTA file; return Sanger immediately
             print >>sys.stderr, 'FASTA file encountered. Returning Sanger.'
-            return 'Sanger'
+            return ('Sanger', sum(1 for line in fastq_stream) + 1)
     except IndexError:
         print >>sys.stderr, 'Empty file encountered. Returning Sanger.'
-        return 'Sanger'
+        return ('Sanger', 0)
     # Now assume FASTQ; use first line as seed
     random.seed(first_line)
     quals = []
@@ -55,7 +54,7 @@ def inferred_phred_format(fastq_stream, sample_size=10000, allowed_fails=5,
     except ValueError:
         # Empty list; default to Sanger
         print >>sys.stderr, 'No quality strings found. Returning Sanger.'
-        return 'Sanger'
+        return ('Sanger', 0)
     if verbose:
         print >>sys.stderr, (
                 'Range of quality values found from random sample of {} '
@@ -65,19 +64,19 @@ def inferred_phred_format(fastq_stream, sample_size=10000, allowed_fails=5,
     if qual_range[0] >= 64:
         # Don't even check max; choose Phred64 and round down as necessary
         print >>sys.stderr, message % 'Phred64'
-        return 'Phred64'
+        return ('Phred64', (i + 1) * 4)
     if qual_range[0] < 59:
         '''Now we're choosing between Sanger and Solexa, and this means there
         are Sanger-unique characters.'''
         print >>sys.stderr, message % 'Sanger'
-        return 'Sanger'
+        return ('Sanger', (i + 1) * 4)
     # Min qual is now on [59, 63]; could still be either Sanger or Solexa
     if qual_range[1] >= 94:
         print >>sys.stderr, message % 'Solexa'
-        return 'Solexa'
+        return ('Solexa', (i + 1) * 4)
     # Default to Sanger
     print >>sys.stderr, message % 'Sanger'
-    return 'Sanger'
+    return ('Sanger', (i + 1) * 4)
 
 def phred_converter(fastq_stream=None, phred_format=None, sample_size=10000):
     """ Provides a function that converts a quality string to Sanger format
@@ -101,7 +100,7 @@ def phred_converter(fastq_stream=None, phred_format=None, sample_size=10000):
         'Either a fastq stream must be provided to infer phred format '
         'or a phred_format must be provided directly.')
     if phred_format is None:
-        phred_format = inferred_phred_format(fastq_stream, at_once)
+        phred_format = inferred_phred_format(fastq_stream, at_once)[0]
     if phred_format == 'Solexa':
        def final_converter(qual):
            return ''.join([

@@ -85,12 +85,6 @@ for input_line_count, line in enumerate(sys.stdin):
         sys.stdout.write(line)
         output_line_count += 1
         continue
-    with open(file_to_count, 'rb') as binary_input_stream:
-        if binary_input_stream.read(2) == '\x1f\x8b':
-            # Magic number of gzip'd file found
-            command_to_run = 'gzip -cd {} | wc -l'.format(file_to_count)
-        else:
-            command_to_run = 'cat {} | wc -l'.format(file_to_count)
     with xopen(None, file_to_count) as input_stream:
         first_char = input_stream.readline()[0]
         if first_char in fastq_cues:
@@ -104,29 +98,9 @@ for input_line_count, line in enumerate(sys.stdin):
                             file_to_count
                         )
                 )
-    if first_char in fastq_cues:
-        # Check Phred format
-        with xopen(None, file_to_count) as input_stream:
-            try:
-                phred_format = inferred_phred_format(input_stream)
-            except RuntimeError:
-                phred_format = 'Sanger'
-    else:
-        phred_format = 'Sanger'
-    try:
-        lines_and_bytes = subprocess.check_output(
-                                        command_to_run,
-                                        shell=True,
-                                        executable='/bin/bash',
-                                        bufsize=-1
-                                    )
-    except subprocess.CalledProcessError:
-        from traceback import format_exc
-        print >>sys.stderr, \
-                'Error\n\n{}\nencountered counting lines with {}.'.format(
-                    format_exc(), command_to_run
-                )
-    lines_and_bytes = str((int(lines_and_bytes) + 1) / line_divider)
+    with xopen(None, file_to_count) as input_stream:
+        phred_format, line_count = inferred_phred_format(input_stream)
+    lines_and_bytes = str((int(line_count) + 1) / line_divider)
     print '\t'.join(
             ['#!splitload', lines_and_bytes, line.partition('\t')[2].strip(),
                 phred_format]
