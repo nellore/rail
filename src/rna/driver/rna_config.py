@@ -3935,8 +3935,10 @@ class RailRnaAlign(object):
             {
                 'name' : 'Enumerate possible intron cooccurrences on readlets',
                 'reducer' : ('intron_config.py '
-                             '--readlet-size={0} {1}').format(
+                             '--readlet-size={0} '
+                             '--min-overlap-exon-size={1} {2}').format(
                                                     base.readlet_config_size,
+                                                    base.min_exon_size,
                                                     verbose
                                                 ),
                 'inputs' : [path_join(elastic, 'intron_filter', 'filter')],
