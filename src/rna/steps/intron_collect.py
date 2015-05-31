@@ -99,7 +99,7 @@ if args.out is not None:
         register_cleanup(tempdel.remove_temporary_directories,
                             [temp_dir_path])
         output_filename = args.intron_filename + '.temp'
-        output_filename = os.path.join(temp_dir_path, intron_filename)
+        output_filename = os.path.join(temp_dir_path, output_filename)
     with xopen(True, output_filename, 'w', args.gzip_level) as output_stream:
         for line in sys.stdin:
             output_stream.write(line)
