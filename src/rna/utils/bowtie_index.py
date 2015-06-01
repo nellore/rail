@@ -299,4 +299,11 @@ CA
                 self.assertEqual(ref.length['short_name2'], 80)
                 self.assertEqual(ref.length['short_name3'], 2)
 
+            def test_off_reference_values(self):
+                ref = BowtieIndexReference(self.fa_fn_1)
+                self.assertEqual('NNNACG', ref.get_stretch('short_name1', -3, 6))
+                self.assertEqual('NNNNN', ref.get_stretch('short_name1', -20, 5))
+                self.assertEqual('NNNNNNNNN', ref.get_stretch('short_name1', 85, 9))
+                self.assertEqual('ANNNNNNNN', ref.get_stretch('short_name1', 80, 9))
+
         unittest.main(argv=[sys.argv[0]])
