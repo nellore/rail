@@ -153,7 +153,12 @@ class BowtieIndexReference(object):
         @return: string extracted from reference
         """
         assert ref_id in self.recs
-        stretch = []
+        # Account for negative reference offsets by padding with Ns
+        N_count = min(abs(min(ref_off, 0)), count)
+        stretch = ['N'] * N_count
+        count -= N_count
+        if not count: return ''.join(stretch)
+        ref_off = max(ref_off, 0)
         starting_rec = bisect_right(self.offset_in_ref[ref_id], ref_off) - 1
         assert starting_rec >= 0
         off = self.offset_in_ref[ref_id][starting_rec]
