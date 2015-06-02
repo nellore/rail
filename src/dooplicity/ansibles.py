@@ -106,7 +106,7 @@ class S3Ansible(object):
         self._osdevnull = open(os.devnull, 'w')
         self.iface = iface
 
-    def create_bucket(self, bucket):
+    def create_bucket(self, bucket, region='us-east-1'):
         """ Creates a new bucket only if it doesn't already exist.
 
             Raises subprocess.CalledProcessError if a bucket already exists.
@@ -117,17 +117,21 @@ class S3Ansible(object):
             No return value.
         """
         cleaned_url = clean_url(bucket)
+        create_bucket_command = [self.aws, '--profile', self.profile,
+                                    's3', 'mb', cleaned_url, '--region',
+                                    region]
         try:
-            subprocess.check_output(' '.join([self.aws, '--profile',
-                                            self.profile,
-                                            's3 mb', cleaned_url,
-                                            '--region', 'us-east-1']),
+            subprocess.check_output(create_bucket_command,
                                     bufsize=-1,
-                                    shell=True,
                                     stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             if 'BucketAlreadyOwnedByYou' not in e.output:
-                raise
+                raise RuntimeError(('Error "{}" encountered trying to make '
+                                    'bucket with command "{}".').format(
+                                            e.output, ' '.join(
+                                                    create_bucket_command
+                                                )
+                                        ))
 
     def exists(self, path):
         """ Checks whether a file on S3 exists.
@@ -142,12 +146,11 @@ class S3Ansible(object):
         cleaned_url = clean_url(path)
         # Extract filename from URL; everything after terminal slash
         filename = cleaned_url[::-1][:cleaned_url[::-1].index('/')][::-1]
-        aws_command = ' '.join([self.aws, '--profile', self.profile, 
-                                's3 ls', cleaned_url])
+        aws_command = [self.aws, '--profile', self.profile, 
+                        's3', 'ls', cleaned_url]
         aws_process = subprocess.Popen(aws_command,
                                         stdout=subprocess.PIPE,
                                         stderr=self._osdevnull,
-                                        shell=True,
                                         bufsize=-1)
         filename_size = len(filename)
         for line in aws_process.stdout:
@@ -171,13 +174,12 @@ class S3Ansible(object):
         while cleaned_url[-2] == '/':
             cleaned_url = cleaned_url[:-1]
         # Now the URL has just one trailing slash
-        aws_command = ' '.join([self.aws, '--profile', self.profile, 
-                                        's3 ls', cleaned_url])
+        aws_command = [self.aws, '--profile', self.profile, 
+                        's3', 'ls', cleaned_url]
         try:
             list_out = \
                 subprocess.check_output(aws_command,
                                          stderr=self._osdevnull,
-                                         shell=True,
                                          bufsize=-1).strip()
         except subprocess.CalledProcessError:
             # Bucket doesn't exist
@@ -202,14 +204,13 @@ class S3Ansible(object):
         while cleaned_url[-2] == '/':
             cleaned_url = cleaned_url[:-1]
         # Now the URL has just one trailing slash
-        aws_command = ' '.join([self.aws, '--profile', self.profile,
-                                    's3 rm --recursive', cleaned_url])
+        aws_command = [self.aws, '--profile', self.profile,
+                        's3', 'rm', '--recursive', cleaned_url]
         if self.iface:
             rm_process = subprocess.Popen(aws_command,
                                             bufsize=-1,
                                             stdout=subprocess.PIPE,
-                                            stderr=self._osdevnull,
-                                            shell=True)
+                                            stderr=self._osdevnull)
             lim = 70 # Max number of chars to print in delete message
             process_start = time.time()
             printed = False
@@ -250,8 +251,7 @@ class S3Ansible(object):
             try:
                 subprocess.check_call(aws_command, bufsize=-1,
                                             stdout=self._osdevnull,
-                                            stderr=self._osdevnull,
-                                            shell=True)
+                                            stderr=self._osdevnull)
             except subprocess.CalledProcessError:
                 # Bucket does not exist
                 pass
@@ -264,13 +264,12 @@ class S3Ansible(object):
 
             No return value.
         """
-        aws_command = ' '.join([self.aws, '--profile', self.profile,
-                                    's3 cp', os.path.abspath(source),
-                                    clean_url(destination)])
+        aws_command = [self.aws, '--profile', self.profile,
+                        's3', 'cp', os.path.abspath(source),
+                        clean_url(destination)]
         subprocess.check_call(aws_command, bufsize=-1,
                                     stdout=self._osdevnull,
-                                    stderr=sys.stderr,
-                                    shell=True)
+                                    stderr=sys.stderr)
 
     def get(self, source, destination='.'):
         """ Gets a file from S3.
@@ -280,13 +279,11 @@ class S3Ansible(object):
 
             No return value.
         """
-        aws_command = ' '.join([self.aws, '--profile', self.profile,
-                                    's3 cp', clean_url(source),
-                                    os.path.abspath(destination)])
+        aws_command = [self.aws, '--profile', self.profile, 's3', 'cp',
+                        clean_url(source), os.path.abspath(destination)]
         subprocess.check_call(aws_command, bufsize=-1,
-                                    stdout=self._osdevnull,
-                                    stderr=sys.stderr,
-                                    shell=True)
+                                stdout=self._osdevnull,
+                                stderr=sys.stderr)
 
     def expire_prefix(self, prefix, days=4):
         """ Expires object prefix after specified number of days.
@@ -315,14 +312,12 @@ class S3Ansible(object):
                                 'the output directory.') % bucket)
         # Remove bucket name from prefix
         prefix = cleaned_prefix[cleaned_prefix[6:].index('/')+7:]
-        aws_command = ' '.join([self.aws, '--profile', self.profile,
-                                    's3api get-bucket-lifecycle --bucket',
-                                    bucket])
+        aws_command = [self.aws, '--profile', self.profile,
+                        's3api', 'get-bucket-lifecycle', '--bucket', bucket]
         lifecycle_process = subprocess.Popen(aws_command, 
-                                                    bufsize=-1,
-                                                    stderr=subprocess.PIPE,
-                                                    stdout=subprocess.PIPE,
-                                                    shell=True)
+                                                bufsize=-1,
+                                                stderr=subprocess.PIPE,
+                                                stdout=subprocess.PIPE)
         errors = lifecycle_process.stderr.read()
         try:
             rules = json.loads(lifecycle_process.stdout.read())['Rules']
@@ -348,18 +343,20 @@ class S3Ansible(object):
                         'Prefix' : prefix
                     }
                 )
-            aws_command = ' '.join([self.aws, '--profile', self.profile,
-                                        's3api put-bucket-lifecycle --bucket',
-                                        bucket, '--lifecycle-configuration',
-                                                '"{\\"Rules\\":%s}"'
-                                                % json.dumps(rules).replace(
-                                                        '"', '\\"'
-                                                    )
-                                            ])
-            subprocess.check_call(aws_command, bufsize=-1,
-                                        stdout=self._osdevnull,
-                                        stderr=sys.stderr,
-                                        shell=True)
+            aws_command = [self.aws, '--profile', self.profile,
+                            's3api', 'put-bucket-lifecycle', '--bucket',
+                            bucket, '--lifecycle-configuration',
+                                                '{"Rules":%s}'
+                                                % json.dumps(rules)]
+            try:
+                subprocess.check_call(aws_command, bufsize=-1,
+                                            stdout=self._osdevnull,
+                                            stderr=sys.stderr)
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(('Error encountered changing lifecycle'
+                                    'parameters with command "{}".').format(
+                                                ' '.join(aws_command)
+                                            ))
 
 def aws_params_from_json(json_object, prefix=''):
     """ Parses JSON object to generate AWS query string params.
@@ -787,15 +784,16 @@ class WebAnsible(object):
         self._osdevnull = open(os.devnull, 'w')
 
     def exists(self, path):
-        curl_process = subprocess.Popen(' '.join(['curl', '--head', path]),
-                                shell=True, bufsize=-1,
-                                stdout=subprocess.PIPE,
-                                stderr=self._osdevnull)
+        curl_process = subprocess.Popen(
+                                ['curl', '--head', path],
+                                bufsize=-1, stdout=subprocess.PIPE,
+                                stderr=self._osdevnull
+                            )
         curl_err = curl_process.stdout.read()
         return_code = curl_process.wait()
         curl_err = curl_err.lower()
-        if 'resolve host' in curl_err or 'not found' in curl_err \
-            or return_code in [19, 6]:
+        if ('resolve host' in curl_err or 'not found' in curl_err
+             or return_code in [19, 6]):
             # 19 is file doesn't exist; 6 is couldn't resolve host
             return False
         return True

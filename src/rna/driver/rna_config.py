@@ -392,7 +392,7 @@ def ready_engines(rc, base, prep=False):
                             newline=False, carriage_return=True)
     apply_async_with_errors(rc, engines_for_copying, subprocess.check_output,
             'tar xzf {} -C {}'.format(compressed_rail_destination, temp_dir),
-            shell=True)
+            shell=True, executable='/bin/bash')
     print_to_screen('Extracted Rail-RNA on cluster nodes.',
                             newline=True, carriage_return=False)
     # Add Rail to path on every engine

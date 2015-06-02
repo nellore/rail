@@ -207,7 +207,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
                 buckets.add(ab.bucket_from_url(step_data['output']))
         for bucket in buckets:
             try:
-                s3_ansible.create_bucket(bucket)
+                s3_ansible.create_bucket(bucket, region=aws_ansible.region)
             except Exception as e:
                 raise RuntimeError(('Bucket %s already exists on S3. Change '
                                     'affected output directories in job flow '

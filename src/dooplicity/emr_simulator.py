@@ -339,6 +339,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                     'gzip -%d >%s' % 
                                     (gzip_level, task_file),
                                     shell=True, bufsize=-1,
+                                    executable='/bin/bash',
                                     stdin=subprocess.PIPE
                                 )
                             task_streams[task] \
@@ -395,6 +396,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 try:
                     subprocess.check_output(sort_command,
                                               shell=True,
+                                              executable='/bin/bash',
                                               bufsize=-1,
                                               stderr=subprocess.STDOUT)
                 except subprocess.CalledProcessError as e:
@@ -580,6 +582,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                 (gzip_level,
                                  os.path.join(key_dir, str(task_id) + '.gz')),
                                 shell=True, bufsize=-1,
+                                executable='/bin/bash',
                                 stdin=subprocess.PIPE
                             )
                         task_file_streams[key] \
@@ -1176,7 +1179,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             'tar xzf {} -C {}'.format(
                                 destination_path,
                                 os.path.join(temp_dir, archive_dir)),
-                            shell=True
+                            shell=True,
+                            executable='/bin/bash'
                     )
                     apply_async_with_errors(
                             pool, engines_for_copying,

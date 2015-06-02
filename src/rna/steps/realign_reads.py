@@ -166,7 +166,8 @@ def input_files_from_input_stream(input_stream,
         # Sort prefasta and eliminate duplicate lines
         dedup_process_return = subprocess.call(
                 r'''sort %s | uniq >%s'''
-                % (prefasta_filename, deduped_fasta_filename), shell=True
+                % (prefasta_filename, deduped_fasta_filename), shell=True,
+                executable='/bin/bash'
             )
         if dedup_process_return != 0:
             raise RuntimeError(

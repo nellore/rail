@@ -229,9 +229,8 @@ else:
                     subprocess_stdout.close()
                     # Index bam
                     if not output_path.endswith('.unmapped.bam'):
-                        subprocess.check_call('samtools index %s'
-                                                % output_path, 
-                                                shell=True,
+                        subprocess.check_call(['samtools', 'index',
+                                                output_path],
                                                 bufsize=-1)
             last_output_filename = output_filename
             last_output_path = output_path
@@ -285,9 +284,8 @@ else:
                         subprocess_stdout.close()
                         # Index bam
                         if not output_path.endswith('.unmapped.bam'):
-                            subprocess.check_call('samtools index %s'
-                                                    % output_path, 
-                                                    shell=True,
+                            subprocess.check_call(['samtools', 'index',
+                                                    output_path],
                                                     bufsize=-1)
                 '''If --out is a local file, just write directly to that file.
                 Otherwise, write to a temporary file that will later be

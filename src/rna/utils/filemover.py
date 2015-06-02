@@ -11,6 +11,7 @@ import sys
 import subprocess
 import time
 import threading
+import pipes
 
 def add_args(parser):
     """ Sets up arguments related to moving files around. """
@@ -31,11 +32,10 @@ class CommandThread(threading.Thread):
         self.process_return, self.process = None, None
     def run(self):
         self.process \
-            = subprocess.Popen(' '.join(self.command_list),
+            = subprocess.Popen(self.command_list,
                                     bufsize=-1,
                                     stdout=sys.stderr,
-                                    stderr=sys.stderr,
-                                    shell=True)
+                                    stderr=sys.stderr)
         self.process_return = self.process.wait()
 
 class FileMover(object):
@@ -102,7 +102,7 @@ class FileMover(object):
             return os.path.exists(url.to_url())
         elif url.is_curlable:
             curl_process = subprocess.Popen(['curl', '--head', url.to_url()],
-                                shell=True, bufsize=-1, stderr=subprocess.PIPE,
+                                bufsize=-1, stderr=subprocess.PIPE,
                                 stdout=subprocess.PIPE)
             curl_err = curl_process.stderr.read()
             curl_process.wait()
@@ -142,8 +142,8 @@ class FileMover(object):
                 command_list.append(self.s3cred)
             filename = os.path.join(dest, url.to_url().rpartition('/')[2])
             command_list.extend(
-                    ['get', url.to_nonnative_url(), '-', '--force', '>%s'
-                                                                    % filename]
+                    ['get', url.to_nonnative_url(), '-', '--force',
+                        '>' + pipes.quote(filename)]
                 )
             command = ' '.join(command_list)
             tries = 0
