@@ -31,11 +31,12 @@ import group_reads
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 _output_line_count = 0
+_polyA = set(['A'])
 
 def print_readletized_output(seq, sample_indexes,
         reversed_complement_sample_indexes, seq_id, cap_sizes,
         output_stream=sys.stdout, min_readlet_size=8, max_readlet_size=25,
-        readlet_interval=5, verbose=False):
+        readlet_interval=5, verbose=False, no_polyA=False):
     """ Readletizes the unique read sequence seq.
 
         The function divides a sequence seq into several overlapping segments,
@@ -67,6 +68,7 @@ def print_readletized_output(seq, sample_indexes,
         report_multiplier: if verbose is True, the line number of a read or its 
             first readlet written to stderr increases exponentially with base
             report_multiplier.
+        no_polyA: kill readlets that are all As
 
         No return value.
     """
@@ -100,25 +102,29 @@ def print_readletized_output(seq, sample_indexes,
                         _reversed_complement_translation_table
                     )
         if readlet_seq < reversed_complement_readlet_seq:
-            to_write.append('%s\t%s\x1e%d\x1e%d' % (readlet_seq, seq_id 
-                                                    + '+', 0,
-                                                    seq_size - cap_size))
+            if not no_polyA or set(readlet_seq) != _polyA:
+                to_write.append('%s\t%s\x1e%d\x1e%d' % (readlet_seq, seq_id 
+                                                        + '+', 0,
+                                                        seq_size - cap_size))
         else:
-            to_write.append('%s\t%s\x1e%d\x1e%d' \
-                                % (reversed_complement_readlet_seq,
-                                    seq_id + '-', 0, seq_size - cap_size))
+            if not no_polyA or set(reversed_complement_readlet_seq) != _polyA:
+                to_write.append('%s\t%s\x1e%d\x1e%d' \
+                                    % (reversed_complement_readlet_seq,
+                                        seq_id + '-', 0, seq_size - cap_size))
         readlet_seq = seq[-cap_size:]
         reversed_complement_readlet_seq = readlet_seq[::-1].translate(
                         _reversed_complement_translation_table
                     )
         if readlet_seq < reversed_complement_readlet_seq:
-            to_write.append('%s\t%s\x1e%d\x1e%d' % (readlet_seq,
-                                                seq_id + '+',
-                                                seq_size - cap_size, 0))
+            if not no_polyA or set(readlet_seq) != _polyA:
+                to_write.append('%s\t%s\x1e%d\x1e%d' % (readlet_seq,
+                                                    seq_id + '+',
+                                                    seq_size - cap_size, 0))
         else:
-            to_write.append('%s\t%s\x1e%d\x1e%d' \
-                                % (reversed_complement_readlet_seq,
-                                    seq_id + '-', seq_size - cap_size, 0))
+            if not no_polyA or set(reversed_complement_readlet_seq) != _polyA:
+                to_write.append('%s\t%s\x1e%d\x1e%d' \
+                                    % (reversed_complement_readlet_seq,
+                                        seq_id + '-', seq_size - cap_size, 0))
     # Add noncapping readlets
     for j in xrange(readlet_interval, seq_size - max_readlet_size,
                         readlet_interval):
@@ -127,28 +133,34 @@ def print_readletized_output(seq, sample_indexes,
                         _reversed_complement_translation_table
                     )
         if readlet_seq < reversed_complement_readlet_seq:
-            to_write.append('%s\t%s\x1e%d\x1e%d' % (readlet_seq,
-                                                seq_id + '+', j, 
-                                                seq_size - j
-                                                    - max_readlet_size))
+            if not no_polyA or set(readlet_seq) != _polyA:
+                to_write.append('%s\t%s\x1e%d\x1e%d' % (readlet_seq,
+                                                    seq_id + '+', j, 
+                                                    seq_size - j
+                                                        - max_readlet_size))
         else:
-            to_write.append('%s\t%s\x1e%d\x1e%d' \
-                                % (reversed_complement_readlet_seq,
-                                    seq_id + '-', j, 
-                                    seq_size - j - max_readlet_size))
+            if not no_polyA or set(reversed_complement_readlet_seq) != _polyA:
+                to_write.append('%s\t%s\x1e%d\x1e%d' \
+                                    % (reversed_complement_readlet_seq,
+                                        seq_id + '-', j, 
+                                        seq_size - j - max_readlet_size))
     # Add additional info to first readlet in to_write
-    to_write[0] = '\x1e'.join([to_write[0], seq,
-                    '\x1f'.join(sample_indexes.keys()),
-                    '\x1f'.join(
-                        reversed_complement_sample_indexes.keys()
-                    ),
-                    '\x1f'.join(
-                        [str(count) for count in sample_indexes.values()]
-                    ),
-                    '\x1f'.join(
-                        [str(count) for count
-                            in reversed_complement_sample_indexes.values()]
-                    )])
+    try:
+        to_write[0] = '\x1e'.join([to_write[0], seq,
+                        '\x1f'.join(sample_indexes.keys()),
+                        '\x1f'.join(
+                            reversed_complement_sample_indexes.keys()
+                        ),
+                        '\x1f'.join(
+                            [str(count) for count in sample_indexes.values()]
+                        ),
+                        '\x1f'.join(
+                            [str(count) for count
+                                in reversed_complement_sample_indexes.values()]
+                        )])
+    except IndexError:
+        # No readlets because polyAs were present!
+        return
     if verbose:
         print >>sys.stderr, 'First readlet from read %d: %s' \
             % (i + 1, to_write[0])
@@ -165,7 +177,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
         bin_size=10000, report_multiplier=1.2, min_exon_size=8,
         min_readlet_size=8, max_readlet_size=25,
         readlet_interval=5, drop_deletions=False, output_bam_by_chr=False,
-        tie_margin=0):
+        tie_margin=0, no_realign=False, no_polyA=False):
     """ Prints end-to-end alignments and selects reads to be realigned.
 
         input_stream: where to retrieve Bowtie's SAM output, typically a
@@ -216,13 +228,135 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
         output_bam_by_chr: True iff final BAMs are to be output by chromosome
         tie_margin: allowed score difference per 100 bases among ties in
             max score. For example, 150 and 144 are tied alignment scores
-            for a 100-bp read when --tie-margin is 6.
+            for a 100-bp read when --tie-margin is 6
+        no_realign: True iff job flow does not need more than readlets: this
+            usually means only a transcript index is being constructed
+        no_polyA: kill readlets that are all As
 
         No return value.
     """
     global _output_line_count
     next_report_line = 0
     i = 0
+    # Shortcut if no realignment is to be done in job flow
+    if other_stream and no_realign:
+        # First-pass alignment
+        if verbose:
+            print >>sys.stderr, ('Processing alignments; suppressing some '
+                                 'output.')
+        readletized_index = 0
+        other_xstream = xstream(other_stream, 1)
+        for (qname,), xpartition in xstream(input_stream, 1):
+            is_reverse, _, qname = qname.partition('\x1d')
+            is_reverse = int(is_reverse)
+            _, other_xpartition = other_xstream.next()
+            sample_index = manifest_object.label_to_index[
+                        qname.rpartition('\x1d')[2]
+                    ]
+            # Handle primary alignment
+            rest_of_line = xpartition.next()
+            i += 1
+            flag = int(rest_of_line[0])
+            if is_reverse:
+                true_flag = flag ^ 16
+            else:
+                true_flag = flag
+            cigar = rest_of_line[4]
+            rname = rest_of_line[1]
+            pos = int(rest_of_line[2])
+            seq, qual = rest_of_line[8], rest_of_line[9]
+            if verbose and next_report_line == i:
+                print >>sys.stderr, \
+                    'SAM output record %d: rdname="%s", flag=%d' \
+                    % (i, qname, true_flag)
+                next_report_line = max(int(next_report_line
+                    * report_multiplier), next_report_line + 1)
+            if flag & 4:
+                continue
+            multiread = [(qname,) + rest_of_line] + \
+                [(qname,) + next_line for next_line in xpartition]
+            scores = [
+                    field[5:] for field in multiread[0]
+                    if field[:5] == 'XS:i:'
+                ] + [
+                    field[5:] for field in multiread[0]
+                    if field[:5] == 'AS:i:'
+                ]
+            # Note: needs to be changed to accommodate --tie-margin
+            # extra keywords for grepping: tie margin tie_margin break
+            tie_present = (len(scores) == 2) and (scores[0] == scores[1])
+            clip_present = 'S' in cigar
+            exact_match = 'NM:i:0' in multiread[0]
+            alignment_reversed = [
+                                    int(alignment[1]) & 16
+                                    for alignment in multiread
+                                ]
+            if k_value == 1 and exact_match and not clip_present:
+                continue
+            reversed_complement_seq = seq[::-1].translate(
+                _reversed_complement_translation_table
+            )
+            if seq < reversed_complement_seq:
+                seq_to_print = seq
+                qual_to_print = qual
+            else:
+                seq_to_print = reversed_complement_seq
+                qual_to_print = qual[::-1]
+            if not (exact_match and not clip_present):
+                # Print output
+                split_cigar = re.split(r'([MINDS])', cigar)[:-1]
+                try:
+                    if ((split_cigar[1] == 'S'
+                            and int(split_cigar[0]) >= min_exon_size) or
+                        (split_cigar[-1] == 'S'
+                            and int(split_cigar[-2]) >= min_exon_size)):
+                        search_for_introns = True
+                    else:
+                        search_for_introns = False
+                except IndexError:
+                    search_for_introns = False
+                if search_for_introns:
+                    sample_indexes, reversed_complement_sample_indexes = (
+                            defaultdict(int), defaultdict(int)
+                        )
+                    try:
+                        for current_is_reverse, current_qname, current_qual \
+                            in other_xpartition:
+                            if current_is_reverse == '1':
+                                reversed_complement_sample_indexes[
+                                        manifest_object.label_to_index[
+                                            current_qname.rpartition('\x1d')[2]
+                                        ]
+                                    ] += 1
+                            else:
+                                sample_indexes[
+                                        manifest_object.label_to_index[
+                                            current_qname.rpartition('\x1d')[2]
+                                        ]
+                                    ] += 1
+                    except ValueError:
+                        # No other reads
+                        pass
+                    if is_reverse:
+                        reversed_complement_sample_indexes[sample_index] += 1
+                    else:
+                        sample_indexes[sample_index] += 1
+                    print_readletized_output(
+                            seq=seq_to_print,
+                            sample_indexes=sample_indexes,
+                            reversed_complement_sample_indexes=\
+                                reversed_complement_sample_indexes,
+                            seq_id=(':'.join([task_partition,
+                                                str(readletized_index)])),
+                            cap_sizes=cap_sizes,
+                            output_stream=output_stream,
+                            min_readlet_size=min_readlet_size,
+                            max_readlet_size=max_readlet_size,
+                            readlet_interval=readlet_interval,
+                            verbose=(verbose and next_report_line == i),
+                            no_polyA=no_polyA)
+                    readletized_index += 1
+        return
     alignment_printer = AlignmentPrinter(
             manifest_object,
             reference_index,
@@ -442,7 +576,8 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                             min_readlet_size=min_readlet_size,
                             max_readlet_size=max_readlet_size,
                             readlet_interval=readlet_interval,
-                            verbose=(verbose and next_report_line == i))
+                            verbose=(verbose and next_report_line == i),
+                            no_polyA=no_polyA)
                     readletized_index += 1
                 else:
                     try:
@@ -583,7 +718,8 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
         k_value=1, bowtie_index_base='genome', bin_size=10000,
         manifest_file='manifest', exon_differentials=True,
         exon_intervals=False, gzip_level=3, min_exon_size=9,
-        index_count=1, output_bam_by_chr=False, tie_margin=0):
+        index_count=1, output_bam_by_chr=False, tie_margin=0,
+        no_realign=False, no_polyA=False):
     """ Emits output specified in align_reads.py by processing Bowtie 2 output.
 
         This script containing this function is invoked twice to process each
@@ -640,7 +776,10 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
         output_bam_by_chr: True iff final BAM output should be by chr
         tie_margin: allowed score difference per 100 bases among ties in
             max score. For example, 150 and 144 are tied alignment scores
-            for a 100-bp read when --tie-margin is 6.
+            for a 100-bp read when --tie-margin is 6
+        no_realign: True iff job flow does not need more than readlets: this
+            usually means only a transcript index is being constructed
+        no_polyA: kill readlets that are all As
     """
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
@@ -683,7 +822,9 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
                     readlet_interval=readlet_interval,
                     drop_deletions=drop_deletions,
                     output_bam_by_chr=output_bam_by_chr,
-                    tie_margin=tie_margin
+                    tie_margin=tie_margin,
+                    no_realign=no_realign,
+                    no_polyA=no_polyA
                 )
         print >>sys.stderr, (
             'align_reads_delegate.py reports %d output lines on first pass.'
@@ -781,6 +922,15 @@ if __name__ == '__main__':
     parser.add_argument('--gzip-level', type=int, required=False,
         default=3,
         help='Level of gzip compression to use for temporary files')
+    parser.add_argument('--no-realign', action='store_const',
+        const=True,
+        default=False, 
+        help=('Suppresses some output and does not perform second-pass '
+              'alignment if unnecessary for job flow'))
+    parser.add_argument('--no-polyA', action='store_const',
+        const=True,
+        default=False, 
+        help='Disallows any readlet that is a string of A nucleotides')
 
     # Add command-line arguments for dependencies
     partition.add_args(parser)
@@ -815,7 +965,9 @@ if __name__ == '__main__' and not args.test:
         gzip_level=args.gzip_level,
         index_count=args.index_count,
         output_bam_by_chr=args.output_bam_by_chr,
-        tie_margin=args.tie_margin)
+        tie_margin=args.tie_margin,
+        no_realign=args.no_realign,
+        no_polyA=args.no_polyA)
 
 elif __name__ == '__main__':
     # Test units
@@ -843,14 +995,19 @@ elif __name__ == '__main__':
                      'CAGAGTGCCGCAATGACGTGCGCCAAAGCGGACAAAGCACCATGACAAGT'
                      'ACACAGGTGACAGTGACAAGACAGAGGTGACACAGAGAAAGtGGGTGTGA',
                      'ATCGATTAAGCTATAACAGATAACATAGACATTGCGCCCATAATAGATAA'
-                     'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC']
+                     'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC',
+                     'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+                     'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC',
+                     'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+                     'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA']
             sample_indexes = [
                     {'1' : 2}, {'1' : 2, '2' : 3}, {'1' : 4, '3' : 5},
-                    {'1' : 5}
+                    {'1' : 5}, {'1' : 5}, {'1' : 5}
                 ]
             reversed_complement_sample_indexes = [
                     {'1' : 7}, {'1' : 2, '2' : 2, '3' : 3},
                     {'1' : 8, '2' : 1, '3' : 6}, {'1' : 1},
+                    {'1' : 1}, {'1' : 1}
                 ]
             cap_sizes = []
             cap_size = 25
@@ -863,14 +1020,14 @@ elif __name__ == '__main__':
                 # Always have a start or end read of length max_readlet_size
                 cap_sizes.append(50)
             with open(self.output_file, 'w') as output_stream:
-                for i in xrange(4):
+                for i in xrange(6):
                     print_readletized_output(
                             input_seqs[i], sample_indexes[i],
                             reversed_complement_sample_indexes[i],
                             '0:' + str(i), cap_sizes,
                             output_stream=output_stream,
                             min_readlet_size=25, readlet_interval=5,
-                            max_readlet_size=50
+                            max_readlet_size=50, no_polyA=True
                         )
             collected_readlets = []
             with open(self.output_file) as processed_stream:
@@ -888,8 +1045,10 @@ elif __name__ == '__main__':
                                 for i in xrange(4, 0, -1)]
                             for info in read_info if len(info) > 3]
             sample_indexes, reversed_complement_sample_indexes \
-                = [{} for i in xrange(4)], [{} for i in xrange(4)]
-            for i in xrange(4):
+                = [{} for i in xrange(6)], [{} for i in xrange(6)]
+            # All-A read should have been skipped completely
+            self.assertEquals(len(read_info), 5)
+            for i in xrange(5):
                 for j in xrange(len(read_info[i][1])):
                     sample_indexes[i][read_info[i][1][j]] \
                         = int(read_info[i][3][j])
@@ -918,6 +1077,18 @@ elif __name__ == '__main__':
                 ] in read_info)
             self.assertTrue([
                     'ATCGATTAAGCTATAACAGATAACATAGACATTGCGCCCATAATAGATAA'
+                    'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC',
+                    sample_indexes[3],
+                    reversed_complement_sample_indexes[3]
+                ] in read_info)
+            self.assertTrue([
+                    'ATCGATTAAGCTATAACAGATAACATAGACATTGCGCCCATAATAGATAA'
+                    'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC',
+                    sample_indexes[3],
+                    reversed_complement_sample_indexes[3]
+                ] in read_info)
+            self.assertTrue([
+                    'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
                     'CTGACACCTGACCAGTGCCAGATGACCAGTGCCAGATGGACGACAGTAGC',
                     sample_indexes[3],
                     reversed_complement_sample_indexes[3]
@@ -982,6 +1153,9 @@ elif __name__ == '__main__':
                                     '\x1e1\x1e1\x1e1\x1e1'
                                 ] in collected_readlets
                             )
+            # Ensure no polyA readlets
+            self.assertEquals([readlet for readlet in collected_readlets
+                                if set(readlet[0]) == _polyA], [])
 
         def tearDown(self):
             # Kill temporary directory

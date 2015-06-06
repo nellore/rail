@@ -16,7 +16,7 @@ Input (read from stdin)
 Tab-delimited input tuple columns:
 1. Readlet sequence or its reversed complement, whichever is first in
     alphabetical order
-2. '\x1d'-separated list of [read sequence ID + ('-' if readlet sequence is
+2.  read sequence ID + ('-' if readlet sequence is
     reverse-complemented; else '+') + '\x1e' + displacement of readlet's 5' end
     from read's 5' end + '\x1e' + displacement of readlet's 3' end from read's
     3' end (+, for EXACTLY one readlet of a read sequence, '\x1e' +
@@ -95,7 +95,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         Tab-delimited input tuple columns:
         1. Readlet sequence or its reversed complement, whichever is first in
             alphabetical order
-        2. '\x1d'-separated list of [read sequence ID + ('-' if readlet
+        2. read sequence ID + ('-' if readlet
             sequence is reverse-complemented; else '+') + '\x1e' + displacement
             of readlet's 5' end from read's 5' end + '\x1e' + displacement of
             readlet's 3' end from read's 3' end (+, for EXACTLY one readlet of
@@ -108,7 +108,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
             instances of the read sequence for each respective sample in list
             A) + '\x1e' + (an '\x1f'-separated list of the number of instances
             of the read sequence's reversed complement for each respective
-            sample in list B)]. Here, a read sequence ID takes the form X:Y,
+            sample in list B). Here, a read sequence ID takes the form X:Y,
             where X is the "mapred_task_partition" environment variable -- a
             unique index for a task within a job -- and Y is the index of the
             read sequence relative to the beginning of the input stream.
@@ -173,11 +173,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
                 in enumerate(xstream(input_stream, 1)):
                 print >>readlet_stream, \
                     '\t'.join([str(seq_count), seq, 'I'*len(seq)])
-                qname_stream.write(next(iter(xpartition))[0])
+                print >>qname_stream, next(iter(xpartition))[0]
                 for (qname,) in xpartition:
                     _input_line_count += 1
-                    qname_stream.write('\x1d' + qname)
-                qname_stream.write('\n')
+                    print >>qname_stream, qname
+                # Separate qnames with single + character
+                print >>qname_stream, '+'
     input_command = 'gzip -cd %s' % readlet_file
     bowtie_command = ' '.join([bowtie_exe, bowtie_args,
         '-S -t --sam-nohead --mm', bowtie_index_base, '--12 -'])

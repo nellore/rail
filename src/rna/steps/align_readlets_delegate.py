@@ -20,28 +20,6 @@ site.addsitedir(base_path)
 
 from dooplicity.tools import xstream, xopen
 
-import re
-_expression = re.compile('\x1d')
-
-def itersplit(a_string):
-    """ Generator for splitting a string between '\x1d's.
-
-        Based on http://stackoverflow.com/questions/3862010/
-        is-there-a-generator-version-of-string-split-in-python
-
-        a_string: string
-
-        Yield value: next part of string between \x1ds.
-    """
-    pos = 0
-    while True:
-        next = _expression.search(a_string, pos)
-        if not next:
-            yield a_string[pos:]
-            break
-        yield a_string[pos:next.start()]
-        pos = next.end()
-
 def go(qname_stream, output_stream=sys.stdout, input_stream=sys.stdin,
         verbose=False, report_multiplier=1.2):
     """ Emits readlet alignments.
@@ -99,7 +77,6 @@ def go(qname_stream, output_stream=sys.stdout, input_stream=sys.stdin,
         '''If the next qname doesn't match the last qname or there are no
         more lines, all of a multireadlet's alignments have been
         collected.'''
-        reads = itersplit(qname_stream.readline().rstrip())
         if not flag & 4:
             '''Last readlet has at least one alignment; print all
             alignments for each read from which readlet sequence is
@@ -113,7 +90,8 @@ def go(qname_stream, output_stream=sys.stdout, input_stream=sys.stdin,
                                 )
             rnames = '\x1f'.join(rnames)
             poses = '\x1f'.join(poses)
-            for read in reads:
+            read = qname_stream.readline().strip()
+            while read != '+':
                 read_id, _, read_rest = read.partition('\x1e')
                 if read_id[-1] == '-':
                     current_flags = reverse_flags
@@ -123,16 +101,19 @@ def go(qname_stream, output_stream=sys.stdout, input_stream=sys.stdin,
                     (read_id[:-1], read_rest, rnames,
                         current_flags, poses)
                 output_line_count += 1
+                read = qname_stream.readline().strip()
         else:
             '''Readlet had no reported alignments; print ONLY when readlet
             contains general info about read.'''
-            for read in reads:
+            read = qname_stream.readline().strip()
+            while read != '+':
                 read_id, _, read_rest = read.partition('\x1e')
                 if len(read_rest.split('\x1e')) > 2:
                     print >>output_stream, \
                         '%s\t%s\t\x1c\t\x1c\t\x1c' % (read_id[:-1],
                                                         read_rest)
                 output_line_count += 1
+                read = qname_stream.readline().strip()
     output_stream.flush()
     print >>sys.stderr, ('align_readlets_delegate.py reports %d output lines.'
                             % output_line_count)

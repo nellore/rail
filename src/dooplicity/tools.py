@@ -225,10 +225,7 @@ def xopen(gzipped, *args):
             except IndexError:
                 mode = 'rb'
             if 'r' in mode:
-                gzip_process = subprocess.Popen(['gzip', '-cd', args[0]],
-                                                    bufsize=-1,
-                                                    stdout=subprocess.PIPE)
-                fh = gzip_process.stdout
+                fh = gzip.open(*args)
             elif 'w' in mode or 'a' in mode:
                 try:
                     compresslevel = int(args[2])

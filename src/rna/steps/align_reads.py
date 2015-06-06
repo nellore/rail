@@ -116,7 +116,7 @@ Tab-delimited output tuple columns (unmapped):
 Tab-delimited output tuple columns (readletized)
 1. Readlet sequence or its reversed complement, whichever is first in
     alphabetical order
-2. '\x1d'-separated list of [read sequence ID + ('-' if readlet sequence is
+2. read sequence ID + ('-' if readlet sequence is
     reverse-complemented; else '+') + '\x1e' + displacement of readlet's 5' end
     from read's 5' end + '\x1e' + displacement of readlet's 3' end from read's
     3' end (+, for EXACTLY one readlet of a read sequence, '\x1e' +
@@ -176,7 +176,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     min_exon_size=8, min_readlet_size=15, max_readlet_size=25,
     readlet_interval=12, capping_multiplier=1.5, drop_deletions=False,
     gzip_level=3, scratch=None, index_count=1, output_bam_by_chr=False,
-    tie_margin=0):
+    tie_margin=0, no_realign=False, no_polyA=False):
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
@@ -295,7 +295,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         Tab-delimited output tuple columns (readletized):
         1. Readlet sequence or its reversed complement, whichever is first in
             alphabetical order
-        2. '\x1d'-separated list of [read sequence ID + ('-' if readlet
+        2. read sequence ID + ('-' if readlet
             sequence is reverse-complemented; else '+') + '\x1e' + displacement
             of readlet's 5' end from read's 5' end + '\x1e' + displacement of
             readlet's 3' end from read's 3' end (+, for EXACTLY one readlet of
@@ -363,6 +363,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         tie_margin: allowed score difference per 100 bases among ties in
             max score. For example, 150 and 144 are tied alignment scores
             for a 100-bp read when --tie-margin is 6.
+        no_realign: True iff job flow does not need more than readlets: this
+            usually means only a transcript index is being constructed
+        no_polyA: kill noncapping readlets that are all As
 
         No return value.
     """
@@ -448,6 +451,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                      '--min-exon-size {min_exon_size} '
                      '--index-count {index_count} '
                      '--tie-margin {tie_margin} '
+                     '{no_realign} '
+                     '{no_polyA} '
                      '{output_bam_by_chr}').format(
                         task_partition=task_partition,
                         other_reads=other_reads_file,
@@ -472,6 +477,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         min_exon_size=min_exon_size,
                         index_count=index_count,
                         tie_margin=tie_margin,
+                        no_realign=('--no-realign' if no_realign else ''),
+                        no_polyA=('--no-polyA' if no_polyA else ''),
                         output_bam_by_chr=('--output-bam-by-chr'
                                             if output_bam_by_chr
                                             else '')
@@ -492,67 +499,72 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                            'output; exitlevel was %d.' % return_code)
     os.remove(align_file)
     os.remove(other_reads_file)
-    input_command = 'gzip -cd %s' % second_pass_file
-    bowtie_command = ' '.join([bowtie2_exe,
-        bowtie2_args if bowtie2_args is not None else '',
-        ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12 -'])
-    delegate_command = ''.join(
-                [sys.executable, ' ', os.path.realpath(__file__)[:-3],
-                    ('_delegate.py --task-partition {task_partition} '
-                     '--min-readlet-size {min_readlet_size} {drop_deletions} '
-                     '--max-readlet-size {max_readlet_size} '
-                     '--readlet-interval {readlet_interval} '
-                     '--capping-multiplier {capping_multiplier:012f} '
-                     '{verbose} --report-multiplier {report_multiplier:012f} '
-                     '--k-value {k_value} '
-                     '--bowtie-idx {bowtie_index_base} '
-                     '--partition-length {bin_size} '
-                     '--manifest {manifest_file} '
-                     '{exon_differentials} {exon_intervals} '
-                     '--gzip-level {gzip_level} '
-                     '--min-exon-size {min_exon_size} ' 
-                     '--index-count {index_count} '
-                     '--tie-margin {tie_margin} '
-                     '{output_bam_by_chr}').format(
-                        task_partition=task_partition,
-                        min_readlet_size=min_readlet_size,
-                        drop_deletions=('--drop-deletions' if drop_deletions
-                                            else ''),
-                        readlet_interval=readlet_interval,
-                        max_readlet_size=max_readlet_size,
-                        capping_multiplier=capping_multiplier,
-                        verbose=('--verbose' if verbose else ''),
-                        report_multiplier=report_multiplier,
-                        k_value=k_value,
-                        bowtie_index_base=bowtie_index_base,
-                        bin_size=bin_size,
-                        manifest_file=manifest_file,
-                        exon_differentials=('--exon-differentials'
-                                            if exon_differentials else ''),
-                        exon_intervals=('--exon-intervals'
-                                        if exon_intervals else ''),
-                        gzip_level=gzip_level,
-                        min_exon_size=min_exon_size,
-                        index_count=index_count,
-                        tie_margin=tie_margin,
-                        output_bam_by_chr=('--output-bam-by-chr'
-                                            if output_bam_by_chr
-                                            else '')
-                     )]
-            )
-    full_command = ' | '.join([input_command, 
-                                bowtie_command, delegate_command])
-    print >>sys.stderr, \
-        'Starting second-pass Bowtie 2 with command: ' + full_command
-    bowtie_process = subprocess.Popen(' '.join(
-                    ['set -exo pipefail;', full_command]
-                ),
-            bufsize=-1, stdout=sys.stdout, stderr=sys.stderr, shell=True,
-            executable='/bin/bash')
-    return_code = bowtie_process.wait()
-    if return_code:
-        raise RuntimeError('Error occurred while reading second-pass Bowtie 2 '
-                           'output; exitlevel was %d.' % return_code)
+    if not no_realign:
+        input_command = 'gzip -cd %s' % second_pass_file
+        bowtie_command = ' '.join([bowtie2_exe,
+            bowtie2_args if bowtie2_args is not None else '',
+            ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12 -'])
+        delegate_command = ''.join(
+                    [sys.executable, ' ', os.path.realpath(__file__)[:-3],
+                        ('_delegate.py --task-partition {task_partition} '
+                         '--min-readlet-size {min_readlet_size} '
+                         '{drop_deletions} '
+                         '--max-readlet-size {max_readlet_size} '
+                         '--readlet-interval {readlet_interval} '
+                         '--capping-multiplier {capping_multiplier:012f} '
+                         '{verbose} '
+                         '--report-multiplier {report_multiplier:012f} '
+                         '--k-value {k_value} '
+                         '--bowtie-idx {bowtie_index_base} '
+                         '--partition-length {bin_size} '
+                         '--manifest {manifest_file} '
+                         '{exon_differentials} {exon_intervals} '
+                         '--gzip-level {gzip_level} '
+                         '--min-exon-size {min_exon_size} ' 
+                         '--index-count {index_count} '
+                         '--tie-margin {tie_margin} '
+                         '{output_bam_by_chr}').format(
+                            task_partition=task_partition,
+                            min_readlet_size=min_readlet_size,
+                            drop_deletions=('--drop-deletions'
+                                                if drop_deletions else ''),
+                            readlet_interval=readlet_interval,
+                            max_readlet_size=max_readlet_size,
+                            capping_multiplier=capping_multiplier,
+                            verbose=('--verbose' if verbose else ''),
+                            report_multiplier=report_multiplier,
+                            k_value=k_value,
+                            bowtie_index_base=bowtie_index_base,
+                            bin_size=bin_size,
+                            manifest_file=manifest_file,
+                            exon_differentials=('--exon-differentials'
+                                                if exon_differentials else ''),
+                            exon_intervals=('--exon-intervals'
+                                            if exon_intervals else ''),
+                            gzip_level=gzip_level,
+                            min_exon_size=min_exon_size,
+                            index_count=index_count,
+                            tie_margin=tie_margin,
+                            output_bam_by_chr=('--output-bam-by-chr'
+                                                if output_bam_by_chr
+                                                else '')
+                         )]
+                )
+        full_command = ' | '.join([input_command, 
+                                    bowtie_command, delegate_command])
+        sys.exit(0)
+        print >>sys.stderr, \
+            'Starting second-pass Bowtie 2 with command: ' + full_command
+        bowtie_process = subprocess.Popen(' '.join(
+                        ['set -exo pipefail;', full_command]
+                    ),
+                bufsize=-1, stdout=sys.stdout, stderr=sys.stderr, shell=True,
+                executable='/bin/bash')
+        return_code = bowtie_process.wait()
+        if return_code:
+            raise RuntimeError('Error occurred while reading second-pass '
+                               'Bowtie 2 output; exitlevel was %d.'
+                                % return_code)
     sys.stdout.flush()
 
 if __name__ == '__main__':
@@ -609,6 +621,15 @@ if __name__ == '__main__':
     parser.add_argument('--gzip-level', type=int, required=False,
         default=3,
         help='Level of gzip compression to use for temporary files')
+    parser.add_argument('--no-realign', action='store_const',
+        const=True,
+        default=False, 
+        help=('Suppresses some output and does not perform second-pass '
+              'alignment if unnecessary for job flow'))
+    parser.add_argument('--no-polyA', action='store_const',
+        const=True,
+        default=False, 
+        help='Disallows any capping readlet that is a string of A nucleotides')
     
     # Add command-line arguments for dependencies
     partition.add_args(parser)
@@ -662,7 +683,9 @@ if __name__ == '__main__':
         scratch=args.scratch,
         index_count=args.index_count,
         output_bam_by_chr=args.output_bam_by_chr,
-        tie_margin=args.tie_margin)
+        tie_margin=args.tie_margin,
+        no_realign=args.no_realign,
+        no_polyA=args.no_polyA)
 
     print >>sys.stderr, 'DONE with align_reads.py; in=%d; ' \
         'time=%0.3f s' % (_input_line_count, time.time() - start_time)
