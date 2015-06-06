@@ -3813,7 +3813,7 @@ class RailRnaAlign(object):
                 'inputs' : [input_dir],
                 'no_input_prefix' : True,
                 'output' : 'align_reads',
-                'tasks' : ('%d,' % (base.sample_count * 12))
+                'tasks' : ('%d,' % (base.sample_count * 3))
                                 if elastic else '1x',
                 'partition' : '-k1,1',
                 'multiple_outputs' : True,
@@ -3846,7 +3846,7 @@ class RailRnaAlign(object):
                                                 ),
                 'inputs' : [path_join(elastic, 'align_reads', 'readletized')],
                 'output' : 'align_readlets',
-                'tasks' :  ('%d,' % (base.sample_count * 12))
+                'tasks' :  ('%d,' % (base.sample_count * 3))
                                 if elastic else '1x',
                 'partition' : '-k1,1',
                 'extra_args' : [
@@ -3879,7 +3879,7 @@ class RailRnaAlign(object):
                                             ),
                 'inputs' : ['align_readlets'],
                 'output' : 'intron_search',
-                'tasks' : ('%d,' % (base.sample_count * 12))
+                'tasks' : ('%d,' % (base.sample_count * 3))
                                     if elastic else '1x',
                 'partition' : '-k1,1',
                 'extra_args' : [
