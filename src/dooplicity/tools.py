@@ -225,6 +225,9 @@ def xopen(gzipped, *args):
             except IndexError:
                 mode = 'rb'
             if 'r' in mode:
+                # Be forgiving of gzips that end unexpectedly
+                old_read_eof = gzip.GzipFile._read_eof
+                gzip.GzipFile._read_eof = lambda *args, **kwargs: None
                 fh = gzip.open(*args)
             elif 'w' in mode or 'a' in mode:
                 try:
@@ -254,6 +257,8 @@ def xopen(gzipped, *args):
             gzip_process.wait()
         if 'output_stream' in locals():
             output_stream.close()
+        if 'old_read_eof' in locals():
+            gzip.GzipFile._read_eof = old_read_eof
 
 def make_temp_dir(scratch=None):
     """ Creates temporary directory in some scratch directory.
