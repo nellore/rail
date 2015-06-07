@@ -3676,6 +3676,7 @@ class RailRnaAlign(object):
         )
         algo_parser.add_argument(
             '--library-size', type=int, required=False,
+            metavar='<int>',
             default=40,
             help=('Library size (in millions of reads) to which every '
                   'sample\'s coverage is normalized when computing '
