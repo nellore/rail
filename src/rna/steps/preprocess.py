@@ -317,7 +317,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             # Single-end reads
             source_dict[(Url(tokens[0]),)] = (tokens[-1],)
         elif token_count == 5:
-            # token_count == 5
+            # Paired-end reads
             source_dict[(Url(tokens[0]), Url(tokens[2]))] = (tokens[-1],)
         else:
             # Not a valid line, but continue for robustness
@@ -508,7 +508,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                                         sources[1]
                                                     )
                                         )
-                            except (AssertionError, RuntimeError):
+                            except (AssertionError,
+                                    IndexError, RuntimeError) as e:
                                 if skip_bad_records:
                                     print >>sys.stderr, ('Error "%s" '
                                             'encountered; skipping bad record.'
@@ -547,7 +548,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                             'match length of quality string '
                                             'at line %d of file "%s".'
                                         ) % (line_numbers[i], sources[i])
-                                except AssertionError as e:
+                                except (AssertionError, IndexError) as e:
                                     if skip_bad_records:
                                         print >>sys.stderr, (
                                                 'Error "%s" encountered; '
@@ -615,7 +616,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                             line_numbers[i],
                                             sources[i]
                                         )
-                                except (RuntimeError, AssertionError) as e:
+                                except (IndexError, 
+                                        RuntimeError, AssertionError) as e:
                                     if skip_bad_records:
                                         print >>sys.stderr, (
                                                 'Error "%s" encountered; '

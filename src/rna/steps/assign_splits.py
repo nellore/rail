@@ -92,6 +92,7 @@ if output_url.is_local:
     # Set up destination directory
     try: os.makedirs(output_url.to_url())
     except: pass
+    output_path = os.path.join(args.out, args.filename)
 else:
     mover = filemover.FileMover(args=args)
     # Set up temporary destination
@@ -99,13 +100,14 @@ else:
     from dooplicity.tools import make_temp_dir
     temp_dir_path = make_temp_dir(args.scratch)
     register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
+    output_path = os.path.join(temp_dir_path, args.filename)
 samples = {}
+saved = []
 for input_line_count, line in enumerate(sys.stdin):
     tokens = line.strip().split('\t')
     token_count = len(tokens)
     if not (token_count > 4 and tokens[0] == '#!splitload'):
-        sys.stdout.write(line)
-        output_line_count += 1
+        saved.append('\t'.join(tokens[1:]))
         continue
     assert token_count in [6, 8], (
             'Line "{}" of input has {} fields, but 6 or 8 are expected.'
@@ -122,62 +124,66 @@ critical_sample_values = [
             (critical_value, True) for critical_value in 
             running_sum([sample_data[0] for sample_data in samples.values()])
         ]
-total_reads = critical_sample_values[-1][0]
-reads_per_file = int(math.ceil(float(total_reads) / args.num_processes))
-critical_read_values = [(0, False)]
-candidate_critical_value = critical_read_values[-1][0] + reads_per_file
-while candidate_critical_value < total_reads:
-    critical_read_values.append((candidate_critical_value, False))
-    candidate_critical_value = critical_read_values[-1][0] + reads_per_file
-critical_values = sorted(
-        list(critical_read_values + critical_sample_values),
-        key=lambda crit: crit[0]
-    )
-sample_iter = iter(samples.keys())
+lines_assigned = [[]]
 try:
-    current_sample = sample_iter.next()
-except StopIteration:
+    total_reads = critical_sample_values[-1][0]
+except IndexError:
+    # No splitload lines
     pass
 else:
-    lines_assigned, reads_assigned, sample_index = [[]], 0, 0
-    for critical_pair in pairwise(critical_values):
-        if critical_pair[0][-1]:
-            try:
-                current_sample = sample_iter.next()
-            except StopIteration:
-                break
-            sample_index = 0
-        span = critical_pair[1][0] - critical_pair[0][0]
-        if not span:
-            continue
-        lines_assigned[-1].append((current_sample, samples[current_sample][-1],
-                                    sample_index, span))
-        sample_index += span
-        reads_assigned += span
-        if not (reads_assigned % reads_per_file):
-            lines_assigned.append([])
-    if output_url.is_local:
-        output_path = os.path.join(args.out, args.filename)
+    reads_per_file = int(math.ceil(float(total_reads) / args.num_processes))
+    critical_read_values = [(0, False)]
+    candidate_critical_value = critical_read_values[-1][0] + reads_per_file
+    while candidate_critical_value < total_reads:
+        critical_read_values.append((candidate_critical_value, False))
+        candidate_critical_value = critical_read_values[-1][0] + reads_per_file
+    critical_values = sorted(
+            list(critical_read_values + critical_sample_values),
+            key=lambda crit: crit[0]
+        )
+    sample_iter = iter(samples.keys())
+    try:
+        current_sample = sample_iter.next()
+    except StopIteration:
+        pass
     else:
-        output_path = os.path.join(temp_dir_path, args.filename)
-    with open(output_path, 'w') as output_stream:
-        for line_tuples in lines_assigned:
-            if not line_tuples: continue
-            print >>output_stream, '\t'.join(('#!splitload', '\x1d'.join(
-                            str(line_tuple[-2]) for line_tuple in line_tuples
-                        ), 
-                        '\x1d'.join(
-                            str(line_tuple[-1]) for line_tuple in line_tuples
+        reads_assigned, sample_index = 0, 0
+        for critical_pair in pairwise(critical_values):
+            if critical_pair[0][-1]:
+                try:
+                    current_sample = sample_iter.next()
+                except StopIteration:
+                    break
+                sample_index = 0
+            span = critical_pair[1][0] - critical_pair[0][0]
+            if not span:
+                continue
+            lines_assigned[-1].append((current_sample, samples[current_sample][-1],
+                                        sample_index, span))
+            sample_index += span
+            reads_assigned += span
+            if not (reads_assigned % reads_per_file):
+                lines_assigned.append([])
+with open(output_path, 'w') as output_stream:
+    for line_tuples in lines_assigned:
+        if not line_tuples: continue
+        print >>output_stream, '\t'.join(('#!splitload', '\x1d'.join(
+                        str(line_tuple[-2]) for line_tuple in line_tuples
+                    ), 
+                    '\x1d'.join(
+                        str(line_tuple[-1]) for line_tuple in line_tuples
+                    ),
+                    '\x1d'.join(
+                            '\x1e'.join(samples[line_tuple[0]][1:])
+                            for line_tuple in line_tuples
                         ),
-                        '\x1d'.join(
-                                '\x1e'.join(samples[line_tuple[0]][1:])
-                                for line_tuple in line_tuples
-                            ),
-                        phred_format
-                        ))
-    if not output_url.is_local:
-        mover.put(output_path, output_url.plus(args.filename))
-        os.remove(output_path)
+                    phred_format
+                    ))
+    for line in saved:
+        print >>output_stream, line,
+if not output_url.is_local:
+    mover.put(output_path, output_url.plus(args.filename))
+    os.remove(output_path)
 
 sys.stdout.flush()
 print >>sys.stderr, 'DONE with assign_splits.py; in/out=%d/%d; ' \
