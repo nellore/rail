@@ -552,7 +552,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                 )
         full_command = ' | '.join([input_command, 
                                     bowtie_command, delegate_command])
-        sys.exit(0)
         print >>sys.stderr, \
             'Starting second-pass Bowtie 2 with command: ' + full_command
         bowtie_process = subprocess.Popen(' '.join(
