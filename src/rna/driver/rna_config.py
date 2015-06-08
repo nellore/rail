@@ -3773,19 +3773,21 @@ class RailRnaAlign(object):
                          '--bowtie2-exe={2} '
                          '--exon-differentials --partition-length={3} '
                          '--min-exon-size={4} '
-                         '--manifest={5} '
-                         '--max-readlet-size={6} '
-                         '--readlet-interval={7} '
-                         '--capping-multiplier={8} '
-                         '--gzip-level {9} '
-                         '--index-count {10} '
-                         '--tie-margin {11} '
-                         '{12} {13} {14} {15} {16} {17} {18} -- {19}'
+                         '--search-filter={5} '
+                         '--manifest={6} '
+                         '--max-readlet-size={7} '
+                         '--readlet-interval={8} '
+                         '--capping-multiplier={9} '
+                         '--gzip-level {10} '
+                         '--index-count {11} '
+                         '--tie-margin {12} '
+                         '{13} {14} {15} {16} {17} {18} {19} -- {20}'
                         ).format(
                                     base.bowtie1_idx,
                                     base.bowtie2_idx,
                                     base.bowtie2_exe,
                                     base.partition_length,
+                                    base.min_exon_size,
                                     base.search_filter,
                                     manifest,
                                     base.max_readlet_size,

@@ -174,7 +174,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
         group_reads_object, task_partition, cap_sizes, k_value=1,
         align_stream=None, other_stream=None, output_stream=sys.stdout,
         exon_differentials=True, exon_intervals=False, verbose=False,
-        bin_size=10000, report_multiplier=1.2, min_exon_size=8,
+        bin_size=10000, report_multiplier=1.2, search_filter=8,
         min_readlet_size=8, max_readlet_size=25,
         readlet_interval=5, drop_deletions=False, output_bam_by_chr=False,
         tie_margin=0, no_realign=False, no_polyA=False):
@@ -212,10 +212,8 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
         report_multiplier: if verbose is True, the line number of an
             alignment written to stderr increases exponentially with base
             report_multiplier.
-        min_exon_size: minimum exon size searched for in intron_search.py
-            later in pipeline; used to determine how large a soft clip on
-            one side of a read is necessary to pass it on to intron search
-            pipeline
+        search_filter: determine how large a soft clip on one side of a read
+            is necessary to pass it on to intron search pipeline
         min_readlet_size: "capping" readlets (that is, readlets that terminate
             at a given end of the read) are never smaller than this value.
             Ignored if readletize=False.
@@ -307,9 +305,9 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 split_cigar = re.split(r'([MINDS])', cigar)[:-1]
                 try:
                     if ((split_cigar[1] == 'S'
-                            and int(split_cigar[0]) >= min_exon_size) or
+                            and int(split_cigar[0]) >= search_filter) or
                         (split_cigar[-1] == 'S'
-                            and int(split_cigar[-2]) >= min_exon_size)):
+                            and int(split_cigar[-2]) >= search_filter)):
                         search_for_introns = True
                     else:
                         search_for_introns = False
@@ -525,9 +523,9 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                 split_cigar = re.split(r'([MINDS])', cigar)[:-1]
                 try:
                     if ((split_cigar[1] == 'S'
-                            and int(split_cigar[0]) >= min_exon_size) or
+                            and int(split_cigar[0]) >= search_filter) or
                         (split_cigar[-1] == 'S'
-                            and int(split_cigar[-2]) >= min_exon_size)):
+                            and int(split_cigar[-2]) >= search_filter)):
                         search_for_introns = True
                     else:
                         search_for_introns = False
@@ -717,7 +715,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
         input_stream=sys.stdin, verbose=False, report_multiplier=1.2,
         k_value=1, bowtie_index_base='genome', bin_size=10000,
         manifest_file='manifest', exon_differentials=True,
-        exon_intervals=False, gzip_level=3, min_exon_size=9,
+        exon_intervals=False, gzip_level=3, search_filter=9,
         index_count=1, output_bam_by_chr=False, tie_margin=0,
         no_realign=False, no_polyA=False):
     """ Emits output specified in align_reads.py by processing Bowtie 2 output.
@@ -757,8 +755,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
         report_multiplier: if verbose is True, the line number of an alignment
             or read written to stderr increases exponentially with base
             report_multiplier.
-        min_exon_size: minimum exon size searched for in intron_search.py later
-            in pipeline; used to determine how large a soft clip on one side of
+        search_filter: determines how large a soft clip on one side of
             a read is necessary to pass it on to intron search pipeline
         min_readlet_size: "capping" readlets (that is, readlets that terminate
             at a given end of the read) are never smaller than this value
@@ -816,7 +813,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
                     verbose=verbose, 
                     output_stream=output_stream,
                     report_multiplier=report_multiplier,
-                    min_exon_size=min_exon_size,
+                    search_filter=search_filter,
                     min_readlet_size=min_readlet_size,
                     max_readlet_size=max_readlet_size,
                     readlet_interval=readlet_interval,
@@ -845,7 +842,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
                 verbose=verbose, 
                 output_stream=output_stream,
                 report_multiplier=report_multiplier,
-                min_exon_size=min_exon_size,
+                search_filter=search_filter,
                 drop_deletions=drop_deletions,
                 output_bam_by_chr=output_bam_by_chr,
                 tie_margin=tie_margin
@@ -890,9 +887,10 @@ if __name__ == '__main__':
         const=True,
         default=False, 
         help='Print exon intervals')
-    parser.add_argument('--min-exon-size', type=int, required=False,
-        default=8,
-        help='Minimum size of exons searched for in intron_search.py')
+    parser.add_argument('--search-filter', type=int, required=False,
+        default=1,
+        help=('Minimum size of soft-clipped end that dispatches a read for '
+              'intron search'))
     parser.add_argument('--k-value', type=int, required=False,
         default=1,
         help='Argument of -k parameter from Bowtie 2')
@@ -961,7 +959,7 @@ if __name__ == '__main__' and not args.test:
         manifest_file=args.manifest,
         exon_differentials=args.exon_differentials,
         exon_intervals=args.exon_intervals,
-        min_exon_size=args.min_exon_size,
+        search_filter=args.search_filter,
         gzip_level=args.gzip_level,
         index_count=args.index_count,
         output_bam_by_chr=args.output_bam_by_chr,

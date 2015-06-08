@@ -178,7 +178,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 
     manifest_file='manifest', bowtie2_args=None, bin_size=10000, verbose=False,
     exon_differentials=True, exon_intervals=False, report_multiplier=1.2,
-    min_exon_size=8, min_readlet_size=15, max_readlet_size=25,
+    min_exon_size=8, search_filter=1, min_readlet_size=15, max_readlet_size=25,
     readlet_interval=12, capping_multiplier=1.5, drop_deletions=False,
     gzip_level=3, scratch=None, index_count=1, output_bam_by_chr=False,
     tie_margin=0, no_realign=False, no_polyA=False):
@@ -348,8 +348,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             report_multiplier.
         min_exon_size: minimum exon size searched for in intron_search.py later
             in pipeline; used to determine how large a soft clip on one side of
-            a read is necessary to pass it on to intron search pipeline -- and
-            also 
+            a read is necessary to pass it on to intron search pipeline
+        search_filter: how large a soft clip on one side of a read is necessary
+            to pass it on to intron search pipeline
         min_readlet_size: "capping" readlets (that is, readlets that terminate
             at a given end of the read) are never smaller than this value
         max_readlet_size: size of every noncapping readlet
@@ -498,7 +499,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                      '--manifest {manifest_file} '
                      '{exon_differentials} {exon_intervals} '
                      '--gzip-level {gzip_level} '
-                     '--min-exon-size {min_exon_size} '
+                     '--search-filter {search_filter} '
                      '--index-count {index_count} '
                      '--tie-margin {tie_margin} '
                      '{no_realign} '
@@ -524,7 +525,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         exon_intervals=('--exon-intervals'
                                         if exon_intervals else ''),
                         gzip_level=gzip_level,
-                        min_exon_size=min_exon_size,
+                        search_filter=search_filter,
                         index_count=index_count,
                         tie_margin=tie_margin,
                         no_realign=('--no-realign' if no_realign else ''),
@@ -570,7 +571,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                          '--manifest {manifest_file} '
                          '{exon_differentials} {exon_intervals} '
                          '--gzip-level {gzip_level} '
-                         '--min-exon-size {min_exon_size} ' 
+                         '--search-filter {search_filter} ' 
                          '--index-count {index_count} '
                          '--tie-margin {tie_margin} '
                          '{output_bam_by_chr}').format(
@@ -592,7 +593,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                             exon_intervals=('--exon-intervals'
                                             if exon_intervals else ''),
                             gzip_level=gzip_level,
-                            min_exon_size=min_exon_size,
+                            search_filter=search_filter,
                             index_count=index_count,
                             tie_margin=tie_margin,
                             output_bam_by_chr=('--output-bam-by-chr'
@@ -652,6 +653,10 @@ if __name__ == '__main__':
     parser.add_argument('--min-exon-size', type=int, required=False,
         default=8,
         help='Minimum size of exons searched for in intron_search.py')
+    parser.add_argument('--search-filter', type=int, required=False,
+        default=1,
+        help=('Minimum size of soft-clipped end that dispatches a read for '
+              'intron search'))
     parser.add_argument('--min-readlet-size', type=int, required=False,
         default=15, 
         help='Capping readlets (that is, readlets that terminate '
@@ -723,6 +728,7 @@ if __name__ == '__main__':
         exon_intervals=args.exon_intervals,
         report_multiplier=args.report_multiplier,
         min_exon_size=args.min_exon_size,
+        search_filter=args.search_filter,
         min_readlet_size=args.min_readlet_size,
         max_readlet_size=args.max_readlet_size,
         readlet_interval=args.readlet_interval,
