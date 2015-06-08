@@ -6,4 +6,4 @@ Part of Rail-RNA
 Stores version number of Rail-RNA as a string.
 """
 
-version_number = '0.2.0-devel'
+version_number = '0.1.7b'

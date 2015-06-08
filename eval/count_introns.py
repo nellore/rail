@@ -21,6 +21,7 @@ import mmap
 from operator import itemgetter
 from bisect import bisect_right
 from collections import defaultdict
+import sys
 
 def introns_from_bed(bed):
     """ Converts BED to dictionary that maps RNAMES to sets of introns.
@@ -388,4 +389,4 @@ if __name__ == '__main__':
                             key=lambda intron: (intron[0][:-1], intron[2])
                     )
         for rname, start, end in introns:
-            print '\t'.join([rname[:-1], str(start), str(end)])
+            print >>sys.stderr, '\t'.join([rname[:-1], str(start), str(end)])
