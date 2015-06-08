@@ -314,7 +314,7 @@ if __name__ == '__main__':
         start = seq_start + subseq_sizes[0]
         for i, size in enumerate(subseq_sizes[1:]):
             introns.add((
-                       rname_and_sense[:-1],
+                       rname_and_sense,
                        start, start + intron_sizes[i]
                     )
             )
@@ -330,6 +330,7 @@ if __name__ == '__main__':
 
     canonicals, less_canonicals, much_less_canonicals = 0, 0, 0
     for rname, start, end in introns:
+        rname = rname[:-1]
         left = reference_index.get_stretch(rname, start - 1, 2)
         right = reference_index.get_stretch(rname, end - 3, 2)
         assert (left, right) in possible_combos, (left, right)
