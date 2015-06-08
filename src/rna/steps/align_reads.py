@@ -148,6 +148,7 @@ import subprocess
 import shutil
 import tempfile
 import time
+import string
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -159,15 +160,19 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 import bowtie
+import bowtie_index
 import partition
 import manifest
 import tempdel
 import group_reads
 from dooplicity.tools import xstream, dlist, register_cleanup, xopen, \
     make_temp_dir
+from alignment_handlers import AlignmentPrinter
 
 # Initialize global variables for tracking number of input lines
 _input_line_count = 0
+
+_reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie_index_base='genome', bowtie2_index_base='genome2', 
@@ -343,7 +348,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             report_multiplier.
         min_exon_size: minimum exon size searched for in intron_search.py later
             in pipeline; used to determine how large a soft clip on one side of
-            a read is necessary to pass it on to intron search pipeline
+            a read is necessary to pass it on to intron search pipeline -- and
+            also 
         min_readlet_size: "capping" readlets (that is, readlets that terminate
             at a given end of the read) are never smaller than this value
         max_readlet_size: size of every noncapping readlet
@@ -365,11 +371,29 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             for a 100-bp read when --tie-margin is 6.
         no_realign: True iff job flow does not need more than readlets: this
             usually means only a transcript index is being constructed
-        no_polyA: kill noncapping readlets that are all As
+        no_polyA: kill noncapping readlets that are all As and write as
+            unmapped all reads with polyA prefixes whose suffixes are <
+            min_exon_size
 
         No return value.
     """
     global _input_line_count
+    polyA_set = set([frozenset(['A']), frozenset(['']), frozenset(['T'])])
+    # Required length of prefix after poly(A) is trimmed
+    remaining_seq_size = max(min_exon_size - 1, 1)
+    reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
+    manifest_object = manifest.LabelsAndIndices(manifest_file)
+    alignment_printer = AlignmentPrinter(
+            manifest_object,
+            reference_index,
+            bin_size=bin_size,
+            output_stream=output_stream,
+            exon_ivals=exon_intervals,
+            exon_diffs=exon_differentials,
+            drop_deletions=drop_deletions,
+            output_bam_by_chr=output_bam_by_chr,
+            tie_margin=tie_margin
+        )
     # Get task partition to pass to align_reads_delegate.py
     try:
         task_partition = os.environ['mapred_task_partition']
@@ -392,6 +416,32 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         for seq_number, ((seq,), xpartition) in enumerate(
                                                         xstream(sys.stdin, 1)
                                                     ):
+            if no_polyA and (
+                    set(seq[:-remaining_seq_size]) in polyA_set
+                    or set(seq[remaining_seq_size:]) in polyA_set
+                ):
+                if not no_realign:
+                    '''If a sequence is too short without its poly(A) tail,
+                    make all reads with that sequence unmapped. Technically,
+                    this also kills poly(A)s at 5' ends, but we probably
+                    couldn't align those sequences anyway.'''
+                    reversed_complement_seq = seq[::-1].translate(
+                                        _reversed_complement_translation_table
+                                    )
+                    for is_reversed, name, qual in xpartition:
+                        if is_reversed == '0':
+                            alignment_printer.print_unmapped_read(
+                                                    name,
+                                                    seq,
+                                                    qual
+                                                )
+                        else:
+                            alignment_printer.print_unmapped_read(
+                                                    name,
+                                                    reversed_complement_seq,
+                                                    qual[::-1]
+                                                )
+                continue
             nothing_doing = False
             '''Select highest-quality read with alphabetically last qname
             for first-pass alignment.'''
