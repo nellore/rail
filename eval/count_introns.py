@@ -389,4 +389,4 @@ if __name__ == '__main__':
                             key=lambda intron: (intron[0][:-1], intron[2])
                     )
         for rname, start, end in introns:
-            print >>sys.stderr, '\t'.join([rname[:-1], str(start), str(end)])
+            print >>sys.stderr, '\t'.join([rname, str(start), str(end)])
