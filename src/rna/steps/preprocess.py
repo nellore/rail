@@ -280,10 +280,13 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     fasta_cues = set(['>', ';'])
     source_dict = {}
     for line in sys.stdin:
-        if not line.strip() or line[0] == '#': continue
         _input_line_count += 1
+        if not line.strip(): continue
         # Kill offset from start of manifest file
         tokens = line.strip().split('\t')[1:]
+        if tokens[0][0] == '#' and tokens[0] != '#!splitload':
+            # Comment line
+            continue
         token_count = len(tokens)
         qual_getter = None
         if tokens[0] == '#!splitload':
