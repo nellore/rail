@@ -339,7 +339,10 @@ else:
         '''Recall that pos has leading 0's so it is sorted properly; remove
         them below.'''
         sam_line_to_print = [qname[:254], flag, rname,
-                                str(int(pos))] + tokens[5:]
+                                str(int(pos))] + [('ZS:i:' + token[5:]
+                                                    if token[:5] == 'XS:i:'
+                                                    else token)
+                                                    for token in tokens[5:]]
         print >>output_stream, '\t'.join(sam_line_to_print)
         if not (int(flag) & 256):
             total_count += 1
