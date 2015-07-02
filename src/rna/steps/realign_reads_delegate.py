@@ -80,7 +80,6 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin,
                         % (output_line_count, qname, int(rest_of_line[0]))
                     next_report_line = max(int(next_report_line
                         * report_multiplier), next_report_line + 1)
-                print >>output_stream, '\t'.join((qname,) + rest_of_line)
     output_stream.flush()
     print >>sys.stderr, ('realign_reads_delegate.py reports %d output lines.'
                             % output_line_count)
