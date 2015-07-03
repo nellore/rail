@@ -619,6 +619,7 @@ class AlignmentPrinter(object):
                                                     manifest_object,
                                                     output_bam_by_chr
                                                 )
+        self.secondary_set = set(['XS:i:', 'ZS:i:'])
 
     def unique(self, alignment, seq_index=9):
         """ Returns True iff alignment is unique according to tie_margin.
@@ -632,9 +633,9 @@ class AlignmentPrinter(object):
         first_place_score = [int(field[5:]) for field in alignment
                                 if field[:5] == 'AS:i:'][0]
         try:
-            second_place_score = [int(field[5:]) for field in
-                                    alignment
-                                    if field[:5] == 'XS:i:'][0]
+            second_place_score = [int(field[5:]) for field
+                                    in alignment if field[:5]
+                                    in secondary_set][0]
         except IndexError:
             # No XS field; assume uniqueness
             return True
