@@ -64,6 +64,7 @@ def dummy_md_and_mapped_offsets(cigar):
             cigar_index += 2
             continue
         if cigar[cigar_index+1] == 'M':
+            base_count = int(cigar[cigar_index])
             try:
                 if type(md[-1]) is int:
                     md[-1] += base_count
@@ -72,7 +73,7 @@ def dummy_md_and_mapped_offsets(cigar):
             except IndexError:
                 md.append(base_count)
             cigar_index += 2
-            mapped.extend(range(offset, base_count))
+            mapped.extend(range(offset, offset + base_count))
             offset += base_count
         elif cigar[cigar_index+1] in 'SI':
             offset += int(cigar[cigar_index])
@@ -110,63 +111,38 @@ if __name__ == '__main__':
     true_maps = {} # Warning: takes up a lot of memory for large samples!
     basewise_relevant, read_relevant = 0, 0
     with open(args.true_bed) as true_bed_stream:
-        if args.generous:
-            for line in bed_stream:
-                tokens = line.rstrip().split('\t')
-                if len(tokens) < 12:
-                    continue
-                chrom = tokens[0]
-                chrom_start = int(tokens[1])
-                chrom_end = int(tokens[2])
-                block_sizes = tokens[10].split(',')
-                block_starts = tokens[11].split(',')
-                # Handle trailing commas
-                try:
-                    int(block_sizes[-1])
-                except ValueError:
-                    block_sizes = block_sizes[:-1]
-                try:
-                    int(block_starts[-1])
-                except ValueError:
-                    block_starts = block_starts[:-1]
-                block_count = len(block_sizes)
-                assert block_count == len(block_starts)
-                exons = [(chrom,
-                            chrom_start + block_starts[i],
-                            chrom_start + block_starts[i] + block_sizes[i])
-                            for i in xrange(block_count)]
-                # Cut off /1 or /2
-                true_maps[tokens[3][:-2]] = exons
-        else:
-            for line in true_bed_stream:
-                tokens = line.rstrip().split('\t')
-                if len(tokens) < 12:
-                    continue
-                chrom = tokens[0]
-                chrom_start = int(tokens[1])
-                chrom_end = int(tokens[2])
-                block_sizes = tokens[10].split(',')
-                block_starts = tokens[11].split(',')
-                # Handle trailing commas
-                try:
-                    int(block_sizes[-1])
-                except ValueError:
-                    block_sizes = block_sizes[:-1]
-                try:
-                    int(block_starts[-1])
-                except ValueError:
-                    block_starts = block_starts[:-1]
-                block_count = len(block_sizes)
-                assert block_count == len(block_starts)
-                exons = [(chrom,
-                            chrom_start + block_starts[i],
-                            chrom_start + block_starts[i] + block_sizes[i])
-                            for i in xrange(block_count)]
-                # No cutting off read names
-                true_maps[tokens[3]] = exons
+        for line in true_bed_stream:
+            tokens = line.rstrip().split('\t')
+            if len(tokens) < 12:
+                continue
+            chrom = tokens[0]
+            chrom_start = int(tokens[1])
+            chrom_end = int(tokens[2])
+            block_sizes = tokens[10].split(',')
+            block_starts = tokens[11].split(',')
+            # Handle trailing commas
+            try:
+                int(block_sizes[-1])
+            except ValueError:
+                block_sizes = block_sizes[:-1]
+            try:
+                int(block_starts[-1])
+            except ValueError:
+                block_starts = block_starts[:-1]
+            block_count = len(block_sizes)
+            assert block_count == len(block_starts)
+            exons = [(chrom,
+                        chrom_start + int(block_starts[i]),
+                        chrom_start + int(block_starts[i])
+                        + int(block_sizes[i]))
+                        for i in xrange(block_count)]
+            true_maps[tokens[3]] = exons
+            basewise_relevant += sum([int(block_size) for block_size
+                                        in block_sizes])
+            read_relevant += 1
     # Initialize counters for computing accuracy metrics
-    basewise_retrieved, basewise_intersection = 0, 0, 0
-    read_retrieved, read_intersection = 0, 0, 0
+    basewise_retrieved, basewise_intersection = 0, 0
+    read_retrieved, read_intersection = 0, 0
     # Read SAM for stdin
     for line in sys.stdin:
         tokens = line.strip().split('\t')
@@ -175,38 +151,53 @@ if __name__ == '__main__':
             # Secondary alignment or unmapped and thus not retrieved; ignore
             continue 
         true_map = true_maps[tokens[0]]
-        read_length = true_map[0][2] - true_map[0][1]
+        read_length = sum(true_map[i][2] - true_map[i][1]
+                            for i in xrange(len(true_map)))
         basewise_retrieved += read_length
         read_retrieved += 1
         if tokens[2] != true_map[0][0]:
             # chr is wrong, but this is still counted as a retrieval above
             continue
-        base_counter, base_truths = 0, set()
-        # Each tuple in base_truths is (index of base in read, mapped location)
-        for block in true_map:
-            base_truths.update([(base_counter + i, j)
-                                    for i, j in enumerate(xrange(
+        if args.generous:
+            suffixes = ['/1', '/2']
+        else:
+            suffixes = ['']
+        # Try both /1 and /2; choose the best basewise result
+        intersected_base_count = 0
+        for suffix in suffixes:
+            base_counter, base_truths = 0, set()
+            '''Each tuple in base_truths is
+            (index of base in read, mapped location)'''
+            for block in true_map:
+                base_truths.update([(base_counter + i, j + 1)
+                                        for i, j in enumerate(
+                                                    xrange(
                                                         block[1], block[2]
                                                     ))])
-            base_counter += block[2] - block[1]
-        base_predictions = set()
-        dummy_md, mapped = dummy_md_and_mapped_offsets(cigar)
-        _, _, _, exons = indels_introns_and_exons(cigar, dummy_md, pos, seq)
-        mapped_index = 0
-        for exon in exons:
-            base_predictions.update([(mapped[mapped_index + i], j)
-                                      for i, j in enumerate(xrange(
-                                                        exon[1], exon[2]
+                base_counter += block[2] - block[1]
+            base_predictions = set()
+            cigar, pos, seq = tokens[5], int(tokens[3]), tokens[9]
+            dummy_md, mapped = dummy_md_and_mapped_offsets(cigar)
+            _, _, _, exons = indels_introns_and_exons(cigar,
+                                                    dummy_md, pos, seq,
+                                                    drop_deletions=True)
+            mapped_index = 0
+            for exon in exons:
+                base_predictions.update([(mapped[mapped_index + i], j)
+                                          for i, j in enumerate(xrange(
+                                                        exon[0], exon[1]
                                                     ))])
-            mapped_index += exon[2] - exon[1]
-        intersected_base_count = len(base_predictions & base_truths)
+                mapped_index += exon[1] - exon[0]
+            intersected_base_count = max(intersected_base_count, len(
+                                base_predictions.intersection(base_truths)
+                            ))
         basewise_intersection += intersected_base_count
         if intersected_base_count >= read_length * args.base_threshold:
             read_intersection += 1
     basewise_precision = float(basewise_intersection) / basewise_retrieved
-    basewise_recall = float(basewise_intersection) / read_relevant
+    basewise_recall = float(basewise_intersection) / basewise_relevant
     read_precision = float(read_intersection) / read_retrieved
-    read_recall = float(read_intersection) / basewise_relevant
+    read_recall = float(read_intersection) / read_relevant
     print 'relevant instances\t%d\t%d' % (basewise_relevant, read_relevant)
     print 'retrieved instances\t%d\t%d' % (basewise_retrieved, read_retrieved)
     print 'intersection\t%d\t%d' % (basewise_intersection, read_intersection)
