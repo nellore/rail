@@ -89,82 +89,70 @@ def dummy_md_and_mapped_offsets(cigar):
                     )
     return (''.join(str(el) for el in md), mapped)
 
-if __name__ == '__main__':
-    import argparse
-    # Print file's docstring if -h is invoked
-    parser = argparse.ArgumentParser(description=__doc__, 
-            formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-t', '--true-bed', type=str, required=True, 
-        help='Full path of BED file containing true mappings')
-    parser.add_argument('-g', '--generous', action='store_const', const=True,
-        default=False,
-        help='TopHat/STAR/HISAT cut off /1s and /2s from read names, even in '
-             'unpaired mode. This loses information. In generous mode, '
-             'this script provides extremely tight upper bounds on '
-             'precision and recall for TopHat/STAR/HISAT')
-    parser.add_argument('-b', '--base-threshold', type=float,
-        required=False, default=0.5,
-        help=('Proportion of a read\'s bases that must align correctly for '
-              'the read to be considered a correct mapping'))
-    args = parser.parse_args(sys.argv[1:])
+def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
+        base_threshold=0.5):
+    """ 
+    """
     # Dict mapping read names to alignments (chrom, 1-based start, 1-based end)
     true_maps = {} # Warning: takes up a lot of memory for large samples!
     basewise_relevant, read_relevant = 0, 0
-    with open(args.true_bed) as true_bed_stream:
-        for line in true_bed_stream:
-            tokens = line.rstrip().split('\t')
-            if len(tokens) < 12:
-                continue
-            chrom = tokens[0]
-            chrom_start = int(tokens[1])
-            chrom_end = int(tokens[2])
-            block_sizes = tokens[10].split(',')
-            block_starts = tokens[11].split(',')
-            # Handle trailing commas
-            try:
-                int(block_sizes[-1])
-            except ValueError:
-                block_sizes = block_sizes[:-1]
-            try:
-                int(block_starts[-1])
-            except ValueError:
-                block_starts = block_starts[:-1]
-            block_count = len(block_sizes)
-            assert block_count == len(block_starts)
-            exons = [(chrom,
-                        chrom_start + int(block_starts[i]),
-                        chrom_start + int(block_starts[i])
-                        + int(block_sizes[i]))
-                        for i in xrange(block_count)]
-            true_maps[tokens[3]] = exons
-            basewise_relevant += sum([int(block_size) for block_size
-                                        in block_sizes])
-            read_relevant += 1
+    for line in true_bed_stream:
+        tokens = line.rstrip().split('\t')
+        if len(tokens) < 12:
+            continue
+        chrom = tokens[0]
+        chrom_start = int(tokens[1])
+        chrom_end = int(tokens[2])
+        block_sizes = tokens[10].split(',')
+        block_starts = tokens[11].split(',')
+        # Handle trailing commas
+        try:
+            int(block_sizes[-1])
+        except ValueError:
+            block_sizes = block_sizes[:-1]
+        try:
+            int(block_starts[-1])
+        except ValueError:
+            block_starts = block_starts[:-1]
+        block_count = len(block_sizes)
+        assert block_count == len(block_starts)
+        exons = [(chrom,
+                    chrom_start + int(block_starts[i]),
+                    chrom_start + int(block_starts[i])
+                    + int(block_sizes[i]))
+                    for i in xrange(block_count)]
+        true_maps[tokens[3]] = exons
+        basewise_relevant += sum([int(block_size) for block_size
+                                    in block_sizes])
+        read_relevant += 1
     # Initialize counters for computing accuracy metrics
     basewise_retrieved, basewise_intersection = 0, 0
     read_retrieved, read_intersection = 0, 0
     # Read SAM for stdin
-    for line in sys.stdin:
+    for line in sam_stream:
         tokens = line.strip().split('\t')
         flag = int(tokens[1])
         if flag & 256 or flag & 4:
             # Secondary alignment or unmapped and thus not retrieved; ignore
             continue 
-        true_map = true_maps[tokens[0]]
-        read_length = sum(true_map[i][2] - true_map[i][1]
-                            for i in xrange(len(true_map)))
-        basewise_retrieved += read_length
-        read_retrieved += 1
-        if tokens[2] != true_map[0][0]:
-            # chr is wrong, but this is still counted as a retrieval above
-            continue
-        if args.generous:
+        if generous:
             suffixes = ['/1', '/2']
         else:
             suffixes = ['']
+        considered_true_maps = [true_maps[tokens[0] + suffix]
+                                    for suffix in suffixes]
+        # Assume same read length for read pair
+        read_length = sum(considered_true_maps[0][i][2]
+                            - considered_true_maps[0][i][1]
+                            for i in xrange(len(considered_true_maps[0])))
+        basewise_retrieved += read_length
+        read_retrieved += 1
         # Try both /1 and /2; choose the best basewise result
         intersected_base_count = 0
-        for suffix in suffixes:
+        for true_map in considered_true_maps:
+            if tokens[2] != true_map[0][0]:
+                # chr is wrong, but this is still counted as a retrieval above
+                continue
             base_counter, base_truths = 0, set()
             '''Each tuple in base_truths is
             (index of base in read, mapped location)'''
@@ -192,14 +180,193 @@ if __name__ == '__main__':
                                 base_predictions.intersection(base_truths)
                             ))
         basewise_intersection += intersected_base_count
-        if intersected_base_count >= read_length * args.base_threshold:
+        if intersected_base_count >= read_length * base_threshold:
             read_intersection += 1
-    basewise_precision = float(basewise_intersection) / basewise_retrieved
-    basewise_recall = float(basewise_intersection) / basewise_relevant
-    read_precision = float(read_intersection) / read_retrieved
-    read_recall = float(read_intersection) / read_relevant
-    print 'relevant instances\t%d\t%d' % (basewise_relevant, read_relevant)
-    print 'retrieved instances\t%d\t%d' % (basewise_retrieved, read_retrieved)
-    print 'intersection\t%d\t%d' % (basewise_intersection, read_intersection)
-    print 'precision\t%.12f\t%.12f' % (basewise_precision, read_precision)
-    print 'recall\t%.12f\t%.12f' % (basewise_recall, read_recall)
+    return (basewise_retrieved, basewise_relevant, basewise_intersection,
+            read_retrieved, read_relevant, read_intersection)
+
+if __name__ == '__main__':
+    import argparse
+    # Print file's docstring if -h is invoked
+    parser = argparse.ArgumentParser(description=__doc__, 
+            formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--test', action='store_const', const=True,
+        default=False,
+        help='Run unit tests')
+    args = parser.parse_known_args(sys.argv[1:])[0]
+    if not args.test:
+        parser = argparse.ArgumentParser(description=__doc__, 
+            formatter_class=argparse.RawDescriptionHelpFormatter)
+        parser.add_argument('-t', '--true-bed', type=str, required=True, 
+            help='Full path of BED file containing true mappings')
+        parser.add_argument('-g', '--generous', action='store_const', const=True,
+            default=False,
+            help='TopHat/STAR/HISAT cut off /1s and /2s from read names, even '
+                 'in unpaired mode. This loses information. In generous mode, '
+                 'this script provides extremely tight upper bounds on '
+                 'precision and recall for TopHat/STAR/HISAT')
+        parser.add_argument('-b', '--base-threshold', type=float,
+            required=False, default=0.5,
+            help=('Proportion of a read\'s bases that must align correctly for '
+                  'the read to be considered a correct mapping'))
+        args = parser.parse_known_args(sys.argv[1:])[0]
+        with open(args.true_bed) as true_bed_stream:
+            (basewise_retrieved, basewise_relevant, basewise_intersection,
+                read_retrieved, read_relevant, read_intersection) = go(
+                        true_bed_stream,
+                        generous=args.generous,
+                        base_threshold=args.base_threshold
+                    )
+        basewise_precision = float(basewise_intersection) / basewise_retrieved
+        basewise_recall = float(basewise_intersection) / basewise_relevant
+        read_precision = float(read_intersection) / read_retrieved
+        read_recall = float(read_intersection) / read_relevant
+        print 'relevant instances\t%d\t%d' % (basewise_relevant, read_relevant)
+        print 'retrieved instances\t%d\t%d' % (basewise_retrieved,
+                                                    read_retrieved)
+        print 'intersection\t%d\t%d' % (basewise_intersection,
+                                            read_intersection)
+        print 'precision\t%.12f\t%.12f' % (basewise_precision, read_precision)
+        print 'recall\t%.12f\t%.12f' % (basewise_recall, read_recall)
+    else:
+        # Test go()
+        del sys.argv[1:] # Don't choke on extra command-line parameters
+        import unittest
+        import shutil
+        import tempfile
+
+        class TestGo(unittest.TestCase):
+            """ Tests go(). """
+            def setUp(self):
+                # For storing output of print_readletized_output()
+                self.temp_dir_path = tempfile.mkdtemp()
+                self.true_bed = os.path.join(self.temp_dir_path,
+                                                        'true.bed')
+                self.sam = os.path.join(self.temp_dir_path,
+                                            'recovered.sam')
+                # These bed lines are selected from a Flux simulation
+                with open(self.true_bed, 'w') as true_bed_stream:
+                    print >>true_bed_stream, (
+"""chr2L\t70326\t70402\tchr2L:66584-71390W:NM_001258881:2:3789:2629:2857:A\t0\t-\t.\t.\t0,0,0\t1\t76\t0
+chr2L\t200609\t200751\tchr2L:159032-203250W:NM_001272876:177:18434:15833:15999:A\t0\t-\t.\t.\t0,0,0\t2\t66,10\t0,132
+chrX\t5525473\t5527141\tchrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t0\t+\t.\t.\t0,0,0\t3\t55,18,3\t0,749,1665
+"""
+                    )
+
+            def test_perfection(self):
+                """ Fails if basewise/read-level instance counts are wrong. """
+                # SAM lines are based on Rail's output
+                with open(self.sam, 'w') as sam_stream:
+                    print >>sam_stream, (
+"""chr2L:66584-71390W:NM_001258881:2:3789:2629:2857:A\t16\tchr2L\t70327\t44\t76M\t*\t0\t0\tTTAGAAGTGCGTTAAAGCGCTCTATAAAACAGGCCCAGGAGCAACAGCTTCAGCTGAAGCGAGGCAATCATGAAGAHHHHHHHHH5HHHH555HHHHhHHH555HHHHHHHHhHHH5HHHHHHHHHHhhHhhHHHHH5HHHHhhhhHHHHHH
+chr2L:159032-203250W:NM_001272876:177:18434:15833:15999:A\t16\tchr2L\t200610\t255\t66M66N10M\t*\t0\t0\tATCCAGGCAAGGCAATGGATATGCAGTTGGATGAGATGGACCGCATGTCAATGATTGCAGCTGTCGTTCAACAACA\tH55HHHHHHhhhHHhH5HHHHHHHHHhhHhhHHhhHHHhhhhHHhHhhhhhHHHHHHH55HHHHHHHHHHHHHHHH
+chrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t0\tchrX\t5525474\t255\t55M694N18M898N3M\t*\t0\t0\tCCACCACATGCATCAGGCCAAAGCGAGCGATCACCTTGAAGCGATGGATGTTCAACTGAAATGGCGGCCTAGTCCG\tHHHhhhhhhhhhhhhhHhhhhhhHHhhhhhhhhHHHHHHHHHHH5HHHhhHhHHHH55H55HHHHHHHHHHHH5HH"""
+                    )
+                with open(self.true_bed) as true_bed_stream, \
+                        open(self.sam) as sam_stream:
+                    (basewise_retrieved, basewise_relevant,
+                        basewise_intersection,
+                        read_retrieved, read_relevant,
+                        read_intersection) = go(
+                                true_bed_stream,
+                                sam_stream=sam_stream,
+                                generous=False,
+                                base_threshold=0.5
+                            )
+                # This should be perfect
+                self.assertEquals(basewise_retrieved, 228)
+                self.assertEquals(basewise_relevant, 228)
+                self.assertEquals(basewise_intersection, 228)
+                self.assertEquals(read_retrieved, 3)
+                self.assertEquals(read_relevant, 3)
+                self.assertEquals(read_intersection, 3)
+
+            def test_deletions(self):
+                """ Fails if basewise/read-level instance counts are wrong. """
+                # SAM lines are based on Rail's output
+                with open(self.sam, 'w') as sam_stream:
+                    print >>sam_stream, (
+"""chr2L:66584-71390W:NM_001258881:2:3789:2629:2857:A\t16\tchr2L\t70327\t44\t35M1D41M\t*\t0\t0\tTTAGAAGTGCGTTAAAGCGCTCTATAAAACAGGCCCAGGAGCAACAGCTTCAGCTGAAGCGAGGCAATCATGAAGAHHHHHHHHH5HHHH555HHHHhHHH555HHHHHHHHhHHH5HHHHHHHHHHhhHhhHHHHH5HHHHhhhhHHHHHH
+chr2L:159032-203250W:NM_001272876:177:18434:15833:15999:A\t16\tchr2L\t200610\t255\t66M66N10M\t*\t0\t0\tATCCAGGCAAGGCAATGGATATGCAGTTGGATGAGATGGACCGCATGTCAATGATTGCAGCTGTCGTTCAACAACA\tH55HHHHHHhhhHHhH5HHHHHHHHHhhHhhHHhhHHHhhhhHHhHhhhhhHHHHHHH55HHHHHHHHHHHHHHHH
+chrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t0\tchrX\t5525474\t255\t55M694N18M898N1D3M\t*\t0\t0\tCCACCACATGCATCAGGCCAAAGCGAGCGATCACCTTGAAGCGATGGATGTTCAACTGAAATGGCGGCCTAGTCCG\tHHHhhhhhhhhhhhhhHhhhhhhHHhhhhhhhhHHHHHHHHHHH5HHHhhHhHHHH55H55HHHHHHHHHHHH5HH"""
+                    )
+                with open(self.true_bed) as true_bed_stream, \
+                        open(self.sam) as sam_stream:
+                    (basewise_retrieved, basewise_relevant,
+                        basewise_intersection,
+                        read_retrieved, read_relevant,
+                        read_intersection) = go(
+                                true_bed_stream,
+                                sam_stream=sam_stream,
+                                generous=False,
+                                base_threshold=0.5
+                            )
+                # This should be perfect
+                self.assertEquals(basewise_retrieved, 228)
+                self.assertEquals(basewise_relevant, 228)
+                self.assertEquals(basewise_intersection, 184)
+                self.assertEquals(read_retrieved, 3)
+                self.assertEquals(read_relevant, 3)
+                self.assertEquals(read_intersection, 2)
+
+            def test_soft_clips(self):
+                """ Fails if basewise/read-level instance counts are wrong. """
+                # SAM lines are based on Rail's output
+                with open(self.sam, 'w') as sam_stream:
+                    print >>sam_stream, (
+"""chr2L:66584-71390W:NM_001258881:2:3789:2629:2857:A\t16\tchr2L\t70332\t44\t5S71M\t*\t0\t0\tTTAGAAGTGCGTTAAAGCGCTCTATAAAACAGGCCCAGGAGCAACAGCTTCAGCTGAAGCGAGGCAATCATGAAGAHHHHHHHHH5HHHH555HHHHhHHH555HHHHHHHHhHHH5HHHHHHHHHHhhHhhHHHHH5HHHHhhhhHHHHHH
+chr2L:159032-203250W:NM_001272876:177:18434:15833:15999:A\t16\tchr2L\t200610\t255\t66M66N1M9S\t*\t0\t0\tATCCAGGCAAGGCAATGGATATGCAGTTGGATGAGATGGACCGCATGTCAATGATTGCAGCTGTCGTTCAACAACA\tH55HHHHHHhhhHHhH5HHHHHHHHHhhHhhHHhhHHHhhhhHHhHhhhhhHHHHHHH55HHHHHHHHHHHHHHHH
+chrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t0\tchrX\t5525474\t255\t55M694N18M898N1M2S\t*\t0\t0\tCCACCACATGCATCAGGCCAAAGCGAGCGATCACCTTGAAGCGATGGATGTTCAACTGAAATGGCGGCCTAGTCCG\tHHHhhhhhhhhhhhhhHhhhhhhHHhhhhhhhhHHHHHHHHHHH5HHHhhHhHHHH55H55HHHHHHHHHHHH5HH"""
+                    )
+                with open(self.true_bed) as true_bed_stream, \
+                        open(self.sam) as sam_stream:
+                    (basewise_retrieved, basewise_relevant,
+                        basewise_intersection,
+                        read_retrieved, read_relevant,
+                        read_intersection) = go(
+                                true_bed_stream,
+                                sam_stream=sam_stream,
+                                generous=False,
+                                base_threshold=0.8
+                            )
+                # This should be perfect
+                self.assertEquals(basewise_retrieved, 228)
+                self.assertEquals(basewise_relevant, 228)
+                self.assertEquals(basewise_intersection, 212)
+                self.assertEquals(read_retrieved, 3)
+                self.assertEquals(read_relevant, 3)
+                self.assertEquals(read_intersection, 3)
+
+            def test_unmapped(self):
+                """ Fails if basewise/read-level instance counts are wrong. """
+                # SAM lines are based on Rail's output
+                with open(self.sam, 'w') as sam_stream:
+                    print >>sam_stream, (
+"""chr2L:66584-71390W:NM_001258881:2:3789:2629:2857:A\t16\tchr2L\t70327\t44\t76M\t*\t0\t0\tTTAGAAGTGCGTTAAAGCGCTCTATAAAACAGGCCCAGGAGCAACAGCTTCAGCTGAAGCGAGGCAATCATGAAGAHHHHHHHHH5HHHH555HHHHhHHH555HHHHHHHHhHHH5HHHHHHHHHHhhHhhHHHHH5HHHHhhhhHHHHHH
+chr2L:159032-203250W:NM_001272876:177:18434:15833:15999:A\t16\tchr2L\t200610\t255\t66M66N10M\t*\t0\t0\tATCCAGGCAAGGCAATGGATATGCAGTTGGATGAGATGGACCGCATGTCAATGATTGCAGCTGTCGTTCAACAACA\tH55HHHHHHhhhHHhH5HHHHHHHHHhhHhhHHhhHHHhhhhHHhHhhhhhHHHHHHH55HHHHHHHHHHHHHHHH
+chrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t4\t*\t0\t0\t*\t*\t0\t0\tCCACCACATGCATCAGGCCAAAGCGAGCGATCACCTTGAAGCGATGGATGTTCAACTGAAATGGCGGCCTAGTCCG\tHHHhhhhhhhhhhhhhHhhhhhhHHhhhhhhhhHHHHHHHHHHH5HHHhhHhHHHH55H55HHHHHHHHHHHH5HH"""
+                    )
+                with open(self.true_bed) as true_bed_stream, \
+                        open(self.sam) as sam_stream:
+                    (basewise_retrieved, basewise_relevant,
+                        basewise_intersection,
+                        read_retrieved, read_relevant,
+                        read_intersection) = go(
+                                true_bed_stream,
+                                sam_stream=sam_stream,
+                                generous=False,
+                                base_threshold=0.8
+                            )
+                # This should be perfect
+                self.assertEquals(basewise_retrieved, 152)
+                self.assertEquals(basewise_relevant, 228)
+                self.assertEquals(basewise_intersection, 152)
+                self.assertEquals(read_retrieved, 2)
+                self.assertEquals(read_relevant, 3)
+                self.assertEquals(read_intersection, 2)
+
+            def tearDown(self):
+                # Kill temporary directory
+                shutil.rmtree(self.temp_dir_path)
+
+        unittest.main()
