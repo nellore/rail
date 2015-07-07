@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 generate_bioreps.py
-Abhi Nellore / July 14, 2014
+Abhi Nellore / July 14, 2014; updated July 7, 2015
 
 Generates 112 bioreps for Rail paper using Flux Simulator by:
 
@@ -12,8 +12,10 @@ Generates 112 bioreps for Rail paper using Flux Simulator by:
     distribution. The coverage distribution is specified as follows: column 6
     of P has the absolute number of RNA molecules associated with each
     transcript. To recompute this value, an RPKM for a given transcript from
-    (2) is multiplied by transcript length (column 4 of P) in kb
-    and subsequently multiplied by 10. This gives ~1e6-1e7 nb_molecules for a
+    (2) is multiplied by 20. (A previous version of this script first
+    multiplied RPKM by transcript length (column 4 of P) in kb and subsequently 
+    multiplied by 10, which is incorrect and leads to a bias where longer
+    transcripts are overexpressed.) This gives ~1e6-1e7 nb_molecules for a
     given Flux simulation, which is close to that for the human example on the
     Flux website and apparently makes for adequate library yield.
 4) restarting Flux, now for each PRO file, generating bioreps. FASTAs are named
@@ -99,19 +101,12 @@ def write_par_and_pro(par_template, pro_template, basename,
             for line in read_stream:
                 tokens = line.strip().split('\t')
                 transcript_label = tokens[1]
-                transcript_length_in_kb = float(tokens[3]) / 1000
                 try:
                     rpkm = rpkms.loc[transcript_label][sample]
                 except KeyError:
                     # Not expressed; kill it
                     rpkm = 0.0
-                tokens[5] = transcript_length_in_kb * rpkm * 10
-                remaining = tokens[5] - int(tokens[5])
-                if remaining > 0.5:
-                    tokens[5] = int(tokens[5]) + 1
-                else:
-                    tokens[5] = int(tokens[5])
-                tokens[5] = str(tokens[5])
+                tokens[5] = str(int(round(rpkm * 20)))
                 print >>write_stream, '\t'.join(tokens)
     # Write distinct seed for sample
     with open(basename + '.par', 'w') as write_stream:
