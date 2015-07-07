@@ -3317,12 +3317,12 @@ class RailRnaAlign(object):
         if confidence_criteria_error:
             base.errors.append('Intron confidence criteria '
                                '(--intron-criteria) must be a '
-                               'comma-separated list of two elements: the '
-                               'first should be a decimal value between 0 '
-                               'and 1 inclusive; the second should be '
-                               'an integer >= 1 or -1 to disable filtering '
+                               'comma- or space-separated list of two '
+                               'elements: the first should be a decimal value '
+                               'between 0 and 1 inclusive; the second should '
+                               'be an integer >= 1 or -1 to disable filtering '
                                'by read count. {0} was entered.'.format(
-                                                    intron_criteria
+                                                    ','.join(intron_criteria)
                                                 ))
         if isinstance(indel_criteria, str):
             indel_criteria = [indel_criteria]
@@ -3354,12 +3354,12 @@ class RailRnaAlign(object):
         if confidence_criteria_error:
             base.errors.append('Indel confidence criteria '
                                '(--indel-criteria) must be a '
-                               'comma-separated list of two elements: the '
-                               'first should be a decimal value between 0 '
-                               'and 1 inclusive; the second should be '
-                               'an integer >= 1 or -1 to disable filtering '
+                               'comma- or space-separated list of two '
+                               'elements: the first should be a decimal value '
+                               'between 0 and 1 inclusive; the second should '
+                               'be an integer >= 1 or -1 to disable filtering '
                                'by read count. {0} was entered.'.format(
-                                                    indel_criteria
+                                                    ','.join(indel_criteria)
                                                 ))
         base.do_not_drop_polyA_tails = do_not_drop_polyA_tails
         base.drop_deletions = drop_deletions

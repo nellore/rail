@@ -5,6 +5,13 @@ Part of Rail-RNA
 Defines URLs at which dependencies may be downloaded when installing Rail-RNA.
 Increasing version numbers of dependencies should formally increase Rail-RNA's
 version.
+
+Note that bedGraphToBigWig is occasionally updated at 
+http://hgdownload.cse.ucsc.edu/admin/exe/macOSX.x86_64/bedGraphToBigWig 
+and
+http://hgdownload.cse.ucsc.edu/admin/exe/linux.x86_64/bedGraphToBigWig
+without forewarning, so the default URL for these is in Ben Langmead's CCB
+space. The alternative URLs at Webfactional are Abhi Nellore's space.
 """
 import os
 
@@ -17,7 +24,7 @@ linux_dependencies = {
                  'bowtie2/2.2.5/bowtie2-2.2.5-linux-x86_64.zip',
                  'http://verve.webfactional.com/mirror/linux/'
                   'bowtie2-2.2.5-linux-x86_64.zip'],
-    'bedgraphtobigwig' : ['http://hgdownload.cse.ucsc.edu/admin/exe/'
+    'bedgraphtobigwig' : ['ftp://ftp.ccb.jhu.edu/pub/langmead/rail/'
                           'linux.x86_64/bedGraphToBigWig',
                           'http://verve.webfactional.com/mirror/linux/'
                           'bedGraphToBigWig'],
@@ -54,7 +61,7 @@ mac_dependencies = {
                  'bowtie2/2.2.5/bowtie2-2.2.5-macos-x86_64.zip',
                  'http://verve.webfactional.com/mirror/mac/'
                  'bowtie2-2.2.5-macos-x86_64.zip'],
-    'bedgraphtobigwig' : ['http://hgdownload.cse.ucsc.edu/admin/exe/'
+    'bedgraphtobigwig' : ['ftp://ftp.ccb.jhu.edu/pub/langmead/rail/'
                           'macOSX.x86_64/bedGraphToBigWig',
                           'http://verve.webfactional.com/mirror/mac/'
                           'bedGraphToBigWig'],
