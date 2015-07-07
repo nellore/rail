@@ -57,7 +57,7 @@ observed across the originals, but demonstrating that Rail's methods are
 robust to permissive definitions of bioreplicates -- and even do well across
 vastly different datasets -- is desirable.
 
-Run this file from desired output directory if not entering output dir with -o.
+**Run this file from the eval directory, and specify the output dir with -o.**
 Fix command-line parameters specifying input directories as necessary; use
 use python generate_bioreps.py --help to determine how this should be done.
 """
