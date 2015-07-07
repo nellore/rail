@@ -13,7 +13,7 @@ aligned correctly (precision) and the proportion of all reads for which >= K%
 of bases are aligned correctly (recall). K is the argument of the
 --base-threshold command-line parameter.
 
-Warning: this script is a memory hog. Eats ~16 GB of RAM on 40 million reads.
+Warning: this script is a memory hog. Eats ~15 GB of RAM on 40 million reads.
 Be ready.
 
 THIS FILE DEPENDS ON DOOPLICITY AND RAIL; don't move it in the Rail repo.
@@ -120,110 +120,140 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
         clip_threshold: proportion of a read's bases that must be clipped
             for a read to be considered unmapped
     """
-    # Dict mapping read names to alignments (chrom, 1-based start, 1-based end)
-    true_maps = {} # Warning: takes up a lot of memory for large samples!
+    from tempdel import remove_temporary_directories
+    import tempfile
+    import atexit
+    temp_dir_path = tempfile.mkdtemp()
+    #print >>sys.stderr, temp_dir_path
+    atexit.register(remove_temporary_directories, [temp_dir_path])
+    # Store everything in one file, then sort it on read name
+    combined_file = os.path.join(temp_dir_path, 'combined.temp')
+    with open(combined_file, 'w') as temp_stream:
+        if generous:
+            for line in true_bed_stream:
+                tokens = line.strip().split('\t')
+                print >>temp_stream, '\t'.join([tokens[3][:-2], '0']
+                                                + tokens[:3] + tokens[4:])
+        else:
+            for line in true_bed_stream:
+                tokens = line.strip().split('\t')
+                print >>temp_stream, '\t'.join(
+                                [tokens[3], '0'] + tokens[:3] + tokens[4:]
+                            )
+        for line in sam_stream:
+            tokens = line.strip().split('\t')
+            print >>temp_stream, '\t'.join([tokens[0], '1'] + tokens[1:])
+    import subprocess
+    sorted_combined_file = os.path.join(temp_dir_path, 'combined.sorted.temp')
+    subprocess.check_call(' '.join(['sort -k1,1 -k2,2n', combined_file, 
+                                    '>', sorted_combined_file]),
+                            bufsize=-1, shell=True)
     basewise_relevant, read_relevant = 0, 0
-    for line in true_bed_stream:
-        tokens = line.rstrip().split('\t')
-        if len(tokens) < 12:
-            continue
-        chrom = tokens[0]
-        chrom_start = int(tokens[1])
-        chrom_end = int(tokens[2])
-        block_sizes = tokens[10].split(',')
-        block_starts = tokens[11].split(',')
-        # Handle trailing commas
-        try:
-            int(block_sizes[-1])
-        except ValueError:
-            block_sizes = block_sizes[:-1]
-        try:
-            int(block_starts[-1])
-        except ValueError:
-            block_starts = block_starts[:-1]
-        block_count = len(block_sizes)
-        assert block_count == len(block_starts)
-        exons = [(chrom,
-                    chrom_start + int(block_starts[i]),
-                    chrom_start + int(block_starts[i])
-                    + int(block_sizes[i]))
-                    for i in xrange(block_count)]
-        true_maps[tokens[3]] = exons
-        basewise_relevant += sum([int(block_size) for block_size
-                                    in block_sizes])
-        read_relevant += 1
     # Initialize counters for computing accuracy metrics
     basewise_retrieved, basewise_intersection = 0, 0
     read_retrieved, read_intersection = 0, 0
-    # Read SAM for stdin
-    for line in sam_stream:
-        tokens = line.strip().split('\t')
-        flag = int(tokens[1])
-        if flag & 256 or flag & 4:
-            # Secondary alignment or unmapped and thus not retrieved; ignore
-            continue
-        cigar, pos, seq = tokens[5], int(tokens[3]), tokens[9]
-        dummy_md, mapped, unmapped, clip_count = dummy_md_and_mapped_offsets(
-                                cigar,
-                                clip_threshold=clip_threshold
-                            )
-        if unmapped:
-            # Too much clipping
-            continue
-        if generous:
-            suffixes = ['/1', '/2']
-        else:
-            suffixes = ['']
-        considered_true_maps = [true_maps[tokens[0] + suffix]
-                                    for suffix in suffixes]
-        # Assume same read length for read pair
-        read_length = sum(considered_true_maps[0][i][2]
-                            - considered_true_maps[0][i][1]
-                            for i in xrange(len(considered_true_maps[0])))
-        basewise_retrieved += read_length - clip_count
-        read_retrieved += 1
-        # Try both /1 and /2; choose the best basewise result
-        intersected_base_count = 0
-        for true_map in considered_true_maps:
-            if tokens[2] != true_map[0][0]:
-                # chr is wrong, but this is still counted as a retrieval above
-                continue
-            base_counter, base_truths = 0, set()
-            '''Each tuple in base_truths is
-            (index of base in read, mapped location)'''
-            for block in true_map:
-                base_truths.update([(base_counter + i, j + 1)
-                                        for i, j in enumerate(
+    with open(sorted_combined_file) as sorted_combined_stream:
+        for (name,), xpartition in xstream(sorted_combined_stream, 1):
+            '''Dict mapping read names to alignments
+            (chrom, 1-based start, 1-based end)'''
+            true_maps = []
+            for tokens in xpartition:
+                if tokens[0] == '0':
+                    if len(tokens) < 12:
+                        continue
+                    chrom = tokens[1]
+                    chrom_start = int(tokens[2])
+                    chrom_end = int(tokens[3])
+                    block_sizes = tokens[10].split(',')
+                    block_starts = tokens[11].split(',')
+                    # Handle trailing commas
+                    try:
+                        int(block_sizes[-1])
+                    except ValueError:
+                        block_sizes = block_sizes[:-1]
+                    try:
+                        int(block_starts[-1])
+                    except ValueError:
+                        block_starts = block_starts[:-1]
+                    block_count = len(block_sizes)
+                    assert block_count == len(block_starts)
+                    exons = [(chrom,
+                                chrom_start + int(block_starts[i]),
+                                chrom_start + int(block_starts[i])
+                                + int(block_sizes[i]))
+                                for i in xrange(block_count)]
+                    true_maps.append(exons)
+                    basewise_relevant += sum([int(block_size) for block_size
+                                                in block_sizes])
+                    read_relevant += 1
+                elif tokens[0] == '1':
+                    flag = int(tokens[1])
+                    if flag & 256 or flag & 4:
+                        '''Secondary alignment or unmapped and thus not
+                        retrieved; ignore'''
+                        continue
+                    cigar, pos, seq = tokens[5], int(tokens[3]), tokens[9]
+                    (dummy_md, mapped,
+                        unmapped, clip_count) = dummy_md_and_mapped_offsets(
+                                            cigar,
+                                            clip_threshold=clip_threshold
+                                        )
+                    if unmapped:
+                        # Too much clipping
+                        continue
+                    # Assume same read length for read pair
+                    read_length = sum(
+                            true_maps[0][i][2]
+                                - true_maps[0][i][1]
+                                for i in xrange(len(true_maps[0])))
+                    basewise_retrieved += read_length - clip_count
+                    read_retrieved += 1
+                    # Try both /1 and /2; choose the best basewise result
+                    intersected_base_count = 0
+                    for true_map in true_maps:
+                        if tokens[2] != true_map[0][0]:
+                            '''chr is wrong, but this is still counted as a
+                            retrieval above'''
+                            continue
+                        base_counter, base_truths = 0, set()
+                        '''Each tuple in base_truths is
+                        (index of base in read, mapped location)'''
+                        for block in true_map:
+                            base_truths.update([(base_counter + i, j + 1)
+                                                    for i, j in enumerate(
+                                                        xrange(
+                                                            block[1], block[2]
+                                                        ))])
+                            base_counter += block[2] - block[1]
+                        base_predictions = set()
+                        if unmapped:
+                            # Too much clipping
+                            continue
+                        _, _, _, exons = indels_introns_and_exons(
+                                                        cigar,
+                                                        dummy_md, pos, seq,
+                                                        drop_deletions=True
+                                                    )
+                        mapped_index = 0
+                        for exon in exons:
+                            base_predictions.update(
+                                        [(mapped[mapped_index + i], j)
+                                                  for i, j in enumerate(
                                                     xrange(
-                                                        block[1], block[2]
-                                                    ))])
-                base_counter += block[2] - block[1]
-            base_predictions = set()
-            cigar, pos, seq = tokens[5], int(tokens[3]), tokens[9]
-            (dummy_md, mapped,
-                unmapped, clip_count) = dummy_md_and_mapped_offsets(
-                                                cigar,
-                                                clip_threshold=clip_threshold
-                                            )
-            if unmapped:
-                # Too much clipping
-                continue
-            _, _, _, exons = indels_introns_and_exons(cigar,
-                                                    dummy_md, pos, seq,
-                                                    drop_deletions=True)
-            mapped_index = 0
-            for exon in exons:
-                base_predictions.update([(mapped[mapped_index + i], j)
-                                          for i, j in enumerate(xrange(
                                                         exon[0], exon[1]
                                                     ))])
-                mapped_index += exon[1] - exon[0]
-            intersected_base_count = max(intersected_base_count, len(
-                                base_predictions.intersection(base_truths)
-                            ))
-        basewise_intersection += intersected_base_count
-        if intersected_base_count >= read_length * base_threshold:
-            read_intersection += 1
+                            mapped_index += exon[1] - exon[0]
+                        intersected_base_count = max(intersected_base_count,
+                                len(
+                                    base_predictions.intersection(base_truths)
+                                ))
+                    basewise_intersection += intersected_base_count
+                    if intersected_base_count >= read_length * base_threshold:
+                        read_intersection += 1
+                else:
+                    raise RuntimeError(
+                                'Invalid intermediate line.'
+                            )
     return (basewise_retrieved, basewise_relevant, basewise_intersection,
             read_retrieved, read_relevant, read_intersection)
 
