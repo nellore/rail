@@ -45,26 +45,32 @@ site.addsitedir(src_path)
 from alignment_handlers import indels_introns_and_exons
 from dooplicity.tools import xstream
 
-def dummy_md_and_mapped_offsets(cigar):
+def dummy_md_and_mapped_offsets(cigar, clip_threshold=1.0):
     """ Creates dummy MD string from CIGAR in case of missing MD.
 
         cigar: cigar string
         mapped_bases: returns list of offsets of mapped bases from end of read
             rather than MD string if True
+        clip_threshold: proportion of a read's bases that must be clipped
+            for a read to be considered unmapped
 
         Return value: tuple (dummy MD string, list of offsets of of mapped
-                                bases from beginning of read)
+                                bases from beginning of read,
+                                True iff read should be considered unmapped,
+                                number of clipped bases)
     """
     cigar = re.split(r'([MINDS])', cigar)[:-1]
-    cigar_index, offset = 0, 0
+    cigar_index, offset, read_bases = 0, 0, 0
     max_cigar_index = len(cigar)
     md, mapped = [], []
+    clip_count = 0
     while cigar_index != max_cigar_index:
         if cigar[cigar_index] == 0:
             cigar_index += 2
             continue
         if cigar[cigar_index+1] == 'M':
             base_count = int(cigar[cigar_index])
+            read_bases += base_count
             try:
                 if type(md[-1]) is int:
                     md[-1] += base_count
@@ -75,8 +81,16 @@ def dummy_md_and_mapped_offsets(cigar):
             cigar_index += 2
             mapped.extend(range(offset, offset + base_count))
             offset += base_count
-        elif cigar[cigar_index+1] in 'SI':
-            offset += int(cigar[cigar_index])
+        elif cigar[cigar_index+1] == 'S':
+            value = int(cigar[cigar_index])
+            read_bases += value
+            offset += value
+            clip_count += value
+            cigar_index += 2
+        elif cigar[cigar_index+1] == 'I':
+            value = int(cigar[cigar_index])
+            offset += value
+            read_bases += value
             cigar_index += 2
         elif cigar[cigar_index+1] == 'N':
             cigar_index += 2
@@ -87,11 +101,21 @@ def dummy_md_and_mapped_offsets(cigar):
             raise RuntimeError(
                         'Accepted CIGAR characters are only in [MINDS].'
                     )
-    return (''.join(str(el) for el in md), mapped)
+    return (''.join(str(el) for el in md), mapped,
+                float(clip_count) / read_bases >= clip_threshold,
+                clip_count)
 
 def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
-        base_threshold=0.5):
-    """ 
+        base_threshold=0.5, clip_threshold=1.0):
+    """ Finds relevant and retrieved instance counts.
+
+        true_bed_stream: file handle for BED output of Flux simulation
+        sam_stream: where to read in aligner's mappings
+        generous: True iff aligner cuts off /1 or /2 of a given read
+        base_threshold: proportion of a read's bases that must align
+            correctly for a read to be considered a correct mapping
+        clip_threshold: proportion of a read's bases that must be clipped
+            for a read to be considered unmapped
     """
     # Dict mapping read names to alignments (chrom, 1-based start, 1-based end)
     true_maps = {} # Warning: takes up a lot of memory for large samples!
@@ -134,7 +158,15 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
         flag = int(tokens[1])
         if flag & 256 or flag & 4:
             # Secondary alignment or unmapped and thus not retrieved; ignore
-            continue 
+            continue
+        cigar, pos, seq = tokens[5], int(tokens[3]), tokens[9]
+        dummy_md, mapped, unmapped, clip_count = dummy_md_and_mapped_offsets(
+                                cigar,
+                                clip_threshold=clip_threshold
+                            )
+        if unmapped:
+            # Too much clipping
+            continue
         if generous:
             suffixes = ['/1', '/2']
         else:
@@ -145,7 +177,7 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
         read_length = sum(considered_true_maps[0][i][2]
                             - considered_true_maps[0][i][1]
                             for i in xrange(len(considered_true_maps[0])))
-        basewise_retrieved += read_length
+        basewise_retrieved += read_length - clip_count
         read_retrieved += 1
         # Try both /1 and /2; choose the best basewise result
         intersected_base_count = 0
@@ -165,7 +197,14 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
                 base_counter += block[2] - block[1]
             base_predictions = set()
             cigar, pos, seq = tokens[5], int(tokens[3]), tokens[9]
-            dummy_md, mapped = dummy_md_and_mapped_offsets(cigar)
+            (dummy_md, mapped,
+                unmapped, clip_count) = dummy_md_and_mapped_offsets(
+                                                cigar,
+                                                clip_threshold=clip_threshold
+                                            )
+            if unmapped:
+                # Too much clipping
+                continue
             _, _, _, exons = indels_introns_and_exons(cigar,
                                                     dummy_md, pos, seq,
                                                     drop_deletions=True)
@@ -209,13 +248,18 @@ if __name__ == '__main__':
             required=False, default=0.5,
             help=('Proportion of a read\'s bases that must align correctly for '
                   'the read to be considered a correct mapping'))
+        parser.add_argument('-c', '--clip-threshold', type=float,
+            required=False, default=1.0,
+            help=('Proportion of a read\'s bases that are clipped above '
+                  'which the read is considered unmapped'))
         args = parser.parse_known_args(sys.argv[1:])[0]
         with open(args.true_bed) as true_bed_stream:
             (basewise_retrieved, basewise_relevant, basewise_intersection,
                 read_retrieved, read_relevant, read_intersection) = go(
                         true_bed_stream,
                         generous=args.generous,
-                        base_threshold=args.base_threshold
+                        base_threshold=args.base_threshold,
+                        clip_threshold=args.clip_threshold
                     )
         basewise_precision = float(basewise_intersection) / basewise_retrieved
         basewise_recall = float(basewise_intersection) / basewise_relevant
@@ -249,8 +293,7 @@ if __name__ == '__main__':
                     print >>true_bed_stream, (
 """chr2L\t70326\t70402\tchr2L:66584-71390W:NM_001258881:2:3789:2629:2857:A\t0\t-\t.\t.\t0,0,0\t1\t76\t0
 chr2L\t200609\t200751\tchr2L:159032-203250W:NM_001272876:177:18434:15833:15999:A\t0\t-\t.\t.\t0,0,0\t2\t66,10\t0,132
-chrX\t5525473\t5527141\tchrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t0\t+\t.\t.\t0,0,0\t3\t55,18,3\t0,749,1665
-"""
+chrX\t5525473\t5527141\tchrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t0\t+\t.\t.\t0,0,0\t3\t55,18,3\t0,749,1665"""
                     )
 
             def test_perfection(self):
@@ -301,7 +344,6 @@ chrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t0\tchrX\t5525474\t255\t5
                                 generous=False,
                                 base_threshold=0.5
                             )
-                # This should be perfect
                 self.assertEquals(basewise_retrieved, 228)
                 self.assertEquals(basewise_relevant, 228)
                 self.assertEquals(basewise_intersection, 184)
@@ -330,7 +372,7 @@ chrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t0\tchrX\t5525474\t255\t5
                                 base_threshold=0.8
                             )
                 # This should be perfect
-                self.assertEquals(basewise_retrieved, 228)
+                self.assertEquals(basewise_retrieved, 212)
                 self.assertEquals(basewise_relevant, 228)
                 self.assertEquals(basewise_intersection, 212)
                 self.assertEquals(read_retrieved, 3)
@@ -357,13 +399,66 @@ chrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t4\t*\t0\t0\t*\t*\t0\t0\t
                                 generous=False,
                                 base_threshold=0.8
                             )
-                # This should be perfect
                 self.assertEquals(basewise_retrieved, 152)
                 self.assertEquals(basewise_relevant, 228)
                 self.assertEquals(basewise_intersection, 152)
                 self.assertEquals(read_retrieved, 2)
                 self.assertEquals(read_relevant, 3)
                 self.assertEquals(read_intersection, 2)
+
+            def test_clip_threshold(self):
+                """ Fails if basewise/read-level instance counts are wrong. """
+                # SAM lines are based on Rail's output
+                with open(self.sam, 'w') as sam_stream:
+                    print >>sam_stream, (
+"""chr2L:66584-71390W:NM_001258881:2:3789:2629:2857:A\t16\tchr2L\t70327\t44\t72M4S\t*\t0\t0\tTTAGAAGTGCGTTAAAGCGCTCTATAAAACAGGCCCAGGAGCAACAGCTTCAGCTGAAGCGAGGCAATCATGAAGAHHHHHHHHH5HHHH555HHHHhHHH555HHHHHHHHhHHH5HHHHHHHHHHhhHhhHHHHH5HHHHhhhhHHHHHH
+chr2L:159032-203250W:NM_001272876:177:18434:15833:15999:A\t16\tchr2L\t200610\t255\t66M66N10M\t*\t0\t0\tATCCAGGCAAGGCAATGGATATGCAGTTGGATGAGATGGACCGCATGTCAATGATTGCAGCTGTCGTTCAACAACA\tH55HHHHHHhhhHHhH5HHHHHHHHHhhHhhHHhhHHHhhhhHHhHhhhhhHHHHHHH55HHHHHHHHHHHHHHHH
+chrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t0\tchrX\t5525474\t255\t55M694N18M898N3M\t*\t0\t0\tCCACCACATGCATCAGGCCAAAGCGAGCGATCACCTTGAAGCGATGGATGTTCAACTGAAATGGCGGCCTAGTCCG\tHHHhhhhhhhhhhhhhHhhhhhhHHhhhhhhhhHHHHHHHHHHH5HHHhhHhHHHH55H55HHHHHHHHHHHH5HH"""
+                    )
+                with open(self.true_bed) as true_bed_stream, \
+                        open(self.sam) as sam_stream:
+                    (basewise_retrieved, basewise_relevant,
+                        basewise_intersection,
+                        read_retrieved, read_relevant,
+                        read_intersection) = go(
+                                true_bed_stream,
+                                sam_stream=sam_stream,
+                                generous=False,
+                                base_threshold=0.5,
+                                clip_threshold=0.05
+                            )
+                # Clip should kill read 1 here
+                self.assertEquals(basewise_retrieved, 152)
+                self.assertEquals(basewise_relevant, 228)
+                self.assertEquals(basewise_intersection, 152)
+                self.assertEquals(read_retrieved, 2)
+                self.assertEquals(read_relevant, 3)
+                self.assertEquals(read_intersection, 2)
+                with open(self.sam, 'w') as sam_stream:
+                    print >>sam_stream, (
+"""chr2L:66584-71390W:NM_001258881:2:3789:2629:2857:A\t16\tchr2L\t70327\t44\t73M3S\t*\t0\t0\tTTAGAAGTGCGTTAAAGCGCTCTATAAAACAGGCCCAGGAGCAACAGCTTCAGCTGAAGCGAGGCAATCATGAAGAHHHHHHHHH5HHHH555HHHHhHHH555HHHHHHHHhHHH5HHHHHHHHHHhhHhhHHHHH5HHHHhhhhHHHHHH
+chr2L:159032-203250W:NM_001272876:177:18434:15833:15999:A\t16\tchr2L\t200610\t255\t66M66N10M\t*\t0\t0\tATCCAGGCAAGGCAATGGATATGCAGTTGGATGAGATGGACCGCATGTCAATGATTGCAGCTGTCGTTCAACAACA\tH55HHHHHHhhhHHhH5HHHHHHHHHhhHhhHHhhHHHhhhhHHhHhhhhhHHHHHHH55HHHHHHHHHHHHHHHH
+chrX:5519709-5542520C:NM_001272325:24:5914:1276:1427:A\t0\tchrX\t5525474\t255\t55M694N18M898N3M\t*\t0\t0\tCCACCACATGCATCAGGCCAAAGCGAGCGATCACCTTGAAGCGATGGATGTTCAACTGAAATGGCGGCCTAGTCCG\tHHHhhhhhhhhhhhhhHhhhhhhHHhhhhhhhhHHHHHHHHHHH5HHHhhHhHHHH55H55HHHHHHHHHHHH5HH"""
+                    )
+                with open(self.true_bed) as true_bed_stream, \
+                        open(self.sam) as sam_stream:
+                    (basewise_retrieved, basewise_relevant,
+                        basewise_intersection,
+                        read_retrieved, read_relevant,
+                        read_intersection) = go(
+                                true_bed_stream,
+                                sam_stream=sam_stream,
+                                generous=False,
+                                base_threshold=0.5,
+                                clip_threshold=0.05
+                            )
+                # Clip should kill read 1 here
+                self.assertEquals(basewise_retrieved, 225)
+                self.assertEquals(basewise_relevant, 228)
+                self.assertEquals(basewise_intersection, 225)
+                self.assertEquals(read_retrieved, 3)
+                self.assertEquals(read_relevant, 3)
+                self.assertEquals(read_intersection, 3)
 
             def tearDown(self):
                 # Kill temporary directory
