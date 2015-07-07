@@ -128,12 +128,22 @@ class BowtieIndexReference(object):
         # To facilitate sorting reference names in order of descending length
         sorted_rnames = sorted(self.length.items(),
                                key=lambda x: itemgetter(1)(x), reverse=True)
-        self.rname_to_string = {}
-        self.string_to_rname = {}
+        '''A case-sensitive sort is also necessary here because new versions of
+        bedGraphToBigWig complain on encountering a nonlexicographic sort
+        order.'''
+        lexicographically_sorted_rnames = sorted(self.length.items(),
+                                                    key=lambda x:
+                                                    itemgetter(0)(x))
+        self.rname_to_string, self.l_rname_to_string = {}, {}
+        self.string_to_rname, self.l_string_to_rname = {}, {}
         for i, (rname, _) in enumerate(sorted_rnames):
             rname_string = ('%012d' % i)
             self.rname_to_string[rname] = rname_string
             self.string_to_rname[rname_string] = rname
+        for i, (rname, _) in enumerate(lexicographically_sorted_rnames):
+            rname_string = ('%012d' % i)
+            self.l_rname_to_string[rname] = rname_string
+            self.l_string_to_rname[rname_string] = rname
         # Handle unmapped reads
         unmapped_string = ('%012d' % len(sorted_rnames))
         self.rname_to_string['*'] = unmapped_string

@@ -220,7 +220,7 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
         for rname, coverages in itertools.groupby(xpartition, 
                                                     key=lambda val: val[0]):
             try:
-                rname = reference_index.string_to_rname[rname]
+                rname = reference_index.l_string_to_rname[rname]
             except KeyError:
                 raise RuntimeError(
                         'RNAME number string "%s" not in Bowtie index.' 

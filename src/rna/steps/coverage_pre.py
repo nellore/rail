@@ -149,7 +149,7 @@ for (partition_id,), xpartition in xstream(sys.stdin, 1):
     bin_count += 1
     bin_start_time, bin_diff_count = time.time(), 0
     rname = partition_id.rpartition(';')[0]
-    rname_index = reference_index.rname_to_string[rname]
+    rname_index = reference_index.l_rname_to_string[rname]
     coverages, unique_coverages = defaultdict(int), defaultdict(int)
     for (pos, sample_indexes_and_diffs) in itertools.groupby(
                                             xpartition, lambda val: val[0]

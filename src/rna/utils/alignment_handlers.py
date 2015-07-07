@@ -635,7 +635,7 @@ class AlignmentPrinter(object):
         try:
             second_place_score = [int(field[5:]) for field
                                     in alignment if field[:5]
-                                    in secondary_set][0]
+                                    in self.secondary_set][0]
         except IndexError:
             # No XS field; assume uniqueness
             return True

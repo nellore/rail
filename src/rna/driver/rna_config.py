@@ -45,6 +45,7 @@ import unicodedata
 
 _help_set = set(['--help', '-h'])
 _argv_set = set(sys.argv)
+_whitespace_and_comma = string.whitespace + ','
 
 class RailParser(argparse.ArgumentParser):
     """ Accommodates Rail-RNA's subcommand structure. """
@@ -2931,12 +2932,6 @@ class RailRnaAlign(object):
         if not elastic:
             '''Programs and Bowtie indexes should be checked only in local
             mode. First grab Bowtie index paths.'''
-            if ',' in bowtie_idx:
-                bowtie1_idx, _, bowtie2_idx = bowtie_idx.partition(',')
-            else:
-                bowtie1_idx = bowtie2_idx = bowtie_idx
-            bowtie1_idx = os.path.expandvars(os.path.expanduser(bowtie1_idx))
-            bowtie2_idx = os.path.expandvars(os.path.expanduser(bowtie2_idx))
             base.bowtie1_exe = base.check_program('bowtie', 'Bowtie 1',
                                 '--bowtie1', entered_exe=bowtie1_exe,
                                 is_exe=is_exe, which=which)
@@ -2959,18 +2954,6 @@ class RailRnaAlign(object):
                                             entered_exe=bowtie1_build_exe,
                                             is_exe=is_exe,
                                             which=which)
-            for extension in ['.1.ebwt', '.2.ebwt', '.3.ebwt', '.4.ebwt', 
-                                '.rev.1.ebwt', '.rev.2.ebwt']:
-                index_file = bowtie1_idx + extension
-                if not ab.Url(index_file).is_local:
-                    base_errors.append(('Bowtie 1 index file {0} must be '
-                                        'on the local filesystem.').format(
-                                            index_file
-                                        ))
-                elif not os.path.exists(index_file):
-                    base.errors.append(('Bowtie 1 index file {0} does not '
-                                        'exist.').format(index_file))
-            base.bowtie1_idx = bowtie1_idx
             base.bowtie2_exe = base.check_program('bowtie2', 'Bowtie 2',
                                 '--bowtie2', entered_exe=bowtie2_exe,
                                 is_exe=is_exe, which=which)
@@ -2993,18 +2976,63 @@ class RailRnaAlign(object):
                                             entered_exe=bowtie2_build_exe,
                                             is_exe=is_exe,
                                             which=which)
-            for extension in ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', 
-                                '.rev.1.bt2', '.rev.2.bt2']:
-                index_file = bowtie2_idx + extension
-                if not ab.Url(index_file).is_local:
-                    base_errors.append(('Bowtie 2 index file {0} must be '
-                                        'on the local filesystem.').format(
-                                            index_file
+            bowtie_idx = ','.join(bowtie_idx)
+            if ',' in bowtie_idx:
+                bowtie1_idx, _, bowtie2_idx = bowtie_idx.partition(',')
+            else:
+                bowtie1_idx = bowtie2_idx = bowtie_idx
+            bowtie1_idx = os.path.expandvars(os.path.expanduser(bowtie1_idx))
+            bowtie2_idx = os.path.expandvars(os.path.expanduser(bowtie2_idx))
+            bowtie1_extensions = set(['.1.ebwt', '.2.ebwt', '.3.ebwt',
+                                      '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt'])
+            bowtie2_extensions = set(['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', 
+                                      '.rev.1.bt2', '.rev.2.bt2'])
+            if not (ab.Url(bowtie1_idx).is_local
+                    and ab.Url(bowtie2_idx).is_local):
+                base.errors.append(('Bowtie index basenames must be '
+                                    'on the local filesystem, but "{0}" and '
+                                    '"{1}" were entered.').format(
+                                            bowtie1_idx, bowtie2_idx
                                         ))
-                elif not os.path.exists(index_file):
-                    base.errors.append(('Bowtie 2 index file {0} does not '
-                                        'exist.').format(index_file))
-            base.bowtie2_idx = bowtie2_idx
+            else:
+                import glob
+                bowtie1_idx_len = len(bowtie1_idx)
+                existing_bowtie1_extensions = set(
+                        [idx_file[bowtie1_idx_len:]
+                            for idx_file in glob.glob(bowtie1_idx + '*')]
+                    )
+                if not (bowtie1_extensions <= existing_bowtie1_extensions):
+                    # Swap BT1 and 2 indexes and try again
+                    bowtie1_idx, bowtie2_idx = bowtie2_idx, bowtie1_idx
+                bowtie1_idx_len = len(bowtie1_idx)
+                existing_bowtie1_extensions = set(
+                        [idx_file[bowtie1_idx_len:]
+                            for idx_file in glob.glob(bowtie1_idx + '*')]
+                    )
+                bowtie2_idx_len = len(bowtie2_idx)
+                existing_bowtie2_extensions = set(
+                        [idx_file[bowtie2_idx_len:]
+                            for idx_file in glob.glob(bowtie2_idx + '*')]
+                    )
+                if not (bowtie1_extensions <= existing_bowtie1_extensions
+                        and bowtie2_extensions <= existing_bowtie2_extensions):
+                    missing_extensions = ['"{}"'.format(extension)
+                                            for extension in
+                                            ((bowtie1_extensions
+                                                | bowtie2_extensions) - (
+                                                existing_bowtie2_extensions
+                                                | existing_bowtie1_extensions
+                                            ))]
+                    base.errors.append(('Some Bowtie index files were not '
+                                        'found. Check that index files with '
+                                        'the extensions {0} exist with the '
+                                        'basename(s) specified.').format(
+                                                ', '.join(
+                                                    missing_extensions[:-1]
+                                                ) + ', and '
+                                                + missing_extensions[-1]
+                                            ))
+            base.bowtie1_idx, base.bowtie2_idx = bowtie1_idx, bowtie2_idx
             base.samtools_exe = base.check_program('samtools', 'SAMTools',
                                 '--samtools', entered_exe=samtools_exe,
                                 is_exe=is_exe, which=which)
@@ -3263,23 +3291,29 @@ class RailRnaAlign(object):
                                                     library_size
                                                 ))
         base.library_size = library_size
-        confidence_criteria_split = intron_criteria.split(',')
-        confidence_criteria_error = False
-        try:
-            base.sample_fraction = float(confidence_criteria_split[0])
-        except ValueError:
-            confidence_criteria_error = True
-        else:
-            if not (0 <= base.sample_fraction <= 1):
+        if isinstance(intron_criteria, str):
+            intron_criteria = [intron_criteria]
+        confidence_criteria_split = [criterion.strip(_whitespace_and_comma)
+                                        for criterion in 
+                                        ','.join(intron_criteria).split(',')
+                                        if criterion]
+        confidence_criteria_error = len(confidence_criteria_split) != 2
+        if not confidence_criteria_error:
+            try:
+                base.sample_fraction = float(confidence_criteria_split[0])
+            except ValueError:
                 confidence_criteria_error = True
-        try:
-            base.coverage_threshold = int(confidence_criteria_split[1])
-        except ValueError:
-            confidence_criteria_error = True
-        else:
-            if not (base.coverage_threshold >= 0
-                    or base.coverage_threshold == -1):
+            else:
+                if not (0 <= base.sample_fraction <= 1):
+                    confidence_criteria_error = True
+            try:
+                base.coverage_threshold = int(confidence_criteria_split[1])
+            except ValueError:
                 confidence_criteria_error = True
+            else:
+                if not (base.coverage_threshold >= 0
+                        or base.coverage_threshold == -1):
+                    confidence_criteria_error = True
         if confidence_criteria_error:
             base.errors.append('Intron confidence criteria '
                                '(--intron-criteria) must be a '
@@ -3290,23 +3324,33 @@ class RailRnaAlign(object):
                                'by read count. {0} was entered.'.format(
                                                     intron_criteria
                                                 ))
-        confidence_criteria_split = indel_criteria.split(',')
-        confidence_criteria_error = False
-        try:
-            base.indel_sample_fraction = float(confidence_criteria_split[0])
-        except ValueError:
-            confidence_criteria_error = True
-        else:
-            if not (0 <= base.indel_sample_fraction <= 1):
+        if isinstance(indel_criteria, str):
+            indel_criteria = [indel_criteria]
+        confidence_criteria_split = [criterion.strip(_whitespace_and_comma)
+                                        for criterion in 
+                                        ','.join(indel_criteria).split(',')
+                                        if criterion]
+        confidence_criteria_error = len(confidence_criteria_split) != 2
+        if not confidence_criteria_error:
+            try:
+                base.indel_sample_fraction = float(
+                                            confidence_criteria_split[0]
+                                        )
+            except ValueError:
                 confidence_criteria_error = True
-        try:
-            base.indel_coverage_threshold = int(confidence_criteria_split[1])
-        except ValueError:
-            confidence_criteria_error = True
-        else:
-            if not (base.indel_coverage_threshold >= 0
-                    or base.indel_coverage_threshold == -1):
+            else:
+                if not (0 <= base.indel_sample_fraction <= 1):
+                    confidence_criteria_error = True
+            try:
+                base.indel_coverage_threshold = int(
+                                            confidence_criteria_split[1]
+                                        )
+            except ValueError:
                 confidence_criteria_error = True
+            else:
+                if not (base.indel_coverage_threshold >= 0
+                        or base.indel_coverage_threshold == -1):
+                    confidence_criteria_error = True
         if confidence_criteria_error:
             base.errors.append('Indel confidence criteria '
                                '(--indel-criteria) must be a '
@@ -3334,8 +3378,12 @@ class RailRnaAlign(object):
         deliverable_choices = set(
                 ['idx', 'bam', 'sam', 'bed', 'tsv', 'bw', 'itn']
             )
-        split_deliverables = set([deliverable.strip() for deliverable
-                                    in deliverables.split(',')])
+        if isinstance(deliverables, str):
+            deliverables = [deliverables]
+        split_deliverables = set([deliverable.strip(_whitespace_and_comma)
+                                    for deliverable
+                                    in ','.join(deliverables).split(',')
+                                    if deliverable])
         undeliverables = split_deliverables - deliverable_choices
         if undeliverables:
             base.errors.append('Some deliverables (--deliverables) specified '
@@ -3473,9 +3521,11 @@ class RailRnaAlign(object):
             required_parser.add_argument(
                 '-x', '--bowtie-idx', type=str, required=True,
                 metavar='<idx | idx/idx>',
+                nargs='+',
                 help=('Bowtie 1 and 2 index basenames if they share the '
                       'same path; otherwise, Bowtie 1 index basename '
-                      'and Bowtie 2 index basename separated by comma')
+                      'and Bowtie 2 index basename separated by comma or '
+                      'space')
             )
             exec_parser.add_argument(
                 '--bowtie2', type=str, required=False,
@@ -3619,6 +3669,7 @@ class RailRnaAlign(object):
             '--intron-criteria', type=str, required=False,
             metavar='<dec,int>',
             default='0.05,5',
+            nargs='+',
             help=('if parameter is "f,c", filter out introns that are not '
                   'either present in at least a fraction f of samples or '
                   'detected in at least c reads of one sample')
@@ -3685,8 +3736,10 @@ class RailRnaAlign(object):
         output_parser.add_argument('-d', '--deliverables', required=False,
             metavar='<choice,...>',
             default='idx,tsv,bed,bam,bw',
-            help=('comma-separated list of desired outputs. Choose from among '
-                  '{"idx", "tsv", "bed", "sam" | "bam", "bw", "itn"}.')
+            nargs='+',
+            help=('comma- or space-separated list of desired outputs. Choose '
+                  'from among {"idx", "tsv", "bed", "sam" | "bam", "bw", '
+                  '"itn"}.')
         )
         output_parser.add_argument(
             '--drop-deletions', action='store_const', const=True,
@@ -3709,6 +3762,7 @@ class RailRnaAlign(object):
             '--indel-criteria', type=str, required=False,
             metavar='<dec,int>',
             default='0.05,5',
+            nargs='+',
             help=('if parameter is "f,c", suppress indels from cross-sample '
                   'TSVs that are not either present in at least a fraction f '
                   'of samples or detected in at least c reads of one sample')
