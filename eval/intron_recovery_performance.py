@@ -256,7 +256,7 @@ def dummy_md_index(cigar):
     return ''.join(str(el) for el in md)
 
 def introns_from_sam_stream(sam_stream):
-    """ Writes output that maps QNAMES to introns overlapped.
+    """ Writes output that maps QNAMES to exon-exon junctions overlapped.
 
         sam_stream: where to find retrieved alignments in SAM form
 

@@ -5,11 +5,12 @@ spliced_read_recovery_performance.py
 Outputs precision, recall, and related performance measurements of a spliced
 aligner given a Flux-like BED file T with true spliced alignments and a SAM
 file Y with the aligner's spliced alignments (read from stdin). Only reads that
-overlap introns in the relevant (true) and retrieved (aligner result) datasets
-are considered. Secondary alignments from the SAM input are ignored.
+overlap exon-exon junctions in the relevant (true) and retrieved
+(aligner result) datasets are considered. Secondary alignments from the SAM
+input are ignored.
 
 If a coverage threshold is specified with -c, only reads that overlap at least
-one intron whose TRUE coverage is <= -c are considered.
+one exon-exon junction whose TRUE coverage is <= -c are considered.
 
 THIS FILE DEPENDS ON DOOPLICITY AND RAIL; don't move it in the Rail repo.
 
@@ -93,7 +94,7 @@ def write_read_introns_from_bed_stream(bed_stream, output_stream,
                                         intron_counts,
                                         generous=False,
                                         instance=False):
-    """ Writes output that maps QNAMES to introns overlapped.
+    """ Writes output that maps QNAMES to exon-exon junctions overlapped.
 
         bed_stream: input stream containing lines of a BED file characterizing
             splice junctions.
@@ -101,7 +102,7 @@ def write_read_introns_from_bed_stream(bed_stream, output_stream,
             <read name><TAB><sorted list of intron starts and ends>
             <TAB>['t' for 'true']
         intron_counts: defaultdict(int) that counts number of simulated
-            alignments overlapping intron
+            alignments overlapping exon-exon junction
         generous: True iff QNAMES should have the last two chars cut off
 
         No return value.
@@ -163,14 +164,14 @@ def write_read_introns_from_bed_stream(bed_stream, output_stream,
 def write_read_introns_from_sam_stream(sam_stream, output_stream,
                                         retrieved_intron_counts,
                                         instance=False):
-    """ Writes output that maps QNAMES to introns overlapped.
+    """ Writes output that maps QNAMES to exon-exon junctions overlapped.
 
         sam_stream: where to find retrieved alignments in SAM form
         output_stream: where to write output. Each line takes the form:
             <read name><TAB>RNAME<TAB><sorted list of intron starts and ends>
             <TAB>['r' for 'retrieved']
         retrieved_intron_counts: defaultdict(int) that counts number of
-            retrieved alignments overlapping intron
+            retrieved alignments overlapping exon-exon junction
 
         No return value.
     """
@@ -217,12 +218,13 @@ def print_instance(code, introns, intron_counts, retrieved_intron_counts):
         both of the original simulated data or the aligned data. A read that
         appears in the original data is relevant; a read that appears in the
         aligned data is retrieved. Here, "coverage" means the number of reads
-        that overlap an intron in the simulated or retrieved dataset.
+        that overlap an exon-exon junction in the simulated or retrieved
+        dataset.
 
         code: 'rel' if relevant but not retrieved
               'ret' if retrieved but not relevant
               'relret' if relevant and retrieved
-        introns: list introns overlapped by instance
+        introns: list of introns crossed by instance
         intron_counts: maps elements of "introns" to their simulated coverages
         retrieved_intron_counts: maps elements of "introns" to their retrieved
             coverages
@@ -266,19 +268,19 @@ if __name__ == '__main__':
         help='Full path of BED file containing true introns')
     parser.add_argument('-r', '--read-instance', action='store_const',
         const=True, default=False,
-        help='Defines an instance as an alignment that overlaps introns '
-             'rather than the event that an intron is overlapped by '
-             'an alignment')
+        help='Defines an instance as an alignment that overlaps exon-exon '
+             'junctions rather than the event that an exon-exon junction '
+             'is overlapped by an alignment')
     parser.add_argument('-g', '--generous', action='store_const', const=True,
         default=False,
-        help='TopHat/STAR cut off /1s and /2s from read names, even in '
+        help='TopHat/STAR/HISAT cut off /1s and /2s from read names, even in '
              'unpaired mode. This loses information. In generous mode, '
              'this script provides extremely tight upper bounds on '
-             'precision and recall for TopHat/STAR')
+             'precision and recall for TopHat/STAR/HISAT')
     parser.add_argument('-c', '--coverage-threshold', type=int,
         required=False, default=None,
         help='Consider only reads that overlap at least '
-             'one intron whose TRUE coverage is <= -c')
+             'one exon-exon junction whose TRUE coverage is <= -c')
     args = parser.parse_args(sys.argv[1:])
     from tempdel import remove_temporary_directories
     import tempfile

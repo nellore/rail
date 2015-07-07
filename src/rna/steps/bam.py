@@ -343,7 +343,10 @@ else:
                                                     if token[:5] == 'XS:i:'
                                                     else token)
                                                     for token in tokens[5:]]
-        print >>output_stream, '\t'.join(sam_line_to_print)
+        try:
+            print >>output_stream, '\t'.join(sam_line_to_print)
+        except IOError:
+            raise IOError('Error writing line "%s".' % sam_line_to_print)
         if not (int(flag) & 256):
             total_count += 1
             try:
