@@ -13,6 +13,9 @@ aligned correctly (precision) and the proportion of all reads for which >= K%
 of bases are aligned correctly (recall). K is the argument of the
 --base-threshold command-line parameter.
 
+Warning: this script is a memory hog. Eats ~16 GB of RAM on 40 million reads.
+Be ready.
+
 THIS FILE DEPENDS ON DOOPLICITY AND RAIL; don't move it in the Rail repo.
 
 Output (written to stdout)
