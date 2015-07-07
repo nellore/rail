@@ -1,3 +1,7 @@
+Notes on versioning
+-----
+This version of the readme is a work in progress describing how to reproduce results in a soon-to-appear revision of the [Rail-RNA preprint](http://biorxiv.org/content/early/2015/05/07/019067). To view the README that reproduces the results contained in v1, see [this](https://github.com/nellore/rail/tree/7db1e4e506224e156ae1ac271ceb88d5e465b7b9/eval) commit.
+
 Reproducing preprint results
 -----
 **Use Rail-RNA v0.1.0a.** Rail-RNA has several dependencies. In the experiments we conducted, Rail-RNA wrapped Bowtie 1 v1.1.1, Bowtie 2 v2.2.4, and SAMTools v0.1.19. When run in its `elastic` mode as described below, Rail-RNA used PyPy v2.2.1. In all other cases, Rail-RNA used PyPy v2.4.0. Version 2.0.12 of TopHat 2 was used and, like Rail-RNA, it wrapped Bowtie 2 v2.2.4 and SAMTools v0.1.19. Version 2.4.0j of STAR was used, and version 0.1.5-beta of HISAT was used. Flux Simulator 1.2.1 was used to obtain simulated samples as described below.
