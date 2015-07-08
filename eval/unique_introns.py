@@ -6,8 +6,8 @@ Outputs introns unique to each bed file from a set on bed files supplied as
 a space-separated list at the command line.
 
 Introns are output as new files with the same prefixes as the old ones,
-but with the suffix ".unique" rather than ".bed". ".unique" files are placed
-in the same directory as the original bed files.
+but with the suffix ".introns.unique" rather than ".bed". ".introns.unique"
+files are placed in the same directory as the original bed files.
 
 Output tuple columns per file
 chrom <tab> intron start (1-based inclusive)
@@ -17,19 +17,20 @@ import os
 from collections import defaultdict
 
 if __name__ == '__main__':
+    import argparse
     # Print file's docstring if -h is invoked
     parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-b', '--bed', type=str, required=True, nargs='+'
+    parser.add_argument('-b', '--bed', type=str, required=True, nargs='+',
         help='Path to BED files whose exonic blocks deck introns')
     args = parser.parse_args()
     introns_to_sample_indexes = defaultdict(set)
     sample_indexes_to_filenames = {}
     for k, bed_file in enumerate(args.bed):
         bed_dir = os.path.dirname(bed_file)
-        sample_indexes_to_filenames[i] = os.path.join(
+        sample_indexes_to_filenames[k] = os.path.join(
                                             bed_dir,
-                                            bed_file[:-4] + '.unique'
+                                            bed_file[:-4] + 'introns.unique'
                                         )
         with open(bed_file) as bed_stream:
             for line in bed_stream:
@@ -75,9 +76,13 @@ if __name__ == '__main__':
         if len(introns_to_sample_indexes[intron]) == 1:
             sample_index = list(introns_to_sample_indexes[intron])[0]
             try:
-                print >>open_files[sample_index], '\t'.join(intron)
+                print >>open_files[sample_index], '\t'.join(
+                        [str(el) for el in intron]
+                    )
             except KeyError:
                 open_files[sample_index] = open(
                             sample_indexes_to_filenames[sample_index], 'w'
                         )
-                print >>open_files[sample_index], '\t'.join(intron)
+                print >>open_files[sample_index], '\t'.join(
+                        [str(el) for el in intron]
+                    )
