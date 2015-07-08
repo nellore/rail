@@ -11,6 +11,8 @@ BOWTIE2BUILD=/scratch0/langmead-fs1/shared/bowtie2-2.2.4/bowtie2-build
 STAR=/scratch0/langmead-fs1/shared/STAR-STAR_2.4.0j/bin/Linux_x86_64_static
 # Where to find HISAT build executable; version 0.1.1-beta is used
 HISATBUILD=/scratch0/langmead-fs1/shared/hisat-0.1.1-beta/hisat-build
+#Where to find Subread build executable; version 1.4.6-p4 is used
+SUBREADBUILD=/scratch0/langmead-fs1/shared/subread-1.4.6-p4-Linux-x86_64/bin/subread-buildindex
 
 # Number of cores
 CORES=32
@@ -24,3 +26,4 @@ $STAR --runMode genomeGenerate --genomeDir $REFDIR/star --genomeFastaFiles genom
 $BOWTIEBUILD genome.fa genome || { echo 'Problem encountered building Bowtie 1 index'; exit 1; }
 $BOWTIE2BUILD genome.fa genome || { echo 'Problem encountered building Bowtie 2 index'; exit 1; }
 $HISATBUILD genome.fa hisatgenome || { echo 'Problem encountered building HISAT index'; exit 1; }
+$SUBREADBUILD -o subreadgenome genome.fa || { echo 'Problem encountered building Subread index'; exit 1; }

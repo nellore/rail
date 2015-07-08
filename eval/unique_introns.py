@@ -29,7 +29,7 @@ if __name__ == '__main__':
         bed_dir = os.path.dirname(bed_file)
         sample_indexes_to_filenames[i] = os.path.join(
                                             bed_dir,
-                                            bed_file[:-4] + '.unique.bed'
+                                            bed_file[:-4] + '.unique'
                                         )
         with open(bed_file) as bed_stream:
             for line in bed_stream:
