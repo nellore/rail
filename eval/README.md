@@ -4,7 +4,7 @@ This version of the readme is a work in progress describing how to reproduce res
 
 Reproducing preprint results
 -----
-**Use Rail-RNA v0.1.0a.** Rail-RNA has several dependencies. In the experiments we conducted, Rail-RNA wrapped Bowtie 1 v1.1.1, Bowtie 2 v2.2.4, and SAMTools v0.1.19. When run in its `elastic` mode as described below, Rail-RNA used PyPy v2.2.1. In all other cases, Rail-RNA used PyPy v2.4.0. Version 2.0.12 of TopHat 2 was used and, like Rail-RNA, it wrapped Bowtie 2 v2.2.4 and SAMTools v0.1.19. Version 2.4.0j of STAR was used, and version 0.1.5-beta of HISAT was used. Flux Simulator 1.2.1 was used to obtain simulated samples as described below.
+**Use Rail-RNA v0.1.8**. Rail-RNA has several dependencies. In the experiments we conducted, Rail-RNA wrapped Bowtie 1 v1.1.1, Bowtie 2 v2.2.5, and SAMTools v1.2.1. When run in its `elastic` mode as described below, Rail-RNA used PyPy v2.2.1. In all other cases, Rail-RNA used PyPy v2.4.0. Version 2.0.12 of TopHat 2 was used and, like Rail-RNA, it wrapped Bowtie 2 v2.2.4 and SAMTools v0.1.19. Version 2.4.0j of STAR was used, and version 0.1.5-beta of HISAT was used. Flux Simulator 1.2.1 was used to obtain simulated samples as described below.
 
 To reproduce results from the [preprint](http://biorxiv.org/content/early/2015/05/07/019067), perform the following steps. Note that input and output directories in scripts may need to be changed.
 
@@ -14,7 +14,7 @@ Use `create_indexes.sh`. Refer to comments in that script for further instructio
 
 Scaling experiments
 -----
-1. Start with the Myrna-style manifest file GEUVADIS_all_samples.manifest composed of the URLs of all GEUVADIS samples. Invoke
+1. Start with the Myrna-style manifest file GEUVADIS_all_samples.manifest composed of the URLs of all GEUVADIS samples (minus one; see note under the section All-of-GEUVADIS run below). Invoke
     ```
     python geuvadis_lab_ethnicity_sex_all.py
     ```
@@ -31,7 +31,8 @@ with 56 datasets, 8 from each lab, and a random sample C of B with 28 datasets, 
     ```
     sh prep_scaling_experiments.sh
     ```
-to submit all jobs that preprocess GEUVADIS data for scaling experiments to Elastic MapReduce (EMR). This requires an account with [Amazon Web Services](http://aws.amazon.com/), whose charges will apply. Note also that `--ec2-key-name` in all commands from `prep_scaling_experiments.sh` should either be removed to changed to a valid EC2 key name. The key name permits SSHing to EC2 instances while the preprocessing jobs are running.
+to submit all jobs that preprocess GEUVADIS data for scaling experiments to Elastic MapReduce (EMR). This requires an account with [Amazon Web Services](http://aws.amazon.com/), whose charges will apply. Note also that `--ec2-key-name` in all commands from `prep_scaling_experiments.sh` should either be removed to changed to a valid EC2 key name. The key name permits SSHing to EC2 instances while the preprocessing jobs are running. See (this)[http://docs.aws.amazon.com/gettingstarted/latest/wah/getting-started-prereq.html] page for more information.
+
 4. Again, change the output S3 bucket and home directory of Rail-RNA's source code in `submit_scaling_experiments.sh`, and run
 
     ```
@@ -58,8 +59,16 @@ to view instructions on how to regenerate the 112 simulated bioreplicates whose 
 
 All-of-GEUVADIS run
 -----
-1. Change the output bucket and argument of `--ec2-key-name` in `preprocess_all_of_GEUVADIS.sh`, and run the preprocess job flow contained in that script.
-2. Change the output bucket and argument of `--ec2-key-name` in `submit_all_of_geuvadis_job.sh`, and run the alignment job flow contained in that script.
+The file GEUVADIS_all_samples.manifest from which 112 samples are obtained for scaling experiments is missing one GEUVADIS sample because its FASTQ could not be found on the server. We ultimately realized that the missing sample was paired-end and divided into two FASTQs on the server. The original manifest file with the missing sample `GEUVADIS_all_samples.manifest` has been preserved so manifest files for scaling and accuracy experiments may be regenerated, but we use a different manifest file for our all-of-GEUVADIS run. To generate it:
+
+1. Start with the Myrna-style manifest file GEUVADIS_all_samples_revised.manifest composed of the URLs of all GEUVADIS samples. The missing sample from GEUVADIS_all_samples.manifest is added to the top. Invoke
+    ```
+    python geuvadis_lab_ethnicity_sex_all_revised.py
+    ```
+2. Change the output bucket and argument of `--ec2-key-name` in `preprocess_all_of_GEUVADIS.sh`, and run the preprocess job flow contained in that script.
+3. Change the output bucket and argument of `--ec2-key-name` in `submit_all_of_geuvadis_job.sh`, and run the alignment job flow contained in that script.
+
+`--ec2-key-name` may also be removed in the scripts above. This is a PEM file the user generates to be able to SSH to an Elastic MapReduce cluster. See (this)[http://docs.aws.amazon.com/gettingstarted/latest/wah/getting-started-prereq.html] page for more information.
 
 Junction comparison analysis
 ----
