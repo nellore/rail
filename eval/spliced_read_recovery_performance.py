@@ -405,5 +405,7 @@ if __name__ == '__main__':
     print >>sys.stderr, 'relevant instances\t%d' % relevant
     print >>sys.stderr, 'retrieved instances\t%d' % retrieved
     print >>sys.stderr, 'intersection\t%d' % relevant_and_retrieved
-    print >>sys.stderr, 'precision\t%.9f' % precision
-    print >>sys.stderr, 'recall\t%.9f' % recall
+    print >>sys.stderr, 'precision\t%.12f' % precision
+    print >>sys.stderr, 'recall\t%.12f' % recall
+    print >>sys.stderr, ('fscore\t%.12f'
+                            % (2 * precision * recall / (precision + recall)))

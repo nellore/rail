@@ -318,6 +318,12 @@ if __name__ == '__main__':
                                             read_intersection)
         print 'precision\t%.12f\t%.12f' % (basewise_precision, read_precision)
         print 'recall\t%.12f\t%.12f' % (basewise_recall, read_recall)
+        print 'fscore\t%.12f\t%.12f' % (
+                (2 * basewise_precision * basewise_recall) /
+                    (basewise_precision + basewise_recall),
+                (2 * read_precision * read_recall) /
+                    (read_precision + read_recall)
+            )
     else:
         # Test go()
         del sys.argv[1:] # Don't choke on extra command-line parameters

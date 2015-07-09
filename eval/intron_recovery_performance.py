@@ -325,5 +325,6 @@ if __name__ == '__main__':
     print 'true positive count\t%d' % true_positive_count
     print 'false positive count\t%d' % false_positive_count
     print 'false negative count\t%d' % false_negative_count
-    print 'precision\t%.9f' % precision
-    print 'recall\t%.9f' % recall
+    print 'precision\t%.12f' % precision
+    print 'recall\t%.12f' % recall
+    print 'fscore\t%.12f' % (2 * precision * recall / (precision + recall))
