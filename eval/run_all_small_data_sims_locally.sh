@@ -3,15 +3,22 @@
 # $1: number of cores
 # $2: output directory -- SPECIFY FULL PATH
 # $3: where to find sample fastqs from generate_bioreps.py
-# Ex: taskset -c 0,1,2,3 sh run_all_small_data_sims_locally.sh 4 ./myoutput
-# Select two sample names for analysis. See generate_bioreps.py for how sample data was generated.
-# We ran taskset -c 0,1,2,3,4,5,6,7 sh run_all_small_data_sims_locally.sh 8 /scratch0/langmead-fs1/geuvadis_sims_for_paper/8core /scratch0/langmead-fs1/geuvadis_sims_for_paper
-SAMPLE1=NA19129_female_YRI_UU_6-1-1
-SAMPLE2=NA07048_male_CEU_UU_6-1-2
+# $4: sample name; this is the prefix of "_sim.fastq"
+# $5: scratch directory; files are written here first, and relevant output is copied back to $2
+# Ex: taskset -c 0,1,2,3 sh run_all_small_data_sims_locally.sh 4  ./myoutput
+# See generate_bioreps.py for how sample data was generated.
+# We ran taskset -c 0,1,2,3,4,5,6,7,8,9,10,11 sh run_all_small_data_sims_locally.sh 12 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/12core /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2
 
 # Specify data directory; fastqs should be of the form [SAMPLE NAME]_sim.fastq; Flux beds should be
 # of form [SAMPLE_NAME]_sim.bed
 DATADIR=$3
+
+# Specify sample name at command line
+SAMPLE=$4
+
+# Temp dir
+SCRATCH=$5
+mkdir -p $SCRATCH
 
 ## Specify locations of executables
 # Used version 2.0.12 of TopHat; wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
@@ -22,12 +29,14 @@ STAR=/scratch0/langmead-fs1/shared/STAR-STAR_2.4.0j/bin/Linux_x86_64_static/STAR
 HISAT=/scratch0/langmead-fs1/shared/hisat-0.1.5-beta/hisat
 # Use HISAT's tool for extracting splice sites for its junction database
 HISATSPLICE=/scratch0/langmead-fs1/shared/hisat-0.1.5-beta/extract_splice_sites.py
-# Used version 0.1.0 of Rail-RNA, but wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
+# Use v1.4.6-p4 of Subread/Subjunc
+SUBJUNC=/scratch0/langmead-fs1/shared/subread-1.4.6-p4-Linux-x86_64/bin/subjunc
+# Used version 0.1.8 of Rail-RNA, but wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
 # Specify Python executable/loc of get_junctions.py; PyPy 2.4.0 was used
 PYTHON=pypy
 RAILHOME=/scratch0/langmead-fs1/rail
-RAILRNA=$PYTHON\ $RAILHOME/src
-# Samtools v0.1.19-44428cd was used (and wrapped by TopHat and Rail)
+RAILRNA=rail-rna
+# Samtools v0.1.19-44428cd was used (and wrapped by TopHat)
 SAMTOOLS=samtools
 
 # Specify number of parallel processes for each program
@@ -35,7 +44,6 @@ CORES=$1
 
 # Specify FULL PATH to output directory
 MAINOUTPUT=$2
-mkdir -p $MAINOUTPUT
 
 # Specify log filename for recording times
 TIMELOG=$MAINOUTPUT/small_data_times.log
@@ -109,15 +117,6 @@ done
 for SAMPLE in {$SAMPLE1,$SAMPLE2}
 do
 	OUTPUT=$MAINOUTPUT/${SAMPLE}
-	echo 'Running HISAT on sample '${SAMPLE}' with no annotation and in single-end mode...'
-	echo '#'${SAMPLE}' HISAT 1-pass noann single' >>$TIMELOG
-	mkdir -p $OUTPUT/hisat/noann_single_1pass
-	cd $OUTPUT/hisat/noann_single_1pass
-	time ($HISAT -x $HISATIDX -U $DATADIR/${SAMPLE}_sim.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-outfile novel_splice_sites.txt 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
 	echo 'Running HISAT on sample '${SAMPLE}' with no annotation and in paired-end mode...'
 	echo '#'${SAMPLE}' HISAT 1-pass noann paired' >>$TIMELOG
 	mkdir -p $OUTPUT/hisat/noann_paired_1pass
@@ -125,15 +124,6 @@ do
 	time ($HISAT -x $HISATIDX -1 $DATADIR/${SAMPLE}_sim_left.fastq -2 $DATADIR/${SAMPLE}_sim_right.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-outfile novel_splice_sites.txt 2>&1) 2>>$TIMELOG
 	echo 'Computing precision and recall...'
 	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running HISAT on sample '${SAMPLE}' with annotation and in single-end mode...'
-	echo '#'${SAMPLE}' HISAT 1-pass ann single' >>$TIMELOG
-	mkdir -p $OUTPUT/hisat/ann_single_1pass
-	cd $OUTPUT/hisat/ann_single_1pass
-	time ($HISAT -x $HISATIDX -U $DATADIR/${SAMPLE}_sim.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-outfile novel_splice_sites.txt --novel-splicesite-infile $HISATANNOTATION 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 	wait
 	echo 'Running HISAT on sample '${SAMPLE}' with annotation and in paired-end mode...'

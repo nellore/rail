@@ -109,7 +109,7 @@ def dummy_md_and_mapped_offsets(cigar, clip_threshold=1.0):
                 clip_count)
 
 def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
-        base_threshold=0.5, clip_threshold=1.0):
+        base_threshold=0.5, clip_threshold=1.0, dump_incorrect=False):
     """ Finds relevant and retrieved instance counts.
 
         true_bed_stream: file handle for BED output of Flux simulation
@@ -119,6 +119,7 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
             correctly for a read to be considered a correct mapping
         clip_threshold: proportion of a read's bases that must be clipped
             for a read to be considered unmapped
+        dump_incorrect: write incorrect (read) alignments to stderr
     """
     from tempdel import remove_temporary_directories
     import tempfile
@@ -157,7 +158,9 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
             '''Dict mapping read names to alignments
             (chrom, 1-based start, 1-based end)'''
             true_maps = []
+            saved = []
             for tokens in xpartition:
+                saved.append(tokens)
                 if tokens[0] == '0':
                     if len(tokens) < 12:
                         continue
@@ -250,6 +253,11 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
                     basewise_intersection += intersected_base_count
                     if intersected_base_count >= read_length * base_threshold:
                         read_intersection += 1
+                    elif dump_incorrect:
+                        # Incorrect alignment; write to stderr
+                        print >>sys.stderr, '\t'.join(
+                                ['.'.join(line) for line in saved]
+                            )
                 else:
                     raise RuntimeError(
                                 'Invalid intermediate line.'
@@ -285,6 +293,10 @@ if __name__ == '__main__':
             required=False, default=1.0,
             help=('Proportion of a read\'s bases that are clipped above '
                   'which the read is considered unmapped'))
+        parser.add_argument('--dump-incorrect', action='store_const',
+            const=True,
+            default=False,
+            help='Write lines that aligned incorrectly to stderr')
         args = parser.parse_known_args(sys.argv[1:])[0]
         with open(args.true_bed) as true_bed_stream:
             (basewise_retrieved, basewise_relevant, basewise_intersection,
@@ -292,7 +304,8 @@ if __name__ == '__main__':
                         true_bed_stream,
                         generous=args.generous,
                         base_threshold=args.base_threshold,
-                        clip_threshold=args.clip_threshold
+                        clip_threshold=args.clip_threshold,
+                        dump_incorrect=args.dump_incorrect
                     )
         basewise_precision = float(basewise_intersection) / basewise_retrieved
         basewise_recall = float(basewise_intersection) / basewise_relevant
