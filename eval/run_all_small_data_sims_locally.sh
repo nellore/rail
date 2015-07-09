@@ -22,22 +22,22 @@ mkdir -p $SCRATCH
 
 ## Specify locations of executables
 # Used version 2.0.12 of TopHat; wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
-TOPHAT=/scratch0/langmead-fs1/shared/tophat-2.0.12.Linux_x86_64/tophat2
-# Used version 2.4.0j of STAR
-STAR=/scratch0/langmead-fs1/shared/STAR-STAR_2.4.0j/bin/Linux_x86_64_static/STAR
-# Used version 0.1.5-beta of HISAT
-HISAT=/scratch0/langmead-fs1/shared/hisat-0.1.5-beta/hisat
+TOPHAT=/scratch0/langmead-fs1/shared/tophat-2.1.0.Linux_x86_64/tophat2
+# Used version 2.4.2a of STAR
+STAR=/scratch0/langmead-fs1/shared/STARv2.4.2a/STAR
+# Used version 0.1.6-beta of HISAT
+HISAT=/scratch0/langmead-fs1/shared/hisat-0.1.6-beta/hisat
 # Use HISAT's tool for extracting splice sites for its junction database
-HISATSPLICE=/scratch0/langmead-fs1/shared/hisat-0.1.5-beta/extract_splice_sites.py
+HISATSPLICE=/scratch0/langmead-fs1/shared/hisat-0.1.6-beta/extract_splice_sites.py
 # Use v1.4.6-p4 of Subread/Subjunc
 SUBJUNC=/scratch0/langmead-fs1/shared/subread-1.4.6-p4-Linux-x86_64/bin/subjunc
-# Used version 0.1.8 of Rail-RNA, but wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
-# Specify Python executable/loc of get_junctions.py; PyPy 2.4.0 was used
-PYTHON=pypy
+# Used version 0.1.7d of Rail-RNA, but wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
+# Specify Python executable/loc of get_junctions.py; PyPy 2.5.0 was used
+PYTHON=/home/anellor1/raildotbio/pypy-2.5-linux_x86_64-portable/bin/pypy
 RAILHOME=/scratch0/langmead-fs1/rail
 RAILRNA=rail-rna
-# Samtools v0.1.19-44428cd was used (and wrapped by TopHat)
-SAMTOOLS=samtools
+# Samtools v1.2 was used (and wrapped by TopHat)
+SAMTOOLS=/home/anellor1/raildotbio/samtools-1.2/samtools
 
 # Specify number of parallel processes for each program
 CORES=$1
@@ -110,217 +110,216 @@ do
 	mkdir -p tophat
 	mkdir -p star
 	mkdir -p rail
+	mkdir -p subjunc
 	cd ..
 done
 
 # Run simulations
-for SAMPLE in {$SAMPLE1,$SAMPLE2}
-do
-	OUTPUT=$MAINOUTPUT/${SAMPLE}
-	echo 'Running HISAT on sample '${SAMPLE}' with no annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' HISAT 1-pass noann paired' >>$TIMELOG
-	mkdir -p $OUTPUT/hisat/noann_paired_1pass
-	cd $OUTPUT/hisat/noann_paired_1pass
-	time ($HISAT -x $HISATIDX -1 $DATADIR/${SAMPLE}_sim_left.fastq -2 $DATADIR/${SAMPLE}_sim_right.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-outfile novel_splice_sites.txt 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running HISAT on sample '${SAMPLE}' with annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' HISAT 1-pass ann paired' >>$TIMELOG
-	mkdir -p $OUTPUT/hisat/ann_paired_1pass
-	cd $OUTPUT/hisat/ann_paired_1pass
-	time ($HISAT -x $HISATIDX -1 $DATADIR/${SAMPLE}_sim_left.fastq -2 $DATADIR/${SAMPLE}_sim_right.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-outfile novel_splice_sites.txt --novel-splicesite-infile $HISATANNOTATION 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running second pass of HISAT on sample '${SAMPLE}' with no annotation and in single-end mode...'
-	echo '#'${SAMPLE}' HISAT 2-pass noann single' >>$TIMELOG
-	mkdir -p $OUTPUT/hisat/noann_single_2pass
-	cd $OUTPUT/hisat/noann_single_2pass
-	time ($HISAT -x $HISATIDX -U $DATADIR/${SAMPLE}_sim.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-infile $OUTPUT/hisat/noann_single_1pass/novel_splice_sites.txt 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running second pass of HISAT on sample '${SAMPLE}' with no annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' HISAT 2-pass noann paired' >>$TIMELOG
-	mkdir -p $OUTPUT/hisat/noann_paired_2pass
-	cd $OUTPUT/hisat/noann_paired_2pass
-	time ($HISAT -x $HISATIDX -1 $DATADIR/${SAMPLE}_sim_left.fastq -2 $DATADIR/${SAMPLE}_sim_right.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-infile $OUTPUT/hisat/noann_paired_1pass/novel_splice_sites.txt 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	echo 'Running second pass of HISAT on sample '${SAMPLE}' with annotation and in single-end mode...'
-	echo '#'${SAMPLE}' HISAT 2-pass ann single' >>$TIMELOG
-	mkdir -p $OUTPUT/hisat/ann_single_2pass
-	cd $OUTPUT/hisat/ann_single_2pass
-	time ($HISAT -x $HISATIDX -U $DATADIR/${SAMPLE}_sim.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-infile $OUTPUT/hisat/ann_single_1pass/novel_splice_sites.txt 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running second pass of HISAT on sample '${SAMPLE}' with annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' HISAT 2-pass ann paired' >>$TIMELOG
-	mkdir -p $OUTPUT/hisat/ann_paired_2pass
-	cd $OUTPUT/hisat/ann_paired_2pass
-	time ($HISAT -x $HISATIDX -1 $DATADIR/${SAMPLE}_sim_left.fastq -2 $DATADIR/${SAMPLE}_sim_right.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-infile $OUTPUT/hisat/ann_paired_1pass/novel_splice_sites.txt 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running Rail-RNA on sample '${SAMPLE}'...'
-	echo '#'${SAMPLE}' Rail-RNA' >>$TIMELOG
-	# Write manifest file
-	echo -e $DATADIR/${SAMPLE}_sim.fastq'\t0\t'${SAMPLE} >$MAINOUTPUT/${SAMPLE}.manifest
-	time ($RAILRNA go local -p $CORES -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -x $BOWTIE1IDX,$BOWTIE2IDX -f >/dev/null 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(for i in $OUTPUT/rail/alignments/*.bam; do $SAMTOOLS view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail/$PERFORMANCE 2>$OUTPUT/rail/${PERFORMANCE}_summary) &
-	(for i in $OUTPUT/rail/alignments/*.bam; do $SAMTOOLS view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail/${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running TopHat on sample '${SAMPLE}' with no annotation and in single-end mode...'
-	echo '#'${SAMPLE}' TopHat noann single' >>$TIMELOG
-	time ($TOPHAT -o $OUTPUT/tophat/noann_single -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim.fastq 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	($SAMTOOLS view $OUTPUT/tophat/noann_single/accepted_hits.bam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed -g >$OUTPUT/tophat/noann_single/$PERFORMANCE 2>$OUTPUT/tophat/noann_single/${PERFORMANCE}_summary) &
-	($SAMTOOLS view $OUTPUT/tophat/noann_single/accepted_hits.bam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/tophat/noann_single/${PERFORMANCE}_intron_recovery_summary)
-	wait
-	echo 'Running TopHat on sample '${SAMPLE}' with no annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' TopHat noann paired' >>$TIMELOG
-	time ($TOPHAT -o $OUTPUT/tophat/noann_paired -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	($SAMTOOLS view $OUTPUT/tophat/noann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed -g >$OUTPUT/tophat/noann_paired/$PERFORMANCE 2>$OUTPUT/tophat/noann_paired/${PERFORMANCE}_summary) &
-	($SAMTOOLS view $OUTPUT/tophat/noann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/tophat/noann_paired/${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running TopHat on sample '${SAMPLE}' with annotation and in single-end mode...'
-	echo '#'${SAMPLE}' TopHat ann single' >>$TIMELOG
-	time ($TOPHAT -o $OUTPUT/tophat/ann_single -G $ANNOTATION -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim.fastq 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	($SAMTOOLS view $OUTPUT/tophat/ann_single/accepted_hits.bam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed -g >$OUTPUT/tophat/ann_single/$PERFORMANCE 2>$OUTPUT/tophat/ann_single/${PERFORMANCE}_summary) &
-	($SAMTOOLS view $OUTPUT/tophat/ann_single/accepted_hits.bam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/tophat/ann_single/${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running TopHat on sample '${SAMPLE}' with annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' TopHat ann paired' >>$TIMELOG
-	time ($TOPHAT -o $OUTPUT/tophat/ann_paired -G $ANNOTATION -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	($SAMTOOLS view $OUTPUT/tophat/ann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed -g >$OUTPUT/tophat/ann_paired/$PERFORMANCE 2>$OUTPUT/tophat/ann_paired/${PERFORMANCE}_summary) &
-	($SAMTOOLS view $OUTPUT/tophat/ann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/tophat/ann_paired/${PERFORMANCE}_intron_recovery_summary) &
-	# STAR protocol for 2-pass execution w/ index construction is described on pp. 43-44 of the supplement of the RGASP spliced alignment paper
-	# (http://www.nature.com/nmeth/journal/v10/n12/extref/nmeth.2722-S1.pdf)
-	echo 'Running STAR on sample '${SAMPLE}' with no annotation and in single-end mode...'
-	echo '#'${SAMPLE}' STAR 1-pass noann single' >>$TIMELOG
-	mkdir -p $OUTPUT/star/noann_single_1pass
-	cd $OUTPUT/star/noann_single_1pass
-	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running STAR on sample '${SAMPLE}' with no annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' STAR 1-pass noann paired' >>$TIMELOG
-	mkdir -p $OUTPUT/star/noann_paired_1pass
-	cd $OUTPUT/star/noann_paired_1pass
-	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running STAR on sample '${SAMPLE}' with annotation and in single-end mode...'
-	echo '#'${SAMPLE}' STAR 1-pass ann single' >>$TIMELOG
-	mkdir -p $OUTPUT/star/ann_single_1pass
-	cd $OUTPUT/star/ann_single_1pass
-	time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running STAR on sample '${SAMPLE}' with annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' STAR 1-pass ann paired' >>$TIMELOG
-	mkdir -p $OUTPUT/star/ann_paired_1pass
-	cd $OUTPUT/star/ann_paired_1pass
-	time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Creating new STAR index for sample '${SAMPLE}' with no annotation and in single-end mode...'
-	echo '#'${SAMPLE}' STAR 1-pass noann single index' >>$TIMELOG
-	STARIDXNOANNSINGLE=$OUTPUT/star/noann_single_idx
-	mkdir -p $STARIDXNOANNSINGLE
-	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXNOANNSINGLE --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
-			--sjdbFileChrStartEnd $OUTPUT/star/noann_single_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Creating new STAR index for sample '${SAMPLE}' with no annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' STAR 1-pass noann paired index' >>$TIMELOG
-	STARIDXNOANNPAIRED=$OUTPUT/star/noann_paired_idx
-	mkdir -p $STARIDXNOANNPAIRED
-	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXNOANNPAIRED --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
-			--sjdbFileChrStartEnd $OUTPUT/star/noann_paired_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Creating new STAR index for sample '${SAMPLE}' with annotation and in single-end mode...'
-	echo '#'${SAMPLE}' STAR 1-pass ann single index' >>$TIMELOG
-	STARIDXANNSINGLE=$OUTPUT/star/ann_single_idx
-	mkdir -p $STARIDXANNSINGLE
-	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXANNSINGLE --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
-			--sjdbFileChrStartEnd $OUTPUT/star/ann_single_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Creating new STAR index for sample '${SAMPLE}' with annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' STAR 1-pass ann paired index' >>$TIMELOG
-	STARIDXANNPAIRED=$OUTPUT/star/ann_paired_idx
-	mkdir -p $STARIDXANNPAIRED
-	time ($STAR --runMode genomeGenerate --genomeDir $STARIDXANNPAIRED --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
-			--sjdbFileChrStartEnd $OUTPUT/star/ann_paired_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Running second pass of STAR on sample '${SAMPLE}' with no annotation and in single-end mode...'
-	echo '#'${SAMPLE}' STAR 2-pass noann single' >>$TIMELOG
-	mkdir -p $OUTPUT/star/noann_single_2pass
-	cd $OUTPUT/star/noann_single_2pass
-	time ($STAR --genomeDir $STARIDXNOANNSINGLE --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running second pass of STAR on sample '${SAMPLE}' with no annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' STAR 2-pass noann paired' >>$TIMELOG
-	mkdir -p $OUTPUT/star/noann_paired_2pass
-	cd $OUTPUT/star/noann_paired_2pass
-	time ($STAR --genomeDir $STARIDXNOANNPAIRED --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running second pass of STAR on sample '${SAMPLE}' with annotation and in single-end mode...'
-	echo '#'${SAMPLE}' STAR 2-pass ann single' >>$TIMELOG
-	mkdir -p $OUTPUT/star/ann_single_2pass
-	cd $OUTPUT/star/ann_single_2pass
-	time ($STAR --genomeDir $STARIDXANNSINGLE --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running second pass of STAR on sample '${SAMPLE}' with annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' STAR 2-pass ann paired' >>$TIMELOG
-	mkdir -p $OUTPUT/star/ann_paired_2pass
-	cd $OUTPUT/star/ann_paired_2pass
-	time ($STAR --genomeDir $STARIDXANNPAIRED --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	# STAR 2-pass single-run protocol is documented in section 7.2 of STAR manual https://github.com/alexdobin/STAR/blob/master/doc/STARmanual.pdf (v2.4.0.1)
-	echo 'Running 2-pass STAR on sample '${SAMPLE}' with no regenerated genome/no annotation and in single-end mode...'
-	echo '#'${SAMPLE}' STAR 2-pass nogen noann single' >>$TIMELOG
-	mkdir -p $OUTPUT/star/nogen_noann_single_2pass
-	cd $OUTPUT/star/nogen_noann_single_2pass
-	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES --twopass1readsN 50000000 --sjdbOverhang $OVERHANG 2>&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
-	echo 'Running STAR on sample '${SAMPLE}' with no regenerated genome/no annotation and in paired-end mode...'
-	echo '#'${SAMPLE}' STAR 2-pass nogen noann paired' >>$TIMELOG
-	mkdir -p $OUTPUT/star/nogen_noann_paired_2pass
-	cd $OUTPUT/star/nogen_noann_paired_2pass
-	time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES --twopass1readsN 50000000 --sjdbOverhang $OVERHANG >&1) 2>>$TIMELOG
-	echo 'Computing precision and recall...'
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-	(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-	wait
+OUTPUT=$MAINOUTPUT/${SAMPLE}
+echo 'Running HISAT on sample '${SAMPLE}' with no annotation and in paired-end mode...'
+echo '#'${SAMPLE}' HISAT 1-pass noann paired' >>$TIMELOG
+mkdir -p $OUTPUT/hisat/noann_paired_1pass
+cd $OUTPUT/hisat/noann_paired_1pass
+time ($HISAT -x $HISATIDX -1 $DATADIR/${SAMPLE}_sim_left.fastq -2 $DATADIR/${SAMPLE}_sim_right.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-outfile novel_splice_sites.txt 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running HISAT on sample '${SAMPLE}' with annotation and in paired-end mode...'
+echo '#'${SAMPLE}' HISAT 1-pass ann paired' >>$TIMELOG
+mkdir -p $OUTPUT/hisat/ann_paired_1pass
+cd $OUTPUT/hisat/ann_paired_1pass
+time ($HISAT -x $HISATIDX -1 $DATADIR/${SAMPLE}_sim_left.fastq -2 $DATADIR/${SAMPLE}_sim_right.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-outfile novel_splice_sites.txt --novel-splicesite-infile $HISATANNOTATION 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running second pass of HISAT on sample '${SAMPLE}' with no annotation and in single-end mode...'
+echo '#'${SAMPLE}' HISAT 2-pass noann single' >>$TIMELOG
+mkdir -p $OUTPUT/hisat/noann_single_2pass
+cd $OUTPUT/hisat/noann_single_2pass
+time ($HISAT -x $HISATIDX -U $DATADIR/${SAMPLE}_sim.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-infile $OUTPUT/hisat/noann_single_1pass/novel_splice_sites.txt 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running second pass of HISAT on sample '${SAMPLE}' with no annotation and in paired-end mode...'
+echo '#'${SAMPLE}' HISAT 2-pass noann paired' >>$TIMELOG
+mkdir -p $OUTPUT/hisat/noann_paired_2pass
+cd $OUTPUT/hisat/noann_paired_2pass
+time ($HISAT -x $HISATIDX -1 $DATADIR/${SAMPLE}_sim_left.fastq -2 $DATADIR/${SAMPLE}_sim_right.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-infile $OUTPUT/hisat/noann_paired_1pass/novel_splice_sites.txt 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+echo 'Running second pass of HISAT on sample '${SAMPLE}' with annotation and in single-end mode...'
+echo '#'${SAMPLE}' HISAT 2-pass ann single' >>$TIMELOG
+mkdir -p $OUTPUT/hisat/ann_single_2pass
+cd $OUTPUT/hisat/ann_single_2pass
+time ($HISAT -x $HISATIDX -U $DATADIR/${SAMPLE}_sim.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-infile $OUTPUT/hisat/ann_single_1pass/novel_splice_sites.txt 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running second pass of HISAT on sample '${SAMPLE}' with annotation and in paired-end mode...'
+echo '#'${SAMPLE}' HISAT 2-pass ann paired' >>$TIMELOG
+mkdir -p $OUTPUT/hisat/ann_paired_2pass
+cd $OUTPUT/hisat/ann_paired_2pass
+time ($HISAT -x $HISATIDX -1 $DATADIR/${SAMPLE}_sim_left.fastq -2 $DATADIR/${SAMPLE}_sim_right.fastq -p $CORES -S Aligned.out.sam --novel-splicesite-infile $OUTPUT/hisat/ann_paired_1pass/novel_splice_sites.txt 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running Rail-RNA on sample '${SAMPLE}'...'
+echo '#'${SAMPLE}' Rail-RNA' >>$TIMELOG
+# Write manifest file
+echo -e $DATADIR/${SAMPLE}_sim.fastq'\t0\t'${SAMPLE} >$MAINOUTPUT/${SAMPLE}.manifest
+time ($RAILRNA go local -p $CORES -m $MAINOUTPUT/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -x $BOWTIE1IDX,$BOWTIE2IDX -f >/dev/null 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(for i in $OUTPUT/rail/alignments/*.bam; do $SAMTOOLS view $i; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail/$PERFORMANCE 2>$OUTPUT/rail/${PERFORMANCE}_summary) &
+(for i in $OUTPUT/rail/alignments/*.bam; do $SAMTOOLS view $i; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/rail/${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running TopHat on sample '${SAMPLE}' with no annotation and in single-end mode...'
+echo '#'${SAMPLE}' TopHat noann single' >>$TIMELOG
+time ($TOPHAT -o $OUTPUT/tophat/noann_single -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim.fastq 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+($SAMTOOLS view $OUTPUT/tophat/noann_single/accepted_hits.bam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed -g >$OUTPUT/tophat/noann_single/$PERFORMANCE 2>$OUTPUT/tophat/noann_single/${PERFORMANCE}_summary) &
+($SAMTOOLS view $OUTPUT/tophat/noann_single/accepted_hits.bam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/tophat/noann_single/${PERFORMANCE}_intron_recovery_summary)
+wait
+echo 'Running TopHat on sample '${SAMPLE}' with no annotation and in paired-end mode...'
+echo '#'${SAMPLE}' TopHat noann paired' >>$TIMELOG
+time ($TOPHAT -o $OUTPUT/tophat/noann_paired -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+($SAMTOOLS view $OUTPUT/tophat/noann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed -g >$OUTPUT/tophat/noann_paired/$PERFORMANCE 2>$OUTPUT/tophat/noann_paired/${PERFORMANCE}_summary) &
+($SAMTOOLS view $OUTPUT/tophat/noann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/tophat/noann_paired/${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running TopHat on sample '${SAMPLE}' with annotation and in single-end mode...'
+echo '#'${SAMPLE}' TopHat ann single' >>$TIMELOG
+time ($TOPHAT -o $OUTPUT/tophat/ann_single -G $ANNOTATION -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim.fastq 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+($SAMTOOLS view $OUTPUT/tophat/ann_single/accepted_hits.bam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed -g >$OUTPUT/tophat/ann_single/$PERFORMANCE 2>$OUTPUT/tophat/ann_single/${PERFORMANCE}_summary) &
+($SAMTOOLS view $OUTPUT/tophat/ann_single/accepted_hits.bam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/tophat/ann_single/${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running TopHat on sample '${SAMPLE}' with annotation and in paired-end mode...'
+echo '#'${SAMPLE}' TopHat ann paired' >>$TIMELOG
+time ($TOPHAT -o $OUTPUT/tophat/ann_paired -G $ANNOTATION -p $CORES $BOWTIE2IDX $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+($SAMTOOLS view $OUTPUT/tophat/ann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed -g >$OUTPUT/tophat/ann_paired/$PERFORMANCE 2>$OUTPUT/tophat/ann_paired/${PERFORMANCE}_summary) &
+($SAMTOOLS view $OUTPUT/tophat/ann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >$OUTPUT/tophat/ann_paired/${PERFORMANCE}_intron_recovery_summary) &
+# STAR protocol for 2-pass execution w/ index construction is described on pp. 43-44 of the supplement of the RGASP spliced alignment paper
+# (http://www.nature.com/nmeth/journal/v10/n12/extref/nmeth.2722-S1.pdf)
+echo 'Running STAR on sample '${SAMPLE}' with no annotation and in single-end mode...'
+echo '#'${SAMPLE}' STAR 1-pass noann single' >>$TIMELOG
+mkdir -p $OUTPUT/star/noann_single_1pass
+cd $OUTPUT/star/noann_single_1pass
+time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running STAR on sample '${SAMPLE}' with no annotation and in paired-end mode...'
+echo '#'${SAMPLE}' STAR 1-pass noann paired' >>$TIMELOG
+mkdir -p $OUTPUT/star/noann_paired_1pass
+cd $OUTPUT/star/noann_paired_1pass
+time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running STAR on sample '${SAMPLE}' with annotation and in single-end mode...'
+echo '#'${SAMPLE}' STAR 1-pass ann single' >>$TIMELOG
+mkdir -p $OUTPUT/star/ann_single_1pass
+cd $OUTPUT/star/ann_single_1pass
+time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running STAR on sample '${SAMPLE}' with annotation and in paired-end mode...'
+echo '#'${SAMPLE}' STAR 1-pass ann paired' >>$TIMELOG
+mkdir -p $OUTPUT/star/ann_paired_1pass
+cd $OUTPUT/star/ann_paired_1pass
+time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Creating new STAR index for sample '${SAMPLE}' with no annotation and in single-end mode...'
+echo '#'${SAMPLE}' STAR 1-pass noann single index' >>$TIMELOG
+STARIDXNOANNSINGLE=$OUTPUT/star/noann_single_idx
+mkdir -p $STARIDXNOANNSINGLE
+time ($STAR --runMode genomeGenerate --genomeDir $STARIDXNOANNSINGLE --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
+		--sjdbFileChrStartEnd $OUTPUT/star/noann_single_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Creating new STAR index for sample '${SAMPLE}' with no annotation and in paired-end mode...'
+echo '#'${SAMPLE}' STAR 1-pass noann paired index' >>$TIMELOG
+STARIDXNOANNPAIRED=$OUTPUT/star/noann_paired_idx
+mkdir -p $STARIDXNOANNPAIRED
+time ($STAR --runMode genomeGenerate --genomeDir $STARIDXNOANNPAIRED --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
+		--sjdbFileChrStartEnd $OUTPUT/star/noann_paired_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Creating new STAR index for sample '${SAMPLE}' with annotation and in single-end mode...'
+echo '#'${SAMPLE}' STAR 1-pass ann single index' >>$TIMELOG
+STARIDXANNSINGLE=$OUTPUT/star/ann_single_idx
+mkdir -p $STARIDXANNSINGLE
+time ($STAR --runMode genomeGenerate --genomeDir $STARIDXANNSINGLE --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
+		--sjdbFileChrStartEnd $OUTPUT/star/ann_single_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Creating new STAR index for sample '${SAMPLE}' with annotation and in paired-end mode...'
+echo '#'${SAMPLE}' STAR 1-pass ann paired index' >>$TIMELOG
+STARIDXANNPAIRED=$OUTPUT/star/ann_paired_idx
+mkdir -p $STARIDXANNPAIRED
+time ($STAR --runMode genomeGenerate --genomeDir $STARIDXANNPAIRED --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
+		--sjdbFileChrStartEnd $OUTPUT/star/ann_paired_1pass/SJ.out.tab --sjdbOverhang $OVERHANG --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Running second pass of STAR on sample '${SAMPLE}' with no annotation and in single-end mode...'
+echo '#'${SAMPLE}' STAR 2-pass noann single' >>$TIMELOG
+mkdir -p $OUTPUT/star/noann_single_2pass
+cd $OUTPUT/star/noann_single_2pass
+time ($STAR --genomeDir $STARIDXNOANNSINGLE --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running second pass of STAR on sample '${SAMPLE}' with no annotation and in paired-end mode...'
+echo '#'${SAMPLE}' STAR 2-pass noann paired' >>$TIMELOG
+mkdir -p $OUTPUT/star/noann_paired_2pass
+cd $OUTPUT/star/noann_paired_2pass
+time ($STAR --genomeDir $STARIDXNOANNPAIRED --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running second pass of STAR on sample '${SAMPLE}' with annotation and in single-end mode...'
+echo '#'${SAMPLE}' STAR 2-pass ann single' >>$TIMELOG
+mkdir -p $OUTPUT/star/ann_single_2pass
+cd $OUTPUT/star/ann_single_2pass
+time ($STAR --genomeDir $STARIDXANNSINGLE --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running second pass of STAR on sample '${SAMPLE}' with annotation and in paired-end mode...'
+echo '#'${SAMPLE}' STAR 2-pass ann paired' >>$TIMELOG
+mkdir -p $OUTPUT/star/ann_paired_2pass
+cd $OUTPUT/star/ann_paired_2pass
+time ($STAR --genomeDir $STARIDXANNPAIRED --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+# STAR 2-pass single-run protocol is documented in section 7.2 of STAR manual https://github.com/alexdobin/STAR/blob/master/doc/STARmanual.pdf (v2.4.0.1)
+echo 'Running 2-pass STAR on sample '${SAMPLE}' with no regenerated genome/no annotation and in single-end mode...'
+echo '#'${SAMPLE}' STAR 2-pass nogen noann single' >>$TIMELOG
+mkdir -p $OUTPUT/star/nogen_noann_single_2pass
+cd $OUTPUT/star/nogen_noann_single_2pass
+time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES --twopass1readsN 50000000 --sjdbOverhang $OVERHANG 2>&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
+echo 'Running STAR on sample '${SAMPLE}' with no regenerated genome/no annotation and in paired-end mode...'
+echo '#'${SAMPLE}' STAR 2-pass nogen noann paired' >>$TIMELOG
+mkdir -p $OUTPUT/star/nogen_noann_paired_2pass
+cd $OUTPUT/star/nogen_noann_paired_2pass
+time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES --twopass1readsN 50000000 --sjdbOverhang $OVERHANG >&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+wait
 done
