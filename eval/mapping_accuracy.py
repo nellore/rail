@@ -313,7 +313,7 @@ if __name__ == '__main__':
         read_recall = float(read_intersection) / read_relevant
         print 'relevant instances\t%d\t%d' % (basewise_relevant, read_relevant)
         print 'retrieved instances\t%d\t%d' % (basewise_retrieved,
-                                                    read_retrieved)
+                                                read_retrieved)
         print 'intersection\t%d\t%d' % (basewise_intersection,
                                             read_intersection)
         print 'precision\t%.12f\t%.12f' % (basewise_precision, read_precision)
