@@ -225,11 +225,11 @@ def run_job_flow(branding, json_config, force, no_browser=False,
         try:
             job_flow_response = aws_ansible.post_request(full_payload)
         except urllib2.HTTPError as e:
-            if 'bad request' in e.message.lower():
-                raise urllib2.HTTPError(e.message
-                                + ('; ensure that IAM roles are '
+            if 'bad request' in str(e).lower():
+                raise RuntimeError('(' + str(e) + ');'
+                                + ('s ensure that IAM roles are '
                                 'configured properly and try again. See '
-                                'http://docs.aws.amazon.com/ElasticMapReduce/ '
+                                'http://docs.aws.amazon.com/ElasticMapReduce/'
                                 'latest/DeveloperGuide/emr-'
                                 'iam-roles-defaultroles.html for more '
                                 'information.'))

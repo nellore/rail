@@ -160,6 +160,10 @@ class Launcher(object):
             print json.dumps(json.loads(payload), sort_keys=True,
                              indent=4, separators=(',', ': '))
             quit()
+        #temp=json.loads(payload)
+        #del temp['ServiceRole']
+        #del temp['JobFlowRole']
+        #payload = json.dumps(temp)
         read_pipe, write_pipe = os.pipe()
         if os.fork() != 0:
             # Parent process; read from child after determining executable
