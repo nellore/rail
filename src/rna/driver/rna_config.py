@@ -1039,17 +1039,18 @@ class RailRnaErrors(object):
                                     '\n\nIf all dependence on S3 in the '
                                     'pipeline is removed, the AWS CLI need '
                                     'not be installed.'))
-        if self.region is None:
-            self.region = 'us-east-1'
-        if 'region_holder' in locals() and region_holder == self.region and \
-            'service_role_holder' in locals() and 'instance_profile_holder' \
-            in locals():
+        if 'region_holder' in locals() and region_holder is not None and \
+            (region_holder == self.region or self.region is None) and \
+            'service_role_holder' in locals() and \
+            'instance_profile_holder' in locals():
             '''It's okay to use the profile's IAM roles if the region in which
             job is to be run is the same as the profile's region.'''
             if self.service_role is None:
                 self.service_role = service_role_holder
             if self.instance_profile is None:
                 self.instance_profile = instance_profile_holder
+        if self.region is None:
+            self.region = 'us-east-1'
         # Finalize roles; if they're still None, try default Amazonian ones
         if self.service_role is None:
             print_to_screen('Warning: IAM service role not found. Attempting '

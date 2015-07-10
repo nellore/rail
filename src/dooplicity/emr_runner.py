@@ -227,8 +227,10 @@ def run_job_flow(branding, json_config, force, no_browser=False,
         except urllib2.HTTPError as e:
             if 'bad request' in str(e).lower():
                 raise RuntimeError('(' + str(e) + ');'
-                                + ('s ensure that IAM roles are '
-                                'configured properly and try again. See '
+                                + (' ensure that IAM roles are '
+                                'configured properly, and try again. This '
+                                'may require talking to your AWS account '
+                                'admin. See '
                                 'http://docs.aws.amazon.com/ElasticMapReduce/'
                                 'latest/DeveloperGuide/emr-'
                                 'iam-roles-defaultroles.html for more '
