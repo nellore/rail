@@ -668,5 +668,11 @@ fi
                                 '"source ~/.bash_profile".*')
             if self.installed_aws:
                 print_to_screen('Configure the AWS CLI by running '
-                                '"aws configure".')
+                                '"aws configure". Afterwards, run '
+                                '"aws emr create-default-roles" '
+                                'to use default IAM roles on Amazon '
+                                'Elastic MapReduce. To learn more '
+                                'about IAM roles, visit http://docs.'
+                                'aws.amazon.com/IAM/latest/UserGuide/'
+                                'roles-toplevel.html .')
             print_to_screen('Start using Rail by entering "rail-rna".')

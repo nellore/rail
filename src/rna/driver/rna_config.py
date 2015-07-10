@@ -70,11 +70,12 @@ class RailHelpFormatter(argparse.HelpFormatter):
         if '(def: ' not in action.help and not action.required \
             and not action.const:
             if action.default is not argparse.SUPPRESS:
-                defaulting_nargs = [argparse.OPTIONAL, argparse.ZERO_OR_MORE]
+                defaulting_nargs = [argparse.OPTIONAL, argparse.ZERO_OR_MORE,
+                                    argparse.ONE_OR_MORE]
                 if action.option_strings or action.nargs in defaulting_nargs:
                     action_help += ' (def: %(default)s)'
         # Take out the "def: "
-        return action_help.replace('(def: ', '(')
+        return action_help
 
     def _format_action_invocation(self, action):
         if not action.option_strings:
@@ -83,6 +84,21 @@ class RailHelpFormatter(argparse.HelpFormatter):
         else:
             return '%s %s' % ('/'.join(action.option_strings),
                                 self._format_args(action, action.dest.upper()))
+
+    def _format_args(self, action, default_metavar):
+        get_metavar = self._metavar_formatter(action, default_metavar)
+        if action.nargs in [None, argparse.ZERO_OR_MORE, argparse.ONE_OR_MORE]:
+            result = '%s' % get_metavar(1)
+        elif action.nargs == argparse.OPTIONAL:
+            result = '[%s]' % get_metavar(1)
+        elif action.nargs == argparse.REMAINDER:
+            result = '...'
+        elif action.nargs == argparse.PARSER:
+            result = '%s ...' % get_metavar(1)
+        else:
+            formats = ['%s' for _ in range(action.nargs)]
+            result = ' '.join(formats) % get_metavar(action.nargs)
+        return result
 
 def general_usage(job_flow_and_mode, required_args=''):
     """ Special Rail-RNA usage message at subcommand level.
@@ -983,8 +999,8 @@ class RailRnaErrors(object):
                     for line in config_stream:
                         tokens = [token.strip() for token in line.split('=')]
                         if tokens[0] == 'region':
-                            if tokens[1] == 'None':
-                                tokens[1] = None
+                            if self.region is None:
+                                self.region = tokens[1]
                             region_holder = tokens[1]
                         elif tokens[0] == 'aws_access_key_id':
                             self._aws_access_key_id = tokens[1]
@@ -993,9 +1009,9 @@ class RailRnaErrors(object):
                         elif tokens[0] == 'emr':
                             grab_roles = True
                         elif tokens[0] == 'service_role' and grab_roles:
-                            service_role_holder = tokens[1]
+                            self.service_role = tokens[1]
                         elif tokens[0] == 'instance_profile' and grab_roles:
-                            instance_profile_holder = tokens[1]
+                            self.instance_profile = tokens[1]
                         else:
                             line = line.strip()
                             if line[0] == '[' and line[-1] == ']':
@@ -1039,16 +1055,6 @@ class RailRnaErrors(object):
                                     '\n\nIf all dependence on S3 in the '
                                     'pipeline is removed, the AWS CLI need '
                                     'not be installed.'))
-        if 'region_holder' in locals() and region_holder is not None and \
-            (region_holder == self.region or self.region is None) and \
-            'service_role_holder' in locals() and \
-            'instance_profile_holder' in locals():
-            '''It's okay to use the profile's IAM roles if the region in which
-            job is to be run is the same as the profile's region.'''
-            if self.service_role is None:
-                self.service_role = service_role_holder
-            if self.instance_profile is None:
-                self.instance_profile = instance_profile_holder
         if self.region is None:
             self.region = 'us-east-1'
         # Finalize roles; if they're still None, try default Amazonian ones
@@ -1764,7 +1770,7 @@ class RailRnaElastic(object):
         to base instance of RailRnaErrors.
     """
     def __init__(self, base, check_manifest=False,
-        log_uri=None, ami_version='3.7.0',
+        log_uri=None, ami_version='3.8.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -1774,7 +1780,7 @@ class RailRnaElastic(object):
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False, no_consistent_view=False,
+        termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4):
 
         # CLI is REQUIRED in elastic mode
@@ -2161,16 +2167,16 @@ export HOME=/home/hadoop
 printf '\\nexport HOME=/home/hadoop\\n' >>/home/hadoop/conf/hadoop-user-env.sh
 sudo ln -s /home/hadoop/.s3cfg /home/.s3cfg
 
-sudo wget -O/etc/yum.repos.d/s3tools.repo http://s3tools.org/repo/RHEL_6/s3tools.repo || { echo 'wget failed' ; exit 1; }
-sudo yum -y install s3cmd || { echo 's3cmd installation failed' ; exit 1; }
-
-AWS_ACCESS_ID=`grep 'fs.s3.awsAccessKeyId' ~/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
-AWS_ACCESS_KEY=`grep 'fs.s3.awsSecretAccessKey' ~/conf/*.xml | sed 's/.*<value>//' | sed 's/<\/value>.*//'`
+curl -OL http://downloads.sourceforge.net/project/s3tools/s3cmd/1.5.2/s3cmd-1.5.2.tar.gz
+tar xvzf s3cmd-1.5.2.tar.gz
+cd s3cmd-1.5.2
+sudo ln -s $(pwd)/s3cmd /usr/bin/s3cmd
 
 cat >~/.s3cfg <<EOF
 [default]
-access_key = $AWS_ACCESS_ID
-secret_key = $AWS_ACCESS_KEY
+access_key = 
+secret_key = 
+security_token = 
 socket_timeout = 300
 multipart_chunk_size_mb = 15
 reduced_redundancy = False
@@ -2408,7 +2414,7 @@ fi
         base.ec2_key_name = ec2_key_name
         base.keep_alive = keep_alive
         base.termination_protected = termination_protected
-        base.no_consistent_view = no_consistent_view
+        base.consistent_view = consistent_view
         base.no_direct_copy = no_direct_copy
 
     @staticmethod
@@ -2453,7 +2459,7 @@ fi
         )
         elastic_parser.add_argument('--ami-version', type=str, required=False,
             metavar='<str>',
-            default='3.7.0',
+            default='3.8.0',
             help='Amazon Machine Image version'
         )
         elastic_parser.add_argument('--visible-to-all-users',
@@ -2470,13 +2476,12 @@ fi
                   '<choice> is in {"TERMINATE_JOB_FLOW", "CANCEL_AND_WAIT", '
                   '"CONTINUE", "TERMINATE_CLUSTER"}')
         )
-        elastic_parser.add_argument('--no-consistent-view',
+        elastic_parser.add_argument('--consistent-view',
             action='store_const',
             const=True,
             default=False,
-            help=('do not use "consistent view," which incurs DynamoDB '
-                 'charges; some intermediate data may then (very rarely) '
-                 'be lost'))
+            help=('use "consistent view," which incurs DynamoDB '
+                  'charges; not necessary for Rail\'s default job flows'))
         elastic_parser.add_argument('--no-direct-copy',
             action='store_const',
             const=True,
@@ -2575,17 +2580,15 @@ fi
             metavar='<str>',
             required=False,
             default=None,
-            help=('IAM service role (def: from --profile if --region '
-                  'is same as specified there; otherwise, attempts '
-                  '"EMR_DefaultRole")')
+            help=('IAM service role (def: from --profile if available; '
+                  'otherwise, attempts "EMR_DefaultRole")')
         )
         elastic_parser.add_argument('--instance-profile', type=str,
             metavar='<str>',
             required=False,
             default=None,
-            help=('IAM EC2 instance profile (def: from --profile if '
-                  '--region is same as specified there; otherwise, attempts '
-                  '"EMR_EC2_DefaultRole")')
+            help=('IAM EC2 instance profile (def: from --profile if available'
+                  '; otherwise, attempts "EMR_EC2_DefaultRole")')
         )
         general_parser.add_argument(
             '--max-task-attempts', type=int, required=False,
@@ -2692,7 +2695,7 @@ fi
                         '-m',
                         'mapreduce.job.maps=%d' % base.total_cores,
                     ] + (['-e', 'fs.s3.consistent=true']
-                            if not base.no_consistent_view
+                            if base.consistent_view
                             else ['-e', 'fs.s3.consistent=false']),
                     'Path' : ('s3://%s.elasticmapreduce/bootstrap-actions/'
                               'configure-hadoop' % base.region)
@@ -4706,7 +4709,7 @@ class RailRnaElasticPreprocessJson(object):
         service_role=None, instance_profile=None,
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
-        log_uri=None, ami_version='3.7.0',
+        log_uri=None, ami_version='3.8.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW',
@@ -4716,7 +4719,7 @@ class RailRnaElasticPreprocessJson(object):
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False, no_consistent_view=False,
+        termination_protected=False, consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
         max_task_attempts=4):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
@@ -4741,7 +4744,7 @@ class RailRnaElasticPreprocessJson(object):
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected,
-            no_consistent_view=no_consistent_view,
+            consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
@@ -5049,7 +5052,7 @@ class RailRnaElasticAlignJson(object):
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
-        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.7.0',
+        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.8.0',
         visible_to_all_users=False, tags='', name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW', hadoop_jar=None,
         master_instance_count=1, master_instance_type='c1.xlarge',
@@ -5057,7 +5060,7 @@ class RailRnaElasticAlignJson(object):
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False, no_consistent_view=False,
+        termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
@@ -5080,7 +5083,7 @@ class RailRnaElasticAlignJson(object):
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected,
-            no_consistent_view=no_consistent_view,
+            consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime)
         RailRnaAlign(base, input_dir=input_dir,
@@ -5447,7 +5450,7 @@ class RailRnaElasticAllJson(object):
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
-        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.7.0',
+        bed_basename='', tsv_basename='', log_uri=None, ami_version='3.8.0',
         visible_to_all_users=False, tags='', name='Rail-RNA Job Flow',
         action_on_failure='TERMINATE_JOB_FLOW', hadoop_jar=None,
         master_instance_count=1, master_instance_type='c1.xlarge',
@@ -5456,7 +5459,7 @@ class RailRnaElasticAllJson(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, check_manifest=True,
-        no_direct_copy=False, no_consistent_view=False,
+        no_direct_copy=False, consistent_view=False,
         intermediate_lifetime=4, max_task_attempts=4):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
@@ -5480,7 +5483,7 @@ class RailRnaElasticAllJson(object):
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, keep_alive=keep_alive,
             termination_protected=termination_protected,
-            no_consistent_view=no_consistent_view,
+            consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,

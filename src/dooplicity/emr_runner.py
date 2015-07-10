@@ -228,13 +228,15 @@ def run_job_flow(branding, json_config, force, no_browser=False,
             if 'bad request' in str(e).lower():
                 raise RuntimeError('(' + str(e) + ');'
                                 + (' ensure that IAM roles are '
-                                'configured properly, and try again. This '
+                                'configured properly. This '
                                 'may require talking to your AWS account '
                                 'admin. See '
                                 'http://docs.aws.amazon.com/ElasticMapReduce/'
                                 'latest/DeveloperGuide/emr-'
                                 'iam-roles-defaultroles.html for more '
-                                'information.'))
+                                'information. In most cases, the solution '
+                                'to is to run "aws emr '
+                                'create-default-roles", and try again.'))
             else:
                 raise
         json_response = json.load(job_flow_response)

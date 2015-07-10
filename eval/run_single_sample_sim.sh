@@ -128,7 +128,7 @@ echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 wait
 # Move Subjunc results to final destination
-mv $OUTPUT/subjunc $MAINOUTPUT
+mv $OUTPUT/subjunc $SAMPLEOUTPUT
 echo 'Running HISAT on sample '${SAMPLE}' with no annotation and in paired-end mode...'
 echo '#'${SAMPLE}' HISAT 1-pass noann paired' >>$TIMELOG
 mkdir -p $OUTPUT/hisat/noann_paired_1pass
