@@ -885,8 +885,9 @@ class RailRnaErrors(object):
     """
     def __init__(self, manifest, output_dir, isofrag_idx=None,
             intermediate_dir='./intermediate', force=False, aws_exe=None,
-            profile='default', region='us-east-1', verbose=False,
-            curl_exe=None, max_task_attempts=4
+            profile='default', region=None, service_role=None,
+            instance_profile=None, verbose=False, curl_exe=None,
+            max_task_attempts=4
         ):
         '''Store all errors uncovered in a list, then output. This prevents the
         user from having to rerun Rail-RNA to find what else is wrong with
@@ -904,6 +905,8 @@ class RailRnaErrors(object):
         self.curl_exe = curl_exe
         self.verbose = verbose
         self.profile = profile
+        self.service_role = service_role
+        self.instance_profile = instance_profile
         if not (float(max_task_attempts).is_integer()
                         and max_task_attempts >= 1):
             self.errors.append('Max task attempts (--max-task-attempts) '
@@ -979,13 +982,20 @@ class RailRnaErrors(object):
                             break
                     for line in config_stream:
                         tokens = [token.strip() for token in line.split('=')]
-                        if tokens[0] == 'region' \
-                            and self.region == 'us-east-1':
-                            self.region = tokens[1]
+                        if tokens[0] == 'region':
+                            if tokens[1] == 'None':
+                                tokens[1] = None
+                            region_holder = tokens[1]
                         elif tokens[0] == 'aws_access_key_id':
                             self._aws_access_key_id = tokens[1]
                         elif tokens[0] == 'aws_secret_access_key':
                             self._aws_secret_access_key = tokens[1]
+                        elif tokens[0] == 'emr':
+                            grab_roles = True
+                        elif tokens[0] == 'service_role' and grab_roles:
+                            service_role_holder = tokens[1]
+                        elif tokens[0] == 'instance_profile' and grab_roles:
+                            instance_profile_holder = tokens[1]
                         else:
                             line = line.strip()
                             if line[0] == '[' and line[-1] == ']':
@@ -1029,6 +1039,28 @@ class RailRnaErrors(object):
                                     '\n\nIf all dependence on S3 in the '
                                     'pipeline is removed, the AWS CLI need '
                                     'not be installed.'))
+        if self.region is None:
+            self.region = 'us-east-1'
+        if 'region_holder' in locals() and region_holder == self.region and \
+            'service_role_holder' in locals() and 'instance_profile_holder' \
+            in locals():
+            '''It's okay to use the profile's IAM roles if the region in which
+            job is to be run is the same as the profile's region.'''
+            if self.service_role is None:
+                self.service_role = service_role_holder
+            if self.instance_profile is None:
+                self.instance_profile = instance_profile_holder
+        # Finalize roles; if they're still None, try default Amazonian ones
+        if self.service_role is None:
+            print_to_screen('Warning: IAM service role not found. Attempting '
+                            '"EMR_DefaultRole".',
+                            newline=True, carriage_return=False)
+            self.service_role = 'EMR_DefaultRole'
+        if self.instance_profile is None:
+            print_to_screen('Warning: EC2 instance profile not found. '
+                            'Attempting "EMR_EC2_DefaultRole".',
+                            newline=True, carriage_return=False)
+            self.instance_profile = 'EMR_EC2_DefaultRole'
         self.checked_programs.add('AWS CLI')
 
     def check_program(self, exe, program_name, parameter,
@@ -2478,21 +2510,21 @@ fi
             required=False,
             default=None,
             help=('bid price (dollars/hr); invoke only if master instances '
-                  'should be spot')
+                  'should be spot (def: none)')
         )
         elastic_parser.add_argument('--core-instance-bid-price', type=float,
             metavar='<dec>',
             required=False,
             default=None,
             help=('bid price (dollars/hr); invoke only if core instances '
-                  'should be spot')
+                  'should be spot (def: none)')
         )
         elastic_parser.add_argument('--task-instance-bid-price', type=float,
             metavar='<dec>',
             required=False,
             default=None,
             help=('bid price (dollars/hr); invoke only if task instances '
-                  'should be spot')
+                  'should be spot (def: none)')
         )
         elastic_parser.add_argument('--master-instance-type', type=str,
             metavar='<choice>',
@@ -2504,13 +2536,13 @@ fi
             metavar='<choice>',
             required=False,
             default=None,
-            help=('core instance type')
+            help=('core instance type (def: master instance type)')
         )
         elastic_parser.add_argument('--task-instance-type', type=str,
             metavar='<choice>',
             required=False,
             default=None,
-            help=('task instance type')
+            help=('task instance type (def: master instance type)')
         )
         elastic_parser.add_argument('--ec2-key-name', type=str,
             metavar='<str>',
@@ -2533,9 +2565,26 @@ fi
         elastic_parser.add_argument('--region', type=str,
             metavar='<choice>',
             required=False,
-            default='us-east-1',
+            default=None,
             help=('Amazon data center in which to run job flow. Google '
-                  '"Elastic MapReduce regions" for recent list of centers')
+                  '"Elastic MapReduce regions" for recent list of centers '
+                  '(def: from --profile)')
+        )
+        elastic_parser.add_argument('--service-role', type=str,
+            metavar='<str>',
+            required=False,
+            default=None,
+            help=('IAM service role (def: from --profile if --region '
+                  'is same as specified there; otherwise, attempts '
+                  '"EMR_DefaultRole")')
+        )
+        elastic_parser.add_argument('--instance-profile', type=str,
+            metavar='<str>',
+            required=False,
+            default=None,
+            help=('IAM EC2 instance profile (def: from --profile if '
+                  '--region is same as specified there; otherwise, attempts '
+                  '"EMR_EC2_DefaultRole")')
         )
         general_parser.add_argument(
             '--max-task-attempts', type=int, required=False,
@@ -4528,7 +4577,7 @@ class RailRnaLocalPreprocessJson(object):
     """ Constructs JSON for local mode + preprocess job flow. """
     def __init__(self, manifest, output_dir, isofrag_idx=None,
         intermediate_dir='./intermediate', force=False, aws_exe=None,
-        profile='default', region='us-east-1', verbose=False,
+        profile='default', region=None, verbose=False,
         nucleotides_per_input=8000000, gzip_input=True,
         do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
@@ -4569,7 +4618,7 @@ class RailRnaParallelPreprocessJson(object):
     """ Constructs JSON for parallel mode + preprocess job flow. """
     def __init__(self, manifest, output_dir, isofrag_idx=None,
         intermediate_dir='./intermediate', force=False, aws_exe=None,
-        profile='default', region='us-east-1', verbose=False,
+        profile='default', region=None, verbose=False,
         nucleotides_per_input=8000000, gzip_input=True,
         do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
@@ -4652,7 +4701,8 @@ class RailRnaElasticPreprocessJson(object):
     """ Constructs JSON for elastic mode + preprocess job flow. """
     def __init__(self, manifest, output_dir, isofrag_idx=None,
         intermediate_dir='./intermediate', force=False, aws_exe=None,
-        profile='default', region='us-east-1',
+        profile='default', region=None,
+        service_role=None, instance_profile=None,
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
         log_uri=None, ami_version='3.7.0',
@@ -4671,7 +4721,8 @@ class RailRnaElasticPreprocessJson(object):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose,
+            region=region, service_role=service_role,
+            instance_profile=instance_profile, verbose=verbose,
             max_task_attempts=max_task_attempts)
         RailRnaElastic(base, check_manifest=check_manifest,
             log_uri=log_uri, ami_version=ami_version,
@@ -4715,6 +4766,8 @@ class RailRnaElasticPreprocessJson(object):
                     no_direct_copy=base.no_direct_copy
                 )
         self._json_serial['AmiVersion'] = base.ami_version
+        self._json_serial['ServiceRole'] = base.service_role
+        self._json_serial['JobFlowRole'] = base.instance_profile
         if base.log_uri is not None:
             self._json_serial['LogUri'] = base.log_uri
         else:
@@ -4741,7 +4794,7 @@ class RailRnaLocalAlignJson(object):
     """ Constructs JSON for local mode + align job flow. """
     def __init__(self, manifest, output_dir, input_dir,
         isofrag_idx=None, intermediate_dir='./intermediate',
-        force=False, aws_exe=None, profile='default', region='us-east-1',
+        force=False, aws_exe=None, profile='default', region=None,
         verbose=False, bowtie1_exe=None,
         bowtie_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
         bowtie2_build_exe=None, k=1, bowtie2_args='',
@@ -4823,7 +4876,7 @@ class RailRnaParallelAlignJson(object):
     """ Constructs JSON for local mode + align job flow. """
     def __init__(self, manifest, output_dir, input_dir,
         isofrag_idx=None, intermediate_dir='./intermediate',
-        force=False, aws_exe=None, profile='default', region='us-east-1',
+        force=False, aws_exe=None, profile='default', region=None,
         verbose=False, bowtie1_exe=None,
         bowtie_idx='genome', bowtie1_build_exe=None, bowtie2_exe=None,
         bowtie2_build_exe=None, k=1, bowtie2_args='',
@@ -4977,7 +5030,8 @@ class RailRnaElasticAlignJson(object):
     """ Constructs JSON for elastic mode + align job flow. """
     def __init__(self, manifest, output_dir, input_dir,
         isofrag_idx=None, intermediate_dir='./intermediate',
-        force=False, aws_exe=None, profile='default', region='us-east-1',
+        force=False, aws_exe=None, profile='default', region=None,
+        service_role=None, instance_profile=None,
         verbose=False, bowtie1_exe=None, bowtie_idx='genome',
         bowtie1_build_exe=None, bowtie2_exe=None,
         bowtie2_build_exe=None, k=1, bowtie2_args='',
@@ -5007,7 +5061,8 @@ class RailRnaElasticAlignJson(object):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose,
+            region=region, service_role=service_role,
+            instance_profile=instance_profile, verbose=verbose,
             max_task_attempts=max_task_attempts)
         RailRnaElastic(base, check_manifest=False,
             log_uri=log_uri, ami_version=ami_version,
@@ -5081,6 +5136,8 @@ class RailRnaElasticAlignJson(object):
                     no_direct_copy=base.no_direct_copy
                 )
         self._json_serial['AmiVersion'] = base.ami_version
+        self._json_serial['ServiceRole'] = base.service_role
+        self._json_serial['JobFlowRole'] = base.instance_profile
         if base.log_uri is not None:
             self._json_serial['LogUri'] = base.log_uri
         else:
@@ -5107,7 +5164,7 @@ class RailRnaLocalAllJson(object):
     """ Constructs JSON for local mode + preprocess+align job flow. """
     def __init__(self, manifest, output_dir, isofrag_idx=None,
         intermediate_dir='./intermediate', force=False, aws_exe=None,
-        profile='default', region='us-east-1',
+        profile='default', region=None,
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
@@ -5203,7 +5260,7 @@ class RailRnaParallelAllJson(object):
     """ Constructs JSON for local mode + preprocess+align job flow. """
     def __init__(self, manifest, output_dir, isofrag_idx=None,
         intermediate_dir='./intermediate', force=False, aws_exe=None,
-        profile='default', region='us-east-1',
+        profile='default', region=None,
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
@@ -5370,7 +5427,8 @@ class RailRnaElasticAllJson(object):
     """ Constructs JSON for elastic mode + preprocess+align job flow. """
     def __init__(self, manifest, output_dir, isofrag_idx=None,
         intermediate_dir='./intermediate', force=False, aws_exe=None,
-        profile='default', region='us-east-1',
+        profile='default', region=None,
+        service_role=None, instance_profile=None,
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
         do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
@@ -5402,7 +5460,8 @@ class RailRnaElasticAllJson(object):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
-            region=region, verbose=verbose,
+            region=region, service_role=service_role,
+            instance_profile=instance_profile, verbose=verbose,
             max_task_attempts=max_task_attempts)
         RailRnaElastic(base, check_manifest=check_manifest, 
             log_uri=log_uri, ami_version=ami_version,
@@ -5491,6 +5550,8 @@ class RailRnaElasticAllJson(object):
                     no_direct_copy=base.no_direct_copy
                 )
         self._json_serial['AmiVersion'] = base.ami_version
+        self._json_serial['ServiceRole'] = base.service_role
+        self._json_serial['JobFlowRole'] = base.instance_profile
         if base.log_uri is not None:
             self._json_serial['LogUri'] = base.log_uri
         else:

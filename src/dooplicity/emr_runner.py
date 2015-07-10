@@ -36,6 +36,7 @@ from collections import OrderedDict, defaultdict
 import argparse
 import webbrowser
 import ansibles as ab
+import urllib2
 
 _aws_regions = set(['us-east-1', 'us-west-2', 'us-west-1', 'eu-west-1',
                     'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1',
@@ -92,6 +93,7 @@ def run_job_flow(branding, json_config, force, no_browser=False,
             and secret access key.
         region: Amazon data center in which to run job flow. If None, uses
             region from AWS CLI.
+
         No return value.
     """
     iface = dp_iface.DooplicityInterface(
@@ -220,7 +222,19 @@ def run_job_flow(branding, json_config, force, no_browser=False,
                                     % bucket)
         iface.step('Set up output directories on S3.')
         iface.status('Submitting job flow...')
-        job_flow_response = aws_ansible.post_request(full_payload)
+        try:
+            job_flow_response = aws_ansible.post_request(full_payload)
+        except urllib2.HTTPError as e:
+            if 'bad request' in e.message.lower():
+                raise urllib2.HTTPError(e.message
+                                + ('; ensure that IAM roles are '
+                                'configured properly and try again. See '
+                                'http://docs.aws.amazon.com/ElasticMapReduce/ '
+                                'latest/DeveloperGuide/emr-'
+                                'iam-roles-defaultroles.html for more '
+                                'information.'))
+            else:
+                raise
         json_response = json.load(job_flow_response)
         if 'JobFlowId' not in json_response:
             raise RuntimeError('Job flow submission failed. Server returned '

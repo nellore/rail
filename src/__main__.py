@@ -866,7 +866,10 @@ if __name__ == '__main__':
                 isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
-                region=args.region, verbose=args.verbose,
+                region=args.region,
+                service_role=args.service_role,
+                instance_profile=args.instance_profile,
+                verbose=args.verbose,
                 k=args.k, bowtie2_args=args.bowtie2_args,
                 partition_length=args.partition_length,
                 max_readlet_size=args.max_readlet_size,
@@ -929,7 +932,10 @@ if __name__ == '__main__':
                 isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
-                region=args.region, verbose=args.verbose,
+                region=args.region,
+                service_role=args.service_role,
+                instance_profile=args.instance_profile,
+                verbose=args.verbose,
                 input_dir=args.input,
                 k=args.k, bowtie2_args=args.bowtie2_args,
                 partition_length=args.partition_length,
@@ -993,7 +999,10 @@ if __name__ == '__main__':
                 skip_bad_records=args.skip_bad_records,
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
-                region=args.region, verbose=args.verbose,
+                region=args.region,
+                service_role=args.service_role,
+                instance_profile=args.instance_profile,
+                verbose=args.verbose,
                 log_uri=args.log_uri,
                 ami_version=args.ami_version,
                 visible_to_all_users=args.visible_to_all_users,
@@ -1028,7 +1037,7 @@ if __name__ == '__main__':
         # No log file
         log_file = None
     try:
-        region_to_use = args.region
+        region_to_use = json_creator.base.region
     except AttributeError:
         # No region specified; use US Standard
         region_to_use = 'us-east-1'

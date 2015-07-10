@@ -491,6 +491,8 @@ class AWSAnsible(object):
     """
     def __init__(self, profile='default', region=None, valid_regions=None,
                     base_uri='https://elasticmapreduce.amazonaws.com'):
+        # Set service and job flow roles to None for now
+        self.service_role, self.instance_profile = None, None
         if base_uri[:8] == 'https://':
             base_suffix = base_uri[8:]
             self.base_prefix = base_uri[:8]
@@ -544,14 +546,22 @@ class AWSAnsible(object):
                     for line in config_stream:
                         if line.strip() == to_search:
                             break
+                    grab_roles = False
                     for line in config_stream:
-                        tokens = [token.strip() for token in line.split('=')]
+                        tokens = [token.strip() for token
+                                    in line.strip().split('=')]
                         if tokens[0] == 'region':
                             self.region = tokens[1]
                         elif tokens[0] == 'aws_access_key_id':
                             self._aws_access_key_id = tokens[1]
                         elif tokens[0] == 'aws_secret_access_key':
                             self._aws_secret_access_key = tokens[1]
+                        elif tokens[0] == 'emr':
+                            grab_roles = True
+                        elif tokens[0] == 'service_role' and grab_roles:
+                            self.service_role = tokens[1]
+                        elif tokens[0] == 'instance_profile' and grab_roles:
+                            self.instance_profile = tokens[1]
                         else:
                             line = line.strip()
                             if line[0] == '[' and line[-1] == ']':
