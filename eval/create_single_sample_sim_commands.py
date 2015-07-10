@@ -12,9 +12,9 @@ whether they should be changed.
 """
 import random
 import sys
+import os
 
-in __name__ == '__main__':
-    for line in 
+if __name__ == '__main__':
     import argparse
     # Print file's docstring if -h is invoked
     parser = argparse.ArgumentParser(description=__doc__, 
@@ -40,14 +40,16 @@ in __name__ == '__main__':
         ) as manifest_stream:
         sample_names = [line.strip().split('\t')[-1]
                         for line in manifest_stream
-                        if line[0] != '#' and not line.strip()]
+                        if line[0] != '#' and line.strip()]
     random.seed(1)
-    final_sample_names = random.choice(sample_names, 20)
+    final_sample_names = random.sample(sample_names, 20)
+    script_path = os.path.abspath(__file__)
     for sample_name in final_sample_names:
-        print 'sh run_single_sample_sim.sh {} {} {} {} {}'.format(
+        print 'sh {} {} {} {} {} {}'.format(
+                script_path,
                 args.num_processes,
                 args.output_dir,
                 args.data_dir,
-                args.sample_name,
+                sample_name,
                 args.scratch
             )
