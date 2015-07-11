@@ -3,7 +3,6 @@
 # $2: output directory -- SPECIFY FULL PATH
 # $3: where to find sample fastqs from generate_bioreps.py
 # $4: sample name; this is the prefix of "_sim.fastq"
-# $5: scratch directory; files are written here first, and relevant output is copied back to $2
 # Ex: taskset -c 0,1,2,3 sh run_single_sample_rail_sim.sh 4 ./myoutput NA11829_male_CEU_UU_6-1-1 /tmp
 # See generate_bioreps.py for how sample data was generated.
 
