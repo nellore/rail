@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# RUN WITH TASKSET to limit CPU usage on multicore system for benchmarking!
 # $1: number of cores
 # $2: output directory -- SPECIFY FULL PATH
 # $3: where to find sample fastqs from generate_bioreps.py
@@ -26,7 +25,7 @@ SCRATCH=$5
 mkdir -p ${SCRATCH}
 
 ## Specify locations of executables
-# Used version 2.0.12 of TopHat; wrapped version 2.2.5 of Bowtie2 and version 1.1.1 of Bowtie
+# Used version 2.1.0 of TopHat; wrapped version 2.2.5 of Bowtie2 and version 1.1.1 of Bowtie
 TOPHAT=/scratch0/langmead-fs1/shared/tophat-2.1.0.Linux_x86_64/tophat2
 # Used version 2.4.2a of STAR
 STAR=/scratch0/langmead-fs1/shared/STARv2.4.2a/STAR

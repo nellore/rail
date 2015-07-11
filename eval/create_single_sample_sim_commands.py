@@ -23,10 +23,10 @@ if __name__ == '__main__':
         default=8,
         help='Number of threads each aligner should use')
     parser.add_argument('--output-dir', type=str, required=False,
-        default='/scratch2/langmead-fs1/geuvadis_sims_for_paper_v2/8core',
+        default='/scratch1/langmead-fs1/geuvadis_sims_for_paper_v2/8core',
         help='Directory to which output of all simulations should be written ')
     parser.add_argument('--data-dir', type=str, required=False,
-        default='/scratch2/langmead-fs1/geuvadis_sims_for_paper_v2',
+        default='/scratch1/langmead-fs1/geuvadis_sims_for_paper_v2',
         help='Where to find Flux FASTQs and BEDs output by '
              'generate_bioreps.py')
     parser.add_argument('--scratch', type=str, required=False,
