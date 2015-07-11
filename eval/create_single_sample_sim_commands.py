@@ -33,6 +33,10 @@ if __name__ == '__main__':
         default='/tmp',
         help='Scratch directory. If running each command on cluster, make '
              'this a node-local directory.')
+    parser.add_argument('--aligners', type=str, required=True,
+        nargs='+',
+        help=('aligner to use to run simulation; assumes script in dir is '
+              'present in format run_single_sample_[aligner]_sim.sh'))
     args = parser.parse_args()
     sample_names = []
     with open(
@@ -44,7 +48,8 @@ if __name__ == '__main__':
     random.seed(1)
     final_sample_names = random.sample(sample_names, 20)
     script_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                                'run_single_sample_sim.sh')
+                                'run_single_sample_'
+                                + args.aligner + '_sim.sh')
     for sample_name in final_sample_names:
         print 'sh {} {} {} {} {} {}'.format(
                 script_path,
