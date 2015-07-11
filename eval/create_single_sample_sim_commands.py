@@ -52,6 +52,8 @@ if __name__ == '__main__':
                                     'run_single_sample_'
                                     + aligner + '_sim.sh')
         for i, sample_name in enumerate(final_sample_names):
+            if i and (i % 4) == 0:
+                print 'wait'
             print 'sh {} {} {} {} {} {} &'.format(
                     script_path,
                     args.num_processes,
@@ -60,5 +62,3 @@ if __name__ == '__main__':
                     sample_name,
                     args.scratch
                 )
-            if i % 4 == 0:
-                print 'wait'
