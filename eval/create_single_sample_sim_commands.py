@@ -8,7 +8,7 @@ commands to stdout.
 
 The default values of all command-line parameters were the ones we used.
 Run python create_single_sample_sim_commands.py -h to see what they were and 
-whether they should be changed.
+whether they should be changed. Four commands are executed at a time.
 """
 import random
 import sys
@@ -51,8 +51,8 @@ if __name__ == '__main__':
         script_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                                     'run_single_sample_'
                                     + aligner + '_sim.sh')
-        for sample_name in final_sample_names:
-            print 'sh {} {} {} {} {} {}'.format(
+        for i, sample_name in enumerate(final_sample_names):
+            print 'sh {} {} {} {} {} {} &'.format(
                     script_path,
                     args.num_processes,
                     args.output_dir,
@@ -60,3 +60,5 @@ if __name__ == '__main__':
                     sample_name,
                     args.scratch
                 )
+            if i % 4 == 0:
+                print 'wait'
