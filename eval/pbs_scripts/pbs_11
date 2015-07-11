@@ -1,0 +1,8 @@
+#!/bin/bash
+#PBS -q batch
+#PBS -l walltime=48:00
+#PBS -l nodes=1:ppn=8
+#PBS -j n
+#PBS -m abe
+#PBS -M anellore@gmail.com
+sh /scratch0/langmead-fs1/rail/eval/create_single_sample_sim_commands.py 8 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/8core /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2 HG00154_female_GBR_HMGU_5-1-1 /tmp
