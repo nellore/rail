@@ -51,12 +51,12 @@ if __name__ == '__main__':
         script_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                                     'run_single_sample_'
                                     + aligner + '_sim.sh')
-    for sample_name in final_sample_names:
-        print 'sh {} {} {} {} {} {}'.format(
-                script_path,
-                args.num_processes,
-                args.output_dir,
-                args.data_dir,
-                sample_name,
-                args.scratch
-            )
+        for sample_name in final_sample_names:
+            print 'sh {} {} {} {} {} {}'.format(
+                    script_path,
+                    args.num_processes,
+                    args.output_dir,
+                    args.data_dir,
+                    sample_name,
+                    args.scratch
+                )
