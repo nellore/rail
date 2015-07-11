@@ -47,12 +47,13 @@ if __name__ == '__main__':
                         if line[0] != '#' and line.strip()]
     random.seed(1)
     final_sample_names = random.sample(sample_names, 20)
+    total_counter = 0
     for aligner in args.aligners:
         script_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                                     'run_single_sample_'
                                     + aligner + '_sim.sh')
-        for i, sample_name in enumerate(final_sample_names):
-            if i and (i % 4) == 0:
+        for sample_name in final_sample_names:
+            if total_counter and (total_counter % 4) == 0:
                 print 'wait'
             print 'sh {} {} {} {} {} {} &'.format(
                     script_path,
@@ -62,3 +63,4 @@ if __name__ == '__main__':
                     sample_name,
                     args.scratch
                 )
+            total_counter += 1
