@@ -43,7 +43,8 @@ if __name__ == '__main__':
                         if line[0] != '#' and line.strip()]
     random.seed(1)
     final_sample_names = random.sample(sample_names, 20)
-    script_path = os.path.abspath(__file__)
+    script_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                                'run_single_sample_sim.sh')
     for sample_name in final_sample_names:
         print 'sh {} {} {} {} {} {}'.format(
                 script_path,
