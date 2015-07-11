@@ -46,6 +46,12 @@ SUBJUNCIDX=/scratch0/langmead-fs1/indexes_for_paper/subreadgenome
 # Performance is computed with spliced_read_recovery_performance.py; refer to that file for details
 PERFORMANCE=perform
 
+# Flux outputs paired-end reads in one file; split files here
+echo 'Splitting Flux FASTQs...'
+awk '(NR-1) % 8 < 4' $DATADIR/${SAMPLE}_sim.fastq >${SCRATCH}/${SAMPLE}_sim_left.fastq
+awk '(NR-1) % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >${SCRATCH}/${SAMPLE}_sim_right.fastq
+
+RAILHOME=/scratch0/langmead-fs1/rail
 cd $SCRATCH
 mkdir -p ${SAMPLE}
 cd ${SAMPLE}

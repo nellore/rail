@@ -24,6 +24,7 @@ SAMPLE=$4
 # Temp dir
 SCRATCH=$5
 mkdir -p ${SCRATCH}
+RAILHOME=/scratch0/langmead-fs1/rail
 
 ## Specify locations of executables
 # Used version 2.1.0 of TopHat; wrapped version 2.2.5 of Bowtie2 and version 1.1.1 of Bowtie

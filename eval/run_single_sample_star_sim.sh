@@ -24,6 +24,7 @@ SAMPLE=$4
 # Temp dir
 SCRATCH=$5
 mkdir -p ${SCRATCH}
+RAILHOME=/scratch0/langmead-fs1/rail
 
 ## Specify locations of executables
 # Used version 2.4.2a of STAR
