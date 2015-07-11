@@ -4,7 +4,10 @@
 # $3: where to find sample fastqs from generate_bioreps.py
 # $4: sample name; this is the prefix of "_sim.fastq"
 # $5: scratch directory; files are written here first, and relevant output is copied back to $2
-# Ex: taskset -c 0,1,2,3 sh run_single_sample_sim.sh 4 ./myoutput NA11829_male_CEU_UU_6-1-1 /tmp
+# Do perform our timing simulation, we chose the sample HG00154_female_GBR_HMGU_5-1-1 at random and ran:
+# sh run_single_sample_sim.sh 8 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/8core_timing /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2 HG00154_female_GBR_HMGU_5-1-1 /scratch2/langmead-fs1/tmp_timing
+# sh run_single_sample_sim.sh 16 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/16core_timing /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2 HG00154_female_GBR_HMGU_5-1-1 /scratch2/langmead-fs1/tmp_timing
+# sh run_single_sample_sim.sh 32 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/16core_timing /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2 HG00154_female_GBR_HMGU_5-1-1 /scratch2/langmead-fs1/tmp_timing
 # See generate_bioreps.py for how sample data was generated.
 
 # Specify number of parallel processes for each program
