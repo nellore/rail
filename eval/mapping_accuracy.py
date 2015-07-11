@@ -142,6 +142,7 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
                                 [tokens[3], '0'] + tokens[:3] + tokens[4:]
                             )
         for line in sam_stream:
+            if line[0] == '@' or not line.strip(): continue
             tokens = line.strip().split('\t')
             print >>temp_stream, '\t'.join([tokens[0], '1'] + tokens[1:])
     import subprocess

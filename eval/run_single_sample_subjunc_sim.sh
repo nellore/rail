@@ -76,4 +76,6 @@ echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 wait
 # Move Subjunc results to final destination
-mv $OUTPUT/subjunc $SAMPLEOUTPUT
+rm -rf ${SAMPLEOUTPUT}/subjunc
+cp -r ${OUTPUT}/subjunc $SAMPLEOUTPUT
+rm -rf ${OUTPUT}/subjunc

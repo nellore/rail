@@ -118,4 +118,6 @@ echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 wait
 # Move all hisat results to final destination
-mv $OUTPUT/hisat $SAMPLEOUTPUT
+rm -rf ${SAMPLEOUTPUT}/hisat
+cp -r ${OUTPUT}/hisat $SAMPLEOUTPUT
+rm -rf ${OUTPUT}/hisat

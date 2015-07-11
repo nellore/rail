@@ -74,4 +74,6 @@ echo 'Computing precision and recall...'
 (for i in $OUTPUT/rail/alignments/*.bam; do $SAMTOOLS view $i; done | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 wait
 # Move rail results to final destination
-mv $OUTPUT/rail $SAMPLEOUTPUT
+rm -rf ${SAMPLEOUTPUT}/rail
+cp -r ${OUTPUT}/rail $SAMPLEOUTPUT
+rm -rf ${OUTPUT}/rail

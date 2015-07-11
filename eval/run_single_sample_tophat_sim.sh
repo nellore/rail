@@ -85,4 +85,6 @@ echo 'Computing precision and recall...'
 ($SAMTOOLS view $OUTPUT/tophat/ann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_mapping_accuracy_summary) &
 ($SAMTOOLS view $OUTPUT/tophat/ann_paired/accepted_hits.bam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 # Move TopHat results to final destination
-mv $OUTPUT/tophat $SAMPLEOUTPUT
+rm -rf ${SAMPLEOUTPUT}/tophat
+cp -r ${OUTPUT}/tophat $SAMPLEOUTPUT
+rm -rf ${OUTPUT}/tophat
