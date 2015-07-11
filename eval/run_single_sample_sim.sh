@@ -12,6 +12,7 @@ CORES=$1
 
 # Specify FULL PATH to output directory
 MAINOUTPUT=$2
+mkdir -p ${MAINOUTPUT}
 
 # Specify data directory; fastqs should be of the form [SAMPLE NAME]_sim.fastq; Flux beds should be
 # of form [SAMPLE_NAME]_sim.bed
@@ -119,7 +120,7 @@ echo '#'${SAMPLE}' Subjunc' >>$TIMELOG
 mkdir -p $OUTPUT/subjunc
 cd $OUTPUT/subjunc
 # Use Subjunc defaults
-time (${SUBJUNC} -T $CORES -d 50 -D 600 -i ${SUBJUNCIDX} -r $DATADIR/${SAMPLE}_sim_left.fastq -R $DATADIR/${SAMPLE}_sim_right.fastq -o Aligned.out.sam) 2>>$TIMELOG
+time (${SUBJUNC} -T $CORES -d 50 -D 600 -i ${SUBJUNCIDX} -r ${SCRATCH}/${SAMPLE}_sim_left.fastq -R ${SCRATCH}/${SAMPLE}_sim_right.fastq -o Aligned.out.sam) 2>>$TIMELOG
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
@@ -211,7 +212,7 @@ echo 'Running STAR on sample '${SAMPLE}' with no annotation and in paired-end mo
 echo '#'${SAMPLE}' STAR 1-pass noann paired' >>$TIMELOG
 mkdir -p $OUTPUT/star/noann_paired_1pass
 cd $OUTPUT/star/noann_paired_1pass
-time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+time ($STAR --genomeDir $STARIDX --readFilesIn ${SCRATCH}/${SAMPLE}_sim_left.fastq ${SCRATCH}/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
@@ -222,7 +223,7 @@ echo 'Running STAR on sample '${SAMPLE}' with annotation and in paired-end mode.
 echo '#'${SAMPLE}' STAR 1-pass ann paired' >>$TIMELOG
 mkdir -p $OUTPUT/star/ann_paired_1pass
 cd $OUTPUT/star/ann_paired_1pass
-time ($STAR --genomeDir $STARANNIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+time ($STAR --genomeDir $STARANNIDX --readFilesIn ${SCRATCH}/${SAMPLE}_sim_left.fastq ${SCRATCH}/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
@@ -245,7 +246,7 @@ echo 'Running second pass of STAR on sample '${SAMPLE}' with no annotation and i
 echo '#'${SAMPLE}' STAR 2-pass noann paired' >>$TIMELOG
 mkdir -p $OUTPUT/star/noann_paired_2pass
 cd $OUTPUT/star/noann_paired_2pass
-time ($STAR --genomeDir $STARIDXNOANNPAIRED --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
+time ($STAR --genomeDir $STARIDXNOANNPAIRED --readFilesIn ${SCRATCH}/${SAMPLE}_sim_left.fastq ${SCRATCH}/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
@@ -256,19 +257,7 @@ echo 'Running second pass of STAR on sample '${SAMPLE}' with annotation and in p
 echo '#'${SAMPLE}' STAR 2-pass ann paired' >>$TIMELOG
 mkdir -p $OUTPUT/star/ann_paired_2pass
 cd $OUTPUT/star/ann_paired_2pass
-time ($STAR --genomeDir $STARIDXANNPAIRED --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-echo 'Computing precision and recall...'
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_mapping_accuracy_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
-wait
-# STAR 2-pass single-run protocol is documented in section 7.2 of STAR manual https://github.com/alexdobin/STAR/blob/master/doc/STARmanual.pdf (v2.4.0.1)
-echo 'Running 2-pass STAR on sample '${SAMPLE}' with no regenerated genome/no annotation and in single-end mode...'
-echo '#'${SAMPLE}' STAR 2-pass nogen noann single' >>$TIMELOG
-mkdir -p $OUTPUT/star/nogen_noann_single_2pass
-cd $OUTPUT/star/nogen_noann_single_2pass
-time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim.fastq --runThreadN $CORES --twopass1readsN 50000000 --sjdbOverhang $OVERHANG 2>&1) 2>>$TIMELOG
+time ($STAR --genomeDir $STARIDXANNPAIRED --readFilesIn ${SCRATCH}/${SAMPLE}_sim_left.fastq ${SCRATCH}/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
@@ -279,7 +268,7 @@ echo 'Running STAR on sample '${SAMPLE}' with no regenerated genome/no annotatio
 echo '#'${SAMPLE}' STAR 2-pass nogen noann paired' >>$TIMELOG
 mkdir -p $OUTPUT/star/nogen_noann_paired_2pass
 cd $OUTPUT/star/nogen_noann_paired_2pass
-time ($STAR --genomeDir $STARIDX --readFilesIn $DATADIR/${SAMPLE}_sim_left.fastq $DATADIR/${SAMPLE}_sim_right.fastq --runThreadN $CORES --twopass1readsN 50000000 --sjdbOverhang $OVERHANG >&1) 2>>$TIMELOG
+time ($STAR --genomeDir $STARIDX --readFilesIn ${SCRATCH}/${SAMPLE} ${SCRATCH}/${SAMPLE} --runThreadN $CORES --twopass1readsN 50000000 --sjdbOverhang $OVERHANG >&1) 2>>$TIMELOG
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
