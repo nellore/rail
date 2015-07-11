@@ -82,8 +82,8 @@ time ($HISAT -x $HISATIDX -1 ${SCRATCH}/${SAMPLE}_sim_left.fastq -2 ${SCRATCH}/$
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_mapping_accuracy_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -g >${PERFORMANCE}_mapping_accuracy_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 -g >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 wait
 echo 'Running HISAT on sample '${SAMPLE}' with annotation and in paired-end mode...'
 echo '#'${SAMPLE}' HISAT 1-pass ann paired' >>$TIMELOG
@@ -93,8 +93,8 @@ time ($HISAT -x $HISATIDX -1 ${SCRATCH}/${SAMPLE}_sim_left.fastq -2 ${SCRATCH}/$
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t ${SCRATCH}/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t ${SCRATCH}/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_mapping_accuracy_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -g >${PERFORMANCE}_mapping_accuracy_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 -g >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 wait
 echo 'Running second pass of HISAT on sample '${SAMPLE}' with no annotation and in paired-end mode...'
 echo '#'${SAMPLE}' HISAT 2-pass noann paired' >>$TIMELOG
@@ -104,8 +104,8 @@ time ($HISAT -x $HISATIDX -1 ${SCRATCH}/${SAMPLE}_sim_left.fastq -2 ${SCRATCH}/$
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_mapping_accuracy_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -g >${PERFORMANCE}_mapping_accuracy_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 -g >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 echo 'Running second pass of HISAT on sample '${SAMPLE}' with annotation and in paired-end mode...'
 echo '#'${SAMPLE}' HISAT 2-pass ann paired' >>$TIMELOG
 mkdir -p $OUTPUT/hisat/ann_paired_2pass
@@ -114,8 +114,8 @@ time ($HISAT -x $HISATIDX -1 ${SCRATCH}${SAMPLE}_sim_left.fastq -2 ${SCRATCH}/${
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t ${SCRATCH}/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t ${SCRATCH}/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_mapping_accuracy_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -g >${PERFORMANCE}_mapping_accuracy_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 -g >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 wait
 # Move all hisat results to final destination
 rm -rf ${SAMPLEOUTPUT}/hisat
