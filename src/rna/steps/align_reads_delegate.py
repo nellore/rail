@@ -604,17 +604,15 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                     current_qname
                                 )
                             if tie_present and current_mate:
+                                decoded = decode_sequence(current_mate)
                                 print >>align_stream, '\t'.join([
                                         '%s\x1d%s' % (
                                             current_is_reverse, current_qname
                                         ), seq_to_print, current_qual,
-                                        decode_sequence(current_mate)
-                                        if current_is_reverse == '0'
-                                    else decode_sequence(
-                                                current_mate
-                                            )[::-1].translate(
+                                        decoded if current_is_reverse == '0'
+                                        else decoded[::-1].translate(
                                         _reversed_complement_translation_table
-                                    ), 'I'*len(current_mate)
+                                    ), 'I'*len(decoded)
                                 ])
                             else:
                                 print >>align_stream, '\t'.join([
@@ -664,17 +662,15 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                     current_qname
                                 )
                             if current_mate:
+                                decoded = decode_sequence(current_mate)
                                 print >>align_stream, '\t'.join([
                                         '%s\x1d%s' % (
                                             current_is_reverse, current_qname
                                         ), seq_to_print, current_qual,
-                                        decode_sequence(current_mate)
-                                        if current_is_reverse == '0'
-                                    else decode_sequence(
-                                                current_mate
-                                            )[::-1].translate(
+                                        decoded if current_is_reverse == '0'
+                                        else decoded[::-1].translate(
                                         _reversed_complement_translation_table
-                                    ), 'I'*len(current_mate)
+                                    ), 'I'*len(decoded)
                                 ])
                             else:
                                 print >>align_stream, '\t'.join([
@@ -709,17 +705,15 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                 current_qname
                             )
                         if current_mate:
+                            decoded = decode_sequence(current_mate)
                             print >>align_stream, '\t'.join([
                                     '%s\x1d%s' % (
                                             current_is_reverse, current_qname
                                         ), seq_to_print, current_qual,
-                                        decode_sequence(current_mate)
-                                        if current_is_reverse == '0'
-                                    else decode_sequence(
-                                                current_mate
-                                            )[::-1].translate(
+                                        decoded if current_is_reverse == '0'
+                                        else decoded[::-1].translate(
                                         _reversed_complement_translation_table
-                                    ), 'I'*len(current_mate)
+                                    ), 'I'*len(decoded)
                                 ])
                         else:
                             print >>align_stream, '\t'.join([
@@ -763,8 +757,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                 '%s\x1d%s' % (
                                         '0', qname
                                     ), seq_to_print, qual_to_print,
-                                    decoded,
-                                    len(decoded)*'I'
+                                    decoded, len(decoded)*'I'
                             ])
                 else:
                     if is_reverse:
