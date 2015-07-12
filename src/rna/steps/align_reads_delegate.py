@@ -179,8 +179,8 @@ def qname_and_mate(qname):
         Return value: tuple (qname, mate sequence, which could be empty)
     """
     split_name = qname.split('\x1d')
-    mate = split_name[1].rpartition(',')
-    split_name[1] = mate[0] + ','
+    mate = split_name[1].rpartition(':')
+    split_name[1] = mate[0] + ':'
     return ('\x1d'.join(split_name), mate[2])
 
 def handle_bowtie_output(input_stream, reference_index, manifest_object,

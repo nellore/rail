@@ -128,7 +128,7 @@ def qname_from_read(qname, seq, sample_label, mate=None):
     """
     return ''.join([qname, '\x1d',
                     hex(hash(qname + seq + sample_label))[-12:],
-                    ',', encode_sequence(mate) if mate is not None else '',
+                    ':', encode_sequence(mate) if mate is not None else '',
                     '\x1d', sample_label])
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
