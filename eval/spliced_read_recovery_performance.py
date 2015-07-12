@@ -285,7 +285,13 @@ if __name__ == '__main__':
     from tempdel import remove_temporary_directories
     import tempfile
     import atexit
-    temp_dir_path = tempfile.mkdtemp()
+    try:
+        temp_dir_path = tempfile.mkdtemp(dir=os.path.dirname(
+                                                    args.true_introns_bed
+                                                )
+                                            )
+    except:
+        temp_dir_path = tempfile.mkdtemp()
     #print >>sys.stderr, temp_dir_path
     atexit.register(remove_temporary_directories, [temp_dir_path])
     combined_file = os.path.join(temp_dir_path, 'combined.temp')
@@ -302,7 +308,8 @@ if __name__ == '__main__':
                                             instance=args.read_instance)
     import subprocess
     sorted_combined_file = os.path.join(temp_dir_path, 'combined.sorted.temp')
-    subprocess.check_call(' '.join(['sort -k1,1', combined_file, 
+    subprocess.check_call(' '.join(['sort -T %s -k1,1' % temp_dir_path,
+                                    combined_file, 
                                     '>', sorted_combined_file]),
                             bufsize=-1, shell=True)
     relevant = 0

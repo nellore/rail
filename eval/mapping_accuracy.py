@@ -109,7 +109,8 @@ def dummy_md_and_mapped_offsets(cigar, clip_threshold=1.0):
                 clip_count)
 
 def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
-        base_threshold=0.5, clip_threshold=1.0, dump_incorrect=False):
+        base_threshold=0.5, clip_threshold=1.0, dump_incorrect=False,
+        temp_dir=None):
     """ Finds relevant and retrieved instance counts.
 
         true_bed_stream: file handle for BED output of Flux simulation
@@ -124,7 +125,13 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
     from tempdel import remove_temporary_directories
     import tempfile
     import atexit
-    temp_dir_path = tempfile.mkdtemp()
+    if temp_dir is None:
+        temp_dir_path = tempfile.mkdtemp()
+    else:
+        try:
+            temp_dir_path = tempfile.mkdtemp(dir=temp_dir)
+        except:
+            temp_dir_path = tempfile.mkdtemp()
     #print >>sys.stderr, temp_dir_path
     atexit.register(remove_temporary_directories, [temp_dir_path])
     # Store everything in one file, then sort it on read name
@@ -147,8 +154,9 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
             print >>temp_stream, '\t'.join([tokens[0], '1'] + tokens[1:])
     import subprocess
     sorted_combined_file = os.path.join(temp_dir_path, 'combined.sorted.temp')
-    subprocess.check_call(' '.join(['sort -k1,1 -k2,2n', combined_file, 
-                                    '>', sorted_combined_file]),
+    subprocess.check_call(' '.join(['sort -T %s -k1,1 -k2,2n'
+                                        % temp_dir_path, combined_file, 
+                                        '>', sorted_combined_file]),
                             bufsize=-1, shell=True)
     basewise_relevant, read_relevant = 0, 0
     # Initialize counters for computing accuracy metrics
@@ -306,7 +314,8 @@ if __name__ == '__main__':
                         generous=args.generous,
                         base_threshold=args.base_threshold,
                         clip_threshold=args.clip_threshold,
-                        dump_incorrect=args.dump_incorrect
+                        dump_incorrect=args.dump_incorrect,
+                        temp_dir=os.path.dirname(args.true_bed)
                     )
         basewise_precision = float(basewise_intersection) / basewise_retrieved
         basewise_recall = float(basewise_intersection) / basewise_relevant
