@@ -88,6 +88,7 @@ from dooplicity.tools import xopen, register_cleanup, make_temp_dir
 import filemover
 import tempdel
 from guess import phred_converter
+from encode import encode, encode_sequence
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -101,37 +102,15 @@ _MX, _MN = 6, 2
 scores, each an "exemplar" from a different bin.'''
 _mismatch_penalties_to_quality_scores = string.maketrans('23456', '#05Hh')
 
-_alphabet = string.ascii_uppercase + string.ascii_lowercase + \
-            string.digits + '-_'
-_base = len(_alphabet)
-
-def encode(value):
-    """ Encodes an integer in base (len alphabet) to shorten it.
-
-        This function is used to assign short names to reads by record.
-        Based on http://stackoverflow.com/questions/561486/
-        how-to-convert-an-integer-to-the-shortest-url-safe-string-in-python/
-        561534#561534 . Does not reverse encoded string because it's 
-        unnecessary.
-
-        value: integer
-
-        Return value: base (len alphabet) encoded value
-    """
-    assert value >= 0
-    s = []
-    while True:
-        value, r = divmod(value, _base)
-        s.append(_alphabet[r])
-        if value == 0: break
-    return ''.join(s)
-
-def qname_from_read(qname, seq, sample_label):
+def qname_from_read(qname, seq, sample_label, mate=None):
     """ Returns QNAME including sample label and ID formed from hash.
 
         New QNAME takes the form:
             <qname> + '\x1d'
-            + <short hash of original_qname + seq + sample label> + '\x1d'
+            + <short hash of original_qname + seq + sample label> + 
+            comma character + base 36-encoded mate sequence if present, else
+            blank
+            '\x1d'
             + <sample_label>
 
         The purpose of the ID is to distinguish reads with the same name in
@@ -143,11 +122,13 @@ def qname_from_read(qname, seq, sample_label):
         short_name: short name to ultimately give read if qname shortening
             is turned on
         sample_label: sample label
+        mate: mate sequence if paired-end read; else None
 
         Return value: new QNAME string
     """
     return ''.join([qname, '\x1d',
                     hex(hash(qname + seq + sample_label))[-12:],
+                    ',', encode_sequence(mate) if mate is not None else '',
                     '\x1d', sample_label])
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
@@ -703,7 +684,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                             qname_from_read(
                                                     left_qname_to_write,
                                                     seqs[0] + quals[0], 
-                                                    sample_label
+                                                    sample_label,
+                                                    mate=seqs[1]
                                                 ),
                                             '\n'.join([
                                                 round_quality_string(
@@ -714,7 +696,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                             qname_from_read(
                                                     right_qname_to_write,
                                                     seqs[1] + quals[1], 
-                                                    sample_label
+                                                    sample_label,
+                                                    mate=seqs[0]
                                                 ),
                                             round_quality_string(right_qual)
                                         ]
