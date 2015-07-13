@@ -106,6 +106,7 @@ echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -g >${PERFORMANCE}_mapping_accuracy_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 -g >${PERFORMANCE}_mapping_accuracy_SC_summary) &
+wait
 echo 'Running second pass of HISAT on sample '${SAMPLE}' with annotation and in paired-end mode...'
 echo '#'${SAMPLE}' HISAT 2-pass ann paired' >>$TIMELOG
 mkdir -p $OUTPUT/hisat/ann_paired_2pass
