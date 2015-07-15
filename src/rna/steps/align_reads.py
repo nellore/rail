@@ -379,7 +379,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         No return value.
     """
     global _input_line_count
-    polyA_set = set([frozenset(['A']), frozenset(['']), frozenset(['T'])])
+    polyA_set = frozenset(
+            ['A'*i for i in xrange(1, remaining_seq_size+1)]
+            + ['T'*i for i in xrange(1, remaining_seq_size+1)]
+            + ['']
+        )
     # Required length of prefix after poly(A) is trimmed
     remaining_seq_size = max(min_exon_size - 1, 1)
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
@@ -418,8 +422,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                                         xstream(sys.stdin, 1)
                                                     ):
             if no_polyA and (
-                    set(seq[:-remaining_seq_size]) in polyA_set
-                    or set(seq[remaining_seq_size:]) in polyA_set
+                    seq[:-remaining_seq_size] in polyA_set
+                    or seq[remaining_seq_size:] in polyA_set
                 ):
                 if not no_realign:
                     '''If a sequence is too short without its poly(A) tail,
@@ -476,6 +480,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                     if j != best_qual_index:
                         print >>other_stream, other_to_print
             print >>align_stream, to_align
+    sys.stdout.flush()
     if nothing_doing:
         # No input
         sys.exit(0)
