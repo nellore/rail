@@ -379,13 +379,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         No return value.
     """
     global _input_line_count
+    # Required length of prefix after poly(A) is trimmed
+    remaining_seq_size = max(min_exon_size - 1, 1)
     polyA_set = frozenset(
             ['A'*i for i in xrange(1, remaining_seq_size+1)]
             + ['T'*i for i in xrange(1, remaining_seq_size+1)]
             + ['']
         )
-    # Required length of prefix after poly(A) is trimmed
-    remaining_seq_size = max(min_exon_size - 1, 1)
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
     alignment_printer = AlignmentPrinter(
