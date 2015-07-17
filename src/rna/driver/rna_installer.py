@@ -221,11 +221,20 @@ class RailRnaInstaller(object):
                         with zipfile.ZipFile(filename) as zip_object:
                             zip_object.extractall()
                     except Exception as e:
-                        self._print_to_screen_and_log(
-                                'Error encountered exploding %s.'
-                                    % filename
+                        if not url_deque:
+                            self._print_to_screen_and_log(
+                                    'Error encountered exploding %s.'
+                                        % filename
+                                )
+                            self._bail()
+                        else:
+                            self._print_to_screen_and_log(
+                                '[Installing] Extraction failed; '
+                                'trying alternate URL for %s...' % name,
+                                newline=False,
+                                carriage_return=True
                             )
-                        self._bail()
+                            continue
                     finally:
                         os.remove(filename)
                 if explode_command is not None:
@@ -237,12 +246,22 @@ class RailRnaInstaller(object):
                         subprocess.check_output(explode_command,
                                                 stderr=self.log_stream)
                     except subprocess.CalledProcessError as e:
-                        self._print_to_screen_and_log(
-                            ('Error encountered exploding file %s; exit '
-                             'code was %d; command invoked was "%s".') %
-                            (filename, e.returncode, ' '.join(explode_command))
-                        )
-                        self._bail()
+                        if not url_deque:
+                            self._print_to_screen_and_log(
+                                ('Error encountered exploding file %s; exit '
+                                 'code was %d; command invoked was "%s".') %
+                                (filename, e.returncode,
+                                    ' '.join(explode_command))
+                            )
+                            self._bail()
+                        else:
+                            self._print_to_screen_and_log(
+                                '[Installing] Extraction failed; '
+                                'trying alternate URL for %s...' % name,
+                                newline=False,
+                                carriage_return=True
+                            )
+                            continue
                     finally:
                         os.remove(filename)
                 break
