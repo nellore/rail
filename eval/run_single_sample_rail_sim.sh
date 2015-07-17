@@ -27,7 +27,7 @@ mkdir -p ${SCRATCH}
 ## Specify locations of executables
 # Used version 0.1.8 of Rail-RNA, but wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
 # Specify Python executable/loc of get_junctions.py; PyPy 2.5.0 was used
-PYTHON=/home/anellor1/raildotbio/pypy-2.5-linux_x86_64-portable/bin/pypy
+PYTHON=/home/anellor1/raildotbio3/pypy-2.5-linux_x86_64-portable/bin/pypy
 RAILHOME=/scratch0/langmead-fs1/rail
 RAILRNA=rail-rna
 # Samtools v1.2 was used

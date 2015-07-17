@@ -32,7 +32,7 @@ HISAT=/scratch0/langmead-fs1/shared/hisat-0.1.6-beta/hisat
 # Use HISAT's tool for extracting splice sites for its junction database
 HISATSPLICE=/scratch0/langmead-fs1/shared/hisat-0.1.6-beta/extract_splice_sites.py
 # Specify Python executable/loc of get_junctions.py; PyPy 2.5.0 was used
-PYTHON=/home/anellor1/raildotbio/pypy-2.5-linux_x86_64-portable/bin/pypy
+PYTHON=/home/anellor1/raildotbio3/pypy-2.5-linux_x86_64-portable/bin/pypy
 # Samtools v1.2 was used
 SAMTOOLS=/home/anellor1/raildotbio/samtools-1.2/samtools
 

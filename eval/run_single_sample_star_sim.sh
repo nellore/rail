@@ -30,7 +30,7 @@ RAILHOME=/scratch0/langmead-fs1/rail
 # Used version 2.4.2a of STAR
 STAR=/scratch0/langmead-fs1/shared/STARv2.4.2a/STAR
 # Specify Python executable/loc of get_junctions.py; PyPy 2.5.0 was used
-PYTHON=/home/anellor1/raildotbio/pypy-2.5-linux_x86_64-portable/bin/pypy
+PYTHON=/home/anellor1/raildotbio3/pypy-2.5-linux_x86_64-portable/bin/pypy
 # Samtools v1.2 was used
 SAMTOOLS=/home/anellor1/raildotbio/samtools-1.2/samtools
 
