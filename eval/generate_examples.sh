@@ -8,7 +8,7 @@ cd small_human_examples
 # Grab the last two lines of the 112 manifest
 tail -n 2 ../GEUVADIS_112.manifest >src.manifest
 cd ..
-python generate_bioreps.py -c 20000 --single-end -l 76 -p 2 -o ./small_human_examples --manifest src.manifest
+python generate_bioreps.py -c 20000 --single-end -l 76 -p 2 -o ./small_human_examples --manifest ./small_human_examples/src.manifest
 # Rename files, removing redundant labels at the end
 mv NA07048_male_CEU_UU_6-1-2.bed NA07048_male_CEU_UU.bed
 mv NA07048_male_CEU_UU_6-1-2.fastq NA07048_male_CEU_UU.fastq
