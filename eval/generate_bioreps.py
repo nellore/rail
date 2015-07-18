@@ -211,7 +211,10 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--read-length', type=int,
             default=76,
             help='Length of a generated read; WARNING: error model used by '
-            	 'Flux here applies to reads 76 bases long')
+                'Flux here applies to reads 76 bases long')
+    parser.add_argument('-n', '--num-molecules', type=int,
+            default=5000000,
+            help='Number of molecules in Flux simulation')
 
     args = parser.parse_args()
 
@@ -246,7 +249,7 @@ if __name__ == '__main__':
     atexit.register(kill_dir, temp_dir)
     expression_par = os.path.join(temp_dir, 'sim.par')
     par_template = [
-        ('NB_MOLECULES', '5000000'),
+        ('NB_MOLECULES', str(args.num_molecules)),
         ('LOAD_NONCODING', 'YES'),
         ('TSS_MEAN', '50'),
         ('POLYA_SCALE', 'NaN'),
