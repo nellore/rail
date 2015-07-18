@@ -94,7 +94,7 @@ echo 'Running STAR on sample '${SAMPLE}' with no regenerated genome/no annotatio
 echo '#'${SAMPLE}' STAR 2-pass nogen noann paired' >>$TIMELOG
 mkdir -p $OUTPUT/star/nogen_noann_paired_2pass
 cd $OUTPUT/star/nogen_noann_paired_2pass
-time ($STAR --genomeDir $STARIDX --readFilesIn ${SCRATCH}/${SAMPLE} ${SCRATCH}/${SAMPLE} --runThreadN $CORES --twopass1readsN -1 --sjdbOverhang $OVERHANG --twopassMode Basic >&1) 2>>$TIMELOG
+time ($STAR --genomeDir $STARIDX --readFilesIn ${SCRATCH}/${SAMPLE}_sim_left.fastq ${SCRATCH}/${SAMPLE}_sim_right.fastq --runThreadN $CORES --twopass1readsN -1 --sjdbOverhang $OVERHANG --twopassMode Basic >&1) 2>>$TIMELOG
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
