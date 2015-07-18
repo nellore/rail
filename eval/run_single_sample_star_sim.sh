@@ -90,6 +90,16 @@ SAMPLEOUTPUT=${MAINOUTPUT}/${SAMPLE}
 OUTPUT=$SCRATCH/${SAMPLE}
 # STAR protocol for 2-pass execution w/ index construction is described on pp. 43-44 of the supplement of the RGASP spliced alignment paper
 # (http://www.nature.com/nmeth/journal/v10/n12/extref/nmeth.2722-S1.pdf)
+echo 'Running STAR on sample '${SAMPLE}' with no regenerated genome/no annotation and in paired-end mode...'
+echo '#'${SAMPLE}' STAR 2-pass nogen noann paired' >>$TIMELOG
+mkdir -p $OUTPUT/star/nogen_noann_paired_2pass
+cd $OUTPUT/star/nogen_noann_paired_2pass
+time ($STAR --genomeDir $STARIDX --readFilesIn ${SCRATCH}/${SAMPLE} ${SCRATCH}/${SAMPLE} --runThreadN $CORES --twopass1readsN -1 --sjdbOverhang $OVERHANG --twopassMode Basic >&1) 2>>$TIMELOG
+echo 'Computing precision and recall...'
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -g >${PERFORMANCE}_mapping_accuracy_summary) &
+(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 -g >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 echo 'Running STAR on sample '${SAMPLE}' with no annotation and in paired-end mode...'
 echo '#'${SAMPLE}' STAR 1-pass noann paired' >>$TIMELOG
 mkdir -p $OUTPUT/star/noann_paired_1pass
@@ -121,16 +131,6 @@ echo '#'${SAMPLE}' STAR 2-pass ann paired' >>$TIMELOG
 mkdir -p $OUTPUT/star/ann_paired_2pass
 cd $OUTPUT/star/ann_paired_2pass
 time ($STAR --genomeDir $STARIDXANNPAIRED --readFilesIn ${SCRATCH}/${SAMPLE}_sim_left.fastq ${SCRATCH}/${SAMPLE}_sim_right.fastq --runThreadN $CORES 2>&1) 2>>$TIMELOG
-echo 'Computing precision and recall...'
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -g >${PERFORMANCE}_mapping_accuracy_summary) &
-(cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 -g >${PERFORMANCE}_mapping_accuracy_SC_summary) &
-echo 'Running STAR on sample '${SAMPLE}' with no regenerated genome/no annotation and in paired-end mode...'
-echo '#'${SAMPLE}' STAR 2-pass nogen noann paired' >>$TIMELOG
-mkdir -p $OUTPUT/star/nogen_noann_paired_2pass
-cd $OUTPUT/star/nogen_noann_paired_2pass
-time ($STAR --genomeDir $STARIDX --readFilesIn ${SCRATCH}/${SAMPLE} ${SCRATCH}/${SAMPLE} --runThreadN $CORES --twopass1readsN -1 --twopassMode Basic --sjdbOverhang $OVERHANG >&1) 2>>$TIMELOG
 echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -g -t $DATADIR/${SAMPLE}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t $DATADIR/${SAMPLE}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
