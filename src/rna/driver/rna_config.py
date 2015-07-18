@@ -3062,12 +3062,12 @@ class RailRnaAlign(object):
                 bowtie1_idx_len = len(bowtie1_idx)
                 existing_bowtie1_extensions = set(
                         [idx_file[bowtie1_idx_len:]
-                            for idx_file in glob.glob(bowtie1_idx + '*')]
+                            for idx_file in glob.glob(bowtie1_idx + '*ebwt')]
                     )
                 bowtie2_idx_len = len(bowtie2_idx)
                 existing_bowtie2_extensions = set(
                         [idx_file[bowtie2_idx_len:]
-                            for idx_file in glob.glob(bowtie2_idx + '*')]
+                            for idx_file in glob.glob(bowtie2_idx + '*bt2')]
                     )
                 missing_extensions = ['"{}"'.format(extension)
                                             for extension in
