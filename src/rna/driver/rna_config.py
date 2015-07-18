@@ -3069,15 +3069,14 @@ class RailRnaAlign(object):
                         [idx_file[bowtie2_idx_len:]
                             for idx_file in glob.glob(bowtie2_idx + '*')]
                     )
-                if not (bowtie1_extensions <= existing_bowtie1_extensions
-                        and bowtie2_extensions <= existing_bowtie2_extensions):
-                    missing_extensions = ['"{}"'.format(extension)
+                missing_extensions = ['"{}"'.format(extension)
                                             for extension in
                                             ((bowtie1_extensions
                                                 | bowtie2_extensions) - (
                                                 existing_bowtie2_extensions
                                                 | existing_bowtie1_extensions
                                             ))]
+                if missing_extensions:
                     base.errors.append(('Some Bowtie index files were not '
                                         'found. Check that index files with '
                                         'the extensions {0} exist with the '
