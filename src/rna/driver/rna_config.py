@@ -1400,9 +1400,10 @@ class RailRnaLocal(object):
                         base.isofrag_dir = base.intermediate_dir
                         base.isofrag_idx = os.path.join(
                                             base.isofrag_dir,
-                                            os.path.basename(isofrag_idx)
+                                            os.path.basename(base.isofrag_idx)
                                         )
-                        ansible.get(isofrag_url, destination=base.isofrag_idx)
+                        ansible.get(isofrag_url.to_url(),
+                                    destination=base.isofrag_idx)
                     base.isofrag_idx = os.path.abspath(base.isofrag_idx)
             # Check manifest; download it if necessary
             manifest_url = ab.Url(base.manifest)
@@ -1431,7 +1432,8 @@ class RailRnaLocal(object):
                     (not parallel).'''
                     base.manifest_dir = base.intermediate_dir
                     base.manifest = os.path.join(base.manifest_dir, 'MANIFEST')
-                    ansible.get(manifest_url, destination=base.manifest)
+                    ansible.get(manifest_url.to_url(),
+                                destination=base.manifest)
                 base.manifest = os.path.abspath(base.manifest)
                 files_to_check = []
                 base.sample_count = 0

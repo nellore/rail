@@ -180,7 +180,7 @@ with open(output_path, 'w') as output_stream:
                     phred_format
                     ))
     for line in saved:
-        print >>output_stream, line,
+        print >>output_stream, line.strip()
 if not output_url.is_local:
     mover.put(output_path, output_url.plus(args.filename))
     os.remove(output_path)

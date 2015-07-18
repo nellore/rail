@@ -683,6 +683,8 @@ class Url(object):
                 self.type = 's3'
             elif prefix[:4] == 'hdfs':
                 self.type = 'hdfs'
+            elif prefix[:5] == 'https':
+                self.type = 'https'
             elif prefix[:4] == 'http':
                 self.type = 'http'
             elif prefix[:4] == 'ftp':
@@ -822,40 +824,80 @@ class WebAnsible(object):
             source: filename of source
             destination: filename of destination
         """
-        old_directory = os.getcwd()
-        source_filename = source[::-1][:source[::-1].index('/')][::-1]
-        if not os.path.isdir(destination):
-            final_file = destination
-            destination = os.path.dirname(destination)
+        oldp = os.getcwd()
+        try:
+            os.chdir(destination)
+        except OSError:
+            # destination doesn't exist; the filename is the destination
+            filename = os.path.abspath(destination)
+            try:
+                os.makedirs(os.path.dirname(os.path.abspath(filename)))
+            except OSError:
+                pass
         else:
-            final_file = os.path.join(destination, source_filename)
-        os.chdir(destination)
-        command_list = [self.curl, '-O', '--connect-timeout', '60', source]
+            filename = os.path.join(os.path.abspath(destination),
+                                    source.rpartition('/')[2])
+        command_list = ['curl', '-o', filename,
+                        '-s', '-O', '--connect-timeout', '600']
+        command_list.append(source)
         command = ' '.join(command_list)
-        while True:
+        tries = 0
+        while tries < 5:
+            break_outer_loop = False
             curl_thread = CommandThread(command_list)
             curl_thread.start()
-            if self.keep_alive:
-                while curl_thread.is_alive():
-                    print >>sys.stderr, 'reporter:status:alive'
-                    sys.stderr.flush()
-                    time.sleep(60)
-            else:
-                curl_thread.join()
-            if curl_thread.process_return > 89:
+            last_print_time = time.time()
+            try:
+                last_size = os.path.getsize(filename)
+            except OSError:
+                last_size = 0
+            while curl_thread.is_alive():
+                now_time = time.time()
+                if now_time - last_print_time > 160:
+                    if self.keep_alive:
+                        print >>sys.stderr, '\nreporter:status:alive'
+                        sys.stderr.flush()
+                    try:
+                        new_size = os.path.getsize(filename)
+                    except OSError:
+                        new_size = 0
+                    if new_size == last_size:
+                        # Download stalled
+                        break_outer_loop = True
+                        break
+                    else:
+                        last_size = new_size
+                    last_print_time = now_time
+                    time.sleep(1)
+                time.sleep(1)
+            if break_outer_loop:
+                tries += 1
+                print >>sys.stderr, 'Download stalled on try %d.' % tries
+                try:
+                    curl_thread.process.kill()
+                except AttributeError:
+                    pass
+                try:
+                    os.remove(filename)
+                except OSError:
+                    pass
+                time.sleep(2)
+                continue
+            if curl_thread.process_return > 89 \
+                or curl_thread.process_return == 56:
                 '''If the exit code is greater than the highest-documented
                 curl exit code, there was a timeout.'''
                 print >>sys.stderr, 'Too many simultaneous connections; ' \
                                     'restarting in 10 s.'
-                time.sleep(10)
+                time.sleep(5)
             else:
                 break
-        os.chdir(old_directory)
-        os.rename(os.path.join(destination, source_filename),
-                    final_file)
+        os.chdir(oldp)
         if curl_thread.process_return > 0:
             raise RuntimeError(('Nonzero exitlevel %d from curl command '
-                                '"%s"') % (curl_thread.exit_level, command))
+                                '"%s"') 
+                                    % (curl_thread.process_return,
+                                        command))
 
 class Ansible(object):
     """ Ultimate goal: seamless communication with various web services.
