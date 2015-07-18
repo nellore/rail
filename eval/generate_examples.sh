@@ -10,11 +10,15 @@ tail -n 2 ../GEUVADIS_112.manifest >src.manifest
 cd ..
 python generate_bioreps.py -c 20000 --single-end -l 76 -p 2 -o ./small_human_examples --manifest ./small_human_examples/src.manifest
 # Rename files, removing redundant labels at the end
-mv NA07048_male_CEU_UU_6-1-2.bed NA07048_male_CEU_UU.bed
-mv NA07048_male_CEU_UU_6-1-2.fastq NA07048_male_CEU_UU.fastq
-mv NA19129_female_YRI_UU_6-1-1.bed NA19129_female_YRI_UU.bed
-mv NA19129_female_YRI_UU_6-1-1.fastq NA19129_female_YRI_UU.fastq
+cd small_human_examples
+mv NA07048_male_CEU_UU_6-1-2_sim.bed NA07048_male_CEU_UU.bed
+mv NA07048_male_CEU_UU_6-1-2_sim.fastq NA07048_male_CEU_UU.fastq
+mv NA19129_female_YRI_UU_6-1-1_sim.bed NA19129_female_YRI_UU.bed
+mv NA19129_female_YRI_UU_6-1-1_sim.fastq NA19129_female_YRI_UU.fastq
 rm src.manifest
+rm *.lib
+rm *.pro
+rm *.log
 read -r -d '' var <<EOF
 NA07048_male_CEU_UU.fastq\t0\tNA07048_male_CEU_UU-1-1\nNA19129_female_YRI_UU.fastq\t0\tNA19129_female_YRI_UU_6-1-1
 EOF
