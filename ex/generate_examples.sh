@@ -12,8 +12,9 @@ DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 cd $DIR
 # Make "clean" Drosophila gtf; see http://sammeth.net/confluence/pages/viewpage.action?pageId=7013276
 awk 'BEGIN{FS="\t";OFS="\t"}{split($NF,a," ");pfx="";s="";for(i=1;i<=length(a);i+=2){if(a[i]=="transcript_id"){pfx=a[i]" "a[i+1]}else{s=s" "a[i]" "a[i+1]}}if(pfx==""){print "[WARN] line "NR" without transcript_id!" > "/dev/stderr"}else{$NF=pfx""s;print$0} }' $DM3GTF | awk '$1 == "chr2L" || $1 == "chr2R" || $1 == "chr3L" || $1 == "chr3R" || $1 == "chr4" || $1 == "chrX" || $1 == "chrYHet" || $1 == "chr2LHet" ||  $1 == "chr2RHet" ||  $1 == "chr3LHet" || $1 == "chr3RHet" || $1 == "chrM" ||  $1 == "chrXHet"' >genes_clean.gtf
+
 read -r -d '' var <<EOF
-NB_MOLECULES\t5000000\n
+NB_MOLECULES\t500000\n
 LOAD_NONCODING\tYES\n
 TSS_MEAN\t50\n
 POLYA_SCALE\tNaN\n
@@ -42,7 +43,7 @@ SEED\t1
 EOF
 echo -e $var >dm3_example_1.par
 read -r -d '' var <<EOF
-NB_MOLECULES\t5000000\n
+NB_MOLECULES\t500000\n
 LOAD_NONCODING\tYES\n
 TSS_MEAN\t50\n
 POLYA_SCALE\tNaN\n
@@ -110,9 +111,9 @@ ATACAGATGACAGATGACAGGGTAGAGACAAATAGACAGATGACGATGGACAGATGACAGATAGAACAGATAGAGA
 +
 IIIIIIIIIIIIII
 @goodrecord
-ATACAGATGACAGATGACAGGAGACAAATAGACAGATGACGATGGACAGATGACAGATAGAACAGATAGAGA
+ATGGCATCAGTCAAGTCAAGATTACTAGTAGCCATACAAGATACATCGTTTAACGATTGTGGCACATACGTCACCA
 +
-IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 EOF
 read -r -d '' var <<EOF
 http://verve.webfactional.com/bad.fastq\t0\tbad-1-1
