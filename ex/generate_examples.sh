@@ -13,31 +13,31 @@ cd $DIR
 # Make "clean" Drosophila gtf; see http://sammeth.net/confluence/pages/viewpage.action?pageId=7013276
 awk 'BEGIN{FS="\t";OFS="\t"}{split($NF,a," ");pfx="";s="";for(i=1;i<=length(a);i+=2){if(a[i]=="transcript_id"){pfx=a[i]" "a[i+1]}else{s=s" "a[i]" "a[i+1]}}if(pfx==""){print "[WARN] line "NR" without transcript_id!" > "/dev/stderr"}else{$NF=pfx""s;print$0} }' $2 > genes_clean.gtf
 read -r -d '' var <<EOF
-NB_MOLECULES\t5000000
-LOAD_NONCODING\tYES
-TSS_MEAN\t50
-POLYA_SCALE\tNaN
-POLYA_SHAPE\tNaN
-FRAG_SUBSTRATE\tRNA
-FRAG_METHOD\tUR
-FRAG_UR_ETA\t350
-FRAG_UR_D0\t1
-RTRANSCRIPTION\tYES
-RT_PRIMER\tRH
-RT_LOSSLESS\tYES
-RT_MIN\t500
-RT_MAX\t5500
-GC_MEAN\tNaN
-PCR_PROBABILITY\t0.050000
-FILTERING\tNO
-READ_NUMBER\t50000
-READ_LENGTH\t76
-PAIRED_END\tYES
-ERR_FILE\t76
-FASTA\tYES
-UNIQUE_IDS\tYES
-GEN_DIR\t$DM3GEN
-REF_FILE_NAME\tgenes_clean.gtf
+NB_MOLECULES\t5000000\n
+LOAD_NONCODING\tYES\n
+TSS_MEAN\t50\n
+POLYA_SCALE\tNaN\n
+POLYA_SHAPE\tNaN\n
+FRAG_SUBSTRATE\tRNA\n
+FRAG_METHOD\tUR\n
+FRAG_UR_ETA\t350\n
+FRAG_UR_D0\t1\n
+RTRANSCRIPTION\tYES\n
+RT_PRIMER\tRH\n
+RT_LOSSLESS\tYES\n
+RT_MIN\t500\n
+RT_MAX\t5500\n
+GC_MEAN\tNaN\n
+PCR_PROBABILITY\t0.050000\n
+FILTERING\tNO\n
+READ_NUMBER\t50000\n
+READ_LENGTH\t76\n
+PAIRED_END\tYES\n
+ERR_FILE\t76\n
+FASTA\tYES\n
+UNIQUE_IDS\tYES\n
+GEN_DIR\t$DM3GEN\n
+REF_FILE_NAME\tgenes_clean.gtf\n
 SEED\t1
 EOF
 echo -e $var >dm3_example.par
