@@ -89,7 +89,7 @@ echo -e $var >dm3_example.manifest
 # Grab the last two lines of the 112 manifest
 tail -n 2 ../eval/GEUVADIS_112.manifest >src.manifest
 cd ../eval
-python generate_bioreps.py -c 20000 --single-end -l 76 -p 2 -o ../ex --manifest ../ex/src.manifest
+python generate_bioreps.py -c 20000 --single-end -l 76 -p 2 --num-molecules 500000 -o ../ex --manifest ../ex/src.manifest
 # Rename files, removing redundant labels at the end
 cd ../ex
 mv NA07048_male_CEU_UU_6-1-2_sim.bed NA07048_male_CEU_UU.bed
