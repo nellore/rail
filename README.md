@@ -64,7 +64,7 @@ Renting AWS resources costs money, regardless of whether your run ultimately suc
 
 Licenses
 -----
-[GNU GPL v3.0](http://choosealicense.com/licenses/gpl-3.0/) unless otherwise specified. [Dooplicity](https://github.com/nellore/rail/tree/master/src/dooplicity), for example, is [MIT-licensed](http://choosealicense.com/licenses/mit/).
+[MIT](http://choosealicense.com/licenses/mit/) unless otherwise specified. Some code borrowed from [NetworkX](http://networkx.lanl.gov/) in `src/rna/steps/cointron_enum_delegate.py` is [BSD](http://networkx.lanl.gov/reference/legal.html)-licensed, for example. See the source there for the appropriate copyright notice.
 
 Contributors
 -----
