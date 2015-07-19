@@ -67,20 +67,20 @@ awk '(NR-1) % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >${SCRATCH}/${SAMPLE}_sim_rig
 # These are here because it's necessary to build a new STAR index for its 2-pass and annotation protocols
 FADIR=/scratch0/langmead-fs1/shared/references/hg19/fasta
 
-# Create STAR index including annotation
-echo 'Creating new STAR index including splice junctions...'
-echo '#STAR index pre-1-pass ann' >>$TIMELOG
-STARANNIDX=${SCRATCH}/starannidx
-mkdir -p $STARANNIDX
-# Use --sjdbOverhang 75 because reads are 76 bases long! See p. 3 of STAR manual for details.
-time ($STAR --runMode genomeGenerate --genomeDir $STARANNIDX --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
-		--runThreadN $CORES --sjdbFileChrStartEnd $STARANNOTATION --sjdbOverhang $OVERHANG 2>&1) 2>>$TIMELOG
-
 cd $SCRATCH
 mkdir -p ${SAMPLE}
 cd ${SAMPLE}
 mkdir -p star
 cd ..
+
+# Create STAR index including annotation
+echo 'Creating new STAR index including splice junctions...'
+echo '#STAR index pre-1-pass ann' >>$TIMELOG
+STARANNIDX=${SCRATCH}/${SAMPLE}/starannidx
+mkdir -p $STARANNIDX
+# Use --sjdbOverhang 75 because reads are 76 bases long! See p. 3 of STAR manual for details.
+time ($STAR --runMode genomeGenerate --genomeDir $STARANNIDX --genomeFastaFiles $FADIR/chr{1..22}.fa $FADIR/chr{X,Y,M}.fa \
+		--runThreadN $CORES --sjdbFileChrStartEnd $STARANNOTATION --sjdbOverhang $OVERHANG 2>&1) 2>>$TIMELOG
 
 cd $MAINOUTPUT
 mkdir -p ${SAMPLE}
