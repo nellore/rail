@@ -75,7 +75,9 @@ Renting AWS resources costs money, regardless of whether your run ultimately suc
 
 Licenses
 -----
-[MIT](http://choosealicense.com/licenses/mit/) except for some code borrowed from [NetworkX](http://networkx.lanl.gov/) in `src/rna/steps/cointron_enum_delegate.py`, which is [BSD](http://networkx.lanl.gov/reference/legal.html)-licensed. See the source there for the appropriate copyright notice.
+[MIT](http://choosealicense.com/licenses/mit/) except for:
+* code borrowed from [NetworkX](http://networkx.lanl.gov/) in `src/rna/steps/cointron_enum_delegate.py`, which is [BSD](http://networkx.lanl.gov/reference/legal.html)-licensed. See the source there for the appropriate copyright notice.
+* code adapted from the Twitter's Elephant Bird project in `src/hadoop/relevant-elephant`, which is [Apache](http://apache.org/licenses/LICENSE-2.0)-licensed.
 
 Contributors
 -----
