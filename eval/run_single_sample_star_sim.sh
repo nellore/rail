@@ -52,9 +52,15 @@ PERFORMANCE=perform
 # This is Gencode v12, which may be obtained at ftp://ftp.sanger.ac.uk/pub/gencode/release_12/gencode.v12.annotation.gtf.gz
 ANNOTATION=/scratch0/langmead-fs1/geuvadis_sim/gencode.v12.annotation.gtf
 
+cd $SCRATCH
+mkdir -p ${SAMPLE}
+cd ${SAMPLE}
+mkdir -p star
+cd ..
+
 ## STAR requires its own annotation format that lists introns directly; conversion is done by get_junctions.py
 # Build STAR junction index from GTF
-STARANNOTATION=$SCRATCH/junctions_for_star.txt
+STARANNOTATION=$SCRATCH/${SAMPLE}/junctions_for_star.txt
 
 echo 'Building annotation for STAR from GTF...'
 cat $ANNOTATION | $PYTHON $RAILHOME/eval/get_junctions.py >$STARANNOTATION
@@ -66,12 +72,6 @@ awk '(NR-1) % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >${SCRATCH}/${SAMPLE}_sim_rig
 ## Where Feb 2009 hg19 chromosome files are located; download them at http://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips/chromFa.tar.gz
 # These are here because it's necessary to build a new STAR index for its 2-pass and annotation protocols
 FADIR=/scratch0/langmead-fs1/shared/references/hg19/fasta
-
-cd $SCRATCH
-mkdir -p ${SAMPLE}
-cd ${SAMPLE}
-mkdir -p star
-cd ..
 
 # Create STAR index including annotation
 echo 'Creating new STAR index including splice junctions...'
