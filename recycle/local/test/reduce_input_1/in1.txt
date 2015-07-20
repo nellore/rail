@@ -1,4 +1,0 @@
-00001	00002	one then two
-00002	00003	two then three
-00010	00000	then then zero
-00006	00006	six then six

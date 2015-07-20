@@ -1,8 +1,0 @@
-fly.genes*
-*.tab
-*.manifest
-*.sites
-*.xscripts
-*.cov
-*.variants
-intermediate

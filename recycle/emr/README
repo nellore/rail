@@ -1,1 +1,0 @@
-Bootstrap scripts related to getting Elastic MapReduce instances up and running are contained here. push_bootstrap.sh uploads them to s3://rail-emr/bootstrap/.
