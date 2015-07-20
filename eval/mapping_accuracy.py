@@ -15,6 +15,8 @@ of bases are aligned correctly (recall). K is the argument of the
 
 THIS FILE DEPENDS ON DOOPLICITY AND RAIL; don't move it in the Rail repo.
 
+Warning: works only with Flux sims
+
 Output (written to stdout)
 ----------------------------
 1. relevant instances <tab> value <tab> value
@@ -57,7 +59,7 @@ def dummy_md_and_mapped_offsets(cigar, clip_threshold=1.0):
         Return value: tuple (dummy MD string, list of offsets of of mapped
                                 bases from beginning of read,
                                 True iff read should be considered unmapped,
-                                number of clipped bases)
+                                number of clipped bases, length of read)
     """
     cigar = re.split(r'([MINDS])', cigar)[:-1]
     cigar_index, offset, read_bases = 0, 0, 0
@@ -103,11 +105,11 @@ def dummy_md_and_mapped_offsets(cigar, clip_threshold=1.0):
                     )
     return (''.join(str(el) for el in md), mapped,
                 float(clip_count) / read_bases >= clip_threshold,
-                clip_count)
+                clip_count, read_bases)
 
 def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
         base_threshold=0.5, clip_threshold=1.0, dump_incorrect=False,
-        temp_dir=None):
+        temp_dir=None, ignore_spliced_reads=False):
     """ Finds relevant and retrieved instance counts.
 
         true_bed_stream: file handle for BED output of Flux simulation
@@ -118,6 +120,7 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
         clip_threshold: proportion of a read's bases that must be clipped
             for a read to be considered unmapped
         dump_incorrect: write incorrect (read) alignments to stderr
+        ignore_spliced_reads: ignores all spliced reads
     """
     from tempdel import remove_temporary_directories
     import tempfile
@@ -134,21 +137,41 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
     # Store everything in one file, then sort it on read name
     combined_file = os.path.join(temp_dir_path, 'combined.temp')
     with open(combined_file, 'w') as temp_stream:
-        if generous:
-            for line in true_bed_stream:
+        if ignore_spliced_reads:
+            if generous:
+                for line in true_bed_stream:
+                    tokens = line.strip().split('\t')
+                    if ',' in tokens[-1]: continue # skip intron line
+                    print >>temp_stream, '\t'.join([tokens[3][:-2], '0']
+                                                    + tokens[:3] + tokens[4:])
+            else:
+                for line in true_bed_stream:
+                    tokens = line.strip().split('\t')
+                    if ',' in tokens[-1]: continue # skip intron line
+                    print >>temp_stream, '\t'.join(
+                                    [tokens[3], '0'] + tokens[:3] + tokens[4:]
+                                )
+            for line in sam_stream:
+                if line[0] == '@' or not line.strip(): continue
                 tokens = line.strip().split('\t')
-                print >>temp_stream, '\t'.join([tokens[3][:-2], '0']
-                                                + tokens[:3] + tokens[4:])
+                if 'N' in tokens[5]: continue # skip intron line
+                print >>temp_stream, '\t'.join([tokens[0], '1'] + tokens[1:])
         else:
-            for line in true_bed_stream:
+            if generous:
+                for line in true_bed_stream:
+                    tokens = line.strip().split('\t')
+                    print >>temp_stream, '\t'.join([tokens[3][:-2], '0']
+                                                    + tokens[:3] + tokens[4:])
+            else:
+                for line in true_bed_stream:
+                    tokens = line.strip().split('\t')
+                    print >>temp_stream, '\t'.join(
+                                    [tokens[3], '0'] + tokens[:3] + tokens[4:]
+                                )
+            for line in sam_stream:
+                if line[0] == '@' or not line.strip(): continue
                 tokens = line.strip().split('\t')
-                print >>temp_stream, '\t'.join(
-                                [tokens[3], '0'] + tokens[:3] + tokens[4:]
-                            )
-        for line in sam_stream:
-            if line[0] == '@' or not line.strip(): continue
-            tokens = line.strip().split('\t')
-            print >>temp_stream, '\t'.join([tokens[0], '1'] + tokens[1:])
+                print >>temp_stream, '\t'.join([tokens[0], '1'] + tokens[1:])
     import subprocess
     sorted_combined_file = os.path.join(temp_dir_path, 'combined.sorted.temp')
     subprocess.check_call(' '.join(['sort -T %s -k1,1 -k2,2n'
@@ -203,20 +226,19 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
                         continue
                     cigar, pos, seq = tokens[5], int(tokens[3]), tokens[9]
                     (dummy_md, mapped,
-                        unmapped, clip_count) = dummy_md_and_mapped_offsets(
+                        unmapped, clip_count, read_length) \
+                        = dummy_md_and_mapped_offsets(
                                             cigar,
                                             clip_threshold=clip_threshold
                                         )
                     if unmapped:
                         # Too much clipping
                         continue
-                    # Assume same read length for read pair
-                    read_length = sum(
-                            true_maps[0][i][2]
-                                - true_maps[0][i][1]
-                                for i in xrange(len(true_maps[0])))
                     basewise_retrieved += read_length - clip_count
                     read_retrieved += 1
+                    if not true_maps:
+                        assert ignore_spliced_reads
+                        continue
                     # Try both /1 and /2; choose the best basewise result
                     intersected_base_count = 0
                     for true_map in true_maps:
@@ -291,6 +313,11 @@ if __name__ == '__main__':
                  'in unpaired mode. This loses information. In generous mode, '
                  'this script provides extremely tight upper bounds on '
                  'precision and recall for TopHat/STAR/HISAT')
+        parser.add_argument('--ignore-spliced-reads',
+            action='store_const', const=True,
+            default=False,
+            help=('Considers only reads that lie entirely within single '
+                  'exons from both the true and the retrieved sets'))
         parser.add_argument('-b', '--base-threshold', type=float,
             required=False, default=0.5,
             help=('Proportion of a read\'s bases that must align correctly for '
@@ -304,6 +331,8 @@ if __name__ == '__main__':
             default=False,
             help='Write lines that aligned incorrectly to stderr')
         args = parser.parse_known_args(sys.argv[1:])[0]
+        if args.ignore_spliced_reads and args.generous:
+            raise RuntimeError('Cannot ignore spliced reads in generous mode.')
         with open(args.true_bed) as true_bed_stream:
             (basewise_retrieved, basewise_relevant, basewise_intersection,
                 read_retrieved, read_relevant, read_intersection) = go(
@@ -312,6 +341,7 @@ if __name__ == '__main__':
                         base_threshold=args.base_threshold,
                         clip_threshold=args.clip_threshold,
                         dump_incorrect=args.dump_incorrect,
+                        ignore_spliced_reads=args.ignore_spliced_reads,
                         temp_dir=os.path.dirname(args.true_bed)
                     )
         basewise_precision = float(basewise_intersection) / basewise_retrieved
