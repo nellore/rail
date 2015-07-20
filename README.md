@@ -50,7 +50,7 @@ to install for just you. Check
 ```
 ./install_rail-rna-0.1.8c -h
 ```
-for more installation options. If the executable doesn't work, you may need [Python](http://www.python.org). You'll also need Bowtie 1 and 2 indexes of the appropriate genome assembly if you will be running Rail-RNA in either its single-computer (local) or IPython Parallel (parallel) modes. The easiest way to get these is by downloading an [Illumina iGenome](http://support.illumina.com/sequencing/sequencing_software/igenome.html). If running Rail-RNA on EMR (elastic mode) and aligning to hg19, the assembly can be specified at the command line with the `-a` parameter. More assemblies are on their way.
+for more installation options, or refer to [these](http://docs.rail.bio/installation/) detailedinstallation instructions. If the executable doesn't work, you may need [Python](http://www.python.org). You'll also need Bowtie 1 and 2 indexes of the appropriate genome assembly if you will be running Rail-RNA in either its single-computer (local) or IPython Parallel (parallel) modes. The easiest way to get these is by downloading an [Illumina iGenome](http://support.illumina.com/sequencing/sequencing_software/igenome.html). If running Rail-RNA on EMR (elastic mode) and aligning to hg19, the assembly can be specified at the command line with the `-a` parameter.
 
 Get started
 -----
@@ -65,7 +65,7 @@ Rail-RNA takes as input a [Myrna](http://bowtie-bio.sourceforge.net/myrna/)-styl
 ```
 rail-rna
 ```
-**and follow the instructions.**
+**and follow the instructions; or check the [docs](http://docs.rail.bio/) for help getting started.**
 
 To use Rail-RNA in elastic mode, you'll need an account with [AWS](http://aws.amazon.com/). For an introduction to cloud computing with AWS, refer to [this](https://github.com/griffithlab/rnaseq_tutorial/wiki/Intro-to-AWS-Cloud-Computing) excellent tutorial by the [Griffith Lab](http://genome.wustl.edu/people/groups/detail/griffith-lab/) at Wash U.
 
