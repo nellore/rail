@@ -14,7 +14,7 @@ This is the official repo for Rail-RNA, software for RNA-seq analysis.
 
 **Ask questions in the repo's**
 
-### [Gitter](https://gitter.com/nellore/rail): [![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .
+### [Gitter](https://gitter.im/nellore/rail): [![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .
 
 Get interested
 -----
