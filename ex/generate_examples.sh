@@ -82,8 +82,7 @@ rm -rf dm3_example_1.fastq
 rm -rf dm3_example_2.fastq
 rm -rf genes*.gtf
 read -r -d '' var <<EOF
-http://verve.webfactional.com/dm3_example_1_left.fastq\t0\thttp://verve.webfactional.com/dm3_example_1_right.fastq\t0\tdm3_example-1-1
-http://verve.webfactional.com/dm3_example_2_left.fastq\t0\thttp://verve.webfactional.com/dm3_example_2_right.fastq\t0\tdm3_example-2-1
+http://verve.webfactional.com/dm3_example_1_left.fastq\t0\thttp://verve.webfactional.com/dm3_example_1_right.fastq\t0\tdm3_example-1-1\nhttp://verve.webfactional.com/dm3_example_2_left.fastq\t0\thttp://verve.webfactional.com/dm3_example_2_right.fastq\t0\tdm3_example-2-1
 EOF
 echo -e $var >dm3_example.manifest
 # Grab the last two lines of the 112 manifest
