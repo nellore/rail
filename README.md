@@ -1,7 +1,18 @@
 ![Rail-RNA logo](https://github.com/nellore/rail/blob/master/assets/railrnalogodark.png)
 ====
 
-This is the official repo for Rail-RNA, software for RNA-seq analysis. [Download](https://github.com/nellore/rail/raw/v0.1.8c/releases/install_rail-rna-0.1.8c) the latest stable release. **Read the [docs](http://docs.rail.bio/), especially the [tutorial](http://docs.rail.bio/tutorial/). Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
+This is the official repo for Rail-RNA, software for RNA-seq analysis. 
+## [Download](https://github.com/nellore/rail/raw/v0.1.8c/releases/install_rail-rna-0.1.8c)
+
+**the latest stable release. Read the**
+
+## [docs](http://docs.rail.bio/), 
+
+**especially the**
+
+## [tutorial](http://docs.rail.bio/tutorial/).
+
+**Ask questions in the repo's Gitter: [![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .**
 
 Get interested
 -----
