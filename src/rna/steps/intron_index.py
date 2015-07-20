@@ -101,7 +101,8 @@ index_basename = os.path.join(temp_dir_path, 'index/' + args.basename)
 fasta_file = os.path.join(temp_dir_path, 'temp.fa')
 print >>sys.stderr, 'Opened %s for writing....' % fasta_file
 with open(fasta_file, 'w') as fasta_stream:
-    for input_line_count, line in enumerate(sys.stdin):
+    input_line_count = 0
+    for line in sys.stdin:
         if args.keep_alive and not (input_line_count % 1000):
             print >>sys.stderr, 'reporter:status:alive'
         tokens = line.rstrip().split('\t')
@@ -116,9 +117,13 @@ with open(fasta_file, 'w') as fasta_stream:
         print >>fasta_stream, rname
         fasta_stream.write(
                 '\n'.join([seq[i:i+80] for i 
-                            in xrange(0, len(seq), 80)])
+                            in xrange(0, len(seq), 80)]) + '\n'
             )
-        fasta_stream.write('\n')
+        input_line_count += 1
+    if not input_line_count:
+        '''There were no input FASTA files. Write one bum line so the
+        pipeline doesn't fail.'''
+        print >>fasta_stream, '>bum\nNA'
 
 # Build index
 print >>sys.stderr, 'Running bowtie2-build....'
