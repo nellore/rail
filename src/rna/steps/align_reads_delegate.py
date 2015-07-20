@@ -600,7 +600,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                     try:
                         for current_is_reverse, current_qname, current_qual \
                             in other_xpartition:
-                            current_qname, _ = qname_and_mate(
+                            current_qname, current_mate = qname_and_mate(
                                     current_qname
                                 )
                             if tie_present and current_mate:
