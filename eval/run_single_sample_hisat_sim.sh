@@ -52,9 +52,14 @@ PERFORMANCE=perform
 # This is Gencode v12, which may be obtained at ftp://ftp.sanger.ac.uk/pub/gencode/release_12/gencode.v12.annotation.gtf.gz
 ANNOTATION=/scratch0/langmead-fs1/geuvadis_sim/gencode.v12.annotation.gtf
 
+cd $SCRATCH
+mkdir -p ${SAMPLE}
+cd ${SAMPLE}
+mkdir -p hisat
+
 ## HISAT also uses a list of introns, but here we use a tool that came with HISAT to grab splice sites because coordinate system could be different
 # Build HISAT junction index from GTF
-HISATANNOTATION=$SCRATCH/junctions_for_hisat.txt
+HISATANNOTATION=$SCRATCH/${SAMPLE}/junctions_for_hisat.txt
 
 # Flux outputs paired-end reads in one file; split files here
 echo 'Building annotation for HISAT from GTF...'
@@ -62,11 +67,6 @@ $PYTHON $HISATSPLICE $ANNOTATION >$HISATANNOTATION
 echo 'Splitting Flux FASTQs...'
 awk '(NR-1) % 8 < 4' $DATADIR/${SAMPLE}_sim.fastq >${SCRATCH}/${SAMPLE}_sim_left.fastq
 awk '(NR-1) % 8 >= 4' $DATADIR/${SAMPLE}_sim.fastq >${SCRATCH}/${SAMPLE}_sim_right.fastq
-
-cd $SCRATCH
-mkdir -p ${SAMPLE}
-cd ${SAMPLE}
-mkdir -p hisat
 
 cd $MAINOUTPUT
 mkdir -p ${SAMPLE}
