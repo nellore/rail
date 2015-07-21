@@ -4103,7 +4103,8 @@ class RailRnaAlign(object):
                                             keep_alive,
                                             scratch
                                         ),
-                'inputs' : ['intron_fasta'],
+                'inputs' : ['intron_fasta',
+                                path_join(elastic, 'align_reads', 'dummy')],
                 'output' : 'intron_index',
                 'tasks' : 1,
                 'partition' : '-k1,1',

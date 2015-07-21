@@ -19,8 +19,8 @@ Tab-delimited tuple columns:
     iff sample contains intron combo
 3. Sequence
 
-Input is partitioned by the first column and sorted on the second column to ensure
-that exactly the same FASTA file is indexed every time.
+Input is partitioned by the first column and sorted on the second column to
+ensure that exactly the same FASTA file is indexed every time.
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -106,6 +106,9 @@ with open(fasta_file, 'w') as fasta_stream:
         if args.keep_alive and not (input_line_count % 1000):
             print >>sys.stderr, 'reporter:status:alive'
         tokens = line.rstrip().split('\t')
+        if len(tokens) == 2 and tokens[1] == 'dummy':
+            # dummy line
+            continue
         assert len(tokens) == 3
         rname, seq = tokens[1:]
         '''A given reference name in the index will be in the following
@@ -124,6 +127,8 @@ with open(fasta_file, 'w') as fasta_stream:
         '''There were no input FASTA files. Write one bum line so the
         pipeline doesn't fail.'''
         print >>fasta_stream, '>bum\nNA'
+        print >>sys.stderr, ('Wrote bum index because no transcripts were '
+                             'passed.')
 
 # Build index
 print >>sys.stderr, 'Running bowtie2-build....'

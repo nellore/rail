@@ -139,6 +139,10 @@ Standard 11+ -column raw SAM output
 Single column (unique):
 1. A unique read sequence
 
+Two columns, exactly one line (dummy); ensures creation of intron index:
+1. character "-"
+2. the word "dummy"
+
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
 import sys
@@ -324,6 +328,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         Single column (unique):
         1. A unique read sequence
 
+        Two columns, exactly one line (dummy); ensures creation of intron
+            index:
+        1. character "-"
+        2. the word "dummy"
+
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
         input_stream: where to find input reads.
@@ -480,6 +489,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                     if j != best_qual_index:
                         print >>other_stream, other_to_print
             print >>align_stream, to_align
+    # Print dummy line
+    print 'dummy\t-\tdummy'
     sys.stdout.flush() # this is REALLY important b/c called script will stdout
     if nothing_doing:
         # No input
