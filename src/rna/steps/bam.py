@@ -284,7 +284,7 @@ else:
                         subprocess_stdout.close()
                         # Index bam
                         if not output_path.endswith('.unmapped.bam'):
-                            subprocess.check_call(['samtools', 'index',
+                            subprocess.check_call([args.samtools_exe, 'index',
                                                     output_path],
                                                     bufsize=-1)
                 '''If --out is a local file, just write directly to that file.
