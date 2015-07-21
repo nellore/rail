@@ -516,42 +516,25 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                     if is_reverse:
                         if flag & 16:
                             print >>align_stream, '\t'.join([
-                                    '%s\x1d%s' % (
-                                            '1', qname
-                                        ), seq[::-1].translate(
-                                        _reversed_complement_translation_table
-                                    ), qual[::-1],
-                                        decoded[::-1].translate(
-                                        _reversed_complement_translation_table
-                                    ), len(decoded)*'I'
+                                    qname, seq, qual,
+                                        decoded, len(decoded)*'I'
                                 ])
                         else:
                             print >>align_stream, '\t'.join([
-                                    '%s\x1d%s' % (
-                                            '1', qname
-                                        ), seq, qual,
-                                        decoded[::-1].translate(
+                                    qname, seq[::-1].translate(
                                         _reversed_complement_translation_table
-                                    ), len(decoded)*'I'
+                                    ), qual[::-1], decoded, len(decoded)*'I'
                                 ])
                     else:
                         if flag & 16:
                             print >>align_stream, '\t'.join([
-                                    '%s\x1d%s' % (
-                                            '0', qname
-                                        ), seq[::-1].translate(
+                                    qname, seq[::-1].translate(
                                         _reversed_complement_translation_table
-                                    ), qual[::-1],
-                                        decoded,
-                                        len(decoded)*'I'
+                                    ), qual[::-1], decoded, len(decoded)*'I'
                                 ])
                         else:
                             print >>align_stream, '\t'.join([
-                                    '%s\x1d%s' % (
-                                            '0', qname
-                                        ), seq, qual,
-                                        decoded,
-                                        len(decoded)*'I'
+                                    qname, seq, qual, decoded, len(decoded)*'I'
                                 ])
                 else:
                     # Final alignment can be written if no tie+mate
@@ -580,6 +563,16 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             else:
                 seq_to_print = reversed_complement_seq
                 qual_to_print = qual[::-1]
+            if flag & 16:
+                seq_to_realign = reversed_complement_seq
+                reversed_complement_seq_to_realign = seq
+                qual_to_realign = qual[::-1]
+                reversed_qual_to_realign = qual
+            else:
+                seq_to_realign = seq
+                reversed_complement_seq_to_realign = reversed_complement_seq
+                qual_to_realign = qual
+                reversed_qual_to_realign = qual[::-1]
             if not (exact_match and not clip_present):
                 # Prep for second-pass Bowtie 2 and print output
                 split_cigar = re.split(r'([MINDS])', cigar)[:-1]
@@ -605,21 +598,31 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                 )
                             if tie_present and current_mate:
                                 decoded = decode_sequence(current_mate)
-                                print >>align_stream, '\t'.join([
-                                        '%s\x1d%s' % (
-                                            current_is_reverse, current_qname
-                                        ), seq_to_print, current_qual,
-                                        decoded if current_is_reverse == '0'
-                                        else decoded[::-1].translate(
-                                        _reversed_complement_translation_table
-                                    ), 'I'*len(decoded)
-                                ])
-                            else:
-                                print >>align_stream, '\t'.join([
-                                        '%s\x1d%s' % (
-                                            current_is_reverse, current_qname
-                                        ), seq_to_print, current_qual
+                                if current_is_reverse == '1':
+                                    print >>align_stream, '\t'.join([
+                                            current_qname,
+                                            reversed_complement_seq_to_realign,
+                                            current_qual[::-1],
+                                            decoded, 'I'*len(decoded)
                                     ])
+                                else:
+                                    print >>align_stream, '\t'.join([
+                                            current_qname,
+                                            seq_to_realign, current_qual,
+                                            decoded, 'I'*len(decoded)
+                                    ])
+                            else:
+                                if current_is_reverse == '1':
+                                    print >>align_stream, '\t'.join([
+                                            current_qname,
+                                            reversed_complement_seq_to_realign,
+                                            current_qual[::-1]
+                                        ])
+                                else:
+                                    print >>align_stream, '\t'.join([
+                                            current_qname, seq_to_realign,
+                                            current_qual
+                                        ])
                             if current_is_reverse == '1':
                                 reversed_complement_sample_indexes[
                                         manifest_object.label_to_index[
@@ -663,21 +666,31 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                                 )
                             if current_mate:
                                 decoded = decode_sequence(current_mate)
-                                print >>align_stream, '\t'.join([
-                                        '%s\x1d%s' % (
-                                            current_is_reverse, current_qname
-                                        ), seq_to_print, current_qual,
-                                        decoded if current_is_reverse == '0'
-                                        else decoded[::-1].translate(
-                                        _reversed_complement_translation_table
-                                    ), 'I'*len(decoded)
-                                ])
+                                if current_is_reverse == '1':
+                                    print >>align_stream, '\t'.join([
+                                            current_qname,
+                                            reversed_complement_seq_to_realign,
+                                            current_qual[::-1],
+                                            decoded, 'I'*len(decoded)
+                                    ])
+                                else:
+                                    print >>align_stream, '\t'.join([
+                                            current_qname,
+                                            seq_to_realign, current_qual,
+                                            decoded, 'I'*len(decoded)
+                                    ])
                             else:
-                                print >>align_stream, '\t'.join([
-                                    '%s\x1d%s' % (
-                                            current_is_reverse, current_qname
-                                        ), seq_to_print, current_qual
-                                ])
+                                if current_is_reverse == '1':
+                                    print >>align_stream, '\t'.join([
+                                            current_qname,
+                                            reversed_complement_seq_to_realign,
+                                            current_qual[::-1]
+                                        ])
+                                else:
+                                    print >>align_stream, '\t'.join([
+                                            current_qname, seq_to_realign,
+                                            current_qual
+                                        ])
                     except ValueError:
                         # No other reads
                         pass
@@ -688,11 +701,17 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                             current_qname, _ = qname_and_mate(
                                     current_qname
                                 )
-                            print >>align_stream, '\t'.join([
-                                    '%s\x1d%s' % (
-                                            current_is_reverse, current_qname
-                                        ), seq_to_print, current_qual
-                                ])
+                            if current_is_reverse == '1':
+                                print >>align_stream, '\t'.join([
+                                        current_qname,
+                                        reversed_complement_seq_to_realign,
+                                        current_qual[::-1]
+                                    ])
+                            else:
+                                print >>align_stream, '\t'.join([
+                                        current_qname, seq_to_realign,
+                                        current_qual
+                                    ])
                     except ValueError:
                         # No other reads
                         pass
@@ -706,21 +725,31 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                             )
                         if current_mate:
                             decoded = decode_sequence(current_mate)
-                            print >>align_stream, '\t'.join([
-                                    '%s\x1d%s' % (
-                                            current_is_reverse, current_qname
-                                        ), seq_to_print, current_qual,
-                                        decoded if current_is_reverse == '0'
-                                        else decoded[::-1].translate(
-                                        _reversed_complement_translation_table
-                                    ), 'I'*len(decoded)
+                            if current_is_reverse == '1':
+                                print >>align_stream, '\t'.join([
+                                        current_qname,
+                                        reversed_complement_seq_to_realign,
+                                        current_qual[::-1],
+                                        decoded, 'I'*len(decoded)
+                                ])
+                            else:
+                                print >>align_stream, '\t'.join([
+                                        current_qname,
+                                        seq_to_realign, current_qual,
+                                        decoded, 'I'*len(decoded)
                                 ])
                         else:
-                            print >>align_stream, '\t'.join([
-                                '%s\x1d%s' % (
-                                        current_is_reverse, current_qname
-                                    ), seq_to_print, current_qual
-                            ])
+                            if current_is_reverse == '1':
+                                print >>align_stream, '\t'.join([
+                                        current_qname,
+                                        reversed_complement_seq_to_realign,
+                                        current_qual[::-1]
+                                    ])
+                            else:
+                                print >>align_stream, '\t'.join([
+                                        current_qname, seq_to_realign,
+                                        current_qual
+                                    ])
                 except ValueError:
                     # No other reads
                     pass
@@ -730,11 +759,17 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                     for current_is_reverse, current_qname, current_qual \
                         in other_xpartition:
                         current_qname, _ = qname_and_mate(current_qname)
-                        print >>align_stream, '\t'.join([
-                                '%s\x1d%s' % (
-                                        current_is_reverse, current_qname
-                                    ), seq_to_print, current_qual
-                            ])
+                        if current_is_reverse == '1':
+                            print >>align_stream, '\t'.join([
+                                    current_qname,
+                                    reversed_complement_seq_to_realign,
+                                    current_qual[::-1]
+                                ])
+                        else:
+                            print >>align_stream, '\t'.join([
+                                    current_qname, seq_to_realign,
+                                    current_qual
+                                ])
                 except ValueError:
                     # No other reads
                     pass
@@ -745,20 +780,16 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                     decoded = decode_sequence(mate)
                     if is_reverse:
                         print >>align_stream, '\t'.join([
-                                '%s\x1d%s' % (
-                                        '1', qname
-                                    ), seq_to_print, qual_to_print,
-                                    decoded[::-1].translate(
-                                    _reversed_complement_translation_table
-                                ), len(decoded)*'I'
-                            ])
+                                        qname,
+                                        reversed_complement_seq_to_realign,
+                                        reversed_qual_to_realign,
+                                        decoded, 'I'*len(decoded)
+                                    ])
                     else:
                         print >>align_stream, '\t'.join([
-                                '%s\x1d%s' % (
-                                        '0', qname
-                                    ), seq_to_print, qual_to_print,
-                                    decoded, len(decoded)*'I'
-                            ])
+                                        qname, seq_to_realign, qual_to_realign,
+                                        decoded, 'I'*len(decoded)
+                                    ])
                 else:
                     if is_reverse:
                         for alignment in multiread:
@@ -784,8 +815,6 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
         if verbose:
             print >>sys.stderr, 'Processing second-pass alignments.'
         for (qname,), xpartition in xstream(input_stream, 1):
-            is_reverse, _, qname = qname.partition('\x1d')
-            is_reverse = int(is_reverse)
             # Add to multiread if and only if not second mate from pair
             multiread = [(qname,) + next_line for next_line in xpartition
                             if not (int(next_line[0]) & 128)]
@@ -793,27 +822,34 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             rest_of_line = multiread[0][1:]
             i += 1
             flag = int(rest_of_line[0])
-            if is_reverse:
-                true_flag = flag ^ 16
-            else:
-                true_flag = flag
             cigar = rest_of_line[4]
             rname = rest_of_line[1]
             pos = int(rest_of_line[2])
             seq, qual = rest_of_line[8], rest_of_line[9]
+            reversed_complement_seq = seq[::-1].translate(
+                _reversed_complement_translation_table
+            )
+            if seq < reversed_complement_seq:
+                seq_to_print = seq
+                qual_to_print = qual
+                is_reverse = 0
+            else:
+                seq_to_print = reversed_complement_seq
+                qual_to_print = qual[::-1]
+                is_reverse = 1
             if verbose and next_report_line == i:
                 print >>sys.stderr, \
                     'SAM output record %d: rdname="%s", flag=%d' \
-                    % (i, qname, true_flag)
+                    % (i, qname, flag)
                 next_report_line = max(int(next_report_line
                     * report_multiplier), next_report_line + 1)
             if flag & 4:
                 print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
                                         group_reads_object.index_group(seq),
-                                        seq,
+                                        seq_to_print,
                                         is_reverse + 1,
                                         qname,
-                                        qual
+                                        qual_to_print
                                     )
                 continue
             clip_present = 'S' in cigar
@@ -821,42 +857,20 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             if k_value == 1 and exact_match and not clip_present:
                 # All alignments for all read sequences can be written
                 NH_field = 'NH:i:%d' % len(multiread)
-                if is_reverse:
-                    _output_line_count += \
-                        alignment_printer.print_alignment_data(
-                                ([(alignment[0], str(int(alignment[1]) ^ 16))
-                                   + alignment[2:] + (NH_field,)
-                                   for alignment in multiread],)
-                            )
-                else:
-                    _output_line_count += \
-                        alignment_printer.print_alignment_data(
-                                ([alignment + (NH_field,)
-                                   for alignment in multiread],)
-                            )
+                _output_line_count += \
+                    alignment_printer.print_alignment_data(
+                            ([alignment + (NH_field,)
+                               for alignment in multiread],)
+                        )
             else:
                 # Write "postponed" SAM/unmapped lines
-                if is_reverse:
-                    for alignment in multiread:
-                        print >>output_stream, \
-                            '\t'.join(('postponed_sam', alignment[0])
-                                + (str(int(alignment[1]) ^ 16),)
-                                + alignment[2:])
-                        _output_line_count += 1
-                else:
-                    for alignment in multiread:
-                        print >>output_stream, \
-                            '\t'.join(('postponed_sam',) + alignment)
-                        _output_line_count += 1
+                for alignment in multiread:
+                    print >>output_stream, \
+                        '\t'.join(('postponed_sam',) + alignment)
+                    _output_line_count += 1
                 reversed_complement_seq = seq[::-1].translate(
                     _reversed_complement_translation_table
                 )
-                if seq < reversed_complement_seq:
-                    seq_to_print = seq
-                    qual_to_print = qual
-                else:
-                    seq_to_print = reversed_complement_seq
-                    qual_to_print = qual[::-1]
                 print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
                                 group_reads_object.index_group(seq_to_print),
                                 seq_to_print,
