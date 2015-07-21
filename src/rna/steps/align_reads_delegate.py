@@ -832,11 +832,17 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             if seq < reversed_complement_seq:
                 seq_to_print = seq
                 qual_to_print = qual
-                is_reverse = 0
+                if flag & 16:
+                    is_reverse = 1
+                else:
+                    is_reverse = 0
             else:
                 seq_to_print = reversed_complement_seq
                 qual_to_print = qual[::-1]
-                is_reverse = 1
+                if flag & 16:
+                    is_reverse = 0
+                else:
+                    is_reverse = 1
             if verbose and next_report_line == i:
                 print >>sys.stderr, \
                     'SAM output record %d: rdname="%s", flag=%d' \
@@ -845,12 +851,12 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                     * report_multiplier), next_report_line + 1)
             if flag & 4:
                 print >>output_stream, 'unmapped\t%s\t%s\t%d\t%s\t%s' % (
-                                        group_reads_object.index_group(seq),
-                                        seq_to_print,
-                                        is_reverse + 1,
-                                        qname,
-                                        qual_to_print
-                                    )
+                                group_reads_object.index_group(seq_to_print),
+                                seq_to_print,
+                                is_reverse + 1,
+                                qname,
+                                qual_to_print
+                            )
                 continue
             clip_present = 'S' in cigar
             exact_match = 'NM:i:0' in multiread[0]
