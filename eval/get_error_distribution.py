@@ -26,6 +26,10 @@ if __name__ == '__main__':
     parser.add_argument('--fastq', type=str, required=True,
         help='Path to Flux FASTQ'
     )
+    parser.add_argument('--ignore-b-tails', action='store_const', const=True,
+        default=False,
+        help='Don\'t count reads for which the last 10 bases have Q <= 15'
+    )
     parser.add_argument('-x', '--bowtie-idx', required=True,
         help='Path to Bowtie 1 index. Specify its basename.'
     )
@@ -42,7 +46,11 @@ if __name__ == '__main__':
                 read_name = fastq_stream.readline().strip()[1:]
                 seq = fastq_stream.readline().strip().upper()
                 fastq_stream.readline()
-                fastq_stream.readline()
+                qual = fastq_stream.readline().strip()
+                if args.ignore_b_tails and all(
+                            [ord(score) - 33 <= 15 for score in qual[-10:]]
+                        ):
+                    continue
                 if len(seq) != args.length: continue
                 tokens = bed_line.rstrip().split('\t')
                 assert len(tokens) >= 12
