@@ -110,7 +110,7 @@ u"""rail-rna <job flow> <mode> <[args]>
 {0} Rail-RNA v{1} by Abhi Nellore (anellore@jhu.edu; nellore.github.io)
 
 Rail-RNA is a scalable MapReduce pipeline that can analyze many RNA-seq
-datasets at once. To view help for a given combination of <job flow> and
+samples at once. To view help for a given combination of <job flow> and
 <mode>, specify both, then add -h/--help.""".format(u'\u2200', version_number)
 
 if sys.stdout.encoding != 'UTF-8':
