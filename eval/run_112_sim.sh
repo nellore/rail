@@ -8,7 +8,7 @@
 ## $3: where on S3 to output Rail results
 ## $4: path to manifest file to write (taken in our experiments to be eval/GEUVADIS_112_sim.manifest)
 ## Requires AWS CLI
-## Full command we ran was sh run_112_sim.sh /scratch2/langmead-fs1/geuvadis_sims_for_paper_v2 s3://rail-results/geuv112sim_v2 s3://rail-results/geuv112sim_v2.out /scratch0/langmead-fs1/rail/eval/GEUVADIS_112_sim.manifest
+## Full command we ran was sh run_112_sim.sh /scratch2/langmead-fs1/geuvadis_sims_for_paper_v2 s3://rail-eu-west-1/geuv112sim_v2 s3://rail-eu-west-1/geuv112sim_v2.out /scratch0/langmead-fs1/rail/eval/GEUVADIS_112_sim.manifest
 ## Use Rail-RNA v0.1.9
 FASTQDIR=$1
 S3STAGED=$2
@@ -22,6 +22,6 @@ for line in sys.stdin:
     print '\t'.join(['${S3STAGED}/' + line.strip(), '0', ''.join(sample_name)])" >$MANIFEST
 for i in $(find . -name \*.fastq ! -name \*right\*.fastq ! -name \*left\*.fastq | cut -c3-); do aws s3 cp $i $S3STAGED/$i; done
 # Submit jobs to EMR
-rail-rna go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST --core-instance-bid-price 0.11 --master-instance-bid-price 0.11
+rail-rna go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST --core-instance-bid-price 0.11 --master-instance-bid-price 0.11 --region eu-west-1
 # WITHOUT intron filter
-rail-rna go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST.nofilter --core-instance-bid-price 0.11 --master-instance-bid-price 0.11 --intron-criteria 0,0
+rail-rna go elastic -c 40 -a hg19 -m $MANIFEST -o $S3DEST.nofilter --core-instance-bid-price 0.11 --master-instance-bid-price 0.11 --region eu-west-1 --intron-criteria 0,0
