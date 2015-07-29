@@ -24,17 +24,17 @@ SAMPLE=$4
 # Temp dir
 SCRATCH=$5
 mkdir -p ${SCRATCH}
-RAILHOME=/scratch0/langmead-fs1/rail
+RAILHOME=/home/student/anellor1/rail
 
 ## Specify locations of executables
 # Used version 0.1.6-beta of HISAT
-HISAT=/scratch0/langmead-fs1/shared/hisat-0.1.6-beta/hisat
+HISAT=/home/student/anellor1/hisat-0.1.6-beta/hisat
 # Use HISAT's tool for extracting splice sites for its junction database
-HISATSPLICE=/scratch0/langmead-fs1/shared/hisat-0.1.6-beta/extract_splice_sites.py
+HISATSPLICE=/home/student/anellor1/hisat-0.1.6-beta/extract_splice_sites.py
 # Specify Python executable/loc of get_junctions.py; PyPy 2.5.0 was used
-PYTHON=/home/anellor1/raildotbio3/pypy-2.5-linux_x86_64-portable/bin/pypy
+PYTHON=/home/student/anellor1/raildotbio/pypy-2.5-linux_x86_64-portable/bin/pypy
 # Samtools v1.2 was used
-SAMTOOLS=/home/anellor1/raildotbio/samtools-1.2/samtools
+SAMTOOLS=/home/student/anellor1/raildotbio/samtools-1.2/samtools
 
 # Specify log filename for recording times
 TIMELOG=${MAINOUTPUT}/hisat_times.log
@@ -42,7 +42,7 @@ TIMELOG=${MAINOUTPUT}/hisat_times.log
 ## Specify locations of reference-related files
 ## See create_indexes.sh for index creation script
 # HISAT index
-HISATIDX=/scratch0/langmead-fs1/indexes_for_paper/hisatgenome
+HISATIDX=/dcl01/leek/data/railsims/indexes_for_paper/hisatgenome
 
 # Generic name of file measuring performance of a given alignment strategy
 # Performance is computed with spliced_read_recovery_performance.py; refer to that file for details
@@ -50,7 +50,7 @@ PERFORMANCE=perform
 
 ## Specify location of annotation
 # This is Gencode v12, which may be obtained at ftp://ftp.sanger.ac.uk/pub/gencode/release_12/gencode.v12.annotation.gtf.gz
-ANNOTATION=/scratch0/langmead-fs1/geuvadis_sim/gencode.v12.annotation.gtf
+ANNOTATION=/dcl01/leek/data/railsims/indexes_for_paper/gencode.v12.annotation.gtf
 
 cd $SCRATCH
 mkdir -p ${SAMPLE}
