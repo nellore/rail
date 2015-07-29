@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 ## Grabs results of experiment running Rail-RNA on 112 simulated datasets
 ## reflecting the coverage distributions of 112 GEUVADIS datasets from S3
-## and computes performance measures on only those two samples considered
+## and computes performance measures on only those samples considered
 ## in run_all_small_data_sims_locally.sh. Also grabs transcript indexes
 ## and counts numbers of introns in each index with count_introns.py
 ## Requires s3cmd, Bowtie 2 in PATH
