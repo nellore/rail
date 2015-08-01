@@ -27,11 +27,11 @@ mkdir -p ${SCRATCH}
 ## Specify locations of executables
 # Used version 0.1.8 of Rail-RNA, but wrapped version 2.2.4 of Bowtie2 and version 1.1.1 of Bowtie
 # Specify Python executable/loc of get_junctions.py; PyPy 2.5.0 was used
-PYTHON=/home/anellor1/raildotbio3/pypy-2.5-linux_x86_64-portable/bin/pypy
-RAILHOME=/scratch0/langmead-fs1/rail
+PYTHON=/home/student/anellor1/raildotbio/pypy-2.5-linux_x86_64-portable/bin/pypy
+RAILHOME=/home/student/anellor1/rail
 RAILRNA=rail-rna
 # Samtools v1.2 was used
-SAMTOOLS=/home/anellor1/raildotbio/samtools-1.2/samtools
+SAMTOOLS=/home/student/anellor1/raildotbio/samtools-1.2/samtools
 
 # Specify log filename for recording times
 TIMELOG=${MAINOUTPUT}/small_data_times.log
@@ -39,8 +39,8 @@ TIMELOG=${MAINOUTPUT}/small_data_times.log
 ## Specify locations of reference-related files
 ## See create_indexes.sh for index creation script
 # Bowtie indexes
-BOWTIE1IDX=/scratch0/langmead-fs1/indexes_for_paper/genome
-BOWTIE2IDX=/scratch0/langmead-fs1/indexes_for_paper/genome
+BOWTIE1IDX=/dcl01/leek/data/railsims/indexes_for_paper/genome
+BOWTIE2IDX=/dcl01/leek/data/railsims/indexes_for_paper/genome
 
 # Generic name of file measuring performance of a given alignment strategy
 # Performance is computed with spliced_read_recovery_performance.py; refer to that file for details
