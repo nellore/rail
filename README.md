@@ -2,7 +2,7 @@
 ====
 
 This is the official repo for Rail-RNA, software for RNA-seq analysis. 
-### [Download](https://github.com/nellore/rail/raw/v0.1.9/releases/install_rail-rna-0.1.9)
+### [Download](https://github.com/nellore/rail/raw/v0.1.9a/releases/install_rail-rna-0.1.9a)
 
 **the latest stable release. Read the**
 
@@ -36,17 +36,17 @@ Read the [preprint](http://biorxiv.org/content/early/2015/05/07/019067) for more
 
 Get set up
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.9`](https://github.com/nellore/rail/raw/v0.1.9/releases/install_rail-rna-0.1.9), change to the directory containing it, and make the installer executable with
+Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.9a`](https://github.com/nellore/rail/raw/v0.1.9a/releases/install_rail-rna-0.1.9a), change to the directory containing it, and make the installer executable with
 ```
-chmod +x install_rail-rna-0.1.9
+chmod +x install_rail-rna-0.1.9a
 ```
 Now run
 ```
-sudo ./install_rail-rna-0.1.9
+sudo ./install_rail-rna-0.1.9a
 ```
 to install for all users or
 ```
-./install_rail-rna-0.1.9
+./install_rail-rna-0.1.9a
 ```
 to install for just you. Refer to [these](http://docs.rail.bio/installation/) detailed installation instructions from the [docs](http://docs.rail.bio) for more information. If the executable doesn't work, you may need [Python](http://www.python.org). You'll also need Bowtie 1 and 2 indexes of the appropriate genome assembly if you will be running Rail-RNA in either its single-computer (local) or IPython Parallel (parallel) modes. The easiest way to get these is by downloading an [Illumina iGenome](http://support.illumina.com/sequencing/sequencing_software/igenome.html). If running Rail-RNA on EMR (elastic mode) and aligning to hg19, the assembly can be specified at the command line with the `-a` parameter.
 
