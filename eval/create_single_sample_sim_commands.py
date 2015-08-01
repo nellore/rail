@@ -53,9 +53,9 @@ if __name__ == '__main__':
                                     'run_single_sample_'
                                     + aligner + '_sim.sh')
         for sample_name in final_sample_names:
-            if total_counter and (total_counter % 4) == 0:
-                print 'wait'
-            print 'sh {} {} {} {} {} {} &'.format(
+            #if total_counter and (total_counter % 4) == 0:
+            #    print 'wait'
+            print 'sh {} {} {} {} {} {}'.format(
                     script_path,
                     args.num_processes,
                     args.output_dir,
