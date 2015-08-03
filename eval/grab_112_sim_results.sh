@@ -29,7 +29,7 @@ PYTHON=/home/student/anellor1/raildotbio/pypy-2.5-linux_x86_64-portable/bin/pypy
 SAMTOOLS=/home/student/anellor1/raildotbio/samtools-1.2/samtools
 PERFORMANCE=perform
 
-mkdir -p $OUTOUTDIR
+mkdir -p $OUTPUTDIR
 cd $OUTPUTDIR
 # Grab intron indexes with and without filter
 mkdir -p withfilter
