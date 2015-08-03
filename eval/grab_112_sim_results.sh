@@ -48,10 +48,9 @@ do
 	cd withfilter
 	mkdir -p ${SAMPLES[$i]}
 	cd ${SAMPLES[$i]}
-	for j in $(aws s3 ls ${WITHFILTER}/alignments/alignments.${SAMPLENAMES[$i]} | grep -v .bai)
+	for j in $(aws s3 ls ${WITHFILTER}/alignments/alignments.${SAMPLENAMES[$i]} | grep -v .bai | tr -s '[:blank:]' '\t' | cut -f4)
 	do
-		echo $j
-		aws s3 cp $j ./
+		aws s3 cp ${WITHFILTER}/alignments/$j ./
 	done
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
@@ -62,9 +61,9 @@ do
 	cd withoutfilter
 	mkdir -p ${SAMPLES[$i]}
 	cd ${SAMPLES[$i]}
-	for j in $(aws s3 ls ${WITHOUTFILTER}/alignments/alignments.${SAMPLENAMES[$i]} | grep -v .bai)
+	for j in $(aws s3 ls ${WITHOUTFILTER}/alignments/alignments.${SAMPLENAMES[$i]} | grep -v .bai | tr -s '[:blank:]' '\t' | cut -f4)
 	do
-		aws s3 cp $j ./
+		aws s3 cp ${WITHOUTFILTER}/alignments/$j ./
 	done
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
