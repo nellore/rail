@@ -10,7 +10,7 @@
 ## $3: directory in which to dump output
 ## $4: where to find Flux BEDs storing true read alignments from simulation
 ## $5: where to find Bowtie 1 index basename of genome
-## Command we ran was sh grab_112_sim_results.sh s3://rail-eu-west-1/geuv112sim_v2.out s3://rail-eu-west-1/geuv112sim_v2.out.nofilter /dcl01/leek/data/railsims/112sim /dcl01/leek/data/railsims /dcl01/leek/data/railsims/indexes_for_paper/genome
+## Command we ran was sh grab_112_sim_results.sh s3://rail-eu-west-1/geuv112sim_v2.out s3://rail-eu-west-1/geuv112sim_v2.out.nofilter /dcl01/leek/data/railsims/112simresults /dcl01/leek/data/railsims /dcl01/leek/data/railsims/indexes_for_paper/genome
 
 # Use the 20 samples that were randomly selected in create_single_sample_sim_commands.py
 SAMPLES=( HG00115_male_GBR_UU_6-1-1 NA06984_male_CEU_UNIGE_1-1-1 HG00313_female_FIN_UNIGE_1-1-1 NA19095_female_YRI_LUMC_7-1-3 HG00117_male_GBR_LUMC_7-1-1 NA20768_female_TSI_HMGU_5-1-1 NA20582_female_TSI_ICMB_4-1-1 NA19130_male_YRI_HMGU_5-1-1 HG00139_male_GBR_LUMC_7-1-1 NA18486_male_YRI_LUMC_7-1-1 HG01790_female_GBR_MPIMG_3-1-1 NA12287_female_CEU_UNIGE_1-1-1 NA12287_female_CEU_MPIMG_3-1-2 HG00096_male_GBR_UNIGE_1-1-1 NA11831_male_CEU_LUMC_7-1-1 NA12874_male_CEU_UNIGE_1-1-1 HG00154_female_GBR_HMGU_5-1-1 NA07051_male_CEU_HMGU_5-1-1 NA12776_female_CEU_UU_6-1-1 NA20813_female_TSI_HMGU_5-1-1 )
