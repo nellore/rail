@@ -119,9 +119,6 @@ OUTPUT=$SCRATCH/${SAMPLE}
 echo 'Running Subjunc on sample '${SAMPLE}' in paired-end mode...'
 echo '#'${SAMPLE}' Subjunc' >>$TIMELOG
 mkdir -p $OUTPUT/subjunc
-echo 'Running Subjunc on sample '${SAMPLE}' in paired-end mode...'
-echo '#'${SAMPLE}' Subjunc' >>$TIMELOG
-mkdir -p $OUTPUT/subjunc
 cd $OUTPUT/subjunc
 # Use Subjunc defaults
 time (${SUBJUNC} -T $CORES -d 50 -D 600 -i ${SUBJUNCIDX} -r ${SCRATCH}/${SAMPLE}_sim_left.fastq -R ${SCRATCH}/${SAMPLE}_sim_right.fastq -o Aligned.out.sam) 2>>$TIMELOG
