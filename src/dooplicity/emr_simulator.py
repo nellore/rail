@@ -182,26 +182,6 @@ def yopen(gzipped, *args):
         return gzip.open(*args)
     return open(*args)
 
-@contextlib.contextmanager
-def cd(dir_name):
-    """ Changes directory in a context only. Borrowed from AWS CLI code.
-
-        This is also in tools.py, but IPython has trouble with it.
-
-        dir_name: directory name to which to change
-
-        No return value.
-    """
-    if dir_name is None:
-        yield
-        return
-    original_dir = os.getcwd()
-    os.chdir(dir_name)
-    try:
-        yield
-    finally:
-        os.chdir(original_dir)
-
 def parsed_keys(partition_options, key_fields):
     """ Parses UNIX sort options to figure out what to partition on.
 
@@ -556,16 +536,18 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             command_to_run \
                 = prefix + ' | ' + streaming_command + (' 2>%s' % err_file)
             # Need bash or zsh for process substitution
-            with cd(dir_to_path):
-                multiple_output_process = subprocess.Popen(
-                        ' '.join(['set -eo pipefail;', command_to_run]),
-                        shell=True,
-                        stdout=subprocess.PIPE,
-                        stderr=open(os.devnull, 'w'),
-                        env=new_env,
-                        bufsize=-1,
-                        executable='/bin/bash'
-                    )
+            multiple_output_process = subprocess.Popen(
+                    ' '.join([('set -eo pipefail; cd %s;' % dir_to_path)
+                                if dir_to_path is not None
+                                else 'set -eo pipefail;',
+                              command_to_run]),
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=open(os.devnull, 'w'),
+                    env=new_env,
+                    bufsize=-1,
+                    executable='/bin/bash'
+                )
             task_file_streams = {}
             if gzip:
                 task_file_stream_processes = {}
@@ -629,14 +611,16 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                                                 err_file))
             try:
                 # Need bash or zsh for process substitution
-                with cd(dir_to_path):
-                    subprocess.check_output(' '.join(['set -eo pipefail;',
-                                                      command_to_run]),
-                                                shell=True,
-                                                env=new_env,
-                                                bufsize=-1,
-                                                stderr=subprocess.STDOUT,
-                                                executable='/bin/bash')
+                subprocess.check_output(' '.join([('set -eo pipefail; cd %s;'
+                                                    % dir_to_path)
+                                                    if dir_to_path is not None
+                                                    else 'set -eo pipefail;',
+                                                  command_to_run]),
+                                            shell=True,
+                                            env=new_env,
+                                            bufsize=-1,
+                                            stderr=subprocess.STDOUT,
+                                            executable='/bin/bash')
             except subprocess.CalledProcessError as e:
                 return (('Streaming command "%s" failed; exit level was %d.')
                          % (command_to_run, e.returncode))
@@ -822,7 +806,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     step_runner_with_error_return=\
                         step_runner_with_error_return,
                     presorted_tasks=presorted_tasks,
-                    cd=cd,
                     parsed_keys=parsed_keys
                 ))
             iface.step('Loaded dependencies on IPython engines.')
