@@ -349,9 +349,17 @@ if __name__ == '__main__':
     print 'AT-AC count: %d\tproportion: %08f' % (much_less_canonicals,
                                         float(much_less_canonicals)
                                                                 / intron_count)
+    if args.print_introns_to_stderr:
+        introns = sorted(
+                            list(introns),
+                            key=lambda intron: (intron[0][:-1], intron[2])
+                    )
+        for rname, start, end in introns:
+            print >>sys.stderr, '\t'.join([rname, str(start), str(end)])
     if args.true_introns_bed_dir is not None:
         # Read Flux BEDs
         true_introns = set()
+        introns = set([(strand[:-1], pos, end_pos) for (strand, pos, end_pos) in introns])
         def add_sets(list_of_sets):
             """ For updating set with sets in list
 
@@ -384,10 +392,3 @@ if __name__ == '__main__':
         print 'recall\t%.9f' % (float(relevant_and_retrieved) / relevant)
     else:
         print 'intron count\t%d' % intron_count
-    if args.print_introns_to_stderr:
-        introns = sorted(
-                            list(introns),
-                            key=lambda intron: (intron[0][:-1], intron[2])
-                    )
-        for rname, start, end in introns:
-            print >>sys.stderr, '\t'.join([rname, str(start), str(end)])
