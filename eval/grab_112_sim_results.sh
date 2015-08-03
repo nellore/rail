@@ -50,6 +50,7 @@ do
 	cd ${SAMPLES[$i]}
 	for j in $(aws s3 ls ${WITHFILTER}/alignments/alignments.${SAMPLENAMES[$i]} | grep -v .bai)
 	do
+		echo $j
 		aws s3 cp $j ./
 	done
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/spliced_read_recovery_performance.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed >$PERFORMANCE 2>${PERFORMANCE}_summary) &
