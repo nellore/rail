@@ -36,11 +36,13 @@ mkdir -p withfilter
 cd withfilter
 aws s3 cp ${WITHFILTER}/cross_sample_results/isofrags.tar.gz ./
 tar xvzf isofrags.tar.gz
+$PYTHON $RAILHOME/eval/count_introns.py --bowtie1-idx $BOWTIEIDX --bowtie2-idx isofrags -t ${DATADIR} --bowtie2-inspect ${BOWTIE2INSPECT} >intron_count &
 cd ..
 mkdir -p withoutfilter
 cd withoutfilter
 aws s3 cp ${WITHOUTFILTER}/cross_sample_results/isofrags.tar.gz ./
 tar xvzf isofrags.tar.gz
+$PYTHON $RAILHOME/eval/count_introns.py --bowtie1-idx $BOWTIEIDX --bowtie2-idx isofrags -t ${DATADIR} --bowtie2-inspect ${BOWTIE2INSPECT} >intron_count &
 cd ..
 # Download/compute performances for all 20 samples with and without filter
 for i in $(seq 0 19)
@@ -56,7 +58,6 @@ do
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed >${PERFORMANCE}_mapping_accuracy_summary) &
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
-	$PYTHON $RAILHOME/eval/count_introns.py --bowtie1-idx $BOWTIEIDX --bowtie2-idx ../isofrags -t ${DATADIR}/${SAMPLES[$i]}_sim.bed --bowtie2-inspect ${BOWTIE2INSPECT} >intron_count &
 	cd ../..
 	cd withoutfilter
 	mkdir -p ${SAMPLES[$i]}
@@ -69,7 +70,6 @@ do
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/intron_recovery_performance.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed >${PERFORMANCE}_intron_recovery_summary) &
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed >${PERFORMANCE}_mapping_accuracy_summary) &
 	(for k in *.bam; do $SAMTOOLS view $k; done | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t ${DATADIR}/${SAMPLES[$i]}_sim.bed -c 0.1 >${PERFORMANCE}_mapping_accuracy_SC_summary) &
-	$PYTHON $RAILHOME/eval/count_introns.py --bowtie1-idx $BOWTIEIDX --bowtie2-idx ../isofrags -t ${DATADIR}/${SAMPLES[$i]}_sim.bed --bowtie2-inspect ${BOWTIE2INSPECT} >intron_count &
 	cd ../..
 	wait
 done
