@@ -48,8 +48,6 @@ do
 	cd withfilter
 	mkdir -p ${SAMPLES[$i]}
 	cd ${SAMPLES[$i]}
-	echo ${DATADIR}/${SAMPLES[$i]}_sim.bed
-	ls ${DATADIR}/${SAMPLES[$i]}_sim.bed
 	for j in $(aws s3 ls ${WITHFILTER}/alignments/alignments.${SAMPLENAMES[$i]} | grep -v .bai | tr -s '[:blank:]' '\t' | cut -f4)
 	do
 		aws s3 cp ${WITHFILTER}/alignments/$j ./
