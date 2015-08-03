@@ -38,6 +38,7 @@ if __name__ == '__main__':
     truths = [0 for i in xrange(args.length)]
     recalls = [0 for i in xrange(args.length)]
     k = 0
+    b_tail_count, read_count = 0, 0
     with open(args.bed) as bed_stream:
         with open(args.fastq) as fastq_stream:
             while True:
@@ -47,9 +48,11 @@ if __name__ == '__main__':
                 seq = fastq_stream.readline().strip().upper()
                 fastq_stream.readline()
                 qual = fastq_stream.readline().strip()
+                read_count += 1
                 if args.ignore_b_tails and all(
                             [ord(score) - 33 <= 15 for score in qual[-10:]]
                         ):
+                    b_tail_count += 1
                     continue
                 if len(seq) != args.length: continue
                 tokens = bed_line.rstrip().split('\t')
@@ -87,9 +90,13 @@ if __name__ == '__main__':
                 k += 1
     overall_truths = sum(truths)
     overall_recalls = sum(recalls)
+    print 'Read count: %d' % read_count
     print 'Overall error rate: %.12f' % (
                 float(overall_truths - overall_recalls) / overall_truths
             )
     distribution = [float(truths[i] - recalls[i]) / truths[i]
                         for i in xrange(args.length)]
     print 'Error rate distribution: %s' % distribution
+    if args.ignore_b_tails:
+        print 'B-tail count: %d' % b_tail_count
+        print 'B-tail proportion: %.12f' % (float(b_tail_count) / read_count)

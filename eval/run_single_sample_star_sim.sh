@@ -138,4 +138,6 @@ echo 'Computing precision and recall...'
 (cat Aligned.out.sam | $PYTHON $RAILHOME/eval/mapping_accuracy.py -t $DATADIR/${SAMPLE}_sim.bed -c 0.1 -g >${PERFORMANCE}_mapping_accuracy_SC_summary) &
 wait
 # Move STAR results to final destination
-mv $OUTPUT/star $SAMPLEOUTPUT
+rm -rf ${SAMPLEOUTPUT}/star
+cp -r ${OUTPUT}/star $SAMPLEOUTPUT
+rm -rf ${OUTPUT}/star
