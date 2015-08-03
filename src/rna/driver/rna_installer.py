@@ -60,7 +60,7 @@ class RailRnaInstaller(object):
 
     def __init__(self, zip_name, curl_exe=None, install_dir=None,
                     no_dependencies=False, prep_dependencies=False,
-                    yes=False, add_symlinks=False):
+                    yes=False, me=False, add_symlinks=False):
         print_to_screen(u"""{0} Rail-RNA v{1} Installer""".format(
                                         u'\u2200', version_number)
                                     )
@@ -88,7 +88,8 @@ class RailRnaInstaller(object):
         self.log_stream = open(self.log_file, 'w')
         self.finished = False
         register_cleanup(remove_temporary_directories, [log_dir])
-        self.yes = yes
+        self.yes = yes or me
+        self.me = me
         self.prep_dependencies = prep_dependencies
         self.add_symlinks = add_symlinks
 
@@ -107,16 +108,25 @@ class RailRnaInstaller(object):
         print_to_screen('Installation log may be found at %s.' % new_log_file)
         sys.exit(1)
 
-    def _yes_no_query(self, question):
+    def _yes_no_query(self, question, answer=None):
         """ Gets a yes/no answer from the user if self.yes is not True.
 
             question: string with question to be printed to console
+            answer: boolean that overrides self.yes if an answer should
+                be forced
 
             Return value: boolean
         """
-        if self.yes:
+        if answer is None:
+            if self.yes:
+                print '%s [y/n]: y' % question
+                return True
+        elif answer:
             print '%s [y/n]: y' % question
             return True
+        else:
+            print '%s [y/n]: n' % question
+            return False
         while True:
             sys.stdout.write('%s [y/n]: ' % question)
             try:
@@ -293,7 +303,8 @@ class RailRnaInstaller(object):
                 sys.exit(1)
         if self._yes_no_query(
                 'Rail-RNA can be installed for all users or just the '
-                'current user.\n    * Install for all users?'
+                'current user.\n    * Install for all users?',
+                answer=(None if not self.yes else (self.yes and not self.me))
             ):
             if os.getuid():
                 print_to_screen('Rerun with sudo privileges to install '

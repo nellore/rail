@@ -59,7 +59,14 @@ if zipfile.is_zipfile(containing_dir):
     parser.add_argument('-y', '--yes', action='store_const',
             const=True,
             default=False,
-            help='answers "yes" to all user prompts'
+            help=('answers "yes" to all user prompts, installing for all '
+                  'users; overrided by --me')
+        )
+    parser.add_argument('-m', '--me', action='store_const',
+            const=True,
+            default=False,
+            help=('answers "no" to the user prompt "Install for all users?" '
+                  'and "yes" to all other user prompts')
         )
     parser.add_argument('-s', '--symlink-dependencies', action='store_const',
             const=True,
@@ -79,7 +86,7 @@ if zipfile.is_zipfile(containing_dir):
                             no_dependencies=args.no_dependencies,
                             prep_dependencies=args.prep_dependencies,
                             add_symlinks=args.symlink_dependencies,
-                            yes=args.yes) as railrna_installer:
+                            yes=args.yes, me=args.me) as railrna_installer:
         railrna_installer.install()
     sys.exit(0)
 
