@@ -43,7 +43,7 @@ aws s3 cp ${WITHOUTFILTER}/cross_sample_results/isofrags.tar.gz ./
 tar xvzf isofrags.tar.gz
 cd ..
 # Download/compute performances for all 20 samples with and without filter
-for i in (seq 0 19)
+for i in $(seq 0 19)
 do
 	cd withfilter
 	mkdir -p ${SAMPLES[$i]}
