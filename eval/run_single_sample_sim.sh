@@ -156,7 +156,7 @@ rm -rf ${OUTPUT}/hisat
 echo 'Running Rail-RNA on sample '${SAMPLE}'...'
 echo '#'${SAMPLE}' Rail-RNA' >>$TIMELOG
 # Write manifest file
-echo -e ${SCRATCH}/${SAMPLE}_sim_left.fastq'\t0\t'${SCRATCH}/${SAMPLE}_sim_right.fastq'\t0\t'${SAMPLE} >${SCRATCH}/${SAMPLE}.manifest
+echo -e ${SCRATCH}/${SAMPLE}_sim_left.fastq'\t0\t'${SCRATCH}/${SAMPLE}_sim_right.fastq'\t0\t'${SAMPLE}'-1-1' >${SCRATCH}/${SAMPLE}.manifest
 time ($RAILRNA go local -p $CORES -m ${SCRATCH}/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -x $BOWTIE1IDX,$BOWTIE2IDX -f -d bam >/dev/null 2>&1) 2>>$TIMELOG
 # Move rail results to final destination
 rm -rf ${SAMPLEOUTPUT}/rail
