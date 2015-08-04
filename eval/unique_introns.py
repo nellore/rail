@@ -25,6 +25,7 @@ import sys
 import glob
 import time
 import math
+import multiprocessing
 
 def introns_from_bed(bed, index):
     """ Converts BED to dictionary that maps RNAMES to sets of introns.
