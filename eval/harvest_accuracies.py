@@ -129,6 +129,11 @@ if __name__ == '__main__':
             help=('Aligners whose results this script should look for. Use '
                   'hisat, rail, subjunc, tophat, or star.')
         )
+    parser.add_argument('--hacky-workaround', action='store_const', const=True,
+            default=False,
+            help=('Invoked iff making tables for results of 112 sim; '
+                  'accommodates peculiarity in its directory structure.')
+        )
     args = parser.parse_args()
     modes = []
     if 'star' in args.aligners:
@@ -154,7 +159,9 @@ if __name__ == '__main__':
         for mode in modes:
             sample_stats = []
             for sample in samples:
-                full_path = os.path.join(args.sam_dir, sample, mode, perform)
+                full_path = os.path.join(args.sam_dir, sample, mode
+                    if (mode != 'rail' or not args.hacky_workaround)
+                    else '', perform)
                 sample_stats.append(stats(full_path))
             sample_stats = zip(*sample_stats)
             means = tuple([mean(stat_list) for stat_list in sample_stats])
