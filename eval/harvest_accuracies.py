@@ -179,7 +179,7 @@ if __name__ == '__main__':
                     full_path = os.path.join(
                                         args.sam_dir, sample, mode, perform
                                     )
-                    sample_stats.append(stats(full_path), first=first)
+                    sample_stats.append(stats(full_path, first=first))
                 sample_stats = zip(*sample_stats)
                 means = [mean(stat_list) for stat_list in sample_stats]
                 stdevs = [stdev(stat_list) for stat_list in sample_stats]
