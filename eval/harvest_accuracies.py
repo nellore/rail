@@ -169,9 +169,9 @@ if __name__ == '__main__':
         print perform + '\n'
         for first in [False, True]:
             if first:
-                print 'basewise'
+                print 'basewise\n'
             else:
-                print 'readwise'
+                print 'readwise\n'
             write_samples(samples)
             for mode in modes:
                 sample_stats = []
