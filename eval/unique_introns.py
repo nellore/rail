@@ -14,7 +14,7 @@ accepted_hits.bam, and Rail's output is assumed to span all the bam files in
 its output directory.
 
 A tab-separated matrix A_ij is output. Each i is a different mode
-(of a given aligner), and each j is a sample name, mean, median, stdev, or MAD.
+(of a given aligner), and each j is a sample name, mean, or stdev.
 A_ij is the comma-separated list (true intron count, retrieved intron count,
                                     overlap, precision, recall, f-score)
 """
