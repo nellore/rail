@@ -26,6 +26,7 @@ import glob
 import time
 import math
 import multiprocessing
+import signal
 
 def init_worker():
     """ Prevents KeyboardInterrupt from reaching a pool's workers.
