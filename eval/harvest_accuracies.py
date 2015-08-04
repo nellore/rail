@@ -130,6 +130,7 @@ if __name__ == '__main__':
                   'hisat, rail, subjunc, tophat, or star.')
         )
     args = parser.parse_args()
+    modes = []
     if 'star' in args.aligners:
         modes.extend(['star/ann_paired_1pass',
                         'star/ann_paired_2pass',
