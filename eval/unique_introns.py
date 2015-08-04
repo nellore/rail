@@ -39,20 +39,21 @@ def init_worker():
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-def introns_from_bed(bed, index):
+def introns_from_bed(index_and_bed):
     """ Converts BED to dictionary that maps RNAMES to sets of introns.
-
-        bed: input BED file characterizing splice junctions
+        
+        index_and_bed is composed of:
         index: index of bed file; used for tracking which bed is which
             when using multiple cores
+        bed: input BED file characterizing splice junctions
 
         Return value: (index, a dictionary). Each key is an RNAME, typically a
             chromosome, and its corresponding value is a set of tuples, each
             denoting an intron on RNAME. Each tuple is of the form
             (start position, end position).
     """
+    index, bed = index_and_bed
     introns = set()
-    print 'hi'
     with open(bed) as bed_stream:
         for line in bed_stream:
             tokens = line.rstrip().split('\t')
@@ -127,12 +128,13 @@ def dummy_md_index(cigar):
                     )
     return ''.join(str(el) for el in md)
 
-def introns_from_sam(sam, index, samtools_exe):
+def introns_from_sam(index_and_sam_and_samtools_exe):
     """ Writes output that maps QNAMES to exon-exon junctions overlapped.
 
-        sam: where to find retrieved alignments in SAM form
+        index_and_sam_and_samtools_exe is composed of
         index: index of SAM file; used for tracking which bed is which
             when using multiple cores
+        sam: where to find retrieved alignments in SAM form
         samtools_exe: where to find samtools executable
 
         Return value: (index, a dictionary). Each key is an RNAME, typically a
@@ -140,6 +142,7 @@ def introns_from_sam(sam, index, samtools_exe):
             denoting an intron on RNAME. Each tuple is of the form
             (start position, end position).
     """
+    index, sam, samtools_exe = index_and_sam_and_samtools_exe
     introns = set()
     for sam_file in sam:
         sam_stream = subprocess.Popen([samtools_exe, 'view', sam_file],
@@ -169,18 +172,20 @@ def introns_from_sam(sam, index, samtools_exe):
         sam_stream.close()
     return (index, introns)
 
-def stats(true, retrieved, index):
+def stats(index_and_true_and_retrieved):
     """ Returns comma-separated list of accuracy stats
 
         Included are (relevant instances, retrieved instances, overlap,
                         precision, recall, f-score)
         
+        index_and_true_and_retrieved is composed of:
+        index: used to track which sample is associated with the stats
         true: set of true instances
         retrieved: set of retrieved indexes
-        index: used to track which sample is associated with the stats
 
         Return value: (index, tuple of stats)
     """
+    index, true, retrieved = index_and_true_and_retrieved
     relevant = len(true)
     retrieved = len(retrieved)
     overlap = len(relevant.intersection(retrieved))
@@ -271,14 +276,14 @@ if __name__ == '__main__':
     pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1,
                                     init_worker, maxtasksperchild=5)
     returned_introns = []
-    for i, bed_path in enumerate(bed_paths):
-        pool.apply_async(
+    pool.map_async(
                     introns_from_bed,
-                    bed_path, i,
+                    list(enumerate(bed_paths)),
                     callback=returned_introns.extend
                 )
     bed_path_size = len(bed_paths)
     while len(returned_introns) < bed_path_size:
+        print >>sys.stderr, '%d tasks complete\r' % len(returned_introns),
         time.sleep(1)
     for index, true_intron_set in returned_introns:
         for intron in true_intron_set:
@@ -333,14 +338,15 @@ if __name__ == '__main__':
                 ]
         returned_introns = []
         retrieved_introns = defaultdict(list)
-        for i, alignments in enumerate(alignment_files):
-            pool.apply_async(
-                        introns_from_sam,
-                        alignments, i, args.samtools,
-                        callback=returned_introns.extend
-                    )
+        pool.map_async(
+                    introns_from_sam,
+                    [el + (args.samtools,) for el
+                        in enumerate(alignment_files)],
+                    callback=returned_introns.extend
+                )
         alignment_files_size = len(alignment_files)
         while len(returned_introns) < alignment_files_size:
+            print >>sys.stderr, '%d tasks complete\r' % len(returned_introns),
             time.sleep(1)
         for index, retrieved_intron_set in returned_introns:
             for intron in retrieved_intron_set:
@@ -350,12 +356,16 @@ if __name__ == '__main__':
             if len(retrieved_introns[intron]) == 1:
                 retrieved_unique_introns[index].add(intron)
         returned_stats = []
-        for i, sample in enumerate(samples):
-            pool.apply_async(
+        pool.map_async(
                         stats,
-                        true_unique_introns[i], retrieved_unique_introns[i], i,
+                        [(i, true_unique_introns[i],
+                          retrieved_unique_introns[i])
+                         for i in xrange(len(samples))],
                         callback=returned_stats.extend
                     )
+        sample_size = len(samples)
+        while len(returned_stats) < sample_size:
+            time.sleep(1)
         means = [mean([el[1][k] for el in returned_stats]) for k in xrange(6)]
         stdevs = [
                 stdev([el[1][k] for el in returned_stats]) for k in xrange(6)
