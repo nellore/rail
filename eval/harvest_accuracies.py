@@ -186,7 +186,9 @@ if __name__ == '__main__':
                 sample_stats = []
                 for sample in samples:
                     full_path = os.path.join(
-                                        args.sam_dir, sample, mode, perform
+                                        args.sam_dir, sample, mode
+                    if (mode != 'rail' or not args.hacky_workaround)
+                    else '', perform
                                     )
                     sample_stats.append(stats(full_path, first=first))
                 sample_stats = zip(*sample_stats)
