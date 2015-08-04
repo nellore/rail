@@ -149,7 +149,7 @@ if __name__ == '__main__':
                         'hisat/noann_paired_2pass'])
     samples = args.samples.split(',')
     for perform in ['perform_intron_recovery_summary', 'perform_summary']:
-        print perform + '\n'
+        print '\n' + perform + '\n'
         write_samples(samples)
         for mode in modes:
             sample_stats = []
@@ -166,12 +166,12 @@ if __name__ == '__main__':
             sys.stdout.write('\n')
     for perform in ['perform_mapping_accuracy_summary',
                     'perform_mapping_accuracy_SC_summary']:
-        print perform + '\n'
+        print '\n' + perform + '\n'
         for first in [False, True]:
             if first:
-                print 'basewise\n'
+                print '\nbasewise\n'
             else:
-                print 'readwise\n'
+                print '\nreadwise\n'
             write_samples(samples)
             for mode in modes:
                 sample_stats = []
