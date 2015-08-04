@@ -329,15 +329,15 @@ if __name__ == '__main__':
         if 'rail' in mode:
             alignment_files = [glob.glob(
                     os.path.join(args.sam_dir,
-                                    sample, mode, 'alignments.*.bam')
+                                    sample, mode,
+                                    'alignments/alignments.*.bam')
                 ) for sample in samples]
             if not alignment_files[0]:
-                # look in alignments subdir instead
+                # working with 112 sim
                 alignment_files = [glob.glob(
-                    os.path.join(args.sam_dir,
-                                    sample, mode,
-                                   'alignments/alignments.*.bam')
-                ) for sample in samples]
+                            os.path.join(args.sam_dir,
+                                            sample, 'alignments.*.bam')
+                        ) for sample in samples]
         elif 'tophat' in mode:
             alignment_files = [
                     [os.path.join(args.sam_dir, sample,
