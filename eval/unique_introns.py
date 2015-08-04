@@ -52,6 +52,7 @@ def introns_from_bed(bed, index):
             (start position, end position).
     """
     introns = set()
+    print 'hi'
     with open(bed) as bed_stream:
         for line in bed_stream:
             tokens = line.rstrip().split('\t')
