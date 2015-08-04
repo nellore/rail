@@ -27,6 +27,8 @@ import time
 import math
 import multiprocessing
 import signal
+import re
+from intron_recovery_performance import indels_introns_and_exons
 
 def init_worker():
     """ Prevents KeyboardInterrupt from reaching a pool's workers.
@@ -147,7 +149,7 @@ def introns_from_sam(index_and_sam_and_samtools_exe):
     for sam_file in sam:
         sam_stream = subprocess.Popen([samtools_exe, 'view', sam_file],
                                             stdout=subprocess.PIPE)
-        for line in sam_stream:
+        for line in sam_stream.stdout:
             if line[0] == '@': continue
             try:
                 tokens = line.strip().split('\t')
@@ -169,7 +171,10 @@ def introns_from_sam(index_and_sam_and_samtools_exe):
             except IndexError:
                 print >>sys.stderr, ('Error found on line: ' + line)
                 raise
-        sam_stream.close()
+            except Exception as e:
+                print >>sys.stderr, e
+                raise
+        sam_stream.kill()
     return (index, introns)
 
 def stats(index_and_true_and_retrieved):
@@ -185,13 +190,22 @@ def stats(index_and_true_and_retrieved):
 
         Return value: (index, tuple of stats)
     """
-    index, true, retrieved = index_and_true_and_retrieved
+    index, true, recovered = index_and_true_and_retrieved
     relevant = len(true)
-    retrieved = len(retrieved)
-    overlap = len(relevant.intersection(retrieved))
-    precision = float(overlap) / retrieved
-    recall = float(overlap) / relevant
-    fscore = 2 * precision * recall / (precision + recall)
+    retrieved = len(recovered)
+    overlap = len(true.intersection(recovered))
+    try:
+        precision = float(overlap) / retrieved
+    except ZeroDivisionError:
+        precision = 1
+    try:
+        recall = float(overlap) / relevant
+    except ZeroDivisionError:
+        recall = 1
+    try:
+        fscore = 2 * precision * recall / (precision + recall)
+    except ZeroDivisionError:
+        fscore = 1
     return (index, (relevant, retrieved, overlap, precision, recall, fscore))
 
 def mean(a_list):
@@ -212,7 +226,7 @@ def stdev(a_list):
     """
     working_mean = mean(a_list)
     return math.sqrt(1. / (len(a_list) - 1)
-                        * sum((el-working_mean)**2 for el in data))
+                        * sum((el-working_mean)**2 for el in a_list))
 
 if __name__ == '__main__':
     import argparse
@@ -290,7 +304,7 @@ if __name__ == '__main__':
     true_unique_introns = defaultdict(set)
     for intron in true_introns:
         if len(true_introns[intron]) == 1:
-            true_unique_introns[index].add(intron)
+            true_unique_introns[true_introns[intron][0]].add(intron)
     print >>sys.stderr, 'Loaded true introns.'
     print '\t'.join([''] + samples + ['means', 'stdevs'])
     modes = []
@@ -321,18 +335,19 @@ if __name__ == '__main__':
                 # look in alignments subdir instead
                 alignment_files = glob.glob(
                     os.path.join(args.sam_dir,
-                                    sample, mode, 'rail/alignments.*.bam')
+                                    sample, mode,
+                                   'alignments/alignments.*.bam')
                 )
         elif 'tophat' in mode:
             alignment_files = [
-                    os.path.join(args.sam_dir, sample,
-                                    mode, 'accepted_hits.bam')
+                    [os.path.join(args.sam_dir, sample,
+                                    mode, 'accepted_hits.bam')]
                     for sample in samples
                 ]
         else:
             alignment_files = [
-                    os.path.join(args.sam_dir, sample,
-                                    mode, 'Aligned.out.sam')
+                    [os.path.join(args.sam_dir, sample,
+                                    mode, 'Aligned.out.sam')]
                     for sample in samples
                 ]
         returned_introns = []
@@ -352,7 +367,9 @@ if __name__ == '__main__':
         retrieved_unique_introns = defaultdict(set)
         for intron in retrieved_introns:
             if len(retrieved_introns[intron]) == 1:
-                retrieved_unique_introns[index].add(intron)
+                retrieved_unique_introns[
+                        retrieved_introns[intron][0]
+                    ].add(intron)
         returned_stats = []
         pool.map_async(
                         stats,
@@ -364,15 +381,16 @@ if __name__ == '__main__':
         sample_size = len(samples)
         while len(returned_stats) < sample_size:
             time.sleep(1)
-        means = [mean([el[1][k] for el in returned_stats]) for k in xrange(6)]
-        stdevs = [
+        means = tuple([mean([el[1][k] for el in returned_stats])
+                       for k in xrange(6)])
+        stdevs = tuple([
                 stdev([el[1][k] for el in returned_stats]) for k in xrange(6)
-            ]
+            ])
         returned_stats.sort(key=lambda x: x[0])
         for stat_set in returned_stats:
-            sys.stdout.write('\t%d,%d,%d,%.8f,%.8f,%.8f' % stat_set[1])
-        sys.stdout.write('\t%.8f,%.8f,%.8f,%.8f,%.8f,%.8f' % means)
-        sys.stdout.write('\t%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n' % stdevs)
+            sys.stdout.write('\t%d,%d,%d,%.3f,%.3f,%.3f' % stat_set[1])
+        sys.stdout.write('\t%.3f,%.3f,%.3f,%.3f,%.3f,%.3f' % means)
+        sys.stdout.write('\t%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n' % stdevs)
         sys.stdout.flush()
     pool.close()
     pool.join()
