@@ -147,7 +147,7 @@ if __name__ == '__main__':
                         'hisat/ann_paired_2pass',
                         'hisat/noann_paired_1pass',
                         'hisat/noann_paired_2pass'])
-    samples = args.samples.split('\t')
+    samples = args.samples.split(',')
     for perform in ['perform_intron_recovery_summary', 'perform_summary']:
         print perform + '\n'
         write_samples(samples)
