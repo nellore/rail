@@ -157,12 +157,14 @@ if __name__ == '__main__':
                 full_path = os.path.join(args.sam_dir, sample, mode, perform)
                 sample_stats.append(stats(full_path))
             sample_stats = zip(*sample_stats)
-            means = [mean(stat_list) for stat_list in sample_stats]
-            stdevs = [stdev(stat_list) for stat_list in sample_stats]
+            means = tuple([mean(stat_list) for stat_list in sample_stats])
+            stdevs = tuple([stdev(stat_list) for stat_list in sample_stats])
             sample_stats = zip(*sample_stats)
             sys.stdout.write(mode)
             for i, sample in enumerate(samples):
                 sys.stdout.write('\t' + ('%.3f,%.3f,%.3f' % sample_stats[i]))
+            sys.stdout.write('\t' + ('%.3f,%.3f,%.3f' % means))
+            sys.stdout.write('\t' + ('%.3f,%.3f,%.3f' % stdevs))
             sys.stdout.write('\n')
     for perform in ['perform_mapping_accuracy_summary',
                     'perform_mapping_accuracy_SC_summary']:
@@ -181,12 +183,16 @@ if __name__ == '__main__':
                                     )
                     sample_stats.append(stats(full_path, first=first))
                 sample_stats = zip(*sample_stats)
-                means = [mean(stat_list) for stat_list in sample_stats]
-                stdevs = [stdev(stat_list) for stat_list in sample_stats]
+                means = tuple([mean(stat_list) for stat_list in sample_stats])
+                stdevs = tuple(
+                        [stdev(stat_list) for stat_list in sample_stats]
+                    )
                 sample_stats = zip(*sample_stats)
                 sys.stdout.write(mode)
                 for i, sample in enumerate(samples):
                     sys.stdout.write(
                                 '\t' + ('%.3f,%.3f,%.3f' % sample_stats[i])
                             )
+                sys.stdout.write('\t' + ('%.3f,%.3f,%.3f' % means))
+                sys.stdout.write('\t' + ('%.3f,%.3f,%.3f' % stdevs))
                 sys.stdout.write('\n')
