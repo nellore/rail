@@ -283,7 +283,6 @@ if __name__ == '__main__':
                 )
     bed_path_size = len(bed_paths)
     while len(returned_introns) < bed_path_size:
-        print >>sys.stderr, '%d tasks complete\r' % len(returned_introns),
         time.sleep(1)
     for index, true_intron_set in returned_introns:
         for intron in true_intron_set:
@@ -346,7 +345,6 @@ if __name__ == '__main__':
                 )
         alignment_files_size = len(alignment_files)
         while len(returned_introns) < alignment_files_size:
-            print >>sys.stderr, '%d tasks complete\r' % len(returned_introns),
             time.sleep(1)
         for index, retrieved_intron_set in returned_introns:
             for intron in retrieved_intron_set:
