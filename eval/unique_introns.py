@@ -1,20 +1,30 @@
+#!/usr/bin/env python
 """
 unique_introns.py
 
 Measures precision and recall of introns that are unique to each of the 20
 samples selected at random (in create_single_sample_sim_commands.py) from
 112 simulated GEUVADIS-based samples. Assumes a directory structure for output
-created by either grab_112_sim_results.sh or 
+created by either grab_112_sim_results.sh or the commands output by
+create_commands_for_all_sample_sims.sh.
 
 A file Aligned.out.sam is assumed to be in output directories for all aligners
 but Rail-RNA and TopHat 2. TopHat 2's output file is assumed to be
 accepted_hits.bam, and Rail's output is assumed to span all the bam files in
 its output directory.
+
+A tab-separated matrix A_ij is output. Each i is a different mode
+(of a given aligner), and each j is a sample name, mean, median, stdev, or MAD.
+A_ij is the comma-separated list (true intron count, retrieved intron count,
+                                    overlap, precision, recall, f-score)
 """
 
 import os
 from collections import defaultdict
 import sys
+import glob
+import time
+import math
 
 def introns_from_bed(bed, index):
     """ Converts BED to dictionary that maps RNAMES to sets of introns.
@@ -23,7 +33,7 @@ def introns_from_bed(bed, index):
         index: index of bed file; used for tracking which bed is which
             when using multiple cores
 
-        Return value: a dictionary. Each key is an RNAME, typically a
+        Return value: (index, a dictionary). Each key is an RNAME, typically a
             chromosome, and its corresponding value is a set of tuples, each
             denoting an intron on RNAME. Each tuple is of the form
             (start position, end position).
@@ -68,42 +78,122 @@ def introns_from_bed(bed, index):
                 introns.add((chrom, junctions[2*i]+1, junctions[2*i+1]+1))
     return (index, introns)
 
-def introns_from_sam_stream(sam_stream):
+def dummy_md_index(cigar):
+    """ Creates dummy MD string from CIGAR in case of missing MD.
+
+        cigar: cigar string
+
+        Return value: dummy MD string
+    """
+    cigar = re.split(r'([MINDS])', cigar)[:-1]
+    cigar_index = 0
+    max_cigar_index = len(cigar)
+    md = []
+    while cigar_index != max_cigar_index:
+        if cigar[cigar_index] == 0:
+            cigar_index += 2
+            continue
+        if cigar[cigar_index+1] == 'M':
+            try:
+                if type(md[-1]) is int:
+                    md[-1] += int(cigar[cigar_index])
+                else:
+                    md.append(int(cigar[cigar_index]))
+            except IndexError:
+                md.append(int(cigar[cigar_index]))
+            cigar_index += 2
+        elif cigar[cigar_index+1] in 'SIN':
+            cigar_index += 2
+        elif cigar[cigar_index+1] == 'D':
+            md.extend(['^', 'A'*int(cigar[cigar_index])])
+            cigar_index += 2
+        else:
+            raise RuntimeError(
+                        'Accepted CIGAR characters are only in [MINDS].'
+                    )
+    return ''.join(str(el) for el in md)
+
+def introns_from_sam(sam, index, samtools_exe):
     """ Writes output that maps QNAMES to exon-exon junctions overlapped.
 
-        sam_stream: where to find retrieved alignments in SAM form
+        sam: where to find retrieved alignments in SAM form
+        index: index of SAM file; used for tracking which bed is which
+            when using multiple cores
+        samtools_exe: where to find samtools executable
 
-        Return value: a dictionary. Each key is an RNAME, typically a
+        Return value: (index, a dictionary). Each key is an RNAME, typically a
             chromosome, and its corresponding value is a set of tuples, each
             denoting an intron on RNAME. Each tuple is of the form
             (start position, end position).
     """
-    introns = defaultdict(set)
-    for line in sam_stream:
-        if line[0] == '@': continue
-        try:
-            tokens = line.strip().split('\t')
-            flag = int(tokens[1])
-            if flag & 4:
-                continue
-            name = tokens[0]
-            rname = tokens[2]
-            cigar = tokens[5]
-            pos = int(tokens[3])
-            seq = tokens[9]
-            flag = int(tokens[1])
-            if 'N' not in cigar or flag & 256:
-                continue
-            #md = [token[5:] for token in tokens if token[:5] == 'MD:Z:'][0]
-            _, _, introns_to_add, _ = indels_introns_and_exons(cigar,
-                                        dummy_md_index(cigar), pos, seq)
-            for intron in introns_to_add:
-                introns[rname].add(intron[:2])
-                key = (rname,) + intron[:2]
-        except IndexError:
-            print >>sys.stderr, ('Error found on line: ' + line)
-            raise
-    return introns
+    introns = set()
+    for sam_file in sam:
+        sam_stream = subprocess.Popen([samtools_exe, 'view', sam_file],
+                                            stdout=subprocess.PIPE)
+        for line in sam_stream:
+            if line[0] == '@': continue
+            try:
+                tokens = line.strip().split('\t')
+                flag = int(tokens[1])
+                if flag & 4:
+                    continue
+                name = tokens[0]
+                rname = tokens[2]
+                cigar = tokens[5]
+                pos = int(tokens[3])
+                seq = tokens[9]
+                flag = int(tokens[1])
+                if 'N' not in cigar or flag & 256:
+                    continue
+                _, _, introns_to_add, _ = indels_introns_and_exons(cigar,
+                                            dummy_md_index(cigar), pos, seq)
+                for intron in introns_to_add:
+                    introns.add((rname,) + intron[:2])
+            except IndexError:
+                print >>sys.stderr, ('Error found on line: ' + line)
+                raise
+        sam_stream.close()
+    return (index, introns)
+
+def stats(true, retrieved, index):
+    """ Returns comma-separated list of accuracy stats
+
+        Included are (relevant instances, retrieved instances, overlap,
+                        precision, recall, f-score)
+        
+        true: set of true instances
+        retrieved: set of retrieved indexes
+        index: used to track which sample is associated with the stats
+
+        Return value: (index, tuple of stats)
+    """
+    relevant = len(true)
+    retrieved = len(retrieved)
+    overlap = len(relevant.intersection(retrieved))
+    precision = float(overlap) / retrieved
+    recall = float(overlap) / relevant
+    fscore = 2 * precision * recall / (precision + recall)
+    return (index, (relevant, retrieved, overlap, precision, recall, fscore))
+
+def mean(a_list):
+    """ Finds mean of list.
+
+        a_list: a list
+
+        Return value: mean
+    """
+    return float(sum(a_list)) / len(a_list)
+
+def stdev(a_list):
+    """ Finds sample stdev of list.
+
+        a_list: a list
+
+        Return value: stdev
+    """
+    working_mean = mean(a_list)
+    return math.sqrt(1. / (len(a_list) - 1)
+                        * sum((el-working_mean)**2 for el in data))
 
 if __name__ == '__main__':
     import argparse
@@ -141,9 +231,14 @@ if __name__ == '__main__':
                   'computation of introns unique to particular samples.')
         )
     parser.add_argument('-t', '--true-introns-bed-dir', type=str,
+            required=True,
+            help='Path to directory containing Flux Simulator BEDs'
+        )
+    parser.add_argument('-r', '--sam-dir', type=str,
             required=False,
             default=None,
-            help='Path to directory containing Flux Simulator BEDs'
+            help=('Path to root directory containing sample dirs with aligner '
+                  'results')
         )
     parser.add_argument('-a', '--aligners', type=str,
             required=True, nargs='+',
@@ -157,53 +252,104 @@ if __name__ == '__main__':
     bed_paths = [os.path.join(args.true_introns_bed_dir,
                                         sample + '_sim.bed')
                             for sample in samples]
+    print >>sys.stderr, 'Loading true introns...'
     # Use multiple cores
     pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
+    returned_introns = []
     for i, bed_path in enumerate(bed_paths):
-        with open(sample_sim_path) as bed_stream:
-            for intron in introns_from_bed(bed_path):
-                true_introns[intron].append(i)
+        pool.apply_async(
+                    introns_from_bed,
+                    bed_path, i,
+                    callback=returned_introns.extend
+                )
+    bed_path_size = len(bed_paths)
+    while len(returned_introns) < bed_path_size:
+        time.sleep(1)
+    for index, true_intron_set in returned_introns:
+        for intron in true_intron_set:
+            true_introns[intron].append(index)
     true_unique_introns = defaultdict(set)
     for intron in true_introns:
         if len(true_introns[intron]) == 1:
-            true_unique_introns[true_introns[intron][0]].add(intron)
+            true_unique_introns[index].add(intron)
+    print >>sys.stderr, 'Loaded true introns.'
+    print '\t'.join([''] + samples + ['means', 'stdevs'])
+    modes = []
     if 'star' in args.aligners:
-        for mode in ['ann_paired_1pass', 'ann_paired_2pass',
-                     'noann_paired_1pass', 'nogen_noann_paired_2pass']:
-
-    if args.true_introns_bed_dir is not None:
-        # Read Flux BEDs
-        true_introns = set()
-        introns = set([(strand[:-1], pos, end_pos) for (strand, pos, end_pos) in introns])
-        def add_sets(list_of_sets):
-            """ For updating set with sets in list
-
-                list_of_sets: list to sets to add to true_introns
-
-                No return value.
-            """
-            global true_introns
-            for item in list_of_sets:
-                true_introns.update(item)
-        import glob
-        import multiprocessing
-        pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
-        pool.map_async(
-                    introns_from_bed,
-                    glob.glob(
-                            os.path.join(args.true_introns_bed_dir, '*.bed')
-                        ),
-                    callback=add_sets
+        modes.extend(['star/ann_paired_1pass',
+                        'star/ann_paired_2pass',
+                        'star/noann_paired_1pass',
+                        'star/nogen_noann_paired_2pass'])
+    if 'tophat' in args.aligners:
+        modes.extend(['tophat/ann_paired', 'tophat/noann_paired'])
+    if 'subjunc' in args.aligners:
+        modes.extend(['subjunc'])
+    if 'rail' in args.aligners:
+        modes.extend(['rail'])
+    if 'hisat' in args.aligners:
+        modes.extend(['hisat/ann_paired_1pass',
+                        'hisat/ann_paired_2pass',
+                        'hisat/noann_paired_1pass',
+                        'hisat/noann_paired_2pass'])
+    for mode in modes:
+        sys.stdout.write(mode)
+        if 'rail' in mode:
+            alignment_files = [glob.glob(
+                    os.path.join(args.sam_dir,
+                                    sample, mode, 'alignments.*.bam')
+                ) for sample in samples]
+            if not alignment_files[0]:
+                # look in alignments subdir instead
+                alignment_files = glob.glob(
+                    os.path.join(args.sam_dir,
+                                    sample, mode, 'rail/alignments.*.bam')
                 )
-        pool.close()
-        pool.join()
-        retrieved = intron_count
-        relevant = len(true_introns)
-        relevant_and_retrieved = len(introns.intersection(true_introns))
-        print 'true intron count\t%d' % relevant
-        print 'retrieved intron count\t%d' % retrieved
-        print 'overlap\t%d' % relevant_and_retrieved
-        print 'precision\t%.9f' % (float(relevant_and_retrieved) / retrieved)
-        print 'recall\t%.9f' % (float(relevant_and_retrieved) / relevant)
-    else:
-        print 'intron count\t%d' % intron_count
+        elif 'tophat' in mode:
+            alignment_files = [
+                    os.path.join(args.sam_dir, sample,
+                                    mode, 'accepted_hits.bam')
+                    for sample in samples
+                ]
+        else:
+            alignment_files = [
+                    os.path.join(args.sam_dir, sample,
+                                    mode, 'Aligned.out.sam')
+                    for sample in samples
+                ]
+        returned_introns = []
+        retrieved_introns = defaultdict(list)
+        for i, alignments in enumerate(alignment_files):
+            pool.apply_async(
+                        introns_from_sam,
+                        alignments, i, args.samtools,
+                        callback=returned_introns.extend
+                    )
+        alignment_files_size = len(alignment_files)
+        while len(returned_introns) < alignment_files_size:
+            time.sleep(1)
+        for index, retrieved_intron_set in returned_introns:
+            for intron in retrieved_intron_set:
+                retrieved_introns[intron].append(index)
+        retrieved_unique_introns = defaultdict(set)
+        for intron in retrieved_introns:
+            if len(retrieved_introns[intron]) == 1:
+                retrieved_unique_introns[index].add(intron)
+        returned_stats = []
+        for i, sample in enumerate(samples):
+            pool.apply_async(
+                        stats,
+                        true_unique_introns[i], retrieved_unique_introns[i], i,
+                        callback=returned_stats.extend
+                    )
+        means = [mean([el[1][k] for el in returned_stats]) for k in xrange(6)]
+        stdevs = [
+                stdev([el[1][k] for el in returned_stats]) for k in xrange(6)
+            ]
+        returned_stats.sort(key=lambda x: x[0])
+        for stat_set in returned_stats:
+            sys.stdout.write('\t%d,%d,%d,%.8f,%.8f,%.8f' % stat_set[1])
+        sys.stdout.write('\t%.8f,%.8f,%.8f,%.8f,%.8f,%.8f' % means)
+        sys.stdout.write('\t%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n' % stdevs)
+        sys.stdout.flush()
+    pool.close()
+    pool.join()
