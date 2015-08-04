@@ -27,6 +27,17 @@ import time
 import math
 import multiprocessing
 
+def init_worker():
+    """ Prevents KeyboardInterrupt from reaching a pool's workers.
+
+        Exiting gracefully after KeyboardInterrupt or SystemExit is a
+        challenge. The solution implemented here is by John Reese and is from
+        http://noswap.com/blog/python-multiprocessing-keyboardinterrupt .
+
+        No return value.
+    """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
 def introns_from_bed(bed, index):
     """ Converts BED to dictionary that maps RNAMES to sets of introns.
 
@@ -255,7 +266,8 @@ if __name__ == '__main__':
                             for sample in samples]
     print >>sys.stderr, 'Loading true introns...'
     # Use multiple cores
-    pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
+    pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1,
+                                    init_worker, maxtasksperchild=5)
     returned_introns = []
     for i, bed_path in enumerate(bed_paths):
         pool.apply_async(
