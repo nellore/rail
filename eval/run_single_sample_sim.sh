@@ -150,15 +150,24 @@ time ($HISAT -x $HISATIDX -1 ${SCRATCH}/${SAMPLE}_sim_left.fastq -2 ${SCRATCH}/$
 rm -rf ${SAMPLEOUTPUT}/hisat
 cp -r ${OUTPUT}/hisat $SAMPLEOUTPUT
 rm -rf ${OUTPUT}/hisat
-echo 'Running Rail-RNA on sample '${SAMPLE}'...'
-echo '#'${SAMPLE}' Rail-RNA' >>$TIMELOG
+echo 'Running Rail-RNA on sample '${SAMPLE}', outputting only BAM...'
+echo '#'${SAMPLE}' Rail-RNA only bam' >>$TIMELOG
 # Write manifest file
 echo -e ${SCRATCH}/${SAMPLE}_sim_left.fastq'\t0\t'${SCRATCH}/${SAMPLE}_sim_right.fastq'\t0\t'${SAMPLE}'-1-1' >${SCRATCH}/${SAMPLE}.manifest
-time ($RAILRNA go local -p $CORES -m ${SCRATCH}/${SAMPLE}.manifest -o $OUTPUT/rail --log $OUTPUT/rail.log -x $BOWTIE1IDX,$BOWTIE2IDX -f -d bam >/dev/null 2>&1) 2>>$TIMELOG
-# Move rail results to final destination
-rm -rf ${SAMPLEOUTPUT}/rail
-cp -r ${OUTPUT}/rail $SAMPLEOUTPUT
-rm -rf ${OUTPUT}/rail
+time ($RAILRNA go local -p $CORES -m ${SCRATCH}/${SAMPLE}.manifest -o $OUTPUT/railb --log $OUTPUT/railb.log -x $BOWTIE1IDX,$BOWTIE2IDX -f -d bam >/dev/null 2>&1) 2>>$TIMELOG
+# Move railb results to final destination
+rm -rf ${SAMPLEOUTPUT}/railb
+cp -r ${OUTPUT}/railb $SAMPLEOUTPUT
+rm -rf ${OUTPUT}/railb
+echo 'Running Rail-RNA on sample '${SAMPLE}' with all default outputs...'
+echo '#'${SAMPLE}' Rail-RNA all default outputs' >>$TIMELOG
+# Write manifest file
+echo -e ${SCRATCH}/${SAMPLE}_sim_left.fastq'\t0\t'${SCRATCH}/${SAMPLE}_sim_right.fastq'\t0\t'${SAMPLE}'-1-1' >${SCRATCH}/${SAMPLE}.manifest
+time ($RAILRNA go local -p $CORES -m ${SCRATCH}/${SAMPLE}.manifest -o $OUTPUT/raild --log $OUTPUT/raild.log -x $BOWTIE1IDX,$BOWTIE2IDX -f >/dev/null 2>&1) 2>>$TIMELOG
+# Move raild results to final destination
+rm -rf ${SAMPLEOUTPUT}/raild
+cp -r ${OUTPUT}/raild $SAMPLEOUTPUT
+rm -rf ${OUTPUT}/raild
 echo 'Running TopHat on sample '${SAMPLE}' with no annotation and in paired-end mode...'
 echo '#'${SAMPLE}' TopHat noann paired' >>$TIMELOG
 time ($TOPHAT -o $OUTPUT/tophat/noann_paired -p $CORES $BOWTIE2IDX ${SCRATCH}/${SAMPLE}_sim_left.fastq ${SCRATCH}/${SAMPLE}_sim_right.fastq 2>&1) 2>>$TIMELOG
