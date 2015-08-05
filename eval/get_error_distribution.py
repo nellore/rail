@@ -7,17 +7,17 @@ with the length specified at the command line.
 
 We executed
 
-for i in *.bed; do (
-    pypy get_error_distribution.py --bed $i
-    --fastq $(echo $i | cut -d '.' -f1).fastq -l 76
-    -x /dcl01/leek/data/railsims/indexes_for_paper/genome
-    >$i.error_distribution &
-); done
+pypy get_error_distribution.py --bed <(cat *.bed) --fastq <(cat *_sim.fastq)
+     -l 76 -x /dcl01/leek/data/railsims/indexes_for_paper/genome
+    >error_distribution
 
-from the directory containing the 112 Flux BEDs/FASTQs to obtain all error
-distributions. Replace
-/dcl01/leek/data/railsims/indexes_for_paper/genome with the path to the
-Bowtie 1 index for the genome from which the Flux simulations sampled reads.
+from the directory containing the 112 Flux BEDs/FASTQs to obtain the overall
+error distribution and
+
+pypy get_error_distribution.py --bed <(cat *.bed) --fastq <(cat *_sim.fastq)
+     -l 76 -x /dcl01/leek/data/railsims/indexes_for_paper/genome
+     --ignore-b-tails >error_distribution_no_b_tails
+     
 """
 
 from count_introns import BowtieIndexReference
