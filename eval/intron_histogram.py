@@ -101,7 +101,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # Ingest true introns
     true_introns = defaultdict(list)
-    samples = args.samples.split(',')
     bed_paths = glob.glob(os.path.join(args.true_introns_bed_dir, '*_sim.bed'))
     print >>sys.stderr, 'Loading true introns...'
     # Use multiple cores
