@@ -4,6 +4,20 @@ get_error_distribution.py
 
 Gets error distribution of Flux BED/FASTQ. Considers only reads from the FASTQ
 with the length specified at the command line.
+
+We executed
+
+for i in *.bed; do (
+    pypy get_error_distribution.py --bed $i
+    --fastq $(echo $i | cut -d '.' -f1).fastq -l 76
+    -x /dcl01/leek/data/railsims/indexes_for_paper/genome
+    >$i.error_distribution &
+); done
+
+from the directory containing the 112 Flux BEDs/FASTQs to obtain all error
+distributions. Replace
+/dcl01/leek/data/railsims/indexes_for_paper/genome with the path to the
+Bowtie 1 index for the genome from which the Flux simulations sampled reads.
 """
 
 from count_introns import BowtieIndexReference
@@ -97,7 +111,7 @@ if __name__ == '__main__':
     distribution = [float(truths[i] - recalls[i]) / truths[i]
                         for i in xrange(args.length)]
     print 'Error rate distribution:'
-    print '\t'.join(distribution)
+    print '\t'.join([str(val) for val in distribution])
     if args.ignore_b_tails:
         print 'B-tail count: %d' % b_tail_count
         print 'B-tail proportion: %.12f' % (float(b_tail_count) / read_count)
