@@ -96,7 +96,8 @@ if __name__ == '__main__':
             )
     distribution = [float(truths[i] - recalls[i]) / truths[i]
                         for i in xrange(args.length)]
-    print 'Error rate distribution: %s' % distribution
+    print 'Error rate distribution:'
+    print '\t'.join(distribution)
     if args.ignore_b_tails:
         print 'B-tail count: %d' % b_tail_count
         print 'B-tail proportion: %.12f' % (float(b_tail_count) / read_count)
