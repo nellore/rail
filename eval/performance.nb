@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[     99690,       2544]
-NotebookOptionsPosition[     96438,       2433]
-NotebookOutlinePosition[     96797,       2449]
-CellTagsIndexPosition[     96754,       2446]
+NotebookDataLength[    116868,       3035]
+NotebookOptionsPosition[    113408,       2918]
+NotebookOutlinePosition[    113766,       2934]
+CellTagsIndexPosition[    113723,       2931]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -71,7 +71,8 @@ Cell[BoxData[
 
 Cell[BoxData["52609404"], "Output",
  CellChangeTimes->{
-  3.647775318437833*^9, {3.647835244885202*^9, 3.6478352534203672`*^9}}]
+  3.647775318437833*^9, {3.647835244885202*^9, 3.6478352534203672`*^9}, 
+   3.6478608063740473`*^9}]
 }, Open  ]],
 
 Cell[CellGroupData[{
@@ -82,7 +83,8 @@ Cell[BoxData[
 
 Cell[BoxData["12553184"], "Output",
  CellChangeTimes->{
-  3.647775311573119*^9, {3.647835244927513*^9, 3.6478352534569902`*^9}}]
+  3.647775311573119*^9, {3.647835244927513*^9, 3.6478352534569902`*^9}, 
+   3.6478608063907213`*^9}]
 }, Open  ]],
 
 Cell[CellGroupData[{
@@ -122,8 +124,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{1.*^7, 0}, {2.*^7, 1}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{70.42, 123.93}, {241.82481987648205`, 
-          245.7830290605321}}],
+         ImageSizeCache->{{68.04, 114.41000000000001`}, {205.74456683143248`, 
+          209.23698439929467`}}],
         StatusArea[#, 1]& ,
         TagBoxNote->"1"],
        StyleBox["1", {}, StripOnInput -> False]],
@@ -140,8 +142,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{2.*^7, 0}, {3.*^7, 69}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{123.43, 176.94}, {6.6665953610795725`, 
-          245.7830290605321}}],
+         ImageSizeCache->{{113.91000000000001`, 160.28000000000003`}, {
+          2.2601722168029426`, 209.23698439929467`}}],
         StatusArea[#, 69]& ,
         TagBoxNote->"69"],
        StyleBox["69", {}, StripOnInput -> False]],
@@ -158,8 +160,9 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{3.*^7, 0}, {4.*^7, 119}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{176.44, 229.95}, {-166.24386384142224`, 
-          245.7830290605321}}],
+         ImageSizeCache->{{159.78000000000003`, 
+          206.15000000000003`}, {-147.36070617630702`, 209.23698439929467`}}],
+        
         StatusArea[#, 119]& ,
         TagBoxNote->"119"],
        StyleBox["119", {}, StripOnInput -> False]],
@@ -176,8 +179,9 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{4.*^7, 0}, {5.*^7, 107}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{229.45, 
-          282.96000000000004`}, {-124.74535363282183`, 245.7830290605321}}],
+         ImageSizeCache->{{205.65000000000003`, 
+          252.02000000000004`}, {-111.45169536196062`, 209.23698439929467`}}],
+        
         StatusArea[#, 107]& ,
         TagBoxNote->"107"],
        StyleBox["107", {}, StripOnInput -> False]],
@@ -194,8 +198,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{5.*^7, 0}, {6.*^7, 150}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{282.46000000000004`, 
-          335.97}, {-273.44834854697336`, 245.7830290605321}}],
+         ImageSizeCache->{{251.52000000000004`, 
+          297.89000000000004`}, {-240.1256507800352, 209.23698439929467`}}],
         StatusArea[#, 150]& ,
         TagBoxNote->"150"],
        StyleBox["150", {}, StripOnInput -> False]],
@@ -212,8 +216,9 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{6.*^7, 0}, {7.*^7, 119}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{335.47, 388.98}, {-166.24386384142224`, 
-          245.7830290605321}}],
+         ImageSizeCache->{{297.39000000000004`, 
+          343.76000000000005`}, {-147.36070617630702`, 209.23698439929467`}}],
+        
         StatusArea[#, 119]& ,
         TagBoxNote->"119"],
        StyleBox["119", {}, StripOnInput -> False]],
@@ -230,8 +235,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{7.*^7, 0}, {8.*^7, 59}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{388.48, 441.99}, {41.24868720157994, 
-          245.7830290605321}}],
+         ImageSizeCache->{{343.26000000000005`, 389.63000000000005`}, {
+          32.18434789542491, 209.23698439929467`}}],
         StatusArea[#, 59]& ,
         TagBoxNote->"59"],
        StyleBox["59", {}, StripOnInput -> False]],
@@ -248,8 +253,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{8.*^7, 0}, {9.*^7, 17}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{441.49, 495.}, {186.49347293168148`, 
-          245.7830290605321}}],
+         ImageSizeCache->{{389.13000000000005`, 435.50000000000006`}, {
+          157.86588574563729`, 209.23698439929467`}}],
         StatusArea[#, 17]& ,
         TagBoxNote->"17"],
        StyleBox["17", {}, StripOnInput -> False]],
@@ -266,8 +271,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{9.*^7, 0}, {1.*^8, 12}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{494.5, 548.01}, {203.78451885193167`, 
-          245.7830290605321}}],
+         ImageSizeCache->{{435.00000000000006`, 481.37000000000006`}, {
+          172.82797358494827`, 209.23698439929467`}}],
         StatusArea[#, 12]& ,
         TagBoxNote->"12"],
        StyleBox["12", {}, StripOnInput -> False]],
@@ -284,8 +289,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{1.*^8, 0}, {1.1*^8, 5}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{547.51, 601.02}, {227.99198314028192`, 
-          245.7830290605321}}],
+         ImageSizeCache->{{480.87000000000006`, 527.24}, {193.7748965599837, 
+          209.23698439929467`}}],
         StatusArea[#, 5]& ,
         TagBoxNote->"5"],
        StyleBox["5", {}, StripOnInput -> False]],
@@ -302,8 +307,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{1.1*^8, 0}, {1.2*^8, 6}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{600.52, 654.03}, {224.53377395623187`, 
-          245.7830290605321}}],
+         ImageSizeCache->{{526.74, 573.11}, {190.78247899212147`, 
+          209.23698439929467`}}],
         StatusArea[#, 6]& ,
         TagBoxNote->"6"],
        StyleBox["6", {}, StripOnInput -> False]],
@@ -320,8 +325,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{1.4*^8, 0}, {1.5*^8, 1}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{759.55, 813.06}, {241.82481987648205`, 
-          245.7830290605321}}],
+         ImageSizeCache->{{664.35, 710.72}, {205.74456683143248`, 
+          209.23698439929467`}}],
         StatusArea[#, 1]& ,
         TagBoxNote->"1"],
        StyleBox["1", {}, StripOnInput -> False]],
@@ -338,8 +343,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{1.5*^8, 0}, {1.6*^8, 1}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{812.56, 866.0699999999999}, {241.82481987648205`, 
-          245.7830290605321}}],
+         ImageSizeCache->{{710.22, 756.59}, {205.74456683143248`, 
+          209.23698439929467`}}],
         StatusArea[#, 1]& ,
         TagBoxNote->"1"],
        StyleBox["1", {}, StripOnInput -> False]],
@@ -356,8 +361,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{1.6*^8, 0}, {1.7*^8, 1}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{865.5699999999999, 919.0799999999999}, {
-          241.82481987648205`, 245.7830290605321}}],
+         ImageSizeCache->{{756.09, 802.46}, {205.74456683143248`, 
+          209.23698439929467`}}],
         StatusArea[#, 1]& ,
         TagBoxNote->"1"],
        StyleBox["1", {}, StripOnInput -> False]],
@@ -386,7 +391,7 @@ Cell[BoxData[
   Ticks->{Automatic, Automatic}]], "Output",
  CellChangeTimes->{
   3.6477753311239653`*^9, 3.64777538990326*^9, {3.647835245087232*^9, 
-   3.647835253540019*^9}}]
+   3.647835253540019*^9}, 3.647860806505577*^9}]
 }, Open  ]],
 
 Cell[BoxData[
@@ -451,8 +456,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{0., 0}, {5., 38216}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{123.34000000000002`, 158.4626086956522}, {
-          45.61544210398458, 230.4091936680376}}],
+         ImageSizeCache->{{120.96000000000001`, 151.11565217391305`}, {
+          34.50816348991091, 192.8631490068002}}],
         StatusArea[#, 38216]& ,
         TagBoxNote->"38216"],
        StyleBox["38216", {}, StripOnInput -> False]],
@@ -469,8 +474,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{5., 0}, {10., 18349}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{157.9626086956522, 193.08521739130435`}, {
-          141.42253762217177`, 230.4091936680376}}],
+         ImageSizeCache->{{150.61565217391305`, 180.77130434782612`}, {
+          116.57078117004592`, 192.8631490068002}}],
         StatusArea[#, 18349]& ,
         TagBoxNote->"18349"],
        StyleBox["18349", {}, StripOnInput -> False]],
@@ -487,8 +492,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{10., 0}, {15., 12049}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{192.58521739130435`, 227.70782608695654`}, {
-          171.8038081594738, 230.4091936680376}}],
+         ImageSizeCache->{{180.27130434782612`, 210.42695652173916`}, {
+          142.5935571998869, 192.8631490068002}}],
         StatusArea[#, 12049]& ,
         TagBoxNote->"12049"],
        StyleBox["12049", {}, StripOnInput -> False]],
@@ -505,8 +510,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{15., 0}, {20., 9122}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{227.20782608695654`, 262.33043478260873`}, {
-          185.9190428995822, 230.4091936680376}}],
+         ImageSizeCache->{{209.92695652173916`, 240.0826086956522}, {
+          154.6838215553384, 192.8631490068002}}],
         StatusArea[#, 9122]& ,
         TagBoxNote->"9122"],
        StyleBox["9122", {}, StripOnInput -> False]],
@@ -523,8 +528,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{20., 0}, {25., 7750}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{261.83043478260873`, 296.9530434782609}, {
-          192.5354084832613, 230.4091936680376}}],
+         ImageSizeCache->{{239.5826086956522, 269.73826086956524`}, {
+          160.351003890726, 192.8631490068002}}],
         StatusArea[#, 7750]& ,
         TagBoxNote->"7750"],
        StyleBox["7750", {}, StripOnInput -> False]],
@@ -541,8 +546,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{25., 0}, {30., 6794}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{296.4530434782609, 331.57565217391306`}, {
-          197.1456457266995, 230.4091936680376}}],
+         ImageSizeCache->{{269.23826086956524`, 299.3939130434783}, {
+          164.2998568882701, 192.8631490068002}}],
         StatusArea[#, 6794]& ,
         TagBoxNote->"6794"],
        StyleBox["6794", {}, StripOnInput -> False]],
@@ -559,8 +564,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{30., 0}, {35., 6068}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{331.07565217391306`, 366.1982608695653}, {
-          200.64672547433148`, 230.4091936680376}}],
+         ImageSizeCache->{{298.8939130434783, 329.0495652173914}, {
+          167.29867203075653`, 192.8631490068002}}],
         StatusArea[#, 6068]& ,
         TagBoxNote->"6068"],
        StyleBox["6068", {}, StripOnInput -> False]],
@@ -577,8 +582,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{35., 0}, {40., 5501}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{365.6982608695653, 400.82086956521744`}, {
-          203.38103982268865`, 230.4091936680376}}],
+         ImageSizeCache->{{328.5495652173914, 358.7052173913044}, {
+          169.64072187344223`, 192.8631490068002}}],
         StatusArea[#, 5501]& ,
         TagBoxNote->"5501"],
        StyleBox["5501", {}, StripOnInput -> False]],
@@ -595,8 +600,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{40., 0}, {45., 4883}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{400.32086956521744`, 435.44347826086965`}, {
-          206.36129778968115`, 230.4091936680376}}],
+         ImageSizeCache->{{358.2052173913044, 388.3608695652175}, {
+          172.19343228398853`, 192.8631490068002}}],
         StatusArea[#, 4883]& ,
         TagBoxNote->"4883"],
        StyleBox["4883", {}, StripOnInput -> False]],
@@ -613,8 +618,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{45., 0}, {50., 4524}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{434.94347826086965`, 470.0660869565218}, {
-          208.09254796791788`, 230.4091936680376}}],
+         ImageSizeCache->{{387.8608695652175, 418.01652173913055`}, {
+          173.6763174577525, 192.8631490068002}}],
         StatusArea[#, 4524]& ,
         TagBoxNote->"4524"],
        StyleBox["4524", {}, StripOnInput -> False]],
@@ -631,8 +636,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{50., 0}, {55., 4445}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{469.5660869565218, 504.688695652174}, {
-          208.47351945560786`, 230.4091936680376}}],
+         ImageSizeCache->{{417.51652173913055`, 447.6721739130436}, {
+          174.00263480796795`, 192.8631490068002}}],
         StatusArea[#, 4445]& ,
         TagBoxNote->"4445"],
        StyleBox["4445", {}, StripOnInput -> False]],
@@ -649,8 +654,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{55., 0}, {60., 4384}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{504.188695652174, 539.3113043478261}, {
-          208.76768731319123`, 230.4091936680376}}],
+         ImageSizeCache->{{447.1721739130436, 477.32782608695663`}, {
+          174.25460136952674`, 192.8631490068002}}],
         StatusArea[#, 4384]& ,
         TagBoxNote->"4384"],
        StyleBox["4384", {}, StripOnInput -> False]],
@@ -667,8 +672,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{60., 0}, {65., 4275}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{538.8113043478261, 573.9339130434784}, {
-          209.2933315177255, 230.4091936680376}}],
+         ImageSizeCache->{{476.82782608695663`, 506.9834782608697}, {
+          174.7048367008367, 192.8631490068002}}],
         StatusArea[#, 4275]& ,
         TagBoxNote->"4275"],
        StyleBox["4275", {}, StripOnInput -> False]],
@@ -685,8 +690,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{65., 0}, {70., 4214}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{573.4339130434784, 608.5565217391305}, {
-          209.5874993753089, 230.4091936680376}}],
+         ImageSizeCache->{{506.4834782608697, 536.6391304347827}, {
+          174.95680326239545`, 192.8631490068002}}],
         StatusArea[#, 4214]& ,
         TagBoxNote->"4214"],
        StyleBox["4214", {}, StripOnInput -> False]],
@@ -703,8 +708,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{70., 0}, {75., 4234}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{608.0565217391305, 643.1791304347827}, {
-          209.49105089741272`, 230.4091936680376}}],
+         ImageSizeCache->{{536.1391304347827, 566.2947826086958}, {
+          174.87419127499913`, 192.8631490068002}}],
         StatusArea[#, 4234]& ,
         TagBoxNote->"4234"],
        StyleBox["4234", {}, StripOnInput -> False]],
@@ -721,8 +726,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{75., 0}, {80., 4239}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{642.6791304347827, 677.8017391304348}, {
-          209.46693877793868`, 230.4091936680376}}],
+         ImageSizeCache->{{565.7947826086958, 595.9504347826088}, {
+          174.85353827815007`, 192.8631490068002}}],
         StatusArea[#, 4239]& ,
         TagBoxNote->"4239"],
        StyleBox["4239", {}, StripOnInput -> False]],
@@ -739,8 +744,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{80., 0}, {85., 4426}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{677.3017391304348, 712.424347826087}, {
-          208.56514550960924`, 230.4091936680376}}],
+         ImageSizeCache->{{595.4504347826088, 625.6060869565218}, {
+          174.08111619599447`, 192.8631490068002}}],
         StatusArea[#, 4426]& ,
         TagBoxNote->"4426"],
        StyleBox["4426", {}, StripOnInput -> False]],
@@ -757,8 +762,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{85., 0}, {90., 4559}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{711.924347826087, 747.0469565217393}, {
-          207.92376313159951`, 230.4091936680376}}],
+         ImageSizeCache->{{625.1060869565218, 655.261739130435}, {
+          173.53174647980893`, 192.8631490068002}}],
         StatusArea[#, 4559]& ,
         TagBoxNote->"4559"],
        StyleBox["4559", {}, StripOnInput -> False]],
@@ -775,8 +780,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{90., 0}, {95., 4905}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{746.5469565217393, 781.6695652173914}, {
-          206.2552044639953, 230.4091936680376}}],
+         ImageSizeCache->{{654.761739130435, 684.917391304348}, {
+          172.10255909785258`, 192.8631490068002}}],
         StatusArea[#, 4905]& ,
         TagBoxNote->"4905"],
        StyleBox["4905", {}, StripOnInput -> False]],
@@ -793,8 +798,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{95., 0}, {100., 5889}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{781.1695652173914, 816.2921739130436}, {
-          201.50993935150242`, 230.4091936680376}}],
+         ImageSizeCache->{{684.417391304348, 714.5730434782611}, {
+          168.0380493179536, 192.8631490068002}}],
         StatusArea[#, 5889]& ,
         TagBoxNote->"5889"],
        StyleBox["5889", {}, StripOnInput -> False]],
@@ -811,8 +816,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{100., 0}, {105., 7508}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{815.7921739130436, 850.9147826086958}, {
-          193.70243506580528`, 230.4091936680376}}],
+         ImageSizeCache->{{714.0730434782611, 744.2286956521741}, {
+          161.35060893822146`, 192.8631490068002}}],
         StatusArea[#, 7508]& ,
         TagBoxNote->"7508"],
        StyleBox["7508", {}, StripOnInput -> False]],
@@ -829,8 +834,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{105., 0}, {110., 12355}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{850.4147826086958, 885.5373913043479}, {
-          170.32814644766196`, 230.4091936680376}}],
+         ImageSizeCache->{{743.7286956521741, 773.8843478260872}, {
+          141.3295937927232, 192.8631490068002}}],
         StatusArea[#, 12355]& ,
         TagBoxNote->"12355"],
        StyleBox["12355", {}, StripOnInput -> False]],
@@ -847,8 +852,8 @@ Cell[BoxData[
              AbsoluteThickness[1.5], 
              Opacity[0.66]}], {}, {}], 
           RectangleBox[{110., 0}, {115., 100992}, "RoundingRadius" -> 0]},
-         ImageSizeCache->{{885.0373913043479, 
-          920.1600000000001}, {-257.11704031659826`, 230.40919366803757`}}],
+         ImageSizeCache->{{773.3843478260872, 
+          803.5400000000002}, {-224.79434254966003`, 192.8631490068002}}],
         StatusArea[#, 100992]& ,
         TagBoxNote->"100992"],
        StyleBox["100992", {}, StripOnInput -> False]],
@@ -876,7 +881,8 @@ Cell[BoxData[
      Scaled[0.05]}},
   Ticks->{Automatic, Automatic}]], "Output",
  CellChangeTimes->{{3.647799623483973*^9, 3.647799650346998*^9}, 
-   3.647799736076866*^9, {3.647835248461413*^9, 3.647835256916109*^9}}]
+   3.647799736076866*^9, {3.647835248461413*^9, 3.647835256916109*^9}, 
+   3.64786081013386*^9}]
 }, Open  ]],
 
 Cell[BoxData[
@@ -903,7 +909,8 @@ Cell[BoxData["\<\"NA20768_female_TSI_HMGU_5-1-1\"\>"], "Output",
    3.615205919975708*^9, {3.6153634281384277`*^9, 3.6153634499790077`*^9}, 
    3.623515928918*^9, 3.63178608992249*^9, 3.636637727429554*^9, 
    3.637871143726165*^9, 3.639215408060565*^9, 3.647833923905827*^9, 
-   3.6478339736803503`*^9, {3.64783524850871*^9, 3.647835256987919*^9}}]
+   3.6478339736803503`*^9, {3.64783524850871*^9, 3.647835256987919*^9}, 
+   3.647860810191711*^9}]
 }, Open  ]],
 
 Cell[CellGroupData[{
@@ -938,7 +945,7 @@ perform_true\"\>",
 "}], "}"}]], "Output",
  CellChangeTimes->{{3.647834501783121*^9, 3.6478345495717983`*^9}, 
    3.647834599297079*^9, {3.647834634949925*^9, 3.647834648660153*^9}, {
-   3.647835248528429*^9, 3.647835257005726*^9}}]
+   3.647835248528429*^9, 3.647835257005726*^9}, 3.647860810219552*^9}]
 }, Open  ]],
 
 Cell[CellGroupData[{
@@ -994,7 +1001,7 @@ perform_true\"\>",
    3.636638293842999*^9, 3.637871146354697*^9, 3.639215410350952*^9, 
    3.639215903209331*^9, {3.6478339487950697`*^9, 3.647833975524356*^9}, 
    3.6478347113786297`*^9, 3.6478349600257072`*^9, {3.647835248560402*^9, 
-   3.647835257043548*^9}}]
+   3.647835257043548*^9}, 3.6478608102530193`*^9}]
 }, Open  ]],
 
 Cell[BoxData[
@@ -1327,7 +1334,424 @@ nR5v69P7fwG69Omv
    3.636638299772678*^9, 3.6366390856090937`*^9, 3.637871152974581*^9, 
    3.6392154194031267`*^9, {3.6392158931067543`*^9, 3.639215908683201*^9}, 
    3.647834723185789*^9, 3.6478349659447107`*^9, {3.647835248874959*^9, 
-   3.6478352572062674`*^9}}]
+   3.6478352572062674`*^9}, 3.647860810483491*^9}]
+}, Open  ]],
+
+Cell[BoxData[
+ RowBox[{"(*", 
+  RowBox[{
+  "Get", " ", "color", " ", "matchups", " ", "for", " ", "constructing", " ", 
+   "legend", " ", "in", " ", "Keynote"}], "*)"}]], "Input",
+ CellChangeTimes->{{3.647860411514707*^9, 3.647860420633588*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"Transpose", "[", 
+  RowBox[{"{", 
+   RowBox[{"allTrueStatsFiles", ",", " ", 
+    RowBox[{
+     RowBox[{"ColorData", "[", 
+      RowBox[{"97", ",", "\"\<ColorList\>\""}], "]"}], "[", 
+     RowBox[{"[", 
+      RowBox[{"Range", "[", 
+       RowBox[{"1", ",", "8"}], "]"}], "]"}], "]"}]}], "}"}], "]"}]], "Input",\
+
+ CellChangeTimes->{{3.647860442391321*^9, 3.647860459278656*^9}, {
+  3.647860712603956*^9, 3.647860722438182*^9}, {3.647860753363618*^9, 
+  3.6478607551837273`*^9}}],
+
+Cell[BoxData[
+ RowBox[{"{", 
+  RowBox[{
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/NA20768_female_TSI_HMGU_5-1-1_hisat_noann_paired_\
+1pass_perform_true\"\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.368417, 0.506779, 0.709798], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          
+          FrameStyle->RGBColor[
+           0.24561133333333335`, 0.3378526666666667, 0.4731986666666667],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.368417, 0.506779, 0.709798]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.368417, 0.506779, 0.709798]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.368417, 0.506779, 0.709798],
+      Editable->False,
+      Selectable->False]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/NA20768_female_TSI_HMGU_5-1-1_hisat_noann_paired_\
+2pass_perform_true\"\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.880722, 0.611041, 0.142051], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          
+          FrameStyle->RGBColor[
+           0.587148, 0.40736066666666665`, 0.09470066666666668],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.880722, 0.611041, 0.142051]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.880722, 0.611041, 0.142051]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.880722, 0.611041, 0.142051],
+      Editable->False,
+      Selectable->False]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/NA20768_female_TSI_HMGU_5-1-1_star_noann_paired_\
+1pass_perform_true\"\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.560181, 0.691569, 0.194885], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          
+          FrameStyle->RGBColor[
+           0.37345400000000006`, 0.461046, 0.12992333333333334`],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.560181, 0.691569, 0.194885]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.560181, 0.691569, 0.194885]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.560181, 0.691569, 0.194885],
+      Editable->False,
+      Selectable->False]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/NA20768_female_TSI_HMGU_5-1-1_star_nogen_noann_\
+paired_2pass_perform_true\"\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.922526, 0.385626, 0.209179], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          
+          FrameStyle->RGBColor[
+           0.6150173333333333, 0.25708400000000003`, 0.13945266666666667`],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.922526, 0.385626, 0.209179]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.922526, 0.385626, 0.209179]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.922526, 0.385626, 0.209179],
+      Editable->False,
+      Selectable->False]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/NA20768_female_TSI_HMGU_5-1-1_tophat_noann_paired_\
+perform_true\"\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.528488, 0.470624, 0.701351], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          
+          FrameStyle->RGBColor[
+           0.3523253333333333, 0.3137493333333333, 0.46756733333333333`],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.528488, 0.470624, 0.701351]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.528488, 0.470624, 0.701351]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.528488, 0.470624, 0.701351],
+      Editable->False,
+      Selectable->False]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/NA20768_female_TSI_HMGU_5-1-1_subjunc_perform_true\"\
+\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.772079, 0.431554, 0.102387], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          
+          FrameStyle->RGBColor[
+           0.5147193333333333, 0.28770266666666666`, 0.06825800000000001],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.772079, 0.431554, 0.102387]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.772079, 0.431554, 0.102387]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.772079, 0.431554, 0.102387],
+      Editable->False,
+      Selectable->False]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/NA20768_female_TSI_HMGU_5-1-1_rail_perform_true\"\>",
+      ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.363898, 0.618501, 0.782349], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          FrameStyle->RGBColor[0.24259866666666668`, 0.412334, 0.521566],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.363898, 0.618501, 0.782349]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.363898, 0.618501, 0.782349]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.363898, 0.618501, 0.782349],
+      Editable->False,
+      Selectable->False]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/withfilter_NA20768_female_TSI_HMGU_5-1-1_perform_\
+true\"\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[1, 0.75, 0], RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          FrameStyle->RGBColor[0.6666666666666666, 0.5, 0.],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[1, 0.75, 0]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = RGBColor[1, 0.75, 0]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[1, 0.75, 0],
+      Editable->False,
+      Selectable->False]}], "}"}]}], "}"}]], "Output",
+ CellChangeTimes->{3.647860723359507*^9, 3.647860755952258*^9, 
+  3.647860810722755*^9}]
 }, Open  ]],
 
 Cell[CellGroupData[{
@@ -1358,7 +1782,8 @@ true\"\>",
    ",", "\<\"harvest/withfilter_NA20768_female_TSI_HMGU_5-1-1_perform_true\"\>\
 "}], "}"}]], "Output",
  CellChangeTimes->{{3.6478350659321632`*^9, 3.64783507538776*^9}, 
-   3.647835131851512*^9, {3.647835248921381*^9, 3.647835257224202*^9}}]
+   3.647835131851512*^9, {3.647835248921381*^9, 3.647835257224202*^9}, 
+   3.6478608108516607`*^9}]
 }, Open  ]],
 
 Cell[BoxData[
@@ -1564,180 +1989,234 @@ nR5v69P7fwG69Omv
   3.639215725607979*^9, {3.639215757960202*^9, 3.639215793476012*^9}, {
    3.6392158331044607`*^9, 3.639215848252993*^9}, {3.639215926813806*^9, 
    3.6392159686328363`*^9}, 3.647835145643674*^9, {3.647835249055031*^9, 
-   3.6478352574211683`*^9}}]
+   3.6478352574211683`*^9}, 3.6478608109873247`*^9}]
 }, Open  ]],
+
+Cell[BoxData[
+ RowBox[{"(*", 
+  RowBox[{
+  "Get", " ", "color", " ", "matchups", " ", "for", " ", "constructing", " ", 
+   "legend", " ", "in", " ", "Keynote"}], "*)"}]], "Input",
+ CellChangeTimes->{{3.647860411514707*^9, 3.647860420633588*^9}}],
 
 Cell[CellGroupData[{
 
 Cell[BoxData[
- RowBox[{"ListPlot", "[", 
-  RowBox[{
-   RowBox[{"Table", "[", 
+ RowBox[{"Transpose", "[", 
+  RowBox[{"{", 
+   RowBox[{"allTrueStatsFilesAnn", ",", " ", 
     RowBox[{
-     RowBox[{
-      RowBox[{
-       RowBox[{
-        RowBox[{"N", "[", 
-         RowBox[{"#", "[", 
-          RowBox[{"[", "4", "]"}], "]"}], "]"}], "/", 
-        RowBox[{"#", "[", 
-         RowBox[{"[", "2", "]"}], "]"}]}], "&"}], "/@", 
-      RowBox[{"accumulated", "[", 
-       RowBox[{"[", "i", "]"}], "]"}]}], ",", " ", 
-     RowBox[{"{", 
-      RowBox[{"i", ",", " ", "1", ",", " ", 
-       RowBox[{"Length", "[", "allTrueStats", "]"}]}], "}"}]}], "]"}], ",", 
-   " ", 
-   RowBox[{"Joined", "\[Rule]", "True"}], ",", " ", 
-   RowBox[{"PlotStyle", "\[Rule]", 
-    RowBox[{"Thickness", "[", ".003", "]"}]}], ",", " ", 
-   RowBox[{"PlotRange", "\[Rule]", 
-    RowBox[{"{", 
-     RowBox[{"All", ",", " ", 
-      RowBox[{"{", 
-       RowBox[{"0.3", ",", " ", "1"}], "}"}]}], "}"}]}], ",", " ", 
-   RowBox[{"Frame", "\[Rule]", "True"}], ",", " ", 
-   RowBox[{"FrameStyle", "\[Rule]", "White"}], ",", 
-   RowBox[{"ImageSize", "\[Rule]", "Full"}], ",", 
-   RowBox[{"BaseStyle", "\[Rule]", 
-    RowBox[{"{", 
-     RowBox[{
-      RowBox[{"FontName", "\[Rule]", "\"\<Arial\>\""}], ",", " ", 
-      RowBox[{"FontSize", "\[Rule]", "30"}]}], "}"}]}], ",", " ", 
-   RowBox[{"Background", "\[Rule]", "None"}]}], "]"}]], "Input"],
+     RowBox[{"ColorData", "[", 
+      RowBox[{"97", ",", "\"\<ColorList\>\""}], "]"}], "[", 
+     RowBox[{"[", 
+      RowBox[{"Range", "[", 
+       RowBox[{"1", ",", "4"}], "]"}], "]"}], "]"}]}], "}"}], "]"}]], "Input",\
+
+ CellChangeTimes->{{3.647860442391321*^9, 3.647860459278656*^9}, {
+  3.647860712603956*^9, 3.647860722438182*^9}, {3.647860753363618*^9, 
+  3.6478607551837273`*^9}, {3.647860799622658*^9, 3.647860802366846*^9}}],
 
 Cell[BoxData[
- GraphicsBox[{{}, {{}, {}, 
-    {RGBColor[0.368417, 0.506779, 0.709798], PointSize[0.011111111111111112`],
-      Thickness[0.003], 
-     StyleBox[LineBox[CompressedData["
-1:eJw9039Qk3UcB/CdP8pDr2ROjxZdgMrtbEyg8UPEeLOBwzFgGwwmZ550gWH8
-cPAHS0oW4uGREuQvKL2kAJ2AlECTgrsHyigriWo0OqQ6CUo9KGT80KDs8vN5
-7p577vW87/N8n+fzfL6+L+QbM5eIRKIXH5z/Xf8//oy64HmqWFp3O+rhDXSO
-7DrjX0FegX5XtPWklbwa9StfdW3eR5Yg1PvXQPteshcGXz4gE2eSvRHZ2HP6
-djbZBw07P2uz55D9sL5jKPHOfvIGJGUcUV8tIvtjbMbHdZXXlyE88Ou8fvYm
-dCmnfcOKyXJ4LMS/cuggWYFwj7UTQzZyIHRjwfm6Q+Qg+DgDfhsvIwfj4k1X
-w+fl5GcxPDuW88hRshLlJyLEpmPkEFhku9/46E1yKFqyLQGDVeQwZGyJUywe
-J4ejdSFCtP8keQty+yqil5wiRyBAopyd5XwrXjJPXrlfQ47EgGNauPsOeRvO
-uR8bGT1Dfg7fT396wvEuOQrXPgz2ijpHBiJDO+eL33toG9AbM5e1up7yaDi7
-BNOtBsqj0VtYLX37POUqrJPUSZvINhXkP+V6ay5QrkZNTU3hRjvlaoxeO9xo
-JIti0NaUXSLlPAbLvOqH5ZzHQu8+L1FyHovdwobrxy9Svh17q3v+GiDbtkNe
-kpUe2ky5Bi1xiz9cJts0KFAfWC/nPA5zc63ifM7j0FF6IyasifIdEAoM6U/w
-83egZeAfx0p+Py30mmceNdH32rQI6dEv/5b7Ew/546dnmjiPx9OhQeNV3B8d
-Dja03Zrj/ulQerQn9inOE2B0a1Y5uD4Bv+wZ/uN9zhORuVDpXMZ5Iiwheanf
-NFKeBPvHZp91/PwkjH7SneDJ76dHSfdXKi0ZelQXLVruUb1ND1VFW0czWdCj
-7tLMvRmaB5EB0vSqrm1kGOCsNBzup/mxGWDuyHL4Ui4YsHlqao+V58sImdat
-2Mj1RgTfj7T8zvVGbFrqb1eRBSP2rdoqLuP6ZCx/qzVXT0Yyei9pu4N4XpOh
-uFM+1M7rJ2OirHZQy/1JwVmXvnCe109B88Dk5I9cnwL/pfMJT/L3p0D2ZUHp
-Ma43QeVc0HmTYcLrrR/8Pc79M6H+SFG8H/VXMKHyC/ddE/c/FVdqVfY+7n8q
-Om9aIob4f6Wiq33khpr+r5CK5z3Ea3bx/KWhtOTydzKaT6ShsF83OsH7JQ3i
-nNcyeikX0mCdUtR28P4xYyJPeTaf5h1meLb/nDFPtplRt1YCFe0PwYzrVkvY
-EO+fnfCL7e4rfOB/Ady1AOU=
-       "]],
-      FontSize->30]}, 
-    {RGBColor[0.880722, 0.611041, 0.142051], PointSize[0.011111111111111112`],
-      Thickness[0.003], 
-     StyleBox[LineBox[CompressedData["
-1:eJxF0g9Q02UYB/Cpp0aWlhIttMCOK44cwbRZIO4rDnAbm2MbGx3KlUlwHW0u
-1EOd3e+yYXJynRrskEQIlDzsKDqlKeaCyzABEWjyRxhiC80QUhFCpeziedrd
-bvfZ9/f9vfe+77N4g1WfPl0kEm189P3397/PiHxQkru5b+CmfOoPjIYWt3d1
-kR/D27sf3/xpI/kp/N1z/8LRs2R/VH22tzOvjiyGRBUjX/8deRFqpPeOXXKR
-g3F9f1t5wwnyi/BkVFvtnIdgwcszPH5nyC9h2jve7hm8Xih0S+purHOTwxDm
-8P5a3EBegtgJpTPtJ3I4HrrGg2aeJ0cgvODiE9cukCOxI7NMfoQtRe7PGc8/
-10peislCR8VIG3kZpCbZ9Ar2a3gQvs8u7iDLMDlU/cdQO3k5PN7ZpvJfyK9D
-fipr7h32G+hviai8zo6CuTyy1s2ORuytmfFOD3kFKh3KraZOcgwGDb5dmXxf
-K5H6QZlT00OWo3NPQXorGzjQ7HPt6Z2yANgP7y39s4/yVfAPLtFZvJSvwtZp
-Pds29lMei8ZUe4ea81g0PdP+w/dk0WrUpeXfC6DnhdVYmWYJ2M99BYqKqkZt
-nCtwXPd1gJnzOJSec805w3kc7kaMj+ZcpTwew/ItJ01kIR4fy66taOY8AfsW
-Zs/O5zwBl+ff7NBzvgaBD9STXn7/Gog3fTJh4PWVEJaOTcTx/pTYIQ7aZaPz
-EqmQV18rcV2hXIWE4JaQNj5fNVIOPLlewbkaXxU2HsziPBFBTbk5I92UJ8J3
-0Lg7jizSoGbYv2Ue5xo0akKzR/l+teh4L9s6QBa08C0b2HCW52EtdkrM0Xlk
-YS0wcbqzgnMdbLMCs46RoUPqop2VSn5eB7UxRnb/8pTdOgzLfs/VkkVJKHs6
-pGguGUnw69dELiALSbAeP1Si5H4SbBeFw708v3oU/HW01cF9PbS2b243Uy7o
-EVi9vUpBdutxZHyoXsN9A1SOxMF1ZBjQ9Gz8YvD6BnyruBGzidc3YOGVqNpI
-3r8RNbrBk2LevxEZrvNd1dw3IsrZHfIK5W4jctySPgv3k9Eyf3nNHO4no974
-MPb/806GryJfWcj9ZLxwVfjyI+6bsF37lsTHfRMyVb3157hvwsSlW6+G0v26
-TTCHjbma+P7NsHxRPGsLzQfMmHdC71fC82LG54E/jqfTvLnNkP62zWPl+UtB
-g/392xKaT6Tg1IdK52me1xS4coqjpTTv7hSMHfKvsvD8v4m0d51C6SP/Ay7W
-GYo=
-       "]],
-      FontSize->30]}, 
-    {RGBColor[0.560181, 0.691569, 0.194885], PointSize[0.011111111111111112`],
-      Thickness[0.003], 
-     StyleBox[LineBox[CompressedData["
-1:eJxF039Qk3UcB/ABFYQt+YMQEQ+WnCBw4FJRsbk3jDE2FPaD/RBTw+U/mJB4
-Cued+WQphx6ImDIZYCAL+RHJIsChuNSICK475UeXHiXFFUHlkaBiZ9nl5+Pu
-ntu99n7ed999ns8j2Z6r3+EpEoneenL99/3/565cUtUReOPib/KnP2CP90zK
-8+fIPjie0F8af5Lsh6M2+TaPIrI/gqp/9lUdIwfiy9iwoqij5GDcrNNE5ZWQ
-QzE7uTLfWkZ+FVdC7tVkniKHQdNenVVymrwUqR+mP7jGeQS+vteg+Y4dCUdC
-wPVNZ8jRuJ9dU3i+khyDhN4qcdVZ8nI4Ho/t/qCGLMVHUYErKtivodY/wrCv
-lrwC6vCK2QEHeSUKt0YeuMVeBXVAoOVSPTkO2fYAfWIDeTVyp8oViibyGpSn
-meTGZvJaZCV2jHQ1kuMRskf/zxB7HULf73lO/An5dYxnjZZ2fkqWwWx22mQX
-yOsxfKI0vdlJlsMaJ5XcZQPzOq5NadqeWgC+j90/tuhzyhPQ1uNsC2+nPAE3
-Xca+1g7KE7HmdpDOQhYS8ahhvKCXcwVcwXMLc2mfBAXOJh1RLOf9SsK74nkL
-PDhPQl57pGy2k3IlHtZfNfdwrsSbItVWny7Kk2E/7SXpJwvJiEl+4/zAJcpV
-yM+Pzm4lCypMDtnsbu6n4Nd99pZl3E9B9/wtkfEuytUQXFNNc3QeQY2mSe2i
-Rv5/GihfWOxdw/PR4CW736E7PL9UqBb7vZjJeSrGZEsvfMP5BkhUudUFZGED
-erfs/bOY842YiRl9dIzzjSgpzplfzXkaYhujRb/w80tDy4I+H+EzytNxWXPm
-78NkIR0xu2fGIzjXIigxuSKTDC322vOjlvD9WoxfLtrcSvvi1qK7M3RWxPuj
-g7pf6pHXSn0d+m6otjlp/wQdXlldo1hGuVsHx+2+3yt5P/UQlzaW+3Jfj6uw
-nbrFfT2k08dzz5HderSMjO7o574B65ApD+O+AU1L6naK6XyCAcWOrMM5fH4D
-nKi1TvD5MzD018MyfzIycFD2seezfgbKpl/2tHI/A65DxRUnuW+El2SkIJ77
-RoTUufcPct+IOZ/K4XCap9uIFne9VsnzN2GnONz7Os/fhIJh38orPH8TDhbu
-GlhIz9dtgjn4HeEnssiMr378QppH+wAztk/Yujbzvpgx0fyD2ov2z21Gq/Lt
-9c/20wLrkVXCt5TDgu4Hdx6/x++zBYNdg7siaP/dFsStzbk4zO/nJkwXGf/I
-eeJ/ARh6+L0=
-       "]],
-      FontSize->30]}, 
-    {RGBColor[0.922526, 0.385626, 0.209179], PointSize[0.011111111111111112`],
-      Thickness[0.003], 
-     StyleBox[LineBox[CompressedData["
-1:eJw9zA1QkwUcx/FHrjQ5Muo8UKJNBhLtRBCQIRD8gMnrxt43PHmxyTA4CWWI
-sax7ztOb3dSbGmoE6YmVBhy3E0coLW6cJUSDDi1EODrLmkrlUbcGOsyu/Z/n
-bvfcZ7//94nQ1ykNAQzDVD79/ff+/3mYWfZRzK3Ly+9n+v9AQNXhyg9Okp/D
-veAD+i03ycGojeMnjy2QV+J7bX/CaOQDv1fhpGjC4U4jhyPWdtE2WEFeA96r
-6mVDDWQBIkSeqE4LOQqPnjidpjZyNMRWY0diBzkG/XEK2bUrZCF+3LWne/Aa
-eR06p3hrg26Q10PgfbFm9BdyPIIWlv/dN0vegOz6favHPOQE9PPS+M8EzPqd
-iNM9M0WyFeQk9E6d/5AJIW+Edbzv7svh5GTwBCNqXyRZBL3zW36DkJwCn8c8
-H7+evAlH3F0hng3kVAgPtCl/SCanwdv9ygsx6eR0nGgPebY2i/w6cs8PQp9N
-zsAdW6u5oYCcifyK1PT9EjKwmGv4pEPpNwtklo4/L9XQnoXiqLZEi472LMSW
-jQ0s2Up7Nh5M/vOagMxmw/NrdFJFGe052Oe738TfRnsO1r23+xRLZsS45MvY
-OMbtYoh5MX+I9LRvRm7KZ/fefYP2zfBWt/As3J4LY2fPk14ym4tm8/w31ytp
-z0NE12T2iIH2PDSNPA6cIjP5CDs61Gusoj0fZb9d+G4rtxfgfUWX3EHfYwvw
-9bnKr/Zvp70QDrH98lUyW4jAmkeiL7i+CLLSabOD+34R+J4/+bIdtEuwuE1+
-xkZmJVgTNnr7d26XYqhdes7L9VLMuHWfC7m9GKEBXbdSub4YdtehyDm6Z2SY
-apSe1nK7DMWBk9sXuF6OM6GtBuObfkOO4ZSD6Uur6V6OC4WGXjN5QI64ursj
-SWRGgWTzUfdVrldg7+qPH9ZwvQKjcVaTpIZ6BdYmHf60iswoMZzKb4nbSb0S
-CepNKybIrBI3ww/pgsgDSvjsGa38WupVcLlWBhznehXKRdb2U29Rr8LZVQ63
-oI56FXbabxyJ3UW9Gpkdi8Zo2qFGsysw7QqZVWP6tsqiovsBNY4Hd4qO7aZe
-A8nZ+ccHydCgxT4wHGKkXgNXxdAlSz31GoT19X1ZTWa0mLz+UqeJ7qFF69w7
-SeVcr0Wss3GHrYF6LeLL850ze6jXYVxmtRQ0Uq9Dv3BZ4RyZ1cHw8+yS6b3U
-62Dq5ilz3qa+BEtTJ/4yNlFfgovNP0XNk9kSHIuYcQtM1JegPi+rNJTMbEHb
-nR5v69P7fwG69Omv
-       "]],
-      FontSize->30]}}, {}},
-  AspectRatio->NCache[GoldenRatio^(-1), 0.6180339887498948],
-  Axes->{True, True},
-  AxesLabel->{None, None},
-  AxesOrigin->{0, 0.3035},
-  BaseStyle->{FontName -> "Arial", FontSize -> 30},
-  DisplayFunction->Identity,
-  Frame->{{True, True}, {True, True}},
-  FrameLabel->{{None, None}, {None, None}},
-  FrameStyle->GrayLevel[1],
-  FrameTicks->{{Automatic, Automatic}, {Automatic, Automatic}},
-  GridLines->{None, None},
-  GridLinesStyle->Directive[
-    GrayLevel[0.5, 0.4]],
-  ImageSize->Full,
-  Method->{},
-  PlotRange->{{0., 100.}, {0.3, 1}},
-  PlotRangeClipping->True,
-  PlotRangePadding->{{
-     Scaled[0.02], 
-     Scaled[0.02]}, {0, 0}},
-  Ticks->{Automatic, Automatic}]], "Output",
- CellChangeTimes->{{3.647835249205192*^9, 3.647835257465446*^9}}]
+ RowBox[{"{", 
+  RowBox[{
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/NA20768_female_TSI_HMGU_5-1-1_hisat_ann_paired_1pass_\
+perform_true\"\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.368417, 0.506779, 0.709798], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          
+          FrameStyle->RGBColor[
+           0.24561133333333335`, 0.3378526666666667, 0.4731986666666667],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.368417, 0.506779, 0.709798]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.368417, 0.506779, 0.709798]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.368417, 0.506779, 0.709798],
+      Editable->False,
+      Selectable->False]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/NA20768_female_TSI_HMGU_5-1-1_star_ann_paired_1pass_\
+perform_true\"\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.880722, 0.611041, 0.142051], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          
+          FrameStyle->RGBColor[
+           0.587148, 0.40736066666666665`, 0.09470066666666668],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.880722, 0.611041, 0.142051]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.880722, 0.611041, 0.142051]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.880722, 0.611041, 0.142051],
+      Editable->False,
+      Selectable->False]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/NA20768_female_TSI_HMGU_5-1-1_tophat_ann_paired_\
+perform_true\"\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.560181, 0.691569, 0.194885], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          
+          FrameStyle->RGBColor[
+           0.37345400000000006`, 0.461046, 0.12992333333333334`],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.560181, 0.691569, 0.194885]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.560181, 0.691569, 0.194885]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.560181, 0.691569, 0.194885],
+      Editable->False,
+      Selectable->False]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"harvest/withfilter_NA20768_female_TSI_HMGU_5-1-1_perform_\
+true\"\>", ",", 
+     InterpretationBox[
+      ButtonBox[
+       TooltipBox[
+        RowBox[{
+         GraphicsBox[{
+           {GrayLevel[0], RectangleBox[{0, 0}]}, 
+           {GrayLevel[0], RectangleBox[{1, -1}]}, 
+           {RGBColor[0.922526, 0.385626, 0.209179], 
+            RectangleBox[{0, -1}, {2, 1}]}},
+          AspectRatio->1,
+          Frame->True,
+          
+          FrameStyle->RGBColor[
+           0.6150173333333333, 0.25708400000000003`, 0.13945266666666667`],
+          FrameTicks->None,
+          
+          ImageSize->
+           Dynamic[{
+            Automatic, 1.35 CurrentValue["FontCapHeight"]/
+             AbsoluteCurrentValue[Magnification]}],
+          PlotRangePadding->None], "\[InvisibleSpace]"}],
+        "RGBColor[0.922526, 0.385626, 0.209179]"],
+       Appearance->None,
+       BaseStyle->{},
+       BaselinePosition->Baseline,
+       ButtonFunction:>With[{Typeset`box$ = EvaluationBox[]}, 
+         If[
+          Not[
+           AbsoluteCurrentValue["Deployed"]], 
+          SelectionMove[Typeset`box$, All, Expression]; 
+          FrontEnd`Private`$ColorSelectorInitialAlpha = 1; 
+          FrontEnd`Private`$ColorSelectorInitialColor = 
+           RGBColor[0.922526, 0.385626, 0.209179]; 
+          FrontEnd`Private`$ColorSelectorUseMakeBoxes = True; 
+          MathLink`CallFrontEnd[
+            FrontEnd`AttachCell[Typeset`box$, 
+             FrontEndResource["RGBColorValueSelector"], {0, {Left, Bottom}}, {
+             Left, Top}, 
+             "ClosingActions" -> {
+              "SelectionDeparture", "ParentChanged", "EvaluatorQuit"}]]]],
+       DefaultBaseStyle->{},
+       Evaluator->Automatic,
+       Method->"Preemptive"],
+      RGBColor[0.922526, 0.385626, 0.209179],
+      Editable->False,
+      Selectable->False]}], "}"}]}], "}"}]], "Output",
+ CellChangeTimes->{3.647860723359507*^9, 3.647860755952258*^9, 
+  3.647860811023884*^9}]
 }, Open  ]],
 
 Cell[BoxData[
@@ -1799,7 +2278,8 @@ Cell[BoxData[
   3.6317855189020233`*^9, 3.631785579356691*^9, 3.636622217086731*^9, 
    3.637855658744165*^9, 3.639217869526023*^9, 3.6470867747275667`*^9, 
    3.647086950892613*^9, 3.647089165576001*^9, 3.6470895385039883`*^9, 
-   3.6470898745130453`*^9, {3.647835249260951*^9, 3.6478352575155563`*^9}}]
+   3.6470898745130453`*^9, {3.647835249260951*^9, 3.6478352575155563`*^9}, 
+   3.647860811076058*^9}]
 }, Open  ]],
 
 Cell[CellGroupData[{
@@ -1822,7 +2302,8 @@ Cell[BoxData[
    RowBox[{"{", 
     RowBox[{"112.`", ",", "12.566666666666666`"}], "}"}]}], "}"}]], "Output",
  CellChangeTimes->{
-  3.647089881225729*^9, {3.647835249289349*^9, 3.6478352575429173`*^9}}]
+  3.647089881225729*^9, {3.647835249289349*^9, 3.6478352575429173`*^9}, 
+   3.6478608111182747`*^9}]
 }, Open  ]],
 
 Cell[BoxData[
@@ -1854,7 +2335,7 @@ Cell[BoxData[
    FractionBox["317", "60"]}], "}"}]], "Output",
  CellChangeTimes->{
   3.647087148254727*^9, 3.647089167240135*^9, 3.64708954034165*^9, {
-   3.6478352493274603`*^9, 3.647835257589229*^9}}]
+   3.6478352493274603`*^9, 3.647835257589229*^9}, 3.64786081116467*^9}]
 }, Open  ]],
 
 Cell[CellGroupData[{
@@ -1867,7 +2348,8 @@ Cell[BoxData[
  RowBox[{"{", 
   RowBox[{"28.`", ",", "5.283333333333333`"}], "}"}]], "Output",
  CellChangeTimes->{
-  3.647089886242898*^9, {3.647835249377467*^9, 3.647835257636794*^9}}]
+  3.647089886242898*^9, {3.647835249377467*^9, 3.647835257636794*^9}, 
+   3.647860811238372*^9}]
 }, Open  ]],
 
 Cell[BoxData[
@@ -2092,7 +2574,7 @@ Cell[BoxData[
   Ticks->{Automatic, Automatic}]], "Output",
  CellChangeTimes->{{3.6470891440719757`*^9, 3.647089168446458*^9}, {
    3.647089534186223*^9, 3.6470895413665857`*^9}, 3.647089780550755*^9, {
-   3.647835249459462*^9, 3.647835257858886*^9}}]
+   3.647835249459462*^9, 3.647835257858886*^9}, 3.647860811411731*^9}]
 }, Open  ]],
 
 Cell[BoxData[
@@ -2165,7 +2647,8 @@ Cell[BoxData[
    3.636625551281067*^9, 3.6366255910083027`*^9}, 3.636625644627839*^9, 
    3.636625688222829*^9, 3.636626543538452*^9, 3.6366291392407217`*^9, 
    3.63785518417409*^9, 3.639218022282812*^9, 3.647088260430567*^9, 
-   3.647089220975494*^9, {3.647835249492947*^9, 3.6478352578988037`*^9}}]
+   3.647089220975494*^9, {3.647835249492947*^9, 3.6478352578988037`*^9}, 
+   3.647860811451166*^9}]
 }, Open  ]],
 
 Cell[CellGroupData[{
@@ -2193,7 +2676,7 @@ Cell[BoxData[
    FractionBox["5104", "963"]}], "}"}]], "Output",
  CellChangeTimes->{
   3.6470883283652077`*^9, 3.6470891874101543`*^9, 3.647089222392571*^9, {
-   3.647835249511743*^9, 3.647835257943838*^9}}]
+   3.647835249511743*^9, 3.647835257943838*^9}, 3.647860811476063*^9}]
 }, Open  ]],
 
 Cell[CellGroupData[{
@@ -2206,7 +2689,8 @@ Cell[BoxData[
  RowBox[{"{", 
   RowBox[{"40.`", ",", "5.300103842159917`"}], "}"}]], "Output",
  CellChangeTimes->{
-  3.647089481941772*^9, {3.64783524954451*^9, 3.647835257993224*^9}}]
+  3.647089481941772*^9, {3.64783524954451*^9, 3.647835257993224*^9}, 
+   3.647860811502536*^9}]
 }, Open  ]],
 
 Cell[BoxData[
@@ -2428,11 +2912,12 @@ Cell[BoxData[
   Ticks->{Automatic, Automatic}]], "Output",
  CellChangeTimes->{
   3.647088896474279*^9, 3.647088940278699*^9, {3.64708921673945*^9, 
-   3.6470892230355186`*^9}, {3.6478352496365757`*^9, 3.64783525827769*^9}}]
+   3.6470892230355186`*^9}, {3.6478352496365757`*^9, 3.64783525827769*^9}, 
+   3.647860811589353*^9}]
 }, Open  ]]
 },
-WindowSize->{1051, 599},
-WindowMargins->{{86, Automatic}, {Automatic, 25}},
+WindowSize->{932, 723},
+WindowMargins->{{189, Automatic}, {Automatic, 0}},
 FrontEndVersion->"10.0 for Mac OS X x86 (32-bit, 64-bit Kernel) (September 9, \
 2014)",
 StyleDefinitions->"Default.nb"
@@ -2454,97 +2939,103 @@ Cell[1542, 41, 597, 13, 46, "Input"],
 Cell[2142, 56, 306, 7, 28, "Input"],
 Cell[CellGroupData[{
 Cell[2473, 67, 142, 2, 28, "Input"],
-Cell[2618, 71, 128, 2, 28, "Output"]
+Cell[2618, 71, 156, 3, 28, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[2783, 78, 153, 2, 28, "Input"],
-Cell[2939, 82, 128, 2, 28, "Output"]
+Cell[2811, 79, 153, 2, 28, "Input"],
+Cell[2967, 83, 156, 3, 28, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[3104, 89, 680, 16, 46, "Input"],
-Cell[3787, 107, 9516, 281, 603, "Output"]
+Cell[3160, 91, 680, 16, 63, "Input"],
+Cell[3843, 109, 9767, 284, 529, "Output"]
 }, Open  ]],
-Cell[13318, 391, 444, 10, 46, "Input"],
-Cell[13765, 403, 388, 10, 28, "Input"],
+Cell[13625, 396, 444, 10, 46, "Input"],
+Cell[14072, 408, 388, 10, 28, "Input"],
 Cell[CellGroupData[{
-Cell[14178, 417, 761, 17, 46, "Input"],
-Cell[14942, 436, 15620, 442, 567, "Output"]
+Cell[14485, 422, 761, 17, 46, "Input"],
+Cell[15249, 441, 15640, 443, 494, "Output"]
 }, Open  ]],
-Cell[30577, 881, 250, 5, 28, "Input"],
+Cell[30904, 887, 250, 5, 28, "Input"],
 Cell[CellGroupData[{
-Cell[30852, 890, 430, 7, 28, "Input"],
-Cell[31285, 899, 440, 6, 28, "Output"]
-}, Open  ]],
-Cell[CellGroupData[{
-Cell[31762, 910, 525, 11, 46, InheritFromParent],
-Cell[32290, 923, 888, 17, 131, "Output"]
+Cell[31179, 896, 430, 7, 28, "Input"],
+Cell[31612, 905, 466, 7, 28, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[33215, 945, 1188, 21, 46, "Input"],
-Cell[34406, 968, 1666, 28, 131, "Output"]
-}, Open  ]],
-Cell[36087, 999, 324, 9, 28, "Input"],
-Cell[36414, 1010, 256, 6, 28, "Input"],
-Cell[36673, 1018, 406, 9, 28, "Input"],
-Cell[CellGroupData[{
-Cell[37104, 1031, 2489, 51, 63, "Input"],
-Cell[39596, 1084, 13089, 245, 618, "Output"]
+Cell[32115, 917, 525, 11, 46, InheritFromParent],
+Cell[32643, 930, 910, 17, 131, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[52722, 1334, 581, 13, 80, "Input"],
-Cell[53306, 1349, 554, 11, 80, "Output"]
+Cell[33590, 952, 1188, 21, 63, "Input"],
+Cell[34781, 975, 1690, 28, 148, "Output"]
 }, Open  ]],
-Cell[53875, 1363, 301, 8, 28, "Input"],
-Cell[54179, 1373, 191, 5, 28, "Input"],
-Cell[54373, 1380, 349, 8, 28, "Input"],
+Cell[36486, 1006, 324, 9, 28, "Input"],
+Cell[36813, 1017, 256, 6, 28, "Input"],
+Cell[37072, 1025, 406, 9, 28, "Input"],
 Cell[CellGroupData[{
-Cell[54747, 1392, 1488, 39, 63, "Input"],
-Cell[56238, 1433, 6887, 133, 597, "Output"]
+Cell[37503, 1038, 2489, 51, 80, "Input"],
+Cell[39995, 1091, 13111, 245, 543, "Output"]
 }, Open  ]],
+Cell[53121, 1339, 245, 5, 28, "Input"],
 Cell[CellGroupData[{
-Cell[63162, 1571, 1309, 35, 63, "Input"],
-Cell[64474, 1608, 6705, 131, 618, "Output"]
-}, Open  ]],
-Cell[71194, 1742, 407, 9, 28, "Input"],
-Cell[CellGroupData[{
-Cell[71626, 1755, 836, 22, 28, "Input"],
-Cell[72465, 1779, 796, 22, 48, "Output"]
+Cell[53391, 1348, 501, 13, 28, "Input"],
+Cell[53895, 1363, 15028, 390, 157, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[73298, 1806, 126, 2, 28, "Input"],
-Cell[73427, 1810, 491, 14, 28, "Output"]
+Cell[68960, 1758, 581, 13, 80, "Input"],
+Cell[69544, 1773, 582, 12, 80, "Output"]
 }, Open  ]],
-Cell[73933, 1827, 273, 6, 28, "Input"],
+Cell[70141, 1788, 301, 8, 28, "Input"],
+Cell[70445, 1798, 191, 5, 28, "Input"],
+Cell[70639, 1805, 349, 8, 28, "Input"],
 Cell[CellGroupData[{
-Cell[74231, 1837, 390, 11, 28, "Input"],
-Cell[74624, 1850, 239, 6, 48, "Output"]
+Cell[71013, 1817, 1488, 39, 80, "Input"],
+Cell[72504, 1858, 6911, 133, 524, "Output"]
 }, Open  ]],
+Cell[79430, 1994, 245, 5, 28, "Input"],
 Cell[CellGroupData[{
-Cell[74900, 1861, 126, 2, 28, "Input"],
-Cell[75029, 1865, 184, 4, 28, "Output"]
+Cell[79700, 2003, 550, 13, 28, "Input"],
+Cell[80253, 2018, 7673, 200, 85, "Output"]
 }, Open  ]],
-Cell[75228, 1872, 810, 22, 28, "Input"],
+Cell[87941, 2221, 407, 9, 28, "Input"],
 Cell[CellGroupData[{
-Cell[76063, 1898, 5946, 146, 216, "Input"],
-Cell[82012, 2046, 2121, 48, 611, "Output"]
-}, Open  ]],
-Cell[84148, 2097, 457, 9, 28, "Input"],
-Cell[CellGroupData[{
-Cell[84630, 2110, 1362, 37, 28, "Input"],
-Cell[85995, 2149, 827, 18, 28, "Output"]
+Cell[88373, 2234, 836, 22, 28, "Input"],
+Cell[89212, 2258, 822, 23, 48, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[86859, 2172, 473, 15, 28, "Input"],
-Cell[87335, 2189, 244, 6, 48, "Output"]
+Cell[90071, 2286, 126, 2, 28, "Input"],
+Cell[90200, 2290, 519, 15, 28, "Output"]
+}, Open  ]],
+Cell[90734, 2308, 273, 6, 28, "Input"],
+Cell[CellGroupData[{
+Cell[91032, 2318, 390, 11, 28, "Input"],
+Cell[91425, 2331, 260, 6, 48, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[87616, 2200, 126, 2, 28, "Input"],
-Cell[87745, 2204, 183, 4, 28, "Output"]
+Cell[91722, 2342, 126, 2, 28, "Input"],
+Cell[91851, 2346, 210, 5, 28, "Output"]
 }, Open  ]],
-Cell[87943, 2211, 549, 18, 28, "Input"],
+Cell[92076, 2354, 810, 22, 28, "Input"],
 Cell[CellGroupData[{
-Cell[88517, 2233, 5893, 149, 216, "Input"],
-Cell[94413, 2384, 2009, 46, 655, "Output"]
+Cell[92911, 2380, 5946, 146, 216, "Input"],
+Cell[98860, 2528, 2143, 48, 537, "Output"]
+}, Open  ]],
+Cell[101018, 2579, 457, 9, 28, "Input"],
+Cell[CellGroupData[{
+Cell[101500, 2592, 1362, 37, 46, "Input"],
+Cell[102865, 2631, 853, 19, 28, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[103755, 2655, 473, 15, 28, "Input"],
+Cell[104231, 2672, 266, 6, 48, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[104534, 2683, 126, 2, 28, "Input"],
+Cell[104663, 2687, 209, 5, 28, "Output"]
+}, Open  ]],
+Cell[104887, 2695, 549, 18, 28, "Input"],
+Cell[CellGroupData[{
+Cell[105461, 2717, 5893, 149, 216, "Input"],
+Cell[111357, 2868, 2035, 47, 547, "Output"]
 }, Open  ]]
 }
 ]
