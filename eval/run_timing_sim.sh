@@ -4,9 +4,9 @@
 # $3: where to find sample fastqs
 # $4: scratch directory; files are written here first, and relevant output is copied back to $2
 # Do perform our timing simulation, we chose the GEUVADIS sample {ERR205018_1.fastq.gz, ERR205018_2.fastq.gz} at random and ran:
-# taskset -c 1,2,3,4,5,6,7,8 sh run_single_sample_sim.sh 8 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/8core_timing /scratch0/langmead-fs1/data/big_public_datasets/geuvadis /scratch2/langmead-fs1/tmp_timing
-# taskset -c 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 sh run_single_sample_sim.sh 16 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/16core_timing /scratch0/langmead-fs1/data/big_public_datasets/geuvadis /scratch2/langmead-fs1/tmp_timing
-# sh run_single_sample_sim.sh 32 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/32core_timing /scratch0/langmead-fs1/data/big_public_datasets/geuvadis /scratch2/langmead-fs1/tmp_timing
+# taskset -c 1,2,3,4,5,6,7,8 sh run_timing_sim.sh 8 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/8core_timing /scratch0/langmead-fs1/data/big_public_datasets/geuvadis /scratch2/langmead-fs1/tmp_timing
+# taskset -c 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 sh run_timing_sim.sh 16 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/16core_timing /scratch0/langmead-fs1/data/big_public_datasets/geuvadis /scratch2/langmead-fs1/tmp_timing
+# sh run_timing_sim.sh 32 /scratch0/langmead-fs1/geuvadis_sims_for_paper_v2/32core_timing /scratch0/langmead-fs1/data/big_public_datasets/geuvadis /scratch2/langmead-fs1/tmp_timing
 # on a machine with 32 cores.
 
 # Specify number of parallel processes for each program
