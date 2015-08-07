@@ -19,13 +19,27 @@ proc.time()
 message(Sys.time())
 
 ## Identify number of total mapped reads
-bws <- rawFiles(datadir = '/dcs01/ajaffe/Brain/derRuns/railDER/bigwig', samplepatt = 'bw', fileterm = NULL)
+if(maindir == '/dcs01/ajaffe/Brain/derRuns/railDER/railGEU') {
+    bws <- rawFiles(datadir = '/dcs01/ajaffe/Brain/derRuns/railDER/bigwig', samplepatt = 'bw', fileterm = NULL)
+} else if (maindir == '/dcs01/ajaffe/Brain/derRuns/railDER/resub') {
+    bws <- rawFiles(datadir = '/dcl01/leek/data/geuvadis_rail_v0.1.9/coverage_bigwigs', samplepatt = 'bw', fileterm = NULL)
+    bws <- bws[!grepl('mean|median|unique', bws)]
+}
+
+
 names(bws) <- gsub('.bw', '', names(bws))
 
-counts <- read.table('/dcs01/ajaffe/Brain/derRuns/railDER/all_of_geuvadis_read_counts_v4.4.2015', header = TRUE, sep = '\t')
+if(maindir == '/dcs01/ajaffe/Brain/derRuns/railDER/railGEU') {
+    counts <- read.table('/dcs01/ajaffe/Brain/derRuns/railDER/all_of_geuvadis_read_counts_v4.4.2015', header = TRUE, sep = '\t')
+    mapped <- counts$mapped.read.count[match(names(bws), counts$sample.name)]
+    
+} else if (maindir == '/dcs01/ajaffe/Brain/derRuns/railDER/resub') {
+    counts <- read.table('/dcl01/leek/data/geuvadis_rail_v0.1.9/cross_sample_results/counts.tsv.gz', header = TRUE, sep = '\t', stringsAsFactors = FALSE)
+    counts$totalMapped <- as.integer(sapply(strsplit(counts$total.mapped.reads, ','), '[[', 1))
+    mapped <- counts$totalMapped[match(names(bws), counts$X)]
+}
 
 ## Match the names
-mapped <- counts$mapped.read.count[match(names(bws), counts$sample.name)]
 names(mapped) <- names(bws)
 
 ## Check distribution

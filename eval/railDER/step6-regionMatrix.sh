@@ -2,6 +2,7 @@
 
 ## Usage
 # sh step6-regionMatrix.sh railGEU
+# sh step6-regionMatrix.sh resub
 
 # Define variables
 EXPERIMENT=$1
@@ -16,8 +17,12 @@ if [[ "${EXPERIMENT}" == "railGEU" ]]
 then
     CUTOFF=5
     RLENGTH=75
+elif [[ "${EXPERIMENT}" == "resub" ]]
+then
+    CUTOFF=5
+    RLENGTH=75
 else
-    echo "Specify a valid experiment: railGEU"
+    echo "Specify a valid experiment: railGEU, resub"
 fi
 
 

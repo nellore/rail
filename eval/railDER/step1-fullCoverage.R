@@ -32,6 +32,7 @@ if (is.null(opt$fileStyle)) opt$fileStyle <- 'UCSC'
 
 ## Identify the data files
 bws <- rawFiles(datadir = opt$datadir, samplepatt = opt$pattern, fileterm = NULL)
+bws <- bws[!grepl('mean|median|unique', bws)]
 names(bws) <- gsub('.bw', '', names(bws))
 
 bws <- BigWigFileList(bws)

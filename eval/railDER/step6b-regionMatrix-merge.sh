@@ -2,6 +2,7 @@
 
 ## Usage
 # sh step6b-regionMatrix-merge.sh railGEU
+# sh step6b-regionMatrix-merge.sh resub
 
 # Define variables
 EXPERIMENT=$1
@@ -15,8 +16,11 @@ WDIR=${MAINDIR}/regionMatrix
 if [[ "${EXPERIMENT}" == "railGEU" ]]
 then
     CUTOFF=5
+elif [[ "${EXPERIMENT}" == "resub" ]]
+then
+    CUTOFF=5
 else
-    echo "Specify a valid experiment: railGEU"
+    echo "Specify a valid experiment: railGEU, resub"
 fi
 
 # Construct shell file

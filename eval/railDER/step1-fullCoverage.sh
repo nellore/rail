@@ -3,6 +3,7 @@
 
 ## Usage
 # sh step1-fullCoverage.sh railGEU
+# sh step1-fullCoverage.sh resub
 
 
 # Define variables
@@ -19,8 +20,12 @@ if [[ "${EXPERIMENT}" == "railGEU" ]]
 then
     DATADIR=/dcs01/ajaffe/Brain/derRuns/railDER/bigwig
     CUTOFF=5
+elif [[ "${EXPERIMENT}" == "resub" ]]
+then
+    DATADIR=/dcl01/leek/data/geuvadis_rail_v0.1.9/coverage_bigwigs
+    CUTOFF=5
 else
-    echo "Specify a valid experiment: railGEU"
+    echo "Specify a valid experiment: railGEU, resub"
 fi
 
 
