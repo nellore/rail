@@ -15,11 +15,10 @@ load("/dcs01/ajaffe/Brain/derRuns/railDER/railGEU/fixSampleNames/pMatch.Rdata")
 pd$RailID = pMatch$railName[match(rownames(pd), pMatch$bgName)]
 
 ## Load regions data
-load("/dcs01/ajaffe/Brain/derRuns/railDER/railGEU/fixSampleNames/regions.Rdata")
-load("/dcs01/ajaffe/Brain/derRuns/railDER/railGEU/fixSampleNames/coverageMatrix.Rdata")
-
-### filter to the same set of people ####
-coverageMatrix = coverageMatrix[,pd$RailID]
+load("/dcs01/ajaffe/Brain/derRuns/railDER/resub/regionMatrix/regionMat-cut5.Rdata")
+regions = unlist(GRangesList(lapply(regionMat, '[[', 'regions')))
+coverageMatrix = do.call("rbind", lapply(regionMat, '[[', 'coverageMatrix'))
+coverageMatrix = coverageMatrix[,pd$RailID] # put in order
 
 #################
 #### analysis ###
