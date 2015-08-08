@@ -82,8 +82,8 @@ The following object is masked from ‘package:BiocGenerics’:
 > load("/home/epi/ajaffe/GenomicStates/GenomicState.Hsapiens.ensembl.GRCh37.p12.rda")
 > gs = GenomicState.Hsapiens.ensembl.GRCh37.p12$fullGenome
 > ensemblAnno = annotateRegions(regions,gs)
-2015-08-07 20:19:51 annotateRegions: counting
-2015-08-07 20:19:52 annotateRegions: annotating
+2015-08-08 11:05:35 annotateRegions: counting
+2015-08-08 11:05:37 annotateRegions: annotating
 > save(ensemblAnno, file = 'ensemblAnno.Rdata')
 > # load('ensemblAnno.Rdata')
 > countTable = ensemblAnno$countTable
@@ -107,6 +107,18 @@ The following object is masked from ‘package:BiocGenerics’:
 > 100*sapply(annoClassList, length)/nrow(countTable)
     strictExonic   strictIntronic strictIntergenic       exonIntron 
        53.056931        25.330160         6.877614        13.925340 
+> 
+> quantile(width(regions))
+   0%   25%   50%   75%  100% 
+    1     7    70   145 18159 
+> 
+> sapply(annoClassList, function(ii) quantile(width(regions[ii])))
+     strictExonic strictIntronic strictIntergenic exonIntron
+0%              1              1                1          1
+25%            21              2                3         76
+50%            93              9               15        132
+75%           155             37               71        269
+100%        18159           9172             8543      15636
 > 
 > ## Venn diagram: code modified from limma::vennDiagram
 > vennDiagram_custom <- function (object, include = "both", names = NULL, 
@@ -328,7 +340,7 @@ null device
 > 
 > ## Reproducibility info
 > Sys.time() # date generated
-[1] "2015-08-07 20:32:01 EDT"
+[1] "2015-08-08 11:24:22 EDT"
 > options(width = 120)
 > session_info()
 Session info -----------------------------------------------------------------------------------------------------------
@@ -413,5 +425,5 @@ Packages -----------------------------------------------------------------------
  zlibbioc          * 1.14.0   2015-04-18 Bioconductor  
 > 
 > proc.time()
-    user   system  elapsed 
-7893.332   20.000  773.356 
+     user    system   elapsed 
+12135.706    31.255  1192.829 

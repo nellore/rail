@@ -46,6 +46,10 @@ annoClassList = list(strictExonic =
 sapply(annoClassList, length)
 100*sapply(annoClassList, length)/nrow(countTable)
 
+quantile(width(regions))
+
+sapply(annoClassList, function(ii) quantile(width(regions[ii])))
+
 ## Venn diagram: code modified from limma::vennDiagram
 vennDiagram_custom <- function (object, include = "both", names = NULL, 
     mar = rep(1, 4), cex = c(1.5, 1, 0.7), lwd = 1, circle.col = NULL,
