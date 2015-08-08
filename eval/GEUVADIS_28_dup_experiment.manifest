@@ -2,20 +2,6 @@
 # So there are 56 samples in total
 # Used to for comparison with running Rail-RNA on 56 distinct GEUVADIS samples to help demonstrate the magnitude of the effect of reduced redundancy
 
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204963/ERR204963_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204963/ERR204963_2.fastq.gz	0	NA18868_male_YRI_UNIGE_1-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204946/ERR204946_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204946/ERR204946_2.fastq.gz	0	NA12287_female_CEU_UNIGE_1-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204899/ERR204899_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204899/ERR204899_2.fastq.gz	0	NA12716_male_CEU_UNIGE_1-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR205/ERR205015/ERR205015_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR205/ERR205015/ERR205015_2.fastq.gz	0	HG00325_male_FIN_UNIGE_1-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188142/ERR188142_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188142/ERR188142_2.fastq.gz	0	NA12287_female_CEU_MPIMG_3-1-2
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188445/ERR188445_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188445/ERR188445_2.fastq.gz	0	HG00173_female_FIN_MPIMG_3-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188310/ERR188310_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188310/ERR188310_2.fastq.gz	0	HG00124_female_GBR_MPIMG_3-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188447/ERR188447_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188447/ERR188447_2.fastq.gz	0	NA18934_male_YRI_MPIMG_3-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188423/ERR188423_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188423/ERR188423_2.fastq.gz	0	NA19107_male_YRI_CNAG_CRG_2-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188268/ERR188268_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188268/ERR188268_2.fastq.gz	0	NA19095_female_YRI_CNAG_CRG_2-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188363/ERR188363_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188363/ERR188363_2.fastq.gz	0	NA19206_female_YRI_CNAG_CRG_2-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188170/ERR188170_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188170/ERR188170_2.fastq.gz	0	NA19131_female_YRI_CNAG_CRG_2-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188104/ERR188104_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188104/ERR188104_2.fastq.gz	0	NA19146_male_YRI_HMGU_5-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188292/ERR188292_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188292/ERR188292_2.fastq.gz	0	NA19189_male_YRI_HMGU_5-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188260/ERR188260_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188260/ERR188260_2.fastq.gz	0	HG00369_male_FIN_HMGU_5-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204863/ERR204863_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204863/ERR204863_2.fastq.gz	0	NA06986_male_CEU_HMGU_5-1-2
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188147/ERR188147_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188147/ERR188147_2.fastq.gz	0	NA20804_female_TSI_ICMB_4-1-1
@@ -30,20 +16,6 @@ ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204831/ERR204831_1.fastq.gz	0	ftp:/
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188186/ERR188186_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188186/ERR188186_2.fastq.gz	0	HG00115_male_GBR_UU_6-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188444/ERR188444_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188444/ERR188444_2.fastq.gz	0	NA19129_female_YRI_UU_6-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188267/ERR188267_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188267/ERR188267_2.fastq.gz	0	HG00266_female_FIN_UU_6-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204963/ERR204963_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204963/ERR204963_2.fastq.gz	0	DUP_NA18868_male_YRI_UNIGE_1-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204946/ERR204946_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204946/ERR204946_2.fastq.gz	0	DUP_NA12287_female_CEU_UNIGE_1-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204899/ERR204899_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204899/ERR204899_2.fastq.gz	0	DUP_NA12716_male_CEU_UNIGE_1-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR205/ERR205015/ERR205015_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR205/ERR205015/ERR205015_2.fastq.gz	0	DUP_HG00325_male_FIN_UNIGE_1-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188142/ERR188142_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188142/ERR188142_2.fastq.gz	0	DUP_NA12287_female_CEU_MPIMG_3-1-2
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188445/ERR188445_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188445/ERR188445_2.fastq.gz	0	DUP_HG00173_female_FIN_MPIMG_3-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188310/ERR188310_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188310/ERR188310_2.fastq.gz	0	DUP_HG00124_female_GBR_MPIMG_3-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188447/ERR188447_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188447/ERR188447_2.fastq.gz	0	DUP_NA18934_male_YRI_MPIMG_3-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188423/ERR188423_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188423/ERR188423_2.fastq.gz	0	DUP_NA19107_male_YRI_CNAG_CRG_2-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188268/ERR188268_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188268/ERR188268_2.fastq.gz	0	DUP_NA19095_female_YRI_CNAG_CRG_2-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188363/ERR188363_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188363/ERR188363_2.fastq.gz	0	DUP_NA19206_female_YRI_CNAG_CRG_2-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188170/ERR188170_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188170/ERR188170_2.fastq.gz	0	DUP_NA19131_female_YRI_CNAG_CRG_2-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188104/ERR188104_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188104/ERR188104_2.fastq.gz	0	DUP_NA19146_male_YRI_HMGU_5-1-1
-ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188292/ERR188292_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188292/ERR188292_2.fastq.gz	0	DUP_NA19189_male_YRI_HMGU_5-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188260/ERR188260_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188260/ERR188260_2.fastq.gz	0	DUP_HG00369_male_FIN_HMGU_5-1-1
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204863/ERR204863_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR204/ERR204863/ERR204863_2.fastq.gz	0	DUP_NA06986_male_CEU_HMGU_5-1-2
 ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188147/ERR188147_1.fastq.gz	0	ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR188/ERR188147/ERR188147_2.fastq.gz	0	DUP_NA20804_female_TSI_ICMB_4-1-1
