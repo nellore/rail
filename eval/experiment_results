@@ -4,12 +4,12 @@
 # Cost per sample including provisioning and bootstrap is estimated by rounding up 3rd column to the nearest # hours and charging ($0.11/instance/hr (spot price upper bound) + $0.105/instance/hr (EMR surcharge)). Result is rounded up to the nearest cent.
 # Note that the first column is off by 1 from the number of instances reserved; there's always one additional master instance.
 c3.2xlarge instance count - 1	geuvadis sample count	wall clock running time (min; including provisioning and bootstrap)	wall clock running time (min; excluding provisioning and bootstrap)	cost per sample (including provisioning and bootstrap)
-40	112	754	711	$1.02
+40	112	754	710	$1.02
 40	56	459	414	$1.26
 40	28	315	265	$1.89
 40  28	321	265	$1.89
 40  28	315	267	$1.89
-20	28	543	490	$1.62
+20	28	543	489	$1.62
 10	28	917	877	$1.36
 
 Preprocessing times and costs
