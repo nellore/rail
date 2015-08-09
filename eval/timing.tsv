@@ -1,0 +1,14 @@
+	8 cores	16 cores
+HISAT 1 pass ann	4m26s	3m1s
+HISAT 1 pass	4m33s	3m13s
+HISAT 2 pass	8m57s	6m20s
+Rail-RNA (bam only)	103m55s	59m25s
+Rail-RNA (all default outputs)	118m46s	64m40s
+STAR 1 pass ann (with index time) 46m48s	37m22s
+STAR 1 pass ann (no index time)	5m38s	3m59s
+STAR 1 pass	4m6s	2m24s
+STAR 2 pass	10m14s	7m35s
+Subjunc	19m54s	14m44s
+TopHat 2 ann (with index time)	224m54s
+Topat 2 ann (no index time)	98m53s
+TopHat 2	110m38s	84m27s
