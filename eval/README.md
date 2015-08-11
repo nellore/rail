@@ -1,6 +1,6 @@
 Note on preprint versioning
 -----
-This version of the readme is describes how to reproduce results in v2 of the [Rail-RNA preprint](http://biorxiv.org/content/early/2015/05/07/019067). To view the README that reproduces the results contained in v1, see [this](https://github.com/nellore/rail/tree/7db1e4e506224e156ae1ac271ceb88d5e465b7b9/eval) commit.
+This version of the readme describes how to reproduce results in v2 of the [Rail-RNA preprint](http://biorxiv.org/content/early/2015/05/07/019067). To view the README that reproduces the results contained in v1, see [this](https://github.com/nellore/rail/tree/7db1e4e506224e156ae1ac271ceb88d5e465b7b9/eval) commit.
 
 Reproducing preprint results
 -----
