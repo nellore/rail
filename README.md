@@ -32,7 +32,7 @@ Outputs currently include
 
 and will likely expand in future versions.
 
-Read the [preprint](http://biorxiv.org/content/early/2015/05/07/019067) for more details. Methods explained there correspond to Rail-RNA 0.1.0a.
+Read the [preprint](http://biorxiv.org/content/early/2015/08/11/019067) for more details. Methods explained there correspond to Rail-RNA 0.1.9b.
 
 Get set up
 -----
