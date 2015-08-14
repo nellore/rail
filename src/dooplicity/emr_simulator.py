@@ -15,6 +15,8 @@ this script is invoked.
 
 All paths in input JSON should be absolute.
 
+TODO: distribute intermediate files across scratch directories on IPython
+
 Licensed under the MIT License:
 
 Copyright (c) 2014 Abhi Nellore and Ben Langmead.
