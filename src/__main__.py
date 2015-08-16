@@ -80,32 +80,32 @@ if zipfile.is_zipfile(containing_dir):
                     % (exe_paths.curl if exe_paths.curl is not None
                         else 'curl'))
         )
-    parser.add_argument('-k', '--keep-intermediates', action='store_const',
+    parser.add_argument('--keep-intermediates', action='store_const',
             const=True,
             default=False,
-            help=('leaves intermediate installation files '
-                       'around for debugging/restarting')
+            help=('does not delete dependencies downloaded to temporary '
+                  'directory; use with --last-temp-dir')
         )
-    parser.add_argument('-t', '--previous-temp-install-dir', type=str,
+    parser.add_argument('--last-temp-dir', type=str,
             metavar='<dir>',
             required=False,
             default=None,
-            help=('should be full path to previous temporary install directory '
-                   'if previous run had used -k and '
-                     'you want to avoid re-downloading '
-                       'the most of the packages (ipython is still redownloaded)'))
+            help=('path to temporary installation directory used by previous '
+                  'invocation of installer with --keep-intermediates; use to '
+                  'avoid downloading most of the packages again (def: none) '))
 
     args = parser.parse_args()
     from rna_installer import RailRnaInstaller
-    with RailRnaInstaller(containing_dir, curl_exe=args.curl,
-                            install_dir=args.install_dir,
-                            no_dependencies=args.no_dependencies,
-                            prep_dependencies=args.prep_dependencies,
-                            add_symlinks=args.symlink_dependencies,
-                            yes=args.yes,
-                            me=args.me,
-                            keep_intermediate_files=args.keep_intermediates,
-                            previous_temp_install_dir=args.previous_temp_install_dir) as railrna_installer:
+    with RailRnaInstaller(
+            containing_dir, curl_exe=args.curl,
+            install_dir=args.install_dir,
+            no_dependencies=args.no_dependencies,
+            prep_dependencies=args.prep_dependencies,
+            add_symlinks=args.symlink_dependencies,
+            yes=args.yes, me=args.me,
+            keep_intermediates=args.keep_intermediates,
+            last_temp_dir=args.last_temp_dir
+        ) as railrna_installer:
         railrna_installer.install()
     sys.exit(0)
 

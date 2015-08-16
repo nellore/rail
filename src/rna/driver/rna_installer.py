@@ -61,8 +61,7 @@ class RailRnaInstaller(object):
     def __init__(self, zip_name, curl_exe=None, install_dir=None,
                     no_dependencies=False, prep_dependencies=False,
                     yes=False, me=False, add_symlinks=False, 
-                    keep_intermediate_files=False,
-                    previous_temp_install_dir=None):
+                    keep_intermediates=False, last_temp_dir=None):
         print_to_screen(u"""{0} Rail-RNA v{1} Installer""".format(
                                         u'\u2200', version_number)
                                     )
@@ -89,18 +88,23 @@ class RailRnaInstaller(object):
         self.log_file = os.path.join(log_dir, 'rail-rna_install.log')
         self.log_stream = open(self.log_file, 'w')
         self.finished = False
-        self.keep_intermediate_files = keep_intermediate_files
+        self.keep_intermediates = keep_intermediates
         register_cleanup(remove_temporary_directories, [log_dir])
         self.yes = yes or me
         self.me = me
         self.prep_dependencies = prep_dependencies
         self.add_symlinks = add_symlinks
-        self.previous_temp_install_dir = previous_temp_install_dir
+        self.last_temp_dir = last_temp_dir
         # Install in a temporary directory first, then move to final dest
-        if self.previous_temp_install_dir:
-            self.temp_install_dir = self.previous_temp_install_dir
+        if self.last_temp_dir:
+            self.temp_install_dir = self.last_temp_dir
         else:
             self.temp_install_dir = tempfile.mkdtemp()
+        if self.keep_intermediates:
+            '''Print temp dir to screen and log so user can make it argument
+            of --last-temp-dir'''
+            self._print_to_screen_and_log('Temporary installation directory '
+                                          'is %s .' % self.temp_install_dir)
 
     def __enter__(self):
         return self
@@ -203,14 +207,21 @@ class RailRnaInstaller(object):
             command = [self.curl_exe, '-L', '-O', url]
             filename = url.rpartition('/')[2]
             try:
-                if (self.previous_temp_install_dir and 
-                    os.path.exists(os.path.join(
-                                   self.previous_temp_install_dir, 
-                                   download_file))):
-                    print >>self.log_stream, ('skipping '
-                              'download of {0} since it\'s already '
-                              'present in {1}'.format(download_file, 
-                                            self.previous_temp_install_dir))
+                if (self.last_temp_dir and 
+                        os.path.exists(
+                                os.path.join(
+                                    self.last_temp_dir, download_file
+                                )
+                        )):
+                    print >>self.log_stream, (
+                            'Skipping download of {0} since it\'s already '
+                            'present in {1} .'.format(
+                                            download_file, 
+                                            self.last_temp_dir
+                                        )
+                        )
+                    # Add URL back to url_deque in case of fail
+                    url_deque.appendleft(url)
                 else:
                     print >>self.log_stream, ('Downloading '
                               '{} from {}...'.format(name, url))
@@ -264,7 +275,7 @@ class RailRnaInstaller(object):
                             )
                             continue
                     finally:
-                        if not self.keep_intermediate_files:
+                        if not self.keep_intermediates:
                             os.remove(filename)
                 if explode_command is not None:
                     self._print_to_screen_and_log(
@@ -292,7 +303,7 @@ class RailRnaInstaller(object):
                             )
                             continue
                     finally:
-                        if not self.keep_intermediate_files:
+                        if not self.keep_intermediates:
                             os.remove(filename)
                 break
 
@@ -342,13 +353,14 @@ class RailRnaInstaller(object):
         else:
             # User specified an installation directory
             self.final_install_dir = self.install_dir
-        if not self.keep_intermediate_files:
-            #this will also get ipython and aws temp install directories
-            register_cleanup(remove_temporary_directories, [self.temp_install_dir])
+        if not self.keep_intermediates:
+            #tshis will also get ipython and aws temp install directories
+            register_cleanup(remove_temporary_directories,
+                                [self.temp_install_dir])
         if os.path.exists(self.final_install_dir):
             if self._yes_no_query(
                     ('The installation path {dir} already exists.\n    '
-                    '* Overwrite {dir}?').format(dir=self.final_install_dir)
+                     '* Overwrite {dir}?').format(dir=self.final_install_dir)
                 ):
                 try:
                     shutil.rmtree(self.final_install_dir)
@@ -382,15 +394,15 @@ class RailRnaInstaller(object):
             os.rmdir(self.final_install_dir)
             pass
         with cd(self.temp_install_dir):
-            if not (self.previous_temp_install_dir and os.path.exists("./rail-rna")):
+            if not (self.last_temp_dir and os.path.exists('./rail-rna')):
                 with zipfile.ZipFile(self.zip_name) as zip_object:
                     zip_object.extractall('./rail-rna')
             if not self.no_dependencies:
                 self._grab_and_explode(self.depends['pypy'], 'PyPy')
                 if not self.prep_dependencies:
-                    #_grab_and_explode will check to see if these are 
-                    #already downloaded and if previous_temp_install_dir is set 
-                    #will avoid redownloading them
+                    '''_grab_and_explode will check to see if these are 
+                    already downloaded, and if last_temp_dir is set will avoid
+                    redownloading them'''
                     self._grab_and_explode(self.depends['bowtie1'], 'Bowtie 1')
                     self._grab_and_explode(self.depends['bowtie2'], 'Bowtie 2')
                     self._grab_and_explode(self.depends['bedgraphtobigwig'],
