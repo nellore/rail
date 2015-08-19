@@ -150,6 +150,21 @@ def add_args(parser):
                   'temporary files.'))
 
 
+def create_iface(log, branding):
+    if log is not None:
+        try:
+            os.makedirs(os.path.dirname(log))
+        except OSError:
+            pass
+        try:
+            log_stream = open(log, 'a')
+        except Exception as e:
+            log_stream = None
+    else:
+        log_stream = None
+    return dp_iface.DooplicityInterface(branding=branding,
+                                         log_stream=log_stream)
+
 def run_command(cmd_and_args):
     try:
         subprocess.check_output(cmd_and_args, bufsize=CMD_BUFFER_SIZE, 
@@ -186,6 +201,37 @@ def copy_file(src_path, dst_path, remote_host=None, copy_from=False):
     #subprocess call out to rsync for now (maybe replace with scp later)
     command = ['rsync','-av',from_str,to_str]
     return run_command(command)
+
+class FileTracker:
+    """ class to track at the master (singleton) level
+        where each intermediate file is (localized)
+    """
+    def __init__(self, hosts, iface):
+        #also tracks directory
+        self.file2host_dir = {}
+        self.host2file = {}
+        # for logging messages
+        self.iface = iface
+        
+        for host in hosts:
+            self.host2file[host]=[]
+        
+    def add_file_mapping(self, filename, hostname, directory_name):
+        """ adds both a file2host/directory mapping
+            and a host2filename mapping.
+            overwrites the mappings with a warning if they already exist
+        """
+        if filename in self.file2host_dir:
+            (host, directory) = self.file2host_dir[filename]
+            self.iface.status('file {} already present in file2host mapping '
+                              'with host={}, directory={}, overwriting '
+                              'with host={}, directory={}'.format(
+                                filename, host, directory, hostname,
+                                directory_name
+                              ))
+        self.file2host_dir[filename] = [hostname, directory_name]
+        self.host2file[hostname].append(filename)
+
 
 def init_worker():
     """ Prevents KeyboardInterrupt from reaching a pool's workers.
@@ -748,19 +794,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
     import os
     import tempfile
     import glob
-    if log is not None:
-        try:
-            os.makedirs(os.path.dirname(log))
-        except OSError:
-            pass
-        try:
-            log_stream = open(log, 'a')
-        except Exception as e:
-            log_stream = None
-    else:
-        log_stream = None
-    iface = dp_iface.DooplicityInterface(branding=branding,
-                                         log_stream=log_stream)
+
+    iface = create_iface(log, branding)
+
     failed = False
     try:
         # Using IPython?

@@ -9,7 +9,6 @@ import socket
 import tempfile
 from dooplicity import emr_simulator
 
-
 class TestNewParallelCode(unittest.TestCase):
 
     def setUp(self):
@@ -19,9 +18,18 @@ class TestNewParallelCode(unittest.TestCase):
        temp_file_handle = os.fdopen(temp_file_handle_low_level,"w")
        temp_file_handle.write("test123")
        temp_file_handle.close()
+       self.iface = emr_simulator.create_iface(None, None) 
+       hosts = ["test.localhost", "test.stringray"]
+       self.file_tracker = emr_simulator.FileTracker(hosts, self.iface)
 
     def tearDown(self):
         os.unlink(self.temp_file_path)
+        new_temp_file = "%s_new" % self.temp_file_path
+        if os.path.exists(new_temp_file):
+            os.unlink(new_temp_file)
+
+    def test_FileTracker_add_file_mapping(self):
+       self.file_tracker.add_file_mapping("test.txt", "test.localhost", "/tmp") 
 
     def test_copy_file_locally(self):
        error = emr_simulator.copy_file(self.temp_file_path, 
