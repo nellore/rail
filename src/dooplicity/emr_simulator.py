@@ -63,6 +63,8 @@ from ansibles import Url
 import site
 import string
 
+CMD_BUFFER_SIZE=-1
+
 def add_args(parser):
     """ Adds args relevant to EMR simulator.
 
@@ -146,6 +148,44 @@ def add_args(parser):
             help=('Path to sort executable. Add arguments as necessary, '
                   'e.g. for specifying a directory for storing sort\'s '
                   'temporary files.'))
+
+
+def run_command(cmd_and_args):
+    try:
+        subprocess.check_output(cmd_and_args, bufsize=CMD_BUFFER_SIZE, 
+              stderr=subprocess.STDOUT, shell=False)
+    except subprocess.CalledProcessError, e:
+        return ("command %s failed; exit code was %s "
+                   "reason was %s ") % ( " ".join(cmd_and_args), 
+                                         e.returncode, e.output.strip())
+
+def copy_file(src_path, dst_path, remote_host=None, copy_from=False):
+    """Generic file copy method to wrap one or more ways to move
+        files around both remotely and locally.
+    
+        src_path: path of file currently (must be full path)
+        dst_path: path of file to copy to (must be full path)
+        remote_host: hostname/ip where file is to be either copied from or to
+                     depending on the copy_from flag
+        copy_from: if True remote host is used as the source,
+                   otherwise as the target host, ignore if 
+                   remote_host is not specified
+
+        copy methods could include:
+            scp, rsync, and/or shutil.copy
+       
+        Return value: None if successful, otherwise error message
+    """
+    from_str = src_path
+    to_str = dst_path
+    if remote_host:
+        to_str = "%s:%s" % (remote_host, dst_path)
+        if copy_from:
+            to_str = dst_path
+            from_str = "%s:%s" % (remote_host, src_path)
+    #subprocess call out to rsync for now (maybe replace with scp later)
+    command = ['rsync','-av',from_str,to_str]
+    return run_command(command)
 
 def init_worker():
     """ Prevents KeyboardInterrupt from reaching a pool's workers.
