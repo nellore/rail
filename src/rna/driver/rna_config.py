@@ -306,7 +306,8 @@ def ready_engines(rc, base, prep=False):
     # Set random seed so temp directory is reused if restarting Rail
     random.seed(str(sorted(pids)))
     engines_for_copying = [random.choice(list(engines)) 
-                            for engines in hostname_to_engines.values()]
+                            for engines in hostname_to_engines.values()
+                            if len(engines) > 0]
     '''Herd won't work with local engines, work around this by separating
     engines into two groups: local and remote.'''
     remote_hostnames_for_copying = list(

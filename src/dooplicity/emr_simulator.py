@@ -1048,7 +1048,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 directory is reused if restarting job.'''
                 random.seed(str(sorted(pid_map.keys())))
                 engines_for_copying = [random.choice(list(engines)) 
-                                        for engines in engine_map.values()]
+                                        for engines in engine_map.values()
+                                        if len(engines) > 0]
                 '''Herd won't work with local engines; work around this by
                 separating engines into two groups: local and remote.'''
                 remote_hostnames_for_copying = list(
