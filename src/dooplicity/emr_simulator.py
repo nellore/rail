@@ -345,8 +345,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 sort_command = (('set -eo pipefail; gzip -cd %s | '
                                  '%s -S %d %s -t$\'%s\' | '
                                  'gzip -c -%d >%s')
-                                    % (sort,
-                                        unsorted_file, memcap,
+                                    % (unsorted_file, sort, memcap,
                                         sort_options,
                                         separator.encode('string_escape'),
                                         gzip_level,
