@@ -202,35 +202,66 @@ def copy_file(src_path, dst_path, remote_host=None, copy_from=False):
     command = ['rsync','-av',from_str,to_str]
     return run_command(command)
 
+#def stream_input_file(host, path, gzipped=False):
+def process_input_files(input_glob, sort_options):
+    """Determines whether we have an acutal input glob
+       or whether we're dealing with remote files.
+
+       input_glob: either a real glob (e.g. /path/to/1.*)
+                   or a map of task IDs to host:filepaths
+    
+       sort_options: only here to tells us whether to
+                     simply to assume input_glob is indeed
+                     a file glob, or if defined, to tell
+                     us its a dictionary for remote files
+    """
+    #case 1: we're not doing any sorting so
+    #we assume everything is local and we should have a glob
+    #case 2: even with sort_options we're still getting a glob
+    #so everything is still local 
+    if not sort_options or isinstance(input_glob, basestring):
+        if not isinstance(input_glob, basestring):
+           raise TypeError("input_glob is not an actual file glob") 
+        input_files = [input_file for input_file in glob.glob(input_glob)
+                            if os.path.isfile(input_file)]
+        return (input_files, input_glob)
+    #case 3: the files aren't local, so we dont have a glob
+    return (input_glob, "")
+            
 class FileTracker:
     """ class to track at the master (singleton) level
         where each intermediate file is (localized)
     """
-    def __init__(self, hosts, iface):
-        #also tracks directory
-        self.file2host_dir = {}
+    def __init__(self):
+        self.file2host = {}
         self.host2file = {}
-        # for logging messages
-        self.iface = iface
         
-        for host in hosts:
-            self.host2file[host]=[]
-        
-    def add_file_mapping(self, filename, hostname, directory_name):
-        """ adds both a file2host/directory mapping
+    def clear_mappings(self):
+        self.file2host = {}
+        self.host2file = {}
+
+    def add_mappings_from_node(self, node_file_tracker):
+        for (file_, host_) in \
+            node_file_tracker.file2host.iteritems():
+            self.add_file_mapping(file_, host_)
+ 
+    def add_file_mapping(self, filepath, hostname):
+        """ adds both a file2host mapping
             and a host2filename mapping.
             overwrites the mappings with a warning if they already exist
         """
-        if filename in self.file2host_dir:
-            (host, directory) = self.file2host_dir[filename]
+        if filepath in self.file2host:
+            host = self.file2host[filepath]
             self.iface.status('file {} already present in file2host mapping '
-                              'with host={}, directory={}, overwriting '
-                              'with host={}, directory={}'.format(
-                                filename, host, directory, hostname,
-                                directory_name
+                              'with host={}, overwriting '
+                              'with host={}, '.format(
+                                filepath, host, hostname
                               ))
-        self.file2host_dir[filename] = [hostname, directory_name]
-        self.host2file[hostname].append(filename)
+        self.file2host[filepath] = hostname
+        try:
+            self.host2file[hostname].append(filepath)
+        except KeyError as e:
+            self.host2file[hostname]=[filepath]   
 
 
 def init_worker():
@@ -308,7 +339,7 @@ def parsed_keys(partition_options, key_fields):
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, partition_options, task_count,
                     memcap, gzip=False, gzip_level=3, scratch=None,
-                    sort='sort', mod_partition=False, max_attempts=4):
+                    sort='sort', mod_partition=False, max_attempts=1):
     """ Partitions input data into tasks and presorts them.
 
         Files in output directory are in the format x.y, where x is a task
@@ -340,11 +371,17 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         max_attempts: maximum number of times to attempt partitioning input.
             MUST BE FINAL ARG to be compatible with 
             execute_balanced_job_with_retries().
+        file_tracker: singleton object from master/parent that tracks
+                      where split up intermediate files (task files)
+                      are stored in the nodes local scratch space.
+                      if this is set, intermediate task files are NOT
+                      copied back to the final output directory
 
         Return value: None if no errors encountered; otherwise error string.
     """
     try:
         from operator import mul
+        import socket
         task_streams = {}
         if gzip:
             task_stream_processes = {}
@@ -379,6 +416,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             # Invalid partition options
             return ('Partition options "%s" are invalid.' % partition_options)
         for input_file in input_files:
+            #TODO: change yopen to use ssh -t
             with yopen(None, input_file) as input_stream:
                 for line in input_stream:
                     key = partitioned_key(line, separator)
@@ -398,6 +436,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     try:
                         task_streams[task].write(line)
                     except KeyError:
+                        task_file = None
                         # Task file doesn't exist yet; create it
                         if gzip:
                             task_file = os.path.join(output_dir, str(task) +
@@ -433,8 +472,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 sort_command = (('set -eo pipefail; gzip -cd %s | '
                                  '%s -S %d %s -t$\'%s\' | '
                                  'gzip -c -%d >%s')
-                                    % (sort,
-                                        unsorted_file, memcap,
+                                    % (unsorted_file, sort, memcap,
                                         sort_options,
                                         separator.encode('string_escape'),
                                         gzip_level,
@@ -490,7 +528,10 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             (('%s, '* (len(input_files) - 1) 
                                        + '%s') % tuple(input_files))))
     finally:
-        if 'final_output_dir' in locals() and final_output_dir != output_dir:
+        #only copy files back if we're not tracking them for DFS
+        current_node_hostname = socket.gethostname()
+        if ('final_output_dir' in locals() and 
+           final_output_dir != output_dir):
             # Copy all output files to final destination and kill temp dir
             for root, dirnames, filenames in os.walk(output_dir):
                 if not filenames: continue
@@ -504,11 +545,19 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     # Directory already exists
                     pass
                 for filename in filenames:
+                    #DFS
+                    #start tracking task_files
+                    if file_tracker:
+                         file_tracker.add_file_mapping(
+                          os.path.join(root, filename), 
+                          current_node_hostname)
+                    #TODO: dont copy back if we're using file_tracker
                     shutil.copy(
                             os.path.join(root, filename),
                             os.path.join(destination, filename)
                         )
-            shutil.rmtree(output_dir)
+            if not file_tracker:
+                shutil.rmtree(output_dir)
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
@@ -579,8 +628,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                         'scratch subdirectory of %s: %s' % (scratch, e))
         else:
             final_output_dir = output_dir
-        input_files = [input_file for input_file in glob.glob(input_glob)
-                            if os.path.isfile(input_file)]
+        (input_files, input_glob) = process_input_files(
+                                                 input_glob, sort_options)
         if not input_files:
             # No input!
             return None
@@ -748,7 +797,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
                     log, gzip=False, gzip_level=3, ipy=False,
                     ipcontroller_json=None, ipy_profile=None, scratch=None,
-                    common=None, sort='sort', max_attempts=4):
+                    common=None, sort='sort', max_attempts=1):
     """ Runs Hadoop Streaming simulation.
 
         FUNCTIONALITY IS IDIOSYNCRATIC; it is currently confined to those
@@ -798,6 +847,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
     iface = create_iface(log, branding)
 
     failed = False
+    #DFS by default we don't use this
+    #unless we have IPython
+    file_tracker = None
     try:
         # Using IPython?
         if ipy:
@@ -872,6 +924,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             else:
                 direct_view.use_dill()
             iface.status('Loading dependencies on IPython engines...')
+            #this is for our "Poor Man's" DFS
             with direct_view.sync_imports(quiet=True):
                 import subprocess
                 import glob
@@ -884,7 +937,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     step_runner_with_error_return=\
                         step_runner_with_error_return,
                     presorted_tasks=presorted_tasks,
-                    parsed_keys=parsed_keys
+                    parsed_keys=parsed_keys,
+                    process_input_files=process_input_files
                 ))
             iface.step('Loaded dependencies on IPython engines.')
             # Get host-to-engine and engine pids relations
@@ -893,6 +947,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     pool, all_engines, socket.gethostname,
                                     dict_format=True
                                 )
+            file_tracker = FileTracker()
+            direct_view.push(dict(file_tracker=file_tracker))
             engine_map = defaultdict(list)
             for engine in host_map:
                 engine_map[host_map[engine]].append(engine)
@@ -938,7 +994,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             def execute_balanced_job_with_retries(pool, iface,
                 task_function, task_function_args,
                 status_message='Tasks completed',
-                finish_message='Completed tasks.', max_attempts=4):
+                finish_message='Completed tasks.', max_attempts=1):
                 """ Executes parallel job over IPython engines with retries.
 
                     Tasks are assigned to free engines as they become
@@ -996,8 +1052,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                         'combo (%s, %s) has not failed '
                                         'attempt to execute. Check the '
                                         'IPython cluster\'s integrity and '
-                                        'resource availability.')
-                                         % (task_function, task_to_assign[0]),
+                                        'resource availability. all_engines = %s forbidden engines = %s, max_attempts=%d')
+                                         % (task_function, task_to_assign[0], " ".join([str(x) for x in all_engines]), " ".join([str(x) for x in forbidden_engines]), max_attempts),
                                          steps=(job_flow[step_number:]
                                             if step_number != 0 else None))
                             failed = True
@@ -1126,7 +1182,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 directory is reused if restarting job.'''
                 random.seed(str(sorted(pid_map.keys())))
                 engines_for_copying = [random.choice(list(engines)) 
-                                        for engines in engine_map.values()]
+                                        for engines in engine_map.values()
+                                        if len(engines) > 0]
                 '''Herd won't work with local engines; work around this by
                 separating engines into two groups: local and remote.'''
                 remote_hostnames_for_copying = list(
@@ -1274,7 +1331,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             def execute_balanced_job_with_retries(pool, iface,
                 task_function, task_function_args,
                 status_message='Tasks completed',
-                finish_message='Completed tasks.', max_attempts=4):
+                finish_message='Completed tasks.', max_attempts=1):
                 """ Executes parallel job locally with multiprocessing module.
 
                     Tasks are added to queue if they fail, and max_attempts-1
@@ -1844,12 +1901,38 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             ),
                             max_attempts=max_attempts
                         )
+                    input_files = {}
+                    if file_tracker:
+                        iface.step(
+                          'Starting step runner with File Tracking %s...' % (
+                            str(len(direct_view.get('file_tracker')))))
+                        file_tracker.clear_mappings()
+                        for ft in direct_view.get('file_tracker'):
+                            file_tracker.add_mappings_from_node(ft)
+                        #clean and push for next round
+                        clean_file_tracker = FileTracker()
+                        direct_view.push(dict(file_tracker=clean_file_tracker))
+                        #prepare list of remote input files for next step
+                        for (file_, host_) in \
+                            file_tracker.file2host.iteritems():
+                            iface.step('File %s on Host %s ' % (file_, host_))
+                            (path, just_file) = os.path.split(file_)
+                            filename_segments = just_file.split('.')
+                            taskid = int(filename_segments[0])
+                            try:
+                                input_files[taskid].append([host_,file_])
+                            except KeyError as e:
+                                input_files[taskid]=[[host_,file_]]
+
                     iface.status('    Starting step runner...')
-                    input_files = [os.path.join(output_dir, '%d.*' % i) 
-                                   for i in xrange(step_data['task_count'])]
-                    # Filter out bad globs
-                    input_files = [input_file for input_file in input_files
-                                    if glob.glob(input_file)]
+                    if not file_tracker or len(input_files) == 0:
+                        for i in xrange(step_data['task_count']):
+                            file_glob = os.path.join(output_dir, '%d.*' % i)
+                            # Filter out bad globs
+                            if glob.glob(file_glob):
+                                input_files[i] = file_glob
+                        #input_files = [input_file for input_file in input_files
+                        #            if glob.glob(input_file)]
                     input_file_count = len(input_files)
                     try:
                         multiple_outputs = (
@@ -1865,6 +1948,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 )
                     output_dir = step_data['output']
                     return_values = []
+                    #cwilks: possibly introduced non-determinism
+                    #for where jobs are run due to substituting a map here
+                    #for input files
                     execute_balanced_job_with_retries(
                             pool, iface, step_runner_with_error_return,
                                 [[step_data['reducer'], input_file, output_dir, 
@@ -1872,7 +1958,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 step_data['sort_options'], memcap, gzip,
                                 gzip_level, scratch, sort, dir_to_path]
                                     for i, input_file
-                                    in enumerate(input_files)],
+                                    in input_files.iteritems()],
                             status_message='Tasks completed',
                             finish_message=(
                                 '    Completed %s.'
