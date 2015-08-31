@@ -319,7 +319,7 @@ def ready_engines(rc, base, prep=False):
     '''Create temporary directories on selected nodes; NOT WINDOWS-COMPATIBLE;
     must be changed if porting Rail to Windows.'''
     if base.scratch is None:
-        scratch_dir = '/tmp'
+        scratch_dir = tempfile.gettempdir()
     else:
         scratch_dir = base.scratch
     temp_dir = os.path.join(scratch_dir, 'railrna-%s' %
@@ -375,7 +375,7 @@ def ready_engines(rc, base, prep=False):
             compressed_rail_path, compressed_rail_destination,
             message=('Error(s) encountered copying Rail to '
                      'slave nodes. Refer to the errors above -- and '
-                     'especially make sure /tmp is not out of space on any '
+                     'especially make sure $TMPDIR is not out of space on any '
                      'node supporting an IPython engine '
                      '-- before trying again.'),
         )
@@ -390,7 +390,7 @@ def ready_engines(rc, base, prep=False):
                 compressed_rail_destination,
                 message=('Error(s) encountered copying Rail to '
                          'local filesystem. Refer to the errors above -- and '
-                         'especially make sure /tmp is not out of space on '
+                         'especially make sure $TMPDIR is not out of space on '
                          'any node supporting an IPython engine '
                          '-- before trying again.'),
             )
@@ -431,7 +431,7 @@ def ready_engines(rc, base, prep=False):
             base.manifest, manifest_destination,
             message=('Error(s) encountered copying manifest to '
                      'slave nodes. Refer to the errors above -- and '
-                     'especially make sure /tmp is not out of space on any '
+                     'especially make sure $TMPDIR is not out of space on any '
                      'node supporting an IPython engine '
                      '-- before trying again.'),
         )
@@ -445,7 +445,7 @@ def ready_engines(rc, base, prep=False):
                 shutil.copyfile, base.manifest, manifest_destination,
                 message=('Error(s) encountered copying manifest to '
                          'slave nodes. Refer to the errors above -- and '
-                         'especially make sure /tmp is not out of space on '
+                         'especially make sure $TMPDIR is not out of space on '
                          'any node supporting an IPython engine '
                          '-- before trying again.'),
             )
@@ -496,8 +496,8 @@ def ready_engines(rc, base, prep=False):
                                     os.path.basename(index_file)),
                     message=('Error(s) encountered copying Bowtie indexes to '
                              'cluster nodes. Refer to the errors above -- and '
-                             'especially make sure /tmp is not out of space '
-                             'on any node supporting an IPython engine '
+                             'especially make sure $TMPDIR is not out of '
+                             'space on any node supporting an IPython engine '
                              '-- before trying again.')
                 )
                 files_copied += 1
@@ -524,7 +524,7 @@ def ready_engines(rc, base, prep=False):
                         message=('Error(s) encountered copying Bowtie '
                                  'indexes to local filesystem. Refer to the '
                                  'errors above -- and especially make sure '
-                                 '/tmp is not out of space '
+                                 '$TMPDIR is not out of space '
                                  'on any node supporting an IPython engine '
                                  '-- before trying again.')
                     )
@@ -565,7 +565,7 @@ def ready_engines(rc, base, prep=False):
                             message=('Error(s) encountered copying Bowtie '
                                      'indexes to local filesystem. Refer to '
                                      'the errors above -- and especially make '
-                                     'sure /tmp is not out of space '
+                                     'sure $TMPDIR is not out of space '
                                      'on any node supporting an IPython '
                                      'engine -- before trying again.')
                         )
@@ -1723,7 +1723,7 @@ class RailRnaLocal(object):
                 default=None,
                 help=('node-local scratch directory for storing Bowtie index '
                       'and temporary files before they are committed (def: '
-                      'directory in /tmp and/or other securely created '
+                      'TMPDIR environment var and/or other securely created '
                       'temporary directory)')
             )
             if not prep:

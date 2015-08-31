@@ -1062,7 +1062,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 '''Create temporary directories on selected nodes; NOT
                 WINDOWS-COMPATIBLE; must be changed if porting to Windows.'''
                 if scratch == '-':
-                    scratch_dir = '/tmp'
+                    scratch_dir = tempfile.gettempdir()
                 else:
                     scratch_dir = scratch
                 temp_dir = os.path.join(
@@ -1135,7 +1135,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         file_or_archive, destination_path,
                         message=(('Error(s) encountered copying %s to '
                                   'slave nodes. Refer to the errors above '
-                                  '-- and especially make sure /tmp is not '
+                                  '-- and especially make sure $TMPDIR is not '
                                   'out of space on any node supporting an '
                                   'IPython engine -- before trying again.')
                                     % file_or_archive),
@@ -1148,9 +1148,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             destination_path,
                             message=(('Error(s) encountered copying %s to '
                                       'local filesystem. Refer to the errors '
-                                      'above -- and especially make sure /tmp '
-                                      'is not out of space on any node '
-                                      'supporting an IPython engine '
+                                      'above -- and especially make sure '
+                                      '$TMPDIR is not out of space on any '
+                                      'node supporting an IPython engine '
                                       '-- before trying again.')
                                         % file_or_archive),
                         )
