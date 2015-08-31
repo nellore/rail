@@ -95,7 +95,7 @@ if args.out is not None:
         except: pass
         output_filename = os.path.join(args.out, args.intron_filename)
     else:
-        temp_dir_path = make_temp_dir(args.scratch)
+        temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
         register_cleanup(tempdel.remove_temporary_directories,
                             [temp_dir_path])
         output_filename = args.intron_filename + '.temp'

@@ -240,8 +240,8 @@ if __name__ == '__main__':
 if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
-    go(bowtie2_exe=args.bowtie2_exe,
-        bowtie2_index_base=args.bowtie2_idx,
+    go(bowtie2_exe=os.path.expandvars(args.bowtie2_exe),
+        bowtie2_index_base=os.path.expandvars(args.bowtie2_idx),
         bowtie2_args=bowtie2_args, 
         verbose=args.verbose,
         report_multiplier=args.report_multiplier,
@@ -250,7 +250,7 @@ if __name__ == '__main__' and not args.test:
         score_min=args.score_min,
         mover=mover,
         intermediate_dir=args.intermediate_dir,
-        scratch=args.scratch)
+        scratch=tempdel.silentexpandvars(args.scratch))
     print >>sys.stderr, ('DONE with cointron_enum.py; in=%d; time=%0.3f s') % \
         (_input_line_count, time.time() - start_time)
 elif __name__ == '__main__':

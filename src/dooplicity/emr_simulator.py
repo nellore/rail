@@ -133,6 +133,11 @@ def add_args(parser):
                   'string \"-\" means write to a temporary directory securely '
                   'created by Python.')
         )
+    parser.add_argument('--direct-write', action='store_const',
+            const=True, default=False,
+            help=('Always write intermediate files directly to consolidated '
+                  'intermediate directory, even if --scratch is specified.')
+        )
     parser.add_argument('--common', type=str, required=False,
             default=None,
             help=('Location of a writable directory accessible across all '
@@ -220,7 +225,8 @@ def parsed_keys(partition_options, key_fields):
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, partition_options, task_count,
                     memcap, gzip=False, gzip_level=3, scratch=None,
-                    sort='sort', mod_partition=False, max_attempts=4):
+                    direct_write=False, sort='sort', mod_partition=False,
+                    max_attempts=4):
     """ Partitions input data into tasks and presorts them.
 
         Files in output directory are in the format x.y, where x is a task
@@ -246,6 +252,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         scratch: where to write output before copying to output_dir. If "-"
             string, writes to temporary directory; if None, writes directly
             to output directory.
+        direct_write: write intermediate files directly to final destination,
+            no matter what scratch is.
         sort: path to sort executable
         mod_partition: if True, task is assigned according to formula
             (product of fields) % task_count
@@ -260,7 +268,9 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         task_streams = {}
         if gzip:
             task_stream_processes = {}
-        if scratch == '-':
+        if direct_write:
+            final_output_dir = output_dir
+        elif scratch == '-':
             # Write to temporary directory
             final_output_dir = output_dir
             try:
@@ -454,6 +464,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         scratch: where to write output before copying to output_dir. If "-"
             string, writes to temporary directory; if None, writes directly
             to output directory.
+        direct_write: write intermediate files directly to final destination,
+            no matter what scratch is.
         sort: path to sort executable.
         dir_to_path: path to add to PATH.
         attempt_number: attempt number of current task or None if no retries.
@@ -464,7 +476,9 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
     """
     command_to_run = None
     try:
-        if scratch == '-':
+        if direct_write:
+            final_output_dir = output_dir
+        elif scratch == '-':
             # Write to temporary directory
             final_output_dir = output_dir
             try:
@@ -659,7 +673,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
                     log, gzip=False, gzip_level=3, ipy=False,
                     ipcontroller_json=None, ipy_profile=None, scratch=None,
-                    common=None, sort='sort', max_attempts=4):
+                    common=None, sort='sort', max_attempts=4,
+                    direct_write=False):
     """ Runs Hadoop Streaming simulation.
 
         FUNCTIONALITY IS IDIOSYNCRATIC; it is currently confined to those
@@ -697,6 +712,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         common: path to directory accessible across nodes in --ipy mode
         sort: sort executable including command-line arguments
         max_attempts: maximum number of times to attempt a task in ipy mode.
+        direct_write: always writes intermediate files directly to final
+            destination, even when scratch is specified
 
         No return value.
     """
@@ -1074,19 +1091,31 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     )
                             )
                 apply_async_with_errors(
-                    pool, engines_for_copying, os.makedirs,
-                    temp_dir,
+                    pool, engines_for_copying, subprocess.check_output,
+                    'mkdir -p %s' % temp_dir, shell=True,
+                    executable='/bin/bash',
                     message=(('Error(s) encountered creating temporary '
                               'directories for storing {} on slave nodes. '
                               'Restart IPython engines and try again.').format(
                                                         file_or_archive
-                                                    )),
-                    errors_to_ignore=['OSError']
+                                                    ))
                 )
+                '''To accommodate any node-local BASH variables that may be in
+                --scratch, echo them on all engines before adding to engine
+                PYTHONPATHs.'''
+                temp_dirs = apply_async_with_errors(rc, engines_for_copying,
+                    subprocess.check_output,
+                    'echo -c "%s"' % temp_dir,
+                    shell=True,
+                    executable='/bin/bash',
+                    message=('Error obtaining full paths of temporary '
+                             'directories on cluster nodes. Restart IPython '
+                             'engines and try again.'),
+                    dict_format=True)
                 # Add temp dirs to path
                 apply_async_with_errors(
                     pool, engines_for_copying, site.addsitedir,
-                    temp_dir,
+                    temp_dirs,
                     message=(('Error(s) encountered adding temporary '
                               'directories for storing {} to path on '
                               'slave nodes.').format(
@@ -1689,8 +1718,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                          output_dir, err_dir,
                                          i, multiple_outputs,
                                          separator, None, None, gzip,
-                                         gzip_level, scratch, sort,
-                                         dir_to_path]
+                                         gzip_level, scratch, direct_write,
+                                         sort, dir_to_path]
                                          for i, input_file
                                          in enumerate(input_files)
                                          if os.path.isfile(input_file)],
@@ -1755,7 +1784,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 step_data['key_fields'], separator,
                                 step_data['partition_options'],
                                 step_data['task_count'], memcap, gzip,
-                                gzip_level, scratch, sort, mod_partition]
+                                gzip_level, scratch, direct_write,
+                                sort, mod_partition]
                                     for i, input_file_group
                                     in enumerate(input_file_groups)],
                             status_message='Inputs partitioned',
@@ -1792,7 +1822,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 [[step_data['reducer'], input_file, output_dir, 
                                 err_dir, i, multiple_outputs, separator,
                                 step_data['sort_options'], memcap, gzip,
-                                gzip_level, scratch, sort, dir_to_path]
+                                gzip_level, scratch, direct_write,
+                                sort, dir_to_path]
                                     for i, input_file
                                     in enumerate(input_files)],
                             status_message='Tasks completed',
@@ -1943,4 +1974,5 @@ if __name__ == '__main__':
                     args.keep_intermediates, args.keep_last_output,
                     args.log, args.gzip_outputs, args.gzip_level,
                     args.ipy, args.ipcontroller_json, args.ipy_profile,
-                    args.scratch, args.common, args.sort, args.max_attempts)
+                    args.scratch, args.common, args.sort, args.max_attempts,
+                    args.direct_write)

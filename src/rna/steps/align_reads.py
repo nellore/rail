@@ -735,11 +735,11 @@ if __name__ == '__main__':
         keep_alive_thread.start()
 
     start_time = time.time()
-    go(bowtie2_exe=args.bowtie2_exe,
-        bowtie_index_base=args.bowtie_idx,
-        bowtie2_index_base=args.bowtie2_idx,
+    go(bowtie2_exe=os.path.expandvars(args.bowtie2_exe),
+        bowtie_index_base=os.path.expandvars(args.bowtie_idx),
+        bowtie2_index_base=os.path.expandvars(args.bowtie2_idx),
         bowtie2_args=bowtie_args,
-        manifest_file=args.manifest,
+        manifest_file=os.path.expandvars(args.manifest),
         verbose=args.verbose, 
         bin_size=args.partition_length,
         exon_differentials=args.exon_differentials,
@@ -753,7 +753,7 @@ if __name__ == '__main__':
         capping_multiplier=args.capping_multiplier,
         drop_deletions=args.drop_deletions,
         gzip_level=args.gzip_level,
-        scratch=args.scratch,
+        scratch=tempdel.silentexpandvars(args.scratch),
         index_count=args.index_count,
         output_bam_by_chr=args.output_bam_by_chr,
         tie_margin=args.tie_margin,

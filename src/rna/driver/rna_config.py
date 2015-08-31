@@ -329,12 +329,13 @@ def ready_engines(rc, base, prep=False):
         dir_to_create = os.path.join(temp_dir, 'genome')
     else:
         dir_to_create = temp_dir
-    apply_async_with_errors(rc, engines_for_copying, os.makedirs,
-        dir_to_create,
+    '''Must use mkdir -p rather than os.makedirs so node-specific BASH
+    variable, if it was specified, works.'''
+    apply_async_with_errors(rc, engines_for_copying, subprocess.check_output,
+        'mkdir -p %s' % dir_to_create, shell=True, executable='/bin/bash',
         message=('Error(s) encountered creating temporary '
                  'directories for storing Rail on slave nodes. '
-                 'Restart IPython engines and try again.'),
-        errors_to_ignore=['OSError'])
+                 'Restart IPython engines and try again.'))
     '''Only foolproof way to die is by process polling. See
     http://stackoverflow.com/questions/284325/
     how-to-make-child-process-die-after-parent-exits for more information.'''
@@ -367,17 +368,21 @@ def ready_engines(rc, base, prep=False):
         tar_stream.add(base_path, arcname='rail')
     try:
         import herd.herd as herd
+        if '$' in compressed_rail_destination: raise ImportError
     except ImportError:
-        # Torrent distribution channel for compressed archive not available
+        '''Torrent distribution channel for compressed archive not available,
+        or we need to use node-local BASH variables.'''
         print_to_screen('Copying Rail-RNA to cluster nodes...',
                             newline=False, carriage_return=True)
-        apply_async_with_errors(rc, engines_for_copying, shutil.copyfile,
-            compressed_rail_path, compressed_rail_destination,
+        apply_async_with_errors(rc, engines_for_copying,
+            subprocess.check_output, 'cp %s %s' % (
+                    compressed_rail_path, compressed_rail_destination
+                ), shell=True, executable='/bin/bash',
             message=('Error(s) encountered copying Rail to '
                      'slave nodes. Refer to the errors above -- and '
-                     'especially make sure $TMPDIR is not out of space on any '
+                     'especially make sure "%s" is not out of space on any '
                      'node supporting an IPython engine '
-                     '-- before trying again.'),
+                     '-- before trying again.') % temp_dir,
         )
         print_to_screen('Copied Rail-RNA to cluster nodes.',
                             newline=True, carriage_return=False)
@@ -390,9 +395,9 @@ def ready_engines(rc, base, prep=False):
                 compressed_rail_destination,
                 message=('Error(s) encountered copying Rail to '
                          'local filesystem. Refer to the errors above -- and '
-                         'especially make sure $TMPDIR is not out of space on '
+                         'especially make sure "%s" is not out of space on '
                          'any node supporting an IPython engine '
-                         '-- before trying again.'),
+                         '-- before trying again.') % temp_dir,
             )
             print_to_screen('Copied Rail-RNA to local filesystem.',
                                 newline=True, carriage_return=False)
@@ -414,26 +419,45 @@ def ready_engines(rc, base, prep=False):
     print_to_screen('Extracted Rail-RNA on cluster nodes.',
                             newline=True, carriage_return=False)
     # Add Rail to path on every engine
-    temp_base_path = os.path.join(temp_dir, 'rail')
-    temp_utils_path = os.path.join(temp_base_path, 'rna', 'utils')
-    temp_driver_path = os.path.join(temp_base_path, 'rna', 'driver')
-    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_base_path)
-    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_utils_path)
-    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_driver_path)
+    temp_dirs = apply_async_with_errors(rc, engines_for_copying,
+        subprocess.check_output,
+        'echo -c "%s"' % temp_dir,
+        shell=True,
+        executable='/bin/bash',
+        message=('Error obtaining full paths of temporary directories '
+                 'on cluster nodes. Restart IPython engines '
+                 'and try again.'
+            ),
+        dict_format=True)
+    # Must accommodate potentially different paths on different engines
+    temp_base_paths, temp_utils_paths, temp_driver_paths = {}, {}, {}
+    for engine in temp_dirs:
+        temp_base_paths[engine] = os.path.join(temp_dirs[engine], 'rail')
+        temp_utils_paths[engine] = os.path.join(temp_base_paths[engine],
+                                                'rna', 'utils')
+        temp_driver_paths[engine] = os.path.join(temp_base_paths[engine],
+                                                 'rna', 'driver')
+    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_base_paths)
+    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_utils_paths)
+    apply_async_with_errors(rc, all_engines, site.addsitedir,
+                                temp_driver_paths)
     # Copy manifest to nodes
     manifest_destination = os.path.join(temp_dir, 'MANIFEST')
     try:
         import herd.herd as herd
+        if '$' in manifest_destination: raise ImportError
     except ImportError:
         print_to_screen('Copying file manifest to cluster nodes...',
                             newline=False, carriage_return=True)
-        apply_async_with_errors(rc, engines_for_copying, shutil.copyfile,
-            base.manifest, manifest_destination,
+        apply_async_with_errors(rc, engines_for_copying, 
+            subprocess.check_output, 'cp %s %s' % (
+                    base.manifest, manifest_destination,
+                ), shell=True, executable='/bin/bash',
             message=('Error(s) encountered copying manifest to '
                      'slave nodes. Refer to the errors above -- and '
-                     'especially make sure $TMPDIR is not out of space on any '
+                     'especially make sure "%s" is not out of space on any '
                      'node supporting an IPython engine '
-                     '-- before trying again.'),
+                     '-- before trying again.') % temp_dir,
         )
         print_to_screen('Copied file manifest to cluster nodes.',
                             newline=True, carriage_return=False)
@@ -445,9 +469,9 @@ def ready_engines(rc, base, prep=False):
                 shutil.copyfile, base.manifest, manifest_destination,
                 message=('Error(s) encountered copying manifest to '
                          'slave nodes. Refer to the errors above -- and '
-                         'especially make sure $TMPDIR is not out of space on '
+                         'especially make sure "%s" is not out of space on '
                          'any node supporting an IPython engine '
-                         '-- before trying again.'),
+                         '-- before trying again.') % temp_dir,
             )
             print_to_screen('Copied manifest to local filesystem.',
                                 newline=True, carriage_return=False)
@@ -474,8 +498,10 @@ def ready_engines(rc, base, prep=False):
                                 ]])
         try:
             import herd.herd as herd
+            if '$' in temp_dir: raise ImportError
         except ImportError:
-            print_to_screen('Warning: Herd is not installed, so copying '
+            print_to_screen('Warning: Herd is not installed or BASH variables '
+                            'are in --scratch, so copying '
                             'Bowtie indexes to cluster nodes may be slow. '
                             'Install Herd to enable torrent distribution of '
                             'indexes across nodes, or invoke '
@@ -491,14 +517,16 @@ def ready_engines(rc, base, prep=False):
                 )
             for index_file in index_files:
                 apply_async_with_errors(rc, engines_for_copying,
-                    shutil.copyfile, os.path.abspath(index_file),
-                    os.path.join(temp_dir, 'genome',
-                                    os.path.basename(index_file)),
+                    subprocess.check_output, 'cp %s %s' % (
+                        os.path.abspath(index_file),
+                        os.path.join(temp_dir, 'genome',
+                                        os.path.basename(index_file))
+                    ), shell=True, executable='/bin/bash',
                     message=('Error(s) encountered copying Bowtie indexes to '
                              'cluster nodes. Refer to the errors above -- and '
-                             'especially make sure $TMPDIR is not out of '
+                             'especially make sure "%s" is not out of '
                              'space on any node supporting an IPython engine '
-                             '-- before trying again.')
+                             '-- before trying again.') % temp_dir
                 )
                 files_copied += 1
                 print_to_screen(
@@ -524,9 +552,9 @@ def ready_engines(rc, base, prep=False):
                         message=('Error(s) encountered copying Bowtie '
                                  'indexes to local filesystem. Refer to the '
                                  'errors above -- and especially make sure '
-                                 '$TMPDIR is not out of space '
+                                 '"%s" is not out of space '
                                  'on any node supporting an IPython engine '
-                                 '-- before trying again.')
+                                 '-- before trying again.') % temp_dir
                     )
                     files_copied += 1
                     print_to_screen(
@@ -559,15 +587,18 @@ def ready_engines(rc, base, prep=False):
                                 newline=False, carriage_return=True)
                     for index_file in index_files:
                         apply_async_with_errors(rc, engines_for_copying,
-                            shutil.copyfile, os.path.abspath(index_file),
-                            os.path.join(temp_dir, 'genome',
-                                            os.path.basename(index_file)),
+                            subprocess.check_output, 'cp %s %s' % (
+                                os.path.abspath(index_file),
+                                os.path.join(temp_dir, 'genome',
+                                                os.path.basename(index_file))
+                            ), shell=True, executable='/bin/bash',
                             message=('Error(s) encountered copying Bowtie '
                                      'indexes to local filesystem. Refer to '
                                      'the errors above -- and especially make '
-                                     'sure $TMPDIR is not out of space '
+                                     'sure "%s" is not out of space '
                                      'on any node supporting an IPython '
                                      'engine -- before trying again.')
+                                        % temp_dir
                         )
                         files_copied += 1
                         print_to_screen(
@@ -1306,8 +1337,8 @@ class RailRnaLocal(object):
                     num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3,
                     sort_memory_cap=(300*1024), parallel=False,
-                    local=True, scratch=None, ansible=None,
-                    do_not_copy_index_to_nodes=False,
+                    local=True, scratch=None, direct_write=False,
+                    ansible=None, do_not_copy_index_to_nodes=False,
                     sort_exe=None):
         """ base: instance of RailRnaErrors """
         # Initialize ansible for easy checks
@@ -1341,6 +1372,7 @@ class RailRnaLocal(object):
         base.check_s3_on_engines = None
         base.check_curl_on_engines = None
         base.do_not_copy_index_to_nodes = do_not_copy_index_to_nodes
+        base.direct_write = direct_write
         if not parallel:
             if output_dir_url.is_local:
                 if os.path.exists(output_dir_url.to_url()):
@@ -1586,15 +1618,17 @@ class RailRnaLocal(object):
                                                         sort_memory_cap
                                                     ))
             base.sort_memory_cap = sort_memory_cap
-        if scratch:
-            if not os.path.exists(scratch):
+        if parallel and scratch:
+            expanded_scratch = os.path.expandvars(scratch)
+            if not os.path.exists(expanded_scratch):
                 try:
-                    os.makedirs(scratch)
+                    os.makedirs(expanded_scratch)
                 except OSError:
                     base.errors.append(
                             ('Could not create scratch directory %s; '
                              'check that it\'s not a file and that '
-                             'write permissions are active.') % scratch
+                             'write permissions are active.')
+                                % expanded_scratch
                         )
         base.scratch = scratch
         if sort_exe:
@@ -1627,16 +1661,17 @@ class RailRnaLocal(object):
             except ValueError:
                 sort_scratch = base.scratch
                 check_scratch = False
-        if check_scratch:
-            if not os.path.exists(sort_scratch):
+        if parallel and check_scratch:
+            expanded_sort_scratch  = os.path.expandvars(sort_scratch)
+            if not os.path.exists(expanded_sort_scratch):
                 try:
-                    os.makedirs(sort_scratch)
+                    os.makedirs(expanded_sort_scratch)
                 except OSError:
                     base.errors.append(
                             ('Could not create sort scratch directory %s; '
                              'check that it\'s not a file and that '
                              'write permissions are active.')
-                            % sort_scratch
+                            % expanded_sort_scratch
                         )
         base.sort_exe = ' '.join(
                             [base.check_program('sort', 'sort', '--sort',
@@ -1701,8 +1736,9 @@ class RailRnaLocal(object):
             general_parser.add_argument(
                 '--scratch', type=str, required=False, metavar='<dir>',
                 default=None,
-                help=('directory for storing temporary files (def: '
-                      'securely created temporary directory)')
+                help=('directory for storing temporary files; BASH variables '
+                      'specified with dollar signs are recognized here '
+                      '(def: securely created temporary directory)')
             )
         else:
             general_parser.add_argument(
@@ -1722,9 +1758,17 @@ class RailRnaLocal(object):
                 '--scratch', type=str, required=False, metavar='<dir>',
                 default=None,
                 help=('node-local scratch directory for storing Bowtie index '
-                      'and temporary files before they are committed (def: '
-                      'TMPDIR environment var and/or other securely created '
-                      'temporary directory)')
+                      'and temporary files before they are committed; '
+                      'node-local BASH variables specified with dollar signs '
+                      'are recognized here (def: return value of '
+                      'tempfile.gettempdir(); see Python docs)')
+            )
+            general_parser.add_argument(
+                '--direct-write', action='store_const', const=True,
+                default=False,
+                help=('write intermediate files directly to the log directory '
+                      'rather than first writing to scratch and moving '
+                      'results')
             )
             if not prep:
                 general_parser.add_argument(
@@ -4632,8 +4676,8 @@ class RailRnaParallelPreprocessJson(object):
         do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
-        ipcontroller_json=None, scratch=None, keep_intermediates=False,
-        check_manifest=True, sort_exe=None):
+        ipcontroller_json=None, scratch=None, direct_write=False,
+        keep_intermediates=False, check_manifest=True, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
@@ -4645,7 +4689,8 @@ class RailRnaParallelPreprocessJson(object):
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, scratch=scratch,
-            local=False, parallel=False, sort_exe=sort_exe)
+            direct_write=direct_write, local=False, parallel=False,
+            sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
             subsequently upload to final destination.'''
@@ -4675,8 +4720,9 @@ class RailRnaParallelPreprocessJson(object):
             check_manifest=check_manifest, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap, scratch=scratch,
-            keep_intermediates=keep_intermediates, local=False, parallel=True,
-            ansible=ab.Ansible(), sort_exe=sort_exe)
+            direct_write=direct_write, keep_intermediates=keep_intermediates,
+            local=False, parallel=True, ansible=ab.Ansible(),
+            sort_exe=sort_exe)
         engine_base_checks = {}
         for i in rc.ids:
             engine_base_checks[i] = engine_bases[i].check_program
@@ -4832,8 +4878,8 @@ class RailRnaLocalAlignJson(object):
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
-            keep_intermediates=keep_intermediates, scratch=scratch,
-            sort_exe=sort_exe)
+            keep_intermediates=keep_intermediates,
+            scratch=scratch, sort_exe=sort_exe)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -4904,9 +4950,10 @@ class RailRnaParallelAlignJson(object):
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
-        gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
-        max_task_attempts=4, keep_intermediates=False,
-        do_not_copy_index_to_nodes=False, sort_exe=None):
+        direct_write=False, gzip_intermediates=False, gzip_level=3,
+        sort_memory_cap=(300*1024), max_task_attempts=4,
+        keep_intermediates=False, do_not_copy_index_to_nodes=False,
+        sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
@@ -4918,7 +4965,8 @@ class RailRnaParallelAlignJson(object):
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates,
-            local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
+            local=False, parallel=False, scratch=scratch,
+            direct_write=direct_write, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
             subsequently upload to S3.'''
@@ -4974,7 +5022,8 @@ class RailRnaParallelAlignJson(object):
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
-            ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
+            ansible=ab.Ansible(), scratch=scratch, direct_write=direct_write,
+            sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
             input_dir=input_dir, elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -5290,8 +5339,8 @@ class RailRnaParallelAllJson(object):
         bed_basename='', tsv_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
         max_task_attempts=4, ipython_profile=None, ipcontroller_json=None,
-        scratch=None, keep_intermediates=False, check_manifest=True,
-        do_not_copy_index_to_nodes=False, sort_exe=None):
+        scratch=None, direct_write=False, keep_intermediates=False,
+        check_manifest=True, do_not_copy_index_to_nodes=False, sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
@@ -5302,7 +5351,7 @@ class RailRnaParallelAllJson(object):
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
-            keep_intermediates=keep_intermediates,
+            direct_write=direct_write, keep_intermediates=keep_intermediates,
             local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
@@ -5362,7 +5411,8 @@ class RailRnaParallelAllJson(object):
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
-            ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
+            ansible=ab.Ansible(), scratch=scratch, direct_write=direct_write,
+            sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
             bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,

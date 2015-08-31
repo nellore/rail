@@ -842,6 +842,7 @@ if __name__ == '__main__':
         bin_qualities=args.bin_qualities,
         short_qnames=args.shorten_read_names,
         skip_bad_records=args.skip_bad_records,
+        scratch=tempdel.silentexpandvars(args.scratch),
         verbose=args.verbose,
         mover=mover)
     print >>sys.stderr, 'DONE with preprocess.py; in/out=%d/%d; ' \

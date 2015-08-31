@@ -120,8 +120,12 @@ start_time = time.time()
 input_line_count, output_line_count = 0, 0
 bin_count = 0
 # For converting RNAMEs to number strings
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
-manifest_object = manifest.LabelsAndIndices(args.manifest)
+reference_index = bowtie_index.BowtieIndexReference(
+                        os.path.expandvars(args.bowtie_idx)
+                    )
+manifest_object = manifest.LabelsAndIndices(
+                        os.path.expandvars(args.manifest)
+                    )
 # Grab read counts
 mapped_read_counts, unique_mapped_read_counts = {}, {}
 with xopen(None, args.read_counts) as read_count_stream:

@@ -90,7 +90,7 @@ output_url = Url(args.out) if args.out is not None \
     else Url(os.getcwd())
 # Set up temporary destination
 import tempfile
-temp_dir_path = make_temp_dir(args.scratch)
+temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
 # For deleting temporary directory, even on unexpected exit
 register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 # Set up temporary destination

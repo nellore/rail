@@ -93,7 +93,9 @@ input_line_count, output_line_count = 0, 0
 
 start_time = time.time()
 
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
+reference_index = bowtie_index.BowtieIndexReference(
+                        os.path.expandvars(args.bowtie_idx)
+                    )
 for (_, rname_string, intron_pos, intron_end_pos,
         sense, sample_index), xpartition in xstream(sys.stdin, 6):
     coverage = 0

@@ -337,7 +337,9 @@ if __name__ == '__main__':
 
 if __name__ == '__main__' and not args.test:
     start_time = time.time()
-    manifest_object = manifest.LabelsAndIndices(args.manifest)
+    manifest_object = manifest.LabelsAndIndices(
+                                os.path.expandvars(args.manifest)
+                            )
     input_line_count, output_line_count = go(
             manifest_object=manifest_object,
             input_stream=sys.stdin,

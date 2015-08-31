@@ -67,7 +67,9 @@ args = parser.parse_args()
 
 start_time = time.time()
 input_line_count = 0
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
+reference_index = bowtie_index.BowtieIndexReference(
+                            os.path.expandvars(args.bowtie_idx)
+                        )
 group_reads_object = group_reads.IndexGroup(args.index_count)
 for (rname, poses, end_poses), xpartition in xstream(sys.stdin, 3,
                                                         skip_duplicates=True):
