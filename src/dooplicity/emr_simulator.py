@@ -435,8 +435,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
                                   separator, sort_options, memcap,
                                   gzip=False, gzip_level=3, scratch=None,
-                                  sort='sort', dir_to_path=None,
-                                  attempt_number=None):
+                                  direct_write=False, sort='sort',
+                                  dir_to_path=None, attempt_number=None):
     """ Runs a streaming command on a task, segregating multiple outputs. 
 
         streaming_command: streaming command to run.
