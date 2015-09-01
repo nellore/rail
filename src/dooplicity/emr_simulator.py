@@ -202,8 +202,8 @@ def copy_file(src_path, dst_path, remote_host=None, copy_from=False):
     command = ['rsync','-av',from_str,to_str]
     return run_command(command)
 
-#def stream_input_file(host, path, gzipped=False):
-def process_input_files(input_glob, sort_options):
+
+def process_inputs(input_glob):
     """Determines whether we have an acutal input glob
        or whether we're dealing with remote files.
 
@@ -211,22 +211,74 @@ def process_input_files(input_glob, sort_options):
                    or a map of task IDs to host:filepaths
     
        sort_options: only here to tells us whether to
-                     simply to assume input_glob is indeed
+                     simply assume input_glob is indeed
                      a file glob, or if defined, to tell
                      us its a dictionary for remote files
     """
-    #case 1: we're not doing any sorting so
-    #we assume everything is local and we should have a glob
-    #case 2: even with sort_options we're still getting a glob
-    #so everything is still local 
-    if not sort_options or isinstance(input_glob, basestring):
-        if not isinstance(input_glob, basestring):
-           raise TypeError("input_glob is not an actual file glob") 
+    #case 1: we get a string so we assume everything is local
+    if isinstance(input_glob, basestring):
+           #raise TypeError("input_glob is not an actual file glob") 
         input_files = [input_file for input_file in glob.glob(input_glob)
                             if os.path.isfile(input_file)]
         return (input_files, input_glob)
-    #case 3: the files aren't local, so we dont have a glob
+    #case 2: the files aren't local, so we dont have a glob
     return (input_glob, "")
+                    
+
+#prefix = 'gzip -cd %s' % input_glob
+                    #prefix = 'cat %s' % input_glob
+		    #' '.join(['<(gzip -cd %s)' % input_file for input_file in input_files])
+def file_streamer(cmd_to_run, inputs, gzipped, single_cmd=False):
+    '''Abstracted method to deal with the simple (local) 
+       and more complicated (remote) cases of streaming 
+       input files (including gzippped ones).  If file(s)
+       are remote, ssh is used to establish a connection
+       (assumes keys are setup between the nodes) and
+       then files are catted/gzipped as normal.
+     
+       cmd_to_run: gzip -cd, or cat usually, can be None or "" if
+                   not running a command
+       inputs: this is either: a glob string, a dict of host:path pairs,
+               or a list of globs
+      
+       gzipped: whether the input is gzipped or not, if local
+                we actually check the file, otherwise we trust the boolean
+
+       single_cmd: if enabled treats the first command for an array of input
+                   files as the first command, so no (<...), defaults to False
+
+       Return value: a string with the command and file path(s)
+                     or just the file path if the cmd is not defined
+    '''
+    stream_cmd_ = []
+    (input_files, input_glob) = process_inputs(inputs)
+    if not cmd_to_run:
+        cmd_to_run = 'cat'
+        if gzipped:
+            cmd_to_run = 'gzip -cd'
+   
+    if isinstance(inputs, list):
+        #for i,(host, path) in enumerate(inputs.iteritems()):
+        for i,(host, path) in enumerate(inputs):
+            scm = "<(ssh %s \"%s %s\")" % (host, cmd_to_run, path)
+            if i == 0 and single_cmd:
+                scm = "ssh %s \"%s %s\"" % (host, cmd_to_run, path)
+            stream_cmd_.append(scm)
+    #local files
+    else:
+        #if input_glob and isinstance(inputs, basestring):
+        # confirm for local files that we really have gzipped files
+        if cmd_to_run == 'cat' or cmd_to_run == 'gzip -cd':
+            with open(input_files[0], 'rb') as binary_input_stream:
+                if binary_input_stream.read(2) == '\x1f\x8b':
+                    cmd_to_run = 'gzip -cd'
+        for i,path in enumerate(input_files):
+            scm = "<(%s %s)" % (cmd_to_run, path)
+            if i == 0 and single_cmd:
+                scm = "%s %s" % (cmd_to_run, path)
+            stream_cmd_.append(scm)
+    return " ".join(stream_cmd_)
+
             
 class FileTracker:
     """ class to track at the master (singleton) level
@@ -559,6 +611,9 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             if not file_tracker:
                 shutil.rmtree(output_dir)
 
+
+   
+
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
                                   separator, sort_options, memcap,
@@ -628,19 +683,21 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                         'scratch subdirectory of %s: %s' % (scratch, e))
         else:
             final_output_dir = output_dir
-        (input_files, input_glob) = process_input_files(
-                                                 input_glob, sort_options)
-        if not input_files:
+
+        #if not input_files:
             # No input!
-            return None
+        #    return None
         if sort_options is None:
             # Mapper. Check if first input file is gzip'd
-            with open(input_files[0], 'rb') as binary_input_stream:
-                if binary_input_stream.read(2) == '\x1f\x8b':
+            #with open(input_files[0], 'rb') as binary_input_stream:
+            #    if binary_input_stream.read(2) == '\x1f\x8b':
                     # Magic number of gzip'd file found
-                    prefix = 'gzip -cd %s' % input_glob
-                else:
-                    prefix = 'cat %s' % input_glob
+                    #prefix = 'gzip -cd %s' % input_glob
+            #        prefix = file_streamer('gzip -cd', input_glob, True)
+            #    else:
+                    #prefix = 'cat %s' % input_glob
+            #        prefix = file_streamer('cat', input_glob, False)
+            prefix = file_streamer('cat', input_glob, gzip, single_cmd=True)
         else:
             # Reducer. Merge sort the input glob.
             if gzip:
@@ -648,15 +705,18 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                 prefix = '(%s -S %d %s -t$\'%s\' -m %s' % (
                         sort, memcap, sort_options,
                         separator.encode('string_escape'),
-                        ' '.join(['<(gzip -cd %s)' % input_file
-                                    for input_file in input_files]) + ')'
+                        file_streamer('gzip -cd', input_glob, gzip) + ')'
+                        #' '.join(['<(gzip -cd %s)' % input_file
+                        #            for input_file in input_files]) + ')'
                     )
             else:
                 # Reducer. Merge sort the input glob.
                 prefix = '%s -S %d %s -t$\'%s\' -m %s' % (sort, memcap,
                                             sort_options,
                                             separator.encode('string_escape'),
-                                            input_glob)
+                                            #input_glob)
+                                            file_streamer('cat', 
+                                                          input_glob, False))
         err_file = os.path.abspath(os.path.join(err_dir, (
                                             ('%d.log' % task_id)
                                                 if attempt_number is None
@@ -938,7 +998,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         step_runner_with_error_return,
                     presorted_tasks=presorted_tasks,
                     parsed_keys=parsed_keys,
-                    process_input_files=process_input_files
+                    process_inputs=process_inputs,
+                    file_streamer=file_streamer
                 ))
             iface.step('Loaded dependencies on IPython engines.')
             # Get host-to-engine and engine pids relations
@@ -1024,6 +1085,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 random.seed(pool.ids[-1])
                 used_engines, free_engines = set(), set(pool.ids)
                 completed_tasks = 0
+                for i, task_function_arg in enumerate(task_function_args):
+                    iface.step("TASK_FUNCTION_ARG %d %s " % (i, task_function_arg))
                 tasks_to_assign = deque([
                         [task_function_arg, i, []] for i, task_function_arg
                         in enumerate(task_function_args)
@@ -1517,6 +1580,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 finally:
                     # Cleanup
                     shutil.rmtree(temp_dir)
+        #END OF if not ipy (multiprocessor mode)
         # Serialize JSON configuration
         if json_config is not None:
             with open(json_config) as json_stream:
@@ -1711,10 +1775,12 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 # maxtasksperchild doesn't work, somehow? Supported only in 2.7
                 pool = multiprocessing.Pool(num_processes, init_worker)
         for step in steps:
+            iface.step('START ANOTHER STEP ROUND')
             step_data = steps[step]
             step_inputs = []
             # Handle multiple input files/directories
             for input_file_or_dir in step_data['input'].split(','):
+                iface.step('STEP INPUT %s ' % input_file_or_dir)
                 if os.path.isfile(input_file_or_dir):
                     step_inputs.append(input_file_or_dir)
                 elif os.path.isdir(input_file_or_dir):
@@ -1809,6 +1875,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             raise RuntimeError('No NLineInputFormat input to '
                                                'step "%s".' % step)
                     else:
+                        iface.step('not using NLine for inputs')
                         input_files = [input_file for input_file in step_inputs
                                         if os.path.isfile(input_file)]
                     input_file_count = len(input_files)
@@ -1924,7 +1991,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             except KeyError as e:
                                 input_files[taskid]=[[host_,file_]]
 
-                    iface.status('    Starting step runner...')
+                    iface.step('    Starting step runner...')
+                    #if True:
                     if not file_tracker or len(input_files) == 0:
                         for i in xrange(step_data['task_count']):
                             file_glob = os.path.join(output_dir, '%d.*' % i)
@@ -1934,6 +2002,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         #input_files = [input_file for input_file in input_files
                         #            if glob.glob(input_file)]
                     input_file_count = len(input_files)
+                    iface.step('    INPUT FILE COUNT %d ' % input_file_count)
                     try:
                         multiple_outputs = (
                                 ('multiple_outputs' in step_data) or
