@@ -396,7 +396,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     new_kwargs = defaultdict(dict)
     for kwarg in kwargs:
         if (isinstance(kwargs[kwarg], dict)
-            and set(kwargs[kwarg].keys()).issubset(id_set):
+            and set(kwargs[kwarg].keys()).issubset(id_set)):
             for i in ids:
                 new_kwargs[i][kwarg] = kwargs[kwarg][i]
         else:
