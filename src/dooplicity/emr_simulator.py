@@ -1090,6 +1090,34 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                         for _ in xrange(12)
                                     )
                             )
+                '''To accommodate any slot-local BASH variables that may be in
+                --scratch, echo them on all engines before adding to engine
+                PYTHONPATHs.'''
+                temp_dirs = apply_async_with_errors(rc, all_engines,
+                    subprocess.check_output,
+                    'echo -c "%s"' % temp_dir,
+                    shell=True,
+                    executable='/bin/bash',
+                    message=('Error obtaining full paths of temporary '
+                             'directories on cluster nodes. Restart IPython '
+                             'engines and try again.'),
+                    dict_format=True)
+                for engine in temp_dirs:
+                    temp_dirs[engine].strip()
+                engines_with_unique_scratch, engines_to_symlink = [], []
+                engines_to_copy_engines = {}
+                for engine_for_copying in engines_for_copying:
+                    for engine in hostname_to_engines[
+                                engine_to_hostnames[engine_for_copying]
+                            ]:
+                        engine_to_copy_engine[engine] = engine_for_copying
+                        if (engine != engine_for_copying
+                            and temp_dirs[engine]
+                            != temp_dirs[engine_for_copying]):
+                            engines_with_unique_scratch.append(engine)
+                            engines_to_symlink.append(engine)
+                        elif engine == engine_for_copying:
+                            engines_with_unique_scratch.append(engine)
                 apply_async_with_errors(
                     pool, engines_for_copying, subprocess.check_output,
                     'mkdir -p %s' % temp_dir, shell=True,
@@ -1100,22 +1128,24 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                                         file_or_archive
                                                     ))
                 )
-                '''To accommodate any node-local BASH variables that may be in
-                --scratch, echo them on all engines before adding to engine
-                PYTHONPATHs.'''
-                temp_dirs = apply_async_with_errors(rc, engines_for_copying,
-                    subprocess.check_output,
-                    'echo -c "%s"' % temp_dir,
-                    shell=True,
-                    executable='/bin/bash',
-                    message=('Error obtaining full paths of temporary '
-                             'directories on cluster nodes. Restart IPython '
-                             'engines and try again.'),
-                    dict_format=True)
+                if engines_to_symlink:
+                    '''Create symlinks to resources in case of slot-local
+                    scratch dirs'''
+                    source_paths, destination_paths = {}, {}
+                    for engine_to_symlink in engines_to_symlink:
+                        source_paths[engine_to_symlink] = temp_dirs[
+                                engine_to_copy_engine[engine_to_symlink]
+                            ]
+                        destination_paths[engine_to_symlink] = temp_dirs[
+                                engine_to_symlink
+                            ]
+                    apply_async_with_errors(rc, engines_to_symlink,
+                        os.symlink, source_paths, destination_paths,
+                        message=('Error(s) encountered symlinking '
+                                 'among slot-local scratch directories.'))
                 # Add temp dirs to path
                 apply_async_with_errors(
-                    pool, engines_for_copying, site.addsitedir,
-                    temp_dirs,
+                    pool, all_engines, site.addsitedir, temp_dirs,
                     message=(('Error(s) encountered adding temporary '
                               'directories for storing {} to path on '
                               'slave nodes.').format(
@@ -1127,7 +1157,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 how-to-make-child-process-die-after-parent-exits for more
                 information.'''
                 apply_async_with_errors(
-                    pool, engines_for_copying, subprocess.call,
+                    pool, engines_with_unique_scratch, subprocess.call,
                     ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
                      'SIGHUP SIGINT SIGTERM EXIT; '
                      'while [[ \$(ps -p \$\$ -o ppid=) -gt 1 ]]; '
@@ -1142,7 +1172,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         )
                 )
                 apply_async_with_errors(
-                    pool, engines_for_copying, subprocess.Popen,
+                    pool, engines_with_unique_scratch, subprocess.Popen,
                     ['/usr/bin/env', 'bash', '%s/delscript.sh' % temp_dir],
                     message=(
                         'Error scheduling temporary directories on slave '

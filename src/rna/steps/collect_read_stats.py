@@ -94,7 +94,7 @@ reference_index = bowtie_index.BowtieIndexReference(
                             )
 # For mapping sample indices back to original sample labels
 manifest_object = manifest.LabelsAndIndices(
-                                os.path.expandvar(args.manifest)
+                                os.path.expandvars(args.manifest)
                             )
 output_url = Url(args.out) if args.out is not None \
     else Url(os.getcwd())

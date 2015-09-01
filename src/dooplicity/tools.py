@@ -343,7 +343,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
             dictionary whose keys are exactly the engine IDs, each engine ID's
             value is regarded as a distinct function corresponding to the key.
         *args: contains unnamed arguments of function_to_apply. If a given
-            argument is a dictionary whose keys are exactly the engine IDs,
+            argument is a dictionary whose keys are exactly engine IDs,
             each engine ID's value is regarded as a distinct argument
             corresponding to the key. The same goes for kwargs.
         **kwargs: includes --
@@ -379,7 +379,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
         del kwargs['message']
     id_set = set(ids)
     if not (isinstance(function_to_apply, dict)
-            and set(function_to_apply.keys()) == id_set):
+            and set(function_to_apply.keys()).issubset(id_set)):
         function_to_apply_holder = function_to_apply
         function_to_apply = {}
         for i in ids:
@@ -387,7 +387,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     new_args = defaultdict(list)
     for arg in args:
         if (isinstance(arg, dict)
-            and set(arg.keys()) == id_set):
+            and set(arg.keys()).issubset(id_set)):
             for i in arg:
                 new_args[i].append(arg[i])
         else:
@@ -396,7 +396,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     new_kwargs = defaultdict(dict)
     for kwarg in kwargs:
         if (isinstance(kwargs[kwarg], dict)
-            and set(kwargs[kwarg].keys()) == id_set):
+            and set(kwargs[kwarg].keys()).issubset(id_set):
             for i in ids:
                 new_kwargs[i][kwarg] = kwargs[kwarg][i]
         else:

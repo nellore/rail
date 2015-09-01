@@ -329,17 +329,63 @@ def ready_engines(rc, base, prep=False):
         dir_to_create = os.path.join(temp_dir, 'genome')
     else:
         dir_to_create = temp_dir
+    temp_dirs = apply_async_with_errors(rc, all_engines,
+        subprocess.check_output,
+        'echo -c "%s"' % temp_dir,
+        shell=True,
+        executable='/bin/bash',
+        message=('Error obtaining full paths of temporary directories '
+                 'on cluster nodes. Restart IPython engines '
+                 'and try again.'
+            ),
+        dict_format=True)
+    for engine in temp_dirs:
+        temp_dirs[engine] = temp_dirs[engine].strip()
+    engines_with_unique_scratch, engines_to_symlink = [], []
+    engines_to_copy_engines = {}
+    for engine_for_copying in engines_for_copying:
+        for engine in hostname_to_engines[
+                    engine_to_hostnames[engine_for_copying]
+                ]:
+            engine_to_copy_engine[engine] = engine_for_copying
+            if (engine != engine_for_copying
+                and temp_dirs[engine] != temp_dirs[engine_for_copying]):
+                engines_with_unique_scratch.append(engine)
+                engines_to_symlink.append(engine)
+            elif engine == engine_for_copying:
+                engines_with_unique_scratch.append(engine)
     '''Must use mkdir -p rather than os.makedirs so node-specific BASH
     variable, if it was specified, works.'''
-    apply_async_with_errors(rc, engines_for_copying, subprocess.check_output,
+    apply_async_with_errors(rc, engines_for_copying,
+        subprocess.check_output,
         'mkdir -p %s' % dir_to_create, shell=True, executable='/bin/bash',
         message=('Error(s) encountered creating temporary '
                  'directories for storing Rail on slave nodes. '
                  'Restart IPython engines and try again.'))
+    if engines_to_symlink:
+        # Create symlinks to resources in case of slot-local scratch dirs
+        print_to_screen(
+                'Adding symlinks...',
+                newline=False, carriage_return=True
+            )
+        source_paths, destination_paths = {}, {}
+        for engine_to_symlink in engines_to_symlink:
+            source_paths[engine_to_symlink] = temp_dirs[
+                        engine_to_copy_engine[engine_to_symlink]
+                    ]
+            destination_paths[engine_to_symlink] = temp_dirs[engine_to_symlink]
+        apply_async_with_errors(rc, engines_to_symlink,
+            os.symlink, source_paths, destination_paths,
+            message=('Error(s) encountered symlinking '
+                     'among slot-local scratch directories.'))
+        print_to_screen(
+                'Added symlinks.',
+                newline=True, carriage_return=True
+            )
     '''Only foolproof way to die is by process polling. See
     http://stackoverflow.com/questions/284325/
     how-to-make-child-process-die-after-parent-exits for more information.'''
-    apply_async_with_errors(rc, engines_for_copying,
+    apply_async_with_errors(rc, engines_with_unique_scratch,
         subprocess.check_output,
         ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
          'SIGHUP SIGINT SIGTERM EXIT; '
@@ -352,7 +398,7 @@ def ready_engines(rc, base, prep=False):
                 'on cluster nodes for deletion. Restart IPython engines '
                 'and try again.'
             ))
-    apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
+    apply_async_with_errors(rc, engines_with_unique_scratch, subprocess.Popen,
             ['/usr/bin/env', 'bash', '%s/delscript.sh' % temp_dir],
             message=(
                 'Error scheduling temporary directories on slave nodes '
@@ -371,7 +417,7 @@ def ready_engines(rc, base, prep=False):
         if '$' in compressed_rail_destination: raise ImportError
     except ImportError:
         '''Torrent distribution channel for compressed archive not available,
-        or we need to use node-local BASH variables.'''
+        or we need to use slot-local BASH variables.'''
         print_to_screen('Copying Rail-RNA to cluster nodes...',
                             newline=False, carriage_return=True)
         apply_async_with_errors(rc, engines_for_copying,
@@ -418,19 +464,10 @@ def ready_engines(rc, base, prep=False):
             shell=True, executable='/bin/bash')
     print_to_screen('Extracted Rail-RNA on cluster nodes.',
                             newline=True, carriage_return=False)
-    # Add Rail to path on every engine
-    temp_dirs = apply_async_with_errors(rc, engines_for_copying,
-        subprocess.check_output,
-        'echo -c "%s"' % temp_dir,
-        shell=True,
-        executable='/bin/bash',
-        message=('Error obtaining full paths of temporary directories '
-                 'on cluster nodes. Restart IPython engines '
-                 'and try again.'
-            ),
-        dict_format=True)
-    # Must accommodate potentially different paths on different engines
-    temp_base_paths, temp_utils_paths, temp_driver_paths = {}, {}, {}
+    '''Add Rail to path on every engine. Must accommodate potentially different
+    paths on different engines.'''
+    temp_base_paths, temp_rna_paths, \
+        temp_utils_paths, temp_driver_paths = {}, {}, {}, {}
     for engine in temp_dirs:
         temp_base_paths[engine] = os.path.join(temp_dirs[engine], 'rail')
         temp_utils_paths[engine] = os.path.join(temp_base_paths[engine],
@@ -618,7 +655,7 @@ def ready_engines(rc, base, prep=False):
                                         os.path.basename(base.bowtie1_idx))
         base.bowtie2_idx = os.path.join(temp_dir, 'genome',
                                         os.path.basename(base.bowtie2_idx))
-    return temp_base_path
+    return os.path.join(temp_dir, 'rail')
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
@@ -1757,11 +1794,12 @@ class RailRnaLocal(object):
             general_parser.add_argument(
                 '--scratch', type=str, required=False, metavar='<dir>',
                 default=None,
-                help=('node-local scratch directory for storing Bowtie index '
-                      'and temporary files before they are committed; '
-                      'node-local BASH variables specified with dollar signs '
-                      'are recognized here (def: return value of '
-                      'tempfile.gettempdir(); see Python docs)')
+                help=('node- or slot-local scratch directory for storing '
+                      'Bowtie index and temporary files before they are '
+                      'committed; node- or slot-local BASH variables '
+                      'specified with dollar signs are recognized here '
+                      '(def: return value of tempfile.gettempdir(); see '
+                      'Python docs)')
             )
             general_parser.add_argument(
                 '--direct-write', action='store_const', const=True,
