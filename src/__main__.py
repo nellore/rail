@@ -146,6 +146,7 @@ class Launcher(object):
         self.region = region
         self.log = log
         self.scratch = scratch
+        self.direct_write = direct_write
         self.ipython_profile = ipython_profile
         self.ipcontroller_json = ipcontroller_json
         self.common = common

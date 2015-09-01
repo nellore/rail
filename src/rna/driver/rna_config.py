@@ -313,7 +313,7 @@ def ready_engines(rc, base, prep=False):
     remote_hostnames_for_copying = list(
             set(hostname_to_engines.keys()).difference(set([current_hostname]))
         )
-    local_engines_for_copying = [engine for engines in engines_for_copying
+    local_engines_for_copying = [engine for engine in engines_for_copying
                                  if engine
                                  in hostname_to_engines[current_hostname]]
     '''Create temporary directories on selected nodes; NOT WINDOWS-COMPATIBLE;
@@ -331,7 +331,7 @@ def ready_engines(rc, base, prep=False):
         dir_to_create = temp_dir
     temp_dirs = apply_async_with_errors(rc, all_engines,
         subprocess.check_output,
-        'echo -c "%s"' % temp_dir,
+        'echo "%s"' % temp_dir,
         shell=True,
         executable='/bin/bash',
         message=('Error obtaining full paths of temporary directories '
@@ -342,7 +342,7 @@ def ready_engines(rc, base, prep=False):
     for engine in temp_dirs:
         temp_dirs[engine] = temp_dirs[engine].strip()
     engines_with_unique_scratch, engines_to_symlink = [], []
-    engines_to_copy_engines = {}
+    engine_to_copy_engine = {}
     for engine_for_copying in engines_for_copying:
         for engine in hostname_to_engines[
                     engine_to_hostnames[engine_for_copying]
@@ -478,6 +478,10 @@ def ready_engines(rc, base, prep=False):
     apply_async_with_errors(rc, all_engines, site.addsitedir, temp_utils_paths)
     apply_async_with_errors(rc, all_engines, site.addsitedir,
                                 temp_driver_paths)
+    # Change to current path on every engine
+    current_path = os.path.abspath('./')
+    apply_async_with_errors(rc, all_engines, os.chdir, current_path,
+                                errors_to_ignore=['OSError'])
     # Copy manifest to nodes
     manifest_destination = os.path.join(temp_dir, 'MANIFEST')
     try:

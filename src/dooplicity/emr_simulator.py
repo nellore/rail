@@ -1073,7 +1073,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             set([current_hostname]))
                     )
                 local_engines_for_copying = [
-                        engine for engines in engines_for_copying
+                        engine for engine in engines_for_copying
                         if engine in engine_map[current_hostname]
                     ]
                 '''Create temporary directories on selected nodes; NOT
@@ -1093,9 +1093,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 '''To accommodate any slot-local BASH variables that may be in
                 --scratch, echo them on all engines before adding to engine
                 PYTHONPATHs.'''
-                temp_dirs = apply_async_with_errors(rc, all_engines,
+                temp_dirs = apply_async_with_errors(pool, all_engines,
                     subprocess.check_output,
-                    'echo -c "%s"' % temp_dir,
+                    'echo "%s"' % temp_dir,
                     shell=True,
                     executable='/bin/bash',
                     message=('Error obtaining full paths of temporary '
@@ -1105,10 +1105,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 for engine in temp_dirs:
                     temp_dirs[engine].strip()
                 engines_with_unique_scratch, engines_to_symlink = [], []
-                engines_to_copy_engines = {}
+                engine_to_copy_engine = {}
                 for engine_for_copying in engines_for_copying:
-                    for engine in hostname_to_engines[
-                                engine_to_hostnames[engine_for_copying]
+                    for engine in engine_map[
+                                host_map[engine_for_copying]
                             ]:
                         engine_to_copy_engine[engine] = engine_for_copying
                         if (engine != engine_for_copying
@@ -1139,7 +1139,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         destination_paths[engine_to_symlink] = temp_dirs[
                                 engine_to_symlink
                             ]
-                    apply_async_with_errors(rc, engines_to_symlink,
+                    apply_async_with_errors(pool, engines_to_symlink,
                         os.symlink, source_paths, destination_paths,
                         message=('Error(s) encountered symlinking '
                                  'among slot-local scratch directories.'))
