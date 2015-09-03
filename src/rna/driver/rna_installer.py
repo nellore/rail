@@ -373,7 +373,7 @@ class RailRnaInstaller(object):
                                             'BedGraphToBigWig')
                     self._grab_and_explode(self.depends['samtools'],
                                                                 'SAMTools')
-            if not self.prep_dependencies:
+            if not self.prep_dependencies and not self.no_dependencies:
                 # Have to make SAMTools (annoying; maybe change this)
                 samtools_dir = os.path.join(temp_install_dir,
                         self.depends['samtools'][0].rpartition('/')[2][:-8]
@@ -440,11 +440,14 @@ class RailRnaInstaller(object):
             else:
                 bowtie1 = bowtie1_build = bowtie2 = bowtie2_build \
                     = bedgraphtobigwig = samtools = 'None'
-            pypy = os.path.join(self.final_install_dir,
-                    self.depends['pypy'][0].rpartition(
-                            '/'
-                        )[2][:-8], 'bin', 'pypy'
-                )
+            if self.no_dependencies:
+                pypy = 'None'
+            else:
+                pypy = os.path.join(self.final_install_dir,
+                        self.depends['pypy'][0].rpartition(
+                                '/'
+                            )[2][:-8], 'bin', 'pypy'
+                    )
             # Write paths to exe_paths
             with open(
                             os.path.join(temp_install_dir, 'rail-rna',

@@ -296,6 +296,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                         'scratch subdirectory of %s: %s' % (scratch, e))
         else:
             final_output_dir = output_dir
+        output_dir = os.path.expandvars(output_dir)
+        final_output_dir = os.path.expandvars(final_output_dir)
         partitioned_key = parsed_keys(partition_options, separator)
         if not partitioned_key:
             # Invalid partition options
@@ -504,6 +506,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                         'scratch subdirectory of %s: %s' % (scratch, e))
         else:
             final_output_dir = output_dir
+        output_dir = os.path.expandvars(output_dir)
+        final_output_dir = os.path.expandvars(final_output_dir)
         input_files = [input_file for input_file in glob.glob(input_glob)
                             if os.path.isfile(input_file)]
         if not input_files:
