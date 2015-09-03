@@ -394,6 +394,15 @@ class RailRnaInstaller(object):
                                     '#include <string.h>',
                                     '#include <string.h>\n#include <unistd.h>'
                                 ))
+                    makefile = 'Makefile'
+                    with open(makefile) as makefile_stream:
+                        all_makefile = makefile_stream.read()
+                    with open(makefile, 'w') as makefile_stream:
+                        makefile_stream.write(
+                            all_makefile.replace(
+                                    '-D_CURSES_LIB=1', '-D_CURSES_LIB=0'
+                                ).replace('LIBCURSES=','#LIBCURSES=')
+                        )
                     # Make on all but one cylinder
                     thread_count = max(1, multiprocessing.cpu_count() - 1)
                     samtools_command = ['make', '-j%d' % thread_count]
