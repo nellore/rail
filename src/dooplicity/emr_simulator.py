@@ -260,7 +260,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         task_streams = {}
         if gzip:
             task_stream_processes = {}
-        if scratch == '-':
+        if not scratch or scratch == '-':
             # Write to temporary directory
             final_output_dir = output_dir
             try:
@@ -464,7 +464,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
     """
     command_to_run = None
     try:
-        if scratch == '-':
+        if not scratch or scratch == '-':
             # Write to temporary directory
             final_output_dir = output_dir
             try:
@@ -1061,7 +1061,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     ]
                 '''Create temporary directories on selected nodes; NOT
                 WINDOWS-COMPATIBLE; must be changed if porting to Windows.'''
-                if scratch == '-':
+                if not scratch or scratch == '-':
                     scratch_dir = tempfile.gettempdir()
                 else:
                     scratch_dir = scratch
