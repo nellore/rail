@@ -266,6 +266,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
     try:
         from operator import mul
         task_streams = {}
+        if scratch is not None:
+            scratch = os.path.expanduser(os.path.expandvars(scratch))
         if gzip:
             task_stream_processes = {}
         if direct_write:
@@ -489,6 +491,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory: %s' % e)
         elif scratch:
+            scratch = os.path.expanduser(os.path.expandvars(scratch))
             # Write to temporary directory in special location
             final_output_dir = output_dir
             try:
@@ -1038,6 +1041,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                             if step_number != 0 else None))
                     failed = True
                     raise RuntimeError
+                file_or_archive = os.path.expanduser(
+                        os.path.expandvars(file_or_archive)
+                    )
                 file_or_archive_url = Url(file_or_archive)
                 if not (file_or_archive_url.is_nfs
                             or file_or_archive_url.is_local):
@@ -1144,6 +1150,11 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 engine_to_symlink
                             ]
                     apply_async_with_errors(pool, engines_to_symlink,
+                        os.remove, destination_paths,
+                        message=('Error(s) encountered removing symlinks '
+                                 'in slot-local scratch directories.'),
+                        errors_to_ignore=['OSError'])
+                    apply_async_with_errors(pool, engines_to_symlink,
                         os.symlink, source_paths, destination_paths,
                         message=('Error(s) encountered symlinking '
                                  'among slot-local scratch directories.'))
@@ -1161,7 +1172,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 how-to-make-child-process-die-after-parent-exits for more
                 information.'''
                 apply_async_with_errors(
-                    pool, engines_with_unique_scratch, subprocess.call,
+                    pool, engines_with_unique_scratch, subprocess.check_output,
                     ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
                      'SIGHUP SIGINT SIGTERM EXIT; '
                      'while [[ \$(ps -p \$\$ -o ppid=) -gt 1 ]]; '
@@ -1177,7 +1188,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 )
                 apply_async_with_errors(
                     pool, engines_with_unique_scratch, subprocess.Popen,
-                    ['/usr/bin/env', 'bash', '%s/delscript.sh' % temp_dir],
+                    '/usr/bin/env bash %s/delscript.sh' % temp_dir, shell=True,
+                    executable='/bin/bash',
                     message=(
                         'Error scheduling temporary directories on slave '
                         'nodes for deletion. Restart IPython engines and try '
@@ -1207,8 +1219,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     if local_engines_for_copying:
                         apply_async_with_errors(pool,
                             local_engines_for_copying,
-                            shutil.copyfile, file_or_archive,
-                            destination_path,
+                             subprocess.check_output, 'cp %s %s' % (
+                                    file_or_archive, destination_path
+                                ), shell=True, executable='/bin/bash',
                             message=(('Error(s) encountered copying %s to '
                                       'local filesystem. Refer to the errors '
                                       'above -- and especially make sure '
@@ -1226,8 +1239,16 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 # Extract if necessary
                 if archive:
                     apply_async_with_errors(
-                            pool, engines_for_copying,
-                            os.makedirs, os.path.join(temp_dir, archive_dir)
+                            pool, engines_for_copying, subprocess.check_output,
+                            'rm -rf {}'.format(
+                                    os.path.join(temp_dir, archive_dir)
+                                ), shell=True, executable='/bin/bash'
+                        )
+                    apply_async_with_errors(
+                            pool, engines_for_copying, subprocess.check_output,
+                            'mkdir -p {}'.format(
+                                os.path.join(temp_dir, archive_dir)
+                            ), shell=True, executable='/bin/bash'
                     )
                     apply_async_with_errors(
                             pool, engines_for_copying, subprocess.check_output,
@@ -1238,8 +1259,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             executable='/bin/bash'
                     )
                     apply_async_with_errors(
-                            pool, engines_for_copying,
-                            os.remove, destination_path
+                            pool, engines_for_copying, subprocess.check_output,
+                            'rm -f {}'.format(destination_path),
+                            shell=True, executable='/bin/bash'
                     )
                 iface.step('Cached %s.' % file_or_archive_basename)
                 try:
@@ -1248,11 +1270,11 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     # Cleanup
                     apply_async_with_errors(
                             pool,
-                            engines_for_copying,
-                            shutil.rmtree,
-                            temp_dir,
+                            engines_for_copying, subprocess.check_output,
+                            'rm -rf {}'.format(temp_dir), shell=True,
+                            executable='/bin/bash',
                             message=('Error(s) encountered removing temporary '
-                                     'directories.'),
+                                     'directories.')
                         )
         else:
             import multiprocessing
@@ -1377,6 +1399,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                             if step_number != 0 else None))
                     failed = True
                     raise
+                destination_filename = os.path.expanduser(
+                        os.path.expandvars(destination_filename)
+                    )
                 file_or_archive_url = Url(file_or_archive)
                 if not file_or_archive_url.is_local:
                     iface.fail(('The file %s is not local.'

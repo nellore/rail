@@ -348,7 +348,8 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
             corresponding to the key. The same goes for kwargs.
         **kwargs: includes --
             errors_to_ignore: list of exceptions to ignore, where each
-               exception is a string
+               exception is either a string or a tuple (exception name
+                as a string, text to find in exception message)
             message: message to append to exception raised
             and named arguments of function_to_apply
             dict_format: if True, returns engine-result key-value dictionary;
@@ -420,7 +421,16 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
             exc_to_report = format_exc()
             proceed = False
             for error_to_ignore in errors_to_ignore:
-                if error_to_ignore in exc_to_report:
+                if isinstance(error_to_ignore, tuple):
+                    error_to_ignore, text_to_find = (
+                            error_to_ignore
+                        )
+                else:
+                    text_to_find = None
+                if error_to_ignore in exc_to_report and (
+                        text_to_find is None or
+                        text_to_find in exc_to_report
+                    ):
                     proceed = True
                     ids_not_to_return.add(asyncresult.metadata['engine_id'])
             if not proceed:

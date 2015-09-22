@@ -375,6 +375,11 @@ def ready_engines(rc, base, prep=False):
                     ]
             destination_paths[engine_to_symlink] = temp_dirs[engine_to_symlink]
         apply_async_with_errors(rc, engines_to_symlink,
+            os.remove, destination_paths,
+            message=('Error(s) encountered removing symlinks '
+                     'in slot-local scratch directories.'),
+            errors_to_ignore=['OSError'])
+        apply_async_with_errors(rc, engines_to_symlink,
             os.symlink, source_paths, destination_paths,
             message=('Error(s) encountered symlinking '
                      'among slot-local scratch directories.'))
@@ -399,7 +404,8 @@ def ready_engines(rc, base, prep=False):
                 'and try again.'
             ))
     apply_async_with_errors(rc, engines_with_unique_scratch, subprocess.Popen,
-            ['/usr/bin/env', 'bash', '%s/delscript.sh' % temp_dir],
+            '/usr/bin/env bash %s/delscript.sh' % temp_dir, shell=True,
+            executable='/bin/bash',
             message=(
                 'Error scheduling temporary directories on slave nodes '
                 'for deletion. Restart IPython engines and try again.'
@@ -1798,7 +1804,7 @@ class RailRnaLocal(object):
             general_parser.add_argument(
                 '--scratch', type=str, required=False, metavar='<dir>',
                 default=None,
-                help=('node- or slot-local scratch directory for storing '
+                help=('scratch directory for storing '
                       'Bowtie index and temporary files before they are '
                       'committed; node- or slot-local BASH variables '
                       'specified with dollar signs are recognized here '
