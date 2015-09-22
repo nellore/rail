@@ -1807,8 +1807,8 @@ class RailRnaLocal(object):
                 help=('scratch directory for storing '
                       'Bowtie index and temporary files before they are '
                       'committed; node- or slot-local BASH variables '
-                      'specified with dollar signs are recognized here '
-                      '(def: return value of tempfile.gettempdir(); see '
+                      'specified with escaped dollar signs are recognized '
+                      'here (def: return value of tempfile.gettempdir(); see '
                       'Python docs)')
             )
             general_parser.add_argument(
