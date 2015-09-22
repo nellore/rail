@@ -1172,7 +1172,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 how-to-make-child-process-die-after-parent-exits for more
                 information.'''
                 apply_async_with_errors(
-                    pool, engines_with_unique_scratch, subprocess.check_output,
+                    pool, engines_for_copying, subprocess.check_output,
                     ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
                      'SIGHUP SIGINT SIGTERM EXIT; '
                      'while [[ \$(ps -p \$\$ -o ppid=) -gt 1 ]]; '
@@ -1187,7 +1187,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         )
                 )
                 apply_async_with_errors(
-                    pool, engines_with_unique_scratch, subprocess.Popen,
+                    pool, engines_for_copying, subprocess.Popen,
                     '/usr/bin/env bash %s/delscript.sh' % temp_dir, shell=True,
                     executable='/bin/bash',
                     message=(
