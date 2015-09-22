@@ -366,6 +366,7 @@ class RailRnaInstaller(object):
                 zip_object.extractall('./rail-rna')
             if not self.no_dependencies:
                 self._grab_and_explode(self.depends['pypy'], 'PyPy')
+                self._grab_and_explode(self.depends['sra_tools'], 'SRA Tools')
                 if not self.prep_dependencies:
                     self._grab_and_explode(self.depends['bowtie1'], 'Bowtie 1')
                     self._grab_and_explode(self.depends['bowtie2'], 'Bowtie 2')
@@ -451,11 +452,23 @@ class RailRnaInstaller(object):
                     = bedgraphtobigwig = samtools = 'None'
             if self.no_dependencies:
                 pypy = 'None'
+                fastq_dump = 'None'
+                vdb_config = 'None'
             else:
                 pypy = os.path.join(self.final_install_dir,
                         self.depends['pypy'][0].rpartition(
                                 '/'
                             )[2][:-8], 'bin', 'pypy'
+                    )
+                fastq_dump = os.path.join(self.final_install_dir,
+                                self.depends['sra_tools'][0].rpartition(
+                                '/'
+                            )[2][:-7], 'bin', 'fastq-dump'
+                    )
+                vdb_config = os.path.join(self.final_install_dir,
+                                self.depends['sra_tools'][0].rpartition(
+                                '/'
+                            )[2][:-7], 'bin', 'vdb-config'
                     )
             # Write paths to exe_paths
             with open(
@@ -481,13 +494,17 @@ bowtie2 = {bowtie2}
 bowtie2_build = {bowtie2_build}
 samtools = {samtools}
 bedgraphtobigwig = {bedgraphtobigwig}
+fastq_dump = {fastq_dump}
+vdb_config = {vdb_config}
 """
                 ).format(pypy=self._quote(pypy), bowtie1=self._quote(bowtie1),
                             bowtie1_build=self._quote(bowtie1_build),
                             bowtie2=self._quote(bowtie2),
                             bowtie2_build=self._quote(bowtie2_build),
                             samtools=self._quote(samtools),
-                            bedgraphtobigwig=self._quote(bedgraphtobigwig))
+                            bedgraphtobigwig=self._quote(bedgraphtobigwig),
+                            fastq_dump=self._quote(fastq_dump),
+                            vdb_config=self._quote(vdb_config))
         # Move to final directory
         try:
             shutil.move(temp_install_dir, self.final_install_dir)
@@ -597,6 +614,8 @@ fi
         os.chmod(rail_exe, 0755)
         if not self.no_dependencies:
             os.chmod(pypy, 0755)
+            os.chmod(fastq_dump, 0755)
+            os.chmod(vdb_config, 0755)
             if not self.prep_dependencies:
                 for program in [bowtie1, bowtie1_build, bowtie2, bowtie2_build,
                                 samtools, bedgraphtobigwig]:
@@ -613,6 +632,8 @@ fi
             if self.add_symlinks:
                 # Write appropriate symlinks
                 self._add_symlink_to_exe(pypy)
+                self._add_symlink_to_exe(fastq_dump)
+                self._add_symlink_to_exe(vdb_config)
                 if not self.prep_dependencies:
                     for program in [bowtie1, bowtie1_build, bowtie2,
                                     bowtie2_build, samtools, bedgraphtobigwig]:

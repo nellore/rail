@@ -15,3 +15,5 @@ bowtie2 = None
 bowtie2_build = None
 samtools = None
 bedgraphtobigwig = None
+fastq_dump = None
+vdb_config = None
