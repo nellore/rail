@@ -982,7 +982,7 @@ class RailRnaErrors(object):
             intermediate_dir='./intermediate', force=False, aws_exe=None,
             profile='default', region=None, service_role=None,
             instance_profile=None, verbose=False, curl_exe=None,
-            max_task_attempts=4
+            max_task_attempts=4, dbgap_key=None
         ):
         '''Store all errors uncovered in a list, then output. This prevents the
         user from having to rerun Rail-RNA to find what else is wrong with
@@ -1002,6 +1002,7 @@ class RailRnaErrors(object):
         self.profile = profile
         self.service_role = service_role
         self.instance_profile = instance_profile
+        self.dbgap_key = dbgap_key
         if not (float(max_task_attempts).is_integer()
                         and max_task_attempts >= 1):
             self.errors.append('Max task attempts (--max-task-attempts) '
@@ -1517,6 +1518,14 @@ class RailRnaLocal(object):
                 base.manifest = os.path.abspath(base.manifest)
                 files_to_check = []
                 base.sample_count = 0
+                if dbgap_key is not None and not os.path.exists(dbgap_key):
+                    base.errors.append(('dbGaP repository key file '
+                                        '(--dbgap-key) "{}" '
+                                        'does not exist. Check its path and '
+                                        'try again. Note that it must be '
+                                        'stored on the local '
+                                        'filesystem.').format(dbgap_key))
+                dbgap_present = False
                 with open(base.manifest) as manifest_stream:
                     for line in manifest_stream:
                         if line[0] == '#' or not line.strip(): continue
@@ -1527,6 +1536,9 @@ class RailRnaLocal(object):
                             files_to_check.extend([tokens[0], tokens[2]])
                         elif len(tokens) == 3:
                             files_to_check.append(tokens[0])
+                            single_url = ab.Url(tokens[0])
+                            if single_url.is_dbgap:
+                                dbgap_present = True
                         else:
                             base.errors.append(('The following line from the '
                                                 'manifest file {0} '
@@ -1550,6 +1562,11 @@ class RailRnaLocal(object):
                                                         manifest_url.to_url(),
                                                         line.strip()
                                                     ))
+                if dbgap_present and base.dbgap_key is None:
+                    base.errors.append('dbGaP accession numbers are in '
+                                       'manifest file, but no dbGaP '
+                                       'repository key file (--dbgap-key) was '
+                                       'provided. ')
                 if files_to_check:
                     if check_manifest:
                         # Check files in manifest only if in preprocess flow
@@ -1607,6 +1624,81 @@ class RailRnaLocal(object):
                                                       'the web'
                                                     )
                                 ansible.curl_exe = base.curl_exe
+                            elif manifest_url.is_sra or manifest_url.is_dbgap:
+                                if 'SRA Tools' not in base.checked_programs:
+                                    base.fastq_dump_exe = base.check_program(
+                                                'fastq-dump', 'fastq-dump',
+                                                '--fastq-dump',
+                                                entered_exe=fastq_dump_exe,
+                                                is_exe=is_exe,
+                                                which=which
+                                            )
+                                    base.vdb_config_exe = base.check_program(
+                                                'vdb-config', 'vdb-config',
+                                                '--vdb-config',
+                                                entered_exe=vdb_config_exe,
+                                                is_exe=is_exe,
+                                                which=which
+                                            )
+                                    fastq_dump_version_command = [
+                                            base.fastq_dump_exe, '--version'
+                                        ]
+                                    vdb_config_version_command = [
+                                            base.vdb_config_exe, '--version'
+                                        ]
+                                    try:
+                                        fastq_dump_version = \
+                                            subprocess.check_output(
+                                                fastq_dump_version_command
+                                            ).strip().split(':')[1].strip()
+                                    except Exception as e:
+                                        base.errors.append(
+                                            ('Error "{0}" encountered '
+                                             'attempting to execute '
+                                             '"{1}".').format(
+                                                    e.message,
+                                                    ' '.join(
+                                                    fastq_dump_version_command
+                                                   )
+                                                ))
+                                    else:
+                                        try:
+                                            vdb_config_version = \
+                                                subprocess.check_output(
+                                                    vdb_config_version_command
+                                                ).strip().split(':')[1].strip()
+                                        except Exception as e:
+                                            base.errors.append(
+                                                ('Error "{0}" encountered '
+                                                 'attempting to execute '
+                                                 '"{1}".').format(
+                                                    e.message,
+                                                    ' '.join(
+                                                    vdb_config_version_command
+                                                   )
+                                                ))
+                                        else:
+                                            if fastq_dump_version \
+                                                != vdb_config_version:
+                                                base.errors.append(
+                                                    ('fastq-dump and '
+                                                     'vdb-config '
+                                                     'versions do not agree: '
+                                                     'fastq-dump '
+                                                     'version is {}, while '
+                                                     'vdb-config version '
+                                                     'is {}. '
+                                                     'Reinstall '
+                                                     'SRA Tools v2.5 or '
+                                                     'greater and '
+                                                     'try again.').format(
+                                                            fastq_dump_version,
+                                                            vdb_config_version
+                                                        )
+                                                    )
+                                            base.sra_tools_version \
+                                                = fastq_dump_version
+                                    base.checked_programs.add('SRA Tools')
                             if not ansible.exists(filename):
                                 base.errors.append((
                                                     'The file {0} from the '
@@ -1756,6 +1848,14 @@ class RailRnaLocal(object):
                 '-i', '--input', type=str, required=True, metavar='<dir>',
                 help='input directory with preprocessed reads; must be local'
             )
+        else:
+            # "prep" or "go" flows
+            general_parser.add_argument(
+                '--dbgap-key', required=False, metavar='<file>'
+                default=None,
+                help='path to dbGaP key file, which has the extension "ngc"; '
+                     'must be on local filesystem'
+            )
         if prep:
             output_parser.add_argument(
                 '-o', '--output', type=str, required=False, metavar='<dir>',
@@ -1876,7 +1976,7 @@ class RailRnaElastic(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
-        no_direct_copy=False, intermediate_lifetime=4):
+        no_direct_copy=False, intermediate_lifetime=4, secure=False):
 
         # CLI is REQUIRED in elastic mode
         base.check_s3(reason='Rail-RNA is running in "elastic" mode')
@@ -1999,37 +2099,6 @@ class RailRnaElastic(object):
                                     'overwriting it.').format(base.output_dir))
             else:
                 ansible.s3_ansible.remove_dir(base.output_dir)
-        # Check isofrag index; download+upload it if necessary
-        if base.isofrag_idx is not None:
-            isofrag_url = ab.Url(base.isofrag_idx)
-            if isofrag_url.is_curlable \
-                and 'cURL' not in base.checked_programs:
-                base.curl_exe = base.check_program(
-                                    'curl', 'cURL', '--curl',
-                                    entered_exe=base.curl_exe,
-                                    reason='the isofrag index is on the web'
-                                )
-                ansible.curl_exe = base.curl_exe
-            if not ansible.exists(isofrag_url.to_url()):
-                base.errors.append(('Isofrag index (--isofrag-idx) {0} '
-                                    'does not exist. Check the URL and '
-                                    'try again.').format(base.isofrag_idx))
-            elif isofrag_url.is_curlable:
-                # Now copy to S3
-                temp_isofrag_dir = tempfile.mkdtemp()
-                from tempdel import remove_temporary_directories
-                register_cleanup(remove_temporary_directories,
-                                    [temp_isofrag_dir])
-                isofrag = os.path.join(temp_isofrag_dir,
-                                        os.path.basename(base.isofrag_idx))
-                ansible.get(base.isofrag_idx, destination=isofrag)
-                base.isofrag_idx = path_join(
-                                        True,
-                                        base.output_dir + '.isofrag',
-                                        os.path.basename(base.isofrag_idx)
-                                    )
-                ansible.put(isofrag, base.isofrag_idx)
-                shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
         # Set directory for storing Rail-RNA, bootstraps, and possibly manifest
         base.dependency_dir = base.output_dir + '.dependencies'
         dependency_dir_url = ab.Url(base.dependency_dir)
@@ -2052,104 +2121,159 @@ class RailRnaElastic(object):
             base.errors.append(('Manifest file (--manifest) {0} '
                                 'does not exist. Check the URL and '
                                 'try again.').format(base.manifest))
-        else:
-            if not manifest_url.is_local:
-                temp_manifest_dir = tempfile.mkdtemp()
-                from tempdel import remove_temporary_directories
-                register_cleanup(remove_temporary_directories,
-                                    [temp_manifest_dir])
-                manifest = os.path.join(temp_manifest_dir, 'MANIFEST')
-                ansible.get(base.manifest, destination=manifest)
-            else:
-                manifest = manifest_url.to_url()
-            files_to_check = []
-            base.sample_count = 0
-            with open(manifest) as manifest_stream:
-                for line in manifest_stream:
-                    if line[0] == '#' or not line.strip(): continue
-                    base.sample_count += 1
-                    tokens = line.strip().split('\t')
-                    check_sample_label = True
-                    if len(tokens) == 5:
-                        files_to_check.extend([tokens[0], tokens[2]])
-                    elif len(tokens) == 3:
-                        files_to_check.append(tokens[0])
-                    else:
-                        check_sample_label = False
-                        base.errors.append(('The following line from the '
-                                            'manifest file {0} '
-                                            'has an invalid number of '
-                                            'tokens:\n{1}'
-                                            ).format(
-                                                    manifest_url.to_url(),
-                                                    line.strip()
-                                                ))
-                    if check_sample_label and tokens[-1].count('-') != 2:
-                        base.errors.append(('The following line from the '
-                                            'manifest file {0} '
-                                            'has an invalid sample label: '
-                                            '\n{1}\nA valid sample label '
-                                            'takes the following form:\n'
-                                            '<Group ID>-<BioRep ID>-'
-                                            '<TechRep ID>'
-                                            ).format(
-                                                    manifest_url.to_url(),
-                                                    line.strip()
-                                                ))
-            if files_to_check:
-                if check_manifest:
-                    file_count = len(files_to_check)
-                    # Check files in manifest only if in preprocess job flow
-                    for k, filename in enumerate(files_to_check):
-                        if sys.stdout.isatty():
-                            sys.stdout.write(
-                                    '\r\x1b[KChecking that file %d/%d '
-                                    'from manifest file exists...' % (
-                                                                k+1,
-                                                                file_count
-                                                            )
+        if base.isofrag_idx is not None:
+            isofrag_url = ab.Url(base.isofrag_idx)
+            if isofrag_url.is_curlable \
+                and 'cURL' not in base.checked_programs:
+                base.curl_exe = base.check_program(
+                                    'curl', 'cURL', '--curl',
+                                    entered_exe=base.curl_exe,
+                                    reason='the isofrag index is on the web'
                                 )
-                            sys.stdout.flush()
-                        filename_url = ab.Url(filename)
-                        if filename_url.is_curlable \
-                            and 'cURL' not in base.checked_programs:
-                            base.curl_exe = base.check_program('curl', 'cURL',
-                                                '--curl',
-                                                entered_exe=base.curl_exe,
-                                                reason=('at least one sample '
-                                                  'FASTA/FASTQ from the '
-                                                  'manifest file is on '
-                                                  'the web'))
-                            ansible.curl_exe = base.curl_exe
-                        if not ansible.exists(filename_url.to_url()):
-                            base.errors.append(('The file {0} from the '
-                                                'manifest file {1} does not '
-                                                'exist; check the URL and try '
-                                                'again.').format(
-                                                        filename,
-                                                        manifest_url.to_url()
-                                                    ))
+                ansible.curl_exe = base.curl_exe
+            if not ansible.exists(isofrag_url.to_url()):
+                base.errors.append(('Isofrag index (--isofrag-idx) {0} '
+                                    'does not exist. Check the URL and '
+                                    'try again.').format(base.isofrag_idx))
+        raise_runtime_error(base)
+        if not manifest_url.is_local:
+            temp_manifest_dir = tempfile.mkdtemp()
+            from tempdel import remove_temporary_directories
+            register_cleanup(remove_temporary_directories,
+                                [temp_manifest_dir])
+            manifest = os.path.join(temp_manifest_dir, 'MANIFEST')
+            ansible.get(base.manifest, destination=manifest)
+        else:
+            manifest = manifest_url.to_url()
+        if base.dbgap_key is not None and \
+            not os.path.exists(base.dbgap_key):
+            base.errors.append(('dbGaP repository key file '
+                                '(--dbgap-key) "{}" '
+                                'does not exist. Check its path and '
+                                'try again. Note that it must be '
+                                'found on the local '
+                                'filesystem; Rail-RNA uploads this '
+                                'file to S3 securely with server-side '
+                                'encryption enabled and schedules '
+                                'it for deletion.').format(dbgap_key))
+        dbgap_present = False
+        files_to_check = []
+        base.sample_count = 0
+        with open(manifest) as manifest_stream:
+            for line in manifest_stream:
+                if line[0] == '#' or not line.strip(): continue
+                base.sample_count += 1
+                tokens = line.strip().split('\t')
+                check_sample_label = True
+                if len(tokens) == 5:
+                    files_to_check.extend([tokens[0], tokens[2]])
+                elif len(tokens) == 3:
+                    files_to_check.append(tokens[0])
+                    single_url = ab.Url(tokens[0])
+                    if single_url.is_dbgap:
+                        dbgap_present = True
+                else:
+                    check_sample_label = False
+                    base.errors.append(('The following line from the '
+                                        'manifest file {0} '
+                                        'has an invalid number of '
+                                        'tokens:\n{1}'
+                                        ).format(
+                                                manifest_url.to_url(),
+                                                line.strip()
+                                            ))
+                if check_sample_label and tokens[-1].count('-') != 2:
+                    base.errors.append(('The following line from the '
+                                        'manifest file {0} '
+                                        'has an invalid sample label: '
+                                        '\n{1}\nA valid sample label '
+                                        'takes the following form:\n'
+                                        '<Group ID>-<BioRep ID>-'
+                                        '<TechRep ID>'
+                                        ).format(
+                                                manifest_url.to_url(),
+                                                line.strip()
+                                            ))
+        if dbgap_present and base.dbgap_key is None:
+            base.errors.append('dbGaP accession numbers are in '
+                               'manifest file, but no dbGaP '
+                               'repository key file (--dbgap-key) was '
+                               'provided. ')
+        if dbgap_present:
+            # Always use secure mode if dbGaP data is present
+            base.secure = True
+        if files_to_check:
+            if check_manifest:
+                file_count = len(files_to_check)
+                # Check files in manifest only if in preprocess job flow
+                for k, filename in enumerate(files_to_check):
                     if sys.stdout.isatty():
                         sys.stdout.write(
-                                '\r\x1b[KChecked all files listed in manifest '
-                                'file.\n'
+                                '\r\x1b[KChecking that file %d/%d '
+                                'from manifest file exists...' % (
+                                                            k+1,
+                                                            file_count
+                                                        )
                             )
                         sys.stdout.flush()
-            else:
-                base.errors.append(('Manifest file (--manifest) {0} '
-                                    'has no valid lines.').format(
-                                                        manifest_url.to_url()
-                                                    ))
-            # Bail before copying anything to S3
-            raise_runtime_error(base)
-            if not manifest_url.is_s3 and output_dir_url.is_s3:
-                # Copy manifest file to S3 before job flow starts
-                base.manifest = path_join(True, base.dependency_dir,
-                                                'MANIFEST')
-                ansible.put(manifest, base.manifest)
-            if not manifest_url.is_local:
-                # Clean up
-                shutil.rmtree(temp_manifest_dir)
+                    filename_url = ab.Url(filename)
+                    if filename_url.is_curlable \
+                        and 'cURL' not in base.checked_programs:
+                        base.curl_exe = base.check_program('curl', 'cURL',
+                                            '--curl',
+                                            entered_exe=base.curl_exe,
+                                            reason=('at least one sample '
+                                              'FASTA/FASTQ from the '
+                                              'manifest file is on '
+                                              'the web'))
+                        ansible.curl_exe = base.curl_exe
+                    if not ansible.exists(filename_url.to_url()):
+                        base.errors.append(('The file {0} from the '
+                                            'manifest file {1} does not '
+                                            'exist; check the URL and try '
+                                            'again.').format(
+                                                    filename,
+                                                    manifest_url.to_url()
+                                                ))
+                if sys.stdout.isatty():
+                    sys.stdout.write(
+                            '\r\x1b[KChecked all files listed in manifest '
+                            'file.\n'
+                        )
+                    sys.stdout.flush()
+        else:
+            base.errors.append(('Manifest file (--manifest) {0} '
+                                'has no valid lines.').format(
+                                                    manifest_url.to_url()
+                                                ))
+        # Bail before copying anything to S3
+        raise_runtime_error(base)
+
+        # Download+upload isofrag index if necessary
+        if base.isofrag_idx is not None and isofrag_url.is_curlable:
+            temp_isofrag_dir = tempfile.mkdtemp()
+            from tempdel import remove_temporary_directories
+            register_cleanup(remove_temporary_directories,
+                                [temp_isofrag_dir])
+            isofrag = os.path.join(temp_isofrag_dir,
+                                    os.path.basename(base.isofrag_idx))
+            ansible.get(base.isofrag_idx, destination=isofrag)
+            base.isofrag_idx = path_join(
+                                    True,
+                                    base.output_dir + '.isofrag',
+                                    os.path.basename(base.isofrag_idx)
+                                )
+            ansible.put(isofrag, base.isofrag_idx)
+            shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
+
+        if not manifest_url.is_s3 and output_dir_url.is_s3:
+            # Copy manifest file to S3 before job flow starts
+            base.manifest = path_join(True, base.dependency_dir,
+                                            'MANIFEST')
+            ansible.put(manifest, base.manifest)
+        if not manifest_url.is_local:
+            # Clean up
+            shutil.rmtree(temp_manifest_dir)
         print_to_screen('Copying Rail-RNA and bootstraps to S3...',
                         newline=False, carriage_return=True)
         # Create and copy bootstraps to S3; compress and copy Rail-RNA to S3
@@ -2276,6 +2400,7 @@ socket_timeout = 300
 multipart_chunk_size_mb = 15
 reduced_redundancy = False
 send_chunk = 4096
+use_https = True
 EOF
 """
                 )
@@ -2376,6 +2501,187 @@ fi
                                     )
         ansible.put(copy_bootstrap, base.copy_bootstrap)
         os.remove(copy_bootstrap)
+        if base.secure:
+            encrypt_bootstrap = os.path.join(temp_dependency_dir,
+                                                's3cmd_s3.sh')
+            with open(encrypt_bootstrap, 'w') as script_stream:
+                # Code taken from http://bddubois-emr.s3.amazonaws.com/emr-volume-encryption.sh
+                print >>script_stream, (
+"""
+#!/usr/bin/env bash
+if [ `grep -c '"isRunningDataNode":true' /mnt/var/lib/info/instance.json` -eq 0 ]; then
+    exit 0
+fi
+
+set -x
+
+EPHEMERAL_MNT_DIRS=`awk '/mnt/{print $2}' < /proc/mounts`
+ENCRYPTED_SIZE=8g
+export PASSWORD=$(dd count=3 bs=16 if=/dev/urandom of=/dev/stdout 2>/dev/null | base64) PASSWORD_FILE="/tmp/pwd"
+i=0
+STATUS=0
+TMPSIZE=40
+
+echo ${PASSWORD} > $PASSWORD_FILE
+if [ ! $? -eq 0 ]; then
+  echo "ERROR: Failed to create password file"
+  STATUS=1
+fi
+
+sudo modprobe loop
+
+# Install cryptsetup
+#THESE steps fail but its ok the clone in amazon ami already has this installed # #sudo yum -y update #sudo yum -y install cryptsetup
+
+mychildren=""
+
+if [ $STATUS -eq 0 ]; then
+  for DIR in $EPHEMERAL_MNT_DIRS; do
+    #
+    # Setup some variables
+    #
+    ENCRYPTED_LOOPBACK_DIR=$DIR/encrypted_loopbacks
+    ENCRYPTED_MOUNT_POINT=$DIR/var/lib/hadoop/dfs.encrypted/
+    DFS_DATA_DIR=$DIR/var/lib/hadoop/dfs
+    ENCRYPTED_LOOPBACK_DEVICE=/dev/loop$i
+    ENCRYPTED_NAME=crypt$i
+    
+    if [ $STATUS -eq 0 ]; then
+      # Get the total number of blocks for this filesystem $DIR
+      nblocks=`stat -f -c '%a' $DIR`
+      # Get the block size (in bytes for this filesystem $DIR)
+      bsize=`stat -f -c '%s' $DIR`
+      # Calculate the mntsize in MB (divisible by 1000)
+      mntsize=`expr $nblocks \* $bsize \/ 1000 \/ 1000 \/ 1000`
+      # Make $TMPSIZE 1/10th of $mntsize
+      TMPSIZE=`expr $mntsize \/ 10`
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to get mount size"
+        STATUS=1
+      fi
+      ENCRYPTED_SIZE=`expr $mntsize - $TMPSIZE`g
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to calculate encrypted size"
+        STATUS=1
+      fi
+    fi
+
+    #
+    # Create directories
+    #
+    if [ $STATUS -eq 0 ]; then
+      mkdir $ENCRYPTED_LOOPBACK_DIR
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to get create ENCRYPTED_LOOPBACK_DIR"
+        STATUS=1
+      else 
+        echo SUCCESS: Created directory $ENCRYPTED_LOOPBACK_DIR
+      fi
+    fi
+    if [ $STATUS -eq 0 ]; then
+      mkdir $ENCRYPTED_MOUNT_POINT
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to get create ENCRYPTED_MOUNT_POINT"
+        STATUS=1
+      else
+        echo SUCCESS: Created directory $ENCRYPTED_MOUNT_POINT
+      fi
+    fi
+    #
+    # Create loopback device
+    #
+    if [ $STATUS -eq 0 ]; then
+      sudo fallocate -l $ENCRYPTED_SIZE $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to allocate $ENCRYPTED_SIZE $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img"
+        STATUS=1
+      else
+        echo SUCCESS: Allocated $ENCRYPTED_SIZE $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      fi
+    fi 
+    if [ $STATUS -eq 0 ]; then
+      sudo chown hadoop:hadoop $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to chown $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img"
+        STATUS=1
+      else
+        echo SUCCESS: chowned $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      fi
+    fi
+    if [ $STATUS -eq 0 ]; then
+      sudo losetup /dev/loop$i $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to losetup $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img"
+        STATUS=1
+      else
+        echo SUCCESS: losetup $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      fi
+    fi
+    #
+    # Setup LUKS
+    #
+    if [ $STATUS -eq 0 ]; then
+      sudo cryptsetup luksFormat -q --key-file $PASSWORD_FILE $ENCRYPTED_LOOPBACK_DEVICE
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to  cryptsetup luksFormat -q --key-file $PASSWORD_FILE $ENCRYPTED_LOOPBACK_DEVICE"
+        STATUS=1
+      else
+        echo SUCCESS: cryptsetup luksFormat 
+      fi
+    fi
+    if [ $STATUS -eq 0 ]; then
+      sudo cryptsetup luksOpen -q --key-file $PASSWORD_FILE $ENCRYPTED_LOOPBACK_DEVICE $ENCRYPTED_NAME
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to  cryptsetup luksOpen -q --key-file $PASSWORD_FILE $ENCRYPTED_LOOPBACK_DEVICE"
+        STATUS=1
+      else
+        echo SUCCESS: cryptsetup luksopen
+      fi
+    fi
+
+    #
+    # Create file system
+    #
+    if [ $STATUS -eq 0 ]; then
+    mycmd="sudo mkfs.ext4 -m 0 -E lazy_itable_init=1 /dev/mapper/$ENCRYPTED_NAME && sudo mount /dev/mapper/$ENCRYPTED_NAME $DFS_DATA_DIR && sudo chown hadoop:hadoop $DFS_DATA_DIR && sudo rm -rf $DFS_DATA_DIR/lost\+found && sudo echo iamdone-$ENCRYPTED_NAME && date "
+    echo $mycmd
+    eval $mycmd &
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to run the my cmd that follows $mycmd"
+        STATUS=1
+      else
+        echo SUCCESS: MYCMD 
+      fi
+    fi
+
+    mychildren="$mychildren $!"
+
+
+    let i=i+1
+done
+fi
+
+for mypid in $mychildren
+do
+    wait $mypid
+done
+
+sudo rm -f $PASSWORD_FILE
+
+date
+echo "everything done"
+echo $STATUS STATUS
+exit $STATUS
+"""
+            )
+        base.encrypt_bootstrap = path_join(
+                                        True, base.dependency_dir,
+                                        os.path.basename(
+                                                encrypt_bootstrap
+                                            )
+                                    )
+        ansible.put(encrypt_bootstrap, base.encrypt_bootstrap)
+        os.remove(encrypt_bootstrap)
         shutil.rmtree(temp_dependency_dir)
         print_to_screen('Copied Rail-RNA and bootstraps to S3.',
                          newline=True, carriage_return=False)
@@ -2521,6 +2827,16 @@ fi
                 help='input directory with preprocessed reads; must begin ' \
                      'with s3://'
             )
+        else:
+            # "prep" or "go" flows
+            general_parser.add_argument(
+                '--dbgap-key', required=False, metavar='<file>'
+                default=None,
+                help='path to dbGaP key file, which has the extension "ngc"; '
+                     'must be on local filesystem. This file is uploaded '
+                     'securely to S3 and scheduled for deletion if dbGaP '
+                     'data is present in the manifest file'
+            )
         required_parser.add_argument(
             '-o', '--output', type=str, required=True, metavar='<s3_dir>',
             help='output directory; must begin with s3://'
@@ -2533,6 +2849,14 @@ fi
                  'hdfs:// or s3://; use S3 and set --intermediate-lifetime ' \
                  'to -1 to keep intermediates (def: output directory + ' \
                  '".intermediate")'
+        )
+        general_parser.add_argument(
+            '--secure', action='store_const', const=True,
+            default=False,
+            help='turns on security measures enforcing dbGaP requirements; '
+                 'see https://d0.awsstatic.com/whitepapers/compliance/' 
+                 'AWS_dBGaP_Genomics_on_AWS_Best_Practices.pdf (def: on '
+                 'if dbGaP data in manifest file; otherwise off)'
         )
         elastic_parser.add_argument(
             '--intermediate-lifetime', type=int, required=False,
@@ -2712,15 +3036,28 @@ fi
 
     @staticmethod
     def prebootstrap(base):
-        return [
-            {
-                'Name' : 'Install S3cmd',
-                'ScriptBootstrapAction' : {
-                    'Args' : [],
-                    'Path' : base.install_s3cmd_bootstrap
+        if base.secure:
+            to_return = [
+                    {
+                        'Name' : 'Encrypt ephemeral space',
+                        'ScriptBootstrapAction' : {
+                            'Args' : [],
+                            'Path' : base.encrypt_bootstrap
+                        }
+                    }
+
+                ]
+        else:
+            to_return = []
+        return to_return + [
+                {
+                    'Name' : 'Install S3cmd',
+                    'ScriptBootstrapAction' : {
+                        'Args' : [],
+                        'Path' : base.install_s3cmd_bootstrap
+                    }
                 }
-            }
-        ]
+            ]
 
     @staticmethod
     def bootstrap(base):
@@ -2789,9 +3126,11 @@ fi
                          'com.hadoop.compression.lzo.LzopCodec'),
                         '-m',
                         'mapreduce.job.maps=%d' % base.total_cores,
+                        '-e',
+                        'fs.s3.enableServerSideEncryption=true'
                     ] + (['-e', 'fs.s3.consistent=true']
                             if base.consistent_view
-                            else ['-e', 'fs.s3.consistent=false']),
+                            else ['-e', 'fs.s3.consistent=false'])
                     'Path' : ('s3://%s.elasticmapreduce/bootstrap-actions/'
                               'configure-hadoop' % base.region)
                 }
@@ -3710,6 +4049,26 @@ class RailRnaAlign(object):
                         % (exe_paths.bedgraphtobigwig
                             if exe_paths.bedgraphtobigwig is not None
                             else 'bedGraphToBigWig'))
+            )
+            exec_parser.add_argument(
+                '--fastq-dump', type=str, required=False,
+                metavar='<exe>',
+                default=exe_paths.fastq_dump,
+                help=('path to SRA Tools fastq-dump executable '
+                      '(def: %s)' 
+                        % (exe_paths.fastq_dump
+                            if exe_paths.fastq_dump is not None
+                            else 'fastq-dump'))
+            )
+            exec_parser.add_argument(
+                '--vdb-config', type=str, required=False,
+                metavar='<exe>',
+                default=exe_paths.vdb_config,
+                help=('path to SRA Tools vdb-config executable '
+                      '(def: %s)' 
+                        % (exe_paths.vdb_config
+                            if exe_paths.vdb_config is not None
+                            else 'vdb-config'))
             )
         else:
             required_parser.add_argument(
@@ -4684,12 +5043,12 @@ class RailRnaLocalPreprocessJson(object):
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4, 
         keep_intermediates=False, check_manifest=True,
-        scratch=None, sort_exe=None):
+        scratch=None, sort_exe=None, dbgap_key=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
@@ -4725,14 +5084,15 @@ class RailRnaParallelPreprocessJson(object):
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
         ipcontroller_json=None, scratch=None, direct_write=False,
-        keep_intermediates=False, check_manifest=True, sort_exe=None):
+        keep_intermediates=False, check_manifest=True, sort_exe=None,
+        dbgap_key=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=None)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
@@ -4762,7 +5122,8 @@ class RailRnaParallelPreprocessJson(object):
                     intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
                     region=region, verbose=verbose,
-                    max_task_attempts=max_task_attempts
+                    max_task_attempts=max_task_attempts,
+                    dbgap_key=dbgap_key
                 )
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
             check_manifest=check_manifest, num_processes=num_processes,
@@ -4820,13 +5181,13 @@ class RailRnaElasticPreprocessJson(object):
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
-        max_task_attempts=4):
+        max_task_attempts=4,, secure=False, dbgap_key=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, service_role=service_role,
             instance_profile=instance_profile, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
         RailRnaElastic(base, check_manifest=check_manifest,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
@@ -4845,7 +5206,8 @@ class RailRnaElasticPreprocessJson(object):
             termination_protected=termination_protected,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
-            intermediate_lifetime=intermediate_lifetime)
+            intermediate_lifetime=intermediate_lifetime,
+            secure=secure)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -5163,7 +5525,8 @@ class RailRnaElasticAlignJson(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
-        no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4):
+        no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4,
+        secure=False):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -5187,7 +5550,8 @@ class RailRnaElasticAlignJson(object):
             termination_protected=termination_protected,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
-            intermediate_lifetime=intermediate_lifetime)
+            intermediate_lifetime=intermediate_lifetime,
+            secure=secure)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=True, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -5292,12 +5656,12 @@ class RailRnaLocalAllJson(object):
         gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4,
         keep_intermediates=False, check_manifest=True, scratch=None,
-        sort_exe=None):
+        sort_exe=None, dbgap_key=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -5388,14 +5752,15 @@ class RailRnaParallelAllJson(object):
         gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
         max_task_attempts=4, ipython_profile=None, ipcontroller_json=None,
         scratch=None, direct_write=False, keep_intermediates=False,
-        check_manifest=True, do_not_copy_index_to_nodes=False, sort_exe=None):
+        check_manifest=True, do_not_copy_index_to_nodes=False, sort_exe=None,
+        dbgap_key=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
@@ -5452,7 +5817,8 @@ class RailRnaParallelAllJson(object):
                     intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
                     region=region, verbose=verbose,
-                    max_task_attempts=max_task_attempts
+                    max_task_attempts=max_task_attempts,
+                    dbgap_key=dbgap_key
                 )
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
             check_manifest=check_manifest, num_processes=num_processes,
@@ -5563,13 +5929,14 @@ class RailRnaElasticAllJson(object):
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, check_manifest=True,
         no_direct_copy=False, consistent_view=False,
-        intermediate_lifetime=4, max_task_attempts=4):
+        intermediate_lifetime=4, max_task_attempts=4, dbgap_key=None,
+        secure=False):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, service_role=service_role,
             instance_profile=instance_profile, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
         RailRnaElastic(base, check_manifest=check_manifest, 
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
@@ -5588,7 +5955,8 @@ class RailRnaElasticAllJson(object):
             termination_protected=termination_protected,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
-            intermediate_lifetime=intermediate_lifetime)
+            intermediate_lifetime=intermediate_lifetime,
+            secure=secure)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,

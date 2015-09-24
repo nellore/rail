@@ -648,7 +648,8 @@ if __name__ == '__main__':
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
-                scratch=args.scratch
+                scratch=args.scratch,
+                dbgap_key=args.dbgap_key
             )
     elif args.job_flow == 'align' and args.align_mode == 'local':
         mode = 'local'
@@ -725,7 +726,8 @@ if __name__ == '__main__':
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
-                scratch=args.scratch
+                scratch=args.scratch,
+                dbgap_key=args.dbgap_key
             )
     elif args.job_flow == 'go' and args.go_mode == 'parallel':
         mode = 'parallel'
@@ -789,7 +791,8 @@ if __name__ == '__main__':
                 scratch=args.scratch,
                 direct_write=args.direct_write,
                 do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes,
-                sort_exe=args.sort
+                sort_exe=args.sort,
+                dbgap_key=args.dbgap_key
             )
     elif args.job_flow == 'align' and args.align_mode == 'parallel':
         mode = 'parallel'
@@ -871,7 +874,8 @@ if __name__ == '__main__':
                 ipcontroller_json=args.ipcontroller_json,
                 scratch=args.scratch,
                 direct_write=args.direct_write,
-                sort_exe=args.sort
+                sort_exe=args.sort,
+                dbgap_key=args.dbgap_key
             )
     elif args.job_flow == 'go' and args.go_mode == 'elastic':
         mode = 'elastic'
@@ -940,7 +944,9 @@ if __name__ == '__main__':
                 no_direct_copy=args.no_direct_copy,
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime,
-                max_task_attempts=args.max_task_attempts
+                max_task_attempts=args.max_task_attempts,
+                dbgap_key=args.dbgap_key,
+                secure=args.secure
             )
     elif args.job_flow == 'align' and args.align_mode == 'elastic':
         mode = 'elastic'
@@ -1005,7 +1011,8 @@ if __name__ == '__main__':
                 consistent_view=args.consistent_view,
                 no_direct_copy=args.no_direct_copy,
                 intermediate_lifetime=args.intermediate_lifetime,
-                max_task_attempts=args.max_task_attempts
+                max_task_attempts=args.max_task_attempts,
+                secure=args.secure
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'elastic':
         mode = 'elastic'
@@ -1042,7 +1049,9 @@ if __name__ == '__main__':
                 no_direct_copy=args.no_direct_copy,
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime,
-                max_task_attempts=args.max_task_attempts
+                max_task_attempts=args.max_task_attempts,
+                dbgap_key=args.dbgap_key,
+                secure=args.secure
             )
     # Launch
     try:

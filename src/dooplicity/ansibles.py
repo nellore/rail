@@ -264,9 +264,10 @@ class S3Ansible(object):
 
             No return value.
         """
+        # Always use SSE
         aws_command = [self.aws, '--profile', self.profile,
                         's3', 'cp', os.path.abspath(source),
-                        clean_url(destination)]
+                        clean_url(destination), '--sse']
         subprocess.check_call(aws_command, bufsize=-1,
                                     stdout=self._osdevnull,
                                     stderr=sys.stderr)
@@ -693,6 +694,10 @@ class Url(object):
                 self.type = 'local'
             elif prefix[:3] == 'nfs':
                 self.type = 'nfs'
+            elif prefix[:3] == 'sra':
+                self.type = 'sra'
+            elif prefix[:5] == 'dbgap':
+                self.type = 'dbgap'
             else:
                 raise RuntimeError(('Unrecognized URL %s; it\'s not S3, HDFS, '
                                     'HTTP, FTP, or local.') % url)
@@ -705,6 +710,8 @@ class Url(object):
         self.is_local = self.type == 'local'
         self.is_hdfs = self.type == 'hdfs'
         self.is_nfs = self.type == 'nfs'
+        self.is_sra = self.type == 'sra'
+        self.is_dbgap = self.type = 'dbgap'
 
     def to_url(self, caps=False):
         """ Returns URL string: an absolute path if local or an URL.
@@ -717,6 +724,8 @@ class Url(object):
                 else absolute_path
         elif self.type[:2] == 's3' and caps:
             return self.type.upper() + ':' + self.suffix
+        elif self.type[:3] == 'sra':
+            return self.suffix.upper()
         else:
             return self.type + ':' + self.suffix
 
