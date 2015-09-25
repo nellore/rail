@@ -134,7 +134,7 @@ def qname_from_read(qname, seq, sample_label, mate=None):
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         to_stdout=False, push='.', mover=filemover.FileMover(),
         verbose=False, scratch=None, bin_qualities=True, short_qnames=False,
-        skip_bad_records=False):
+        skip_bad_records=False, dbgap_key=None):
     """ Runs Rail-RNA-preprocess
 
         Input (read from stdin)
@@ -212,6 +212,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             should be written in a short base64-encoded format
         skip_bad_records: True iff bad records should be skipped; otherwise,
             raises exception if bad record is encountered
+        dbgap_key: None if no dbGaP key provided; else path to dbGaP file
 
         No return value
     """
@@ -820,6 +821,17 @@ if __name__ == '__main__':
               '"bad" could mean that the quality sequence length does '
               'not match the read length or the record is not in the '
               'proper format'))
+    parser.add_argument(
+            '--dbgap-key', required=False, 
+            default=None,
+            help='Path to dbGaP key file, which has the extension "ngc"; '
+                 'must be on local filesystem.'
+        )
+    parser.add_argument(
+            '--fastq-dump', required=False, 
+            default='fastq-dump',
+            help='Path to fastq-dump executable'
+        )
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
@@ -844,7 +856,8 @@ if __name__ == '__main__':
         skip_bad_records=args.skip_bad_records,
         scratch=tempdel.silentexpandvars(args.scratch),
         verbose=args.verbose,
-        mover=mover)
+        mover=mover,
+        dbgap_key=args.dbgap_key)
     print >>sys.stderr, 'DONE with preprocess.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)

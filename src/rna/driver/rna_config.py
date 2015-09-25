@@ -140,6 +140,8 @@ _elastic_bowtie1_exe = 'bowtie'
 _elastic_bowtie2_exe = 'bowtie2'
 _elastic_bowtie1_build_exe = 'bowtie-build'
 _elastic_bowtie2_build_exe = 'bowtie2-build'
+_elastic_fastq_dump_exe = 'fastq-dump'
+_elastic_vdb_config_exe = 'vdb-config'
 _elastic_step_dir = '/usr/local/raildotbio/rail-rna/rna/steps'
 
 # Set basename of the transcript fragment index; can't settle on this
@@ -2172,6 +2174,9 @@ class RailRnaElastic(object):
                     single_url = ab.Url(tokens[0])
                     if single_url.is_dbgap:
                         dbgap_present = True
+                        sra_tools_needed = True
+                    elif single_url.is_sra:
+                        sra_tools_needed = True
                 else:
                     check_sample_label = False
                     base.errors.append(('The following line from the '
@@ -2265,6 +2270,15 @@ class RailRnaElastic(object):
                                 )
             ansible.put(isofrag, base.isofrag_idx)
             shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
+
+        # Upload NGC file to S3
+        if dbgap_present:
+            base.dbgap_s3_path = path_join(
+                                    True,
+                                    base.intermediate_dir,
+                                    os.path.basename(base.dbgap_key)
+                                )
+            ansible.put(base.dbgap_key, base.dbgap_s3_path)
 
         if not manifest_url.is_s3 and output_dir_url.is_s3:
             # Copy manifest file to S3 before job flow starts
@@ -2470,6 +2484,8 @@ sudo python27 {rail_zipped} $@
         ansible.put(install_rail_bootstrap, base.install_rail_bootstrap)
         copy_bootstrap = os.path.join(temp_dependency_dir,
                                                 's3cmd_s3.sh')
+        base.fastq_dump_exe = _elastic_fastq_dump
+        base.vdb_config_exe = _elastic_vdb_config
         with open(copy_bootstrap, 'w') as script_stream:
              print >>script_stream, (
 """
@@ -3304,7 +3320,7 @@ class RailRnaPreprocess(object):
                     'name' : 'Preprocess reads',
                     'mapper' : ('preprocess.py --nucs-per-file={0} {1} '
                                 '--push={2} --gzip-level {3} {4} {5} '
-                                '{6} {7} {8}').format(
+                                '{6} {7} {8} {9} {10}').format(
                                                 base.nucleotides_per_input,
                                                 '--gzip-output' if
                                                 base.gzip_input else '',
@@ -3327,7 +3343,13 @@ class RailRnaPreprocess(object):
                                                 else '',
                                                 '--skip-bad-records'
                                                 if base.skip_bad_records
-                                                else ''
+                                                else '',
+                                                '--dbgap-key %s'
+                                                    % base.dbgap_key if
+                                                    base.dbgap_key is not None
+                                                    else '',
+                                                '--fastq-dump %s'
+                                                    % base.fastq_dump_exe
                                             ),
                     'inputs' : [os.path.join(base.intermediate_dir,
                                                 'split.manifest')],
@@ -3345,7 +3367,7 @@ class RailRnaPreprocess(object):
                     'name' : 'Preprocess reads',
                     'mapper' : ('preprocess.py --nucs-per-file={0} {1} '
                                 '--push={2} --gzip-level {3} {4} {5} {6} {7} '
-                                '--keep-alive').format(
+                                '--keep-alive {8} {9}').format(
                                                 base.nucleotides_per_input,
                                                 '--gzip-output' if
                                                 base.gzip_input else '',
@@ -3366,7 +3388,12 @@ class RailRnaPreprocess(object):
                                                 else '',
                                                 '--skip-bad-records'
                                                 if base.skip_bad_records
-                                                else ''
+                                                else '',
+                                                '--dbgap-key /mnt/DBGAP.ngc'
+                                                if hasattr(base,
+                                                    'dbgap_s3_path') else '',
+                                                '--fastq-dump %s'
+                                                    % base.fastq_dump_exe
                                             ),
                     'inputs' : [base.old_manifest
                                 if hasattr(base, 'old_manifest')
@@ -5031,7 +5058,17 @@ class RailRnaAlign(object):
                     'Path' : base.copy_bootstrap
                 }
             }
-        ]
+        ] + ([{
+                'Name' : 'Transfer dbGaP key file to nodes',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        base.dbgap_s3_path,
+                        '/mnt',
+                        'DBGAP.ngc'
+                    ],
+                    'Path' : base.copy_bootstrap
+                }
+            }] if hasattr(base, 'dbgap_s3_path') else [])
 
 class RailRnaLocalPreprocessJson(object):
     """ Constructs JSON for local mode + preprocess job flow. """
