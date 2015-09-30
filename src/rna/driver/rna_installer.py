@@ -221,7 +221,7 @@ class RailRnaInstaller(object):
                 if url[-8:] == '.tar.bz2':
                     explode_command = ['tar', 'xvjf', filename]
                 elif url[-7:] == '.tar.gz' or url[-4:] == '.tgz':
-                    explode_command = ['tar', 'xvjf', filename]
+                    explode_command = ['tar', 'xvzf', filename]
                 elif url[-4:] == '.zip':
                     self._print_to_screen_and_log(
                             '[Installing] Extracting %s...' % name,
