@@ -2531,7 +2531,7 @@ fi
         os.remove(copy_bootstrap)
         if base.secure:
             encrypt_bootstrap = os.path.join(temp_dependency_dir,
-                                                's3cmd_s3.sh')
+                                                'encrypt.sh')
             with open(encrypt_bootstrap, 'w') as script_stream:
                 # Code taken from http://bddubois-emr.s3.amazonaws.com/emr-volume-encryption.sh
                 print >>script_stream, (
@@ -2718,13 +2718,15 @@ exit $STATUS
 """#!/usr/bin/env bash
 
 mkdir -p {vdb_workspace}/insecure
+mkdir -p ~/.ncbi
 cat >~/.ncbi/user-settings.mkfg <<EOF
 /repository/user/main/public/root = "{vdb_workspace}/insecure"
 EOF
 mkdir -p {vdb_workspace}/secure
-vdb-config --import /mnt/DBGAP.ngc {vdb_workspace}/secure
+{vdb_config} --import /mnt/DBGAP.ngc {vdb_workspace}/secure
 """
-                    ).format(vdb_workspace=_elastic_vdb_workspace)
+                    ).format(vdb_config=_elastic_vdb_config_exe,
+                             vdb_workspace=_elastic_vdb_workspace)
             else:
                 # Don't need secure dir for workspace
                 with open(vdb_bootstrap, 'w') as script_stream:
@@ -2732,6 +2734,7 @@ vdb-config --import /mnt/DBGAP.ngc {vdb_workspace}/secure
 """#!/usr/bin/env bash
 
 mkdir -p {vdb_workspace}/insecure
+mkdir -p ~/.ncbi
 cat >~/.ncbi/user-settings.mkfg <<EOF
 /repository/user/main/public/root = "{vdb_workspace}/insecure"
 EOF
