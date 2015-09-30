@@ -141,7 +141,7 @@ _elastic_bowtie2_exe = 'bowtie2'
 _elastic_bowtie1_build_exe = 'bowtie-build'
 _elastic_bowtie2_build_exe = 'bowtie2-build'
 _elastic_fastq_dump_exe = 'fastq-dump'
-_elastic_vdb_config_exe = 'vdb-config'
+_elastic_vdb_config_exe = '/usr/local/bin/vdb-config'
 _elastic_vdb_workspace = '/mnt/sra_workspace'
 _elastic_step_dir = '/usr/local/raildotbio/rail-rna/rna/steps'
 
