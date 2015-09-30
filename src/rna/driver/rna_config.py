@@ -2215,6 +2215,7 @@ class RailRnaElastic(object):
                                'manifest file, but no dbGaP '
                                'repository key file (--dbgap-key) was '
                                'provided. ')
+        base.secure = secure
         if dbgap_present:
             # Always use secure mode if dbGaP data is present
             base.secure = True
@@ -2719,14 +2720,14 @@ exit $STATUS
 """
 #!/usr/bin/env bash
 
-mkdir -p {1}/insecure
+mkdir -p {vdb_workspace}/insecure
 cat >~/.ncbi/user-settings.mkfg <<EOF
-/repository/user/main/public/root = "{1}/insecure"
+/repository/user/main/public/root = "{vdb_workspace}/insecure"
 EOF
-mkdir -p {1}/secure
-vdb-config --import /mnt/DBGAP.ngc {1}/secure
+mkdir -p {vdb_workspace}/secure
+vdb-config --import /mnt/DBGAP.ngc {vdb_workspace}/secure
 """
-                    ).format(_elastic_vdb_workspace)
+                    ).format(vdb_workspace=_elastic_vdb_workspace)
             else:
                 # Don't need secure dir for workspace
                 with open(vdb_bootstrap, 'w') as script_stream:
@@ -2734,12 +2735,12 @@ vdb-config --import /mnt/DBGAP.ngc {1}/secure
 """
 #!/usr/bin/env bash
 
-mkdir -p {1}/insecure
+mkdir -p {vdb_workspace}/insecure
 cat >~/.ncbi/user-settings.mkfg <<EOF
-/repository/user/main/public/root = "{1}/insecure"
+/repository/user/main/public/root = "{vdb_workspace}/insecure"
 EOF
 """
-                    ).format(_elastic_vdb_workspace)
+                    ).format(vdb_workspace=_elastic_vdb_workspace)
         base.vdb_bootstrap = path_join(
                                         True, base.dependency_dir,
                                         os.path.basename(
@@ -3125,18 +3126,6 @@ EOF
             ]
 
     @staticmethod
-    def srabootstrap(base):
-        return [
-                    {
-                        'Name' : 'Set up SRA Tools workspace',
-                        'ScriptBootstrapAction' : {
-                            'Args' : [],
-                            'Path' : base.vdb_bootstrap
-                        }
-                }
-            ]
-
-    @staticmethod
     def bootstrap(base):
         return [
             {
@@ -3450,7 +3439,7 @@ class RailRnaPreprocess(object):
                                                 if base.skip_bad_records
                                                 else '',
                                             '--workspace-path %s/secure'
-                                            % _elastic_workspace_path,
+                                            % _elastic_vdb_workspace,
                                                 '--fastq-dump-exe %s'
                                                     % (base.fastq_dump_exe
                                                         if hasattr(base,
@@ -3469,6 +3458,18 @@ class RailRnaPreprocess(object):
                 },
             ]
         return steps_to_return
+
+    @staticmethod
+    def srabootstrap(base):
+        return [
+                    {
+                        'Name' : 'Set up SRA Tools workspace',
+                        'ScriptBootstrapAction' : {
+                            'Args' : [],
+                            'Path' : base.vdb_bootstrap
+                        }
+                }
+            ]
 
     @staticmethod
     def bootstrap(base):
