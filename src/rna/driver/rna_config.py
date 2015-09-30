@@ -2536,11 +2536,7 @@ fi
                 # Code taken from http://bddubois-emr.s3.amazonaws.com/emr-volume-encryption.sh
                 print >>script_stream, (
 """#!/usr/bin/env bash
-if [ `grep -c '"isRunningDataNode":true' /mnt/var/lib/info/instance.json` -eq 0 ]; then
-    exit 0
-fi
-
-set -x
+set -ex
 
 EPHEMERAL_MNT_DIRS=`awk '/mnt/{print $2}' < /proc/mounts`
 ENCRYPTED_SIZE=8g
@@ -2712,7 +2708,7 @@ exit $STATUS
         if sra_tools_needed:
             vdb_bootstrap = os.path.join(temp_dependency_dir,
                                                 'vdb.sh')
-            if base.secure:
+            if dbgap_present:
                 with open(vdb_bootstrap, 'w') as script_stream:
                     print >>script_stream, (
 """#!/usr/bin/env bash
