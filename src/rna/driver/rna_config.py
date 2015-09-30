@@ -2243,7 +2243,8 @@ class RailRnaElastic(object):
                                               'manifest file is on '
                                               'the web'))
                         ansible.curl_exe = base.curl_exe
-                    if not ansible.exists(filename_url.to_url()):
+                    if not filename_url.is_sra \
+                        and not ansible.exists(filename_url.to_url()):
                         base.errors.append(('The file {0} from the '
                                             'manifest file {1} does not '
                                             'exist; check the URL and try '
@@ -2495,8 +2496,8 @@ sudo python27 {rail_zipped} $@
         ansible.put(install_rail_bootstrap, base.install_rail_bootstrap)
         copy_bootstrap = os.path.join(temp_dependency_dir,
                                                 's3cmd_s3.sh')
-        base.fastq_dump_exe = _elastic_fastq_dump
-        base.vdb_config_exe = _elastic_vdb_config
+        base.fastq_dump_exe = _elastic_fastq_dump_exe
+        base.vdb_config_exe = _elastic_vdb_config_exe
         with open(copy_bootstrap, 'w') as script_stream:
              print >>script_stream, (
 """
