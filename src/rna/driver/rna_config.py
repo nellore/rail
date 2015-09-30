@@ -142,6 +142,7 @@ _elastic_bowtie1_build_exe = 'bowtie-build'
 _elastic_bowtie2_build_exe = 'bowtie2-build'
 _elastic_fastq_dump_exe = 'fastq-dump'
 _elastic_vdb_config_exe = 'vdb-config'
+_elastic_vdb_workspace = '/mnt/sra_workspace'
 _elastic_step_dir = '/usr/local/raildotbio/rail-rna/rna/steps'
 
 # Set basename of the transcript fragment index; can't settle on this
@@ -1389,7 +1390,7 @@ class RailRnaLocal(object):
                     sort_memory_cap=(300*1024), parallel=False,
                     local=True, scratch=None, direct_write=False,
                     ansible=None, do_not_copy_index_to_nodes=False,
-                    sort_exe=None):
+                    sort_exe=None, fastq_dump_exe=None, vdb_config_exe=None):
         """ base: instance of RailRnaErrors """
         # Initialize ansible for easy checks
         if not ansible:
@@ -1520,7 +1521,8 @@ class RailRnaLocal(object):
                 base.manifest = os.path.abspath(base.manifest)
                 files_to_check = []
                 base.sample_count = 0
-                if dbgap_key is not None and not os.path.exists(dbgap_key):
+                if base.dbgap_key is not None \
+                    and not os.path.exists(dbgap_key):
                     base.errors.append(('dbGaP repository key file '
                                         '(--dbgap-key) "{}" '
                                         'does not exist. Check its path and '
@@ -1564,11 +1566,18 @@ class RailRnaLocal(object):
                                                         manifest_url.to_url(),
                                                         line.strip()
                                                     ))
-                if dbgap_present and base.dbgap_key is None:
+                if dbgap_present:
+                    base.errors.append('Rail-RNA does not currently work '
+                                       'with dbGaP accession numbers '
+                                       'in manifest files in local and '
+                                       'parallel modes. Decrypt your data '
+                                       'first and try again with FASTQ paths '
+                                       'in the manifest file instead.')
+                '''if dbgap_present and base.dbgap_key is None:
                     base.errors.append('dbGaP accession numbers are in '
                                        'manifest file, but no dbGaP '
                                        'repository key file (--dbgap-key) was '
-                                       'provided. ')
+                                       'provided. ')'''
                 if files_to_check:
                     if check_manifest:
                         # Check files in manifest only if in preprocess flow
@@ -1626,7 +1635,7 @@ class RailRnaLocal(object):
                                                       'the web'
                                                     )
                                 ansible.curl_exe = base.curl_exe
-                            elif manifest_url.is_sra or manifest_url.is_dbgap:
+                            elif filename_url.is_sra:
                                 if 'SRA Tools' not in base.checked_programs:
                                     base.fastq_dump_exe = base.check_program(
                                                 'fastq-dump', 'fastq-dump',
@@ -1701,7 +1710,8 @@ class RailRnaLocal(object):
                                             base.sra_tools_version \
                                                 = fastq_dump_version
                                     base.checked_programs.add('SRA Tools')
-                            if not ansible.exists(filename):
+                            if not filename_url.is_sra \
+                                and not ansible.exists(filename):
                                 base.errors.append((
                                                     'The file {0} from the '
                                                     'manifest file {1} does '
@@ -1721,6 +1731,7 @@ class RailRnaLocal(object):
                                         'has no valid lines.').format(
                                                         manifest_url.to_url()
                                                     ))
+            raise_runtime_error(base)
             from multiprocessing import cpu_count
             if num_processes:
                 if not (float(num_processes).is_integer()
@@ -1850,14 +1861,14 @@ class RailRnaLocal(object):
                 '-i', '--input', type=str, required=True, metavar='<dir>',
                 help='input directory with preprocessed reads; must be local'
             )
-        else:
+        '''else:
             # "prep" or "go" flows
             general_parser.add_argument(
                 '--dbgap-key', required=False, metavar='<file>'
                 default=None,
                 help='path to dbGaP key file, which has the extension "ngc"; '
                      'must be on local filesystem'
-            )
+            )'''
         if prep:
             output_parser.add_argument(
                 '-o', '--output', type=str, required=False, metavar='<dir>',
@@ -2698,6 +2709,44 @@ exit $STATUS
                                     )
         ansible.put(encrypt_bootstrap, base.encrypt_bootstrap)
         os.remove(encrypt_bootstrap)
+        if sra_tools_needed:
+            vdb_bootstrap = os.path.join(temp_dependency_dir,
+                                                'vdb.sh')
+            if base.secure:
+                with open(vdb_bootstrap, 'w') as script_stream:
+                    print >>script_stream, (
+"""
+#!/usr/bin/env bash
+
+mkdir -p {1}/insecure
+cat >~/.ncbi/user-settings.mkfg <<EOF
+/repository/user/main/public/root = "{1}/insecure"
+EOF
+mkdir -p {1}/secure
+vdb-config --import /mnt/DBGAP.ngc {1}/secure
+"""
+                    ).format(_elastic_vdb_workspace)
+            else:
+                # Don't need secure dir for workspace
+                with open(vdb_bootstrap, 'w') as script_stream:
+                    print >>script_stream, (
+"""
+#!/usr/bin/env bash
+
+mkdir -p {1}/insecure
+cat >~/.ncbi/user-settings.mkfg <<EOF
+/repository/user/main/public/root = "{1}/insecure"
+EOF
+"""
+                    ).format(_elastic_vdb_workspace)
+        base.vdb_bootstrap = path_join(
+                                        True, base.dependency_dir,
+                                        os.path.basename(
+                                                vdb_bootstrap
+                                            )
+                                    )
+        ansible.put(vdb_bootstrap, base.vdb_bootstrap)
+        os.remove(vdb_bootstrap)
         shutil.rmtree(temp_dependency_dir)
         print_to_screen('Copied Rail-RNA and bootstraps to S3.',
                          newline=True, carriage_return=False)
@@ -2846,7 +2895,7 @@ exit $STATUS
         else:
             # "prep" or "go" flows
             general_parser.add_argument(
-                '--dbgap-key', required=False, metavar='<file>'
+                '--dbgap-key', required=False, metavar='<file>',
                 default=None,
                 help='path to dbGaP key file, which has the extension "ngc"; '
                      'must be on local filesystem. This file is uploaded '
@@ -3061,7 +3110,6 @@ exit $STATUS
                             'Path' : base.encrypt_bootstrap
                         }
                     }
-
                 ]
         else:
             to_return = []
@@ -3072,6 +3120,18 @@ exit $STATUS
                         'Args' : [],
                         'Path' : base.install_s3cmd_bootstrap
                     }
+                }
+            ]
+
+    @staticmethod
+    def srabootstrap(base):
+        return [
+                    {
+                        'Name' : 'Set up SRA Tools workspace',
+                        'ScriptBootstrapAction' : {
+                            'Args' : [],
+                            'Path' : base.vdb_bootstrap
+                        }
                 }
             ]
 
@@ -3146,7 +3206,7 @@ exit $STATUS
                         'fs.s3.enableServerSideEncryption=true'
                     ] + (['-e', 'fs.s3.consistent=true']
                             if base.consistent_view
-                            else ['-e', 'fs.s3.consistent=false'])
+                            else ['-e', 'fs.s3.consistent=false']),
                     'Path' : ('s3://%s.elasticmapreduce/bootstrap-actions/'
                               'configure-hadoop' % base.region)
                 }
@@ -3320,7 +3380,7 @@ class RailRnaPreprocess(object):
                     'name' : 'Preprocess reads',
                     'mapper' : ('preprocess.py --nucs-per-file={0} {1} '
                                 '--push={2} --gzip-level {3} {4} {5} '
-                                '{6} {7} {8} {9} {10}').format(
+                                '{6} {7} {8} {9}').format(
                                                 base.nucleotides_per_input,
                                                 '--gzip-output' if
                                                 base.gzip_input else '',
@@ -3344,12 +3404,11 @@ class RailRnaPreprocess(object):
                                                 '--skip-bad-records'
                                                 if base.skip_bad_records
                                                 else '',
-                                                '--dbgap-key %s'
-                                                    % base.dbgap_key if
-                                                    base.dbgap_key is not None
-                                                    else '',
-                                                '--fastq-dump %s'
-                                                    % base.fastq_dump_exe
+                                                '--fastq-dump-exe %s'
+                                                    % (base.fastq_dump_exe
+                                                        if hasattr(base,
+                                                            'fastq_dump_exe')
+                                                        else 'fastq-dump')
                                             ),
                     'inputs' : [os.path.join(base.intermediate_dir,
                                                 'split.manifest')],
@@ -3389,11 +3448,13 @@ class RailRnaPreprocess(object):
                                                 '--skip-bad-records'
                                                 if base.skip_bad_records
                                                 else '',
-                                                '--dbgap-key /mnt/DBGAP.ngc'
-                                                if hasattr(base,
-                                                    'dbgap_s3_path') else '',
-                                                '--fastq-dump %s'
-                                                    % base.fastq_dump_exe
+                                            '--workspace-path %s/secure'
+                                            % _elastic_workspace_path,
+                                                '--fastq-dump-exe %s'
+                                                    % (base.fastq_dump_exe
+                                                        if hasattr(base,
+                                                            'fastq_dump_exe')
+                                                        else 'fastq-dump')
                                             ),
                     'inputs' : [base.old_manifest
                                 if hasattr(base, 'old_manifest')
@@ -5080,7 +5141,8 @@ class RailRnaLocalPreprocessJson(object):
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4, 
         keep_intermediates=False, check_manifest=True,
-        scratch=None, sort_exe=None, dbgap_key=None):
+        scratch=None, sort_exe=None, dbgap_key=None,
+        fastq_dump_exe=None, vdb_config_exe=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -5090,7 +5152,8 @@ class RailRnaLocalPreprocessJson(object):
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, scratch=scratch,
-            sort_exe=sort_exe)
+            sort_exe=sort_exe, fastq_dump_exe=fastq_dump_exe,
+            vdb_config_exe=vdb_config_exe)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -5122,7 +5185,7 @@ class RailRnaParallelPreprocessJson(object):
         sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
         ipcontroller_json=None, scratch=None, direct_write=False,
         keep_intermediates=False, check_manifest=True, sort_exe=None,
-        dbgap_key=None):
+        dbgap_key=None, fastq_dump_exe=None, vdb_config_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
@@ -5135,7 +5198,8 @@ class RailRnaParallelPreprocessJson(object):
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, scratch=scratch,
             direct_write=direct_write, local=False, parallel=False,
-            sort_exe=sort_exe)
+            sort_exe=sort_exe, fastq_dump_exe=fastq_dump_exe,
+            vdb_config_exe=vdb_config_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
             subsequently upload to final destination.'''
@@ -5168,7 +5232,8 @@ class RailRnaParallelPreprocessJson(object):
             sort_memory_cap=sort_memory_cap, scratch=scratch,
             direct_write=direct_write, keep_intermediates=keep_intermediates,
             local=False, parallel=True, ansible=ab.Ansible(),
-            sort_exe=sort_exe)
+            sort_exe=sort_exe, fastq_dump_exe=fastq_dump_exe,
+            vdb_config_exe=vdb_config_exe)
         engine_base_checks = {}
         for i in rc.ids:
             engine_base_checks[i] = engine_bases[i].check_program
@@ -5218,7 +5283,7 @@ class RailRnaElasticPreprocessJson(object):
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
-        max_task_attempts=4,, secure=False, dbgap_key=None):
+        max_task_attempts=4, secure=False, dbgap_key=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -5284,6 +5349,7 @@ class RailRnaElasticPreprocessJson(object):
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
                 + RailRnaPreprocess.bootstrap(base)
+                + RailRnaPreprocess.srabootstrap(base)
                 + RailRnaElastic.bootstrap(base)
             )
         self.base = base
@@ -5693,7 +5759,8 @@ class RailRnaLocalAllJson(object):
         gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4,
         keep_intermediates=False, check_manifest=True, scratch=None,
-        sort_exe=None, dbgap_key=None):
+        sort_exe=None, dbgap_key=None, fastq_dump_exe=None,
+        vdb_config_exe=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -5707,7 +5774,8 @@ class RailRnaLocalAllJson(object):
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, scratch=scratch,
-            sort_exe=sort_exe)
+            sort_exe=sort_exe, fastq_dump_exe=fastq_dump_exe,
+            vdb_config_exe=vdb_config_exe)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
@@ -5790,7 +5858,7 @@ class RailRnaParallelAllJson(object):
         max_task_attempts=4, ipython_profile=None, ipcontroller_json=None,
         scratch=None, direct_write=False, keep_intermediates=False,
         check_manifest=True, do_not_copy_index_to_nodes=False, sort_exe=None,
-        dbgap_key=None):
+        dbgap_key=None, fastq_dump_exe=None, vdb_config_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
@@ -5802,7 +5870,8 @@ class RailRnaParallelAllJson(object):
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             direct_write=direct_write, keep_intermediates=keep_intermediates,
-            local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
+            local=False, parallel=False, scratch=scratch, sort_exe=sort_exe,
+            fastq_dump_exe=fastq_dump_exe, vdb_config_exe=vdb_config_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
             subsequently upload to S3.'''
@@ -5863,7 +5932,8 @@ class RailRnaParallelAllJson(object):
             sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
             ansible=ab.Ansible(), scratch=scratch, direct_write=direct_write,
-            sort_exe=sort_exe)
+            sort_exe=sort_exe, fastq_dump_exe=fastq_dump_exe,
+            vdb_config_exe=vdb_config_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
             bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -6078,6 +6148,7 @@ class RailRnaElasticAllJson(object):
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
                 + RailRnaAlign.bootstrap(base)
+                + RailRnaPreprocess.srabootstrap(base)
                 + RailRnaElastic.bootstrap(base)
             )
         self.base = base

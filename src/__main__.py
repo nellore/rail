@@ -649,7 +649,8 @@ if __name__ == '__main__':
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
                 scratch=args.scratch,
-                dbgap_key=args.dbgap_key
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'align' and args.align_mode == 'local':
         mode = 'local'
@@ -727,7 +728,8 @@ if __name__ == '__main__':
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
                 scratch=args.scratch,
-                dbgap_key=args.dbgap_key
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'go' and args.go_mode == 'parallel':
         mode = 'parallel'
@@ -792,7 +794,8 @@ if __name__ == '__main__':
                 direct_write=args.direct_write,
                 do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes,
                 sort_exe=args.sort,
-                dbgap_key=args.dbgap_key
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'align' and args.align_mode == 'parallel':
         mode = 'parallel'
@@ -875,7 +878,8 @@ if __name__ == '__main__':
                 scratch=args.scratch,
                 direct_write=args.direct_write,
                 sort_exe=args.sort,
-                dbgap_key=args.dbgap_key
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'go' and args.go_mode == 'elastic':
         mode = 'elastic'

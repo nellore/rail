@@ -87,6 +87,7 @@ from dooplicity.ansibles import Url
 from dooplicity.tools import xopen, register_cleanup, make_temp_dir
 import filemover
 import tempdel
+import subprocess
 from guess import phred_converter
 from encode import encode, encode_sequence
 
@@ -134,7 +135,8 @@ def qname_from_read(qname, seq, sample_label, mate=None):
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         to_stdout=False, push='.', mover=filemover.FileMover(),
         verbose=False, scratch=None, bin_qualities=True, short_qnames=False,
-        skip_bad_records=False, dbgap_key=None):
+        skip_bad_records=False, workspace_dir=None,
+        fastq_dump_exe='fastq-dump'):
     """ Runs Rail-RNA-preprocess
 
         Input (read from stdin)
@@ -212,7 +214,9 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             should be written in a short base64-encoded format
         skip_bad_records: True iff bad records should be skipped; otherwise,
             raises exception if bad record is encountered
-        dbgap_key: None if no dbGaP key provided; else path to dbGaP file
+        workspace_dir: where to use fastq-dump -- needed for working with
+            dbGaP data. None if temporary dir should be used.
+        fastq_dump_exe: path to fastq-dump executable
 
         No return value
     """
@@ -303,7 +307,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                                         int(read_counts[i])
                                                     )
         elif token_count == 3:
-            # Single-end reads
+            # SRA or single-end reads
             source_dict[(Url(tokens[0]),)] = (tokens[-1],)
         elif token_count == 5:
             # Paired-end reads
@@ -345,11 +349,48 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 # Download
                 print >>sys.stderr, 'Retrieving URL "%s"...' \
                     % source_url.to_url()
-                mover.get(source_url, temp_dir)
-                downloaded = list(
-                        set(os.listdir(temp_dir)).difference(downloaded)
-                    )
-                sources.append(os.path.join(temp_dir, list(downloaded)[0]))
+                if source_url.is_sra:
+                    download_dir = temp_dir
+                elif source_url.is_dbgap:
+                    download_dir = workspace_dir
+                if source_url.is_sra or source_url.is_dbgap:
+                    sra_accession = source_url.to_url()
+                    fastq_dump_command = (
+                            'set -exo pipefail; cd {download_dir}; '
+                            '{fastq_dump_exe} -I --split-files '
+                            '{sra_accession}'
+                        ).format(download_dir=download_dir,
+                                    fastq_dump_exe=fastq_dump_exe,
+                                    sra_accession=sra_accession)
+                    try:
+                        sra_errors = subprocess.check_output(
+                            fastq_dump_command, shell=True, 
+                            executable='/bin/bash',
+                            stderr=subprocess.STDOUT
+                        )
+                    except subprocess.CalledProcessError:
+                        raise RuntimeError(('Error "%s" encountered executing '
+                                            'command %s.') % (sra_errors,
+                                                        fastq_dump_command))
+                    from glob import glob
+                    sources = sorted(glob(
+                        os.path.join(download_dir, sra_accession + '*.fastq'))
+                    ) # ensure 1 is before 2 if paired-end
+                    # Schedule for deletion
+                    def silent_remove(filename):
+                        try:
+                            os.remove(filename)
+                        except OSError as e:
+                            if e.errno != errno.ENOENT:
+                                raise
+                    for source in sources:
+                        register_cleanup(silent_remove, source)
+                else:
+                    mover.get(source_url, temp_dir)
+                    downloaded = list(
+                            set(os.listdir(temp_dir)).difference(downloaded)
+                        )
+                    sources.append(os.path.join(temp_dir, list(downloaded)[0]))
             else:
                 sources.append(source_url.to_url())
         '''Use os.devnull so single- and paired-end data can be handled in one
@@ -822,13 +863,13 @@ if __name__ == '__main__':
               'not match the read length or the record is not in the '
               'proper format'))
     parser.add_argument(
-            '--dbgap-key', required=False, 
+            '--workspace-dir', required=False, 
             default=None,
-            help='Path to dbGaP key file, which has the extension "ngc"; '
-                 'must be on local filesystem.'
+            help='Path to SRA Tools workspace directory; needed if '
+                 'downloading dbGaP data'
         )
     parser.add_argument(
-            '--fastq-dump', required=False, 
+            '--fastq-dump-exe', required=False, 
             default='fastq-dump',
             help='Path to fastq-dump executable'
         )
@@ -857,7 +898,8 @@ if __name__ == '__main__':
         scratch=tempdel.silentexpandvars(args.scratch),
         verbose=args.verbose,
         mover=mover,
-        dbgap_key=args.dbgap_key)
+        workspace_dir=args.workspace_dir,
+        fastq_dump_exe=args.fastq_dump_exe)
     print >>sys.stderr, 'DONE with preprocess.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)

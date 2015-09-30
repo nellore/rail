@@ -710,8 +710,8 @@ class Url(object):
         self.is_local = self.type == 'local'
         self.is_hdfs = self.type == 'hdfs'
         self.is_nfs = self.type == 'nfs'
-        self.is_sra = self.type == 'sra'
-        self.is_dbgap = self.type = 'dbgap'
+        self.is_sra = (self.type == 'sra' or self.type == 'dbgap')
+        self.is_dbgap = self.type == 'dbgap'
 
     def to_url(self, caps=False):
         """ Returns URL string: an absolute path if local or an URL.
@@ -724,7 +724,7 @@ class Url(object):
                 else absolute_path
         elif self.type[:2] == 's3' and caps:
             return self.type.upper() + ':' + self.suffix
-        elif self.type[:3] == 'sra':
+        elif self.type[:3] == 'sra' or self.type[:5] == 'dbgap':
             return self.suffix.upper()
         else:
             return self.type + ':' + self.suffix
