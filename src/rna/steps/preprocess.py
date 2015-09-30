@@ -381,8 +381,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                         try:
                             os.remove(filename)
                         except OSError as e:
-                            if e.errno != errno.ENOENT:
-                                raise
+                            pass
                     for source in sources:
                         register_cleanup(silent_remove, source)
                 else:
