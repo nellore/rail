@@ -2501,8 +2501,7 @@ sudo python27 {rail_zipped} $@
         base.vdb_config_exe = _elastic_vdb_config_exe
         with open(copy_bootstrap, 'w') as script_stream:
              print >>script_stream, (
-"""
-#!/usr/bin/env bash
+"""#!/usr/bin/env bash
 # s3cmd_s3.sh
 #
 # Download a file from an S3 bucket to given directory.  Optionally rename it.
@@ -2536,8 +2535,7 @@ fi
             with open(encrypt_bootstrap, 'w') as script_stream:
                 # Code taken from http://bddubois-emr.s3.amazonaws.com/emr-volume-encryption.sh
                 print >>script_stream, (
-"""
-#!/usr/bin/env bash
+"""#!/usr/bin/env bash
 if [ `grep -c '"isRunningDataNode":true' /mnt/var/lib/info/instance.json` -eq 0 ]; then
     exit 0
 fi
@@ -2717,8 +2715,7 @@ exit $STATUS
             if base.secure:
                 with open(vdb_bootstrap, 'w') as script_stream:
                     print >>script_stream, (
-"""
-#!/usr/bin/env bash
+"""#!/usr/bin/env bash
 
 mkdir -p {vdb_workspace}/insecure
 cat >~/.ncbi/user-settings.mkfg <<EOF
@@ -2732,8 +2729,7 @@ vdb-config --import /mnt/DBGAP.ngc {vdb_workspace}/secure
                 # Don't need secure dir for workspace
                 with open(vdb_bootstrap, 'w') as script_stream:
                     print >>script_stream, (
-"""
-#!/usr/bin/env bash
+"""#!/usr/bin/env bash
 
 mkdir -p {vdb_workspace}/insecure
 cat >~/.ncbi/user-settings.mkfg <<EOF
