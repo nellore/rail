@@ -132,8 +132,8 @@ _hadoop_lzo_jar = ('/home/hadoop/.versions/2.4.0/share/hadoop'
 _s3distcp_jar = '/home/hadoop/lib/emr-s3distcp-1.0.jar'
 _hdfs_temp_dir = 'hdfs:///railtemp'
 _base_combine_split_size = 268435456 # 250 MB
-_elastic_bowtie1_idx = '/mnt/index/genome'
-_elastic_bowtie2_idx = '/mnt/index/genome'
+_elastic_bowtie1_idx = '/mnt/space/index/genome'
+_elastic_bowtie2_idx = '/mnt/space/index/genome'
 _elastic_bedgraphtobigwig_exe = 'bedGraphToBigWig'
 _elastic_samtools_exe = 'samtools'
 _elastic_bowtie1_exe = 'bowtie'
@@ -142,7 +142,7 @@ _elastic_bowtie1_build_exe = 'bowtie-build'
 _elastic_bowtie2_build_exe = 'bowtie2-build'
 _elastic_fastq_dump_exe = 'fastq-dump'
 _elastic_vdb_config_exe = '/usr/local/bin/vdb-config'
-_elastic_vdb_workspace = '/mnt/sra_workspace'
+_elastic_vdb_workspace = '/mnt/space/sra_workspace'
 _elastic_step_dir = '/usr/local/raildotbio/rail-rna/rna/steps'
 
 # Set basename of the transcript fragment index; can't settle on this
@@ -2313,6 +2313,10 @@ class RailRnaElastic(object):
              print >>script_stream, (
 """#!/usr/bin/env bash
 set -e
+EPHEMERAL_MNT_DIRS=`awk '/mnt/{print $2}' < /proc/mounts`
+for DIR in $EPHEMERAL_MNT_DIRS; do
+    mkdir -p $DIR/space
+done
 
 mkdir -p $1
 cd $1
@@ -2511,6 +2515,10 @@ sudo python27 {rail_zipped} $@
 # 2. Local directory to copy to
 # 3. If specified, name to rename file to
 set -e
+EPHEMERAL_MNT_DIRS=`awk '/mnt/{print $2}' < /proc/mounts`
+for DIR in $EPHEMERAL_MNT_DIRS; do
+    mkdir -p $DIR/space
+done
 
 mkdir -p ${2}
 cd ${2}
@@ -2564,10 +2572,15 @@ if [ $STATUS -eq 0 ]; then
     # Setup some variables
     #
     ENCRYPTED_LOOPBACK_DIR=$DIR/encrypted_loopbacks
-    ENCRYPTED_MOUNT_POINT=$DIR/var/lib/hadoop/dfs.encrypted/
+    ENCRYPTED_MOUNT_POINT=$DIR/var/lib/hadoop/space.encrypted/
+    ENCRYPTED_SPACE=$DIR/space
     DFS_DATA_DIR=$DIR/var/lib/hadoop/dfs
+    TMP_DATA_DIR=$DIR/var/lib/hadoop/tmp
     ENCRYPTED_LOOPBACK_DEVICE=/dev/loop$i
     ENCRYPTED_NAME=crypt$i
+
+    mkdir -p ${ENCRYPTED_SPACE}
+    mv $ENCRYPT_START $TEMP_ENCRYPT_START
     
     if [ $STATUS -eq 0 ]; then
       # Get the total number of blocks for this filesystem $DIR
@@ -2576,8 +2589,8 @@ if [ $STATUS -eq 0 ]; then
       bsize=`stat -f -c '%s' $DIR`
       # Calculate the mntsize in MB (divisible by 1000)
       mntsize=`expr $nblocks \* $bsize \/ 1000 \/ 1000 \/ 1000`
-      # Make $TMPSIZE 1/10th of $mntsize
-      TMPSIZE=`expr $mntsize \/ 10`
+      # Make $TMPSIZE 1 GB
+      TMPSIZE=1000
       if [ ! $? -eq 0 ]; then
         echo "ERROR: Failed to get mount size"
         STATUS=1
@@ -2666,7 +2679,7 @@ if [ $STATUS -eq 0 ]; then
     # Create file system
     #
     if [ $STATUS -eq 0 ]; then
-    mycmd="sudo mkfs.ext4 -m 0 -E lazy_itable_init=1 /dev/mapper/$ENCRYPTED_NAME && sudo mount /dev/mapper/$ENCRYPTED_NAME $DFS_DATA_DIR && sudo chown hadoop:hadoop $DFS_DATA_DIR && sudo rm -rf $DFS_DATA_DIR/lost\+found && sudo echo iamdone-$ENCRYPTED_NAME && date "
+    mycmd="sudo mkfs.ext4 -m 0 -E lazy_itable_init=1 /dev/mapper/$ENCRYPTED_NAME && sudo mount /dev/mapper/$ENCRYPTED_NAME ${ENCRYPTED_SPACE} && mkdir -p ${ENCRYPTED_SPACE}/dfs && mkdir -p ${ENCRYPTED_SPACE}/tmp/nm-local-dir && rm -rf ${DFS_DATA_DIR} && sudo ln -s ${ENCRYPTED_SPACE}/dfs ${DFS_DATA_DIR} && sudo chown hadoop:hadoop ${ENCRYPTED_SPACE}/dfs && sudo chown hadoop:hadoop $DFS_DATA_DIR && sudo rm -rf $DFS_DATA_DIR/lost\+found && rm -rf ${TMP_DATA_DIR} && sudo ln -s ${ENCRYPTED_SPACE}/tmp ${TMP_DATA_DIR} && sudo chown hadoop:hadoop ${ENCRYPTED_SPACE}/tmp && sudo chown hadoop:hadoop $TMP_DATA_DIR && sudo chown hadoop:hadoop ${TMP_DATA_DIR}/nm-local-dir && sudo echo iamdone-$ENCRYPTED_NAME && date "
     echo $mycmd
     eval $mycmd &
       if [ ! $? -eq 0 ]; then
@@ -2719,7 +2732,7 @@ cat >~/.ncbi/user-settings.mkfg <<EOF
 /repository/user/main/public/root = "{vdb_workspace}/insecure"
 EOF
 mkdir -p {vdb_workspace}/secure
-{vdb_config} --import /mnt/DBGAP.ngc {vdb_workspace}/secure
+{vdb_config} --import /mnt/space/DBGAP.ngc {vdb_workspace}/secure
 """
                     ).format(vdb_config=_elastic_vdb_config_exe,
                              vdb_workspace=_elastic_vdb_workspace)
@@ -4386,7 +4399,7 @@ class RailRnaAlign(object):
 
     @staticmethod
     def protosteps(base, input_dir, elastic=False):
-        manifest = ('/mnt/MANIFEST' if elastic else base.manifest)
+        manifest = ('/mnt/space/MANIFEST' if elastic else base.manifest)
         verbose = ('--verbose' if base.verbose else '')
         drop_deletions = ('--drop-deletions' if base.drop_deletions else '')
         keep_alive = ('--keep-alive' if elastic else '')
@@ -5099,7 +5112,7 @@ class RailRnaAlign(object):
                 'Name' : 'Transfer Bowtie indexes to nodes',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        '/mnt',
+                        '/mnt/space',
                         base.index_archive
                     ],
                     'Path' : base.copy_index_bootstrap
@@ -5110,7 +5123,7 @@ class RailRnaAlign(object):
                 'ScriptBootstrapAction' : {
                     'Args' : [
                         base.manifest,
-                        '/mnt',
+                        '/mnt/space',
                         'MANIFEST'
                     ],
                     'Path' : base.copy_bootstrap
@@ -5121,7 +5134,7 @@ class RailRnaAlign(object):
                 'ScriptBootstrapAction' : {
                     'Args' : [
                         base.dbgap_s3_path,
-                        '/mnt',
+                        '/mnt/space',
                         'DBGAP.ngc'
                     ],
                     'Path' : base.copy_bootstrap
