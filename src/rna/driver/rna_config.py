@@ -1529,7 +1529,7 @@ class RailRnaLocal(object):
                                         'try again. Note that it must be '
                                         'stored on the local '
                                         'filesystem.').format(dbgap_key))
-                dbgap_present = False
+                base.dbgap_present = False
                 with open(base.manifest) as manifest_stream:
                     for line in manifest_stream:
                         if line[0] == '#' or not line.strip(): continue
@@ -1542,7 +1542,7 @@ class RailRnaLocal(object):
                             files_to_check.append(tokens[0])
                             single_url = ab.Url(tokens[0])
                             if single_url.is_dbgap:
-                                dbgap_present = True
+                                base.dbgap_present = True
                         else:
                             base.errors.append(('The following line from the '
                                                 'manifest file {0} '
@@ -1566,14 +1566,14 @@ class RailRnaLocal(object):
                                                         manifest_url.to_url(),
                                                         line.strip()
                                                     ))
-                if dbgap_present:
+                if base.dbgap_present:
                     base.errors.append('Rail-RNA does not currently work '
                                        'with dbGaP accession numbers '
                                        'in manifest files in local and '
                                        'parallel modes. Decrypt your data '
                                        'first and try again with FASTQ paths '
                                        'in the manifest file instead.')
-                '''if dbgap_present and base.dbgap_key is None:
+                '''if base.dbgap_present and base.dbgap_key is None:
                     base.errors.append('dbGaP accession numbers are in '
                                        'manifest file, but no dbGaP '
                                        'repository key file (--dbgap-key) was '
@@ -2169,7 +2169,7 @@ class RailRnaElastic(object):
                                 'file to S3 securely with server-side '
                                 'encryption enabled and schedules '
                                 'it for deletion.').format(dbgap_key))
-        dbgap_present = False
+        base.dbgap_present = False
         files_to_check = []
         base.sample_count = 0
         with open(manifest) as manifest_stream:
@@ -2184,7 +2184,7 @@ class RailRnaElastic(object):
                     files_to_check.append(tokens[0])
                     single_url = ab.Url(tokens[0])
                     if single_url.is_dbgap:
-                        dbgap_present = True
+                        base.dbgap_present = True
                         sra_tools_needed = True
                     elif single_url.is_sra:
                         sra_tools_needed = True
@@ -2210,13 +2210,13 @@ class RailRnaElastic(object):
                                                 manifest_url.to_url(),
                                                 line.strip()
                                             ))
-        if dbgap_present and base.dbgap_key is None:
+        if base.dbgap_present and base.dbgap_key is None:
             base.errors.append('dbGaP accession numbers are in '
                                'manifest file, but no dbGaP '
                                'repository key file (--dbgap-key) was '
                                'provided. ')
         base.secure = secure
-        if dbgap_present:
+        if base.dbgap_present:
             # Always use secure mode if dbGaP data is present
             base.secure = True
         if files_to_check:
@@ -2285,7 +2285,7 @@ class RailRnaElastic(object):
             shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
 
         # Upload NGC file to S3
-        if dbgap_present:
+        if base.dbgap_present:
             base.dbgap_s3_path = path_join(
                                     True,
                                     base.intermediate_dir,
@@ -2712,7 +2712,7 @@ exit $STATUS
         if sra_tools_needed:
             vdb_bootstrap = os.path.join(temp_dependency_dir,
                                                 'vdb.sh')
-            if dbgap_present:
+            if base.dbgap_present:
                 with open(vdb_bootstrap, 'w') as script_stream:
                     print >>script_stream, (
 """#!/usr/bin/env bash
@@ -3438,8 +3438,10 @@ class RailRnaPreprocess(object):
                                                 '--skip-bad-records'
                                                 if base.skip_bad_records
                                                 else '',
-                                            '--workspace-dir %s/secure'
-                                            % _elastic_vdb_workspace,
+                                            ('--workspace-dir %s/secure'
+                                             % _elastic_vdb_workspace)
+                                                if base.dbgap_present
+                                                else '',
                                                 '--fastq-dump-exe %s'
                                                     % (base.fastq_dump_exe
                                                         if hasattr(base,
