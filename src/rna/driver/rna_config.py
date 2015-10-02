@@ -2313,16 +2313,14 @@ class RailRnaElastic(object):
              print >>script_stream, (
 """#!/usr/bin/env bash
 set -e
-EPHEMERAL_MNT_DIRS=`awk '/mnt/{print $2}' < /proc/mounts`
-for DIR in $EPHEMERAL_MNT_DIRS; do
-    mkdir -p $DIR/space
-done
 
 mkdir -p $1
 cd $1
 
 fn=`basename $2`
-
+echo fn
+echo $1
+echo $(pwd)
 cat >.download_idx.py <<EOF
 \"""
 .download_idx.py
@@ -2515,12 +2513,7 @@ sudo python27 {rail_zipped} $@
 # 2. Local directory to copy to
 # 3. If specified, name to rename file to
 set -e
-EPHEMERAL_MNT_DIRS=`awk '/mnt/{print $2}' < /proc/mounts`
-for DIR in $EPHEMERAL_MNT_DIRS; do
-    mkdir -p $DIR/space
-done
-
-mkdir -p ${2}
+sudo mkdir -p ${2}
 cd ${2}
 fn=`basename ${1}`
 s3cmd get ${1} . || { echo 's3cmd get failed' ; exit 1; }
@@ -2678,7 +2671,7 @@ if [ $STATUS -eq 0 ]; then
     # Create file system
     #
     if [ $STATUS -eq 0 ]; then
-    mycmd="sudo mkfs.ext4 -m 0 -E lazy_itable_init=1 /dev/mapper/$ENCRYPTED_NAME && sudo mount /dev/mapper/$ENCRYPTED_NAME ${ENCRYPTED_SPACE} && mkdir -p ${ENCRYPTED_SPACE}/dfs && mkdir -p ${ENCRYPTED_SPACE}/tmp/nm-local-dir && rm -rf ${DFS_DATA_DIR} && sudo ln -s ${ENCRYPTED_SPACE}/dfs ${DFS_DATA_DIR} && sudo chown hadoop:hadoop ${ENCRYPTED_SPACE}/dfs && sudo chown hadoop:hadoop $DFS_DATA_DIR && sudo rm -rf $DFS_DATA_DIR/lost\+found && rm -rf ${TMP_DATA_DIR} && sudo ln -s ${ENCRYPTED_SPACE}/tmp ${TMP_DATA_DIR} && sudo chown hadoop:hadoop ${ENCRYPTED_SPACE}/tmp && sudo chown hadoop:hadoop $TMP_DATA_DIR && sudo chown hadoop:hadoop ${TMP_DATA_DIR}/nm-local-dir && sudo echo iamdone-$ENCRYPTED_NAME && date "
+    mycmd="sudo mkfs.ext4 -m 0 -E lazy_itable_init=1 /dev/mapper/$ENCRYPTED_NAME && sudo mount /dev/mapper/$ENCRYPTED_NAME $ENCRYPTED_SPACE && sudo mkdir -p $ENCRYPTED_SPACE/dfs && sudo mkdir -p $ENCRYPTED_SPACE/tmp/nm-local-dir && sudo rm -rf $DFS_DATA_DIR && sudo ln -s $ENCRYPTED_SPACE/dfs $DFS_DATA_DIR && sudo chown hadoop:hadoop $ENCRYPTED_SPACE/dfs && sudo chown hadoop:hadoop $DFS_DATA_DIR && sudo rm -rf $DFS_DATA_DIR/lost\+found && sudo rm -rf $TMP_DATA_DIR && sudo ln -s $ENCRYPTED_SPACE/tmp $TMP_DATA_DIR && sudo chown hadoop:hadoop $ENCRYPTED_SPACE/tmp && sudo chown hadoop:hadoop $TMP_DATA_DIR && sudo chown hadoop:hadoop $TMP_DATA_DIR/nm-local-dir && sudo echo iamdone-$ENCRYPTED_NAME && sudo chown -R hadoop:hadoop $ENCRYPTED_SPACE && sudo chmod -R 0755 $ENCRYPTED_SPACE && date "
     echo $mycmd
     eval $mycmd &
       if [ ! $? -eq 0 ]; then
@@ -2690,7 +2683,6 @@ if [ $STATUS -eq 0 ]; then
     fi
 
     mychildren="$mychildren $!"
-
 
     let i=i+1
 done
@@ -3139,7 +3131,8 @@ EOF
                 'Name' : 'Allocate swap space',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        '%d' % base.mem
+                        '%d' % base.mem,
+                        '/mnt/space/swapfile'
                     ],
                     'Path' : 's3://elasticmapreduce/bootstrap-actions/add-swap'
                 }
