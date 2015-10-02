@@ -2572,7 +2572,7 @@ if [ $STATUS -eq 0 ]; then
     # Setup some variables
     #
     ENCRYPTED_LOOPBACK_DIR=$DIR/encrypted_loopbacks
-    ENCRYPTED_MOUNT_POINT=$DIR/var/lib/hadoop/space.encrypted/
+    ENCRYPTED_MOUNT_POINT=$DIR/space.encrypted/
     ENCRYPTED_SPACE=$DIR/space
     DFS_DATA_DIR=$DIR/var/lib/hadoop/dfs
     TMP_DATA_DIR=$DIR/var/lib/hadoop/tmp
@@ -2580,7 +2580,6 @@ if [ $STATUS -eq 0 ]; then
     ENCRYPTED_NAME=crypt$i
 
     mkdir -p ${ENCRYPTED_SPACE}
-    mv $ENCRYPT_START $TEMP_ENCRYPT_START
     
     if [ $STATUS -eq 0 ]; then
       # Get the total number of blocks for this filesystem $DIR
@@ -2589,8 +2588,8 @@ if [ $STATUS -eq 0 ]; then
       bsize=`stat -f -c '%s' $DIR`
       # Calculate the mntsize in MB (divisible by 1000)
       mntsize=`expr $nblocks \* $bsize \/ 1000 \/ 1000 \/ 1000`
-      # Make $TMPSIZE 1 GB
-      TMPSIZE=1000
+      # Make $TMPSIZE 1/10 of mntsize
+      TMPSIZE=`expr $mntsize \/ 10`
       if [ ! $? -eq 0 ]; then
         echo "ERROR: Failed to get mount size"
         STATUS=1
