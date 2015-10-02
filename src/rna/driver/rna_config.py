@@ -2513,7 +2513,7 @@ sudo python27 {rail_zipped} $@
 # 2. Local directory to copy to
 # 3. If specified, name to rename file to
 set -e
-sudo mkdir -p ${2}
+mkdir -p ${2}
 cd ${2}
 fn=`basename ${1}`
 s3cmd get ${1} . || { echo 's3cmd get failed' ; exit 1; }
@@ -3438,7 +3438,7 @@ class RailRnaPreprocess(object):
                                                 '--skip-bad-records'
                                                 if base.skip_bad_records
                                                 else '',
-                                            '--workspace-path %s/secure'
+                                            '--workspace-dir %s/secure'
                                             % _elastic_vdb_workspace,
                                                 '--fastq-dump-exe %s'
                                                     % (base.fastq_dump_exe
