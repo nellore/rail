@@ -132,14 +132,17 @@ _hadoop_lzo_jar = ('/home/hadoop/.versions/2.4.0/share/hadoop'
 _s3distcp_jar = '/home/hadoop/lib/emr-s3distcp-1.0.jar'
 _hdfs_temp_dir = 'hdfs:///railtemp'
 _base_combine_split_size = 268435456 # 250 MB
-_elastic_bowtie1_idx = '/mnt/index/genome'
-_elastic_bowtie2_idx = '/mnt/index/genome'
+_elastic_bowtie1_idx = '/mnt/space/index/genome'
+_elastic_bowtie2_idx = '/mnt/space/index/genome'
 _elastic_bedgraphtobigwig_exe = 'bedGraphToBigWig'
 _elastic_samtools_exe = 'samtools'
 _elastic_bowtie1_exe = 'bowtie'
 _elastic_bowtie2_exe = 'bowtie2'
 _elastic_bowtie1_build_exe = 'bowtie-build'
 _elastic_bowtie2_build_exe = 'bowtie2-build'
+_elastic_fastq_dump_exe = 'fastq-dump'
+_elastic_vdb_config_exe = '/usr/local/bin/vdb-config'
+_elastic_vdb_workspace = '/mnt/space/sra_workspace'
 _elastic_step_dir = '/usr/local/raildotbio/rail-rna/rna/steps'
 
 # Set basename of the transcript fragment index; can't settle on this
@@ -306,19 +309,20 @@ def ready_engines(rc, base, prep=False):
     # Set random seed so temp directory is reused if restarting Rail
     random.seed(str(sorted(pids)))
     engines_for_copying = [random.choice(list(engines)) 
-                            for engines in hostname_to_engines.values()]
+                            for engines in hostname_to_engines.values()
+                            if len(engines) > 0]
     '''Herd won't work with local engines, work around this by separating
     engines into two groups: local and remote.'''
     remote_hostnames_for_copying = list(
             set(hostname_to_engines.keys()).difference(set([current_hostname]))
         )
-    local_engines_for_copying = [engine for engines in engines_for_copying
+    local_engines_for_copying = [engine for engine in engines_for_copying
                                  if engine
                                  in hostname_to_engines[current_hostname]]
     '''Create temporary directories on selected nodes; NOT WINDOWS-COMPATIBLE;
     must be changed if porting Rail to Windows.'''
     if base.scratch is None:
-        scratch_dir = '/tmp'
+        scratch_dir = tempfile.gettempdir()
     else:
         scratch_dir = base.scratch
     temp_dir = os.path.join(scratch_dir, 'railrna-%s' %
@@ -328,16 +332,68 @@ def ready_engines(rc, base, prep=False):
         dir_to_create = os.path.join(temp_dir, 'genome')
     else:
         dir_to_create = temp_dir
-    apply_async_with_errors(rc, engines_for_copying, os.makedirs,
-        dir_to_create,
+    temp_dirs = apply_async_with_errors(rc, all_engines,
+        subprocess.check_output,
+        'echo "%s"' % temp_dir,
+        shell=True,
+        executable='/bin/bash',
+        message=('Error obtaining full paths of temporary directories '
+                 'on cluster nodes. Restart IPython engines '
+                 'and try again.'
+            ),
+        dict_format=True)
+    for engine in temp_dirs:
+        temp_dirs[engine] = temp_dirs[engine].strip()
+    engines_with_unique_scratch, engines_to_symlink = [], []
+    engine_to_copy_engine = {}
+    for engine_for_copying in engines_for_copying:
+        for engine in hostname_to_engines[
+                    engine_to_hostnames[engine_for_copying]
+                ]:
+            engine_to_copy_engine[engine] = engine_for_copying
+            if (engine != engine_for_copying
+                and temp_dirs[engine] != temp_dirs[engine_for_copying]):
+                engines_with_unique_scratch.append(engine)
+                engines_to_symlink.append(engine)
+            elif engine == engine_for_copying:
+                engines_with_unique_scratch.append(engine)
+    '''Must use mkdir -p rather than os.makedirs so node-specific BASH
+    variable, if it was specified, works.'''
+    apply_async_with_errors(rc, engines_for_copying,
+        subprocess.check_output,
+        'mkdir -p %s' % dir_to_create, shell=True, executable='/bin/bash',
         message=('Error(s) encountered creating temporary '
                  'directories for storing Rail on slave nodes. '
-                 'Restart IPython engines and try again.'),
-        errors_to_ignore=['OSError'])
+                 'Restart IPython engines and try again.'))
+    if engines_to_symlink:
+        # Create symlinks to resources in case of slot-local scratch dirs
+        print_to_screen(
+                'Adding symlinks...',
+                newline=False, carriage_return=True
+            )
+        source_paths, destination_paths = {}, {}
+        for engine_to_symlink in engines_to_symlink:
+            source_paths[engine_to_symlink] = temp_dirs[
+                        engine_to_copy_engine[engine_to_symlink]
+                    ]
+            destination_paths[engine_to_symlink] = temp_dirs[engine_to_symlink]
+        apply_async_with_errors(rc, engines_to_symlink,
+            os.remove, destination_paths,
+            message=('Error(s) encountered removing symlinks '
+                     'in slot-local scratch directories.'),
+            errors_to_ignore=['OSError'])
+        apply_async_with_errors(rc, engines_to_symlink,
+            os.symlink, source_paths, destination_paths,
+            message=('Error(s) encountered symlinking '
+                     'among slot-local scratch directories.'))
+        print_to_screen(
+                'Added symlinks.',
+                newline=True, carriage_return=True
+            )
     '''Only foolproof way to die is by process polling. See
     http://stackoverflow.com/questions/284325/
     how-to-make-child-process-die-after-parent-exits for more information.'''
-    apply_async_with_errors(rc, engines_for_copying,
+    apply_async_with_errors(rc, engines_with_unique_scratch,
         subprocess.check_output,
         ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
          'SIGHUP SIGINT SIGTERM EXIT; '
@@ -350,8 +406,9 @@ def ready_engines(rc, base, prep=False):
                 'on cluster nodes for deletion. Restart IPython engines '
                 'and try again.'
             ))
-    apply_async_with_errors(rc, engines_for_copying, subprocess.Popen,
-            ['/usr/bin/env', 'bash', '%s/delscript.sh' % temp_dir],
+    apply_async_with_errors(rc, engines_with_unique_scratch, subprocess.Popen,
+            '/usr/bin/env bash %s/delscript.sh' % temp_dir, shell=True,
+            executable='/bin/bash',
             message=(
                 'Error scheduling temporary directories on slave nodes '
                 'for deletion. Restart IPython engines and try again.'
@@ -366,17 +423,21 @@ def ready_engines(rc, base, prep=False):
         tar_stream.add(base_path, arcname='rail')
     try:
         import herd.herd as herd
+        if '$' in compressed_rail_destination: raise ImportError
     except ImportError:
-        # Torrent distribution channel for compressed archive not available
+        '''Torrent distribution channel for compressed archive not available,
+        or we need to use slot-local BASH variables.'''
         print_to_screen('Copying Rail-RNA to cluster nodes...',
                             newline=False, carriage_return=True)
-        apply_async_with_errors(rc, engines_for_copying, shutil.copyfile,
-            compressed_rail_path, compressed_rail_destination,
+        apply_async_with_errors(rc, engines_for_copying,
+            subprocess.check_output, 'cp %s %s' % (
+                    compressed_rail_path, compressed_rail_destination
+                ), shell=True, executable='/bin/bash',
             message=('Error(s) encountered copying Rail to '
                      'slave nodes. Refer to the errors above -- and '
-                     'especially make sure /tmp is not out of space on any '
+                     'especially make sure "%s" is not out of space on any '
                      'node supporting an IPython engine '
-                     '-- before trying again.'),
+                     '-- before trying again.') % temp_dir,
         )
         print_to_screen('Copied Rail-RNA to cluster nodes.',
                             newline=True, carriage_return=False)
@@ -389,9 +450,9 @@ def ready_engines(rc, base, prep=False):
                 compressed_rail_destination,
                 message=('Error(s) encountered copying Rail to '
                          'local filesystem. Refer to the errors above -- and '
-                         'especially make sure /tmp is not out of space on '
+                         'especially make sure "%s" is not out of space on '
                          'any node supporting an IPython engine '
-                         '-- before trying again.'),
+                         '-- before trying again.') % temp_dir,
             )
             print_to_screen('Copied Rail-RNA to local filesystem.',
                                 newline=True, carriage_return=False)
@@ -412,27 +473,41 @@ def ready_engines(rc, base, prep=False):
             shell=True, executable='/bin/bash')
     print_to_screen('Extracted Rail-RNA on cluster nodes.',
                             newline=True, carriage_return=False)
-    # Add Rail to path on every engine
-    temp_base_path = os.path.join(temp_dir, 'rail')
-    temp_utils_path = os.path.join(temp_base_path, 'rna', 'utils')
-    temp_driver_path = os.path.join(temp_base_path, 'rna', 'driver')
-    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_base_path)
-    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_utils_path)
-    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_driver_path)
+    '''Add Rail to path on every engine. Must accommodate potentially different
+    paths on different engines.'''
+    temp_base_paths, temp_rna_paths, \
+        temp_utils_paths, temp_driver_paths = {}, {}, {}, {}
+    for engine in temp_dirs:
+        temp_base_paths[engine] = os.path.join(temp_dirs[engine], 'rail')
+        temp_utils_paths[engine] = os.path.join(temp_base_paths[engine],
+                                                'rna', 'utils')
+        temp_driver_paths[engine] = os.path.join(temp_base_paths[engine],
+                                                 'rna', 'driver')
+    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_base_paths)
+    apply_async_with_errors(rc, all_engines, site.addsitedir, temp_utils_paths)
+    apply_async_with_errors(rc, all_engines, site.addsitedir,
+                                temp_driver_paths)
+    # Change to current path on every engine
+    current_path = os.path.abspath('./')
+    apply_async_with_errors(rc, all_engines, os.chdir, current_path,
+                                errors_to_ignore=['OSError'])
     # Copy manifest to nodes
     manifest_destination = os.path.join(temp_dir, 'MANIFEST')
     try:
         import herd.herd as herd
+        if '$' in manifest_destination: raise ImportError
     except ImportError:
         print_to_screen('Copying file manifest to cluster nodes...',
                             newline=False, carriage_return=True)
-        apply_async_with_errors(rc, engines_for_copying, shutil.copyfile,
-            base.manifest, manifest_destination,
+        apply_async_with_errors(rc, engines_for_copying, 
+            subprocess.check_output, 'cp %s %s' % (
+                    base.manifest, manifest_destination,
+                ), shell=True, executable='/bin/bash',
             message=('Error(s) encountered copying manifest to '
                      'slave nodes. Refer to the errors above -- and '
-                     'especially make sure /tmp is not out of space on any '
+                     'especially make sure "%s" is not out of space on any '
                      'node supporting an IPython engine '
-                     '-- before trying again.'),
+                     '-- before trying again.') % temp_dir,
         )
         print_to_screen('Copied file manifest to cluster nodes.',
                             newline=True, carriage_return=False)
@@ -444,9 +519,9 @@ def ready_engines(rc, base, prep=False):
                 shutil.copyfile, base.manifest, manifest_destination,
                 message=('Error(s) encountered copying manifest to '
                          'slave nodes. Refer to the errors above -- and '
-                         'especially make sure /tmp is not out of space on '
+                         'especially make sure "%s" is not out of space on '
                          'any node supporting an IPython engine '
-                         '-- before trying again.'),
+                         '-- before trying again.') % temp_dir,
             )
             print_to_screen('Copied manifest to local filesystem.',
                                 newline=True, carriage_return=False)
@@ -473,8 +548,10 @@ def ready_engines(rc, base, prep=False):
                                 ]])
         try:
             import herd.herd as herd
+            if '$' in temp_dir: raise ImportError
         except ImportError:
-            print_to_screen('Warning: Herd is not installed, so copying '
+            print_to_screen('Warning: Herd is not installed or BASH variables '
+                            'are in --scratch, so copying '
                             'Bowtie indexes to cluster nodes may be slow. '
                             'Install Herd to enable torrent distribution of '
                             'indexes across nodes, or invoke '
@@ -490,14 +567,16 @@ def ready_engines(rc, base, prep=False):
                 )
             for index_file in index_files:
                 apply_async_with_errors(rc, engines_for_copying,
-                    shutil.copyfile, os.path.abspath(index_file),
-                    os.path.join(temp_dir, 'genome',
-                                    os.path.basename(index_file)),
+                    subprocess.check_output, 'cp %s %s' % (
+                        os.path.abspath(index_file),
+                        os.path.join(temp_dir, 'genome',
+                                        os.path.basename(index_file))
+                    ), shell=True, executable='/bin/bash',
                     message=('Error(s) encountered copying Bowtie indexes to '
                              'cluster nodes. Refer to the errors above -- and '
-                             'especially make sure /tmp is not out of space '
-                             'on any node supporting an IPython engine '
-                             '-- before trying again.')
+                             'especially make sure "%s" is not out of '
+                             'space on any node supporting an IPython engine '
+                             '-- before trying again.') % temp_dir
                 )
                 files_copied += 1
                 print_to_screen(
@@ -523,9 +602,9 @@ def ready_engines(rc, base, prep=False):
                         message=('Error(s) encountered copying Bowtie '
                                  'indexes to local filesystem. Refer to the '
                                  'errors above -- and especially make sure '
-                                 '/tmp is not out of space '
+                                 '"%s" is not out of space '
                                  'on any node supporting an IPython engine '
-                                 '-- before trying again.')
+                                 '-- before trying again.') % temp_dir
                     )
                     files_copied += 1
                     print_to_screen(
@@ -558,15 +637,18 @@ def ready_engines(rc, base, prep=False):
                                 newline=False, carriage_return=True)
                     for index_file in index_files:
                         apply_async_with_errors(rc, engines_for_copying,
-                            shutil.copyfile, os.path.abspath(index_file),
-                            os.path.join(temp_dir, 'genome',
-                                            os.path.basename(index_file)),
+                            subprocess.check_output, 'cp %s %s' % (
+                                os.path.abspath(index_file),
+                                os.path.join(temp_dir, 'genome',
+                                                os.path.basename(index_file))
+                            ), shell=True, executable='/bin/bash',
                             message=('Error(s) encountered copying Bowtie '
                                      'indexes to local filesystem. Refer to '
                                      'the errors above -- and especially make '
-                                     'sure /tmp is not out of space '
+                                     'sure "%s" is not out of space '
                                      'on any node supporting an IPython '
                                      'engine -- before trying again.')
+                                        % temp_dir
                         )
                         files_copied += 1
                         print_to_screen(
@@ -586,7 +668,7 @@ def ready_engines(rc, base, prep=False):
                                         os.path.basename(base.bowtie1_idx))
         base.bowtie2_idx = os.path.join(temp_dir, 'genome',
                                         os.path.basename(base.bowtie2_idx))
-    return temp_base_path
+    return os.path.join(temp_dir, 'rail')
 
 def step(name, inputs, output,
     mapper='org.apache.hadoop.mapred.lib.IdentityMapper',
@@ -903,7 +985,7 @@ class RailRnaErrors(object):
             intermediate_dir='./intermediate', force=False, aws_exe=None,
             profile='default', region=None, service_role=None,
             instance_profile=None, verbose=False, curl_exe=None,
-            max_task_attempts=4
+            max_task_attempts=4, dbgap_key=None
         ):
         '''Store all errors uncovered in a list, then output. This prevents the
         user from having to rerun Rail-RNA to find what else is wrong with
@@ -923,6 +1005,7 @@ class RailRnaErrors(object):
         self.profile = profile
         self.service_role = service_role
         self.instance_profile = instance_profile
+        self.dbgap_key = dbgap_key
         if not (float(max_task_attempts).is_integer()
                         and max_task_attempts >= 1):
             self.errors.append('Max task attempts (--max-task-attempts) '
@@ -1305,9 +1388,9 @@ class RailRnaLocal(object):
                     num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3,
                     sort_memory_cap=(300*1024), parallel=False,
-                    local=True, scratch=None, ansible=None,
-                    do_not_copy_index_to_nodes=False,
-                    sort_exe=None):
+                    local=True, scratch=None, direct_write=False,
+                    ansible=None, do_not_copy_index_to_nodes=False,
+                    sort_exe=None, fastq_dump_exe=None, vdb_config_exe=None):
         """ base: instance of RailRnaErrors """
         # Initialize ansible for easy checks
         if not ansible:
@@ -1340,6 +1423,7 @@ class RailRnaLocal(object):
         base.check_s3_on_engines = None
         base.check_curl_on_engines = None
         base.do_not_copy_index_to_nodes = do_not_copy_index_to_nodes
+        base.direct_write = direct_write
         if not parallel:
             if output_dir_url.is_local:
                 if os.path.exists(output_dir_url.to_url()):
@@ -1437,6 +1521,15 @@ class RailRnaLocal(object):
                 base.manifest = os.path.abspath(base.manifest)
                 files_to_check = []
                 base.sample_count = 0
+                if base.dbgap_key is not None \
+                    and not os.path.exists(dbgap_key):
+                    base.errors.append(('dbGaP repository key file '
+                                        '(--dbgap-key) "{}" '
+                                        'does not exist. Check its path and '
+                                        'try again. Note that it must be '
+                                        'stored on the local '
+                                        'filesystem.').format(dbgap_key))
+                base.dbgap_present = False
                 with open(base.manifest) as manifest_stream:
                     for line in manifest_stream:
                         if line[0] == '#' or not line.strip(): continue
@@ -1447,6 +1540,9 @@ class RailRnaLocal(object):
                             files_to_check.extend([tokens[0], tokens[2]])
                         elif len(tokens) == 3:
                             files_to_check.append(tokens[0])
+                            single_url = ab.Url(tokens[0])
+                            if single_url.is_dbgap:
+                                base.dbgap_present = True
                         else:
                             base.errors.append(('The following line from the '
                                                 'manifest file {0} '
@@ -1470,6 +1566,18 @@ class RailRnaLocal(object):
                                                         manifest_url.to_url(),
                                                         line.strip()
                                                     ))
+                if base.dbgap_present:
+                    base.errors.append('Rail-RNA does not currently work '
+                                       'with dbGaP accession numbers '
+                                       'in manifest files in local and '
+                                       'parallel modes. Decrypt your data '
+                                       'first and try again with FASTQ paths '
+                                       'in the manifest file instead.')
+                '''if base.dbgap_present and base.dbgap_key is None:
+                    base.errors.append('dbGaP accession numbers are in '
+                                       'manifest file, but no dbGaP '
+                                       'repository key file (--dbgap-key) was '
+                                       'provided. ')'''
                 if files_to_check:
                     if check_manifest:
                         # Check files in manifest only if in preprocess flow
@@ -1527,7 +1635,83 @@ class RailRnaLocal(object):
                                                       'the web'
                                                     )
                                 ansible.curl_exe = base.curl_exe
-                            if not ansible.exists(filename):
+                            elif filename_url.is_sra:
+                                if 'SRA Tools' not in base.checked_programs:
+                                    base.fastq_dump_exe = base.check_program(
+                                                'fastq-dump', 'fastq-dump',
+                                                '--fastq-dump',
+                                                entered_exe=fastq_dump_exe,
+                                                is_exe=is_exe,
+                                                which=which
+                                            )
+                                    base.vdb_config_exe = base.check_program(
+                                                'vdb-config', 'vdb-config',
+                                                '--vdb-config',
+                                                entered_exe=vdb_config_exe,
+                                                is_exe=is_exe,
+                                                which=which
+                                            )
+                                    fastq_dump_version_command = [
+                                            base.fastq_dump_exe, '--version'
+                                        ]
+                                    vdb_config_version_command = [
+                                            base.vdb_config_exe, '--version'
+                                        ]
+                                    try:
+                                        fastq_dump_version = \
+                                            subprocess.check_output(
+                                                fastq_dump_version_command
+                                            ).strip().split(':')[1].strip()
+                                    except Exception as e:
+                                        base.errors.append(
+                                            ('Error "{0}" encountered '
+                                             'attempting to execute '
+                                             '"{1}".').format(
+                                                    e.message,
+                                                    ' '.join(
+                                                    fastq_dump_version_command
+                                                   )
+                                                ))
+                                    else:
+                                        try:
+                                            vdb_config_version = \
+                                                subprocess.check_output(
+                                                    vdb_config_version_command
+                                                ).strip().split(':')[1].strip()
+                                        except Exception as e:
+                                            base.errors.append(
+                                                ('Error "{0}" encountered '
+                                                 'attempting to execute '
+                                                 '"{1}".').format(
+                                                    e.message,
+                                                    ' '.join(
+                                                    vdb_config_version_command
+                                                   )
+                                                ))
+                                        else:
+                                            if fastq_dump_version \
+                                                != vdb_config_version:
+                                                base.errors.append(
+                                                    ('fastq-dump and '
+                                                     'vdb-config '
+                                                     'versions do not agree: '
+                                                     'fastq-dump '
+                                                     'version is {}, while '
+                                                     'vdb-config version '
+                                                     'is {}. '
+                                                     'Reinstall '
+                                                     'SRA Tools v2.5 or '
+                                                     'greater and '
+                                                     'try again.').format(
+                                                            fastq_dump_version,
+                                                            vdb_config_version
+                                                        )
+                                                    )
+                                            base.sra_tools_version \
+                                                = fastq_dump_version
+                                    base.checked_programs.add('SRA Tools')
+                            if not filename_url.is_sra \
+                                and not ansible.exists(filename):
                                 base.errors.append((
                                                     'The file {0} from the '
                                                     'manifest file {1} does '
@@ -1547,6 +1731,7 @@ class RailRnaLocal(object):
                                         'has no valid lines.').format(
                                                         manifest_url.to_url()
                                                     ))
+            raise_runtime_error(base)
             from multiprocessing import cpu_count
             if num_processes:
                 if not (float(num_processes).is_integer()
@@ -1585,15 +1770,17 @@ class RailRnaLocal(object):
                                                         sort_memory_cap
                                                     ))
             base.sort_memory_cap = sort_memory_cap
-        if scratch:
-            if not os.path.exists(scratch):
+        if parallel and scratch:
+            expanded_scratch = os.path.expandvars(scratch)
+            if not os.path.exists(expanded_scratch):
                 try:
-                    os.makedirs(scratch)
+                    os.makedirs(expanded_scratch)
                 except OSError:
                     base.errors.append(
                             ('Could not create scratch directory %s; '
                              'check that it\'s not a file and that '
-                             'write permissions are active.') % scratch
+                             'write permissions are active.')
+                                % expanded_scratch
                         )
         base.scratch = scratch
         if sort_exe:
@@ -1626,16 +1813,17 @@ class RailRnaLocal(object):
             except ValueError:
                 sort_scratch = base.scratch
                 check_scratch = False
-        if check_scratch:
-            if not os.path.exists(sort_scratch):
+        if parallel and check_scratch:
+            expanded_sort_scratch  = os.path.expandvars(sort_scratch)
+            if not os.path.exists(expanded_sort_scratch):
                 try:
-                    os.makedirs(sort_scratch)
+                    os.makedirs(expanded_sort_scratch)
                 except OSError:
                     base.errors.append(
                             ('Could not create sort scratch directory %s; '
                              'check that it\'s not a file and that '
                              'write permissions are active.')
-                            % sort_scratch
+                            % expanded_sort_scratch
                         )
         base.sort_exe = ' '.join(
                             [base.check_program('sort', 'sort', '--sort',
@@ -1673,6 +1861,14 @@ class RailRnaLocal(object):
                 '-i', '--input', type=str, required=True, metavar='<dir>',
                 help='input directory with preprocessed reads; must be local'
             )
+        '''else:
+            # "prep" or "go" flows
+            general_parser.add_argument(
+                '--dbgap-key', required=False, metavar='<file>'
+                default=None,
+                help='path to dbGaP key file, which has the extension "ngc"; '
+                     'must be on local filesystem'
+            )'''
         if prep:
             output_parser.add_argument(
                 '-o', '--output', type=str, required=False, metavar='<dir>',
@@ -1700,8 +1896,9 @@ class RailRnaLocal(object):
             general_parser.add_argument(
                 '--scratch', type=str, required=False, metavar='<dir>',
                 default=None,
-                help=('directory for storing temporary files (def: '
-                      'securely created temporary directory)')
+                help=('directory for storing temporary files; BASH variables '
+                      'specified with dollar signs are recognized here '
+                      '(def: securely created temporary directory)')
             )
         else:
             general_parser.add_argument(
@@ -1720,10 +1917,19 @@ class RailRnaLocal(object):
             general_parser.add_argument(
                 '--scratch', type=str, required=False, metavar='<dir>',
                 default=None,
-                help=('node-local scratch directory for storing Bowtie index '
-                      'and temporary files before they are committed (def: '
-                      'directory in /tmp and/or other securely created '
-                      'temporary directory)')
+                help=('scratch directory for storing '
+                      'Bowtie index and temporary files before they are '
+                      'committed; node- or slot-local BASH variables '
+                      'specified with escaped dollar signs are recognized '
+                      'here (def: return value of tempfile.gettempdir(); see '
+                      'Python docs)')
+            )
+            general_parser.add_argument(
+                '--direct-write', action='store_const', const=True,
+                default=False,
+                help=('write intermediate files directly to the log directory '
+                      'rather than first writing to scratch and moving '
+                      'results')
             )
             if not prep:
                 general_parser.add_argument(
@@ -1783,7 +1989,7 @@ class RailRnaElastic(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
-        no_direct_copy=False, intermediate_lifetime=4):
+        no_direct_copy=False, intermediate_lifetime=4, secure=False):
 
         # CLI is REQUIRED in elastic mode
         base.check_s3(reason='Rail-RNA is running in "elastic" mode')
@@ -1906,37 +2112,6 @@ class RailRnaElastic(object):
                                     'overwriting it.').format(base.output_dir))
             else:
                 ansible.s3_ansible.remove_dir(base.output_dir)
-        # Check isofrag index; download+upload it if necessary
-        if base.isofrag_idx is not None:
-            isofrag_url = ab.Url(base.isofrag_idx)
-            if isofrag_url.is_curlable \
-                and 'cURL' not in base.checked_programs:
-                base.curl_exe = base.check_program(
-                                    'curl', 'cURL', '--curl',
-                                    entered_exe=base.curl_exe,
-                                    reason='the isofrag index is on the web'
-                                )
-                ansible.curl_exe = base.curl_exe
-            if not ansible.exists(isofrag_url.to_url()):
-                base.errors.append(('Isofrag index (--isofrag-idx) {0} '
-                                    'does not exist. Check the URL and '
-                                    'try again.').format(base.isofrag_idx))
-            elif isofrag_url.is_curlable:
-                # Now copy to S3
-                temp_isofrag_dir = tempfile.mkdtemp()
-                from tempdel import remove_temporary_directories
-                register_cleanup(remove_temporary_directories,
-                                    [temp_isofrag_dir])
-                isofrag = os.path.join(temp_isofrag_dir,
-                                        os.path.basename(base.isofrag_idx))
-                ansible.get(base.isofrag_idx, destination=isofrag)
-                base.isofrag_idx = path_join(
-                                        True,
-                                        base.output_dir + '.isofrag',
-                                        os.path.basename(base.isofrag_idx)
-                                    )
-                ansible.put(isofrag, base.isofrag_idx)
-                shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
         # Set directory for storing Rail-RNA, bootstraps, and possibly manifest
         base.dependency_dir = base.output_dir + '.dependencies'
         dependency_dir_url = ab.Url(base.dependency_dir)
@@ -1959,104 +2134,173 @@ class RailRnaElastic(object):
             base.errors.append(('Manifest file (--manifest) {0} '
                                 'does not exist. Check the URL and '
                                 'try again.').format(base.manifest))
-        else:
-            if not manifest_url.is_local:
-                temp_manifest_dir = tempfile.mkdtemp()
-                from tempdel import remove_temporary_directories
-                register_cleanup(remove_temporary_directories,
-                                    [temp_manifest_dir])
-                manifest = os.path.join(temp_manifest_dir, 'MANIFEST')
-                ansible.get(base.manifest, destination=manifest)
-            else:
-                manifest = manifest_url.to_url()
-            files_to_check = []
-            base.sample_count = 0
-            with open(manifest) as manifest_stream:
-                for line in manifest_stream:
-                    if line[0] == '#' or not line.strip(): continue
-                    base.sample_count += 1
-                    tokens = line.strip().split('\t')
-                    check_sample_label = True
-                    if len(tokens) == 5:
-                        files_to_check.extend([tokens[0], tokens[2]])
-                    elif len(tokens) == 3:
-                        files_to_check.append(tokens[0])
-                    else:
-                        check_sample_label = False
-                        base.errors.append(('The following line from the '
-                                            'manifest file {0} '
-                                            'has an invalid number of '
-                                            'tokens:\n{1}'
-                                            ).format(
-                                                    manifest_url.to_url(),
-                                                    line.strip()
-                                                ))
-                    if check_sample_label and tokens[-1].count('-') != 2:
-                        base.errors.append(('The following line from the '
-                                            'manifest file {0} '
-                                            'has an invalid sample label: '
-                                            '\n{1}\nA valid sample label '
-                                            'takes the following form:\n'
-                                            '<Group ID>-<BioRep ID>-'
-                                            '<TechRep ID>'
-                                            ).format(
-                                                    manifest_url.to_url(),
-                                                    line.strip()
-                                                ))
-            if files_to_check:
-                if check_manifest:
-                    file_count = len(files_to_check)
-                    # Check files in manifest only if in preprocess job flow
-                    for k, filename in enumerate(files_to_check):
-                        if sys.stdout.isatty():
-                            sys.stdout.write(
-                                    '\r\x1b[KChecking that file %d/%d '
-                                    'from manifest file exists...' % (
-                                                                k+1,
-                                                                file_count
-                                                            )
+        if base.isofrag_idx is not None:
+            isofrag_url = ab.Url(base.isofrag_idx)
+            if isofrag_url.is_curlable \
+                and 'cURL' not in base.checked_programs:
+                base.curl_exe = base.check_program(
+                                    'curl', 'cURL', '--curl',
+                                    entered_exe=base.curl_exe,
+                                    reason='the isofrag index is on the web'
                                 )
-                            sys.stdout.flush()
-                        filename_url = ab.Url(filename)
-                        if filename_url.is_curlable \
-                            and 'cURL' not in base.checked_programs:
-                            base.curl_exe = base.check_program('curl', 'cURL',
-                                                '--curl',
-                                                entered_exe=base.curl_exe,
-                                                reason=('at least one sample '
-                                                  'FASTA/FASTQ from the '
-                                                  'manifest file is on '
-                                                  'the web'))
-                            ansible.curl_exe = base.curl_exe
-                        if not ansible.exists(filename_url.to_url()):
-                            base.errors.append(('The file {0} from the '
-                                                'manifest file {1} does not '
-                                                'exist; check the URL and try '
-                                                'again.').format(
-                                                        filename,
-                                                        manifest_url.to_url()
-                                                    ))
+                ansible.curl_exe = base.curl_exe
+            if not ansible.exists(isofrag_url.to_url()):
+                base.errors.append(('Isofrag index (--isofrag-idx) {0} '
+                                    'does not exist. Check the URL and '
+                                    'try again.').format(base.isofrag_idx))
+        raise_runtime_error(base)
+        if not manifest_url.is_local:
+            temp_manifest_dir = tempfile.mkdtemp()
+            from tempdel import remove_temporary_directories
+            register_cleanup(remove_temporary_directories,
+                                [temp_manifest_dir])
+            manifest = os.path.join(temp_manifest_dir, 'MANIFEST')
+            ansible.get(base.manifest, destination=manifest)
+        else:
+            manifest = manifest_url.to_url()
+        if base.dbgap_key is not None and \
+            not os.path.exists(base.dbgap_key):
+            base.errors.append(('dbGaP repository key file '
+                                '(--dbgap-key) "{}" '
+                                'does not exist. Check its path and '
+                                'try again. Note that it must be '
+                                'found on the local '
+                                'filesystem; Rail-RNA uploads this '
+                                'file to S3 securely with server-side '
+                                'encryption enabled and schedules '
+                                'it for deletion.').format(dbgap_key))
+        base.dbgap_present = False
+        files_to_check = []
+        base.sample_count = 0
+        with open(manifest) as manifest_stream:
+            for line in manifest_stream:
+                if line[0] == '#' or not line.strip(): continue
+                base.sample_count += 1
+                tokens = line.strip().split('\t')
+                check_sample_label = True
+                if len(tokens) == 5:
+                    files_to_check.extend([tokens[0], tokens[2]])
+                elif len(tokens) == 3:
+                    files_to_check.append(tokens[0])
+                    single_url = ab.Url(tokens[0])
+                    if single_url.is_dbgap:
+                        base.dbgap_present = True
+                        sra_tools_needed = True
+                    elif single_url.is_sra:
+                        sra_tools_needed = True
+                else:
+                    check_sample_label = False
+                    base.errors.append(('The following line from the '
+                                        'manifest file {0} '
+                                        'has an invalid number of '
+                                        'tokens:\n{1}'
+                                        ).format(
+                                                manifest_url.to_url(),
+                                                line.strip()
+                                            ))
+                if check_sample_label and tokens[-1].count('-') != 2:
+                    base.errors.append(('The following line from the '
+                                        'manifest file {0} '
+                                        'has an invalid sample label: '
+                                        '\n{1}\nA valid sample label '
+                                        'takes the following form:\n'
+                                        '<Group ID>-<BioRep ID>-'
+                                        '<TechRep ID>'
+                                        ).format(
+                                                manifest_url.to_url(),
+                                                line.strip()
+                                            ))
+        if base.dbgap_present and base.dbgap_key is None:
+            base.errors.append('dbGaP accession numbers are in '
+                               'manifest file, but no dbGaP '
+                               'repository key file (--dbgap-key) was '
+                               'provided. ')
+        base.secure = secure
+        if base.dbgap_present:
+            # Always use secure mode if dbGaP data is present
+            base.secure = True
+        if files_to_check:
+            if check_manifest:
+                file_count = len(files_to_check)
+                # Check files in manifest only if in preprocess job flow
+                for k, filename in enumerate(files_to_check):
                     if sys.stdout.isatty():
                         sys.stdout.write(
-                                '\r\x1b[KChecked all files listed in manifest '
-                                'file.\n'
+                                '\r\x1b[KChecking that file %d/%d '
+                                'from manifest file exists...' % (
+                                                            k+1,
+                                                            file_count
+                                                        )
                             )
                         sys.stdout.flush()
-            else:
-                base.errors.append(('Manifest file (--manifest) {0} '
-                                    'has no valid lines.').format(
-                                                        manifest_url.to_url()
-                                                    ))
-            # Bail before copying anything to S3
-            raise_runtime_error(base)
-            if not manifest_url.is_s3 and output_dir_url.is_s3:
-                # Copy manifest file to S3 before job flow starts
-                base.manifest = path_join(True, base.dependency_dir,
-                                                'MANIFEST')
-                ansible.put(manifest, base.manifest)
-            if not manifest_url.is_local:
-                # Clean up
-                shutil.rmtree(temp_manifest_dir)
+                    filename_url = ab.Url(filename)
+                    if filename_url.is_curlable \
+                        and 'cURL' not in base.checked_programs:
+                        base.curl_exe = base.check_program('curl', 'cURL',
+                                            '--curl',
+                                            entered_exe=base.curl_exe,
+                                            reason=('at least one sample '
+                                              'FASTA/FASTQ from the '
+                                              'manifest file is on '
+                                              'the web'))
+                        ansible.curl_exe = base.curl_exe
+                    if not filename_url.is_sra \
+                        and not ansible.exists(filename_url.to_url()):
+                        base.errors.append(('The file {0} from the '
+                                            'manifest file {1} does not '
+                                            'exist; check the URL and try '
+                                            'again.').format(
+                                                    filename,
+                                                    manifest_url.to_url()
+                                                ))
+                if sys.stdout.isatty():
+                    sys.stdout.write(
+                            '\r\x1b[KChecked all files listed in manifest '
+                            'file.\n'
+                        )
+                    sys.stdout.flush()
+        else:
+            base.errors.append(('Manifest file (--manifest) {0} '
+                                'has no valid lines.').format(
+                                                    manifest_url.to_url()
+                                                ))
+        # Bail before copying anything to S3
+        raise_runtime_error(base)
+
+        # Download+upload isofrag index if necessary
+        if base.isofrag_idx is not None and isofrag_url.is_curlable:
+            temp_isofrag_dir = tempfile.mkdtemp()
+            from tempdel import remove_temporary_directories
+            register_cleanup(remove_temporary_directories,
+                                [temp_isofrag_dir])
+            isofrag = os.path.join(temp_isofrag_dir,
+                                    os.path.basename(base.isofrag_idx))
+            ansible.get(base.isofrag_idx, destination=isofrag)
+            base.isofrag_idx = path_join(
+                                    True,
+                                    base.output_dir + '.isofrag',
+                                    os.path.basename(base.isofrag_idx)
+                                )
+            ansible.put(isofrag, base.isofrag_idx)
+            shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
+
+        # Upload NGC file to S3
+        if base.dbgap_present:
+            base.dbgap_s3_path = path_join(
+                                    True,
+                                    base.intermediate_dir,
+                                    os.path.basename(base.dbgap_key)
+                                )
+            ansible.put(base.dbgap_key, base.dbgap_s3_path)
+
+        if not manifest_url.is_s3 and output_dir_url.is_s3:
+            # Copy manifest file to S3 before job flow starts
+            base.manifest = path_join(True, base.dependency_dir,
+                                            'MANIFEST')
+            ansible.put(manifest, base.manifest)
+        if not manifest_url.is_local:
+            # Clean up
+            shutil.rmtree(temp_manifest_dir)
         print_to_screen('Copying Rail-RNA and bootstraps to S3...',
                         newline=False, carriage_return=True)
         # Create and copy bootstraps to S3; compress and copy Rail-RNA to S3
@@ -2074,7 +2318,9 @@ mkdir -p $1
 cd $1
 
 fn=`basename $2`
-
+echo fn
+echo $1
+echo $(pwd)
 cat >.download_idx.py <<EOF
 \"""
 .download_idx.py
@@ -2183,6 +2429,7 @@ socket_timeout = 300
 multipart_chunk_size_mb = 15
 reduced_redundancy = False
 send_chunk = 4096
+use_https = True
 EOF
 """
                 )
@@ -2252,10 +2499,11 @@ sudo python27 {rail_zipped} $@
         ansible.put(install_rail_bootstrap, base.install_rail_bootstrap)
         copy_bootstrap = os.path.join(temp_dependency_dir,
                                                 's3cmd_s3.sh')
+        base.fastq_dump_exe = _elastic_fastq_dump_exe
+        base.vdb_config_exe = _elastic_vdb_config_exe
         with open(copy_bootstrap, 'w') as script_stream:
              print >>script_stream, (
-"""
-#!/usr/bin/env bash
+"""#!/usr/bin/env bash
 # s3cmd_s3.sh
 #
 # Download a file from an S3 bucket to given directory.  Optionally rename it.
@@ -2265,7 +2513,6 @@ sudo python27 {rail_zipped} $@
 # 2. Local directory to copy to
 # 3. If specified, name to rename file to
 set -e
-
 mkdir -p ${2}
 cd ${2}
 fn=`basename ${1}`
@@ -2283,6 +2530,224 @@ fi
                                     )
         ansible.put(copy_bootstrap, base.copy_bootstrap)
         os.remove(copy_bootstrap)
+        if base.secure:
+            encrypt_bootstrap = os.path.join(temp_dependency_dir,
+                                                'encrypt.sh')
+            with open(encrypt_bootstrap, 'w') as script_stream:
+                # Code taken from http://bddubois-emr.s3.amazonaws.com/emr-volume-encryption.sh
+                print >>script_stream, (
+"""#!/usr/bin/env bash
+set -ex
+
+EPHEMERAL_MNT_DIRS=`awk '/mnt/{print $2}' < /proc/mounts`
+ENCRYPTED_SIZE=8g
+export PASSWORD=$(dd count=3 bs=16 if=/dev/urandom of=/dev/stdout 2>/dev/null | base64) PASSWORD_FILE="/tmp/pwd"
+i=0
+STATUS=0
+TMPSIZE=40
+
+echo ${PASSWORD} > $PASSWORD_FILE
+if [ ! $? -eq 0 ]; then
+  echo "ERROR: Failed to create password file"
+  STATUS=1
+fi
+
+sudo modprobe loop
+
+# Install cryptsetup
+#THESE steps fail but its ok the clone in amazon ami already has this installed # #sudo yum -y update #sudo yum -y install cryptsetup
+
+mychildren=""
+
+if [ $STATUS -eq 0 ]; then
+  for DIR in $EPHEMERAL_MNT_DIRS; do
+    #
+    # Setup some variables
+    #
+    ENCRYPTED_LOOPBACK_DIR=$DIR/encrypted_loopbacks
+    ENCRYPTED_MOUNT_POINT=$DIR/space.encrypted/
+    ENCRYPTED_SPACE=$DIR/space
+    DFS_DATA_DIR=$DIR/var/lib/hadoop/dfs
+    TMP_DATA_DIR=$DIR/var/lib/hadoop/tmp
+    ENCRYPTED_LOOPBACK_DEVICE=/dev/loop$i
+    ENCRYPTED_NAME=crypt$i
+
+    mkdir -p ${ENCRYPTED_SPACE}
+    
+    if [ $STATUS -eq 0 ]; then
+      # Get the total number of blocks for this filesystem $DIR
+      nblocks=`stat -f -c '%a' $DIR`
+      # Get the block size (in bytes for this filesystem $DIR)
+      bsize=`stat -f -c '%s' $DIR`
+      # Calculate the mntsize in MB (divisible by 1000)
+      mntsize=`expr $nblocks \* $bsize \/ 1000 \/ 1000 \/ 1000`
+      # Make $TMPSIZE 1/10 of mntsize
+      TMPSIZE=`expr $mntsize \/ 10`
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to get mount size"
+        STATUS=1
+      fi
+      ENCRYPTED_SIZE=`expr $mntsize - $TMPSIZE`g
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to calculate encrypted size"
+        STATUS=1
+      fi
+    fi
+
+    #
+    # Create directories
+    #
+    if [ $STATUS -eq 0 ]; then
+      mkdir $ENCRYPTED_LOOPBACK_DIR
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to get create ENCRYPTED_LOOPBACK_DIR"
+        STATUS=1
+      else 
+        echo SUCCESS: Created directory $ENCRYPTED_LOOPBACK_DIR
+      fi
+    fi
+    if [ $STATUS -eq 0 ]; then
+      mkdir $ENCRYPTED_MOUNT_POINT
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to get create ENCRYPTED_MOUNT_POINT"
+        STATUS=1
+      else
+        echo SUCCESS: Created directory $ENCRYPTED_MOUNT_POINT
+      fi
+    fi
+    #
+    # Create loopback device
+    #
+    if [ $STATUS -eq 0 ]; then
+      sudo fallocate -l $ENCRYPTED_SIZE $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to allocate $ENCRYPTED_SIZE $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img"
+        STATUS=1
+      else
+        echo SUCCESS: Allocated $ENCRYPTED_SIZE $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      fi
+    fi 
+    if [ $STATUS -eq 0 ]; then
+      sudo chown hadoop:hadoop $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to chown $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img"
+        STATUS=1
+      else
+        echo SUCCESS: chowned $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      fi
+    fi
+    if [ $STATUS -eq 0 ]; then
+      sudo losetup /dev/loop$i $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to losetup $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img"
+        STATUS=1
+      else
+        echo SUCCESS: losetup $ENCRYPTED_LOOPBACK_DIR/encrypted_loopback.img
+      fi
+    fi
+    #
+    # Setup LUKS
+    #
+    if [ $STATUS -eq 0 ]; then
+      sudo cryptsetup luksFormat -q --key-file $PASSWORD_FILE $ENCRYPTED_LOOPBACK_DEVICE
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to  cryptsetup luksFormat -q --key-file $PASSWORD_FILE $ENCRYPTED_LOOPBACK_DEVICE"
+        STATUS=1
+      else
+        echo SUCCESS: cryptsetup luksFormat 
+      fi
+    fi
+    if [ $STATUS -eq 0 ]; then
+      sudo cryptsetup luksOpen -q --key-file $PASSWORD_FILE $ENCRYPTED_LOOPBACK_DEVICE $ENCRYPTED_NAME
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to  cryptsetup luksOpen -q --key-file $PASSWORD_FILE $ENCRYPTED_LOOPBACK_DEVICE"
+        STATUS=1
+      else
+        echo SUCCESS: cryptsetup luksopen
+      fi
+    fi
+
+    #
+    # Create file system
+    #
+    if [ $STATUS -eq 0 ]; then
+    mycmd="sudo mkfs.ext4 -m 0 -E lazy_itable_init=1 /dev/mapper/$ENCRYPTED_NAME && sudo mount /dev/mapper/$ENCRYPTED_NAME $ENCRYPTED_SPACE && sudo mkdir -p $ENCRYPTED_SPACE/dfs && sudo mkdir -p $ENCRYPTED_SPACE/tmp/nm-local-dir && sudo rm -rf $DFS_DATA_DIR && sudo ln -s $ENCRYPTED_SPACE/dfs $DFS_DATA_DIR && sudo chown hadoop:hadoop $ENCRYPTED_SPACE/dfs && sudo chown hadoop:hadoop $DFS_DATA_DIR && sudo rm -rf $DFS_DATA_DIR/lost\+found && sudo rm -rf $TMP_DATA_DIR && sudo ln -s $ENCRYPTED_SPACE/tmp $TMP_DATA_DIR && sudo chown hadoop:hadoop $ENCRYPTED_SPACE/tmp && sudo chown hadoop:hadoop $TMP_DATA_DIR && sudo chown hadoop:hadoop $TMP_DATA_DIR/nm-local-dir && sudo echo iamdone-$ENCRYPTED_NAME && sudo chown -R hadoop:hadoop $ENCRYPTED_SPACE && sudo chmod -R 0755 $ENCRYPTED_SPACE && date "
+    echo $mycmd
+    eval $mycmd &
+      if [ ! $? -eq 0 ]; then
+        echo "ERROR: Failed to run the my cmd that follows $mycmd"
+        STATUS=1
+      else
+        echo SUCCESS: MYCMD 
+      fi
+    fi
+
+    mychildren="$mychildren $!"
+
+    let i=i+1
+done
+fi
+
+for mypid in $mychildren
+do
+    wait $mypid
+done
+
+sudo rm -f $PASSWORD_FILE
+
+date
+echo "everything done"
+echo $STATUS STATUS
+exit $STATUS
+"""
+            )
+        base.encrypt_bootstrap = path_join(
+                                        True, base.dependency_dir,
+                                        os.path.basename(
+                                                encrypt_bootstrap
+                                            )
+                                    )
+        ansible.put(encrypt_bootstrap, base.encrypt_bootstrap)
+        os.remove(encrypt_bootstrap)
+        if sra_tools_needed:
+            vdb_bootstrap = os.path.join(temp_dependency_dir,
+                                                'vdb.sh')
+            if base.dbgap_present:
+                with open(vdb_bootstrap, 'w') as script_stream:
+                    print >>script_stream, (
+"""#!/usr/bin/env bash
+
+mkdir -p {vdb_workspace}/insecure
+mkdir -p ~/.ncbi
+cat >~/.ncbi/user-settings.mkfg <<EOF
+/repository/user/main/public/root = "{vdb_workspace}/insecure"
+EOF
+mkdir -p {vdb_workspace}/secure
+{vdb_config} --import /mnt/space/DBGAP.ngc {vdb_workspace}/secure
+"""
+                    ).format(vdb_config=_elastic_vdb_config_exe,
+                             vdb_workspace=_elastic_vdb_workspace)
+            else:
+                # Don't need secure dir for workspace
+                with open(vdb_bootstrap, 'w') as script_stream:
+                    print >>script_stream, (
+"""#!/usr/bin/env bash
+
+mkdir -p {vdb_workspace}/insecure
+mkdir -p ~/.ncbi
+cat >~/.ncbi/user-settings.mkfg <<EOF
+/repository/user/main/public/root = "{vdb_workspace}/insecure"
+EOF
+"""
+                    ).format(vdb_workspace=_elastic_vdb_workspace)
+        base.vdb_bootstrap = path_join(
+                                        True, base.dependency_dir,
+                                        os.path.basename(
+                                                vdb_bootstrap
+                                            )
+                                    )
+        ansible.put(vdb_bootstrap, base.vdb_bootstrap)
+        os.remove(vdb_bootstrap)
         shutil.rmtree(temp_dependency_dir)
         print_to_screen('Copied Rail-RNA and bootstraps to S3.',
                          newline=True, carriage_return=False)
@@ -2428,6 +2893,16 @@ fi
                 help='input directory with preprocessed reads; must begin ' \
                      'with s3://'
             )
+        else:
+            # "prep" or "go" flows
+            general_parser.add_argument(
+                '--dbgap-key', required=False, metavar='<file>',
+                default=None,
+                help='path to dbGaP key file, which has the extension "ngc"; '
+                     'must be on local filesystem. This file is uploaded '
+                     'securely to S3 and scheduled for deletion if dbGaP '
+                     'data is present in the manifest file'
+            )
         required_parser.add_argument(
             '-o', '--output', type=str, required=True, metavar='<s3_dir>',
             help='output directory; must begin with s3://'
@@ -2440,6 +2915,14 @@ fi
                  'hdfs:// or s3://; use S3 and set --intermediate-lifetime ' \
                  'to -1 to keep intermediates (def: output directory + ' \
                  '".intermediate")'
+        )
+        general_parser.add_argument(
+            '--secure', action='store_const', const=True,
+            default=False,
+            help='turns on security measures enforcing dbGaP requirements; '
+                 'see https://d0.awsstatic.com/whitepapers/compliance/' 
+                 'AWS_dBGaP_Genomics_on_AWS_Best_Practices.pdf (def: on '
+                 'if dbGaP data in manifest file; otherwise off)'
         )
         elastic_parser.add_argument(
             '--intermediate-lifetime', type=int, required=False,
@@ -2619,15 +3102,27 @@ fi
 
     @staticmethod
     def prebootstrap(base):
-        return [
-            {
-                'Name' : 'Install S3cmd',
-                'ScriptBootstrapAction' : {
-                    'Args' : [],
-                    'Path' : base.install_s3cmd_bootstrap
+        if base.secure:
+            to_return = [
+                    {
+                        'Name' : 'Encrypt ephemeral space',
+                        'ScriptBootstrapAction' : {
+                            'Args' : [],
+                            'Path' : base.encrypt_bootstrap
+                        }
+                    }
+                ]
+        else:
+            to_return = []
+        return to_return + [
+                {
+                    'Name' : 'Install S3cmd',
+                    'ScriptBootstrapAction' : {
+                        'Args' : [],
+                        'Path' : base.install_s3cmd_bootstrap
+                    }
                 }
-            }
-        ]
+            ]
 
     @staticmethod
     def bootstrap(base):
@@ -2636,7 +3131,8 @@ fi
                 'Name' : 'Allocate swap space',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        '%d' % base.mem
+                        '%d' % base.mem,
+                        '/mnt/space/swapfile'
                     ],
                     'Path' : 's3://elasticmapreduce/bootstrap-actions/add-swap'
                 }
@@ -2696,6 +3192,8 @@ fi
                          'com.hadoop.compression.lzo.LzopCodec'),
                         '-m',
                         'mapreduce.job.maps=%d' % base.total_cores,
+                        '-e',
+                        'fs.s3.enableServerSideEncryption=true'
                     ] + (['-e', 'fs.s3.consistent=true']
                             if base.consistent_view
                             else ['-e', 'fs.s3.consistent=false']),
@@ -2872,7 +3370,7 @@ class RailRnaPreprocess(object):
                     'name' : 'Preprocess reads',
                     'mapper' : ('preprocess.py --nucs-per-file={0} {1} '
                                 '--push={2} --gzip-level {3} {4} {5} '
-                                '{6} {7} {8}').format(
+                                '{6} {7} {8} {9}').format(
                                                 base.nucleotides_per_input,
                                                 '--gzip-output' if
                                                 base.gzip_input else '',
@@ -2895,7 +3393,12 @@ class RailRnaPreprocess(object):
                                                 else '',
                                                 '--skip-bad-records'
                                                 if base.skip_bad_records
-                                                else ''
+                                                else '',
+                                                '--fastq-dump-exe %s'
+                                                    % (base.fastq_dump_exe
+                                                        if hasattr(base,
+                                                            'fastq_dump_exe')
+                                                        else 'fastq-dump')
                                             ),
                     'inputs' : [os.path.join(base.intermediate_dir,
                                                 'split.manifest')],
@@ -2913,7 +3416,7 @@ class RailRnaPreprocess(object):
                     'name' : 'Preprocess reads',
                     'mapper' : ('preprocess.py --nucs-per-file={0} {1} '
                                 '--push={2} --gzip-level {3} {4} {5} {6} {7} '
-                                '--keep-alive').format(
+                                '--keep-alive {8} {9}').format(
                                                 base.nucleotides_per_input,
                                                 '--gzip-output' if
                                                 base.gzip_input else '',
@@ -2934,7 +3437,16 @@ class RailRnaPreprocess(object):
                                                 else '',
                                                 '--skip-bad-records'
                                                 if base.skip_bad_records
-                                                else ''
+                                                else '',
+                                            ('--workspace-dir %s/secure'
+                                             % _elastic_vdb_workspace)
+                                                if base.dbgap_present
+                                                else '',
+                                                '--fastq-dump-exe %s'
+                                                    % (base.fastq_dump_exe
+                                                        if hasattr(base,
+                                                            'fastq_dump_exe')
+                                                        else 'fastq-dump')
                                             ),
                     'inputs' : [base.old_manifest
                                 if hasattr(base, 'old_manifest')
@@ -2948,6 +3460,18 @@ class RailRnaPreprocess(object):
                 },
             ]
         return steps_to_return
+
+    @staticmethod
+    def srabootstrap(base):
+        return [
+                    {
+                        'Name' : 'Set up SRA Tools workspace',
+                        'ScriptBootstrapAction' : {
+                            'Args' : [],
+                            'Path' : base.vdb_bootstrap
+                        }
+                }
+            ]
 
     @staticmethod
     def bootstrap(base):
@@ -3618,6 +4142,26 @@ class RailRnaAlign(object):
                             if exe_paths.bedgraphtobigwig is not None
                             else 'bedGraphToBigWig'))
             )
+            exec_parser.add_argument(
+                '--fastq-dump', type=str, required=False,
+                metavar='<exe>',
+                default=exe_paths.fastq_dump,
+                help=('path to SRA Tools fastq-dump executable '
+                      '(def: %s)' 
+                        % (exe_paths.fastq_dump
+                            if exe_paths.fastq_dump is not None
+                            else 'fastq-dump'))
+            )
+            exec_parser.add_argument(
+                '--vdb-config', type=str, required=False,
+                metavar='<exe>',
+                default=exe_paths.vdb_config,
+                help=('path to SRA Tools vdb-config executable '
+                      '(def: %s)' 
+                        % (exe_paths.vdb_config
+                            if exe_paths.vdb_config is not None
+                            else 'vdb-config'))
+            )
         else:
             required_parser.add_argument(
                 '-a', '--assembly', type=str, required=True,
@@ -3849,7 +4393,7 @@ class RailRnaAlign(object):
 
     @staticmethod
     def protosteps(base, input_dir, elastic=False):
-        manifest = ('/mnt/MANIFEST' if elastic else base.manifest)
+        manifest = ('/mnt/space/MANIFEST' if elastic else base.manifest)
         verbose = ('--verbose' if base.verbose else '')
         drop_deletions = ('--drop-deletions' if base.drop_deletions else '')
         keep_alive = ('--keep-alive' if elastic else '')
@@ -4562,7 +5106,7 @@ class RailRnaAlign(object):
                 'Name' : 'Transfer Bowtie indexes to nodes',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        '/mnt',
+                        '/mnt/space',
                         base.index_archive
                     ],
                     'Path' : base.copy_index_bootstrap
@@ -4573,13 +5117,23 @@ class RailRnaAlign(object):
                 'ScriptBootstrapAction' : {
                     'Args' : [
                         base.manifest,
-                        '/mnt',
+                        '/mnt/space',
                         'MANIFEST'
                     ],
                     'Path' : base.copy_bootstrap
                 }
             }
-        ]
+        ] + ([{
+                'Name' : 'Transfer dbGaP key file to nodes',
+                'ScriptBootstrapAction' : {
+                    'Args' : [
+                        base.dbgap_s3_path,
+                        '/mnt/space',
+                        'DBGAP.ngc'
+                    ],
+                    'Path' : base.copy_bootstrap
+                }
+            }] if hasattr(base, 'dbgap_s3_path') else [])
 
 class RailRnaLocalPreprocessJson(object):
     """ Constructs JSON for local mode + preprocess job flow. """
@@ -4591,17 +5145,19 @@ class RailRnaLocalPreprocessJson(object):
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4, 
         keep_intermediates=False, check_manifest=True,
-        scratch=None, sort_exe=None):
+        scratch=None, sort_exe=None, dbgap_key=None,
+        fastq_dump_exe=None, vdb_config_exe=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, scratch=scratch,
-            sort_exe=sort_exe)
+            sort_exe=sort_exe, fastq_dump_exe=fastq_dump_exe,
+            vdb_config_exe=vdb_config_exe)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -4631,20 +5187,23 @@ class RailRnaParallelPreprocessJson(object):
         do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
-        ipcontroller_json=None, scratch=None, keep_intermediates=False,
-        check_manifest=True, sort_exe=None):
+        ipcontroller_json=None, scratch=None, direct_write=False,
+        keep_intermediates=False, check_manifest=True, sort_exe=None,
+        dbgap_key=None, fastq_dump_exe=None, vdb_config_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=None)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, scratch=scratch,
-            local=False, parallel=False, sort_exe=sort_exe)
+            direct_write=direct_write, local=False, parallel=False,
+            sort_exe=sort_exe, fastq_dump_exe=fastq_dump_exe,
+            vdb_config_exe=vdb_config_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
             subsequently upload to final destination.'''
@@ -4668,14 +5227,17 @@ class RailRnaParallelPreprocessJson(object):
                     intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
                     region=region, verbose=verbose,
-                    max_task_attempts=max_task_attempts
+                    max_task_attempts=max_task_attempts,
+                    dbgap_key=dbgap_key
                 )
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
             check_manifest=check_manifest, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap, scratch=scratch,
-            keep_intermediates=keep_intermediates, local=False, parallel=True,
-            ansible=ab.Ansible(), sort_exe=sort_exe)
+            direct_write=direct_write, keep_intermediates=keep_intermediates,
+            local=False, parallel=True, ansible=ab.Ansible(),
+            sort_exe=sort_exe, fastq_dump_exe=fastq_dump_exe,
+            vdb_config_exe=vdb_config_exe)
         engine_base_checks = {}
         for i in rc.ids:
             engine_base_checks[i] = engine_bases[i].check_program
@@ -4725,13 +5287,13 @@ class RailRnaElasticPreprocessJson(object):
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
-        max_task_attempts=4):
+        max_task_attempts=4, secure=False, dbgap_key=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, service_role=service_role,
             instance_profile=instance_profile, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
         RailRnaElastic(base, check_manifest=check_manifest,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
@@ -4750,7 +5312,8 @@ class RailRnaElasticPreprocessJson(object):
             termination_protected=termination_protected,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
-            intermediate_lifetime=intermediate_lifetime)
+            intermediate_lifetime=intermediate_lifetime,
+            secure=secure)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -4790,6 +5353,7 @@ class RailRnaElasticPreprocessJson(object):
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
                 + RailRnaPreprocess.bootstrap(base)
+                + RailRnaPreprocess.srabootstrap(base)
                 + RailRnaElastic.bootstrap(base)
             )
         self.base = base
@@ -4831,8 +5395,8 @@ class RailRnaLocalAlignJson(object):
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
-            keep_intermediates=keep_intermediates, scratch=scratch,
-            sort_exe=sort_exe)
+            keep_intermediates=keep_intermediates,
+            scratch=scratch, sort_exe=sort_exe)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -4903,9 +5467,10 @@ class RailRnaParallelAlignJson(object):
         deliverables='idx,tsv,bed,bam,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
-        gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
-        max_task_attempts=4, keep_intermediates=False,
-        do_not_copy_index_to_nodes=False, sort_exe=None):
+        direct_write=False, gzip_intermediates=False, gzip_level=3,
+        sort_memory_cap=(300*1024), max_task_attempts=4,
+        keep_intermediates=False, do_not_copy_index_to_nodes=False,
+        sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
@@ -4917,7 +5482,8 @@ class RailRnaParallelAlignJson(object):
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates,
-            local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
+            local=False, parallel=False, scratch=scratch,
+            direct_write=direct_write, sort_exe=sort_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
             subsequently upload to S3.'''
@@ -4973,7 +5539,8 @@ class RailRnaParallelAlignJson(object):
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
-            ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
+            ansible=ab.Ansible(), scratch=scratch, direct_write=direct_write,
+            sort_exe=sort_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
             input_dir=input_dir, elastic=False, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -5065,7 +5632,8 @@ class RailRnaElasticAlignJson(object):
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
-        no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4):
+        no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4,
+        secure=False):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -5089,7 +5657,8 @@ class RailRnaElasticAlignJson(object):
             termination_protected=termination_protected,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
-            intermediate_lifetime=intermediate_lifetime)
+            intermediate_lifetime=intermediate_lifetime,
+            secure=secure)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=True, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -5194,12 +5763,13 @@ class RailRnaLocalAllJson(object):
         gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4,
         keep_intermediates=False, check_manifest=True, scratch=None,
-        sort_exe=None):
+        sort_exe=None, dbgap_key=None, fastq_dump_exe=None,
+        vdb_config_exe=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -5208,7 +5778,8 @@ class RailRnaLocalAllJson(object):
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, scratch=scratch,
-            sort_exe=sort_exe)
+            sort_exe=sort_exe, fastq_dump_exe=fastq_dump_exe,
+            vdb_config_exe=vdb_config_exe)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
@@ -5289,20 +5860,22 @@ class RailRnaParallelAllJson(object):
         bed_basename='', tsv_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
         max_task_attempts=4, ipython_profile=None, ipcontroller_json=None,
-        scratch=None, keep_intermediates=False, check_manifest=True,
-        do_not_copy_index_to_nodes=False, sort_exe=None):
+        scratch=None, direct_write=False, keep_intermediates=False,
+        check_manifest=True, do_not_copy_index_to_nodes=False, sort_exe=None,
+        dbgap_key=None, fastq_dump_exe=None, vdb_config_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
-            keep_intermediates=keep_intermediates,
-            local=False, parallel=False, scratch=scratch, sort_exe=sort_exe)
+            direct_write=direct_write, keep_intermediates=keep_intermediates,
+            local=False, parallel=False, scratch=scratch, sort_exe=sort_exe,
+            fastq_dump_exe=fastq_dump_exe, vdb_config_exe=vdb_config_exe)
         if ab.Url(base.output_dir).is_local:
             '''Add NFS prefix to ensure tasks first copy files to temp dir and
             subsequently upload to S3.'''
@@ -5354,14 +5927,17 @@ class RailRnaParallelAllJson(object):
                     intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
                     region=region, verbose=verbose,
-                    max_task_attempts=max_task_attempts
+                    max_task_attempts=max_task_attempts,
+                    dbgap_key=dbgap_key
                 )
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
             check_manifest=check_manifest, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
             keep_intermediates=keep_intermediates, local=False, parallel=True,
-            ansible=ab.Ansible(), scratch=scratch, sort_exe=sort_exe)
+            ansible=ab.Ansible(), scratch=scratch, direct_write=direct_write,
+            sort_exe=sort_exe, fastq_dump_exe=fastq_dump_exe,
+            vdb_config_exe=vdb_config_exe)
         apply_async_with_errors(rc, rc.ids, RailRnaAlign, engine_bases,
             bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -5464,13 +6040,14 @@ class RailRnaElasticAllJson(object):
         task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
         termination_protected=False, check_manifest=True,
         no_direct_copy=False, consistent_view=False,
-        intermediate_lifetime=4, max_task_attempts=4):
+        intermediate_lifetime=4, max_task_attempts=4, dbgap_key=None,
+        secure=False):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, service_role=service_role,
             instance_profile=instance_profile, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
         RailRnaElastic(base, check_manifest=check_manifest, 
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
@@ -5489,7 +6066,8 @@ class RailRnaElasticAllJson(object):
             termination_protected=termination_protected,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
-            intermediate_lifetime=intermediate_lifetime)
+            intermediate_lifetime=intermediate_lifetime,
+            secure=secure)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -5574,6 +6152,7 @@ class RailRnaElasticAllJson(object):
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
                 + RailRnaAlign.bootstrap(base)
+                + RailRnaPreprocess.srabootstrap(base)
                 + RailRnaElastic.bootstrap(base)
             )
         self.base = base

@@ -135,7 +135,7 @@ class Launcher(object):
                     sort_memory_cap=0.2, max_task_attempts=4,
                     region='us-east-1', log=None, scratch=None,
                     ipython_profile=None, ipcontroller_json=None, common=None,
-                    json=False, sort=None):
+                    direct_write=False, json=False, sort=None):
         self.force = force
         self.num_processes = num_processes
         self.keep_intermediates = keep_intermediates
@@ -146,6 +146,7 @@ class Launcher(object):
         self.region = region
         self.log = log
         self.scratch = scratch
+        self.direct_write = direct_write
         self.ipython_profile = ipython_profile
         self.ipcontroller_json = ipcontroller_json
         self.common = common
@@ -221,6 +222,8 @@ class Launcher(object):
                     runner_args.append('-f')
                 if self.keep_intermediates:
                     runner_args.append('--keep-intermediates')
+                if self.direct_write:
+                    runner_args.append('--direct-write')
                 if self.gzip_intermediates:
                     runner_args.extend(['--gzip-outputs', '--gzip-level',
                                             str(self.gzip_level)])
@@ -645,7 +648,9 @@ if __name__ == '__main__':
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
-                scratch=args.scratch
+                scratch=args.scratch,
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'align' and args.align_mode == 'local':
         mode = 'local'
@@ -722,7 +727,9 @@ if __name__ == '__main__':
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
-                scratch=args.scratch
+                scratch=args.scratch,
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'go' and args.go_mode == 'parallel':
         mode = 'parallel'
@@ -784,8 +791,11 @@ if __name__ == '__main__':
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
                 scratch=args.scratch,
+                direct_write=args.direct_write,
                 do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes,
-                sort_exe=args.sort
+                sort_exe=args.sort,
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'align' and args.align_mode == 'parallel':
         mode = 'parallel'
@@ -841,6 +851,7 @@ if __name__ == '__main__':
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
                 scratch=args.scratch,
+                direct_write=args.direct_write,
                 do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes,
                 sort_exe=args.sort
             )
@@ -865,7 +876,10 @@ if __name__ == '__main__':
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
                 scratch=args.scratch,
-                sort_exe=args.sort
+                direct_write=args.direct_write,
+                sort_exe=args.sort,
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'go' and args.go_mode == 'elastic':
         mode = 'elastic'
@@ -934,7 +948,9 @@ if __name__ == '__main__':
                 no_direct_copy=args.no_direct_copy,
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime,
-                max_task_attempts=args.max_task_attempts
+                max_task_attempts=args.max_task_attempts,
+                dbgap_key=args.dbgap_key,
+                secure=args.secure
             )
     elif args.job_flow == 'align' and args.align_mode == 'elastic':
         mode = 'elastic'
@@ -999,7 +1015,8 @@ if __name__ == '__main__':
                 consistent_view=args.consistent_view,
                 no_direct_copy=args.no_direct_copy,
                 intermediate_lifetime=args.intermediate_lifetime,
-                max_task_attempts=args.max_task_attempts
+                max_task_attempts=args.max_task_attempts,
+                secure=args.secure
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'elastic':
         mode = 'elastic'
@@ -1036,7 +1053,9 @@ if __name__ == '__main__':
                 no_direct_copy=args.no_direct_copy,
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime,
-                max_task_attempts=args.max_task_attempts
+                max_task_attempts=args.max_task_attempts,
+                dbgap_key=args.dbgap_key,
+                secure=args.secure
             )
     # Launch
     try:
@@ -1108,6 +1127,11 @@ if __name__ == '__main__':
                                         args.scratch
                                         if mode in ['local', 'parallel']
                                         else None
+                                    ),
+                                    direct_write=(
+                                        args.direct_write
+                                        if mode == 'parallel'
+                                        else False
                                     ),
                                     sort=(
                                         json_creator.base.sort_exe

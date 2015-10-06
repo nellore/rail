@@ -172,8 +172,12 @@ global, properties of args are also arguments of the go() function so
 different command-line arguments can be passed to it for unit tests.'''
 args = parser.parse_args(argv[1:])
 
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
-manifest_object = manifest.LabelsAndIndices(args.manifest)
+reference_index = bowtie_index.BowtieIndexReference(
+                            os.path.expandvars(args.bowtie_idx)
+                        )
+manifest_object = manifest.LabelsAndIndices(
+                            os.path.expandvars(args.manifest)
+                        )
 alignment_count_to_report, seed, non_deterministic \
     = bowtie.parsed_bowtie_args(bowtie_args)
 

@@ -436,7 +436,7 @@ if __name__ == '__main__':
         keep_alive_thread.start()
 
 if __name__ == '__main__' and not args.test:
-    temp_dir_path = make_temp_dir(args.scratch)
+    temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
     archive = os.path.join(args.archive,
         str(os.getpid())) if args.archive is not None else None
     # Handle temporary directory if CTRL+C'd
@@ -444,8 +444,8 @@ if __name__ == '__main__' and not args.test:
     if args.verbose:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path
-    go(bowtie2_exe=args.bowtie2_exe,
-        bowtie2_build_exe=args.bowtie2_build_exe,
+    go(bowtie2_exe=os.path.expandvars(args.bowtie2_exe),
+        bowtie2_build_exe=os.path.expandvars(args.bowtie2_build_exe),
         bowtie2_args=bowtie_args,
         temp_dir_path=temp_dir_path,
         verbose=args.verbose, 

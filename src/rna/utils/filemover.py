@@ -67,8 +67,10 @@ class FileMover(object):
             command_list.append('sync')
             if self.s3public:
                 command_list.append("--acl-public")
-            command_list.append(filename)
-            command_list.append(url.to_nonnative_url())
+            command_list.extend(
+                    [filename, url.to_nonnative_url(),
+                        '--server-side-encryption']
+                )
         elif url.is_curlable:
             raise RuntimeError('Can\'t upload to http/ftp URLs.')
         elif url.is_local or url.is_nfs:

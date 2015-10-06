@@ -136,9 +136,11 @@ if args.keep_alive:
 
 '''Make RNAME lengths available from reference FASTA so SAM header can be
 formed; reference_index.rname_lengths[RNAME] is the length of RNAME.''' 
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
+reference_index = bowtie_index.BowtieIndexReference(
+                            os.path.expandvars(args.bowtie_idx)
+                        )
 # For mapping sample indices back to original sample labels
-manifest_object = manifest.LabelsAndIndices(args.manifest)
+manifest_object = manifest.LabelsAndIndices(os.path.expandvars(args.manifest))
 # To convert sample-rname index to sample index-rname index tuple
 sample_and_rname_indexes = SampleAndRnameIndexes(
                                                     manifest_object,
@@ -212,7 +214,7 @@ else:
             mover = filemover.FileMover(args=args)
             # Set up temporary destination
             import tempfile
-            temp_dir_path = make_temp_dir(args.scratch)
+            temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
             register_cleanup(tempdel.remove_temporary_directories,
                                 [temp_dir_path])
     move_temporary_file = False # True when temporary file should be uploaded

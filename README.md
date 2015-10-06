@@ -2,7 +2,7 @@
 ====
 
 This is the official repo for Rail-RNA, software for RNA-seq analysis. 
-### [Download](https://github.com/nellore/rail/raw/v0.1.9b/releases/install_rail-rna-0.1.9b)
+### [Download](https://github.com/nellore/rail/raw/v0.1.9c/releases/install_rail-rna-0.1.9c)
 
 **the latest stable release. Read the**
 
@@ -23,7 +23,7 @@ Rail-RNA's distinguishing features are
 * **Reduced redundancy**. The software identifies and eliminates redundant alignment work, making the end-to-end analysis time per sample *decrease* for fixed computer cluster size as the number of samples increases.
 * **Integrative analysis**. The software borrows strength across replicates to achieve more accurate splice junction detection, especially in genomic regions with low coverage.
 * **Mode agnosticism**. The software integrates its own parallel abstraction layer that allows it to be run in various distributed computing environments, including the Amazon Web Services (AWS) [Elastic MapReduce (EMR) service](http://aws.amazon.com/elasticmapreduce/), or any distributed environment supported by [IPython](http://ipython.org/), including clusters using batch schedulers like PBS or SGE, Message Passing Interface (MPI), or any cluster with a shared filesystem and mutual SSH access. Alternately, Rail-RNA can be run on a single multi-core computer, without the aid of a batch system or MapReduce implementation.
-* **Inexpensive cloud implementation**. An EMR run on > ~100 samples costs < $1/sample with spot instances.
+* **Inexpensive cloud implementation**. An EMR run on > ~100 samples costs ~ $1/sample with spot instances.
 
 Outputs currently include
 * Alignment BAMs with only primary alignments by default (for more, use `--bowtie2-args "-k <N>"`, where `<N>` is the maximum number of alignments to report per read)
@@ -32,21 +32,21 @@ Outputs currently include
 
 and will likely expand in future versions.
 
-Read the [preprint](http://biorxiv.org/content/early/2015/05/07/019067) for more details. Methods explained there correspond to Rail-RNA 0.1.0a.
+Read the [preprint](http://biorxiv.org/content/early/2015/08/11/019067) for more details. Methods explained there correspond to Rail-RNA 0.1.9c.
 
 Get set up
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.9b`](https://github.com/nellore/rail/raw/v0.1.9b/releases/install_rail-rna-0.1.9b), change to the directory containing it, and make the installer executable with
+Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.9c`](https://github.com/nellore/rail/raw/v0.1.9c/releases/install_rail-rna-0.1.9c), change to the directory containing it, and make the installer executable with
 ```
-chmod +x install_rail-rna-0.1.9b
+chmod +x install_rail-rna-0.1.9c
 ```
 Now run
 ```
-sudo ./install_rail-rna-0.1.9b
+sudo ./install_rail-rna-0.1.9c
 ```
 to install for all users or
 ```
-./install_rail-rna-0.1.9b
+./install_rail-rna-0.1.9c
 ```
 to install for just you. Refer to [these](http://docs.rail.bio/installation/) detailed installation instructions from the [docs](http://docs.rail.bio) for more information. If the executable doesn't work, you may need [Python](http://www.python.org). You'll also need Bowtie 1 and 2 indexes of the appropriate genome assembly if you will be running Rail-RNA in either its single-computer (local) or IPython Parallel (parallel) modes. The easiest way to get these is by downloading an [Illumina iGenome](http://support.illumina.com/sequencing/sequencing_software/igenome.html). If running Rail-RNA on EMR (elastic mode) and aligning to hg19, the assembly can be specified at the command line with the `-a` parameter.
 
@@ -80,6 +80,7 @@ Licenses
 Contributors
 -----
 * [Abhi Nellore]
+* [Chris Wilks]
 * [Leo Collado-Torres]
 * [Andrew Jaffe]
 * [Jamie Morton]
@@ -89,6 +90,7 @@ Contributors
 * [Ben Langmead]
 
 [Abhi Nellore]: http://nellore.github.io/
+[Chris Wilks]: https://github.com/ChristopherWilks
 [Leo Collado-Torres]: http://www.biostat.jhsph.edu/~lcollado/
 [Andrew Jaffe]: http://www.aejaffe.com/
 [Jamie Morton]: https://github.com/mortonjt

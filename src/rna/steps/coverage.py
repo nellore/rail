@@ -151,7 +151,7 @@ def percentile(histogram, percentile=0.75):
 import time
 start_time = time.time()
 
-temp_dir_path = make_temp_dir(args.scratch)
+temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
 # Clean up after script
 register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 bed_filename = os.path.join(temp_dir_path, 'temp.bed')
@@ -165,9 +165,13 @@ output_filename, output_url = None, None
 
 '''Make RNAME lengths available from reference FASTA so SAM header can be
 formed; reference_index.rname_lengths[RNAME] is the length of RNAME.''' 
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
+reference_index = bowtie_index.BowtieIndexReference(
+                        os.path.expandvars(args.bowtie_idx)
+                    )
 # For mapping sample indices back to original sample labels
-manifest_object = manifest.LabelsAndIndices(args.manifest)
+manifest_object = manifest.LabelsAndIndices(
+                        os.path.expandvars(args.manifest)
+                    )
 # Create file with chromosome sizes for bedTobigwig
 sizes_filename = os.path.join(temp_dir_path, 'chrom.sizes')
 if args.verbose:

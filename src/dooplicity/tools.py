@@ -343,12 +343,13 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
             dictionary whose keys are exactly the engine IDs, each engine ID's
             value is regarded as a distinct function corresponding to the key.
         *args: contains unnamed arguments of function_to_apply. If a given
-            argument is a dictionary whose keys are exactly the engine IDs,
+            argument is a dictionary whose keys are exactly engine IDs,
             each engine ID's value is regarded as a distinct argument
             corresponding to the key. The same goes for kwargs.
         **kwargs: includes --
             errors_to_ignore: list of exceptions to ignore, where each
-               exception is a string
+               exception is either a string or a tuple (exception name
+                as a string, text to find in exception message)
             message: message to append to exception raised
             and named arguments of function_to_apply
             dict_format: if True, returns engine-result key-value dictionary;
@@ -379,7 +380,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
         del kwargs['message']
     id_set = set(ids)
     if not (isinstance(function_to_apply, dict)
-            and set(function_to_apply.keys()) == id_set):
+            and set(function_to_apply.keys()).issubset(id_set)):
         function_to_apply_holder = function_to_apply
         function_to_apply = {}
         for i in ids:
@@ -387,7 +388,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     new_args = defaultdict(list)
     for arg in args:
         if (isinstance(arg, dict)
-            and set(arg.keys()) == id_set):
+            and set(arg.keys()).issubset(id_set)):
             for i in arg:
                 new_args[i].append(arg[i])
         else:
@@ -396,7 +397,7 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     new_kwargs = defaultdict(dict)
     for kwarg in kwargs:
         if (isinstance(kwargs[kwarg], dict)
-            and set(kwargs[kwarg].keys()) == id_set):
+            and set(kwargs[kwarg].keys()).issubset(id_set)):
             for i in ids:
                 new_kwargs[i][kwarg] = kwargs[kwarg][i]
         else:
@@ -420,7 +421,16 @@ def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
             exc_to_report = format_exc()
             proceed = False
             for error_to_ignore in errors_to_ignore:
-                if error_to_ignore in exc_to_report:
+                if isinstance(error_to_ignore, tuple):
+                    error_to_ignore, text_to_find = (
+                            error_to_ignore
+                        )
+                else:
+                    text_to_find = None
+                if error_to_ignore in exc_to_report and (
+                        text_to_find is None or
+                        text_to_find in exc_to_report
+                    ):
                     proceed = True
                     ids_not_to_return.add(asyncresult.metadata['engine_id'])
             if not proceed:

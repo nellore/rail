@@ -1318,7 +1318,7 @@ if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
     global_alignment = GlobalAlignment()
-    go(bowtie_index_base=args.bowtie_idx,
+    go(bowtie_index_base=os.path.expandvars(args.bowtie_idx),
         verbose=args.verbose, 
         stranded=args.stranded,
         min_intron_size=args.min_intron_size,

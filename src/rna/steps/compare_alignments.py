@@ -201,10 +201,12 @@ if __name__ == '__main__':
     args = parser.parse_args(argv[1:])
 
     reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
-    manifest_object = manifest.LabelsAndIndices(args.manifest)
+    manifest_object = manifest.LabelsAndIndices(
+                                    os.path.expandvars(args.manifest)
+                                )
     reference_index = bowtie_index.BowtieIndexReference(
-                                            args.bowtie_idx
-                                        )
+                                    os.path.expandvars(args.bowtie_idx)
+                                )
     alignment_printer = AlignmentPrinter(
                     manifest_object,
                     reference_index,

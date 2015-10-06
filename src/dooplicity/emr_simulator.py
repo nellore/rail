@@ -133,6 +133,11 @@ def add_args(parser):
                   'string \"-\" means write to a temporary directory securely '
                   'created by Python.')
         )
+    parser.add_argument('--direct-write', action='store_const',
+            const=True, default=False,
+            help=('Always write intermediate files directly to consolidated '
+                  'intermediate directory, even if --scratch is specified.')
+        )
     parser.add_argument('--common', type=str, required=False,
             default=None,
             help=('Location of a writable directory accessible across all '
@@ -220,7 +225,8 @@ def parsed_keys(partition_options, key_fields):
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, partition_options, task_count,
                     memcap, gzip=False, gzip_level=3, scratch=None,
-                    sort='sort', mod_partition=False, max_attempts=4):
+                    direct_write=False, sort='sort', mod_partition=False,
+                    max_attempts=4):
     """ Partitions input data into tasks and presorts them.
 
         Files in output directory are in the format x.y, where x is a task
@@ -246,6 +252,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         scratch: where to write output before copying to output_dir. If "-"
             string, writes to temporary directory; if None, writes directly
             to output directory.
+        direct_write: write intermediate files directly to final destination,
+            no matter what scratch is.
         sort: path to sort executable
         mod_partition: if True, task is assigned according to formula
             (product of fields) % task_count
@@ -258,9 +266,13 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
     try:
         from operator import mul
         task_streams = {}
+        if scratch is not None:
+            scratch = os.path.expanduser(os.path.expandvars(scratch))
         if gzip:
             task_stream_processes = {}
-        if scratch == '-':
+        if direct_write:
+            final_output_dir = output_dir
+        elif scratch == '-':
             # Write to temporary directory
             final_output_dir = output_dir
             try:
@@ -286,6 +298,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                         'scratch subdirectory of %s: %s' % (scratch, e))
         else:
             final_output_dir = output_dir
+        output_dir = os.path.expandvars(output_dir)
+        final_output_dir = os.path.expandvars(final_output_dir)
         partitioned_key = parsed_keys(partition_options, separator)
         if not partitioned_key:
             # Invalid partition options
@@ -345,8 +359,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                 sort_command = (('set -eo pipefail; gzip -cd %s | '
                                  '%s -S %d %s -t$\'%s\' | '
                                  'gzip -c -%d >%s')
-                                    % (sort,
-                                        unsorted_file, memcap,
+                                    % (unsorted_file, sort, memcap,
                                         sort_options,
                                         separator.encode('string_escape'),
                                         gzip_level,
@@ -426,8 +439,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
                                   separator, sort_options, memcap,
                                   gzip=False, gzip_level=3, scratch=None,
-                                  sort='sort', dir_to_path=None,
-                                  attempt_number=None):
+                                  direct_write=False, sort='sort',
+                                  dir_to_path=None, attempt_number=None):
     """ Runs a streaming command on a task, segregating multiple outputs. 
 
         streaming_command: streaming command to run.
@@ -455,6 +468,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         scratch: where to write output before copying to output_dir. If "-"
             string, writes to temporary directory; if None, writes directly
             to output directory.
+        direct_write: write intermediate files directly to final destination,
+            no matter what scratch is.
         sort: path to sort executable.
         dir_to_path: path to add to PATH.
         attempt_number: attempt number of current task or None if no retries.
@@ -465,7 +480,9 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
     """
     command_to_run = None
     try:
-        if scratch == '-':
+        if direct_write:
+            final_output_dir = output_dir
+        elif scratch == '-':
             # Write to temporary directory
             final_output_dir = output_dir
             try:
@@ -474,6 +491,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                 return ('Problem encountered creating temporary '
                         'scratch subdirectory: %s' % e)
         elif scratch:
+            scratch = os.path.expanduser(os.path.expandvars(scratch))
             # Write to temporary directory in special location
             final_output_dir = output_dir
             try:
@@ -491,6 +509,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                         'scratch subdirectory of %s: %s' % (scratch, e))
         else:
             final_output_dir = output_dir
+        output_dir = os.path.expandvars(output_dir)
+        final_output_dir = os.path.expandvars(final_output_dir)
         input_files = [input_file for input_file in glob.glob(input_glob)
                             if os.path.isfile(input_file)]
         if not input_files:
@@ -660,7 +680,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
                     log, gzip=False, gzip_level=3, ipy=False,
                     ipcontroller_json=None, ipy_profile=None, scratch=None,
-                    common=None, sort='sort', max_attempts=4):
+                    common=None, sort='sort', max_attempts=4,
+                    direct_write=False):
     """ Runs Hadoop Streaming simulation.
 
         FUNCTIONALITY IS IDIOSYNCRATIC; it is currently confined to those
@@ -698,6 +719,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         common: path to directory accessible across nodes in --ipy mode
         sort: sort executable including command-line arguments
         max_attempts: maximum number of times to attempt a task in ipy mode.
+        direct_write: always writes intermediate files directly to final
+            destination, even when scratch is specified
 
         No return value.
     """
@@ -1018,6 +1041,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                             if step_number != 0 else None))
                     failed = True
                     raise RuntimeError
+                file_or_archive = os.path.expanduser(
+                        os.path.expandvars(file_or_archive)
+                    )
                 file_or_archive_url = Url(file_or_archive)
                 if not (file_or_archive_url.is_nfs
                             or file_or_archive_url.is_local):
@@ -1048,7 +1074,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 directory is reused if restarting job.'''
                 random.seed(str(sorted(pid_map.keys())))
                 engines_for_copying = [random.choice(list(engines)) 
-                                        for engines in engine_map.values()]
+                                        for engines in engine_map.values()
+                                        if len(engines) > 0]
                 '''Herd won't work with local engines; work around this by
                 separating engines into two groups: local and remote.'''
                 remote_hostnames_for_copying = list(
@@ -1056,13 +1083,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             set([current_hostname]))
                     )
                 local_engines_for_copying = [
-                        engine for engines in engines_for_copying
+                        engine for engine in engines_for_copying
                         if engine in engine_map[current_hostname]
                     ]
                 '''Create temporary directories on selected nodes; NOT
                 WINDOWS-COMPATIBLE; must be changed if porting to Windows.'''
                 if scratch == '-':
-                    scratch_dir = '/tmp'
+                    scratch_dir = tempfile.gettempdir()
                 else:
                     scratch_dir = scratch
                 temp_dir = os.path.join(
@@ -1073,20 +1100,67 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                         for _ in xrange(12)
                                     )
                             )
+                '''To accommodate any slot-local BASH variables that may be in
+                --scratch, echo them on all engines before adding to engine
+                PYTHONPATHs.'''
+                temp_dirs = apply_async_with_errors(pool, all_engines,
+                    subprocess.check_output,
+                    'echo "%s"' % temp_dir,
+                    shell=True,
+                    executable='/bin/bash',
+                    message=('Error obtaining full paths of temporary '
+                             'directories on cluster nodes. Restart IPython '
+                             'engines and try again.'),
+                    dict_format=True)
+                for engine in temp_dirs:
+                    temp_dirs[engine].strip()
+                engines_with_unique_scratch, engines_to_symlink = [], []
+                engine_to_copy_engine = {}
+                for engine_for_copying in engines_for_copying:
+                    for engine in engine_map[
+                                host_map[engine_for_copying]
+                            ]:
+                        engine_to_copy_engine[engine] = engine_for_copying
+                        if (engine != engine_for_copying
+                            and temp_dirs[engine]
+                            != temp_dirs[engine_for_copying]):
+                            engines_with_unique_scratch.append(engine)
+                            engines_to_symlink.append(engine)
+                        elif engine == engine_for_copying:
+                            engines_with_unique_scratch.append(engine)
                 apply_async_with_errors(
-                    pool, engines_for_copying, os.makedirs,
-                    temp_dir,
+                    pool, engines_for_copying, subprocess.check_output,
+                    'mkdir -p %s' % temp_dir, shell=True,
+                    executable='/bin/bash',
                     message=(('Error(s) encountered creating temporary '
                               'directories for storing {} on slave nodes. '
                               'Restart IPython engines and try again.').format(
                                                         file_or_archive
-                                                    )),
-                    errors_to_ignore=['OSError']
+                                                    ))
                 )
+                if engines_to_symlink:
+                    '''Create symlinks to resources in case of slot-local
+                    scratch dirs'''
+                    source_paths, destination_paths = {}, {}
+                    for engine_to_symlink in engines_to_symlink:
+                        source_paths[engine_to_symlink] = temp_dirs[
+                                engine_to_copy_engine[engine_to_symlink]
+                            ]
+                        destination_paths[engine_to_symlink] = temp_dirs[
+                                engine_to_symlink
+                            ]
+                    apply_async_with_errors(pool, engines_to_symlink,
+                        os.remove, destination_paths,
+                        message=('Error(s) encountered removing symlinks '
+                                 'in slot-local scratch directories.'),
+                        errors_to_ignore=['OSError'])
+                    apply_async_with_errors(pool, engines_to_symlink,
+                        os.symlink, source_paths, destination_paths,
+                        message=('Error(s) encountered symlinking '
+                                 'among slot-local scratch directories.'))
                 # Add temp dirs to path
                 apply_async_with_errors(
-                    pool, engines_for_copying, site.addsitedir,
-                    temp_dir,
+                    pool, all_engines, site.addsitedir, temp_dirs,
                     message=(('Error(s) encountered adding temporary '
                               'directories for storing {} to path on '
                               'slave nodes.').format(
@@ -1098,7 +1172,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 how-to-make-child-process-die-after-parent-exits for more
                 information.'''
                 apply_async_with_errors(
-                    pool, engines_for_copying, subprocess.call,
+                    pool, engines_for_copying, subprocess.check_output,
                     ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
                      'SIGHUP SIGINT SIGTERM EXIT; '
                      'while [[ \$(ps -p \$\$ -o ppid=) -gt 1 ]]; '
@@ -1114,7 +1188,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 )
                 apply_async_with_errors(
                     pool, engines_for_copying, subprocess.Popen,
-                    ['/usr/bin/env', 'bash', '%s/delscript.sh' % temp_dir],
+                    '/usr/bin/env bash %s/delscript.sh' % temp_dir, shell=True,
+                    executable='/bin/bash',
                     message=(
                         'Error scheduling temporary directories on slave '
                         'nodes for deletion. Restart IPython engines and try '
@@ -1135,7 +1210,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         file_or_archive, destination_path,
                         message=(('Error(s) encountered copying %s to '
                                   'slave nodes. Refer to the errors above '
-                                  '-- and especially make sure /tmp is not '
+                                  '-- and especially make sure $TMPDIR is not '
                                   'out of space on any node supporting an '
                                   'IPython engine -- before trying again.')
                                     % file_or_archive),
@@ -1144,13 +1219,14 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     if local_engines_for_copying:
                         apply_async_with_errors(pool,
                             local_engines_for_copying,
-                            shutil.copyfile, file_or_archive,
-                            destination_path,
+                             subprocess.check_output, 'cp %s %s' % (
+                                    file_or_archive, destination_path
+                                ), shell=True, executable='/bin/bash',
                             message=(('Error(s) encountered copying %s to '
                                       'local filesystem. Refer to the errors '
-                                      'above -- and especially make sure /tmp '
-                                      'is not out of space on any node '
-                                      'supporting an IPython engine '
+                                      'above -- and especially make sure '
+                                      '$TMPDIR is not out of space on any '
+                                      'node supporting an IPython engine '
                                       '-- before trying again.')
                                         % file_or_archive),
                         )
@@ -1163,8 +1239,16 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 # Extract if necessary
                 if archive:
                     apply_async_with_errors(
-                            pool, engines_for_copying,
-                            os.makedirs, os.path.join(temp_dir, archive_dir)
+                            pool, engines_for_copying, subprocess.check_output,
+                            'rm -rf {}'.format(
+                                    os.path.join(temp_dir, archive_dir)
+                                ), shell=True, executable='/bin/bash'
+                        )
+                    apply_async_with_errors(
+                            pool, engines_for_copying, subprocess.check_output,
+                            'mkdir -p {}'.format(
+                                os.path.join(temp_dir, archive_dir)
+                            ), shell=True, executable='/bin/bash'
                     )
                     apply_async_with_errors(
                             pool, engines_for_copying, subprocess.check_output,
@@ -1175,8 +1259,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             executable='/bin/bash'
                     )
                     apply_async_with_errors(
-                            pool, engines_for_copying,
-                            os.remove, destination_path
+                            pool, engines_for_copying, subprocess.check_output,
+                            'rm -f {}'.format(destination_path),
+                            shell=True, executable='/bin/bash'
                     )
                 iface.step('Cached %s.' % file_or_archive_basename)
                 try:
@@ -1185,11 +1270,11 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     # Cleanup
                     apply_async_with_errors(
                             pool,
-                            engines_for_copying,
-                            shutil.rmtree,
-                            temp_dir,
+                            engines_for_copying, subprocess.check_output,
+                            'rm -rf {}'.format(temp_dir), shell=True,
+                            executable='/bin/bash',
                             message=('Error(s) encountered removing temporary '
-                                     'directories.'),
+                                     'directories.')
                         )
         else:
             import multiprocessing
@@ -1314,6 +1399,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                             if step_number != 0 else None))
                     failed = True
                     raise
+                destination_filename = os.path.expanduser(
+                        os.path.expandvars(destination_filename)
+                    )
                 file_or_archive_url = Url(file_or_archive)
                 if not file_or_archive_url.is_local:
                     iface.fail(('The file %s is not local.'
@@ -1689,8 +1777,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                          output_dir, err_dir,
                                          i, multiple_outputs,
                                          separator, None, None, gzip,
-                                         gzip_level, scratch, sort,
-                                         dir_to_path]
+                                         gzip_level, scratch, direct_write,
+                                         sort, dir_to_path]
                                          for i, input_file
                                          in enumerate(input_files)
                                          if os.path.isfile(input_file)],
@@ -1755,7 +1843,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 step_data['key_fields'], separator,
                                 step_data['partition_options'],
                                 step_data['task_count'], memcap, gzip,
-                                gzip_level, scratch, sort, mod_partition]
+                                gzip_level, scratch, direct_write,
+                                sort, mod_partition]
                                     for i, input_file_group
                                     in enumerate(input_file_groups)],
                             status_message='Inputs partitioned',
@@ -1792,7 +1881,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 [[step_data['reducer'], input_file, output_dir, 
                                 err_dir, i, multiple_outputs, separator,
                                 step_data['sort_options'], memcap, gzip,
-                                gzip_level, scratch, sort, dir_to_path]
+                                gzip_level, scratch, direct_write,
+                                sort, dir_to_path]
                                     for i, input_file
                                     in enumerate(input_files)],
                             status_message='Tasks completed',
@@ -1943,4 +2033,5 @@ if __name__ == '__main__':
                     args.keep_intermediates, args.keep_last_output,
                     args.log, args.gzip_outputs, args.gzip_level,
                     args.ipy, args.ipcontroller_json, args.ipy_profile,
-                    args.scratch, args.common, args.sort, args.max_attempts)
+                    args.scratch, args.common, args.sort, args.max_attempts,
+                    args.direct_write)

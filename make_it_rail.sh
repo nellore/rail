@@ -20,7 +20,7 @@ cd ..
 mkdir -p $RELEASES
 TARGET=${RELEASES}/install_rail-rna-${VER}
 rm -rf $TARGET
-echo '#!/usr/bin/env python' | cat - $INTERMEDIATE >$TARGET
+echo '#!/usr/bin/env python2.7' | cat - $INTERMEDIATE >$TARGET
 rm -rf $INTERMEDIATE
 chmod 755 $TARGET
 cd $RELEASES

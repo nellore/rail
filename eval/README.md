@@ -1,13 +1,13 @@
 Note on preprint versioning
 -----
-This version of the readme is describes how to reproduce results in v2 of the [Rail-RNA preprint](http://biorxiv.org/content/early/2015/05/07/019067). To view the README that reproduces the results contained in v1, see [this](https://github.com/nellore/rail/tree/7db1e4e506224e156ae1ac271ceb88d5e465b7b9/eval) commit.
+This version of the readme describes how to reproduce results in [v2 of the Rail-RNA preprint](http://biorxiv.org/content/early/2015/08/11/019067). To view the README that reproduces the results contained in v1, see [this](https://github.com/nellore/rail/tree/7db1e4e506224e156ae1ac271ceb88d5e465b7b9/eval) commit.
 
 Reproducing preprint results
 -----
 **Use Rail-RNA v0.1.9b**. Rail-RNA has several dependencies. In the experiments we conducted, Rail-RNA wrapped Bowtie 1 v1.1.1, Bowtie 2 v2.2.5, and SAMTools v1.2, and PyPy 2.5. Version 2.1.0 of TopHat 2 was used and, like Rail-RNA, it wrapped Bowtie 2 v2.2.5. Version 2.4.2a of STAR was used, and version 0.1.6-beta of HISAT was used. Subjunc is a
 tool in the Subread package, and version 1.4.6-p4 of the Subread package was used. Flux Simulator 1.2.1 was used to obtain simulated samples as described below.
 
-To reproduce results from v2 of the Rail-RNA [preprint](http://biorxiv.org/content/early/2015/05/07/019067), perform the following steps. Note that input and output directories in scripts may need to be changed. If you're having trouble, ask questions in our [Gitter](https://gitter.im/nellore/rail).
+To reproduce results from v2 of the Rail-RNA [preprint](http://biorxiv.org/content/early/2015/08/11/019067), perform the following steps. Note that input and output directories in scripts may need to be changed. If you're having trouble, ask questions in our [Gitter](https://gitter.im/nellore/rail).
 
 Generating genome indexes for all experiments
 -----
@@ -73,13 +73,6 @@ The file GEUVADIS_all_samples.manifest from which 112 samples are obtained for s
 
 `--ec2-key-name` may also be removed in the scripts above. This is a PEM file the user generates to be able to SSH to an Elastic MapReduce cluster. See (this)[http://docs.aws.amazon.com/gettingstarted/latest/wah/getting-started-prereq.html] page for more information.
 
-Junction comparison analysis
-----
-1. Download all junction BEDs form the all-of-GEUVADIS run and place them in the same directory `D`.
-2. Run `sh generate_geuvadis_intron_table.sh D`, where `D` is the directory from step 1. Two files are output: one (`intron_table.tsv`) is a list of introns overlapped by Rail-RNA's alignments across all of GEUVADIS; the other (`GEUVADIS_introns_v4.04.2015.tsv.gz`) is a matrix whose (i, j)th element is the number of reads overlapping intron i in sample j.
-3. In `junction_comparison.R`, under `## read in Rail jxns`, write the correct paths to `intron_table.tsv` and `GEUVADIS_introns_v4.04.2015.tsv.gz`.
-4. Run `junction_comparison.R`.
-
 derfinder analysis
 ----
 
@@ -118,3 +111,7 @@ Exon-exon junction count histogram (Figure 6 from preprint)
 Prerequisite: Step 1 under Accuracy experiments above.
 
 See the docstring of `intron_histogram.py` for information on how to regenerate the histogram data. This requires that We plotted the histogram in [Wolfram Mathematica](http://www.wolfram.com/mathematica/) v10 using `performance.nb`.
+
+28-DUP experiment described in Supplementary Material
+---
+The 28-DUP experiment compares the wall clock time of the scaling experiments running Rail on 28 GEUVADIS samples with 41 c3.2xlarge instances with an experiment using the same cluster setup that selects 14 GEUVADIS samples from `GEUVADIS_28_with_112_sample_names.manifest` and duplicates them in the manifest file `GEUVADIS_28_dup_experiment.manifest`. So each input read in a sample from `GEUVADIS_28_dup_experiment.manifest` has at least one duplicate read in another sample from `GEUVADIS_28_dup_experiment.manifest`. Change the output bucket on S3 in `prep_28_dup_experiment.sh` and run `sh prep_28_dup_experiment.sh` to preprocess 14 GEUVADIS samples, twice each sample. Change the input bucket on S3 in `submit_28_dup_experiment.sh` to the output bucket from `prep_28_dup_experiment.sh`, again change the output bucket in `submit_28_dup_experiment.sh`, and run `sh submit_28_dup_experiment.sh`. Wall-clock time is measures as the elapsed time reported by the EMR interface.

@@ -6,6 +6,7 @@ Part of Rail-RNA
 For deleting temporary directories on exit from Python script.
 """
 import shutil
+from os import path
 
 def add_args(parser):
     parser.add_argument(\
@@ -29,3 +30,15 @@ def remove_temporary_directories(temp_dir_paths):
         except Exception as e:
             # Don't know what's up, but forge on
             pass
+
+def silentexpandvars(arg):
+    """ Does not choke if argument of os.path.expandvars is None
+
+        arg: argument of os.path.expandvars()
+
+        Return value: result of os.path.expandvars() or None
+    """
+    try:
+        return path.expandvars(arg)
+    except TypeError:
+        return arg

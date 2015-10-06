@@ -98,9 +98,13 @@ if args.keep_alive:
 import time
 start_time = time.time()
 
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
+reference_index = bowtie_index.BowtieIndexReference(
+                            os.path.expandvars(args.bowtie_idx)
+                        )
 # For mapping sample indices back to original sample labels
-manifest_object = manifest.LabelsAndIndices(args.manifest)
+manifest_object = manifest.LabelsAndIndices(
+                            os.path.expandvars(args.manifest)
+                        )
 output_url = Url(args.out) if args.out is not None \
     else Url(os.getcwd())
 input_line_count = 0
@@ -112,7 +116,7 @@ else:
     mover = filemover.FileMover(args=args)
     # Set up temporary destination
     import tempfile
-    temp_dir_path = make_temp_dir(args.scratch)
+    temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
     register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 for (line_type, sample_label), xpartition in xstream(sys.stdin, 2):
     assert line_type in 'NID'
