@@ -2285,8 +2285,7 @@ class RailRnaElastic(object):
                 question = ('Manifest file (--manifest) includes dbGaP data '
                             'and/or Rail-RNA is being run in secure mode. Do '
                             'you certify that the EC2 subnet ID '
-                            '(--ec2-subnet-id) is a VPC subnet that adheres '
-                            'to the principe'
+                            '(--ec2-subnet-id) corresponds to a secure VPC?')
                 while True:
                     sys.stdout.write('%s [y/n]: ' % question)
                     try:
