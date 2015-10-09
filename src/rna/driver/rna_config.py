@@ -42,6 +42,7 @@ import string
 import socket
 import exe_paths
 import unicodedata
+from distutils.util import strtobool
 
 _help_set = set(['--help', '-h'])
 _argv_set = set(sys.argv)
@@ -1987,7 +1988,8 @@ class RailRnaElastic(object):
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
-        task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
+        task_instance_bid_price=None, ec2_key_name=None,
+        ec2_subnet_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, secure=False):
 
@@ -2264,9 +2266,41 @@ class RailRnaElastic(object):
                                 'has no valid lines.').format(
                                                     manifest_url.to_url()
                                                 ))
+        base.ec2_subnet_id = ec2_subnet_id
         # Bail before copying anything to S3
         raise_runtime_error(base)
-
+        if base.secure:
+            if ec2_subnet_id is None:
+                raise RuntimeError('Manifest file (--manifest) includes dbGaP '
+                                   'data and/or Rail-RNA is being run in '
+                                   'secure mode, so the EMR cluster must be '
+                                   'launched into a VPC subnet specified with '
+                                   '--ec2-subnet-id . Google for "NIH Best '
+                                   'Practices for Controlled-Access Data" '
+                                   'and the Whalley-Pizarro whitepaper '
+                                   '"Architecting for Genomic Data '
+                                   'Security and Compliance in AWS" for '
+                                   'more information.')
+            else:
+                question = ('Manifest file (--manifest) includes dbGaP data '
+                            'and/or Rail-RNA is being run in secure mode. Do '
+                            'you certify that the EC2 subnet ID '
+                            '(--ec2-subnet-id) is a VPC subnet that adheres '
+                            'to the principe'
+                while True:
+                    sys.stdout.write('%s [y/n]: ' % question)
+                    try:
+                        try:
+                            if not strtobool(raw_input().lower()):
+                                print_to_screen(
+                                    'Set up a secure VPC and try again.'
+                                    newline=True, carriage_return=True
+                                )
+                        except KeyboardInterrupt:
+                            sys.stdout.write('\n')
+                            sys.exit(0)
+                    except ValueError:
+                        sys.stdout.write('Please enter \'y\' or \'n\'.\n')
         # Download+upload isofrag index if necessary
         if base.isofrag_idx is not None and isofrag_url.is_curlable:
             temp_isofrag_dir = tempfile.mkdtemp()
@@ -3042,6 +3076,20 @@ EOF
             help=('key pair name for SSHing to EC2 instances (def: '
                   'unspecified, so SSHing is not permitted)')
         )
+        elastic_parser.add_argument('--ec2-subnet-id', type=str,
+            metavar='<str>',
+            required=False,
+            default=None,
+            help=('ID of subnet into which EMR cluster should be '
+                  'launched; a properly configured VPC subnet '
+                  'must be specified in secure mode (def: none)')
+        )elastic_parser.add_argument('--ec2-key-name', type=str,
+            metavar='<str>',
+            required=False,
+            default=None,
+            help=('key pair name for SSHing to EC2 instances (def: '
+                  'unspecified, so SSHing is not permitted)')
+        )
         elastic_parser.add_argument('--keep-alive', action='store_const',
             const=True,
             default=False,
@@ -3265,6 +3313,8 @@ EOF
                     = 'ON_DEMAND'
         if base.ec2_key_name is not None:
             to_return['Ec2KeyName'] = base.ec2_key_name
+        if base.ec2_subnet_id is not None:
+            to_return['Ec2SubnetId'] = base.ec2_subnet_id
         return to_return
 
 class RailRnaPreprocess(object):
@@ -5284,7 +5334,8 @@ class RailRnaElasticPreprocessJson(object):
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
-        task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
+        task_instance_bid_price=None, ec2_key_name=None,
+        ec2_subnet_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
         max_task_attempts=4, secure=False, dbgap_key=None):
@@ -5308,7 +5359,8 @@ class RailRnaElasticPreprocessJson(object):
             task_instance_count=task_instance_count,
             task_instance_type=task_instance_type,
             task_instance_bid_price=task_instance_bid_price,
-            ec2_key_name=ec2_key_name, keep_alive=keep_alive,
+            ec2_key_name=ec2_key_name, ec2_subnet_id=ec2_subnet_id,
+            keep_alive=keep_alive,
             termination_protected=termination_protected,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
@@ -5630,7 +5682,8 @@ class RailRnaElasticAlignJson(object):
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
-        task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
+        task_instance_bid_price=None, ec2_key_name=None,
+        ec2_subnet_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4,
         secure=False):
@@ -5653,7 +5706,8 @@ class RailRnaElasticAlignJson(object):
             task_instance_count=task_instance_count,
             task_instance_type=task_instance_type,
             task_instance_bid_price=task_instance_bid_price,
-            ec2_key_name=ec2_key_name, keep_alive=keep_alive,
+            ec2_key_name=ec2_key_name, ec2_subnet_id=ec2_subnet_id,
+            keep_alive=keep_alive,
             termination_protected=termination_protected,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
@@ -6037,8 +6091,8 @@ class RailRnaElasticAllJson(object):
         master_instance_bid_price=None, core_instance_count=1,
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
-        task_instance_bid_price=None, ec2_key_name=None, keep_alive=False,
-        termination_protected=False, check_manifest=True,
+        task_instance_bid_price=None, ec2_key_name=None, ec2_subnet_id=None,
+        keep_alive=False, termination_protected=False, check_manifest=True,
         no_direct_copy=False, consistent_view=False,
         intermediate_lifetime=4, max_task_attempts=4, dbgap_key=None,
         secure=False):
@@ -6062,8 +6116,8 @@ class RailRnaElasticAllJson(object):
             task_instance_count=task_instance_count,
             task_instance_type=task_instance_type,
             task_instance_bid_price=task_instance_bid_price,
-            ec2_key_name=ec2_key_name, keep_alive=keep_alive,
-            termination_protected=termination_protected,
+            ec2_key_name=ec2_key_name, ec2_subnet_id=ec2_subnet_id,
+            keep_alive=keep_alive, termination_protected=termination_protected,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime,
