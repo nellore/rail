@@ -2292,8 +2292,8 @@ class RailRnaElastic(object):
                         try:
                             if not strtobool(raw_input().lower()):
                                 print_to_screen(
-                                    'Set up a secure VPC and try again.'
-                                    newline=True, carriage_return=True
+                                    'Set up a secure VPC and try again.',
+                                    newline=True, carriage_return=True,
                                 )
                         except KeyboardInterrupt:
                             sys.stdout.write('\n')
@@ -3081,14 +3081,7 @@ EOF
             default=None,
             help=('ID of subnet into which EMR cluster should be '
                   'launched; a properly configured VPC subnet '
-                  'must be specified in secure mode (def: none)')
-        )elastic_parser.add_argument('--ec2-key-name', type=str,
-            metavar='<str>',
-            required=False,
-            default=None,
-            help=('key pair name for SSHing to EC2 instances (def: '
-                  'unspecified, so SSHing is not permitted)')
-        )
+                  'must be specified in secure mode (def: none)'))
         elastic_parser.add_argument('--keep-alive', action='store_const',
             const=True,
             default=False,
