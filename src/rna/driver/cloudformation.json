@@ -22,8 +22,28 @@
       "Default" : "0.0.0.0/0",
       "AllowedPattern" : "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
       "ConstraintDescription" : "must be a valid CIDR range of the form x.x.x.x/x."
+    },
+
+    "ServerSecurityGroup" : {
+       "Type" : "AWS::EC2::SecurityGroup",
+       "Properties" : {
+           "GroupDescription" : "allow dbGaP connections",
+           "SecurityGroupIngress" : [
+               {
+                   "IpProtocol" : "udp",
+                   "FromPort" : "33001",
+                   "ToPort" : "33009",
+                   "CidrIp" : "130.14.0.0/16"
+               }, {
+                   "IpProtocol" : "udp",
+                   "FromPort" : "33001",
+                   "ToPort" : "33009",
+                   "CidrIp" : "165.112.0.0/16"
+               }
+           ]
+       }
     }
-    
+
   },
 
   "Mappings" : {

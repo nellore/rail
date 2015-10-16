@@ -357,7 +357,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                     % process_id
                                                 )):
                 sort_command = (('set -eo pipefail; gzip -cd %s | '
-                                 '%s -S %d %s -t$\'%s\' | '
+                                 'LC_ALL=C %s -S %d %s -t$\'%s\' | '
                                  'gzip -c -%d >%s')
                                     % (unsorted_file, sort, memcap,
                                         sort_options,
@@ -384,13 +384,15 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                                     '*.%s.unsorted'
                                                     % process_id
                                                 )):
-                sort_command = '%s -S %d %s -t$\'%s\' %s >%s' % (sort, memcap,
+                sort_command = 'LC_ALL=C %s -S %d %s -t$\'%s\' %s >%s' % (
+                                                            sort, memcap,
                                                             sort_options,
                                                             separator.encode(
                                                                 'string_escape'
                                                             ),
                                                             unsorted_file,
-                                                            unsorted_file[:-9])
+                                                            unsorted_file[:-9]
+                                                        )
                 try:
                     subprocess.check_output(sort_command,
                                               shell=True,
@@ -528,7 +530,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
             # Reducer. Merge sort the input glob.
             if gzip:
                 # Use process substitution
-                prefix = '(%s -S %d %s -t$\'%s\' -m %s' % (
+                prefix = '(LC_ALL=C %s -S %d %s -t$\'%s\' -m %s' % (
                         sort, memcap, sort_options,
                         separator.encode('string_escape'),
                         ' '.join(['<(gzip -cd %s)' % input_file
@@ -536,7 +538,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                     )
             else:
                 # Reducer. Merge sort the input glob.
-                prefix = '%s -S %d %s -t$\'%s\' -m %s' % (sort, memcap,
+                prefix = 'LC_ALL=C %s -S %d %s -t$\'%s\' -m %s' % (sort,
+                                            memcap,
                                             sort_options,
                                             separator.encode('string_escape'),
                                             input_glob)
