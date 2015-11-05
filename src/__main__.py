@@ -255,8 +255,7 @@ class Launcher(object):
                                         'rna', 'driver', 'rail-rna.txt')]
                 if self.force:
                     runner_args.append('-f')
-                if self.region != 'us-east-1':
-                    runner_args.extend(['-r', self.region])
+                runner_args.extend(['-r', self.region])
                 os.dup2(read_pipe, sys.stdin.fileno())
                 os.close(read_pipe)
                 os.close(write_pipe)
