@@ -2295,6 +2295,7 @@ class RailRnaElastic(object):
                                     'Set up a secure VPC and try again.',
                                     newline=True, carriage_return=True,
                                 )
+                            else: break
                         except KeyboardInterrupt:
                             sys.stdout.write('\n')
                             sys.exit(0)
@@ -2734,14 +2735,14 @@ echo $STATUS STATUS
 exit $STATUS
 """
             )
-        base.encrypt_bootstrap = path_join(
-                                        True, base.dependency_dir,
-                                        os.path.basename(
-                                                encrypt_bootstrap
-                                            )
-                                    )
-        ansible.put(encrypt_bootstrap, base.encrypt_bootstrap)
-        os.remove(encrypt_bootstrap)
+            base.encrypt_bootstrap = path_join(
+                                            True, base.dependency_dir,
+                                            os.path.basename(
+                                                    encrypt_bootstrap
+                                                )
+                                        )
+            ansible.put(encrypt_bootstrap, base.encrypt_bootstrap)
+            os.remove(encrypt_bootstrap)
         if sra_tools_needed:
             vdb_bootstrap = os.path.join(temp_dependency_dir,
                                                 'vdb.sh')
