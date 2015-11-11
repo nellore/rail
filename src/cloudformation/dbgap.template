@@ -243,13 +243,17 @@
       "Description" : "ID of subnet into which secure Rail-RNA job flows should be launched",
       "Value" :  { "Ref" : "PublicSubnet" }
     },
-    "PrepName" : {
-      "Description" : "ID of security group that should be applied to ALL EMR instances for preprocess job flow when analyzing dbGaP data",
-      "Value" :  { "Ref" : "EC2PrepSecurityGroup" }
+    "MasterName" : {
+      "Description" : "ID of security group that should be applied to MASTER EMR instances for all job flows when analyzing dbGaP data",
+      "Value" :  { "Ref" : "EC2MasterSecurityGroup" }
     },
-    "AlignName" : {
-      "Description" : "ID of security group that should be applied to ALL EMR instances for align job flow when analyzing dbGaP data",
-      "Value" :  { "Ref" : "EC2AlignSecurityGroup" }
+    "PrepSlaveName" : {
+      "Description" : "ID of security group that should be applied to SLAVE EMR instances for PREPROCESS job flow when analyzing dbGaP data",
+      "Value" :  { "Ref" : "EC2PrepSlaveSecurityGroup" }
+    },
+    "AlignSlaveName" : {
+      "Description" : "ID of security group that should be applied to SLAVE EMR instances for ALIGN job flow when analyzing dbGaP data",
+      "Value" :  { "Ref" : "EC2AlignSlaveSecurityGroup" }
     }
   }
 }
