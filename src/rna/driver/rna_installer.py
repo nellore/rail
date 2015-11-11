@@ -739,9 +739,8 @@ export RAILDOTBIO={install_dir}
             shutil.copyfile(self.log_file, new_log_file)
             print_to_screen('Installation log may be found at %s.'
                                                         % new_log_file)
-            if self.local:
-                print_to_screen('*Before running any commands below, enter '
-                                '"source ~/.bash_profile".*')
+            print_to_screen('*Before running any commands below, enter '
+                            '"source ~/.bash_profile".*')
             if self.installed_aws:
                 print_to_screen('Configure the AWS CLI by running '
                                 '"aws configure". Afterwards, run '
