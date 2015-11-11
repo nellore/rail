@@ -119,7 +119,7 @@ else ''
 
 def rail_help_wrapper(prog):
     """ So formatter_class's max_help_position can be changed. """
-    return RailHelpFormatter(prog, max_help_position=37)
+    return RailHelpFormatter(prog, max_help_position=40)
 
 '''These are placed here for convenience; their locations may change
 on EMR depending on bootstraps.'''
@@ -1989,7 +1989,8 @@ class RailRnaElastic(object):
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None,
-        ec2_subnet_id=None, keep_alive=False,
+        ec2_subnet_id=None, ec2_master_security_group_id=None,
+        ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, secure=False):
 
@@ -2267,20 +2268,33 @@ class RailRnaElastic(object):
                                                     manifest_url.to_url()
                                                 ))
         base.ec2_subnet_id = ec2_subnet_id
+        base.ec2_master_security_group_id = ec2_master_security_group_id
+        base.ec2_slave_security_group_id = ec2_slave_security_group_id
         # Bail before copying anything to S3
         raise_runtime_error(base)
         if base.secure:
-            if ec2_subnet_id is None:
+            if (ec2_subnet_id is None
+                    or base.ec2_master_security_group_id is None
+                    or base.ec2_slave_security_group_id is None):
                 raise RuntimeError('Manifest file (--manifest) includes dbGaP '
                                    'data and/or Rail-RNA is being run in '
                                    'secure mode, so the EMR cluster must be '
-                                   'launched into a VPC subnet specified with '
-                                   '--ec2-subnet-id . Google for "NIH Best '
-                                   'Practices for Controlled-Access Data" '
+                                   'launched into a public VPC subnet '
+                                   'specified with --ec2-subnet-id, where '
+                                   'appropriate security groups are specified '
+                                   'with --ec2-master-security-group-id and '
+                                   '--ec2-slave-security-group-id . Google '
+                                   'for "NIH Best Practices for '
+                                   'Controlled-Access Data" '
                                    'and the Whalley-Pizarro whitepaper '
                                    '"Architecting for Genomic Data '
                                    'Security and Compliance in AWS" for '
-                                   'more information.')
+                                   'more information. CloudFormation '
+                                   'templates in '
+                                   '$RAILDOTBIO/rail-rna/cloudformation '
+                                   'can create the required stacks. Refer '
+                                   'to the Rail documentation for '
+                                   'instructions on their proper use.')
             else:
                 question = ('Manifest file (--manifest) includes dbGaP data '
                             'and/or Rail-RNA is being run in secure mode. Do '
@@ -3083,6 +3097,18 @@ EOF
             help=('ID of subnet into which EMR cluster should be '
                   'launched; a properly configured VPC subnet '
                   'must be specified in secure mode (def: none)'))
+        elastic_parser.add_argument('--ec2-master-security-group-id', type=str,
+            metavar='<str>',
+            required=False,
+            default=None,
+            help=('ID of security group to associate with every master '
+                  'instance in the EMR cluster (def: Amazon default)'))
+        elastic_parser.add_argument('--ec2-slave-security-group-id', type=str,
+            metavar='<str>',
+            required=False,
+            default=None,
+            help=('ID of security group to associate with every slave '
+                  'instance in the EMR cluster (def: Amazon default)'))
         elastic_parser.add_argument('--keep-alive', action='store_const',
             const=True,
             default=False,
@@ -3308,6 +3334,12 @@ EOF
             to_return['Ec2KeyName'] = base.ec2_key_name
         if base.ec2_subnet_id is not None:
             to_return['Ec2SubnetId'] = base.ec2_subnet_id
+        if base.ec2_master_security_group_id is not None:
+            to_return['EmrManagedMasterSecurityGroup'] \
+                = base.ec2_master_security_group_id
+        if base.ec2_slave_security_group_id is not None:
+            to_return['EmrManagedSlaveSecurityGroup'] \
+                = base.ec2_slave_security_group_id
         return to_return
 
 class RailRnaPreprocess(object):
@@ -5328,7 +5360,8 @@ class RailRnaElasticPreprocessJson(object):
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None,
-        ec2_subnet_id=None, keep_alive=False,
+        ec2_subnet_id=None, ec2_master_security_group_id=None,
+        ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
         max_task_attempts=4, secure=False, dbgap_key=None):
@@ -5353,6 +5386,8 @@ class RailRnaElasticPreprocessJson(object):
             task_instance_type=task_instance_type,
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, ec2_subnet_id=ec2_subnet_id,
+            ec2_master_security_group_id=ec2_master_security_group_id,
+            ec2_slave_security_group_id=ec2_slave_security_group_id,
             keep_alive=keep_alive,
             termination_protected=termination_protected,
             consistent_view=consistent_view,
@@ -5676,7 +5711,8 @@ class RailRnaElasticAlignJson(object):
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None,
-        ec2_subnet_id=None, keep_alive=False,
+        ec2_subnet_id=None, ec2_master_security_group_id=None,
+        ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4,
         secure=False):
@@ -5700,6 +5736,8 @@ class RailRnaElasticAlignJson(object):
             task_instance_type=task_instance_type,
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, ec2_subnet_id=ec2_subnet_id,
+            ec2_master_security_group_id=ec2_master_security_group_id,
+            ec2_slave_security_group_id=ec2_slave_security_group_id,
             keep_alive=keep_alive,
             termination_protected=termination_protected,
             consistent_view=consistent_view,
@@ -6085,6 +6123,7 @@ class RailRnaElasticAllJson(object):
         core_instance_type=None, core_instance_bid_price=None,
         task_instance_count=0, task_instance_type=None,
         task_instance_bid_price=None, ec2_key_name=None, ec2_subnet_id=None,
+        ec2_master_security_group_id=None, ec2_slave_security_group_id=None,
         keep_alive=False, termination_protected=False, check_manifest=True,
         no_direct_copy=False, consistent_view=False,
         intermediate_lifetime=4, max_task_attempts=4, dbgap_key=None,
@@ -6110,6 +6149,8 @@ class RailRnaElasticAllJson(object):
             task_instance_type=task_instance_type,
             task_instance_bid_price=task_instance_bid_price,
             ec2_key_name=ec2_key_name, ec2_subnet_id=ec2_subnet_id,
+            ec2_master_security_group_id=ec2_master_security_group_id,
+            ec2_slave_security_group_id=ec2_slave_security_group_id,
             keep_alive=keep_alive, termination_protected=termination_protected,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,

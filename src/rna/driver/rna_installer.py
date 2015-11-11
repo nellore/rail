@@ -529,6 +529,9 @@ vdb_config = {vdb_config}
                                                 )
                                             )
                 self._bail()
+        install_dir_replacement = os.path.join(
+                                self.final_install_dir, 'rail-rna'
+                            )
         with open(rail_exe, 'w') as rail_exe_stream:
             print >>rail_exe_stream, (
 """#!/usr/bin/env bash
@@ -536,9 +539,7 @@ vdb_config = {vdb_config}
 {python_executable} {install_dir} $@
 """
                 ).format(python_executable=sys.executable,
-                            install_dir=os.path.join(
-                                self.final_install_dir, 'rail-rna'
-                            ))
+                            install_dir=install_dir_replacement)
         if self.local:
             '''Have to add Rail to PATH. Do this in bashrc and bash_profile
             contingent on whether it's present already because of
@@ -549,40 +550,52 @@ vdb_config = {vdb_config}
 if [ -d "{bin_dir}" ] && [[ ":$PATH:" != *":{bin_dir}:"* ]]; then
     PATH="${{PATH:+"$PATH:"}}{bin_dir}"
 fi
+export RAILDOTBIO={install_dir}
 ## End Rail-RNA additions
 """
-                ).format(bin_dir=bin_dir)
-            import mmap
-            bashrc = os.path.expanduser('~/.bashrc')
-            bash_profile = os.path.expanduser('~/.bash_profile')
-            try:
-                with open(bashrc) as bashrc_stream:
-                    mmapped = mmap.mmap(bashrc_stream.fileno(), 0, 
-                                            access=mmap.ACCESS_READ)
-                    if mmapped.find(to_print) == -1:
-                        print_to_bashrc = True
-                    else:
-                        print_to_bashrc = False
-            except (IOError, ValueError):
-                # No file
-                print_to_bashrc = True
-            try:
-                with open(bash_profile) as bash_profile_stream:
-                    mmapped = mmap.mmap(bash_profile_stream.fileno(), 0, 
-                                            access=mmap.ACCESS_READ)
-                    if mmapped.find(to_print) == -1:
-                        print_to_bash_profile = True
-                    else:
-                        print_to_bash_profile = False
-            except (IOError, ValueError):
-                # No file
-                print_to_bash_profile = True
-            if print_to_bashrc:
-                with open(bashrc, 'a') as bashrc_stream:
-                    print >>bashrc_stream, to_print
-            if print_to_bash_profile:
-                with open(bash_profile, 'a') as bash_profile_stream:
-                    print >>bash_profile_stream, to_print
+                ).format(bin_dir=bin_dir,
+                            install_dir=install_dir_replacement)
+        else:
+            # Just define raildotbio directory
+            to_print = (
+"""
+## Rail-RNA addition
+export RAILDOTBIO={install_dir}
+## End Rail-RNA addition
+"""
+                ).format(bin_dir=bin_dir,
+                            install_dir=install_dir_replacement)
+        import mmap
+        bashrc = os.path.expanduser('~/.bashrc')
+        bash_profile = os.path.expanduser('~/.bash_profile')
+        try:
+            with open(bashrc) as bashrc_stream:
+                mmapped = mmap.mmap(bashrc_stream.fileno(), 0, 
+                                        access=mmap.ACCESS_READ)
+                if mmapped.find(to_print) == -1:
+                    print_to_bashrc = True
+                else:
+                    print_to_bashrc = False
+        except (IOError, ValueError):
+            # No file
+            print_to_bashrc = True
+        try:
+            with open(bash_profile) as bash_profile_stream:
+                mmapped = mmap.mmap(bash_profile_stream.fileno(), 0, 
+                                        access=mmap.ACCESS_READ)
+                if mmapped.find(to_print) == -1:
+                    print_to_bash_profile = True
+                else:
+                    print_to_bash_profile = False
+        except (IOError, ValueError):
+            # No file
+            print_to_bash_profile = True
+        if print_to_bashrc:
+            with open(bashrc, 'a') as bashrc_stream:
+                print >>bashrc_stream, to_print
+        if print_to_bash_profile:
+            with open(bash_profile, 'a') as bash_profile_stream:
+                print >>bash_profile_stream, to_print
         # Set 755 permissions across Rail's dirs and 644 across files
         dir_command = ['find', self.final_install_dir, '-type', 'd',
                             '-exec', 'chmod', '755', '{}', ';']
