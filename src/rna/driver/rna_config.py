@@ -146,6 +146,15 @@ _elastic_vdb_config_exe = '/usr/local/bin/vdb-config'
 _elastic_vdb_workspace = '/mnt/space/sra_workspace'
 _elastic_step_dir = '/usr/local/raildotbio/rail-rna/rna/steps'
 
+_assemblies = {
+        'hg19' : 's3://rail-emr-requester-pays/index/hg19.tar.gz',
+        'hg38' : 's3://rail-emr-requester-pays/index/hg38.tar.gz',
+        'mm9' : 's3://rail-emr-requester-pays/index/mm9.tar.gz',
+        'mm10' : 's3://rail-emr-requester-pays/index/mm10.tar.gz',
+        'dm3' : 's3://rail-emr-requester-pays/index/dm3.tar.gz',
+        'dm6' : 's3://rail-emr-requester-pays/index/dm6.tar.gz'
+    }
+
 # Set basename of the transcript fragment index; can't settle on this
 _transcript_fragment_idx_basename = 'isofrags'
 
@@ -2299,7 +2308,20 @@ class RailRnaElastic(object):
                 question = ('Manifest file (--manifest) includes dbGaP data '
                             'and/or Rail-RNA is being run in secure mode. Do '
                             'you certify that the EC2 subnet ID '
-                            '(--ec2-subnet-id) corresponds to a secure VPC?')
+                            '"{ec2_subnet_id}", EC2 master security group ID '
+                            '"{ec2_master_security_group_id}", and EC2 slave '
+                            'security group ID '
+                            '"{ec2_slave_security_group_id}" '
+                            'correspond to a stack that provides '
+                            'the security features included in one of the '
+                            'dbGaP CloudFormation templates in '
+                            '$RAILDOTBIO/rail-rna/cloudformation?').format(
+                                    ec2_subnet_id=base.ec2_subnet_id,
+                                    ec2_master_security_group_id=\
+                                        base.ec2_master_security_group_id,
+                                    ec2_slave_security_group_id=\
+                                        base.ec2_slave_security_group_id
+                                )
                 while True:
                     sys.stdout.write('%s [y/n]: ' % question)
                     try:
@@ -2388,7 +2410,8 @@ filename = sys.argv[2]
 while tries < 5:
     break_outer_loop = False
     s3cmd_process \\
-        = subprocess.Popen(['s3cmd', 'get', url, './', '-f'])
+        = subprocess.Popen(['s3cmd', 'get', url, './', '-f',
+                    '--add-header="x-amz-request-payer: requester"'])
     time.sleep(1)
     last_check_time = time.time()
     try:
@@ -2610,7 +2633,7 @@ mychildren=""
 if [ $STATUS -eq 0 ]; then
   for DIR in $EPHEMERAL_MNT_DIRS; do
     #
-    # Setup some variables
+    # Set up some variables
     #
     ENCRYPTED_LOOPBACK_DIR=$DIR/encrypted_loopbacks
     ENCRYPTED_MOUNT_POINT=$DIR/space.encrypted/
@@ -2694,7 +2717,7 @@ if [ $STATUS -eq 0 ]; then
       fi
     fi
     #
-    # Setup LUKS
+    # Set up LUKS
     #
     if [ $STATUS -eq 0 ]; then
       sudo cryptsetup luksFormat -q --key-file $PASSWORD_FILE $ENCRYPTED_LOOPBACK_DEVICE
@@ -2946,7 +2969,8 @@ EOF
             general_parser.add_argument(
                 '--dbgap-key', required=False, metavar='<file>',
                 default=None,
-                help='path to dbGaP key file, which has the extension "ngc"; '
+                help='path to dbGaP key file, which has the extension "ngc" '
+                     'for SRA data and "key" for CGHub data; '
                      'must be on local filesystem. This file is uploaded '
                      'securely to S3 and scheduled for deletion if dbGaP '
                      'data is present in the manifest file'
@@ -3729,9 +3753,9 @@ class RailRnaAlign(object):
         else:
             # Elastic mode; check S3 for genome if necessary
             assert s3_ansible is not None
-            if assembly == 'hg19':
-                base.index_archive = 's3://rail-emr/index/hg19_UCSC.tar.gz'
-            else:
+            try:
+                base.index_archive = _assemblies[assembly]
+            except KeyError:
                 if not Url(assembly).is_s3:
                     base.errors.append(('Bowtie index archive must be on S3'
                                         ' in "elastic" mode, but '

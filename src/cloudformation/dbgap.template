@@ -158,63 +158,20 @@
     "EC2MasterSecurityGroup" : {
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
-        "GroupDescription" : "Block internet",
+        "GroupDescription" : "Block all of internet ingress; Amazon pokes necessary holes",
         "VpcId" : { "Ref" : "VPC" },
         "SecurityGroupIngress" : [],
-        "SecurityGroupEgress": [
-          {
-            "CidrIp": "127.0.0.1/32",
-            "IpProtocol": "-1"
-          }
-        ]
+        "SecurityGroupEgress": []
       }
     },
 
-    "EC2PrepSlaveSecurityGroup" : {
+    "EC2SlaveSecurityGroup" : {
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
-        "GroupDescription" : "Allow access to dbGaP server; block rest of internet",
+        "GroupDescription" : "Block all of internet ingress; Amazon pokes necessary holes",
         "VpcId" : { "Ref" : "VPC" },
         "SecurityGroupIngress" : [],
-        "SecurityGroupEgress" : [ { 
-          "IpProtocol" : "udp",
-          "FromPort" : "33001",  
-          "ToPort" : "33009",
-          "CidrIp" : "130.14.0.0/16"
-        },
-        { 
-          "IpProtocol" : "udp",
-          "FromPort" : "33001",  
-          "ToPort" : "33009",
-          "CidrIp" : "165.112.0.0/16"
-        },
-        { 
-          "IpProtocol" : "tcp",
-          "FromPort" : "22",  
-          "ToPort" : "22",
-          "CidrIp" : "130.14.0.0/16"
-        },
-        { 
-          "IpProtocol" : "tcp",
-          "FromPort" : "22",  
-          "ToPort" : "22",
-          "CidrIp" : "165.112.0.0/16"
-        } ]
-      }
-    },
-
-    "EC2AlignSlaveSecurityGroup" : {
-      "Type" : "AWS::EC2::SecurityGroup",
-      "Properties" : {
-        "GroupDescription" : "Block internet",
-        "VpcId" : { "Ref" : "VPC" },
-        "SecurityGroupIngress" : [],
-        "SecurityGroupEgress": [
-          {
-            "CidrIp": "127.0.0.1/32",
-            "IpProtocol": "-1"
-          }
-        ]
+        "SecurityGroupEgress" : []
       }
     },
 
@@ -247,13 +204,9 @@
       "Description" : "ID of security group that should be applied to MASTER EMR instances for all job flows when analyzing dbGaP data",
       "Value" :  { "Ref" : "EC2MasterSecurityGroup" }
     },
-    "PrepSlaveName" : {
-      "Description" : "ID of security group that should be applied to SLAVE EMR instances for PREPROCESS job flow when analyzing dbGaP data",
-      "Value" :  { "Ref" : "EC2PrepSlaveSecurityGroup" }
-    },
-    "AlignSlaveName" : {
-      "Description" : "ID of security group that should be applied to SLAVE EMR instances for ALIGN job flow when analyzing dbGaP data",
-      "Value" :  { "Ref" : "EC2AlignSlaveSecurityGroup" }
+    "SlaveName" : {
+      "Description" : "ID of security group that should be applied to SLAVE EMR instances for all job flows when analyzing dbGaP data",
+      "Value" :  { "Ref" : "EC2SlaveSecurityGroup" }
     }
   }
 }
