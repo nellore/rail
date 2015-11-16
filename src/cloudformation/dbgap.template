@@ -1,7 +1,7 @@
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
 
-  "Description" : "AWS CloudFormation template that sets up a VPC appropriate for analyzing dbGaP data using Elastic MapReduce",
+  "Description" : "AWS CloudFormation template that sets up CloudTrail, CloudWatch and alerts, a secure S3 bucket, and a VPC appropriate for analyzing dbGaP data using Elastic MapReduce",
 
   "Mappings" : {
     "SubnetConfig" : {
@@ -10,7 +10,94 @@
     }
   },
 
+  "Parameters" : {
+    "SecureBucket": {
+      "Description": "Name of secure bucket to which Rail's intermediate data and output as well as CloudTrail's output are written.",
+      "Type": "String"
+    }
+  },
+
   "Resources" : {
+
+    "S3Bucket": {
+      "DeletionPolicy" : "Retain",
+      "Type" : "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName" : {"Ref" : "SecureBucket"}
+      }
+    },
+    "BucketPolicy" : {
+      "Type" : "AWS::S3::BucketPolicy",
+      "Properties" : {
+        "Bucket" : {"Ref" : "S3Bucket"},
+        "PolicyDocument" : {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSCloudTrailAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": [
+                  "arn:aws:iam::903692715234:root",
+                  "arn:aws:iam::859597730677:root",
+                  "arn:aws:iam::814480443879:root",
+                  "arn:aws:iam::216624486486:root",
+                  "arn:aws:iam::086441151436:root",
+                  "arn:aws:iam::388731089494:root",
+                  "arn:aws:iam::284668455005:root",
+                  "arn:aws:iam::113285607260:root"
+                ]
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref":"S3Bucket"}]]}
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": [
+                  "arn:aws:iam::903692715234:root",
+                  "arn:aws:iam::859597730677:root",
+                  "arn:aws:iam::814480443879:root",
+                  "arn:aws:iam::216624486486:root",
+                  "arn:aws:iam::086441151436:root",
+                  "arn:aws:iam::388731089494:root",
+                  "arn:aws:iam::284668455005:root",
+                  "arn:aws:iam::113285607260:root"
+                ]
+              },
+              "Action": "s3:PutObject",
+              "Resource": { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref":"S3Bucket"}, "/AWSLogs/", {"Ref":"AWS::AccountId"}, "/*"]]},
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            },
+            {
+               "Sid":"DenyUnEncryptedObjectUploads",
+               "Effect":"Deny",
+               "Principal":"*",
+               "Action":"s3:PutObject",
+               "Resource":"arn:aws:s3:::YourBucket/*",
+               "Condition":{
+                  "StringNotEquals":{
+                     "s3:x-amz-server-side-encryption":"AES256"
+                  }
+               }
+            }
+          ]
+        }
+      }
+    },
+    "secureTrail" : {
+      "DependsOn" : ["BucketPolicy"],
+      "Type" : "AWS::CloudTrail::Trail",
+      "Properties" : {
+        "S3BucketName" : {"Ref":"S3Bucket"},
+        "IsLogging" : true
+      }
+    },
 
     "VPC" : {
       "Type" : "AWS::EC2::VPC",
@@ -196,17 +283,21 @@
   },
 
   "Outputs" : {
-    "PublicSubnet" : {
+    "PublicSubnetId" : {
       "Description" : "ID of subnet into which secure Rail-RNA job flows should be launched",
       "Value" :  { "Ref" : "PublicSubnet" }
     },
-    "MasterName" : {
+    "MasterSecurityGroupId" : {
       "Description" : "ID of security group that should be applied to MASTER EMR instances for all job flows when analyzing dbGaP data",
       "Value" :  { "Ref" : "EC2MasterSecurityGroup" }
     },
-    "SlaveName" : {
+    "SlaveSecurityGroupId" : {
       "Description" : "ID of security group that should be applied to SLAVE EMR instances for all job flows when analyzing dbGaP data",
       "Value" :  { "Ref" : "EC2SlaveSecurityGroup" }
+    },
+    "SecureBucketName" : {
+      "Description" : "Name of secure S3 bucket associated with stack; Rail-RNA job flows must write intermediate and output data to this bucket",
+      "Value" : { "Ref" : "S3Bucket" }
     }
   }
 }
