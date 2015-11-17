@@ -79,7 +79,7 @@
                "Effect":"Deny",
                "Principal":"*",
                "Action":"s3:PutObject",
-               "Resource":"arn:aws:s3:::YourBucket/*",
+               "Resource":{ "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref":"S3Bucket"}, "/*"]]},
                "Condition":{
                   "StringNotEquals":{
                      "s3:x-amz-server-side-encryption":"AES256"
