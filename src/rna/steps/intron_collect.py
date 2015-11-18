@@ -110,7 +110,7 @@ else:
         tokens = line.strip().split('\t')
         # Remove leading zeros from ints
         sys.stdout.write('\t'.join([tokens[0], str(int(tokens[1])),
-                                    str(int(tokens[2])), tokens[3],
+                                    str(int(tokens[2]) - 1), tokens[3],
                                     tokens[4]]))
         input_line_count += 1
 
