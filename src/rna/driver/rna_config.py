@@ -1028,11 +1028,12 @@ class RailRnaErrors(object):
     def check_s3(self, reason=None, is_exe=None, which=None):
         """ Checks for AWS CLI and configuration file.
 
-            In this script, S3 checking is performed as soon as it is found
-            that S3 is needed. If anything is awry, a RuntimeError is raised
-            _immediately_ (the standard behavior is to raise a RuntimeError
-            only after errors are accumulated). A reason specifying where
-            S3 credentials were first needed can also be provided.
+            In this script, checking is performed as soon as it is found
+            that thE CLI is needed. If anything is awry, a RuntimeError is
+            raised _immediately_ (the standard behavior is to raise a
+            RuntimeError only after errors are accumulated). A reason
+            specifying where credentials were first needed can also be
+            provided.
 
             reason: string specifying where S3 credentials were first
                 needed.
@@ -1125,7 +1126,7 @@ class RailRnaErrors(object):
                                     'b) The file ".aws/config" or '
                                     '".aws/credentials" exists in your '
                                     'home directory with a valid profile. '
-                                    'To set this file up, run "aws --config" '
+                                    'To set this file up, run "aws configure" '
                                     'after installing the AWS CLI.')
                                 )
         if len(self.errors) != original_errors_size:
@@ -1161,6 +1162,179 @@ class RailRnaErrors(object):
                             'Attempting "EMR_EC2_DefaultRole".',
                             newline=True, carriage_return=False)
             self.instance_profile = 'EMR_EC2_DefaultRole'
+        self.checked_programs.add('AWS CLI')
+
+    def check_cloudformation(self, stack_name):
+        """ Gets subnet ID, security groups, roles, etc. from secure stack.
+
+            This is basically a version of check_s3() above tailored
+            for describing a stack and setting appropriate object members.
+
+            stack_name: name of stack
+            region: region in which stack was created
+
+            No return value.
+        """
+        if not is_exe:
+            is_exe = globals()['is_exe']
+        if not which:
+            which = globals()['which']
+        original_errors_size = len(self.errors)
+        if self.aws_exe is None:
+            self.aws_exe = 'aws'
+            if not which(self.aws_exe):
+                self.errors.append(('The AWS CLI executable '
+                                    'was not found. Make sure that the '
+                                    'executable is in PATH, or specify the '
+                                    'location of the executable with '
+                                    '--aws.'))
+        elif not is_exe(self.aws_exe):
+            self.errors.append(('The AWS CLI executable (--aws) '
+                                '"{0}" is either not present or not '
+                                'executable.').format(aws_exe))
+        self._aws_access_key_id = None
+        self._aws_secret_access_key = None
+        if self.profile == 'default':
+            # Search environment variables for keys first if profile is default
+            try:
+                self._aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
+                self._aws_secret_access_key \
+                    = os.environ['AWS_SECRET_ACCESS_KEY']
+            except KeyError:
+                to_search = '[default]'
+            else:
+                to_search = None
+            try:
+                # Also grab region
+                self.region = os.environ['AWS_DEFAULT_REGION']
+            except KeyError:
+                pass
+        else:
+            to_search = '[profile ' + self.profile + ']'
+        # Now search AWS CLI config file for the right profile
+        if to_search is not None:
+            cred_file = os.path.join(os.environ['HOME'], '.aws', 'cred')
+            if os.path.exists(cred_file):
+                # "credentials" file takes precedence over "config" file
+                config_file = cred_file
+            else:
+                config_file = os.path.join(os.environ['HOME'], '.aws',
+                                            'config')
+            try:
+                with open(config_file) as config_stream:
+                    for line in config_stream:
+                        if line.strip() == to_search:
+                            break
+                    for line in config_stream:
+                        tokens = [token.strip() for token in line.split('=')]
+                        if tokens[0] == 'region':
+                            if self.region is None:
+                                self.region = tokens[1]
+                            region_holder = tokens[1]
+                        elif tokens[0] == 'aws_access_key_id':
+                            self._aws_access_key_id = tokens[1]
+                        elif tokens[0] == 'aws_secret_access_key':
+                            self._aws_secret_access_key = tokens[1]
+                        elif tokens[0] == 'emr':
+                            grab_roles = True
+                        elif tokens[0] == 'service_role' and grab_roles:
+                            self.service_role = tokens[1]
+                        elif tokens[0] == 'instance_profile' and grab_roles:
+                            self.instance_profile = tokens[1]
+                        else:
+                            line = line.strip()
+                            if line[0] == '[' and line[-1] == ']':
+                                # Break on start of new profile
+                                break
+            except IOError:
+                self.errors.append(
+                                   ('No valid AWS CLI configuration found. '
+                                    'Make sure the AWS CLI is installed '
+                                    'properly and that one of the following '
+                                    'is true:\n\na) The environment variables '
+                                    '"AWS_ACCESS_KEY_ID" and '
+                                    '"AWS_SECRET_ACCESS_KEY" are set to '
+                                    'the desired AWS access key ID and '
+                                    'secret access key, respectively, and '
+                                    'the profile (--profile) is set to '
+                                    '"default" (its default value).\n\n'
+                                    'b) The file ".aws/config" or '
+                                    '".aws/credentials" exists in your '
+                                    'home directory with a valid profile. '
+                                    'To set this file up, run "aws configure" '
+                                    'after installing the AWS CLI.')
+                                )
+        if len(self.errors) != original_errors_size:
+            raise RuntimeError(('\n'.join(['%d) %s' % (i+1, error)
+                                for i, error
+                                in enumerate(self.errors)]) 
+                                if len(self.errors) > 1
+                                else self.errors[0]) + 
+                                '\n\nNote that the AWS CLI is needed '
+                                'because you are attempting to launch '
+                                'Rail-RNA into a VPC from a secure '
+                                'stack.')
+        if self.region is None:
+            self.region = 'us-east-1'
+        # Get appropriate vars
+        command_to_run = ('{} cloudformation describe-stacks '
+                                     '--stack-name {} --region {}').format(
+                                            self.aws_exe, stack_name, region
+                                        )
+        try:
+            described_stack = subprocess.check_output(command_to_run,
+                                                        shell=True,
+                                                        executable='/bin/bash')
+        except subprocess.CalledProcessError:
+            self.errors.append('Error encountered attempting to run AWS CLI '
+                               'to describe stack {}.'.format(stack_name))
+            raise_runtime_error(self)
+        else:
+            if 'does not exist' in described_stack:
+                base.errors.append((
+                        'Stack name "{}" does not exist in region "{}".'
+                    ).format(stack_name, region))
+                raise_runtime_error(self)
+            elif 'CREATE_COMPLETE' not in described_stack:
+                self.errors.append((
+                        'State of stack "{stack_name}" is not '
+                        'CREATE_COMPLETE. Stack state '
+                        'must be CREATE_COMPLETE before proceeding; if you '
+                        'just initiated stack creation with the AWS CLI, you '
+                        'can check whether it\'s done using '
+                        '"aws cloudformation describe-stacks --stack-name '
+                        '{stack_name} --region {region}".'
+                    ).format(stack_name=stack_name, region=self.region))
+                raise_runtime_error(self)
+            else:
+                described_stack = json.loads(
+                                        described_stack
+                                    )['Stacks'][0]['Outputs']
+                outputs = {}
+                for output in described_stack:
+                    outputs[output['OutputKey']] = output['OutputValue']
+                for output in ['ServiceRole', 'InstanceProfile',
+                                'MasterSecurityGroupId',
+                                'SlaveSecurityGroupId', 'PublicSubnetId',
+                                'SecureBucketName']
+                    if output not in outputs:
+                        self.errors.append(('{} not among outputs when '
+                                           'describing stack {}. '
+                                           'Make sure you used an approved '
+                                           'CloudFormation template to create '
+                                           'the stack.').format(output,
+                                                                stack_name))
+                raise_runtime_error(self)
+                self.service_role = outputs['ServiceRole']
+                self.instance_profile = outputs['InstanceProfile']
+                self.ec2_subnet_id = outputs['PublicSubnetId']
+                self.ec2_master_security_group_id = outputs[
+                                                        'MasterSecurityGroupId'
+                                                    ]
+                self.ec2_slave_security_group_id = outputs[
+                                                        'SlaveSecurityGroupId'
+                                                    ]
+                self.secure_bucket_name = outputs['SecureBucketName']
         self.checked_programs.add('AWS CLI')
 
     def check_program(self, exe, program_name, parameter,
@@ -2001,10 +2175,16 @@ class RailRnaElastic(object):
         ec2_subnet_id=None, ec2_master_security_group_id=None,
         ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
-        no_direct_copy=False, intermediate_lifetime=4, secure=False):
+        no_direct_copy=False, intermediate_lifetime=4,
+        secure_stack_name=None):
 
+        base.secure_stack_name = secure_stack_name
         # CLI is REQUIRED in elastic mode
-        base.check_s3(reason='Rail-RNA is running in "elastic" mode')
+        if base.secure_stack_name is None:
+            base.check_s3(reason='Rail-RNA is running in "elastic" mode')
+        else:
+            # CloudFormation version required
+            base.check_cloudformation(stack_name=base.secure_stack_name)
 
         # Initialize possible options
         base.instance_core_counts = {
@@ -2227,10 +2407,14 @@ class RailRnaElastic(object):
                                'manifest file, but no dbGaP '
                                'repository key file (--dbgap-key) was '
                                'provided. ')
-        base.secure = secure
-        if base.dbgap_present:
-            # Always use secure mode if dbGaP data is present
-            base.secure = True
+        if base.dbgap_present and base.secure_stack_name is None:
+            # Secure stack must be specified!
+            base.errors.append('Manifest file (--manifest) has dbGaP data, '
+                               'but secure stack name (--secure-stack-name) '
+                               'was not specified. Rail-RNA must be launched '
+                               'into a VPC associated with some secure stack '
+                               'in elastic mode when analyzing dbGaP data.')
+            raise_runtime_error(base)
         if files_to_check:
             if check_manifest:
                 file_count = len(files_to_check)
@@ -2281,7 +2465,7 @@ class RailRnaElastic(object):
         base.ec2_slave_security_group_id = ec2_slave_security_group_id
         # Bail before copying anything to S3
         raise_runtime_error(base)
-        if base.secure:
+        if base.secure_stack_name is not None:
             if (ec2_subnet_id is None
                     or base.ec2_master_security_group_id is None
                     or base.ec2_slave_security_group_id is None):
@@ -2305,9 +2489,29 @@ class RailRnaElastic(object):
                                    'to the Rail documentation for '
                                    'instructions on their proper use.')
             else:
+                if (ansibles.bucket_from_url(base.intermediate_dir)
+                    != base.secure_bucket_name):
+                    print_to_screen(('Warning: intermediate directory '
+                                       '"{}" not in secure bucket "{}", which '
+                                       'is associated with secure stack '
+                                       '"{}".').format(base.intermediate_dir,
+                                                    base.secure_bucket_name,
+                                                    base.secure_stack_name),
+                                        newline=True, carriage_return=True,
+                                    )
+                if (ansibles.bucket_from_url(base.output_dir)
+                    != base.secure_bucket_name):
+                    print_to_screen(('Warning: output directory '
+                                       '"{}" not in secure bucket "{}", which '
+                                       'is associated with secure stack '
+                                       '"{}".').format(base.output_dir,
+                                                    base.secure_bucket_name,
+                                                    base.secure_stack_name),
+                                        newline=True, carriage_return=True,
+                                    )
                 question = ('Manifest file (--manifest) includes dbGaP data '
-                            'and/or Rail-RNA is being run in secure mode. Do '
-                            'you certify that the EC2 subnet ID '
+                            'and/or Rail-RNA is being run in secure mode. '
+                            'Do you certify that the EC2 subnet ID '
                             '"{ec2_subnet_id}", EC2 master security group ID '
                             '"{ec2_master_security_group_id}", and EC2 slave '
                             'security group ID '
@@ -2601,7 +2805,7 @@ fi
                                     )
         ansible.put(copy_bootstrap, base.copy_bootstrap)
         os.remove(copy_bootstrap)
-        if base.secure:
+        if base.secure_stack_name is not None:
             encrypt_bootstrap = os.path.join(temp_dependency_dir,
                                                 'encrypt.sh')
             with open(encrypt_bootstrap, 'w') as script_stream:
@@ -2989,12 +3193,11 @@ EOF
                  '".intermediate")'
         )
         general_parser.add_argument(
-            '--secure', action='store_const', const=True,
-            default=False,
-            help='turns on security measures enforcing dbGaP requirements; '
-                 'see https://d0.awsstatic.com/whitepapers/compliance/' 
-                 'AWS_dBGaP_Genomics_on_AWS_Best_Practices.pdf (def: on '
-                 'if dbGaP data in manifest file; otherwise off)'
+            '--secure-stack-name', type=str, required=False,
+            metavar='<str>',
+            default=None,
+            help='name of secure stack enforcing dbGaP requirements; '
+                 'must be specified when analyzing dbGaP data.'
         )
         elastic_parser.add_argument(
             '--intermediate-lifetime', type=int, required=False,
@@ -3193,7 +3396,7 @@ EOF
 
     @staticmethod
     def prebootstrap(base):
-        if base.secure:
+        if base.secure_stack_name is not None:
             to_return = [
                     {
                         'Name' : 'Encrypt ephemeral space',
@@ -4053,7 +4256,7 @@ class RailRnaAlign(object):
         base.bed_basename = bed_basename
         base.tsv_basename = tsv_basename
         deliverable_choices = set(
-                ['idx', 'bam', 'sam', 'bed', 'tsv', 'bw', 'itn']
+                ['idx', 'bam', 'sam', 'bed', 'tsv', 'bw', 'jx']
             )
         if isinstance(deliverables, str):
             deliverables = [deliverables]
@@ -4065,7 +4268,7 @@ class RailRnaAlign(object):
         if undeliverables:
             base.errors.append('Some deliverables (--deliverables) specified '
                                'are invalid. Valid choices are in {{"idx", '
-                               '"bam", "bed", "tsv", "bw", "itn"}}, but '
+                               '"bam", "bed", "tsv", "bw", "jx"}}, but '
                                '"{0}" was entered.'.format(deliverables))
         elif not split_deliverables:
             base.errors.append('At least one deliverable (--deliverables) '
@@ -4080,7 +4283,7 @@ class RailRnaAlign(object):
         base.output_sam = 'sam' in split_deliverables
         base.bed = 'bed' in split_deliverables
         base.bw = 'bw' in split_deliverables
-        base.itn = 'itn' in split_deliverables
+        base.jx = 'jx' in split_deliverables
         base.all_final_outs = (base.tsv or base.bam or base.bed or base.bw)
         base.count_filename = (base.tsv_basename + '.' if base.tsv_basename
                                         else '') + 'counts.tsv.gz'
@@ -4438,7 +4641,7 @@ class RailRnaAlign(object):
             nargs='+',
             help=('comma- or space-separated list of desired outputs. Choose '
                   'from among {"idx", "tsv", "bed", "sam" | "bam", "bw", '
-                  '"itn"}.')
+                  '"jx"}.')
         )
         output_parser.add_argument(
             '--drop-deletions', action='store_const', const=True,
@@ -4656,7 +4859,7 @@ class RailRnaAlign(object):
                                         base.coverage_threshold,
                                         verbose,
                                         '--collect-junctions'
-                                        if base.itn else ''
+                                        if base.jx else ''
                                     ),
                 'inputs' : ['junction_search'],
                 'output' : 'junction_filter',
@@ -4699,7 +4902,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
                     ]
-            } if (base.itn and base.isofrag_idx is None) else {},
+            } if (base.jx and base.isofrag_idx is None) else {},
             {
                 'name' : 'Enumerate junction cooccurrences on readlets',
                 'reducer' : ('junction_config.py '
@@ -5392,7 +5595,7 @@ class RailRnaElasticPreprocessJson(object):
         ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
-        max_task_attempts=4, secure=False, dbgap_key=None):
+        max_task_attempts=4, secure_stack_name=None, dbgap_key=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -5421,7 +5624,7 @@ class RailRnaElasticPreprocessJson(object):
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime,
-            secure=secure)
+            secure_stack_name=secure_stack_name)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -5743,7 +5946,7 @@ class RailRnaElasticAlignJson(object):
         ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4,
-        secure=False):
+        secure_stack_name=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -5771,7 +5974,7 @@ class RailRnaElasticAlignJson(object):
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime,
-            secure=secure)
+            secure_stack_name=secure_stack_name)
         RailRnaAlign(base, input_dir=input_dir,
             elastic=True, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
@@ -6155,7 +6358,7 @@ class RailRnaElasticAllJson(object):
         keep_alive=False, termination_protected=False, check_manifest=True,
         no_direct_copy=False, consistent_view=False,
         intermediate_lifetime=4, max_task_attempts=4, dbgap_key=None,
-        secure=False):
+        secure_stack_name=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -6183,7 +6386,7 @@ class RailRnaElasticAllJson(object):
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime,
-            secure=secure)
+            secure_stack_name=secure_stack_name)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,

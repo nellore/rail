@@ -949,7 +949,7 @@ if __name__ == '__main__':
                 intermediate_lifetime=args.intermediate_lifetime,
                 max_task_attempts=args.max_task_attempts,
                 dbgap_key=args.dbgap_key,
-                secure=args.secure,
+                secure_stack_name=args.secure_stack_name,
                 ec2_subnet_id=args.ec2_subnet_id,
                 ec2_master_security_group_id=args.ec2_master_security_group_id,
                 ec2_slave_security_group_id=args.ec2_slave_security_group_id
@@ -1018,7 +1018,7 @@ if __name__ == '__main__':
                 no_direct_copy=args.no_direct_copy,
                 intermediate_lifetime=args.intermediate_lifetime,
                 max_task_attempts=args.max_task_attempts,
-                secure=args.secure,
+                secure_stack_name=args.secure_stack_name,
                 ec2_subnet_id=args.ec2_subnet_id,
                 ec2_master_security_group_id=args.ec2_master_security_group_id,
                 ec2_slave_security_group_id=args.ec2_slave_security_group_id
@@ -1060,7 +1060,7 @@ if __name__ == '__main__':
                 intermediate_lifetime=args.intermediate_lifetime,
                 max_task_attempts=args.max_task_attempts,
                 dbgap_key=args.dbgap_key,
-                secure=args.secure,
+                secure_stack_name=args.secure_stack_name,
                 ec2_subnet_id=args.ec2_subnet_id,
                 ec2_master_security_group_id=args.ec2_master_security_group_id,
                 ec2_slave_security_group_id=args.ec2_slave_security_group_id
