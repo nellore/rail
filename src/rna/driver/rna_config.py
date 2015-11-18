@@ -1325,8 +1325,17 @@ class RailRnaErrors(object):
                                            'the stack.').format(output,
                                                                 stack_name))
                 raise_runtime_error(self)
-                self.service_role = outputs['ServiceRole']
-                self.instance_profile = outputs['InstanceProfile']
+                if self.service_role is None:
+                    print_to_screen('Warning: IAM service role not found. '
+                                    'Attempting '
+                                    '"EMR_DefaultRole".',
+                                    newline=True, carriage_return=False)
+                    self.service_role = 'EMR_DefaultRole'
+                if self.instance_profile is None:
+                    print_to_screen('Warning: EC2 instance profile not found. '
+                                    'Attempting "EMR_EC2_DefaultRole".',
+                                    newline=True, carriage_return=False)
+                    self.instance_profile = 'EMR_EC2_DefaultRole'
                 self.ec2_subnet_id = outputs['PublicSubnetId']
                 self.ec2_master_security_group_id = outputs[
                                                         'MasterSecurityGroupId'
