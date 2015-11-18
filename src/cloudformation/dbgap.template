@@ -296,7 +296,7 @@
       "Value" :  { "Ref" : "EC2SlaveSecurityGroup" }
     },
     "SecureBucketName" : {
-      "Description" : "Name of secure S3 bucket associated with stack; Rail-RNA job flows must write intermediate and output data to this bucket",
+      "Description" : "Name of secure S3 bucket associated with stack; Rail-RNA job flows should write intermediate and output data to this bucket",
       "Value" : { "Ref" : "S3Bucket" }
     }
   }

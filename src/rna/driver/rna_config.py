@@ -42,6 +42,7 @@ import string
 import socket
 import exe_paths
 import unicodedata
+import json
 from distutils.util import strtobool
 
 _help_set = set(['--help', '-h'])
@@ -1057,78 +1058,12 @@ class RailRnaErrors(object):
             self.errors.append(('The AWS CLI executable (--aws) '
                                 '"{0}" is either not present or not '
                                 'executable.').format(aws_exe))
-        self._aws_access_key_id = None
-        self._aws_secret_access_key = None
-        if self.profile == 'default':
-            # Search environment variables for keys first if profile is default
-            try:
-                self._aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
-                self._aws_secret_access_key \
-                    = os.environ['AWS_SECRET_ACCESS_KEY']
-            except KeyError:
-                to_search = '[default]'
-            else:
-                to_search = None
-            try:
-                # Also grab region
-                self.region = os.environ['AWS_DEFAULT_REGION']
-            except KeyError:
-                pass
-        else:
-            to_search = '[profile ' + self.profile + ']'
-        # Now search AWS CLI config file for the right profile
-        if to_search is not None:
-            cred_file = os.path.join(os.environ['HOME'], '.aws', 'cred')
-            if os.path.exists(cred_file):
-                # "credentials" file takes precedence over "config" file
-                config_file = cred_file
-            else:
-                config_file = os.path.join(os.environ['HOME'], '.aws',
-                                            'config')
-            try:
-                with open(config_file) as config_stream:
-                    for line in config_stream:
-                        if line.strip() == to_search:
-                            break
-                    for line in config_stream:
-                        tokens = [token.strip() for token in line.split('=')]
-                        if tokens[0] == 'region':
-                            if self.region is None:
-                                self.region = tokens[1]
-                            region_holder = tokens[1]
-                        elif tokens[0] == 'aws_access_key_id':
-                            self._aws_access_key_id = tokens[1]
-                        elif tokens[0] == 'aws_secret_access_key':
-                            self._aws_secret_access_key = tokens[1]
-                        elif tokens[0] == 'emr':
-                            grab_roles = True
-                        elif tokens[0] == 'service_role' and grab_roles:
-                            self.service_role = tokens[1]
-                        elif tokens[0] == 'instance_profile' and grab_roles:
-                            self.instance_profile = tokens[1]
-                        else:
-                            line = line.strip()
-                            if line[0] == '[' and line[-1] == ']':
-                                # Break on start of new profile
-                                break
-            except IOError:
-                self.errors.append(
-                                   ('No valid AWS CLI configuration found. '
-                                    'Make sure the AWS CLI is installed '
-                                    'properly and that one of the following '
-                                    'is true:\n\na) The environment variables '
-                                    '"AWS_ACCESS_KEY_ID" and '
-                                    '"AWS_SECRET_ACCESS_KEY" are set to '
-                                    'the desired AWS access key ID and '
-                                    'secret access key, respectively, and '
-                                    'the profile (--profile) is set to '
-                                    '"default" (its default value).\n\n'
-                                    'b) The file ".aws/config" or '
-                                    '".aws/credentials" exists in your '
-                                    'home directory with a valid profile. '
-                                    'To set this file up, run "aws configure" '
-                                    'after installing the AWS CLI.')
-                                )
+        (self._aws_access_key_id,
+            self._aws_secret_access_key, 
+            self.region,
+            self.service_role,
+            self.instance_profile) = ab.parsed_credentials(self.profile,
+                                                            base=self)
         if len(self.errors) != original_errors_size:
             if reason:
                 raise RuntimeError((('\n'.join(['%d) %s' % (i+1, error)
@@ -1164,7 +1099,7 @@ class RailRnaErrors(object):
             self.instance_profile = 'EMR_EC2_DefaultRole'
         self.checked_programs.add('AWS CLI')
 
-    def check_cloudformation(self, stack_name):
+    def check_cloudformation(self, stack_name, is_exe=None, which=None):
         """ Gets subnet ID, security groups, roles, etc. from secure stack.
 
             This is basically a version of check_s3() above tailored
@@ -1192,78 +1127,12 @@ class RailRnaErrors(object):
             self.errors.append(('The AWS CLI executable (--aws) '
                                 '"{0}" is either not present or not '
                                 'executable.').format(aws_exe))
-        self._aws_access_key_id = None
-        self._aws_secret_access_key = None
-        if self.profile == 'default':
-            # Search environment variables for keys first if profile is default
-            try:
-                self._aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
-                self._aws_secret_access_key \
-                    = os.environ['AWS_SECRET_ACCESS_KEY']
-            except KeyError:
-                to_search = '[default]'
-            else:
-                to_search = None
-            try:
-                # Also grab region
-                self.region = os.environ['AWS_DEFAULT_REGION']
-            except KeyError:
-                pass
-        else:
-            to_search = '[profile ' + self.profile + ']'
-        # Now search AWS CLI config file for the right profile
-        if to_search is not None:
-            cred_file = os.path.join(os.environ['HOME'], '.aws', 'cred')
-            if os.path.exists(cred_file):
-                # "credentials" file takes precedence over "config" file
-                config_file = cred_file
-            else:
-                config_file = os.path.join(os.environ['HOME'], '.aws',
-                                            'config')
-            try:
-                with open(config_file) as config_stream:
-                    for line in config_stream:
-                        if line.strip() == to_search:
-                            break
-                    for line in config_stream:
-                        tokens = [token.strip() for token in line.split('=')]
-                        if tokens[0] == 'region':
-                            if self.region is None:
-                                self.region = tokens[1]
-                            region_holder = tokens[1]
-                        elif tokens[0] == 'aws_access_key_id':
-                            self._aws_access_key_id = tokens[1]
-                        elif tokens[0] == 'aws_secret_access_key':
-                            self._aws_secret_access_key = tokens[1]
-                        elif tokens[0] == 'emr':
-                            grab_roles = True
-                        elif tokens[0] == 'service_role' and grab_roles:
-                            self.service_role = tokens[1]
-                        elif tokens[0] == 'instance_profile' and grab_roles:
-                            self.instance_profile = tokens[1]
-                        else:
-                            line = line.strip()
-                            if line[0] == '[' and line[-1] == ']':
-                                # Break on start of new profile
-                                break
-            except IOError:
-                self.errors.append(
-                                   ('No valid AWS CLI configuration found. '
-                                    'Make sure the AWS CLI is installed '
-                                    'properly and that one of the following '
-                                    'is true:\n\na) The environment variables '
-                                    '"AWS_ACCESS_KEY_ID" and '
-                                    '"AWS_SECRET_ACCESS_KEY" are set to '
-                                    'the desired AWS access key ID and '
-                                    'secret access key, respectively, and '
-                                    'the profile (--profile) is set to '
-                                    '"default" (its default value).\n\n'
-                                    'b) The file ".aws/config" or '
-                                    '".aws/credentials" exists in your '
-                                    'home directory with a valid profile. '
-                                    'To set this file up, run "aws configure" '
-                                    'after installing the AWS CLI.')
-                                )
+        (self._aws_access_key_id,
+            self._aws_secret_access_key, 
+            self.region,
+            self.service_role,
+            self.instance_profile) = ab.parsed_credentials(self.profile,
+                                                            base=self)
         if len(self.errors) != original_errors_size:
             raise RuntimeError(('\n'.join(['%d) %s' % (i+1, error)
                                 for i, error
@@ -1278,16 +1147,24 @@ class RailRnaErrors(object):
             self.region = 'us-east-1'
         # Get appropriate vars
         command_to_run = ('{} cloudformation describe-stacks '
-                                     '--stack-name {} --region {}').format(
-                                            self.aws_exe, stack_name, region
+                                     '--stack-name {} --region {} '
+                                     '--profile {}').format(
+                                            self.aws_exe,
+                                            self.secure_stack_name,
+                                            self.region,
+                                            self.profile
                                         )
         try:
             described_stack = subprocess.check_output(command_to_run,
                                                         shell=True,
                                                         executable='/bin/bash')
         except subprocess.CalledProcessError:
-            self.errors.append('Error encountered attempting to run AWS CLI '
-                               'to describe stack {}.'.format(stack_name))
+            self.errors.append(('Error encountered attempting to run AWS CLI '
+                                'to describe stack {}. '
+                                'Command run was "{}".').format(
+                                                        stack_name,
+                                                        command_to_run
+                                                    ))
             raise_runtime_error(self)
         else:
             if 'does not exist' in described_stack:
@@ -1313,10 +1190,9 @@ class RailRnaErrors(object):
                 outputs = {}
                 for output in described_stack:
                     outputs[output['OutputKey']] = output['OutputValue']
-                for output in ['ServiceRole', 'InstanceProfile',
-                                'MasterSecurityGroupId',
+                for output in ['MasterSecurityGroupId',
                                 'SlaveSecurityGroupId', 'PublicSubnetId',
-                                'SecureBucketName']
+                                'SecureBucketName']:
                     if output not in outputs:
                         self.errors.append(('{} not among outputs when '
                                            'describing stack {}. '
@@ -2469,13 +2345,18 @@ class RailRnaElastic(object):
                                 'has no valid lines.').format(
                                                     manifest_url.to_url()
                                                 ))
-        base.ec2_subnet_id = ec2_subnet_id
-        base.ec2_master_security_group_id = ec2_master_security_group_id
-        base.ec2_slave_security_group_id = ec2_slave_security_group_id
+        if not hasattr(base, 'ec2_subnet_id') and ec2_subnet_id:
+            base.ec2_subnet_id = ec2_subnet_id
+        if not hasattr(base, 'ec2_master_security_group_id') \
+            and ec2_master_security_group_id:
+            base.ec2_master_security_group_id = ec2_master_security_group_id
+        if not hasattr(base, 'ec2_slave_security_group_id') \
+            and ec2_slave_security_group_id:
+            base.ec2_slave_security_group_id = ec2_slave_security_group_id
         # Bail before copying anything to S3
         raise_runtime_error(base)
         if base.secure_stack_name is not None:
-            if (ec2_subnet_id is None
+            if (base.ec2_subnet_id is None
                     or base.ec2_master_security_group_id is None
                     or base.ec2_slave_security_group_id is None):
                 raise RuntimeError('Manifest file (--manifest) includes dbGaP '
@@ -2498,7 +2379,7 @@ class RailRnaElastic(object):
                                    'to the Rail documentation for '
                                    'instructions on their proper use.')
             else:
-                if (ansibles.bucket_from_url(base.intermediate_dir)
+                if (ab.bucket_from_url(base.intermediate_dir)
                     != base.secure_bucket_name):
                     print_to_screen(('Warning: intermediate directory '
                                        '"{}" not in secure bucket "{}", which '
@@ -2508,7 +2389,7 @@ class RailRnaElastic(object):
                                                     base.secure_stack_name),
                                         newline=True, carriage_return=True,
                                     )
-                if (ansibles.bucket_from_url(base.output_dir)
+                if (ab.bucket_from_url(base.output_dir)
                     != base.secure_bucket_name):
                     print_to_screen(('Warning: output directory '
                                        '"{}" not in secure bucket "{}", which '

@@ -475,6 +475,105 @@ def urlopen_with_retry(request):
     """
     return urllib2.urlopen(request)
 
+def parsed_credentials(profile='default', base=None):
+    """ Parses credentials according to (approximately) AWS CLI's rules
+
+        profile: AWS CLI profile to use
+        base: if None, raise RuntimeError on error; otherwise, append to
+            base.errors
+
+        Return value: tuple (aws access key id, aws secret access key,
+                                region, service role, instance profile)
+    """
+    (aws_access_key_id, aws_secret_access_key, region, service_role,
+        instance_profile) = None, None, None, None, None
+    if profile == 'default':
+        # Search environment variables for keys first if profile is default
+        try:
+            aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
+            aws_secret_access_key \
+                = os.environ['AWS_SECRET_ACCESS_KEY']
+        except KeyError:
+            to_search = '[default]'
+        else:
+            to_search = None
+        try:
+            # Also grab region
+            region = os.environ['AWS_DEFAULT_REGION']
+        except KeyError:
+            pass
+    else:
+        to_search = ['[profile ' + profile + ']', '[' + profile + ']']
+    # Now search AWS CLI config file for the right profile
+    if to_search is not None:
+        cred_file = os.path.join(os.environ['HOME'], '.aws', 'credentials')
+        config_file = os.path.join(os.environ['HOME'], '.aws',
+                                        'config')
+        to_open = [a_file for a_file in [cred_file, config_file]
+                        if os.path.exists(a_file)]
+        try:
+            (region_set, access_key_id_set, secret_access_key_set,
+                service_role_set, instance_profile_set) = (
+                    False, False, False, False, False
+                )
+            for to_open in [cred_file, config_file]:
+                with open(to_open) as config_stream:
+                    for line in config_stream:
+                        if line.strip() in to_search:
+                            break
+                    grab_roles = False
+                    for line in config_stream:
+                        tokens = [token.strip() for token
+                                    in line.strip().split('=')]
+                        if tokens[0] == 'region' and not region_set:
+                            region = tokens[1]
+                            region_set = True
+                        elif (tokens[0] == 'aws_access_key_id'
+                                and not access_key_id_set):
+                            aws_access_key_id = tokens[1]
+                            access_key_id_set = True
+                        elif (tokens[0] == 'aws_secret_access_key'
+                                and not secret_access_key_set):
+                            aws_secret_access_key = tokens[1]
+                            secret_access_key_set = True
+                        elif tokens[0] == 'emr':
+                            grab_roles = True
+                        elif (tokens[0] == 'service_role' and grab_roles
+                                and not service_role_set):
+                            service_role = tokens[1]
+                            service_role_set = True
+                        elif (tokens[0] == 'instance_profile'
+                                and grab_roles
+                                and not instance_profile_set):
+                            instance_profile = tokens[1]
+                            instance_profile_set = True
+                        else:
+                            line = line.strip()
+                            if line[0] == '[' and line[-1] == ']':
+                                # Break on start of new profile
+                                break
+        except IOError:
+            message = ('No valid AWS CLI configuration found. '
+                    'Make sure the AWS CLI is installed '
+                    'properly and that one of the following '
+                    'is true:\n\na) The environment variables '
+                    '"AWS_ACCESS_KEY_ID" and '
+                    '"AWS_SECRET_ACCESS_KEY" are set to '
+                    'the desired AWS access key ID and '
+                    'secret access key, respectively, and '
+                    'the profile (--profile) is set to an existing one.\n\n'
+                    'b) The file(s) ".aws/config" and/or '
+                    '".aws/credentials" exist(s) in your '
+                    'home directory encoding a valid profile. '
+                    'To set this/these up, run "aws configure" '
+                    'after installing the AWS CLI.')
+            if base is not None:
+                base.errors.append(message)
+            else:
+                raise RuntimeError(message)
+    return (aws_access_key_id, aws_secret_access_key, 
+                region, service_role, instance_profile)
+
 class AWSAnsible(object):
     """ Interacts with AWS via POST requests (so far). See AWS API
         documentation. GET requests are cheaper, and if ever a GET request
@@ -513,77 +612,11 @@ class AWSAnsible(object):
             # No segments
             self.canonical_uri = '/'
         self.algorithm = 'AWS4-HMAC-SHA256'
-        self._aws_access_key_id = None
-        self._aws_secret_access_key = None
-        self.region = None
-        if profile == 'default':
-            # Search environment variables for keys first if profile is default
-            try:
-                self._aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
-                self._aws_secret_access_key \
-                    = os.environ['AWS_SECRET_ACCESS_KEY']
-            except KeyError:
-                to_search = '[default]'
-            else:
-                to_search = None
-            try:
-                # Also grab region
-                self.region = os.environ['AWS_DEFAULT_REGION']
-            except KeyError:
-                pass
-        else:
-            to_search = '[profile ' + profile + ']'
-        # Now search AWS CLI config file for the right profile
-        if to_search is not None:
-            cred_file = os.path.join(os.environ['HOME'], '.aws', 'credentials')
-            if os.path.exists(cred_file):
-                # "credentials" file takes precedence over "config" file
-                config_file = cred_file
-            else:
-                config_file = os.path.join(os.environ['HOME'], '.aws',
-                                            'config')
-            try:
-                with open(config_file) as config_stream:
-                    for line in config_stream:
-                        if line.strip() == to_search:
-                            break
-                    grab_roles = False
-                    for line in config_stream:
-                        tokens = [token.strip() for token
-                                    in line.strip().split('=')]
-                        if tokens[0] == 'region':
-                            self.region = tokens[1]
-                        elif tokens[0] == 'aws_access_key_id':
-                            self._aws_access_key_id = tokens[1]
-                        elif tokens[0] == 'aws_secret_access_key':
-                            self._aws_secret_access_key = tokens[1]
-                        elif tokens[0] == 'emr':
-                            grab_roles = True
-                        elif tokens[0] == 'service_role' and grab_roles:
-                            self.service_role = tokens[1]
-                        elif tokens[0] == 'instance_profile' and grab_roles:
-                            self.instance_profile = tokens[1]
-                        else:
-                            line = line.strip()
-                            if line[0] == '[' and line[-1] == ']':
-                                # Break on start of new profile
-                                break
-            except IOError:
-                raise RuntimeError(('No valid AWS CLI configuration found. '
-                                    'Make sure the AWS CLI is installed '
-                                    'properly and that one of the following '
-                                    'is true:\n\na) The environment variables '
-                                    '"AWS_ACCESS_KEY_ID" and '
-                                    '"AWS_SECRET_ACCESS_KEY" are set to '
-                                    'the desired AWS access key ID and '
-                                    'secret access key, respectively, and '
-                                    'the profile (--profile) is set to '
-                                    '"default" (its default value).\n\n'
-                                    'b) The file ".aws/config" or '
-                                    '".aws/credentials" exists in your '
-                                    'home directory with a valid profile. '
-                                    'To set this file up, run "aws --config" '
-                                    'after installing the AWS CLI.'))
+        (self._aws_access_key_id,
+            self._aws_secret_access_key, 
+            self.region,
+            self.service_role,
+            self.instance_profile) = parsed_credentials(profile)
         if region is not None:
             # Always override region
             self.region = region

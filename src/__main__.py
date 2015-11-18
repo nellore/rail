@@ -135,7 +135,8 @@ class Launcher(object):
                     sort_memory_cap=0.2, max_task_attempts=4,
                     region='us-east-1', log=None, scratch=None,
                     ipython_profile=None, ipcontroller_json=None, common=None,
-                    direct_write=False, json=False, sort=None):
+                    direct_write=False, json=False, sort=None,
+                    profile=None):
         self.force = force
         self.num_processes = num_processes
         self.keep_intermediates = keep_intermediates
@@ -152,6 +153,7 @@ class Launcher(object):
         self.common = common
         self.json = json
         self.sort = sort
+        self.profile = profile
 
     def run(self, mode, payload):
         """ Replaces current process, using PyPy if it's available.
@@ -255,6 +257,8 @@ class Launcher(object):
                                         'rna', 'driver', 'rail-rna.txt')]
                 if self.force:
                     runner_args.append('-f')
+                if self.profile:
+                    runner_args.extend(['--profile', self.profile])
                 runner_args.extend(['-r', self.region])
                 os.dup2(read_pipe, sys.stdin.fileno())
                 os.close(read_pipe)
@@ -1146,6 +1150,11 @@ if __name__ == '__main__':
                                         if mode in ['local', 'parallel']
                                         else None
                                     ),
-                                    json=args.json
+                                    json=args.json,
+                                    profile=(
+                                        args.profile
+                                        if mode == 'elastic'
+                                        else None
+                                    ),
                                 )
     launcher.run(mode, json.dumps(json_creator.json_serial))
