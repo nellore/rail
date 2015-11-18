@@ -109,8 +109,8 @@ def qname_from_read(qname, seq, sample_label, mate=None):
         New QNAME takes the form:
             <qname> + '\x1d'
             + <short hash of original_qname + seq + sample label> + 
-            comma character + base 36-encoded mate sequence if present, else
-            blank
+            colon character + (base 36-encoded mate sequence if present else
+            blank)
             '\x1d'
             + <sample_label>
 
