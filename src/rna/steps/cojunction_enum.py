@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """
-Rail-RNA-cointron_enum
+Rail-RNA-cojunction_enum
 
-Follows Rail-RNA-intron_index
-Precedes Rail-RNA-cointron_fasta
+Follows Rail-RNA-junction_index
+Precedes Rail-RNA-cojunction_fasta
 
-Alignment script for MapReduce pipelines that wraps Bowtie 2. Finds introns
+Alignment script for MapReduce pipelines that wraps Bowtie 2. Finds junctions
 that cooccur on reads by local alignments to transcriptome elements.
 
 Input (read from stdin)
@@ -60,10 +60,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     report_multiplier=1.2, stranded=False, fudge=5, score_min=60,
     gzip_level=3, mover=filemover.FileMover(), intermediate_dir='.',
     scratch=None):
-    """ Runs Rail-RNA-cointron_enum 
+    """ Runs Rail-RNA-cojunction_enum 
 
         Alignment script for MapReduce pipelines that wraps Bowtie 2. Finds
-        introns that cooccur on reads by local alignments to transcriptome
+        junctions that cooccur on reads by local alignments to transcriptome
         elements from Bowtie 2.
 
         Input (read from stdin)
@@ -90,7 +90,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         6. Read sequence
 
         input_stream: where to find input reads.
-        output_stream: where to emit exonic chunks and introns.
+        output_stream: where to emit exonic chunks and junctions.
         bowtie2_exe: filename of Bowtie 2 executable; include path if not in
             $PATH.
         bowtie2_index_base: the basename of the Bowtie index files associated
@@ -105,7 +105,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         stranded: True iff input reads are strand-specific; this affects
             whether an output partition has a terminal '+' or '-' indicating
             the sense strand. Further, if stranded is True, an alignment is
-            returned only if its strand agrees with the intron's strand.
+            returned only if its strand agrees with the junction's strand.
         fudge: by how many bases to extend left and right extend sizes
                 to accommodate potential indels
         score_min: Bowtie2 CONSTANT minimum alignment score
@@ -192,9 +192,9 @@ if __name__ == '__main__':
              'job alive')
     parser.add_argument('--fudge', type=int, required=False,
         default=5,
-        help='Permits a sum of exonic bases for an intron combo to be within '
-             'the specified number of bases of a read sequence\'s size; '
-             'this allows for indels with respect to the reference')
+        help='Permits a sum of exonic bases for a junction combo to be '
+             'within the specified number of bases of a read sequence\'s '
+             'size; this allows for indels with respect to the reference')
     parser.add_argument(
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
@@ -251,8 +251,9 @@ if __name__ == '__main__' and not args.test:
         mover=mover,
         intermediate_dir=args.intermediate_dir,
         scratch=tempdel.silentexpandvars(args.scratch))
-    print >>sys.stderr, ('DONE with cointron_enum.py; in=%d; time=%0.3f s') % \
-        (_input_line_count, time.time() - start_time)
+    print >>sys.stderr, ('DONE with cojunction_enum.py; in=%d; '
+                            'time=%0.3f s') % (_input_line_count,
+                                                time.time() - start_time)
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters

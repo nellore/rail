@@ -3600,7 +3600,7 @@ class RailRnaAlign(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
+        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, output_sam=False,
@@ -3968,11 +3968,11 @@ class RailRnaAlign(object):
                                                     library_size
                                                 ))
         base.library_size = library_size
-        if isinstance(intron_criteria, str):
-            intron_criteria = [intron_criteria]
+        if isinstance(junction_criteria, str):
+            junction_criteria = [junction_criteria]
         confidence_criteria_split = [criterion.strip(_whitespace_and_comma)
                                         for criterion in 
-                                        ','.join(intron_criteria).split(',')
+                                        ','.join(junction_criteria).split(',')
                                         if criterion]
         confidence_criteria_error = len(confidence_criteria_split) != 2
         if not confidence_criteria_error:
@@ -3992,14 +3992,14 @@ class RailRnaAlign(object):
                         or base.coverage_threshold == -1):
                     confidence_criteria_error = True
         if confidence_criteria_error:
-            base.errors.append('Intron confidence criteria '
-                               '(--intron-criteria) must be a '
+            base.errors.append('Junction confidence criteria '
+                               '(--junction-criteria) must be a '
                                'comma- or space-separated list of two '
                                'elements: the first should be a decimal value '
                                'between 0 and 1 inclusive; the second should '
                                'be an integer >= 1 or -1 to disable filtering '
                                'by read count. {0} was entered.'.format(
-                                                    ','.join(intron_criteria)
+                                                    ','.join(junction_criteria)
                                                 ))
         if isinstance(indel_criteria, str):
             indel_criteria = [indel_criteria]
@@ -4155,13 +4155,13 @@ class RailRnaAlign(object):
             # Place transcript index in intermediate directory
             base.transcript_out = ab.Url(
                 path_join(elastic, base.intermediate_dir,
-                            'cointron_enum' if not elastic else '',
+                            'cojunction_enum' if not elastic else '',
                             isofrag_basename)
             ).to_url(caps=True)
             base.transcript_archive = ab.Url(
                                     path_join(elastic,
                                     base.intermediate_dir,
-                                    'cointron_enum'
+                                    'cojunction_enum'
                                     if not elastic
                                     else '',
                                     _transcript_fragment_idx_basename,
@@ -4289,7 +4289,7 @@ class RailRnaAlign(object):
             default=None,
             help=('tar.gz containing transcript fragment (isofrag) index from '
                   'previous Rail-RNA run to use in lieu of searching for '
-                  'introns (def: none; search for introns)')
+                  'junctions (def: none; search for junctions)')
         )
         algo_parser.add_argument(
             '--partition-length', type=int, required=False,
@@ -4302,27 +4302,29 @@ class RailRnaAlign(object):
             '--max-readlet-size', type=int, required=False,
             metavar='<int>',
             default=25,
-            help='max size of read segment to align when searching for introns'
+            help=('max size of read segment to align when searching for '
+                  'junctions')
         )
         algo_parser.add_argument(
             '--readlet-config-size', type=int, required=False,
             metavar='<int>',
             default=35,
             help=('max number of exonic bases spanned by a path enumerated in '
-                  'intron DAG')
+                  'junction DAG')
         )
         algo_parser.add_argument(
             '--min-readlet-size', type=int, required=False,
             metavar='<int>',
             default=15,
-            help='min size of read segment to align when searching for introns'
+            help=('min size of read segment to align when searching for '
+                  'junctions')
         )
         algo_parser.add_argument(
             '--readlet-interval', type=int, required=False,
             metavar='<int>',
             default=4,
             help=('distance between start positions of successive overlapping '
-                  'read segments to align when searching for introns')
+                  'read segments to align when searching for junctions')
         )
         algo_parser.add_argument(
             '--cap-size-multiplier', type=float, required=False,
@@ -4358,16 +4360,16 @@ class RailRnaAlign(object):
             '--search-filter', type=str, required=False,
             metavar='<choice/int>',
             default='none',
-            help=('filter out reads searched for introns that fall below '
+            help=('filter out reads searched for junctions that fall below '
                   'threshold <int> for initially detected anchor length; '
                   'or select <choice> from {"strict", "mild", "none"}')
         )
         algo_parser.add_argument(
-            '--intron-criteria', type=str, required=False,
+            '--junction-criteria', type=str, required=False,
             metavar='<dec,int>',
             default='0.05,5',
             nargs='+',
-            help=('if parameter is "f,c", filter out introns that are not '
+            help=('if parameter is "f,c", filter out junctions that are not '
                   'either present in at least a fraction f of samples or '
                   'detected in at least c reads of one sample')
         )
@@ -4611,9 +4613,9 @@ class RailRnaAlign(object):
                     ]
             } if base.isofrag_idx is None else {},
             {
-                'name' : 'Search for introns using readlet alignments',
+                'name' : 'Search for junctions using readlet alignments',
                 'reducer' : (
-                         'intron_search.py --bowtie-idx={0} '
+                         'junction_search.py --bowtie-idx={0} '
                          '--partition-length={1} --max-intron-size={2} '
                          '--min-intron-size={3} --min-exon-size={4} '
                          '--search-window-size={5} {6} '
@@ -4632,7 +4634,7 @@ class RailRnaAlign(object):
                                                 verbose
                                             ),
                 'inputs' : ['align_readlets'],
-                'output' : 'intron_search',
+                'output' : 'junction_search',
                 'tasks' : ('%d,' % (base.sample_count * 3))
                                     if elastic else '1x',
                 'partition' : '-k1,1',
@@ -4644,20 +4646,20 @@ class RailRnaAlign(object):
                     ]
             } if base.isofrag_idx is None else {},
             {
-                'name' : 'Filter out introns that violate confidence criteria',
+                'name' : 'Filter out junctions violating confidence criteria',
                 'reducer' : (
-                         'intron_filter.py --manifest={0} '
+                         'junction_filter.py --manifest={0} '
                          '--sample-fraction={1} --coverage-threshold={2} '
                          '{3} {4}').format(
                                         manifest,
                                         base.sample_fraction,
                                         base.coverage_threshold,
                                         verbose,
-                                        '--collect-introns'
+                                        '--collect-junctions'
                                         if base.itn else ''
                                     ),
-                'inputs' : ['intron_search'],
-                'output' : 'intron_filter',
+                'inputs' : ['junction_search'],
+                'output' : 'junction_filter',
                 'multiple_outputs' : True,
                 'tasks' : ('%d,' % max(base.sample_count / 10, 1))
                                     if elastic else '1x',
@@ -4670,25 +4672,25 @@ class RailRnaAlign(object):
                     ]
             } if base.isofrag_idx is None else {},
             {
-                'name' : 'Write all detected introns',
-                'reducer' : ('intron_collect.py --out={0} '
+                'name' : 'Write all detected junctions',
+                'reducer' : ('junction_collect.py --out={0} '
                              '--gzip-level {1} {2}').format(
                                                         ab.Url(
                                                             path_join(elastic,
                                                             base.output_dir,
-                                                    'collected_introns')
+                                                    'collected_junctions')
                                                         ).to_url(caps=True)
                                                         if elastic
                                                         else path_join(elastic,
                                                             base.output_dir,
-                                                    'collected_introns'),
+                                                    'collected_junctions'),
                                                         base.gzip_level
                                                         if 'gzip_level' in
                                                         dir(base) else 3,
                                                         scratch
                                                     ),
-                'inputs' : [path_join(elastic, 'intron_filter', 'collect')],
-                'output' : 'intron_collect',
+                'inputs' : [path_join(elastic, 'junction_filter', 'collect')],
+                'output' : 'junction_collect',
                 'tasks' : 1,
                 'partition' : '-k1,3',
                 'extra_args' : [
@@ -4699,16 +4701,16 @@ class RailRnaAlign(object):
                     ]
             } if (base.itn and base.isofrag_idx is None) else {},
             {
-                'name' : 'Enumerate possible intron cooccurrences on readlets',
-                'reducer' : ('intron_config.py '
+                'name' : 'Enumerate junction cooccurrences on readlets',
+                'reducer' : ('junction_config.py '
                              '--readlet-size={0} '
                              '--min-overlap-exon-size={1} {2}').format(
                                                     base.readlet_config_size,
                                                     base.min_exon_size,
                                                     verbose
                                                 ),
-                'inputs' : [path_join(elastic, 'intron_filter', 'filter')],
-                'output' : 'intron_config',
+                'inputs' : [path_join(elastic, 'junction_filter', 'filter')],
+                'output' : 'junction_config',
                 'tasks' : '1x',
                 'partition' : '-k1,2',
                 'sort' : '-k1,2 -k3,4',
@@ -4721,12 +4723,12 @@ class RailRnaAlign(object):
             } if (base.isofrag_idx is None and (realign or base.idx)) else {},
             {
                 'name' : 'Get isofrags for index construction',
-                'reducer' : ('intron_fasta.py --bowtie-idx={0} {1}').format(
+                'reducer' : ('junction_fasta.py --bowtie-idx={0} {1}').format(
                                                         base.bowtie1_idx,
                                                         verbose
                                                     ),
-                'inputs' : ['intron_config'],
-                'output' : 'intron_fasta',
+                'inputs' : ['junction_config'],
+                'output' : 'junction_fasta',
                 'tasks' : '1x',
                 'partition' : '-k1,3',
                 'extra_args' : [
@@ -4738,7 +4740,7 @@ class RailRnaAlign(object):
             } if (base.isofrag_idx is None and (realign or base.idx)) else {},
             {
                 'name' : 'Build isofrag index',
-                'reducer' : ('intron_index.py --bowtie2-build-exe={0} '
+                'reducer' : ('junction_index.py --bowtie2-build-exe={0} '
                              '--out={1} --basename {2} {3} {4}').format(
                                             base.bowtie2_build_exe,
                                             base.transcript_out,
@@ -4746,9 +4748,9 @@ class RailRnaAlign(object):
                                             keep_alive,
                                             scratch
                                         ),
-                'inputs' : ['intron_fasta',
+                'inputs' : ['junction_fasta',
                                 path_join(elastic, 'align_reads', 'dummy')],
-                'output' : 'intron_index',
+                'output' : 'junction_index',
                 'tasks' : 1,
                 'partition' : '-k1,1',
                 'sort' : '-k1,1 -k2,2', # ensures ref names in uniform order!
@@ -4760,9 +4762,10 @@ class RailRnaAlign(object):
                     ]
             } if (base.isofrag_idx is None and (realign or base.idx)) else {},
             {
-                'name' : 'Finalize intron cooccurrences on reads',
+                'name' : 'Finalize junction cooccurrences on reads',
                 'reducer' : (
-                         'cointron_enum.py --bowtie2-idx={0} --gzip-level {1} '
+                         'cojunction_enum.py --bowtie2-idx={0} '
+                         '--gzip-level {1} '
                          '--bowtie2-exe={2} {3} {4} --intermediate-dir {5} '
                          '{6} -- {7}').format(
                                             base.transcript_in,
@@ -4779,7 +4782,7 @@ class RailRnaAlign(object):
                                             base.transcriptome_bowtie2_args
                                         ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unique')],
-                'output' : 'cointron_enum',
+                'output' : 'cojunction_enum',
                 'tasks' : ('%d,' % (base.sample_count * 10))
                                 if elastic else '1x',
                 'archives' : base.transcript_archive,
@@ -4793,15 +4796,15 @@ class RailRnaAlign(object):
             } if realign else {},
             {
                 'name' : 'Get transcriptome elements for read realignment',
-                'reducer' : ('cointron_fasta.py --bowtie-idx={0} '
+                'reducer' : ('cojunction_fasta.py --bowtie-idx={0} '
                              '--index-count {1} {2}').format(
                                                         base.bowtie1_idx,
                                         base.transcriptome_indexes_per_sample *
                                             base.sample_count,
                                                         verbose
                                                     ),
-                'inputs' : ['cointron_enum'],
-                'output' : 'cointron_fasta',
+                'inputs' : ['cojunction_enum'],
+                'output' : 'cojunction_fasta',
                 'tasks' : ('%d,' % (base.sample_count * 10))
                                 if elastic else '1x',
                 'partition' : '-k1,3',
@@ -4831,7 +4834,7 @@ class RailRnaAlign(object):
                                             base.bowtie2_args
                                         ),
                 'inputs' : [path_join(elastic, 'align_reads', 'unmapped'),
-                            'cointron_fasta'],
+                            'cojunction_fasta'],
                 'mod_partitioner' : True,
                 'output' : 'realign_reads',
                 # Ensure that a single reducer isn't assigned too much fasta
@@ -4880,15 +4883,15 @@ class RailRnaAlign(object):
                     ]
             } if realign else {},
             {
-                'name' : 'Associate spliced alignments with intron coverages',
-                'reducer' : 'intron_coverage.py --bowtie-idx {0}'.format(
+                'name' : 'Associate spliced reads with junction coverages',
+                'reducer' : 'junction_coverage.py --bowtie-idx {0}'.format(
                                                         base.bowtie1_idx
                                                     ),
                 'inputs' : [path_join(elastic, 'compare_alignments',
-                                                    'intron_bed'),
+                                                    'junction_bed'),
                             path_join(elastic, 'compare_alignments',
-                                               'sam_intron_ties')],
-                'output' : 'intron_coverage',
+                                               'sam_junction_ties')],
+                'output' : 'junction_coverage',
                 'tasks' : '1x',
                 'partition' : '-k1,6',
                 'sort' : '-k1,6 -k7,7',
@@ -4913,7 +4916,7 @@ class RailRnaAlign(object):
                                     output_by_chr,
                                     base.bowtie2_args
                                 ),
-                'inputs' : ['intron_coverage',
+                'inputs' : ['junction_coverage',
                             path_join(elastic, 'compare_alignments',
                                                'sam_clip_ties')],
                 'output' : 'break_ties',
@@ -5087,7 +5090,7 @@ class RailRnaAlign(object):
                     ]
             } if base.bw else {},
             {
-                'name' : 'Aggregate introns/indels',
+                'name' : 'Aggregate junctions/indels',
                 'reducer' : ('bed_pre.py --manifest={0} '
                              '--sample-fraction={1} --coverage-threshold={2} '
                              '{3} {4}').format(
@@ -5101,8 +5104,8 @@ class RailRnaAlign(object):
                                                'indel_bed'),
                             path_join(elastic, 'break_ties', 'indel_bed'),
                             path_join(elastic, 'compare_alignments',
-                                               'intron_bed'),
-                            path_join(elastic, 'break_ties', 'intron_bed')],
+                                               'junction_bed'),
+                            path_join(elastic, 'break_ties', 'junction_bed')],
                 'output' : 'prebed',
                 'multiple_outputs' : True,
                 'tasks' : ('%d,' % (base.sample_count * 12))
@@ -5117,7 +5120,7 @@ class RailRnaAlign(object):
                     ]
             } if (base.tsv or base.bed) else {},
             {
-                'name' : ('Write normalization factors/introns/indels'
+                'name' : ('Write normalization factors/junctions/indels'
                             if base.tsv else 'Write normalization factors'),
                 'reducer' : ('tsv.py --bowtie-idx={0} --out={1} '
                              '--manifest={2} --gzip-level={3} '
@@ -5156,7 +5159,7 @@ class RailRnaAlign(object):
                     ]
             } if (base.tsv or base.bw) else {},
             {
-                'name' : 'Write BEDs with introns/indels by sample',
+                'name' : 'Write BEDs with junctions/indels by sample',
                 'reducer' : (
                          'bed.py --bowtie-idx={0} --out={1} '
                          '--manifest={2} --bed-basename={3} {4} {5}').format(
@@ -5164,12 +5167,13 @@ class RailRnaAlign(object):
                                                         ab.Url(
                                                             path_join(elastic,
                                                             base.output_dir,
-                                                        'introns_and_indels')
+                                                        'junctions_and_indels')
                                                          ).to_url(caps=True)
                                                         if elastic
                                                         else path_join(elastic,
                                                             base.output_dir,
-                                                        'introns_and_indels'),
+                                                        'junctions_and_indels'
+                                                        ),
                                                         manifest,
                                                         base.bed_basename,
                                                         scratch,
@@ -5482,7 +5486,7 @@ class RailRnaLocalAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
+        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -5521,7 +5525,7 @@ class RailRnaLocalAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            intron_criteria=intron_criteria,
+            junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
@@ -5564,7 +5568,7 @@ class RailRnaParallelAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
+        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -5614,7 +5618,7 @@ class RailRnaParallelAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            intron_criteria=intron_criteria,
+            junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
@@ -5665,7 +5669,7 @@ class RailRnaParallelAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            intron_criteria=intron_criteria,
+            junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
@@ -5722,7 +5726,7 @@ class RailRnaElasticAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        intron_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
+        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -5788,7 +5792,7 @@ class RailRnaElasticAlignJson(object):
             max_gaps_mismatches=max_gaps_mismatches,
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
-            intron_criteria=intron_criteria,
+            junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
@@ -5862,7 +5866,7 @@ class RailRnaLocalAllJson(object):
         min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        intron_criteria='0.5,5', indel_criteria='0.5,5',
+        junction_criteria='0.5,5', indel_criteria='0.5,5',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
@@ -5910,7 +5914,7 @@ class RailRnaLocalAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
-            intron_criteria=intron_criteria,
+            junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
@@ -5960,7 +5964,7 @@ class RailRnaParallelAllJson(object):
         min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        intron_criteria='0.5,5', indel_criteria='0.5,5',
+        junction_criteria='0.5,5', indel_criteria='0.5,5',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
@@ -6016,7 +6020,7 @@ class RailRnaParallelAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
-            intron_criteria=intron_criteria,
+            junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
@@ -6069,7 +6073,7 @@ class RailRnaParallelAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
-            intron_criteria=intron_criteria,
+            junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
@@ -6134,7 +6138,7 @@ class RailRnaElasticAllJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
-        intron_criteria='0.5,5', indel_criteria='0.5,5',
+        junction_criteria='0.5,5', indel_criteria='0.5,5',
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -6205,7 +6209,7 @@ class RailRnaElasticAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
-            intron_criteria=intron_criteria,
+            junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,

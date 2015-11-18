@@ -5,9 +5,9 @@ Part of Rail-RNA
 
 Includes various functions for handling alignments output by Bowtie2 -- most
 importantly:
--a function that outputs indels, introns, and exons from a genome
-position, CIGAR string, and MD string (indels_introns_and_exons)
--a function that inserts introns in a CIGAR string (multread_with_introns).
+-a function that outputs indels, junctions, and exons from a genome
+position, CIGAR string, and MD string (indels_junctions_and_exons)
+-a function that inserts junctions in a CIGAR string (multread_with_junctions).
 """
 
 import re
@@ -52,34 +52,34 @@ def pairwise(iterable):
     next(right, None)
     return itertools.izip(left, right)
 
-def multiread_with_introns(multiread, stranded=False):
+def multiread_with_junctions(multiread, stranded=False):
     """ Modifies read alignments to fix CIGARs/positions/primary alignments.
 
         An alignment takes the form of a line of SAM.
-        Introns are encoded in a multiread's RNAME as follows:
+        Junctions are encoded in a multiread's RNAME as follows:
 
         original RNAME + '+' or '-' indicating which strand is the sense
         strand + '\x1d' + start position of sequence + '\x1d' + comma-separated
         list of subsequence sizes framing introns + '\x1d' + comma-separated
         list of intron sizes.
 
-        If there are no introns present, the multiread's RNAME takes the
+        If there are no junctions present, the multiread's RNAME takes the
         following form:
         original RNAME + '\x1d' + start position of sequence + '\x1d\x1d'
 
         More than one alignment output by Bowtie may correspond to the same
         alignment in reference space because at least two reference names in
-        the intron Bowtie index contained overlapping bases. In this case, the
-        alignments are collapsed into a single alignment. If an alignment is
-        found to overlap introns, the XS:A:('+' or '-') field is appended to
-        indicate which strand is the sense strand. An NH:i:(integer) field is
-        also added to each alignment to indicate the number of alignments.
+        the junction Bowtie index contained overlapping bases. In this case,
+        the alignments are collapsed into a single alignment. If an alignment
+        is found to overlap junctions, the XS:A:('+' or '-') field is appended
+        to indicate which strand is the sense strand. An NH:i:(integer) field
+        is also added to each alignment to indicate the number of alignments.
         These extra fields are used by Cufflinks.
 
         multiread: a list of lists, each of whose elements are the tokens
             from a line of SAM representing an alignment.
         stranded: if input reads are stranded, an alignment is returned only
-            if the strand of any introns agrees with the strand of the 
+            if the strand of any junctions agrees with the strand of the 
             alignment.
 
         Return value: alignments modified according to the rules given above;
@@ -100,7 +100,7 @@ def multiread_with_introns(multiread, stranded=False):
         cigar = re.split(r'([MINDS])', alignment[5])[:-1]
         flag = int(alignment[1])
         if not tokens[-1] or len(tokens) == 1:
-            # No introns can be found
+            # No junctions can be found
             try:
                 pos = offset + int(tokens[1])
             except IndexError:
@@ -126,7 +126,7 @@ def multiread_with_introns(multiread, stranded=False):
         assert reverse_strand_string in '+-'
         reverse_strand = (True if reverse_strand_string == '-' else False)
         if stranded and (flag & 16 != 0) == reverse_strand:
-            # Strand of alignment doesn't agree with strand of intron
+            # Strand of alignment doesn't agree with strand of junction
             continue
         rname = tokens[0][:-1]
         exon_sizes = map(int, tokens[2].split(','))
@@ -135,7 +135,7 @@ def multiread_with_introns(multiread, stranded=False):
             if exon_sum > offset: break
         # Compute start position of alignment
         pos = offset + sum(intron_sizes[:i]) + int(tokens[1])
-        # Adjust exon/intron lists so they start where alignment starts
+        # Adjust exon/junction lists so they start where alignment starts
         exon_sizes = exon_sizes[i:]
         exon_sizes[0] = exon_sum - offset
         intron_sizes = intron_sizes[i:]
@@ -290,7 +290,7 @@ def multiread_to_report(multiread, alignment_count_to_report=1, seed=0,
                                             if token[:5] == 'AS:i:'][0],
                                             -alignment[5].count('N')),
                     reverse=True)
-            ,) # Primary sort by score, secondary sort by # introns
+            ,) # Primary sort by score, secondary sort by # junctions
     else:
         # Shuffle before proceeding so secondary ties are broken randomly
         random.shuffle(multiread)
@@ -437,8 +437,8 @@ def reference_from_seq(cigar, seq, reference_index, rname, pos):
         return (new_pos + i, reference_seq[i:])
     return (new_pos + i, reference_seq[i:j+1])
 
-def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
-    """ Computes indels, introns, and exons from CIGAR, MD string, POS
+def indels_junctions_and_exons(cigar, md, pos, seq, drop_deletions=False):
+    """ Computes indels, junctions, and exons from CIGAR, MD string, POS
     
         cigar: CIGAR string
         md: MD:Z string
@@ -446,18 +446,18 @@ def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
         seq: read sequence
         drop_deletions: drops deletions from coverage vectors iff True
 
-        Return value: tuple (insertions, deletions, introns, exons). Insertions
-            is a list of tuples (last genomic position before insertion, 
+        Return value: tuple (insertions, deletions, junctions, exons).
+        Insertions is a list of tuples (last genomic position before insertion, 
                                  string of inserted bases). Deletions
             is a list of tuples (first genomic position of deletion,
-                                 string of deleted bases). Introns is a list
+                                 string of deleted bases). Junctions is a list
             of tuples (intron start position (inclusive),
                        intron end position (exclusive),
                        left_diplacement, right_displacement). Exons is a list
             of tuples (exon start position (inclusive),
                        exon end position (exclusive)).
     """
-    insertions, deletions, introns, exons = [], [], [], []
+    insertions, deletions, junctions, exons = [], [], [], []
     cigar = re.split(r'([MINDS])', cigar)[:-1]
     md = parsed_md(md)
     seq_size = len(seq)
@@ -501,8 +501,8 @@ def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
             seq_index += aligned_base_cap
         elif cigar[cigar_index+1] == 'N':
             skip_increment = int(cigar[cigar_index])
-            # Add intron
-            introns.append((pos, pos + skip_increment,
+            # Add junction
+            junctions.append((pos, pos + skip_increment,
                             seq_index, seq_size - seq_index))
             # Skip region of reference
             pos += skip_increment
@@ -525,7 +525,7 @@ def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
             deletions.append((pos, md[md_index+1][:delete_size]))
             if not drop_deletions: exons.append((pos, pos + delete_size))
             if md_delete_size > delete_size:
-                # Deletion contains an intron
+                # Deletion contains a junction
                 md[md_index+1] = md[md_index+1][delete_size:]
             else:
                 md_index += 2
@@ -537,7 +537,7 @@ def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
             # Advance seq_index
             seq_index += int(cigar[cigar_index])
         cigar_index += 2
-    '''Merge exonic chunks/deletions; insertions/introns could have chopped
+    '''Merge exonic chunks/deletions; insertions/junctions could have chopped
     them up.'''
     new_exons = []
     last_exon = exons[0]
@@ -550,7 +550,7 @@ def indels_introns_and_exons(cigar, md, pos, seq, drop_deletions=False):
             new_exons.append(last_exon)
             last_exon = exon
     new_exons.append(last_exon)
-    return insertions, deletions, introns, new_exons
+    return insertions, deletions, junctions, new_exons
 
 class SampleAndRnameIndexes(object):
     """ Assigns sample-RNAME combination to index to improve load balance.
@@ -675,29 +675,29 @@ class AlignmentPrinter(object):
         return 1
 
     def print_alignment_data(self, multiread_reports_and_ties, count=1):
-        """ Prints almost-SAM alignments, introns/indels, and exonic coverage.
+        """ Prints almost-SAM alignments, junctions/indels, and exon coverage.
 
             Descriptions of output:
 
             Alignments
             
-            (sam_intron_ties) output only for ties in alignment score (which
+            (sam_junction_ties) output only for ties in alignment score (which
                 are within some tie margin as decided by multiread_to_report);
             this is the first element of multiread_reports_and_ties
             tab-delimited output tuple columns:
             Standard SAM output except fields are in different order -- and the
-            first four fields include sample/intron information. If an
-            alignment overlaps k introns, k lines are output. The order of the
-            fields is as follows.
+            first four fields include sample/junction information. If an
+            alignment overlaps k junctions, k lines are output. The order of
+            the fields is as follows.
             1. The character 'N' so the line can be matched up
-                with intron bed lines
+                with junction bed lines
             2. Sample index
             3. Number string representing RNAME; see BowtieIndexReference class
                 in bowtie_index for conversion information
             4. Intron start position
             5. Intron end position
             6. '+' or '-' indicating which strand is sense strand
-            7. '-' to ensure that the line follows all intron lines
+            7. '-' to ensure that the line follows all junction lines
             8. POS
             9. QNAME
             10. FLAG
@@ -711,8 +711,8 @@ class AlignmentPrinter(object):
             ... + optional fields
 
             (sam_clip_ties) output only for ties in alignment score when
-            no introns are overlapped -- these alignments are almost invariably
-            soft-clipped
+            no junctions are overlapped -- these alignments are almost
+            invariably soft-clipped
             [SAME AS SAM FIELDS; see SAM format specification]
 
             (sam) output only for alignments to be reported (first element
@@ -760,19 +760,19 @@ class AlignmentPrinter(object):
             5. +1 or -1 * count, the number of instances of a read sequence
                 for which to print exonic chunks
 
-            Introns (intron_bed) / insertions/deletions (indel_bed);
+            Junctions (junction_bed) / insertions/deletions (indel_bed);
             tab-delimited output tuple columns:
-            1. 'I', 'D', or 'N' for insertion, deletion, or intron line
+            1. 'I', 'D', or 'N' for insertion, deletion, or junction line
             2. Number string representing RNAME
             3. Start position (Last base before insertion, first base of
                                 deletion, or first base of intron)
             4. End position (Last base before insertion, last base of deletion
                 (exclusive), or last base of intron (exclusive))
             5. '+' or '-' indicating which strand is the sense strand for
-                introns, inserted sequence for insertions, or deleted sequence
-                for deletions
+                junctions, inserted sequence for insertions, or deleted
+                sequence for deletions
             6. Sample index
-            ----Next fields are for introns only; they are '\x1c' for indels---
+            -Next fields are for junctions only; they are '\x1c' for indels-
             7. Number of nucleotides between 5' end of intron and 5' end of
                 read from which it was inferred, ASSUMING THE SENSE STRAND IS
                 THE FORWARD STRAND. That is, if the sense strand is the reverse
@@ -782,8 +782,9 @@ class AlignmentPrinter(object):
                 read from which it was inferred, ASSUMING THE SENSE STRAND IS
                 THE FORWARD STRAND.
             -------------------------------------------------------------------
-            9. Number of instances of intron, insertion, or deletion in sample;
-                this is always +1 * count before bed_pre combiner/reducer
+            9. Number of instances of junction, insertion, or deletion in
+                sample; this is always +1 * count before bed_pre
+                combiner/reducer
 
             multiread_reports_and_ties: either:
                 1) 2-tuple whose second element is a list of "tied" alignments
@@ -803,7 +804,7 @@ class AlignmentPrinter(object):
             exon_ivals: True iff exon_ivals should be output
             exon_diffs: True iff exon_diffs should be output
             count: number of alignments for which to output exon_ivals,
-                exon_diffs, indels, and introns
+                exon_diffs, indels, and junctions
 
             Return value: output line count
         """
@@ -819,7 +820,7 @@ class AlignmentPrinter(object):
                 ]
             if count and not (primary_flag & 256):
                 '''First alignment to report is a primary, so output exons,
-                introns, and indels.'''
+                junctions, and indels.'''
                 alignment = multiread_reports_and_ties[0][0]
                 cigar = alignment[5]
                 rname = alignment[2]
@@ -827,8 +828,8 @@ class AlignmentPrinter(object):
                 seq = alignment[9]
                 md = [field for field in alignment
                             if field[:5] == 'MD:Z:'][0][5:]
-                insertions, deletions, introns, exons \
-                    = indels_introns_and_exons(cigar, md, pos, seq,
+                insertions, deletions, junctions, exons \
+                    = indels_junctions_and_exons(cigar, md, pos, seq,
                                             drop_deletions=self.drop_deletions)
                 # Output indels
                 for insert_pos, insert_seq in insertions:
@@ -905,15 +906,15 @@ class AlignmentPrinter(object):
                     reverse_strand_string = [field for field in alignment
                                     if field[:5] == 'XS:A:'][0][5:]
                 except IndexError:
-                    # No introns
+                    # No junctions
                     pass
                 else:
-                    # Output introns
+                    # Output junctions
                     for (intron_pos, intron_end_pos,
                             left_displacement, right_displacement) \
-                        in introns:
+                        in junctions:
                         print >>self.output_stream, (
-                                ('intron_bed\tN\t%s\t%012d\t%012d\t%s\t%s\t'
+                                ('junction_bed\tN\t%s\t%012d\t%012d\t%s\t%s\t'
                                  '%d\t%d\t%d')
                                  % (self.reference_index.\
                                     rname_to_string[rname],
@@ -951,24 +952,24 @@ class AlignmentPrinter(object):
                 seq = alignment[9]
                 md = [field for field in alignment
                             if field[:5] == 'MD:Z:'][0][5:]
-                insertions, deletions, introns, exons \
-                    = indels_introns_and_exons(cigar, md, pos, seq,
+                insertions, deletions, junctions, exons \
+                    = indels_junctions_and_exons(cigar, md, pos, seq,
                                             drop_deletions=self.drop_deletions)
                 try:
                     sense = [field[5:] for field in alignment
                             if field[:5] == 'XS:A:'][0]
                 except IndexError:
                     pass
-                if introns:
-                    for intron in introns:
+                if junctions:
+                    for junction in junctions:
                         print >>self.output_stream, (
-                                        ('sam_intron_ties\tN\t%s\t'
+                                        ('sam_junction_ties\tN\t%s\t'
                                          '%012d\t%012d\t%s\t%s\t_'
                                          '\t%012d\t%s\t%s\t') % (
                                     self.reference_index.rname_to_string[
                                                                         rname
                                                                     ],
-                                    intron[0], intron[1], sense,
+                                    junction[0], junction[1], sense,
                                     self.manifest_object.label_to_index[
                                                 qname.rpartition('\x1d')[2]
                                             ], pos, qname, flag)
@@ -981,8 +982,8 @@ class AlignmentPrinter(object):
 if __name__ == '__main__':
     import unittest
 
-    class TestIndelsIntronsAndExons(unittest.TestCase):
-        """ Tests indels_introns_and_exons(); needs no fixture 
+    class TestIndelsJunctionsAndExons(unittest.TestCase):
+        """ Tests indels_junctions_and_exons(); needs no fixture 
 
             Some examples are ripped from:
             http://onetipperday.blogspot.com/2012/07/
@@ -990,32 +991,32 @@ if __name__ == '__main__':
             SAM output of a dmel simulation
         """
         def test_read_1(self):
-            """ Fails if example doesn't give expected indels/introns/exons."""
+            """ Fails if example doesn't give expected indels/jxns/exons."""
             self.assertEquals(([], [(18909816, 'GG')], [], 
                                [(18909796, 18909816), (18909818, 18909827)]),
-                         indels_introns_and_exons(
+                         indels_junctions_and_exons(
                                 '20M2D9M', '20^GG7A1', 18909796,
                                 'TAGCCTCTGTCAGCACTCCTGAGTTCAGA',
                                 drop_deletions=True)
                     )
 
         def test_read_2(self):
-            """ Fails if example doesn't give expected indels/introns/exons."""
+            """ Fails if example doesn't give expected indels/jxns/exons."""
             self.assertEquals(([], [(73888560, 'GG')], [],
                                [(73888540, 73888560), (73888562, 73888571)]),
-                         indels_introns_and_exons(
+                         indels_junctions_and_exons(
                                 '20M2D9M', '20^GG8C0', 73888540,
                                 'TAGCCTCTGTCAGCACTCCTGAGTTCAGA',
                                 drop_deletions=True)
                     )
 
         def test_read_3(self):
-            """ Fails if example doesn't give expected indels/introns/exons."""
+            """ Fails if example doesn't give expected indels/jxns/exons."""
             self.assertEquals(([(20620369, 'CA')], [(20620365, 'GT')],
                                [(20620167, 20620318, 20, 56)],
                                [(20620147, 20620167), (20620318, 20620365),
                                 (20620367, 20620374)]),
-                         indels_introns_and_exons(
+                         indels_junctions_and_exons(
                                 '20M151N47M2D3M2I4M', '67^GT3T2C0', 20620147,
                                 'CCGCACCCGTACTGCTACAGATTTCCATCATCGCCACCCGCGGGC'
                                 'ATTCTGAAAAAGAGCGACGAAGAAGCAACCT',
@@ -1023,11 +1024,11 @@ if __name__ == '__main__':
                     )
 
         def test_read_4(self):
-            """ Fails if example doesn't give expected indels/introns/exons."""
+            """ Fails if example doesn't give expected indels/jxns/exons."""
             self.assertEquals(([(20620155, 'CT')], [],
                                [(20620219, 20620289, 74, 2)],
                                [(20620147, 20620219), (20620289, 20620291)]),
-                         indels_introns_and_exons(
+                         indels_junctions_and_exons(
                                 '9M2I63M70N2M', '1A2C1A0G1G1C1C0C1G2A54',
                                  20620147,
                                 'TTCTNCCTGCTTGTATGACCGTGTTGGGCGTGAGTGGCTTGTCCC'
@@ -1036,21 +1037,21 @@ if __name__ == '__main__':
                     )
 
         def test_read_5(self):
-            """ Fails if example doesn't give expected indels/introns/exons."""
+            """ Fails if example doesn't give expected indels/jxns/exons."""
             self.assertEquals(([], [(18909816, 'GG')], [], 
                                [(18909796, 18909827)]),
-                         indels_introns_and_exons(
+                         indels_junctions_and_exons(
                                 '20M2D9M', '20^GG7A1', 18909796,
                                 'TAGCCTCTGTCAGCACTCCTGAGTTCAGA',
                                 drop_deletions=False)
                     )
 
         def test_read_6(self):
-            """ Fails if example doesn't give expected indels/introns/exons."""
+            """ Fails if example doesn't give expected indels/jxns/exons."""
             self.assertEquals(([(20620369, 'CA')], [(20620365, 'GT')],
                                [(20620167, 20620318, 20, 56)],
                                [(20620147, 20620167), (20620318, 20620374)]),
-                         indels_introns_and_exons(
+                         indels_junctions_and_exons(
                                 '20M151N47M2D3M2I4M', '67^GT3T2C0', 20620147,
                                 'CCGCACCCGTACTGCTACAGATTTCCATCATCGCCACCCGCGGGC'
                                 'ATTCTGAAAAAGAGCGACGAAGAAGCAACCT',

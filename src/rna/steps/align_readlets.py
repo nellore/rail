@@ -3,7 +3,7 @@
 Rail-RNA-align_readlets
 
 Follows Rail-RNA-align_reads
-Precedes Rail-RNA-intron_search
+Precedes Rail-RNA-junction_search
 
 Alignment script for MapReduce pipelines that wraps Bowtie. Aligns input
 readlet sequences and writes a single output line per readlet belonging to
@@ -143,7 +143,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
         input_stream: where to find input reads.
-        output_stream: where to emit exonic chunks and introns.
+        output_stream: where to emit exonic chunks and junctions.
         bowtie_exe: filename of Bowtie executable; include path if not in
             $PATH.
         bowtie_index_base: the basename of the Bowtie index files associated

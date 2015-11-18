@@ -1,8 +1,8 @@
 """
-cointron_enum_delegate.py 
+cojunction_enum_delegate.py 
 
-Output of Bowtie 2 from cointron_enum.py is streamed to this script to obtain
-final output. See cointron_enum.py for output format information.
+Output of Bowtie 2 from cojunction_enum.py is streamed to this script to obtain
+final output. See cojunction_enum.py for output format information.
 """
 
 import sys
@@ -20,20 +20,21 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.tools import xstream
-from alignment_handlers import multiread_with_introns, indels_introns_and_exons
+from alignment_handlers import multiread_with_junctions, \
+    indels_junctions_and_exons
 
 import string
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
-def maximal_cliques(cointrons):
-    """ Finds maximal cliques of graph of intron combinations.
+def maximal_cliques(cojunctions):
+    """ Finds maximal cliques of graph of junction combinations.
 
         Consider an undirected graph where each node corresponds to
-        cointron, as specified by an element of the list "cointrons". Place
-        an edge between two nodes for which no two _distinct_ introns overlap
-        where one intron is associated with one node, and the other intron is
-        associated with the other node. Now enumerate maximal cliques. This
-        gives all possible valid clusters of _consistent_ introns.
+        cojunction, as specified by an element of the list "cojunctions". Place
+        an edge between two nodes for which no two _distinct_ junctions overlap
+        where one junction is associated with one node, and the other junction
+        is associated with the other node. Now enumerate maximal cliques. This
+        gives all possible valid clusters of _consistent_ junctions.
 
         This code is adapted from NetworkX's find_cliques(), which requires
         inclusion of the following copyright notice.
@@ -75,19 +76,19 @@ def maximal_cliques(cointrons):
         OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         --------
 
-        cointrons: list of introns from the same strand
+        cojunctions: list of junctions from the same strand
         
-        Yield value: A maximal clique -- a list of introns.
+        Yield value: A maximal clique -- a list of junctions.
     """
     # Cache nbrs and find first pivot (highest degree)
     maxconn=-1
     nnbrs={}
     pivotnbrs=set() # handle empty graph
-    for n,nbrs in [(intron, [an_intron for an_intron in cointrons
-                                if not ((min(an_intron[1], intron[1])
-                                           - max(an_intron[0], intron[0]))
+    for n,nbrs in [(junction, [an_junction for an_junction in cojunctions
+                                if not ((min(an_junction[1], junction[1])
+                                           - max(an_junction[0], junction[0]))
                                             >= 0)])
-                    for intron in cointrons]:
+                    for junction in cojunctions]:
         nbrs=set(nbrs)
         nbrs.discard(n)
         conn = len(nbrs)
@@ -167,55 +168,56 @@ def maximal_cliques(cointrons):
         done=new_done
         smallcand = cand - pivotnbrs
 
-def separated_introns(introns, separation):
-    """ Splits introns up if successive introns are separated by > separation
+def separated_junctions(junctions, separation):
+    """ Splits junctions up if successive junctions are spaced by > separation
 
-        Two introns overlapped by readlet alignments may be on the same 
+        Two junctions overlapped by readlet alignments may be on the same 
         strand but much further apart than a read can overlap. This function
-        splits up alignments if successive introns are separated by more
-        than separation. IT ALSO ENUMERATES ALL INTRON COMBINATIONS WITH AND
-        WITHOUT 'EDGE' INTRONS.
+        splits up alignments if successive junctions are separated by more
+        than separation. IT ALSO ENUMERATES ALL JUNCTION COMBINATIONS WITH AND
+        WITHOUT 'EDGE' JUNCTIONS.
 
-        alignment_collections: list of intron tuples (pos, end pos)
-        separation: number of bases at or above which introns should be
+        alignment_collections: list of junction tuples (pos, end pos)
+        separation: number of bases at or above which junctions should be
             separated
 
-        Return value: list of lists of introns.
+        Return value: list of lists of junctions.
     """
-    if not introns: return []
-    introns.sort()
-    prereturn = [[introns[0]]]
-    for i in xrange(1, len(introns)):
-        if introns[i][0] - prereturn[-1][-1][1] >= separation:
-            prereturn.append([introns[i]])
+    if not junctions: return []
+    junctions.sort()
+    prereturn = [[junctions[0]]]
+    for i in xrange(1, len(junctions)):
+        if junctions[i][0] - prereturn[-1][-1][1] >= separation:
+            prereturn.append([junctions[i]])
         else:
-            prereturn[-1].append(introns[i])
+            prereturn[-1].append(junctions[i])
     to_return = set()
-    for intron_combo in prereturn:
-        to_return.add(tuple(intron_combo[:]))
-        to_return.add(tuple(intron_combo[1:-1]))
-        to_return.add(tuple(intron_combo[1:]))
-        to_return.add(tuple(intron_combo[:-1]))
-    return [list(intron_combo) for intron_combo in to_return if intron_combo]
+    for junction_combo in prereturn:
+        to_return.add(tuple(junction_combo[:]))
+        to_return.add(tuple(junction_combo[1:-1]))
+        to_return.add(tuple(junction_combo[1:]))
+        to_return.add(tuple(junction_combo[:-1]))
+    return [list(junction_combo) for junction_combo in to_return
+                if junction_combo]
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
         stranded=False, verbose=False, report_multiplier=1.2):
-    """ Emits intron combinations associated with reads.
+    """ Emits junction combinations associated with reads.
 
         Soft-clipped Bowtie 2 alignments of read sequences to the transcript
-        fragment index are used infer which cointrons could possibly be
+        fragment index are used infer which cojunctions could possibly be
         overlapped by reads. Then maximal cliques of the graph described in
         the maximal_cliques() function are enumerated to obtain which
-        intron combinations could possibly be overlapped by reads.
+        junction combinations could possibly be overlapped by reads.
 
         input_stream: where to retrieve Bowtie 2 output
-        output_stream: where to emit exon and intron tuples; typically, this is
-            sys.stdout.
+        output_stream: where to emit exon and junction tuples; typically, this
+            is sys.stdout.
         verbose: True if alignments should occasionally be written to stderr.
         stranded: True iff input reads are strand-specific; this affects
             whether an output partition has a terminal '+' or '-' indicating
             the sense strand. Further, if stranded is True, an alignment is
-            returned only if its strand agrees with the intron's strand.
+            returned only if its strand agrees with the junction's strand.
         fudge: by how many bases to extend left and right extend sizes
             to accommodate potential indels
         report_multiplier: if verbose is True, the line number of an
@@ -239,10 +241,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
             i += 1
             multiread.append((qname,) + tokens)
         if flag & 4: continue
-        corrected_multiread = multiread_with_introns(multiread,
+        corrected_multiread = multiread_with_junctions(multiread,
                                                         stranded)
-        all_introns = {}
-        for alignment in multiread_with_introns(multiread, stranded):
+        all_junctions = {}
+        for alignment in multiread_with_junctions(multiread, stranded):
             cigar = alignment[5]
             md = [field for field in alignment
                     if field[:5] == 'MD:Z:'][0][5:]
@@ -259,44 +261,44 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
             rname = alignment[2]
             sense = [field for field in alignment
                         if field[:5] == 'XS:A:'][0][5:]
-            if (rname, sense) not in all_introns:
-                all_introns[(rname, sense)] = defaultdict(list)
-            _, _, introns, _ = indels_introns_and_exons(
+            if (rname, sense) not in all_junctions:
+                all_junctions[(rname, sense)] = defaultdict(list)
+            _, _, junctions, _ = indels_junctions_and_exons(
                                                 cigar, md, pos, seq
                                             )
-            for intron in introns:
-                if (intron[0], intron[1]) \
-                    not in all_introns[(rname, sense)]:
-                    all_introns[(rname, sense)][(intron[0], intron[1])] \
-                        = [intron[2], intron[3]]
+            for junction in junctions:
+                if (junction[0], junction[1]) \
+                    not in all_junctions[(rname, sense)]:
+                    all_junctions[(rname, sense)][(junction[0], junction[1])] \
+                        = [junction[2], junction[3]]
                 else:
-                    all_introns[(rname, sense)][
-                            (intron[0], intron[1])
-                        ][0] = max(all_introns[(rname, sense)][
-                                (intron[0], intron[1])
-                            ][0], intron[2])
-                    all_introns[(rname, sense)][
-                            (intron[0], intron[1])
-                        ][1] = max(all_introns[(rname, sense)][
-                                (intron[0], intron[1])
-                            ][1], intron[3])
-        for rname, sense in all_introns:
+                    all_junctions[(rname, sense)][
+                            (junction[0], junction[1])
+                        ][0] = max(all_junctions[(rname, sense)][
+                                (junction[0], junction[1])
+                            ][0], junction[2])
+                    all_junctions[(rname, sense)][
+                            (junction[0], junction[1])
+                        ][1] = max(all_junctions[(rname, sense)][
+                                (junction[0], junction[1])
+                            ][1], junction[3])
+        for rname, sense in all_junctions:
             to_write = set()
             # Grab maximal cliques
             for clique in \
-                maximal_cliques(all_introns[(rname, sense)].keys()):
-                for cointrons in separated_introns(
+                maximal_cliques(all_junctions[(rname, sense)].keys()):
+                for cojunctions in separated_junctions(
                             clique,
                             separation=(seq_size + fudge)
                         ):
-                    cointrons.sort()
-                    left_extend_size = all_introns[(rname, sense)][
-                                            (cointrons[0][0],
-                                                cointrons[0][1])
+                    cojunctions.sort()
+                    left_extend_size = all_junctions[(rname, sense)][
+                                            (cojunctions[0][0],
+                                                cojunctions[0][1])
                                         ][0]
-                    right_extend_size = all_introns[(rname, sense)][
-                                             (cointrons[-1][0],
-                                                cointrons[-1][1])
+                    right_extend_size = all_junctions[(rname, sense)][
+                                             (cojunctions[-1][0],
+                                                cojunctions[-1][1])
                                          ][1]
                     to_write.add(('{rname}{sense}\t{starts}'
                            '\t{ends}\t{left_size}'
@@ -304,12 +306,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
                                 rname=rname,
                                 sense=sense,
                                 starts=','.join(
-                                        [str(intron[0])
-                                            for intron in cointrons]
+                                        [str(junction[0])
+                                            for junction in cojunctions]
                                     ),
                                 ends=','.join(
-                                        [str(intron[1])
-                                            for intron in cointrons]
+                                        [str(junction[1])
+                                            for junction in cojunctions]
                                     ),
                                 left_size=(left_extend_size
                                             + fudge),
@@ -321,7 +323,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
                 print line_to_write
                 output_line_count += 1
     output_stream.flush()
-    print >>sys.stderr, ('cointron_enum_delegate.py reports %d output lines.'
+    print >>sys.stderr, ('cojunction_enum_delegate.py reports %d output lines.'
                             % output_line_count)
 
 if __name__ == '__main__':
@@ -333,9 +335,9 @@ if __name__ == '__main__':
         help='Print out extra debugging statements')
     parser.add_argument('--fudge', type=int, required=False,
         default=5,
-        help='Permits a sum of exonic bases for an intron combo to be within '
-             'the specified number of bases of a read sequence\'s size; '
-             'this allows for indels with respect to the reference')
+        help='Permits a sum of exonic bases for a junction combo to be '
+             'within the specified number of bases of a read sequence\'s '
+             'size; this allows for indels with respect to the reference')
     parser.add_argument(
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '

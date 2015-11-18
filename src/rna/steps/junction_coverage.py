@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 """
-Rail-RNA-intron_coverage
+Rail-RNA-junction_coverage
 Follows Rail-RNA-compare-alignments
 Precedes Rail-RNA-break_ties
 
-Associates each alignment that overlaps introns with their coverage by reads
-aligning to those introns uniquely. Here, "uniquely" is defined by the
+Associates each alignment that overlaps junctions with their coverage by reads
+aligning to those junctions uniquely. Here, "uniquely" is defined by the
 --tie-margin parameter in rail-rna_config: if more than one alignment of a read
 falls within --tie-margin of the maximum alignment score, the read does not 
 align uniquely.
 
 Input (read from stdin)
 ----------------------------
-Two formats -- format 1's tab-delimited input columns (introns):
-Format 1's tab-deliminted input columns (introns):
+Two formats -- format 1's tab-delimited input columns (junctions):
+Format 1's tab-deliminted input columns (junctions):
 1. The character 'N'
 2. Number string representing RNAME
 3. Intron start position
@@ -28,18 +28,18 @@ Format 1's tab-deliminted input columns (introns):
 8. Number of nucleotides between 3' end of intron and 3' end of
     read from which it was inferred, ASSUMING THE SENSE STRAND IS
     THE FORWARD STRAND.
-9. Number of instances of intron, insertion, or deletion in sample;
+9. Number of instances of junction, insertion, or deletion in sample;
     this is always +1 before bed_pre combiner/reducer
 
 Format 2's tab-delimited input columns (alignments)
-1. The character 'N' so the line can be matched up with intron bed lines
+1. The character 'N' so the line can be matched up with junction bed lines
 2. Number string representing RNAME; see BowtieIndexReference class
     in bowtie_index for conversion information
 3. Intron start position
 4. Intron end position
 5. '+' or '-' indicating which strand is sense strand
 6. Sample index
-7. '-' TO ENSURE THAT THE LINE FOLLOWS ALL INTRON LINES
+7. '-' TO ENSURE THAT THE LINE FOLLOWS ALL JUNCTION LINES
 8. POS
 9. QNAME
 10. FLAG
@@ -59,9 +59,9 @@ Hadoop output (written to stdout)
 ----------------------------
 Tab-delimited tuple columns:
 [ALL SAM FIELDS; see SAM format specification for details]
-Last field: XC:i:(coverage of an intron from the read); there are as many lines
-for a given alignment (i.e., QNAMEs) as there are introns overlapped by the
-alignment
+Last field: XC:i:(coverage of a junction from the read); there are as many
+lines for a given alignment (i.e., QNAMEs) as there are junctions overlapped by
+the alignment
 
 ALL COORDINATES ARE 1-BASED.
 """
@@ -102,7 +102,7 @@ for (_, rname_string, intron_pos, intron_end_pos,
     for value in xpartition:
         input_line_count += 1
         try:
-            # Assume intron line
+            # Assume junction line
             _, _, instance_count = value
         except ValueError:
             # Alignment line
@@ -114,6 +114,6 @@ for (_, rname_string, intron_pos, intron_end_pos,
         else:
             coverage += int(instance_count)
 
-print >>sys.stderr, 'DONE with intron_coverage.py; in/out=%d/%d; ' \
+print >>sys.stderr, 'DONE with junction_coverage.py; in/out=%d/%d; ' \
                     'time=%0.3f s' % (input_line_count, output_line_count,
                                         time.time() - start_time)

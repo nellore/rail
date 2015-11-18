@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """
-Rail-RNA-intron_fasta
+Rail-RNA-junction_fasta
 
-Follows Rail-RNA-intron_config
-Precedes Rail-RNA-intron_index
+Follows Rail-RNA-junction_config
+Precedes Rail-RNA-junction_index
 
 Reduce step in MapReduce pipelines that outputs FASTA line for a "reference"
-obtained by concatenating exonic sequences framing each intron in an intron
+obtained by concatenating exonic sequences framing each intron in a junction
 configuration. 
 
 Input (read from stdin)
@@ -73,7 +73,7 @@ reference_index = bowtie_index.BowtieIndexReference(
                     )
 for key, xpartition in xstream(sys.stdin, 3, skip_duplicates=True):
     '''For computing maximum left and right extend sizes for every key --
-    that is, every intron combo (fields 1-3 of input).'''
+    that is, every junction combo (fields 1-3 of input).'''
     left_extend_size, right_extend_size = None, None
     left_size, right_size = None, None
     for value in xpartition:
@@ -92,32 +92,32 @@ for key, xpartition in xstream(sys.stdin, 3, skip_duplicates=True):
     rname = key[0]
     reverse_strand_string = rname[-1]
     rname = rname[:-1]
-    intron_combo = \
+    junction_combo = \
             zip([int(pos) for pos in key[1].split(',')],
                     [int(end_pos) for end_pos in key[2].split(',')])
     reference_length = reference_index.length[rname]
     subseqs = []
-    left_start = max(intron_combo[0][0] - left_extend_size, 1)
-    # Add sequence before first intron
+    left_start = max(junction_combo[0][0] - left_extend_size, 1)
+    # Add sequence before first junction
     subseqs.append(
             reference_index.get_stretch(rname, left_start - 1, 
-                intron_combo[0][0] - left_start)
+                junction_combo[0][0] - left_start)
         )
-    # Add sequences between introns
-    for i in xrange(1, len(intron_combo)):
+    # Add sequences between junctions
+    for i in xrange(1, len(junction_combo)):
         subseqs.append(
                 reference_index.get_stretch(rname, 
-                    intron_combo[i-1][1] - 1,
-                    intron_combo[i][0]
-                    - intron_combo[i-1][1]
+                    junction_combo[i-1][1] - 1,
+                    junction_combo[i][0]
+                    - junction_combo[i-1][1]
                 )
             )
     # Add final sequence
     subseqs.append(
             reference_index.get_stretch(rname,
-                intron_combo[-1][1] - 1,
+                junction_combo[-1][1] - 1,
                 min(right_extend_size, reference_length - 
-                                    intron_combo[-1][1] + 1))
+                                    junction_combo[-1][1] + 1))
         )
     '''A given reference name in the index will be in the following format:
     original RNAME + '+' or '-' indicating which strand is the sense strand
@@ -130,11 +130,11 @@ for key, xpartition in xstream(sys.stdin, 3, skip_duplicates=True):
             + ','.join([str(len(subseq)) for subseq in subseqs]) + '\x1d'
             + ','.join([str(intron_end_pos - intron_pos)
                         for intron_pos, intron_end_pos
-                        in intron_combo])
+                        in junction_combo])
             + '\x1d' + str(left_size) + '\x1d' + str(right_size)
             + '\t' + ''.join(subseqs)
         )
 
-print >>sys.stderr, 'DONE with intron_fasta.py; in=%d; ' \
+print >>sys.stderr, 'DONE with junction_fasta.py; in=%d; ' \
                     'time=%0.3f s' % (input_line_count,
                                         time.time() - start_time)

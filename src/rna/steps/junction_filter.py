@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 """
-Rail-RNA-intron_filter
+Rail-RNA-junction_filter
 
-Follows Rail-RNA-intron_search
-Precedes Rail-RNA-intron_config OR Rail-RNA-intron_collect
+Follows Rail-RNA-junction_search
+Precedes Rail-RNA-junction_config OR Rail-RNA-junction_collect
 
-Reduce step in MapReduce pipelines that filters out introns if they are not
+Reduce step in MapReduce pipelines that filters out junctions if they are not
 found in a specified percentage of samples or are not covered by a given number
 of reads.
 
-In the special mode --collect-introns, this step just collects and outputs
-introns across samples, and no step should follow it.
+In the special mode --collect-junctions, this step just collects and outputs
+junctions across samples, and no step should follow it.
 
 Input (read from stdin)
 ----------------------------
@@ -19,8 +19,8 @@ Tab-delimited columns:
     '+' or '-' indicating which strand is the sense strand
 2. Intron start position (inclusive)
 3. Intron end position (exclusive)
-4. '\x1f'-separated list of sample indexes in which intron was found
-5. '\x1f'-separated list of numbers of reads in which intron was found
+4. '\x1f'-separated list of sample indexes in which junction was found
+5. '\x1f'-separated list of numbers of reads in which junction was found
     in respective sample specified by field 4
 
 Input is partitioned by fields 1-3.
@@ -34,14 +34,14 @@ Tab-delimited tuple columns (filter):
 3. Intron start position (inclusive)
 4. Intron end position (exclusive)
 
-If --collect-introns is True (collect):
+If --collect-junctions is True (collect):
 Tab-delimited tuple columns:
 1. Reference name (RNAME in SAM format) +
     '+' or '-' indicating which strand is the sense strand
 2. Intron start position (inclusive)
 3. Intron end position (exclusive)
-4. comma-separated list of sample indexes in which intron was found
-5. comma-separated list of numbers of reads in which intron was found
+4. comma-separated list of sample indexes in which junction was found
+5. comma-separated list of numbers of reads in which junction was found
     in respective sample specified by field 4
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
@@ -65,11 +65,11 @@ from dooplicity.tools import xstream
 import manifest
 
 def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
-        sample_fraction=0.05, coverage_threshold=5, collect_introns=False,
+        sample_fraction=0.05, coverage_threshold=5, collect_junctions=False,
         verbose=False):
-    """ Runs Rail-RNA-intron_filter.
+    """ Runs Rail-RNA-junction_filter.
 
-        Filters out every intron from input_stream that is not either:
+        Filters out every junction from input_stream that is not either:
           (1) in round(sample_fraction * (total number of samples)) samples OR
           (2) found in at least coverage_threshold reads in at least one
             sample.
@@ -81,9 +81,9 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
             '+' or '-' indicating which strand is the sense strand
         2. Intron start position (inclusive)
         3. Intron end position (exclusive)
-        4. '\x1f'-separated list of sample indexes in which intron was found
-        5. '\x1f'-separated list of numbers of reads in which intron was found
-            in respective sample specified by field 4
+        4. '\x1f'-separated list of sample indexes in which junction was found
+        5. '\x1f'-separated list of numbers of reads in which junction was
+            found in respective sample specified by field 4
 
         Input is partitioned by fields 1-3.
 
@@ -96,29 +96,29 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         3. Intron start position (inclusive)
         4. Intron end position (exclusive)
 
-        If --collect-introns is True:
+        If --collect-junctions is True:
         Tab-delimited tuple columns (collect):
         1. Reference name (RNAME in SAM format) +
             '+' or '-' indicating which strand is the sense strand
         2. Intron start position (inclusive)
         3. Intron end position (exclusive)
-        4. '\x1f'-separated list of sample indexes in which intron was found
-        5. '\x1f'-separated list of numbers of reads in which intron was found
-            in respective sample specified by field 4
+        4. '\x1f'-separated list of sample indexes in which junction was found
+        5. '\x1f'-separated list of numbers of reads in which junction was
+            found in respective sample specified by field 4
 
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
-        input_stream: where to find input introns
+        input_stream: where to find input junctions
         output_stream: where to write output
         manifest_object: object of class LabelsAndIndices that maps indices
             to labels and back; used to count number of samples.
-        sample_fraction: fraction of samples in which an intron must appear
+        sample_fraction: fraction of samples in which a junction must appear
             to pass filter if coverage_threshold criterion is not satisfied
-        coverage_threshold: number of reads that must overlap intron in at
+        coverage_threshold: number of reads that must overlap junction in at
             least one sample to pass filter of sample_fraction criterion is not
             satisfied
-        collect_introns: collects and outputs introns across samples; ignores
-            sample_fraction and coverage_threshold
+        collect_junctions: collects and outputs junctions across samples;
+            ignores sample_fraction and coverage_threshold
         verbose: output extra debugging statements
 
         Return value: tuple (input line count, output line count)
@@ -138,7 +138,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                                         current_sample_indexes.split('\x1f')
                                     ):
                 sample_indexes[sample_index] += int(current_sample_counts[i])
-        if collect_introns:
+        if collect_junctions:
             samples_to_dump = sorted(sample_indexes.items(),
                                         key=lambda sample: sample[0])
             print >>output_stream, 'collect\t%s\t%012d\t%012d\t%s\t%s' % (
@@ -160,7 +160,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                 output_line_count += 1
         elif verbose:
             print >>sys.stderr, (
-                    'Intron (%s, %s, %s) filtered out; it appeared in %d '
+                    'Junction (%s, %s, %s) filtered out; it appeared in %d '
                     'sample(s), and its coverage in any one sample did '
                     'not exceed %d.'
                 ) % (rname_and_strand, pos, end_pos,
@@ -180,21 +180,22 @@ if __name__ == '__main__':
         default=False,
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
              'WRITE TO STDOUT')
-    parser.add_argument('--collect-introns', action='store_const', const=True,
-        default=False,
-        help=('Just collects and outputs unfiltered introns; overrides '
+    parser.add_argument('--collect-junctions', action='store_const',
+        const=True, default=False,
+        help=('Just collects and outputs unfiltered junctions; overrides '
               '--sample-fraction and --coverage-threshold'))
     parser.add_argument('--sample-fraction', type=float, required=False,
         default=0.05,
-        help=('An intron passes the filter if it is present in this fraction '
-              'of samples; if the intron meets neither this criterion nor '
-              'the --coverage-threshold criterion, it is filtered out'))
+        help=('A junction passes the filter if it is present in this '
+              'fraction of samples; if the junction meets neither this '
+              'criterion nor the --coverage-threshold criterion, it is '
+              'filtered out'))
     parser.add_argument('--coverage-threshold', type=int, required=False,
         default=5,
-        help=('An intron passes the filter if it is covered by at least this '
-              'many reads in a single sample; if the intron meets neither '
-              'this criterion nor the --sample-fraction criterion, it is '
-              'filtered out; use -1 to disable'))
+        help=('A junction passes the filter if it is covered by at least '
+              'this many reads in a single sample; if the junction meets '
+              'neither this criterion nor the --sample-fraction criterion, '
+              'it is filtered out; use -1 to disable'))
 
     # Add command-line arguments for dependencies
     manifest.add_args(parser)
@@ -215,10 +216,10 @@ if __name__ == '__main__' and not args.test:
             output_stream=sys.stdout,
             sample_fraction=args.sample_fraction,
             coverage_threshold=args.coverage_threshold,
-            collect_introns=args.collect_introns,
+            collect_junctions=args.collect_junctions,
             verbose=args.verbose
         )
-    print >>sys.stderr, 'DONE with intron_filter.py; in/out=%d/%d; ' \
+    print >>sys.stderr, 'DONE with junction_filter.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (input_line_count, output_line_count,
                             time.time() - start_time)
 elif __name__ == '__main__':
@@ -249,16 +250,16 @@ elif __name__ == '__main__':
                 )
             with open(self.manifest_file, 'w') as manifest_stream:
                 manifest_stream.write(manifest_content)
-            introns = (
+            junctions = (
                     'chr1+\t100\t140\t0\t6\n'
                     'chr2-\t171\t185\t1\x1f2\t2\x1f3\n'
                     'chr3+\t23\t85\t1\t2\n'
                 )
             '''Above, for a coverage_threshold 5 and a sample_fraction 0.5,
-            the introns on chr1+ and chr2- should pass while the intron on
+            the junctions on chr1+ and chr2- should pass while the junction on
             chr3+ should not.'''
             with open(self.input_file, 'w') as output_stream:
-                output_stream.write(introns)
+                output_stream.write(junctions)
             manifest_object = manifest.LabelsAndIndices(self.manifest_file)
             with open(self.input_file) as input_stream, \
                 open(self.output_file, 'w') as output_stream:
@@ -307,16 +308,16 @@ elif __name__ == '__main__':
                 )
             with open(self.manifest_file, 'w') as manifest_stream:
                 manifest_stream.write(manifest_content)
-            introns = (
+            junctions = (
                     'chr1+\t100\t140\t0\t6\n'
                     'chr2-\t171\t185\t1\x1f2\t2\x1f3\n'
                     'chr3+\t23\t85\t1\t2\n'
                     'chr3+\t23\t85\t1\t5\n'
                 )
             '''Above, for a coverage_threshold 5 and a sample_fraction 0.5,
-            the intron on chr2- should NOT pass while the rest should.'''
+            the junction on chr2- should NOT pass while the rest should.'''
             with open(self.input_file, 'w') as output_stream:
-                output_stream.write(introns)
+                output_stream.write(junctions)
             manifest_object = manifest.LabelsAndIndices(self.manifest_file)
             with open(self.input_file) as input_stream, \
                 open(self.output_file, 'w') as output_stream:

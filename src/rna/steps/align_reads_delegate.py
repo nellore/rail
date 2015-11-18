@@ -42,7 +42,7 @@ def print_readletized_output(seq, sample_indexes,
 
         The function divides a sequence seq into several overlapping segments,
         or readlets. These readlets will later be aligned and used to infer the
-        introns that original read sequences without end-to-end alignments
+        junctions that original read sequences without end-to-end alignments
         overlap. In general, readlets have size max_readlet_size and are
         spaced readlet_interval bases apart. Capping readlets cover the ends of
         reads and have minimum size min_readlet_size. capping_multiplier is 
@@ -214,7 +214,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             these reads are assigned the same alignments. If None, second-pass
             alignment is being performed because there were ties or a nonzero
             edit distance during first-pass alignment.
-        output_stream: where to emit exon and intron tuples; typically,
+        output_stream: where to emit exon and junction tuples; typically,
             this is sys.stdout.
         exon_differentials: True iff EC differentials are to be emitted.
         exon_intervals: True iff EC intervals are to be emitted.
@@ -226,7 +226,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             alignment written to stderr increases exponentially with base
             report_multiplier.
         search_filter: determine how large a soft clip on one side of a read
-            is necessary to pass it on to intron search pipeline
+            is necessary to pass it on to junction search pipeline
         min_readlet_size: "capping" readlets (that is, readlets that terminate
             at a given end of the read) are never smaller than this value.
             Ignored if readletize=False.
@@ -322,12 +322,12 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                             and int(split_cigar[0]) >= search_filter) or
                         (split_cigar[-1] == 'S'
                             and int(split_cigar[-2]) >= search_filter)):
-                        search_for_introns = True
+                        search_for_junctions = True
                     else:
-                        search_for_introns = False
+                        search_for_junctions = False
                 except IndexError:
-                    search_for_introns = False
-                if search_for_introns:
+                    search_for_junctions = False
+                if search_for_junctions:
                     sample_indexes, reversed_complement_sample_indexes = (
                             defaultdict(int), defaultdict(int)
                         )
@@ -581,12 +581,12 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                             and int(split_cigar[0]) >= search_filter) or
                         (split_cigar[-1] == 'S'
                             and int(split_cigar[-2]) >= search_filter)):
-                        search_for_introns = True
+                        search_for_junctions = True
                     else:
-                        search_for_introns = False
+                        search_for_junctions = False
                 except IndexError:
-                    search_for_introns = False
-                if search_for_introns:
+                    search_for_junctions = False
+                if search_for_junctions:
                     sample_indexes, reversed_complement_sample_indexes = (
                             defaultdict(int), defaultdict(int)
                         )
@@ -933,7 +933,7 @@ def go(task_partition='0', other_reads=None, second_pass_reads=None,
             or read written to stderr increases exponentially with base
             report_multiplier.
         search_filter: determines how large a soft clip on one side of
-            a read is necessary to pass it on to intron search pipeline
+            a read is necessary to pass it on to junction search pipeline
         min_readlet_size: "capping" readlets (that is, readlets that terminate
             at a given end of the read) are never smaller than this value
         max_readlet_size: size of every noncapping readlet
@@ -1067,7 +1067,7 @@ if __name__ == '__main__':
     parser.add_argument('--search-filter', type=int, required=False,
         default=1,
         help=('Minimum size of soft-clipped end that dispatches a read for '
-              'intron search'))
+              'junction search'))
     parser.add_argument('--k-value', type=int, required=False,
         default=1,
         help='Argument of -k parameter from Bowtie 2')

@@ -3,13 +3,13 @@
 Rail-RNA-compare_alignments
 Follows Rail-RNA-align_reads / Rail-RNA-realign_reads
 Precedes Rail-RNA-collapse / Rail-RNA-bam / Rail-RNA-bed_pre
-    / Rail-RNA-intron_coverage
+    / Rail-RNA-junction_coverage
 
 Combines alignments of same reads from previous steps (so far,
 Rail-RNA-align_reads and Rail-RNA-realign_reads) so alignment scores can be 
 compared. If there are no ties in the top alignment score, alignments are
 printed. Otherwise, alignment printing is postponed until Rail-RNA-break_ties,
-when coverage of alignments by introns is used to break ties.
+when coverage of alignments by junctions is used to break ties.
 
 Input (read from stdin)
 ----------------------------
@@ -43,16 +43,16 @@ Format 2 (exon_diff); tab-delimited output tuple columns:
 
 Note that only unique alignments are currently output as ivals and/or diffs.
 
-Exonic chunks / introns
+Exonic chunks / junctions
 
-Format 3 (sam_intron_ties) output only for ties in alignment score (which are
+Format 3 (sam_junction_ties) output only for ties in alignment score (which are
     within some tie margin as decided by multiread_to_report);
 tab-delimited output tuple columns:
 Standard SAM output except fields are in different order -- and the first four
-fields include sample/intron information. If an alignment overlaps k introns, k
-lines are output.
+fields include sample/junction information. If an alignment overlaps k
+junctions, k lines are output.
 1. The character 'N' so the line can be matched up
-    with intron bed lines
+    with junction bed lines
 2. Sample index
 3. Number string representing RNAME; see BowtieIndexReference class
     in bowtie_index for conversion information
@@ -72,7 +72,7 @@ lines are output.
 ... + optional fields
 
 Format 4 (sam_clip_ties) output only for ties in alignment score when
-    no introns are overlapped -- these alignments are almost invariably
+    no junctions are overlapped -- these alignments are almost invariably
     soft-clipped
 [SAME AS SAM FIELDS; see SAM format specification]
 
@@ -80,7 +80,7 @@ Format 5 (sam); tab-delimited output tuple columns:
 Standard 11-column SAM output except fields are in different order, and the
 first field corresponds to sample label. (Fields are reordered to facilitate
 partitioning by sample name/RNAME and sorting by POS.) Each line corresponds to
-read overlapping at least one intron in the reference. The CIGAR string
+a read overlapping at least one junction in the reference. The CIGAR string
 represents intronic bases with N's and exonic bases with M's.
 The order of the fields is as follows.
 1. Sample index if outputting BAMs by sample OR sample-rname index if
@@ -98,22 +98,22 @@ The order of the fields is as follows.
 10. TLEN
 11. SEQ
 12. QUAL
-... + optional fields, including -- for reads overlapping introns --:
+... + optional fields, including -- for reads overlapping junctions --:
 XS:A:'+' or '-' depending on which strand is the sense strand
 
-Introns (intron_bed), insertions/deletions (indel_bed)
+Junctions (junction_bed), insertions/deletions (indel_bed)
 
 Format 6; tab-delimited output tuple columns:
-1. 'I', 'D', or 'N' for insertion, deletion, or intron line
+1. 'I', 'D', or 'N' for insertion, deletion, or junction line
 2. Number string representing RNAME
 3. Start position (Last base before insertion, first base of deletion,
                     or first base of intron)
 4. End position (Last base before insertion, last base of deletion (exclusive),
                     or last base of intron (exclusive))
-5. '+' or '-' indicating which strand is the sense strand for introns,
+5. '+' or '-' indicating which strand is the sense strand for junctions,
    inserted sequence for insertions, or deleted sequence for deletions
 6. Sample index
-----Next fields are for introns only; they are '\x1c' for indels----
+----Next fields are for junctions only; they are '\x1c' for indels----
 7. Number of nucleotides between 5' end of intron and 5' end of read from which
     it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND. That is,
     if the sense strand is the reverse strand, this is the distance between the
@@ -121,7 +121,7 @@ Format 6; tab-delimited output tuple columns:
 8. Number of nucleotides between 3' end of intron and 3' end of read from which
     it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
 --------------------------------------------------------------------
-9. Number of instances of intron, insertion, or deletion in sample; this is
+9. Number of instances of junction, insertion, or deletion in sample; this is
     always +1 before bed_pre combiner/reducer
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
@@ -145,7 +145,7 @@ site.addsitedir(base_path)
 
 from dooplicity.tools import xstream
 from alignment_handlers \
-    import multiread_with_introns, AlignmentPrinter, multiread_to_report
+    import multiread_with_junctions, AlignmentPrinter, multiread_to_report
 import partition
 import manifest
 import bowtie
@@ -244,7 +244,7 @@ if __name__ == '__main__':
             '''Correct positions to match original reference's, correct
             CIGARs, eliminate duplicates, and decide primary alignment.'''
             try:
-                corrected_multiread = multiread_with_introns(
+                corrected_multiread = multiread_with_junctions(
                                             multiread,
                                             stranded=args.stranded
                                         )

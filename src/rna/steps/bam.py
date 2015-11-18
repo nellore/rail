@@ -14,7 +14,7 @@ Input (read from stdin)
 Standard SAM except fields are in different order, and the first field 
 corresponds to sample label. (Fields are reordered to facilitate partitioning
 by sample name/RNAME and sorting by POS.) Each line corresponds to an
-end-to-end alignment or an alignment overlapping at least one intron in the 
+end-to-end alignment or an alignment overlapping at least one junction in the 
 reference. The order of the fields is as follows.
 1. Sample index if outputting BAMs by sample OR sample-rname index if
     outputting BAMs by chr
@@ -30,7 +30,7 @@ reference. The order of the fields is as follows.
 10. TLEN
 11. SEQ
 12. QUAL
-... + optional fields, including -- for reads overlapping introns --:
+... + optional fields, including -- for reads overlapping junctions --:
 XS:A:'+' or '-' depending on which strand is the sense strand
 
 Input is partitioned by sample label (and RNAME if outputing by chromosome)
