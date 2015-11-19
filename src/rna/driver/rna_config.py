@@ -2501,7 +2501,7 @@ while tries < 5:
     break_outer_loop = False
     s3cmd_process \\
         = subprocess.Popen(['s3cmd', 'get', url, './', '-f',
-                    '--add-header', '"x-amz-request-payer: requester"'])
+                    '--add-header', 'x-amz-request-payer: requester'])
     time.sleep(1)
     last_check_time = time.time()
     try:
@@ -3651,7 +3651,17 @@ class RailRnaPreprocess(object):
 
     @staticmethod
     def srabootstrap(base):
-        return [
+        return ([{
+                    'Name' : 'Transfer dbGaP key file to nodes',
+                    'ScriptBootstrapAction' : {
+                        'Args' : [
+                            base.dbgap_s3_path,
+                            '/mnt/space',
+                            'DBGAP.ngc'
+                        ],
+                        'Path' : base.copy_bootstrap
+                    }
+                }] if hasattr(base, 'dbgap_s3_path') else []) + [
                     {
                         'Name' : 'Set up SRA Tools workspace',
                         'ScriptBootstrapAction' : {
@@ -4355,8 +4365,8 @@ class RailRnaAlign(object):
                 '-a', '--assembly', type=str, required=True,
                 metavar='<choice | tgz>',
                 help=('assembly to use for alignment. <choice> can be in '
-                      '{"hg19", "hg38"}. otherwise, specify path to tar.gz '
-                      'Rail archive on S3')
+                      '{"hg19", "hg38", "mm9", "mm10", "dm3", "dm6"}. '
+                      'Otherwise, specify path to tar.gz Rail archive on S3')
             )
         algo_parser.add_argument(
             '-k', type=int, required=False,
@@ -5315,17 +5325,7 @@ class RailRnaAlign(object):
                     'Path' : base.copy_bootstrap
                 }
             }
-        ] + ([{
-                'Name' : 'Transfer dbGaP key file to nodes',
-                'ScriptBootstrapAction' : {
-                    'Args' : [
-                        base.dbgap_s3_path,
-                        '/mnt/space',
-                        'DBGAP.ngc'
-                    ],
-                    'Path' : base.copy_bootstrap
-                }
-            }] if hasattr(base, 'dbgap_s3_path') else [])
+        ]
 
 class RailRnaLocalPreprocessJson(object):
     """ Constructs JSON for local mode + preprocess job flow. """

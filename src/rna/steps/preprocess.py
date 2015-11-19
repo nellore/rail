@@ -349,10 +349,10 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 # Download
                 print >>sys.stderr, 'Retrieving URL "%s"...' \
                     % source_url.to_url()
-                if source_url.is_sra:
-                    download_dir = temp_dir
-                elif source_url.is_dbgap:
+                if source_url.is_dbgap:
                     download_dir = workspace_dir
+                elif source_url.is_sra:
+                    download_dir = temp_dir
                 if source_url.is_sra or source_url.is_dbgap:
                     sra_accession = source_url.to_url()
                     fastq_dump_command = (
@@ -368,9 +368,9 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             executable='/bin/bash',
                             stderr=subprocess.STDOUT
                         )
-                    except subprocess.CalledProcessError:
+                    except subprocess.CalledProcessError as e:
                         raise RuntimeError(('Error "%s" encountered executing '
-                                            'command %s.') % (sra_errors,
+                                            'command %s.') % (e,
                                                         fastq_dump_command))
                     from glob import glob
                     sources = sorted(glob(
