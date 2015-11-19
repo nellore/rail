@@ -5832,7 +5832,7 @@ class RailRnaElasticAlignJson(object):
         ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4,
-        secure_stack_name=None):
+        secure_stack_name=None, assembly='hg19'):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -5862,6 +5862,7 @@ class RailRnaElasticAlignJson(object):
             intermediate_lifetime=intermediate_lifetime,
             secure_stack_name=secure_stack_name)
         RailRnaAlign(base, input_dir=input_dir,
+            assembly=assembly,
             elastic=True, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
@@ -6244,7 +6245,7 @@ class RailRnaElasticAllJson(object):
         keep_alive=False, termination_protected=False, check_manifest=True,
         no_direct_copy=False, consistent_view=False,
         intermediate_lifetime=4, max_task_attempts=4, dbgap_key=None,
-        secure_stack_name=None):
+        secure_stack_name=None, assembly='hg19'):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -6277,7 +6278,8 @@ class RailRnaElasticAllJson(object):
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
             skip_bad_records=skip_bad_records)
-        RailRnaAlign(base, elastic=True, bowtie1_exe=bowtie1_exe,
+        RailRnaAlign(base, elastic=True,
+            assembly=assembly, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
             k=k, bowtie2_args=bowtie2_args, samtools_exe=samtools_exe,
