@@ -888,6 +888,7 @@ if __name__ == '__main__':
         mode = 'elastic'
         json_creator = RailRnaElasticAllJson(
                 args.manifest, args.output,
+                assembly=args.assembly,
                 do_not_bin_quals=args.do_not_bin_quals,
                 short_read_names=args.short_read_names,
                 skip_bad_records=args.skip_bad_records,
@@ -962,6 +963,7 @@ if __name__ == '__main__':
         mode = 'elastic'
         json_creator = RailRnaElasticAlignJson(
                 args.manifest, args.output,
+                assembly=args.assembly,
                 isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
