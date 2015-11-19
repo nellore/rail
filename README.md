@@ -57,8 +57,6 @@ Rail-RNA takes as input a [Myrna](http://bowtie-bio.sourceforge.net/myrna/)-styl
 1. (for a set of unpaired input reads) `<FASTQ URL>(tab)<optional MD5>(tab)<sample label>`
 2. (for a set of paired input reads) `<FASTQ URL 1>(tab)<optional MD5 1>(tab)<FASTQ URL 2>(tab)<optional MD5 2>(tab)<sample label>`
 
-`<sample label>` must be formatted as `<group ID>-<biorep ID>-<techrep ID>`.
-
 **Find some RNA-seq data, create a manifest file, run**
 ```
 rail-rna

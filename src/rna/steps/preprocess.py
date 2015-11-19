@@ -357,33 +357,44 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     sra_accession = source_url.to_url()
                     fastq_dump_command = (
                             'set -exo pipefail; cd {download_dir}; '
-                            '{fastq_dump_exe} -I --split-files '
+                            '{fastq_dump_exe} -X 1 -Z --split-spot '
                             '{sra_accession}'
                         ).format(download_dir=download_dir,
                                     fastq_dump_exe=fastq_dump_exe,
                                     sra_accession=sra_accession)
                     try:
-                        sra_errors = subprocess.check_output(
+                        content = subprocess.check_output(
                             fastq_dump_command, shell=True, 
                             executable='/bin/bash',
                             stderr=subprocess.STDOUT
                         )
                     except subprocess.CalledProcessError as e:
                         raise RuntimeError(('Error "%s" encountered executing '
-                                            'command %s.') % (e,
+                                            'command "%s".') % (e.output,
                                                         fastq_dump_command))
-                    from glob import glob
-                    sources = sorted(glob(
-                        os.path.join(download_dir, sra_accession + '*.fastq'))
-                    ) # ensure 1 is before 2 if paired-end
-                    # Schedule for deletion
-                    def silent_remove(filename):
-                        try:
-                            os.remove(filename)
-                        except OSError as e:
-                            pass
-                    for source in sources:
-                        register_cleanup(silent_remove, source)
+                    sra_line_count = content.count('\n')
+                    if sra_line_count == 4:
+                        sra_paired_end = False
+                    elif sra_line_count == 8:
+                        sra_paired_end = True
+                    else:
+                        raise RuntimeError(
+                                ('Unexpected number of lines "%d" in single '
+                                 'record from fastq-dump command "%s".')
+                                    % (sra_line_count, fastq_dump_command)
+                            )
+                    sources.append(os.devnull)
+                    fastq_dump_command = (
+                            'set -exo pipefail; cd {download_dir}; '
+                            '{fastq_dump_exe} -I --stdout'
+                            '{sra_accession}'
+                        ).format(download_dir=download_dir,
+                                    fastq_dump_exe=fastq_dump_exe,
+                                    sra_accession=sra_accession)
+                    sra_process = subprocess.Popen(fastq_dump_command,
+                                                    shell=True,
+                                                    executable='/bin/bash',
+                                                    stdout=subprocess.PIPE)
                 else:
                     mover.get(source_url, temp_dir)
                     downloaded = list(
@@ -404,6 +415,13 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 None, sources[1]
             ) as source_stream_2:
             source_streams = [source_stream_1, source_stream_2]
+            if all([source_stream == os.devnull
+                    for source_stream in source_streams]):
+                # SRA data is live
+                if sra_paired_end:
+                    source_streams = [sra_process.stdout, sra_process.stdout]
+                else:
+                    source_streams = [sra_process.stdout, os.devnull]
             break_outer_loop = False
             while True:
                 if not to_stdout:

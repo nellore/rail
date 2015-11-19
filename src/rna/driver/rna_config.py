@@ -1604,7 +1604,6 @@ class RailRnaLocal(object):
                         if line[0] == '#' or not line.strip(): continue
                         base.sample_count += 1
                         tokens = line.strip().split('\t')
-                        check_sample_label = True
                         if len(tokens) == 5:
                             files_to_check.extend([tokens[0], tokens[2]])
                         elif len(tokens) == 3:
@@ -1617,20 +1616,6 @@ class RailRnaLocal(object):
                                                 'manifest file {0} '
                                                 'has an invalid number of '
                                                 'tokens:\n{1}'
-                                                ).format(
-                                                        manifest_url.to_url(),
-                                                        line.strip()
-                                                    ))
-                            check_sample_label = False
-                        if check_sample_label and tokens[-1].count('-') != 2:
-                            line = line.strip()
-                            base.errors.append(('The following line from the '
-                                                'manifest file {0} '
-                                                'has an invalid sample label: '
-                                                '\n{1}\nA valid sample label '
-                                                'takes the following form:\n'
-                                                '<Group ID>-<BioRep ID>-'
-                                                '<TechRep ID>'
                                                 ).format(
                                                         manifest_url.to_url(),
                                                         line.strip()
@@ -2254,7 +2239,6 @@ class RailRnaElastic(object):
                 if line[0] == '#' or not line.strip(): continue
                 base.sample_count += 1
                 tokens = line.strip().split('\t')
-                check_sample_label = True
                 if len(tokens) == 5:
                     files_to_check.extend([tokens[0], tokens[2]])
                 elif len(tokens) == 3:
@@ -2266,23 +2250,10 @@ class RailRnaElastic(object):
                     elif single_url.is_sra:
                         sra_tools_needed = True
                 else:
-                    check_sample_label = False
                     base.errors.append(('The following line from the '
                                         'manifest file {0} '
                                         'has an invalid number of '
                                         'tokens:\n{1}'
-                                        ).format(
-                                                manifest_url.to_url(),
-                                                line.strip()
-                                            ))
-                if check_sample_label and tokens[-1].count('-') != 2:
-                    base.errors.append(('The following line from the '
-                                        'manifest file {0} '
-                                        'has an invalid sample label: '
-                                        '\n{1}\nA valid sample label '
-                                        'takes the following form:\n'
-                                        '<Group ID>-<BioRep ID>-'
-                                        '<TechRep ID>'
                                         ).format(
                                                 manifest_url.to_url(),
                                                 line.strip()
@@ -2877,6 +2848,7 @@ exit $STATUS
                 with open(vdb_bootstrap, 'w') as script_stream:
                     print >>script_stream, (
 """#!/usr/bin/env bash
+export HOME=/home/hadoop
 
 mkdir -p {vdb_workspace}/insecure
 mkdir -p ~/.ncbi
@@ -2893,6 +2865,7 @@ mkdir -p {vdb_workspace}/secure
                 with open(vdb_bootstrap, 'w') as script_stream:
                     print >>script_stream, (
 """#!/usr/bin/env bash
+export HOME=/home/hadoop
 
 mkdir -p {vdb_workspace}/insecure
 mkdir -p ~/.ncbi
