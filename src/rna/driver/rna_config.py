@@ -2505,7 +2505,7 @@ while tries < 5:
     break_outer_loop = False
     s3cmd_process \\
         = subprocess.Popen(['s3cmd', 'get', url, './', '-f',
-                    '--add-header="x-amz-request-payer: requester"'])
+                    '--add-header', '"x-amz-request-payer: requester"'])
     time.sleep(1)
     last_check_time = time.time()
     try:
@@ -4359,8 +4359,8 @@ class RailRnaAlign(object):
                 '-a', '--assembly', type=str, required=True,
                 metavar='<choice | tgz>',
                 help=('assembly to use for alignment. <choice> can be in '
-                      '{"hg19"}. otherwise, specify path to tar.gz Rail '
-                      'archive on S3')
+                      '{"hg19", "hg38"}. otherwise, specify path to tar.gz '
+                      'Rail archive on S3')
             )
         algo_parser.add_argument(
             '-k', type=int, required=False,
