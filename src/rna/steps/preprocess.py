@@ -353,7 +353,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     download_dir = workspace_dir
                 elif source_url.is_sra:
                     download_dir = temp_dir
-                if source_url.is_sra or source_url.is_dbgap:
+                if source_url.is_sra:
                     sra_accession = source_url.to_url()
                     fastq_dump_command = (
                             'set -exo pipefail; cd {download_dir}; '
