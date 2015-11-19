@@ -2401,20 +2401,16 @@ class RailRnaElastic(object):
                                     )
                 question = ('Manifest file (--manifest) includes dbGaP data '
                             'and/or Rail-RNA is being run in secure mode. '
-                            'Do you certify that the EC2 subnet ID '
-                            '"{ec2_subnet_id}", EC2 master security group ID '
-                            '"{ec2_master_security_group_id}", and EC2 slave '
-                            'security group ID '
-                            '"{ec2_slave_security_group_id}" '
-                            'correspond to a stack that provides '
-                            'the security features included in one of the '
-                            'dbGaP CloudFormation templates in '
-                            '$RAILDOTBIO/rail-rna/cloudformation?').format(
-                                    ec2_subnet_id=base.ec2_subnet_id,
-                                    ec2_master_security_group_id=\
-                                        base.ec2_master_security_group_id,
-                                    ec2_slave_security_group_id=\
-                                        base.ec2_slave_security_group_id
+                            'Do you certify that the stack named "{}" with '
+                            'EC2 subnet ID "{}", master security group ID '
+                            '"{}", and slave security group ID "{}" is a '
+                            'secure stack created by following the '
+                            'instructions at '
+                            'http://docs.rail.bio/dbgap/?').format(
+                                    base.secure_stack_name,
+                                    base.ec2_subnet_id,
+                                    base.ec2_master_security_group_id,
+                                    base.ec2_slave_security_group_id
                                 )
                 while True:
                     sys.stdout.write('%s [y/n]: ' % question)
