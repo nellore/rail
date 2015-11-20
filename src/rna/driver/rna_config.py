@@ -2377,7 +2377,7 @@ class RailRnaElastic(object):
                             '"{}", and slave security group ID "{}" is a '
                             'secure stack created by following the '
                             'instructions at '
-                            'http://docs.rail.bio/dbgap/?').format(
+                            'http://docs.rail.bio/dbgap/ ?').format(
                                     base.secure_stack_name,
                                     base.ec2_subnet_id,
                                     base.ec2_master_security_group_id,
@@ -2857,6 +2857,7 @@ cat >~/.ncbi/user-settings.mkfg <<EOF
 EOF
 mkdir -p {vdb_workspace}/secure
 {vdb_config} --import /mnt/space/DBGAP.ngc {vdb_workspace}/secure
+sudo ln -s /home/hadoop/.ncbi /home/.ncbi
 """
                     ).format(vdb_config=_elastic_vdb_config_exe,
                              vdb_workspace=_elastic_vdb_workspace)
@@ -2872,6 +2873,7 @@ mkdir -p ~/.ncbi
 cat >~/.ncbi/user-settings.mkfg <<EOF
 /repository/user/main/public/root = "{vdb_workspace}/insecure"
 EOF
+sudo ln -s /home/hadoop/.ncbi /home/.ncbi
 """
                     ).format(vdb_workspace=_elastic_vdb_workspace)
         base.vdb_bootstrap = path_join(
