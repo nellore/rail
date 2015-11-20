@@ -3816,7 +3816,7 @@ class RailRnaAlign(object):
             # Check input dir
             if input_dir is not None:
                 if not os.path.exists(input_dir):
-                    base_errors.append(('Input directory (--input) '
+                    base.errors.append(('Input directory (--input) '
                                         '"{0}" does not exist').format(
                                                             input_dir
                                                         ))

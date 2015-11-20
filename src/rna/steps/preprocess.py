@@ -355,6 +355,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     download_dir = temp_dir
                 if source_url.is_sra:
                     sra_accession = source_url.to_url()
+                    print os.listdir
                     fastq_dump_command = (
                             'set -exo pipefail; cd {download_dir}; '
                             '{fastq_dump_exe} -X 1 -Z --split-spot '
@@ -605,89 +606,72 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                     else:
                                         raise
                         elif lines[0][0] in fasta_cues:
-                            if records_to_consume and not skipped:
-                                '''Skip lines as necessary; for paired-end
-                                reads skip the largest even number of records 
-                                less than records_to_consume.'''
-                                if len(source_urls) == 1:
-                                    # single-end
-                                    line_skip_count = max(
-                                            skip_count * 2 - 1, 0
-                                        )
-                                else:
-                                    # paired-end
-                                    line_skip_count = max(
-                                            ((skip_count / 2) * 2 - 1), 0
-                                        )
-                                    for _ in xrange(line_skip_count):
-                                        next(source_stream_2)
-                                for _ in xrange(line_skip_count):
-                                    next(source_stream_1)
-                                if skip_count:
-                                    lines = []
-                                    for source_stream in source_streams:
-                                        lines.append(source_stream.readline())
-                                    if not lines[0]:
-                                        break_outer_loop = True
-                                        break
-                                    lines = [line.strip() for line in lines]
-                                skipped = True
-                            original_qnames, seqs, quals, lines = []*4
-                            for i, source_stream in enumerate(source_streams):
-                                next_line = source_stream.readline()
-                                if not next_line: break
-                                line_numbers[i] += 1
-                                while next_line[0] == ';':
-                                    # Skip comment lines
-                                    next_line = source_stream.readline()
-                                    line_numbers[i] += 1
-                                try:
+                            seqs = [[], []]
+                            next_lines = []
+                            for p, source_stream in enumerate(source_streams):
+                                while True:
+                                    next_line \
+                                        = source_stream.readline().strip()
                                     try:
-                                        # Kill spaces in name
-                                        original_qnames.append(
-                                                line[1:].replace(' ', '_')
-                                            )
+                                        if next_line[0] in fasta_cues:
+                                            break
+                                        else:
+                                            try:
+                                                seqs[p].append(next_line)
+                                            except IndexError:
+                                                raise
                                     except IndexError:
-                                        raise RuntimeError(
-                                            ('No QNAME for read '
-                                             'above line %d in file "%s".') % (
-                                                            line_numbers[i],
-                                                            sources[i]
-                                                        ) 
+                                        break
+                                next_lines.append(next_line)
+                            seqs = [''.join(seq) for seq in seqs]
+                            line_numbers = [i + 1 for i in line_numbers]
+                            try:
+                                try:
+                                    # Kill spaces in name
+                                    original_qnames = \
+                                        [line[1:].replace(' ', '_')
+                                            for line in lines]
+                                except IndexError:
+                                    raise RuntimeError(
+                                            'Error finding QNAME at ' 
+                                            'line %d of either %s or %s' % (
+                                                        sources[0],
+                                                        sources[1]
+                                                    )
                                         )
-                                    assert next_line[0] not in fasta_cues, (
-                                            'No read sequence for read named '
-                                            '"%s" above line %d in file "%s".'
-                                        ) % (
-                                            original_qnames[i],
-                                            line_numbers[i],
-                                            sources[i]
-                                        )
-                                except (IndexError, 
-                                        RuntimeError, AssertionError) as e:
+                            except (AssertionError,
+                                    IndexError, RuntimeError) as e:
+                                if skip_bad_records:
+                                    print >>sys.stderr, ('Error "%s" '
+                                            'encountered; skipping bad record.'
+                                        ) % e.message
+                                    for source_stream in source_streams:
+                                        source_stream.readline()
+                                    line_numbers = [
+                                            i + 1 for i in line_numbers
+                                        ]
+                                    bad_record_skip = True
+                                else:
+                                    raise
+                            else:
+                                try:
+                                    quals = [
+                                        'h'*len(seq) for seq in seqs
+                                        ]
+                                except Exception as e:
                                     if skip_bad_records:
                                         print >>sys.stderr, (
-                                                'Error "%s" encountered; '
+                                                'Error "%s" encountered '
+                                                'trying to convert quality '
+                                                'string to Sanger format; '
                                                 'skipping bad record.'
                                             ) % e.message
-                                        while next_line[0] not in fasta_cues:
-                                            next_line \
-                                                = source_stream.readline()
-                                            line_numbers[i] += 1
-                                        lines.append(next_line)
-                                        read_next_line = False
                                         bad_record_skip = True
                                     else:
                                         raise
-                                read_lines = []
-                                while next_line[0] not in fasta_cues:
-                                    read_lines.append(next_line.strip())
-                                    next_line = source_stream.readline()
-                                    line_numbers[i] += 1
-                                seqs.append(''.join(read_lines))
-                                quals.append('I'*len(seqs[-1]))
-                                lines.append(next_line)
-                                read_next_line = False
+                                line_numbers = [i + 1 for i in line_numbers]
+                            lines = next_lines
+                            read_next_line = False
                         if bad_record_skip:
                             seqs = []
                             # Fake record-printing to get to records_to_consume

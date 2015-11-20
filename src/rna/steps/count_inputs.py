@@ -65,6 +65,7 @@ fastq_cues = set(['@'])
 fasta_cues = set(['>', ';'])
 
 input_line_count, output_line_count = 0, 0
+line_divider = 4
 
 for input_line_count, line in enumerate(sys.stdin):
     # Kill offset from start of manifest file
@@ -88,12 +89,11 @@ for input_line_count, line in enumerate(sys.stdin):
         continue
     with xopen(None, file_to_count) as input_stream:
         first_char = input_stream.readline()[0]
-        if first_char in fastq_cues:
-            # 4 lines per record
-            line_divider = 4
-        elif first_char in fasta_cues:
-            line_divider = 2
-        else:
+        if first_char in fasta_cues:
+            sys.stdout.write(line)
+            output_line_count += 1
+            continue
+        elif first_char not in fastq_cues:
             raise RuntimeError(
                     'File "{}" is neither a FASTA nor a FASTQ file.'.format(
                             file_to_count
