@@ -365,7 +365,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     try:
                         subprocess.check_call(
                             fastq_dump_command, shell=True, 
-                            executable='/bin/bash'
+                            executable='/bin/bash',
+                            stdout=os.devnull
                         )
                     except subprocess.CalledProcessError as e:
                         raise RuntimeError(('Error "%s" encountered executing '
@@ -407,7 +408,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     sources.append(os.devnull)
                     fastq_dump_command = (
                             'set -exo pipefail; cd {download_dir}; '
-                            '{fastq_dump_exe} -I --stdout '
+                            '{fastq_dump_exe} --split-spot -I --stdout '
                             '{sra_accession}'
                         ).format(download_dir=download_dir,
                                     fastq_dump_exe=fastq_dump_exe,

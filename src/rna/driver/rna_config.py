@@ -2469,10 +2469,15 @@ import subprocess
 tries = 0
 url = sys.argv[1]
 filename = sys.argv[2]
+split_url = [el for el in url.split('/') if el not in ['s3:', '']]
+bucket_name = split_url[0]
+key = '/'.join(split_url[1:])
 while tries < 5:
     break_outer_loop = False
     cli_process \\
-        = subprocess.Popen(['aws', 's3', 'cp', url, './'])
+        = subprocess.Popen(['aws', 's3api', 'get-object',
+         '--bucket', bucket_name, '--key', key,
+         '--request-payer', 'requester', filename])
     time.sleep(1)
     last_check_time = time.time()
     try:
@@ -2505,8 +2510,8 @@ while tries < 5:
         continue
     if cli_process.poll() > 0:
         if tries > 5:
-            raise RuntimeError(('Non-zero exitlevel %d from s3cmd '
-                                'get command')  % (
+            raise RuntimeError(('Non-zero exitlevel %d from CLI '
+                                's3api command')  % (
                                                 cli_process.poll()
                                             ))
         else:
