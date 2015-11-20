@@ -2230,7 +2230,8 @@ class RailRnaElastic(object):
                                 'filesystem; Rail-RNA uploads this '
                                 'file to S3 securely with server-side '
                                 'encryption enabled and schedules '
-                                'it for deletion.').format(dbgap_key))
+                                'it for deletion.').format(
+                                    base.dbgap_key))
         base.dbgap_present = False
         files_to_check = []
         base.sample_count = 0
