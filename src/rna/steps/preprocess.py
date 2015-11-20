@@ -854,6 +854,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             except OSError:
                 pass
         if 'sra_process' in locals():
+            sra_process.stdout.close()
             sra_return_code = sra_process.wait()
             if sra_return_code > 0:
                 raise RuntimeError(('fastq-dump terminated with exit '

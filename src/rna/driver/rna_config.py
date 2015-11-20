@@ -2470,16 +2470,15 @@ url = sys.argv[1]
 filename = sys.argv[2]
 while tries < 5:
     break_outer_loop = False
-    s3cmd_process \\
-        = subprocess.Popen(['s3cmd', 'get', url, './', '-f',
-                    '--add-header', 'x-amz-request-payer: requester'])
+    cli_process \\
+        = subprocess.Popen(['aws', 's3', 'cp', url, './'])
     time.sleep(1)
     last_check_time = time.time()
     try:
         last_size = os.path.getsize(filename)
     except OSError:
         last_size = 0
-    while s3cmd_process.poll() is None:
+    while cli_process.poll() is None:
         now_time = time.time()
         if now_time - last_check_time > 120:
             try:
@@ -2496,18 +2495,18 @@ while tries < 5:
             time.sleep(1)
     if break_outer_loop:
         tries += 1
-        s3cmd_process.kill()
+        cli_process.kill()
         try:
             os.remove(filename)
         except OSError:
             pass
         time.sleep(2)
         continue
-    if s3cmd_process.poll() > 0:
+    if cli_process.poll() > 0:
         if tries > 5:
             raise RuntimeError(('Non-zero exitlevel %d from s3cmd '
                                 'get command')  % (
-                                                s3cmd_process.poll()
+                                                cli_process.poll()
                                             ))
         else:
             try:
