@@ -366,7 +366,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                         subprocess.check_call(
                             fastq_dump_command, shell=True, 
                             executable='/bin/bash',
-                            stdout=os.devnull
+                            stdout=sys.stderr
                         )
                     except subprocess.CalledProcessError as e:
                         raise RuntimeError(('Error "%s" encountered executing '
