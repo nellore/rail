@@ -222,7 +222,7 @@ else:
 
     from contextlib import contextmanager
     @contextmanager
-    def stream_and_upload(rnames, filename=None, mover=None, output_url=None
+    def stream_and_upload(rnames, filename=None, mover=None, output_url=None,
                             sam=False, samtools_exe=None):
         """ Yields output stream to write to and uploads as necessary
 
@@ -281,14 +281,14 @@ else:
             finally:
                 output_stream.close()
                 samtools_return = samtools_process.wait()
-                    if samtools_return:
-                        raise RuntimeError(
-                                'samtools returned exit code %d' 
-                                    % samtools_return
-                            )
+                if samtools_return:
+                    raise RuntimeError(
+                            'samtools returned exit code %d' 
+                                % samtools_return
+                        )
                 samtools_stream.close()
                 # Index bam
-                unmapped = output_path.endswith('.unmapped.bam')
+                unmapped = filename.endswith('.unmapped.bam')
                 if not unmapped:
                     subprocess.check_call([samtools_exe, 'index',
                                             filename],
@@ -331,7 +331,7 @@ else:
                         output_url=(None if args.out is None else output_url),
                         sam=args.output_sam,
                         samtools_exe=args.samtools_exe
-                    ):
+                    ) as output_stream:
                 for record in xpartition:
                     sam_line_to_print = [record[1][:254], record[2], rname,
                                          str(int(record[0]))] + [
@@ -379,7 +379,7 @@ else:
                         output_url=(None if args.out is None else output_url),
                         sam=args.output_sam,
                         samtools_exe=args.samtools_exe
-                    ):
+                    ) as output_stream:
                 for record in xpartition:
                     sam_line_to_print = [record[1][:254], record[2], rname,
                                          str(int(record[0]))] + [
