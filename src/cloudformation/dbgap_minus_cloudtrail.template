@@ -33,14 +33,6 @@
         "PolicyDocument" : {
           "Version": "2012-10-17",
           "Statement": [
-              "Action": "s3:PutObject",
-              "Resource": { "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref":"S3Bucket"}, "/AWSLogs/", {"Ref":"AWS::AccountId"}, "/*"]]},
-              "Condition": {
-                "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
-                }
-              }
-            },
             {
                "Sid":"DenyUnEncryptedObjectUploads",
                "Effect":"Deny",
