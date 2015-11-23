@@ -72,7 +72,7 @@
       "Properties" : {
         "VpcId" : { "Ref" : "VPC" },
         "CidrBlock" : { "Fn::FindInMap" : [ "SubnetConfig", "Public", "CIDR" ]},
-        "AvailabilityZone" : { "Ref" : "PublicSubnetAvailabilityZone" }
+        "AvailabilityZone" : { "Ref" : "PublicSubnetAvailabilityZone" },
         "Tags" : [
           { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
           { "Key" : "Network", "Value" : "Public" }
