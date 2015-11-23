@@ -2857,6 +2857,7 @@ exit $STATUS
                 with open(vdb_bootstrap, 'w') as script_stream:
                     print >>script_stream, (
 """#!/usr/bin/env bash
+set -ex
 export HOME=/home/hadoop
 
 mkdir -p {vdb_workspace}/insecure
@@ -2879,11 +2880,9 @@ import sys
 for line in sys.stdin:
     tokens = [token.strip() for token in line.split('=')]
     if tokens and tokens[0].endswith('cache-disabled'):
-        tokens[2] = '"true"'
-        print ' = '.join(tokens)
+        print tokens[0] + ' = "true"'
     elif tokens and tokens[0].endswith('cache-enabled'):
-        tokens[2] = '"false"'
-        print ' = '.join(tokens)
+        print tokens[0] + ' = "false"'
     else:
         print line,
 EOF
@@ -2898,6 +2897,7 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                 with open(vdb_bootstrap, 'w') as script_stream:
                     print >>script_stream, (
 """#!/usr/bin/env bash
+set -ex
 export HOME=/home/hadoop
 
 mkdir -p {vdb_workspace}/insecure
