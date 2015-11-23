@@ -2390,9 +2390,12 @@ class RailRnaElastic(object):
                         try:
                             if not strtobool(raw_input().lower()):
                                 print_to_screen(
-                                    'Set up a secure VPC and try again.',
+                                    'Follow the instructions at '
+                                    'http://docs.rail.bio/dbgap/ '
+                                    'and try again.',
                                     newline=True, carriage_return=True,
                                 )
+                                quit()
                             else: break
                         except KeyboardInterrupt:
                             sys.stdout.write('\n')
@@ -2706,6 +2709,7 @@ if [ $STATUS -eq 0 ]; then
     ENCRYPTED_SPACE=$DIR/space
     DFS_DATA_DIR=$DIR/var/lib/hadoop/dfs
     TMP_DATA_DIR=$DIR/var/lib/hadoop/tmp
+    S3_BUFFER_DIR=$DIR/var/lib/hadoop/s3
     ENCRYPTED_LOOPBACK_DEVICE=/dev/loop$i
     ENCRYPTED_NAME=crypt$i
 
@@ -2808,7 +2812,7 @@ if [ $STATUS -eq 0 ]; then
     # Create file system
     #
     if [ $STATUS -eq 0 ]; then
-    mycmd="sudo mkfs.ext4 -m 0 -E lazy_itable_init=1 /dev/mapper/$ENCRYPTED_NAME && sudo mount /dev/mapper/$ENCRYPTED_NAME $ENCRYPTED_SPACE && sudo mkdir -p $ENCRYPTED_SPACE/dfs && sudo mkdir -p $ENCRYPTED_SPACE/tmp/nm-local-dir && sudo rm -rf $DFS_DATA_DIR && sudo ln -s $ENCRYPTED_SPACE/dfs $DFS_DATA_DIR && sudo chown hadoop:hadoop $ENCRYPTED_SPACE/dfs && sudo chown hadoop:hadoop $DFS_DATA_DIR && sudo rm -rf $DFS_DATA_DIR/lost\+found && sudo rm -rf $TMP_DATA_DIR && sudo ln -s $ENCRYPTED_SPACE/tmp $TMP_DATA_DIR && sudo chown hadoop:hadoop $ENCRYPTED_SPACE/tmp && sudo chown hadoop:hadoop $TMP_DATA_DIR && sudo chown hadoop:hadoop $TMP_DATA_DIR/nm-local-dir && sudo echo iamdone-$ENCRYPTED_NAME && sudo chown -R hadoop:hadoop $ENCRYPTED_SPACE && sudo chmod -R 0755 $ENCRYPTED_SPACE && date "
+    mycmd="sudo mkfs.ext4 -m 0 -E lazy_itable_init=1 /dev/mapper/$ENCRYPTED_NAME && sudo mount /dev/mapper/$ENCRYPTED_NAME $ENCRYPTED_SPACE && sudo mkdir -p $ENCRYPTED_SPACE/dfs && sudo mkdir -p $ENCRYPTED_SPACE/s3 && sudo mkdir -p $ENCRYPTED_SPACE/tmp/nm-local-dir && sudo rm -rf $S3_BUFFER_DIR && sudo ln -s $ENCRYPTED_SPACE/s3 $S3_BUFFER_DIR && sudo chown hadoop:hadoop $ENCRYPTED_SPACE/s3 && sudo chown hadoop:hadoop $S3_BUFFER_DIR && sudo rm -rf $DFS_DATA_DIR && sudo ln -s $ENCRYPTED_SPACE/dfs $DFS_DATA_DIR && sudo chown hadoop:hadoop $ENCRYPTED_SPACE/dfs && sudo chown hadoop:hadoop $DFS_DATA_DIR && sudo rm -rf $DFS_DATA_DIR/lost\+found && sudo rm -rf $TMP_DATA_DIR && sudo ln -s $ENCRYPTED_SPACE/tmp $TMP_DATA_DIR && sudo chown hadoop:hadoop $ENCRYPTED_SPACE/tmp && sudo chown hadoop:hadoop $TMP_DATA_DIR && sudo chown hadoop:hadoop $TMP_DATA_DIR/nm-local-dir && sudo echo iamdone-$ENCRYPTED_NAME && sudo chown -R hadoop:hadoop $ENCRYPTED_SPACE && sudo chmod -R 0755 $ENCRYPTED_SPACE && date "
     echo $mycmd
     eval $mycmd &
       if [ ! $? -eq 0 ]; then
@@ -3301,10 +3305,6 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                 'Name' : 'Configure Hadoop',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        '-s',
-                        'dfs.datanode.socket.write.timeout=3000000',
-                        '-s',
-                        'dfs.socket.timeout=3000000',
                         '-c',
                         'fs.s3n.multipart.uploads.enabled=true',
                         '-y',

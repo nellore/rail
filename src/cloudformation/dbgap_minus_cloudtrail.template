@@ -14,6 +14,10 @@
     "SecureBucket": {
       "Description": "Name of secure bucket to which Rail's intermediate data and output as well are written.",
       "Type": "String"
+    },
+    "PublicSubnetAvailabilityZone": {
+      "Description": "Availability zone for public subnet.",
+      "Type": "String"
     }
   },
 
@@ -68,6 +72,7 @@
       "Properties" : {
         "VpcId" : { "Ref" : "VPC" },
         "CidrBlock" : { "Fn::FindInMap" : [ "SubnetConfig", "Public", "CIDR" ]},
+        "AvailabilityZone" : { "Ref" : "PublicSubnetAvailabilityZone" }
         "Tags" : [
           { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
           { "Key" : "Network", "Value" : "Public" }
