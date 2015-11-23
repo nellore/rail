@@ -3301,6 +3301,10 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                 'Name' : 'Configure Hadoop',
                 'ScriptBootstrapAction' : {
                     'Args' : [
+                        '-s',
+                        'dfs.datanode.socket.write.timeout=3000000',
+                        '-s',
+                        'dfs.socket.timeout=3000000',
                         '-c',
                         'fs.s3n.multipart.uploads.enabled=true',
                         '-y',
