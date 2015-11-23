@@ -2887,7 +2887,7 @@ for line in sys.stdin:
     else:
         print line,
 EOF
-cat >~/.ncbi/user-settings.mkfg | python .fix_config.py >new-user-settings.mkfg
+cat ~/.ncbi/user-settings.mkfg | python .fix_config.py >new-user-settings.mkfg
 cp new-user-settings.mkfg ~/.ncbi/user-settings.mkfg
 sudo ln -s /home/hadoop/.ncbi /home/.ncbi
 """
