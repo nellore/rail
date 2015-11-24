@@ -996,7 +996,7 @@ class RailRnaErrors(object):
             intermediate_dir='./intermediate', force=False, aws_exe=None,
             profile='default', region=None, service_role=None,
             instance_profile=None, verbose=False, curl_exe=None,
-            max_task_attempts=4, dbgap_key=None
+            max_task_attempts=4, dbgap_key=None, align_flow=False
         ):
         '''Store all errors uncovered in a list, then output. This prevents the
         user from having to rerun Rail-RNA to find what else is wrong with
@@ -1025,6 +1025,7 @@ class RailRnaErrors(object):
                                                     max_task_attempts
                                                 ))
         self.max_task_attempts = max_task_attempts
+        self.align_flow = align_flow
 
     def check_s3(self, reason=None, is_exe=None, which=None):
         """ Checks for AWS CLI and configuration file.
@@ -2259,7 +2260,9 @@ class RailRnaElastic(object):
                                                 manifest_url.to_url(),
                                                 line.strip()
                                             ))
-        if base.dbgap_present and base.dbgap_key is None:
+        if base.align_flow: sra_tools_needed = False
+        if base.dbgap_present and base.dbgap_key is None \
+            and not base.align_flow:
             base.errors.append('dbGaP accession numbers are in '
                                'manifest file, but no dbGaP '
                                'repository key file (--dbgap-key) was '
@@ -2420,7 +2423,7 @@ class RailRnaElastic(object):
             shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
 
         # Upload NGC file to S3
-        if base.dbgap_present:
+        if not base.align_flow and base.dbgap_present:
             base.dbgap_s3_path = path_join(
                                     True,
                                     base.intermediate_dir,
@@ -2909,14 +2912,14 @@ EOF
 sudo ln -s /home/hadoop/.ncbi /home/.ncbi
 """
                     ).format(vdb_workspace=_elastic_vdb_workspace)
-        base.vdb_bootstrap = path_join(
-                                        True, base.dependency_dir,
-                                        os.path.basename(
-                                                vdb_bootstrap
-                                            )
-                                    )
-        ansible.put(vdb_bootstrap, base.vdb_bootstrap)
-        os.remove(vdb_bootstrap)
+            base.vdb_bootstrap = path_join(
+                                            True, base.dependency_dir,
+                                            os.path.basename(
+                                                    vdb_bootstrap
+                                                )
+                                        )
+            ansible.put(vdb_bootstrap, base.vdb_bootstrap)
+            os.remove(vdb_bootstrap)
         shutil.rmtree(temp_dependency_dir)
         print_to_screen('Copied Rail-RNA and bootstraps to S3.',
                          newline=True, carriage_return=False)
@@ -5596,7 +5599,7 @@ class RailRnaLocalAlignJson(object):
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, align_flow=True)
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
@@ -5682,7 +5685,7 @@ class RailRnaParallelAlignJson(object):
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, align_flow=True)
         RailRnaLocal(base, check_manifest=False,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
@@ -5846,7 +5849,7 @@ class RailRnaElasticAlignJson(object):
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, service_role=service_role,
             instance_profile=instance_profile, verbose=verbose,
-            max_task_attempts=max_task_attempts)
+            max_task_attempts=max_task_attempts, align_flow=True)
         RailRnaElastic(base, check_manifest=False,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
