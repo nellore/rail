@@ -117,13 +117,12 @@ def paths_from_cojunctions(cojunctions, span=50):
                     break
     sources = set(DAG.keys()) - set(reverse_DAG.keys())
     sinks = set(reverse_DAG.keys()) - set(DAG.keys())
-    # DFS to enumerate paths
-    paths = []
+    # DFS to enumerate paths; start with isolated vertices
+    paths = [[i] for i in xrange(cojunctions_count) if (
+                                i not in sources and i not in sinks
+                            )]
     for source in sources:
         for sink in sinks:
-            if source == sink:
-                paths.append([source])
-                continue
             stack = [(source, [source])]
             while stack:
                 (vertex, path) = stack.pop()
@@ -233,7 +232,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
         for rname, sense in all_junctions:
             to_write = set()
             for cojunction in paths_from_cojunctions(
-                    list(cojunctions[(rname, sense)]), span=seq_size
+                    list(cojunctions[(rname, sense)]), span=(seq_size + fudge)
                 ):
                 left_extend_size = all_junctions[(rname, sense)][
                                         cojunction[0]
@@ -283,6 +282,9 @@ if __name__ == '__main__':
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
              'in output have terminal + and - indicating sense strand')
+    parser.add_argument('--test', action='store_const', const=True,
+        default=False,
+        help='Run unit tests; DOES NOT NEED INPUT FROM STDIN')
     parser.add_argument('--report-multiplier', type=float, required=False,
         default=1.2,
         help='When --verbose is also invoked, the only lines of lengthy '
@@ -290,5 +292,101 @@ if __name__ == '__main__':
              'increases exponentially with this base')
     args = parser.parse_args()
 
+if __name__ == '__main__' and not args.test:
     go(stranded=args.stranded, fudge=args.fudge,
         verbose=args.verbose, report_multiplier=args.report_multiplier)
+elif __name__ == '__main__':
+    # Test units
+    del sys.argv[1:] # Don't choke on extra command-line parameters
+    import unittest
+    import shutil
+    import tempfile
+
+    class TestCojunctionLength(unittest.TestCase):
+        """ Tests cojunction_length(). """
+
+        def test_lengths(self):
+            """ Fails if output of cojunction_length() is wrong. """
+            self.assertEquals(
+                    cojunction_length(
+                            ((2, 5), (10, 100), (110, 150))
+                        ), 15
+                )
+            self.assertEquals(
+                    cojunction_length(
+                            ((2, 5),)
+                        ), 0
+                )
+
+    class PathsFromCojunctions(unittest.TestCase):
+        """ Tests paths_from_cojunctions(). """
+
+        def test_lengths(self):
+            """ Fails if output of paths_from_cojunctions() is wrong. """
+            # Test that cojunctions are merged for long-enough span
+            paths = paths_from_cojunctions(
+                            [((2, 5), (10, 100), (110, 150)),
+                             ((160, 170), (190, 200))], span=50
+                        )
+            self.assertTrue(
+                    [(2, 5), (10, 100), (110, 150), (160, 170), (190, 200)]
+                    in paths
+                )
+            # Test that cojunctions remain distinct for short span
+            paths = paths_from_cojunctions(
+                            [((2, 5), (10, 100), (110, 150)),
+                             ((160, 170), (190, 200))], span=20
+                        )
+            self.assertTrue(
+                    [(2, 5), (10, 100), (110, 150)]
+                    in paths
+                )
+            self.assertTrue(
+                    [(160, 170), (190, 200)]
+                    in paths
+                )
+            # Test edge cases: cojunctions remain distinct for span 46
+            paths = paths_from_cojunctions(
+                            [((2, 5), (10, 100), (110, 150)),
+                             ((160, 170), (190, 200))], span=46
+                        )
+            self.assertTrue(
+                    [(2, 5), (10, 100), (110, 150)]
+                    in paths
+                )
+            self.assertTrue(
+                    [(160, 170), (190, 200)]
+                    in paths
+                )
+            # ...but not for span 47
+            paths = paths_from_cojunctions(
+                            [((2, 5), (10, 100), (110, 150)),
+                             ((160, 170), (190, 200))], span=47
+                        )
+            self.assertTrue(
+                    [(2, 5), (10, 100), (110, 150), (160, 170), (190, 200)]
+                    in paths
+                )
+            # Test complicated cases
+            paths = paths_from_cojunctions(
+                            [((2, 5), (10, 100), (110, 150)),
+                             ((10, 110), (123, 221)),
+                             ((110, 150), (180, 210)),
+                             ((220, 240),)], span=75
+                        )
+            self.assertTrue(
+                    [(2, 5), (10, 100), (110, 150), (220, 240)]
+                    not in paths
+                )
+            paths = paths_from_cojunctions(
+                            [((2, 5), (10, 100), (110, 150)),
+                             ((10, 110), (123, 221)),
+                             ((110, 150), (180, 210)),
+                             ((220, 240),)], span=200
+                        )
+            self.assertTrue(
+                    [(2, 5), (10, 100), (110, 150), (220, 240)]
+                    in paths
+                )
+
+    unittest.main()

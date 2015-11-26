@@ -11,8 +11,8 @@ that cooccur on reads by local alignments to transcriptome elements.
 Input (read from stdin)
 ----------------------------
 Single input tuple column:
-1. SEQ or its reversed complement, whichever is first in alphabetical order
-    --- must be unique
+1. SEQ or its reversed complement -- must be unique
+    (but not necessarily in alphabetical order)
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -25,7 +25,7 @@ Tab-delimited tuple columns:
     reference should extend
 5. right_extend_size: by how many bases on the right side of an intron the
     reference should extend
-6. Read sequence
+6. Read sequence or reversed complement, whatever's first in alphabetical order
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -165,6 +165,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                 ['set -exo pipefail;', full_command]
             ), bufsize=-1, stdout=sys.stdout, stderr=sys.stderr,
         shell=True, executable='/bin/bash')
+    _input_line_count += 1
     return_code = bowtie_process.wait()
     if return_code:
         raise RuntimeError('Error occurred while reading Bowtie 2 output; '
