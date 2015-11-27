@@ -2236,6 +2236,7 @@ class RailRnaElastic(object):
         base.dbgap_present = False
         files_to_check = []
         base.sample_count = 0
+        base.sra_tools_needed = False
         with open(manifest) as manifest_stream:
             for line in manifest_stream:
                 if line[0] == '#' or not line.strip(): continue
@@ -2248,9 +2249,9 @@ class RailRnaElastic(object):
                     single_url = ab.Url(tokens[0])
                     if single_url.is_dbgap:
                         base.dbgap_present = True
-                        sra_tools_needed = True
+                        base.sra_tools_needed = True
                     elif single_url.is_sra:
-                        sra_tools_needed = True
+                        base.sra_tools_needed = True
                 else:
                     base.errors.append(('The following line from the '
                                         'manifest file {0} '
@@ -2260,7 +2261,7 @@ class RailRnaElastic(object):
                                                 manifest_url.to_url(),
                                                 line.strip()
                                             ))
-        if base.align_flow: sra_tools_needed = False
+        if base.align_flow: base.sra_tools_needed = False
         if base.dbgap_present and base.dbgap_key is None \
             and not base.align_flow:
             base.errors.append('dbGaP accession numbers are in '
@@ -2853,7 +2854,7 @@ exit $STATUS
                                         )
             ansible.put(encrypt_bootstrap, base.encrypt_bootstrap)
             os.remove(encrypt_bootstrap)
-        if sra_tools_needed:
+        if base.sra_tools_needed:
             vdb_bootstrap = os.path.join(temp_dependency_dir,
                                                 'vdb.sh')
             if base.dbgap_present:
@@ -3456,12 +3457,14 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                     = 'ON_DEMAND'
         if base.ec2_key_name is not None:
             to_return['Ec2KeyName'] = base.ec2_key_name
-        if base.ec2_subnet_id is not None:
+        if hasattr(base, 'ec2_subnet_id') and base.ec2_subnet_id is not None:
             to_return['Ec2SubnetId'] = base.ec2_subnet_id
-        if base.ec2_master_security_group_id is not None:
+        if hasattr(base, 'ec2_master_security_group_id') \
+            and base.ec2_master_security_group_id is not None:
             to_return['EmrManagedMasterSecurityGroup'] \
                 = base.ec2_master_security_group_id
-        if base.ec2_slave_security_group_id is not None:
+        if hasattr(base, 'ec2_slave_security_group_id') \
+            and base.ec2_slave_security_group_id is not None:
             to_return['EmrManagedSlaveSecurityGroup'] \
                 = base.ec2_slave_security_group_id
         return to_return
@@ -3672,7 +3675,7 @@ class RailRnaPreprocess(object):
                         ],
                         'Path' : base.copy_bootstrap
                     }
-                }] if hasattr(base, 'dbgap_s3_path') else []) + [
+                }] if hasattr(base, 'dbgap_s3_path') else []) + ([
                     {
                         'Name' : 'Set up SRA Tools workspace',
                         'ScriptBootstrapAction' : {
@@ -3680,7 +3683,7 @@ class RailRnaPreprocess(object):
                             'Path' : base.vdb_bootstrap
                         }
                 }
-            ]
+            ] if base.sra_tools_needed else [])
 
     @staticmethod
     def bootstrap(base):
