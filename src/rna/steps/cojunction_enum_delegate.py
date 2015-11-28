@@ -9,6 +9,7 @@ import sys
 import os
 import site
 from collections import defaultdict
+import random
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
@@ -158,12 +159,12 @@ def selected_cojunctions(cojunctions, max_refs=300,
     if len(cojunctions) <= max_refs:
         return cojunctions
     cojunctions.sort(key=len)
-    if len(cojunctions[max_refs - 1])  == len(cojunctions[max_refs]):
+    if len(cojunctions[max_refs]) == len(cojunctions[max_refs - 1]):
         # Shuffle cojunctions, then resort
         random.seed(seq + rname + sense)
         random.shuffle(cojunctions)
         cojunctions.sort(key=len)
-        return cojunctions[:max_refs]
+    return cojunctions[:max_refs]
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
         stranded=False, verbose=False, max_refs=300, report_multiplier=1.2):
@@ -360,7 +361,7 @@ elif __name__ == '__main__':
                              ((160, 170), (190, 200))], span=50
                         )
             self.assertTrue(
-                    [(2, 5), (10, 100), (110, 150), (160, 170), (190, 200)]
+                    ((2, 5), (10, 100), (110, 150), (160, 170), (190, 200))
                     in paths
                 )
             # Test that cojunctions remain distinct for short span
@@ -369,11 +370,11 @@ elif __name__ == '__main__':
                              ((160, 170), (190, 200))], span=20
                         )
             self.assertTrue(
-                    [(2, 5), (10, 100), (110, 150)]
+                    ((2, 5), (10, 100), (110, 150))
                     in paths
                 )
             self.assertTrue(
-                    [(160, 170), (190, 200)]
+                    ((160, 170), (190, 200))
                     in paths
                 )
             # Test edge cases: cojunctions remain distinct for span 46
@@ -382,11 +383,11 @@ elif __name__ == '__main__':
                              ((160, 170), (190, 200))], span=46
                         )
             self.assertTrue(
-                    [(2, 5), (10, 100), (110, 150)]
+                    ((2, 5), (10, 100), (110, 150))
                     in paths
                 )
             self.assertTrue(
-                    [(160, 170), (190, 200)]
+                    ((160, 170), (190, 200))
                     in paths
                 )
             # ...but not for span 47
@@ -395,7 +396,7 @@ elif __name__ == '__main__':
                              ((160, 170), (190, 200))], span=47
                         )
             self.assertTrue(
-                    [(2, 5), (10, 100), (110, 150), (160, 170), (190, 200)]
+                    ((2, 5), (10, 100), (110, 150), (160, 170), (190, 200))
                     in paths
                 )
             # Test complicated cases
@@ -406,17 +407,17 @@ elif __name__ == '__main__':
                              ((220, 240),)], span=75
                         )
             for cojunction in [
-                    [(2, 5), (10, 100), (110, 150)],
-                    [(10, 100), (110, 150)],
-                    [(10, 100)],
-                    [(2, 5), (10, 100)],
-                    [(110, 150), (180, 210), (220, 240)],
-                    [(110, 150), (180, 210)],
-                    [(180, 210), (220, 240)],
-                    [(180, 210)],
-                    [(10, 110), (123, 221)],
-                    [(10, 110)],
-                    [(123, 221)]
+                    ((2, 5), (10, 100), (110, 150)),
+                    ((10, 100), (110, 150)),
+                    ((10, 100),),
+                    ((2, 5), (10, 100)),
+                    ((110, 150), (180, 210), (220, 240)),
+                    ((110, 150), (180, 210)),
+                    ((180, 210), (220, 240)),
+                    ((180, 210),),
+                    ((10, 110), (123, 221)),
+                    ((10, 110),),
+                    ((123, 221),)
                 ]:
                 self.assertTrue(
                         cojunction in paths
@@ -431,17 +432,17 @@ elif __name__ == '__main__':
                              ((220, 240),)], span=200
                         )
             for cojunction in [
-                    [(2, 5), (10, 100), (110, 150), (220, 240)],
-                    [(10, 100), (110, 150), (220, 240)],
-                    [(2, 5), (10, 100), (110, 150)],
-                    [(10, 100), (110, 150)],
-                    [(110, 150), (180, 210), (220, 240)],
-                    [(110, 150), (180, 210)],
-                    [(180, 210), (220, 240)],
-                    [(180, 210)],
-                    [(10, 110), (123, 221)],
-                    [(10, 110)],
-                    [(123, 221)]
+                    ((2, 5), (10, 100), (110, 150), (220, 240)),
+                    ((10, 100), (110, 150), (220, 240)),
+                    ((2, 5), (10, 100), (110, 150)),
+                    ((10, 100), (110, 150)),
+                    ((110, 150), (180, 210), (220, 240)),
+                    ((110, 150), (180, 210)),
+                    ((180, 210), (220, 240)),
+                    ((180, 210),),
+                    ((10, 110), (123, 221)),
+                    ((10, 110),),
+                    ((123, 221),)
                 ]:
                 self.assertTrue(
                         cojunction in paths
@@ -449,5 +450,26 @@ elif __name__ == '__main__':
                 self.assertEquals(
                         len(paths), 11
                     )
+
+    class TestSelectedCojunctions(unittest.TestCase):
+        """ Tests selected_cojunctions(). """
+
+        def test_length(self):
+            """ Fails if selected_cojunctions() returns wrong jx count """
+            self.assertEquals(
+                    len(selected_cojunctions(
+                            [((2, 5), (10, 100), (110, 150)),
+                             ((2, 5), (10, 30)),
+                             ((2, 5), (10, 50))], max_refs=2)
+                        ), 2
+                )
+            # Tie must be broken
+            self.assertEquals(
+                    len(selected_cojunctions(
+                            [((2, 5), (10, 100), (110, 150)),
+                             ((2, 5), (10, 30), (35, 39)),
+                             ((2, 5), (10, 50))], max_refs=2)
+                        ), 2
+                )
 
     unittest.main()
