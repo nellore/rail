@@ -3713,7 +3713,8 @@ class RailRnaAlign(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
+        max_refs_per_strand=300, junction_criteria='0.5,5',
+        indel_criteria='0.5,5', tie_margin=6,
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, output_sam=False,
@@ -4073,6 +4074,14 @@ class RailRnaAlign(object):
                                                     count_multiplier
                                                 ))
         base.count_multiplier = count_multiplier
+        if not (float(max_refs_per_strand).is_integer() and
+                    max_refs_per_strand >= 1):
+            base.errors.append('Maximum enumerated reference sequences per '
+                               'strand (--max-refs-per-strand) must be an '
+                               'integer >= 1, but {0} was entered.'.format(
+                                                    max_refs_per_strand
+                                                ))
+        base.max_refs_per_strand = max_refs_per_strand
         if not (float(library_size).is_integer() and
                     library_size >= 0):
             base.errors.append('Library size in millions of reads '
@@ -4517,6 +4526,11 @@ class RailRnaAlign(object):
             help=argparse.SUPPRESS
         )
         algo_parser.add_argument(
+            '--max-refs-per-strand', type=int, required=False,
+            default=300,
+            help=argparse.SUPPRESS
+        )
+        algo_parser.add_argument(
             '--normalize-percentile', type=float, required=False,
             metavar='<dec>',
             default=0.75,
@@ -4880,7 +4894,7 @@ class RailRnaAlign(object):
                          'cojunction_enum.py --bowtie2-idx={0} '
                          '--gzip-level {1} '
                          '--bowtie2-exe={2} {3} {4} --intermediate-dir {5} '
-                         '{6} -- {7}').format(
+                         '--max-refs {6} {7} -- {8}').format(
                                             base.transcript_in,
                                             base.gzip_level
                                             if 'gzip_level' in
@@ -4891,6 +4905,7 @@ class RailRnaAlign(object):
                                             ab.Url(
                                                     base.intermediate_dir
                                                 ).to_url(caps=True),
+                                            base.max_refs_per_strand,
                                             scratch,
                                             base.transcriptome_bowtie2_args
                                         ),
@@ -5589,7 +5604,8 @@ class RailRnaLocalAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
+        max_refs_per_strand=300, junction_criteria='0.5,5',
+        indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -5632,6 +5648,7 @@ class RailRnaLocalAlignJson(object):
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            max_refs_per_strand=max_refs_per_strand,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
@@ -5671,7 +5688,8 @@ class RailRnaParallelAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
+        max_refs_per_strand=300, junction_criteria='0.5,5',
+        indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -5725,6 +5743,7 @@ class RailRnaParallelAlignJson(object):
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            max_refs_per_strand=max_refs_per_strand,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
@@ -5776,6 +5795,7 @@ class RailRnaParallelAlignJson(object):
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            max_refs_per_strand=max_refs_per_strand,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
@@ -5829,7 +5849,8 @@ class RailRnaElasticAlignJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
+        max_refs_per_strand=300, junction_criteria='0.5,5',
+        indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -5900,6 +5921,7 @@ class RailRnaElasticAlignJson(object):
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            max_refs_per_strand=max_refs_per_strand,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
             transcriptome_indexes_per_sample=transcriptome_indexes_per_sample,
@@ -5971,7 +5993,8 @@ class RailRnaLocalAllJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         junction_criteria='0.5,5', indel_criteria='0.5,5',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
+        max_refs_per_strand=300, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -6018,6 +6041,7 @@ class RailRnaLocalAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            max_refs_per_strand=max_refs_per_strand,
             junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             tie_margin=tie_margin,
@@ -6069,7 +6093,8 @@ class RailRnaParallelAllJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         junction_criteria='0.5,5', indel_criteria='0.5,5',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
+        max_refs_per_strand=300, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -6124,6 +6149,7 @@ class RailRnaParallelAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            max_refs_per_strand=max_refs_per_strand,
             junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             tie_margin=tie_margin,
@@ -6177,6 +6203,7 @@ class RailRnaParallelAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            max_refs_per_strand=max_refs_per_strand,
             junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             tie_margin=tie_margin,
@@ -6241,7 +6268,8 @@ class RailRnaElasticAllJson(object):
         min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', tie_margin=6, count_multiplier=15,
+        transcriptome_bowtie2_args='-k 30', tie_margin=6,
+        max_refs_per_strand=300, count_multiplier=15,
         junction_criteria='0.5,5', indel_criteria='0.5,5',
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False,
@@ -6314,6 +6342,7 @@ class RailRnaElasticAllJson(object):
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            max_refs_per_strand=max_refs_per_strand,
             junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             tie_margin=tie_margin,

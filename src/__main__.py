@@ -631,6 +631,7 @@ if __name__ == '__main__':
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -689,6 +690,7 @@ if __name__ == '__main__':
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -773,6 +775,7 @@ if __name__ == '__main__':
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -834,6 +837,7 @@ if __name__ == '__main__':
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -919,6 +923,7 @@ if __name__ == '__main__':
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -992,6 +997,7 @@ if __name__ == '__main__':
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\

@@ -57,7 +57,7 @@ _input_line_count = 0
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base='genome', bowtie2_args='', verbose=False,
-    report_multiplier=1.2, stranded=False, fudge=5, score_min=60,
+    report_multiplier=1.2, stranded=False, fudge=5, max_refs=300, score_min=60,
     gzip_level=3, mover=filemover.FileMover(), intermediate_dir='.',
     scratch=None):
     """ Runs Rail-RNA-cojunction_enum 
@@ -108,6 +108,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             returned only if its strand agrees with the junction's strand.
         fudge: by how many bases to extend left and right extend sizes
                 to accommodate potential indels
+        max_refs: hard limit on number of reference seqs to enumerate per
+            read per strand
         score_min: Bowtie2 CONSTANT minimum alignment score
         gzip_level: compression level to use for temporary files
         mover: FileMover object, for use in case Bowtie2 idx needs to be
@@ -153,10 +155,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         '-D 24 -R 3 -N 1 -L 20 -i L,4,0'])
     delegate_command = ''.join(
             [sys.executable, ' ', os.path.realpath(__file__)[:-3],
-                '_delegate.py --report-multiplier %08f --fudge %d %s %s'
-                    % (report_multiplier, fudge,
-                        '--stranded' if stranded else '',
-                        '--verbose' if verbose else '')]
+                ('_delegate.py --report-multiplier %08f --fudge %d '
+                 '--max-refs %d %s %s') % (report_multiplier, fudge, max_refs,
+                                            '--stranded' if stranded else '',
+                                            '--verbose' if verbose else '')]
         )
     full_command = ' | '.join([input_command,
                                 bowtie_command, delegate_command])
@@ -203,6 +205,11 @@ if __name__ == '__main__':
     parser.add_argument('--score-min', type=int, required=False,
         default=48,
         help='Bowtie2 minimum CONSTANT score to use')
+    parser.add_argument('--max-refs', type=int, required=False,
+        default=300,
+        help='Hard limit on the number of reference sequences to emit '
+             'per read per strand. Prioritizes reference sequences that '
+             'overlap the fewest junctions')
     parser.add_argument('--gzip-level', type=int, required=False,
         default=3,
         help='Gzip compression level to use for temporary Bowtie input file')
@@ -248,6 +255,7 @@ if __name__ == '__main__' and not args.test:
         report_multiplier=args.report_multiplier,
         stranded=args.stranded,
         fudge=args.fudge,
+        max_refs=args.max_refs,
         score_min=args.score_min,
         mover=mover,
         intermediate_dir=args.intermediate_dir,

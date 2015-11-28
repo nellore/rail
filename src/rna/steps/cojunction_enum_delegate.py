@@ -140,11 +140,33 @@ def paths_from_cojunctions(cojunctions, span=50):
         to_return.add(tuple(junction_combo[1:-1]))
         to_return.add(tuple(junction_combo[1:]))
         to_return.add(tuple(junction_combo[:-1]))
-    return [list(junction_combo) for junction_combo in to_return
+    return [junction_combo for junction_combo in to_return
                 if junction_combo]
 
+def selected_cojunctions(cojunctions, max_refs=300,
+                            seq='ATC', rname='chr1', sense='+'):
+    """ Selects the max_ref cojunctions with the fewest junctions.
+
+        Ties are broken at random.
+
+        cojunctions: list of junction combinations
+        max_refs: maximum number of cojunctions to return
+        seq, rname, and sense are used for random seed if necessary
+
+        Return value: truncated cojunctions list
+    """
+    if len(cojunctions) <= max_refs:
+        return cojunctions
+    cojunctions.sort(key=len)
+    if len(cojunctions[max_refs - 1])  == len(cojunctions[max_refs]):
+        # Shuffle cojunctions, then resort
+        random.seed(seq + rname + sense)
+        random.shuffle(cojunctions)
+        cojunctions.sort(key=len)
+        return cojunctions[:max_refs]
+
 def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
-        stranded=False, verbose=False, report_multiplier=1.2):
+        stranded=False, verbose=False, max_refs=300, report_multiplier=1.2):
     """ Emits junction combinations associated with reads.
 
         Soft-clipped Bowtie 2 alignments of read sequences to the transcript
@@ -156,13 +178,16 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
         input_stream: where to retrieve Bowtie 2 output
         output_stream: where to emit exon and junction tuples; typically, this
             is sys.stdout.
-        verbose: True if alignments should occasionally be written to stderr.
+        fudge: by how many bases to extend left and right extend sizes
+            to accommodate potential indels
         stranded: True iff input reads are strand-specific; this affects
             whether an output partition has a terminal '+' or '-' indicating
             the sense strand. Further, if stranded is True, an alignment is
             returned only if its strand agrees with the junction's strand.
-        fudge: by how many bases to extend left and right extend sizes
-            to accommodate potential indels
+        verbose: True if alignments should occasionally be written to stderr.
+        max_refs: maximum number of reference sequences to enumerate per read;
+            if more are present, prioritize those sequences that overlap
+            the fewest junctions
         report_multiplier: if verbose is True, the line number of an
             alignment written to stderr increases exponentially with base
             report_multiplier.
@@ -231,9 +256,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
                             ][1], junction[3])
         for rname, sense in all_junctions:
             to_write = set()
-            for cojunction in paths_from_cojunctions(
+            for cojunction in selected_cojunctions(paths_from_cojunctions(
                     list(cojunctions[(rname, sense)]), span=(seq_size + fudge)
-                ):
+                ), max_refs=max_refs, seq=seq, rname=rname, sense=sense):
                 left_extend_size = all_junctions[(rname, sense)][
                                         cojunction[0]
                                     ][0]
@@ -278,6 +303,11 @@ if __name__ == '__main__':
         help='Permits a sum of exonic bases for a junction combo to be '
              'within the specified number of bases of a read sequence\'s '
              'size; this allows for indels with respect to the reference')
+    parser.add_argument('--max-refs', type=int, required=False,
+        default=300,
+        help='Hard limit on the number of reference sequences to emit '
+             'per read per strand. Prioritizes reference sequences that '
+             'overlap the fewest junctions')
     parser.add_argument(
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
@@ -294,7 +324,8 @@ if __name__ == '__main__':
 
 if __name__ == '__main__' and not args.test:
     go(stranded=args.stranded, fudge=args.fudge,
-        verbose=args.verbose, report_multiplier=args.report_multiplier)
+        verbose=args.verbose, max_refs=args.max_refs,
+        report_multiplier=args.report_multiplier)
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
