@@ -1008,14 +1008,15 @@ class RailRnaErrors(object):
         self.output_dir = output_dir
         self.intermediate_dir = intermediate_dir
         self.aws_exe = aws_exe
-        self.region = region
+        self.region = self.specified_region = region
         self.force = force
         self.checked_programs = set()
         self.curl_exe = curl_exe
         self.verbose = verbose
         self.profile = profile
-        self.service_role = service_role
-        self.instance_profile = instance_profile
+        self.service_role = self.specified_service_role = service_role
+        self.instance_profile = self.specified_instance_profile \
+            = instance_profile
         self.dbgap_key = dbgap_key
         if not (float(max_task_attempts).is_integer()
                         and max_task_attempts >= 1):
@@ -1098,6 +1099,13 @@ class RailRnaErrors(object):
                             'Attempting "EMR_EC2_DefaultRole".',
                             newline=True, carriage_return=False)
             self.instance_profile = 'EMR_EC2_DefaultRole'
+        # Correct parameters that user specified
+        if self.specified_region is not None:
+            self.region = self.specified_region
+        if self.specified_instance_profile is not None:
+            self.instance_profile = self.specified_instance_profile
+        if self.specified_service_role is not None:
+            self.service_role = self.specified_service_role
         self.checked_programs.add('AWS CLI')
 
     def check_cloudformation(self, stack_name, is_exe=None, which=None):
@@ -1221,6 +1229,12 @@ class RailRnaErrors(object):
                                                         'SlaveSecurityGroupId'
                                                     ]
                 self.secure_bucket_name = outputs['SecureBucketName']
+        if self.specified_region is not None:
+            self.region = self.specified_region
+        if self.specified_instance_profile is not None:
+            self.instance_profile = self.specified_instance_profile
+        if self.specified_service_role is not None:
+            self.service_role = self.specified_service_role
         self.checked_programs.add('AWS CLI')
 
     def check_program(self, exe, program_name, parameter,
