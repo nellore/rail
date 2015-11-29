@@ -2,7 +2,7 @@
 ====
 
 This is the official repo for Rail-RNA, software for RNA-seq analysis. 
-### [Download](https://github.com/nellore/rail/raw/v0.2.0/releases/install_rail-rna-0.2.0)
+### [Download](https://github.com/nellore/rail/raw/v0.2.1/releases/install_rail-rna-0.2.1)
 
 **the latest stable release. Read the**
 
@@ -32,21 +32,21 @@ Outputs currently include
 
 and will likely expand in future versions.
 
-Read the [preprint](http://biorxiv.org/content/early/2015/08/11/019067) for more details. Methods explained there correspond to Rail-RNA 0.2.0.
+Read the [preprint](http://biorxiv.org/content/early/2015/08/11/019067) for more details. Methods explained there correspond to Rail-RNA 0.2.1.
 
 Get set up
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.2.0`](https://github.com/nellore/rail/raw/v0.2.0/releases/install_rail-rna-0.2.0), change to the directory containing it, and make the installer executable with
+Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.2.1`](https://github.com/nellore/rail/raw/v0.2.1/releases/install_rail-rna-0.2.1), change to the directory containing it, and make the installer executable with
 ```
-chmod +x install_rail-rna-0.2.0
+chmod +x install_rail-rna-0.2.1
 ```
 Now run
 ```
-sudo ./install_rail-rna-0.2.0
+sudo ./install_rail-rna-0.2.1
 ```
 to install for all users or
 ```
-./install_rail-rna-0.2.0
+./install_rail-rna-0.2.1
 ```
 to install for just you. Refer to [these](http://docs.rail.bio/installation/) detailed installation instructions from the [docs](http://docs.rail.bio) for more information. If the executable doesn't work, you may need [Python](http://www.python.org). You'll also need Bowtie 1 and 2 indexes of the appropriate genome assembly if you will be running Rail-RNA in either its single-computer (local) or IPython Parallel (parallel) modes. The easiest way to get these is by downloading an [Illumina iGenome](http://support.illumina.com/sequencing/sequencing_software/igenome.html). If running Rail-RNA on EMR (elastic mode) and aligning to hg19, the assembly can be specified at the command line with the `-a` parameter.
 
