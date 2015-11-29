@@ -104,11 +104,15 @@ def paths_from_cojunctions(cojunctions, span=50):
             '''Add edges while there's overlap between jth cojunction and
             a successive cojunction'''
             for k in xrange(j+1, cojunctions_count):
-                negative_separation = (
+                overlap = (
                         min(cojunctions[k][-1][1], cojunctions[j][-1][1])
                         - max(cojunctions[k][0][0], cojunctions[j][0][0])
                     )
-                if negative_separation >= 0:
+                if overlap >= 0:
+                    negative_separation = (
+                        min(cojunctions[k][-1][1], cojunctions[i][-1][1])
+                        - max(cojunctions[k][0][0], cojunctions[i][0][0])
+                    )
                     if (-negative_separation
                         + cojunction_length(cojunctions[k])
                         + source_cojunction_length + 2) <= span:
@@ -141,8 +145,7 @@ def paths_from_cojunctions(cojunctions, span=50):
         to_return.add(tuple(junction_combo[1:-1]))
         to_return.add(tuple(junction_combo[1:]))
         to_return.add(tuple(junction_combo[:-1]))
-    return [junction_combo for junction_combo in to_return
-                if junction_combo]
+    return [junction_combo for junction_combo in to_return if junction_combo]
 
 def selected_cojunctions(cojunctions, max_refs=300,
                             seq='ATC', rname='chr1', sense='+'):
