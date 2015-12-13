@@ -140,7 +140,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                 sample_indexes[sample_index] += int(current_sample_counts[i])
         if collect_junctions:
             samples_to_dump = sorted(sample_indexes.items(),
-                                        key=lambda sample: sample[0])
+                                        key=lambda sample: int(sample[0]))
             print >>output_stream, 'collect\t%s\t%012d\t%012d\t%s\t%s' % (
                     rname_and_strand, int(pos), int(end_pos),
                     ','.join([sample[0] for sample in samples_to_dump]),
