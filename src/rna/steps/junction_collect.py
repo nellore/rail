@@ -65,7 +65,7 @@ parser.add_argument(\
     help='URL to which output should be written. Default is stdout')
 parser.add_argument(\
     '--junction-filename', type=str, required=False, 
-    default='collected_junctions.tsv.gz',
+    default='first_pass_junctions.tsv.gz',
     help='The output filename (excluding path). '
          'Ignored if --out is not specified (that is, if --out is stdout)')
 parser.add_argument('--gzip-level', type=int, required=False,

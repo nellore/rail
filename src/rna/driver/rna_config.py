@@ -4819,12 +4819,12 @@ class RailRnaAlign(object):
                                                         ab.Url(
                                                             path_join(elastic,
                                                             base.output_dir,
-                                                    'collected_junctions')
+                                                    'cross_sample_results')
                                                         ).to_url(caps=True)
                                                         if elastic
                                                         else path_join(elastic,
                                                             base.output_dir,
-                                                    'collected_junctions'),
+                                                    'cross_sample_results'),
                                                         base.gzip_level
                                                         if 'gzip_level' in
                                                         dir(base) else 3,
