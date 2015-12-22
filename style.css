@@ -92,3 +92,7 @@ a:hover, a:active {
 a.nohighlight:hover, a.nohighlight:active {
 	background-color: rgba(0,0,0,0);
 }
+
+.hover {
+	color : rgba(40,80,173,1);
+}
