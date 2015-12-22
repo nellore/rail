@@ -1,23 +1,54 @@
-@media only screen and (max-device-width: 480px) {
-	img#clippy {
-		display: none;
-	}
-}
-
 body {
-	background-color: rgba(12,12,14,1);
+	background-color: rgba(0,0,0,1);
 }
 
 ::selection {
   background: rgba(40,80,173,0.8); /* WebKit/Blink Browsers */
 }
+
 ::-moz-selection {
   background: rgba(40,80,173,0.8); /* Gecko Browsers */
 }
 
+.rotate90 {
+  -webkit-transform: rotate(-90deg);
+  -moz-transform: rotate(-90deg);
+  -ms-transform: rotate(-90deg);
+  -o-transform: rotate(-90deg);
+  transform: rotate(-90deg);
+
+  /* also accepts left, right, top, bottom coordinates; not required, but a good idea for styling */
+  -webkit-transform-origin: 50% 50%;
+  -moz-transform-origin: 50% 50%;
+  -ms-transform-origin: 50% 50%;
+  -o-transform-origin: 50% 50%;
+  transform-origin: 50% 50%;
+
+  /* Should be unset in IE9+ I think. */
+  filter: progid:DXImageTransform.Microsoft.BasicImage(rotation=3);
+}
+
+.rotate270 {
+  -webkit-transform: rotate(90deg);
+  -moz-transform: rotate(90deg);
+  -ms-transform: rotate(90deg);
+  -o-transform: rotate(90deg);
+  transform: rotate(90deg);
+
+  /* also accepts left, right, top, bottom coordinates; not required, but a good idea for styling */
+  -webkit-transform-origin: 50% 50%;
+  -moz-transform-origin: 50% 50%;
+  -ms-transform-origin: 50% 50%;
+  -o-transform-origin: 50% 50%;
+  transform-origin: 50% 50%;
+
+  /* Should be unset in IE9+ I think. */
+  filter: progid:DXImageTransform.Microsoft.BasicImage(rotation=3);
+}
+
 div#outer {
 	margin: 0 auto;
-	margin-top: 1em;
+	margin-top: 0.8em;
 	padding: 0.5em;
 	min-width: 19em;
 	max-width: 48em;
@@ -26,7 +57,7 @@ div#outer {
 	text-align: justify;
 	color: white;
 	line-height: 180%;
-	letter-spacing: 0.2em;
+	letter-spacing: 0.15em;
 	min-width: 1em;
 	-webkit-border-radius: 30px 0px 20px 0px;
 	-moz-border-radius: 30px 0px 20px 0px;
@@ -36,16 +67,38 @@ div#outer {
 nav {
 	text-align: center;
 	line-height: 300%;
+	display: inline-block;
+}
+
+div.navblock {
+	display: inline-block;
+	position: relative;
+}
+
+div#reporotate {
+	position: absolute;
+	bottom: 0.8em;
+	left: -1.7em;
+}
+
+div#docsrotate {
+	position: absolute;
+	bottom: 0.7em;
+	right: -1.6em;
 }
 
 article {
 	word-wrap: break-word;
 }
 
+p#intro {
+	margin-top: -0.05em;
+}
+
 div#textarea {
 	position: relative;
     border: ridge 0.1em;
-   	border-color: rgba(255,255,255,0.1);
+   	border-color: rgba(255,255,255,0.2);
     padding: 0.5em;
     margin: 1em;
     width: 20em;
@@ -57,10 +110,11 @@ div#textarea {
 	margin-left: auto;
 	margin-right: auto;
 	font-family: "Courier New", Courier, monospace;
-	font-size: 0.8em;
-	width: 90%;
+	font-size: 0.7em;
+	width: 85%;
 	overflow: visible;
 	line-height: 140%;
+	padding-right: 5em;
 }
 
 .oversize {
@@ -74,18 +128,20 @@ img#docs {
 
 img#logo {
 	position: relative;
-	top: .3em;
+	top: .2em;
 }
 
 img#clippy {
 	position: absolute;
-	bottom: -1.2em;
-	right: -1.5em;
+	margin: auto;
+	right: 0.6em;
+	top: 0;
+	bottom: 0;
 	cursor: pointer;
 }
 
 a {
-	font-size: 1.4em;
+	font-size: 1.1em;
 	color: rgba(236,93,87,1);
 	text-decoration: none;
 	line-height: 130%;
@@ -95,10 +151,42 @@ a:hover, a:active {
 	background-color: rgba(255,255,255,0.1);
 }
 
+a.nohighlight {
+	font-size: 1.5em;
+}
+
 a.nohighlight:hover, a.nohighlight:active {
 	background-color: rgba(0,0,0,0);
 }
 
 .hover {
 	color : rgba(40,80,173,1);
+}
+
+hr {
+	width: 70%;
+	margin-top: 1.2em;
+	margin-bottom: 1.2em;
+}
+
+.nobr {
+   white-space: nowrap;
+}
+
+.supsub {
+   display: inline-block;
+   margin: -9em 0;
+   vertical-align: -0.55em;
+   line-height: 1.35em;
+   font-size: 70%;
+   text-align: left;
+}
+
+@media only screen and (max-device-width: 480px) {
+	img#clippy {
+		display: none;
+	}
+	div#textarea {
+		padding-right: 0.5em;
+	}
 }

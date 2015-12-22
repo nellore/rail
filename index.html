@@ -4,23 +4,23 @@
 	<title>Rail-RNA: scalable RNA-seq analysis</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="stylesheet" href="style.css">
-	<link rel="apple-touch-icon" sizes="57x57" href="/apple-touch-icon-57x57.png">
-	<link rel="apple-touch-icon" sizes="60x60" href="/apple-touch-icon-60x60.png">
-	<link rel="apple-touch-icon" sizes="72x72" href="/apple-touch-icon-72x72.png">
-	<link rel="apple-touch-icon" sizes="76x76" href="/apple-touch-icon-76x76.png">
-	<link rel="apple-touch-icon" sizes="114x114" href="/apple-touch-icon-114x114.png">
-	<link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon-120x120.png">
-	<link rel="apple-touch-icon" sizes="144x144" href="/apple-touch-icon-144x144.png">
-	<link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
-	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png">
-	<link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
-	<link rel="icon" type="image/png" href="/android-chrome-192x192.png" sizes="192x192">
-	<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96">
-	<link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
-	<link rel="manifest" href="/manifest.json">
-	<link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+	<link rel="apple-touch-icon" sizes="57x57" href="apple-touch-icon-57x57.png">
+	<link rel="apple-touch-icon" sizes="60x60" href="apple-touch-icon-60x60.png">
+	<link rel="apple-touch-icon" sizes="72x72" href="apple-touch-icon-72x72.png">
+	<link rel="apple-touch-icon" sizes="76x76" href="apple-touch-icon-76x76.png">
+	<link rel="apple-touch-icon" sizes="114x114" href="apple-touch-icon-114x114.png">
+	<link rel="apple-touch-icon" sizes="120x120" href="apple-touch-icon-120x120.png">
+	<link rel="apple-touch-icon" sizes="144x144" href="apple-touch-icon-144x144.png">
+	<link rel="apple-touch-icon" sizes="152x152" href="apple-touch-icon-152x152.png">
+	<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180x180.png">
+	<link rel="icon" type="image/png" href="favicon-32x32.png" sizes="32x32">
+	<link rel="icon" type="image/png" href="android-chrome-192x192.png" sizes="192x192">
+	<link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96">
+	<link rel="icon" type="image/png" href="favicon-16x16.png" sizes="16x16">
+	<link rel="manifest" href="manifest.json">
+	<link rel="mask-icon" href="safari-pinned-tab.svg" color="#5bbad5">
 	<meta name="msapplication-TileColor" content="#da532c">
-	<meta name="msapplication-TileImage" content="/mstile-144x144.png">
+	<meta name="msapplication-TileImage" content="mstile-144x144.png">
 	<meta name="theme-color" content="#ffffff">
 	<script>
 	  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
@@ -36,19 +36,25 @@
 <body>
 	<div id="outer" style="display: none;">
 		<nav style="display: none;">
-			<nobr>
-				<span class="oversize github">[</span><a class="nohighlight" id="githublink" href="https://github.com/nellore/rail"><img src="GitHub-Mark-Light-120px-plus.png" height="43" width="43" />.com/nellore/rail</a><span class="oversize github">]</span>
-			</nobr>
-			<nobr>
-				<span class="oversize mk">[</span><a class="nohighlight" id="mklink" href="http://docs.rail.bio"><img src="docs.png" height="50" width="50" id="docs" />.rail.bio</a><span class="oversize mk">]</span>
-			</nobr>
+			<div class="navblock">
+				<div class="github rotate90" id="reporotate">repo</div>
+				<span class="oversize github">[</span><a class="nohighlight" id="githublink" href="https://github.com/nellore/rail"><img src="GitHub-Mark-Light-120px-plus.png" height="43" width="43" alt="github" />.com/nellore/rail</a><span class="oversize github">]</span>
+			</div>
+			<div class="navblock">
+				<div class="mk rotate270" id="docsrotate">docs</div>
+				<span class="oversize mk">[</span><a class="nohighlight" id="mklink" href="http://docs.rail.bio"><img src="docs.png" height="50" width="50" id="docs" alt="docs" />.rail.bio</a><span class="oversize mk">]</span>
+			</div>
 		</nav>
 		<article>
-			<a class="nohighlight" href="http://rail.bio"><img src="railrnalogotransparent.png" id="logo" height="43" width="236" style="display: none;" /></a> is a spliced aligner by <a href="https://github.com/nellore/rail#contributors">researchers</a> at <a href="http://jhu.edu">JHU</a> that scales to analyze many RNA-seq samples at once on <a href="https://aws.amazon.com/elasticmapreduce/">Amazon Elastic MapReduce</a>. It also works on single computers and on conventional clusters running, for example, Sun Grid Engine. Install the latest version (0.2.1: <a href="https://github.com/nellore/rail/releases">changelog</a>) for the current user in one command by entering
+			<p id="intro"><a class="nohighlight" href="http://rail.bio"><img src="railrnalogotransparent.png" id="logo" height="43" width="236" style="display: none;" alt="Rail-RNA" /></a> is a spliced aligner by <a href="https://github.com/nellore/rail#contributors">researchers</a> at <a href="http://jhu.edu">JHU</a> that scales to analyze many RNA-seq samples at once on <a href="https://aws.amazon.com/elasticmapreduce/">Amazon Elastic MapReduce</a>. It also works on single computers and on conventional clusters running, for example, Sun Grid Engine.</p>
+			<hr />
+			<p>Install the latest version (0.2.1: <a href="https://github.com/nellore/rail/releases">changelog</a>) for the current user in one command by entering
 			<div id="textarea">
-				<span id="capture">(INSTALLER=/var/tmp/$(cat /dev/urandom | env LC_CTYPE=C tr -cd 'a-f0-9' | head -c 32); curl https://raw.githubusercontent.com/nellore/rail/master/releases/install_rail-rna-0.2.1 -o $INSTALLER; python2 $INSTALLER -m || true; rm -f $INSTALLER)</span><img src="clippy.png" height="43" width="43" id="clippy" data-clipboard-target="#capture" />
+				<span id="capture">(INSTALLER=/var/tmp/$(cat /dev/urandom | env LC_CTYPE=C tr -cd 'a-f0-9' | head -c 32); curl https://raw.githubusercontent.com/nellore/rail/master/releases/install_rail-rna-0.2.1 -o $INSTALLER; python2 $INSTALLER -m || true; rm -f $INSTALLER)</span><img src="clippy.png" height="43" width="43" id="clippy" data-clipboard-target="#capture" alt="Copy" />
 			</div>
-			at a Bash prompt on a recent (>= 2009) Mac OS X or Linux box. For more flexibility, <a href="https://github.com/nellore/rail/raw/master/releases/install_rail-rna-0.2.1">download the installer</a> and follow <a href="http://docs.rail.bio/installation/">these instructions</a>. Now <a href="http://j.mp/rail-pre">read the preprint</a>, <a href="http://docs.rail.bio/tutorial/">review the tutorial</a>, see how Rail makes it easy to <a href="http://docs.rail.bio/dbgap/">analyze dbGaP-protected data</a> in the cloud, or <a href="http://docs.rail.bio/#advertisement">learn about other features</a>.
+			at a Bash prompt on a recent (>= 2009) Mac OS X or Linux box. For more flexibility, <a href="https://github.com/nellore/rail/raw/master/releases/install_rail-rna-0.2.1">download the installer</a> and follow <a href="http://docs.rail.bio/installation/">these instructions</a>.</p>
+
+			<p>Now <a href="http://j.mp/rail-pre">read the preprint</a>, <a href="http://docs.rail.bio/tutorial/">review the tutorial</a>, see how Rail makes it easy to <a href="http://docs.rail.bio/dbgap/">analyze dbGaP-protected data</a> in the cloud, or <a href="http://docs.rail.bio/#advertisement">learn about other features</a>.</p>
 		</article>
 	</div>
 	<script src="https://cdn.jsdelivr.net/jquery/3.0.0-alpha1/jquery.min.js"></script>
@@ -70,6 +76,7 @@
 		}).click( function(e) {
 			$('.mk').removeClass('hover');
 		});
+		$('body').velocity({ "backgroundColor" : "#0c0c0c" }, { duration: 1500 });
 		$('img#logo').velocity("fadeIn", { duration: 2000 } );
 		$('div#outer').velocity("fadeIn", { duration: 200, complete: function() {$('nav').velocity("slideDown", { duration: 200 })} });
 	</script>
