@@ -1,4 +1,4 @@
-@media handheld {
+@media only screen and (max-device-width: 480px) {
 	img#clippy {
 		display: none;
 	}
