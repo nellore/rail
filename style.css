@@ -1,0 +1,59 @@
+body {
+	background-color: rgba(0,0,0,1);
+}
+
+div {
+	text-align: center;
+	line-height: 300%;
+}
+
+.oversize {
+	font-size: 4em;
+}
+
+header {
+	margin: 0 auto;
+	margin-top: 1em;
+	padding: 0.5em;
+	min-width: 19em;
+	max-width: 48em;
+	background-color: rgba(255,255,255,0.1);
+	font-family: Helvetica, Arial, sans-serif;
+	font-weight: 200;
+	text-align: justify;
+	color: white;
+	line-height: 130%;
+	letter-spacing: 0.2em;
+	word-wrap: break-word;
+	min-width: 1em;
+}
+
+.cour {
+	font-family: "Courier New", Courier, monospace;
+}
+
+a {
+	font-size: 1.4em;
+	color: rgba(236,93,87,1);
+	text-decoration: none;
+	line-height: 130%;
+}
+
+a:hover, a:active {
+	background-color: rgba(0,0,0,1);
+}
+
+textarea {
+	display: block;
+	margin-left: auto;
+	margin-right: auto;
+	font-family: "Arial";
+	font-size: 1em;
+	width: 90%;
+	height: 4em;
+}
+
+#logo {
+	position: relative;
+	top: .3em;
+}
