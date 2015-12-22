@@ -194,7 +194,7 @@ hr {
 	img#clippy {
 		display: none;
 	}
-	div#outer {
+	article {
 		letter-spacing: 0.3em;
 	}
 	div#textarea {
