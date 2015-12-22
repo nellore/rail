@@ -73,7 +73,7 @@ img#logo {
 
 img#clippy {
 	position: absolute;
-	bottom: -0.7em;
+	bottom: -1.2em;
 	right: -1.5em;
 	cursor: pointer;
 }
@@ -87,4 +87,8 @@ a {
 
 a:hover, a:active {
 	background-color: rgba(255,255,255,0.1);
+}
+
+a.nohighlight:hover, a.nohighlight:active {
+	background-color: rgba(0,0,0,0);
 }
