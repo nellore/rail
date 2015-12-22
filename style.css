@@ -81,10 +81,18 @@ div#reporotate {
 	left: -1.7em;
 }
 
+div#githubblock {
+	margin-left: 0.85em;
+}
+
 div#docsrotate {
 	position: absolute;
 	bottom: 0.7em;
 	right: -1.6em;
+}
+
+div#mkblock {
+	margin-right: 0.8em;
 }
 
 article {
