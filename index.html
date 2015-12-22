@@ -16,6 +16,7 @@
 	</script>
 </head>
 <body>
+	<div id="strip"></div>
 	<div id="outer" style="display: none;">
 		<nav style="display: none;">
 			<nobr>
@@ -38,8 +39,9 @@
 	<script src="https://cdn.jsdelivr.net/clipboard.js/1.5.5/clipboard.min.js"></script>
 	<script>
 		var clipboard = new Clipboard('img#clippy');
-		$('img#logo').velocity("fadeIn", {duration: 1500} );
-		$('div').velocity("fadeIn", { duration: 200, complete: function() {$('nav').velocity("slideDown", { duration: 200 })} });
+		$('img#logo').velocity("fadeIn", {duration: 2000} );
+		$('div#strip').velocity("fadeIn", {duration: 1000} );
+		$('div#outer').velocity("fadeIn", { duration: 200, complete: function() {$('nav').velocity("slideDown", { duration: 200 })} });
 	</script>
 </body>
 </html>

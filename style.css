@@ -2,18 +2,34 @@ body {
 	background-color: rgba(0,0,0,1);
 }
 
+::selection {
+  background: rgba(40,80,173,0.8); /* WebKit/Blink Browsers */
+}
+::-moz-selection {
+  background: rgba(40,80,173,0.8); /* Gecko Browsers */
+}
+
+div#strip {
+	position: absolute;
+	background-color: rgba(255,255,255,0.05);
+	top: 0em;
+	width: 45em;
+	left: 0em;
+	height: 100%;
+	z-index:-5;
+}
+
 div#outer {
 	margin: 0 auto;
 	margin-top: 1em;
 	padding: 0.5em;
 	min-width: 19em;
 	max-width: 48em;
-	background-color: rgba(255,255,255,0.1);
 	font-family: Helvetica, Arial, sans-serif;
 	font-weight: 200;
 	text-align: justify;
 	color: white;
-	line-height: 130%;
+	line-height: 160%;
 	letter-spacing: 0.2em;
 	min-width: 1em;
 	-webkit-border-radius: 30px 0px 20px 0px;
@@ -79,9 +95,5 @@ a {
 }
 
 a:hover, a:active {
-	background-color: rgba(0,0,0,1);
-}
-
-a#nocolor:hover {
-	background-color: rgba(0,0,0,0);;
+	background-color: rgba(40,80,173,0.3);
 }
