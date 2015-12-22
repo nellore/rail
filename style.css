@@ -195,6 +195,7 @@ hr {
 		display: none;
 	}
 	article {
+		font-size: 1.2em;
 		letter-spacing: 0.3em;
 	}
 	div#textarea {
