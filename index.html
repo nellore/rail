@@ -16,7 +16,6 @@
 	</script>
 </head>
 <body>
-	<div id="strip"></div>
 	<div id="outer" style="display: none;">
 		<nav style="display: none;">
 			<nobr>
@@ -40,7 +39,6 @@
 	<script>
 		var clipboard = new Clipboard('img#clippy');
 		$('img#logo').velocity("fadeIn", {duration: 2000} );
-		$('div#strip').velocity("fadeIn", {duration: 1000} );
 		$('div#outer').velocity("fadeIn", { duration: 200, complete: function() {$('nav').velocity("slideDown", { duration: 200 })} });
 	</script>
 </body>
