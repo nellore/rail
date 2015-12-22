@@ -197,7 +197,7 @@ hr {
 	article {
 		text-align: left;
 		font-size: 1.2em;
-		letter-spacing: 0.3em;
+		letter-spacing: 0;
 	}
 	div#textarea {
 		padding-right: 0.5em;
