@@ -1,7 +1,11 @@
 ![Rail-RNA logo](https://github.com/nellore/rail/blob/master/assets/railrnalogodark.png)
 ====
 
-This is the official repo for Rail-RNA, software for RNA-seq analysis. 
+This is the official repo for Rail-RNA, software for RNA-seq analysis.
+## [Visit](http://rail.bio)
+
+**the website.**
+
 ### [Download](https://github.com/nellore/rail/raw/v0.2.1/releases/install_rail-rna-0.2.1)
 
 **the latest stable release. Read the**
@@ -24,6 +28,7 @@ Rail-RNA's distinguishing features are
 * **Integrative analysis**. The software borrows strength across replicates to achieve more accurate splice junction detection, especially in genomic regions with low coverage.
 * **Mode agnosticism**. The software integrates its own parallel abstraction layer that allows it to be run in various distributed computing environments, including the Amazon Web Services (AWS) [Elastic MapReduce (EMR) service](http://aws.amazon.com/elasticmapreduce/), or any distributed environment supported by [IPython](http://ipython.org/), including clusters using batch schedulers like PBS or SGE, Message Passing Interface (MPI), or any cluster with a shared filesystem and mutual SSH access. Alternately, Rail-RNA can be run on a single multi-core computer, without the aid of a batch system or MapReduce implementation.
 * **Inexpensive cloud implementation**. An EMR run on > ~100 samples costs ~ $1/sample with spot instances.
+* **Secure analysis of dbGaP-protected data on EMR**. See [this](http://docs.rail.bio/dbgap/) guide for information on setup.
 
 Outputs currently include
 * Alignment BAMs with only primary alignments by default (for more, use `--bowtie2-args "-k <N>"`, where `<N>` is the maximum number of alignments to report per read)
