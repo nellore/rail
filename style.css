@@ -160,12 +160,14 @@ hr {
 		width: 200px;
 		height: auto;
 	}
+	div#outer {
+		font-weight: 500;
+	}
 	header, article, footer {
 		text-align: justify;
 		font-size: 1em;
 		letter-spacing: 0;
 		line-height: 115%;
-		font-weight: 500;
 	}
 	a {
 		font-size: 1em;
