@@ -156,6 +156,10 @@ hr {
 	img#clippy {
 		display: none;
 	}
+	img#logo {
+		width: 150px;
+		height: auto;
+	}
 	header, article, footer {
 		text-align: justify;
 		font-size: 0.9em;
