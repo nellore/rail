@@ -158,9 +158,9 @@ hr {
 	}
 	header, article, footer {
 		text-align: justify;
-		font-size: 1em;
+		font-size: 0.9em;
 		letter-spacing: 0;
-		line-height: 120%;
+		line-height: 110%;
 	}
 	div#textarea {
 		padding-right: 0.5em;
