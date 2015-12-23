@@ -2,8 +2,10 @@
 <html>
 <head>
 	<title>Rail-RNA: scalable RNA-seq analysis</title>
+	<!--for the mobile closeup-->
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="stylesheet" href="style.css">
+	<!---regenerate favicon stuff with http://realfavicongenerator.net/-->
 	<link rel="apple-touch-icon" sizes="57x57" href="apple-touch-icon-57x57.png">
 	<link rel="apple-touch-icon" sizes="60x60" href="apple-touch-icon-60x60.png">
 	<link rel="apple-touch-icon" sizes="72x72" href="apple-touch-icon-72x72.png">
@@ -48,11 +50,11 @@
 		<article>
 			<p id="intro"><a class="nohighlight" href="http://rail.bio"><img src="railrnalogotransparent.png" id="logo" height="43" width="236" style="display: none;" alt="Rail-RNA" /></a> is a spliced aligner by <a href="https://github.com/nellore/rail#contributors">researchers</a> at <a href="http://jhu.edu">JHU</a> that scales to analyze many RNA-seq samples at once on <a href="https://aws.amazon.com/elasticmapreduce/">Amazon Elastic MapReduce</a>. It also works on single computers and on conventional clusters running, for example, Sun Grid Engine.</p>
 			<hr />
-			<p>Install the latest version (0.2.1: <a href="https://github.com/nellore/rail/releases">changelog</a>) for the current user in one command by entering
+			<p>Install the latest version (0.2.1: <a href="https://github.com/nellore/rail/releases">changelog</a>) for the current user in one command by entering the following at a Bash prompt on a recent (>= 2009) Mac OS X or Linux box:
 			<div id="textarea">
 				<span id="capture">(INSTALLER=/var/tmp/$(cat /dev/urandom | env LC_CTYPE=C tr -cd 'a-f0-9' | head -c 32); curl https://raw.githubusercontent.com/nellore/rail/master/releases/install_rail-rna-0.2.1 -o $INSTALLER; python2 $INSTALLER -m || true; rm -f $INSTALLER)</span><img src="clippy.png" height="43" width="43" id="clippy" data-clipboard-target="#capture" alt="Copy" />
-			</div>
-			at a Bash prompt on a recent (>= 2009) Mac OS X or Linux box. For more flexibility, <a href="https://github.com/nellore/rail/raw/master/releases/install_rail-rna-0.2.1">download the installer</a> and follow <a href="http://docs.rail.bio/installation/">these instructions</a>.</p>
+			</div></p>
+			<p>For more flexibility, <a href="https://github.com/nellore/rail/raw/master/releases/install_rail-rna-0.2.1">download the installer</a> and follow <a href="http://docs.rail.bio/installation/">these instructions</a>.</p>
 
 			<p>Now <a href="http://j.mp/rail-pre">read the preprint</a>, <a href="http://docs.rail.bio/tutorial/">review the tutorial</a>, see how Rail makes it easy to <a href="http://docs.rail.bio/dbgap/">analyze dbGaP-protected data</a> in the cloud, or <a href="http://docs.rail.bio/#advertisement">learn about other features</a>.</p>
 		</article>
@@ -61,23 +63,36 @@
 	<script src="https://cdn.jsdelivr.net/velocity/1.2.3/velocity.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/clipboard.js/1.5.5/clipboard.min.js"></script>
 	<script>
+		function makeHoverHandler(i, toHover) {
+			// closure thing to capture value of i
+			return function(j) {
+				$(toHover[j][0]).mouseenter( function(e) {
+					$(toHover[j][1]).addClass('nohighlighthover');
+				}).mouseleave( function(e) {
+					$(toHover[j][1]).removeClass('nohighlighthover');
+				}).click( function(e) {
+					$(toHover[j][1]).removeClass('nohighlighthover');
+				});
+			}(i)
+		}
 		var clipboard = new Clipboard('img#clippy');
-		$('a#githublink').mouseenter( function(e) {
-			$('.github').addClass('hover');
+		var toHover = [['a#githublink', '.github'], ['a#mklink', '.mk']];
+		// mouseover workaround: prevents persistence of mouseover effect ontap on mobile
+		for (i=0;i<toHover.length;i++) {
+			makeHoverHandler(i, toHover);
+		}
+		$('a:not(.nohighlight)').mouseenter( function(e) {
+			$(e.target).addClass('hover');
 		}).mouseleave( function(e) {
-			$('.github').removeClass('hover');
+			$(e.target).removeClass('hover');
 		}).click( function(e) {
-			$('.github').removeClass('hover');
+			$(e.target).removeClass('hover');
 		});
-		$('a#mklink').mouseenter( function(e) {
-			$('.mk').addClass('hover');
-		}).mouseleave( function(e) {
-			$('.mk').removeClass('hover');
-		}).click( function(e) {
-			$('.mk').removeClass('hover');
-		});
+		// subtle backlight
 		$('body').velocity({ "backgroundColor" : "#0c0c0c" }, { duration: 1500 });
+		// longer timescale for logo backlight
 		$('img#logo').velocity("fadeIn", { duration: 2000 } );
+		// drop nav to draw attention to quicklinks
 		$('div#outer').velocity("fadeIn", { duration: 200, complete: function() {$('nav').velocity("slideDown", { duration: 200 })} });
 	</script>
 </body>

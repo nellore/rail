@@ -77,7 +77,7 @@ div.navblock {
 
 div#reporotate {
 	position: absolute;
-	bottom: 0.8em;
+	bottom: 0.85em;
 	left: -1.7em;
 }
 
@@ -155,19 +155,15 @@ a {
 	line-height: 130%;
 }
 
-a:hover, a:active {
-	background-color: rgba(255,255,255,0.1);
-}
-
 a.nohighlight {
 	font-size: 1.1em;
 }
 
-a.nohighlight:hover, a.nohighlight:active {
-	background-color: rgba(0,0,0,0);
+.hover {
+	background-color: rgba(255,255,255,0.1);
 }
 
-.hover {
+.nohighlighthover {
 	color : rgba(40,80,173,1);
 }
 
