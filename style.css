@@ -167,6 +167,9 @@ hr {
 		line-height: 115%;
 		font-weight: 500;
 	}
+	a {
+		font-size: 1em;
+	}
 	div#textarea {
 		padding-right: 0.5em;
 	}
