@@ -103,6 +103,11 @@ p#intro {
 	margin-top: -0.05em;
 }
 
+div#textareacontainer {
+	position: relative;
+	text-align: center;
+}
+
 div#textarea {
 	position: relative;
     border: ridge 0.1em;
@@ -123,6 +128,15 @@ div#textarea {
 	overflow: visible;
 	line-height: 140%;
 	padding-right: 5em;
+}
+
+div#copied {
+	position: absolute;
+	font-size: 2em;
+	top: 50%;
+  	left: 50%;
+  	transform: translate(-50%, -50%);
+  	color: rgba(40,80,173,1);
 }
 
 .oversize {
@@ -164,7 +178,7 @@ a.nohighlight {
 }
 
 .nohighlighthover {
-	color : rgba(40,80,173,1);
+	color: rgba(40,80,173,1);
 }
 
 hr {
