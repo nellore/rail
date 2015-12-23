@@ -157,8 +157,8 @@ hr {
 		display: none;
 	}
 	header, article, footer {
-		text-align: left;
-		font-size: 1.2em;
+		text-align: justify;
+		font-size: 0.7em;
 		letter-spacing: 0;
 	}
 	div#textarea {
