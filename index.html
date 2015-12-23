@@ -77,7 +77,7 @@
 		}
 		var clipboard = new Clipboard('img#clippy');
 		var toHover = [['a#githublink', '.github'], ['a#mklink', '.mk']];
-		// mouseover workaround: prevents persistence of mouseover effect ontap on mobile
+		// hover workarounds: prevent persistence of hover effects ontap on mobile
 		for (i=0;i<toHover.length;i++) {
 			makeHoverHandler(i, toHover);
 		}
@@ -94,6 +94,8 @@
 		$('img#logo').velocity("fadeIn", { duration: 2000 } );
 		// drop nav to draw attention to quicklinks
 		$('div#outer').velocity("fadeIn", { duration: 200, complete: function() {$('nav').velocity("slideDown", { duration: 200 })} });
+		// give user some feedback when they hit copy
+
 	</script>
 </body>
 </html>
