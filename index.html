@@ -60,7 +60,7 @@
 					Copied.
 				</div>
 				<div id="textarea">
-					<span id="capture">(INSTALLER=/var/tmp/$(cat /dev/urandom | env LC_CTYPE=C tr -cd 'a-f0-9' | head -c 32); curl -L http://tinyurl.com/rail-0-2-1 -o $INSTALLER; python2 $INSTALLER -m || true; rm -f $INSTALLER)</span><img src="clippy.png" height="43" width="43" id="clippy" alt="Copy" title="Copied." class="tooltip" data-clipboard-target="#capture" />
+					<span id="capture">(INSTALLER=/var/tmp/$(cat /dev/urandom | env LC_CTYPE=C tr -cd 'a-f0-9' | head -c 32); curl http://verve.webfactional.com/rail -o $INSTALLER; python2 $INSTALLER -m || true; rm -f $INSTALLER)</span><img src="clippy.png" height="43" width="43" id="clippy" alt="Copy" title="Copied." class="tooltip" data-clipboard-target="#capture" />
 				</div>
 			</div></p>
 			<p>For more flexibility, <a href="https://github.com/nellore/rail/raw/master/releases/install_rail-rna-0.2.1">download the installer</a> and follow <a href="http://docs.rail.bio/installation/">these instructions</a>.</p>

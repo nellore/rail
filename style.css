@@ -31,10 +31,9 @@ div#outer {
 nav {
 	position: relative;
 	text-align: left;
-	line-height: 300%;
+	line-height: 340%;
 	display: inline-block;
 	padding-left: 0.8em;
-	line-height: 3em;
 	z-index: 5;
 }
 
@@ -89,7 +88,7 @@ div#textarea {
 	margin-right: auto;
 	font-family: "Courier New", Courier, monospace;
 	font-size: 0.85em;
-	width: 75%;
+	width: 80%;
 	overflow: visible;
 	line-height: 140%;
 	padding-right: 5em;
