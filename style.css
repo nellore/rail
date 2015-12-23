@@ -160,6 +160,7 @@ hr {
 		text-align: justify;
 		font-size: 1em;
 		letter-spacing: 0;
+		line-height: 120%;
 	}
 	div#textarea {
 		padding-right: 0.5em;
