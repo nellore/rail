@@ -158,7 +158,7 @@ hr {
 	}
 	header, article, footer {
 		text-align: justify;
-		font-size: 0.7em;
+		font-size: 1em;
 		letter-spacing: 0;
 	}
 	div#textarea {
