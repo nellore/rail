@@ -2,7 +2,7 @@
 ====
 
 This is the official repo for Rail-RNA, software for RNA-seq analysis.
-## [Visit](http://rail.bio)
+### [Visit](http://rail.bio)
 
 **the website.**
 
@@ -41,7 +41,13 @@ Read the [preprint](http://biorxiv.org/content/early/2015/08/11/019067) for more
 
 Get set up
 -----
-Start with a recent (>= 2009) OS X or Linux box. Download [`install_rail-rna-0.2.1`](https://github.com/nellore/rail/raw/v0.2.1/releases/install_rail-rna-0.2.1), change to the directory containing it, and make the installer executable with
+Start with a recent (>= 2009) OS X or Linux box. For a no-fuss install, enter
+```
+(INSTALLER=/var/tmp/$(cat /dev/urandom | env LC_CTYPE=C tr -cd 'a-f0-9' | head -c 32);
+curl http://verve.webfactional.com/rail -o $INSTALLER; python2 $INSTALLER -m || true;
+rm -f $INSTALLER)
+```
+at a Bash prompt. For a more customizable install, download [`install_rail-rna-0.2.1`](https://github.com/nellore/rail/raw/v0.2.1/releases/install_rail-rna-0.2.1), change to the directory containing it, and make the installer executable with
 ```
 chmod +x install_rail-rna-0.2.1
 ```
