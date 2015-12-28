@@ -38,37 +38,45 @@
 	</script>
 </head>
 <body>
-	<div id="outer" style="display: none;">
-		<nav style="display: none;">
-			<div class="navblock" id="mkblock">
-				<div class="mk bracketrotate">docs</div>
-				<span class="oversize mk">[</span><a class="nohighlight" id="mklink" href="http://docs.rail.bio"><img src="docs.png" height="50" width="50" id="docs" alt="docs" />.rail.bio</a><span class="oversize mk">]</span>
+	<header style="display: none;">
+		<div id="thin" style="display: none;"></div>
+		<div id="top">
+			<div class="hemmed">
+				<a class="nohighlight samewindow" href="http://rail.bio"><img src="railrnalogotransparent.png" id="logo" height="43" width="236" alt="Rail-RNA" /></a>
+				<h1>Scalable RNA-seq alignment</h1>
+				<h2>For <a href="https://aws.amazon.com/elasticmapreduce/" class="sameline">Amazon Elastic MapReduce</a>, <a href="http://ipython.org/ipython-doc/dev/parallel/" class="sameline">IPython Parallel</a>, and single computers</h2>
+				<nav>
+					<div class="navblock" id="mkblock">
+						<div class="mk bracketrotate">docs</div>
+						<span class="oversize mk">[</span><a class="nohighlight" id="mklink" href="http://docs.rail.bio"><img src="docs.png" height="50" width="50" id="docs" alt="docs" />.rail.bio</a><span class="oversize mk">]</span>
+					</div>
+					<div class="navblock">
+						<div class="github bracketrotate">repo</div>
+						<span class="oversize github">[</span><a class="nohighlight" id="githublink" href="https://github.com/nellore/rail"><img src="GitHub-Mark-Light-120px-plus.png" height="43" width="43" alt="github" />.com/nellore/rail</a><span class="oversize github">]</span>
+					</div>
+				</nav>
 			</div>
-			<div class="navblock">
-				<div class="github bracketrotate">repo</div>
-				<span class="oversize github">[</span><a class="nohighlight" id="githublink" href="https://github.com/nellore/rail"><img src="GitHub-Mark-Light-120px-plus.png" height="43" width="43" alt="github" />.com/nellore/rail</a><span class="oversize github">]</span>
-			</div>
-		</nav>
-		<header>
-			<a class="nohighlight" href="http://rail.bio"><img src="railrnalogotransparent.png" id="logo" height="43" width="236" style="display: none;" alt="Rail-RNA" /></a> is a spliced aligner by <a href="https://github.com/nellore/rail/blob/master/README.md#contributors">researchers</a> at <a href="http://jhu.edu">JHU</a> that scales to analyze many RNA-seq samples at once on <a href="https://aws.amazon.com/elasticmapreduce/">Amazon Elastic MapReduce</a>. It also works on <a href="http://ipython.org/ipython-doc/dev/parallel/">IPython Parallel</a> clusters and single computers.
-			<hr />
-		</header>
-		<article>
-			<p>Install the latest version (0.2.1: <a href="https://github.com/nellore/rail/releases">changelog</a>) for the current user in one command by entering the following at a Bash prompt on an OS X or Linux box:
-			<div id="textareacontainer">
-				<div id="copied" style="opacity: 0; visibility: hidden;">
-					Copied.
-				</div>
-				<div id="textarea">
-					<span id="capture">(INSTALLER=/var/tmp/$(cat /dev/urandom | env LC_CTYPE=C tr -cd 'a-f0-9' | head -c 32); curl http://verve.webfactional.com/rail -o $INSTALLER; python2 $INSTALLER -m || true; rm -f $INSTALLER)</span><img src="clippy.png" height="43" width="43" id="clippy" alt="Copy" title="Copied." class="tooltip" data-clipboard-target="#capture" />
-				</div>
-			</div></p>
-			<p>For more flexibility, <a href="https://github.com/nellore/rail/raw/master/releases/install_rail-rna-0.2.1">download the installer</a> and follow <a href="http://docs.rail.bio/installation/">these instructions</a>.</p>
-		</article>
-		<footer>
-			<hr />
-			<p>Now <a href="http://j.mp/rail-pre">read the preprint</a>, <a href="http://docs.rail.bio/tutorial/">review the tutorial</a>, see how Rail makes it easy to <a href="http://docs.rail.bio/dbgap/">analyze dbGaP-protected data</a> in the cloud, or <a href="http://docs.rail.bio/#advertisement">learn about other features</a>.</p>
-		</footer>
+		</div>
+	</header>
+	<div id="bottom">
+		<div class="hemmed">
+			<article>
+				<p>Install the latest version (0.2.1: <a href="https://github.com/nellore/rail/releases">changelog</a>) for the current user in one command by entering the following at a Bash prompt on an OS X or Linux box:
+				<div id="textareacontainer">
+					<div id="copied" style="opacity: 0; visibility: hidden;">
+						Copied.
+					</div>
+					<div id="textarea">
+						<span id="capture">(INSTALLER=/var/tmp/$(cat /dev/urandom | env LC_CTYPE=C tr -cd 'a-f0-9' | head -c 32); curl http://verve.webfactional.com/rail -o $INSTALLER; python2 $INSTALLER -m || true; rm -f $INSTALLER)</span><img src="clippy.png" height="43" width="43" id="clippy" alt="Copy" title="Copied." class="tooltip" data-clipboard-target="#capture" />
+					</div>
+				</div></p>
+				<p>For more flexibility, <a href="https://github.com/nellore/rail/raw/master/releases/install_rail-rna-0.2.1">download the installer</a> and follow <a href="http://docs.rail.bio/installation/">instructions</a>.</p>
+				<hr />
+			</article>
+			<footer>
+				<a href="https://github.com/nellore/rail#contributors" class="footer" id="contributors">contributors</a><span class="separator">&nbsp;&nbsp;&nbsp; </span><a href="http://biorxiv.org/content/early/2015/08/11/019067" class="footer" id="preprint">preprint</a><span class="separator">&nbsp;&nbsp;&nbsp; </span><a href="http://docs.rail.bio/tutorial/" class="footer" id="tutorial">tutorial</a><span class="separator">&nbsp;&nbsp;&nbsp; </span><a href="http://biorxiv.org/content/early/2015/12/24/035287" class="footer" id="dbgap">Rail-dbGaP</a>
+			</footer>
+		</div>
 	</div>
 	<script src="https://cdn.jsdelivr.net/jquery/3.0.0-alpha1/jquery.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/velocity/1.2.3/velocity.min.js"></script>
@@ -118,12 +126,9 @@
 		}).click( function(e) {
 			$(e.target).removeClass('hover');
 		});
+		$('header').velocity("slideDown", { duration: 300, complete: function() { $('div#thin').velocity("slideDown",  { duration: 200 }) } } );
 		// subtle backlight
-		$('body').velocity({ "backgroundColor" : "#0c0c0c" }, { duration: 1500 });
-		// longer timescale for logo backlight
-		$('img#logo').velocity("fadeIn", { duration: 2000 } );
-		// drop nav to draw attention to quicklinks
-		$('div#outer').velocity("fadeIn", { duration: 200, complete: function() { $('nav').velocity("slideDown", { duration: 200 }); } });
+		$('header').velocity({ "backgroundColor" : "#0f0f0f" }, { duration: 1500 });
 		// give user some feedback when they hit copy
 		lastTimeout = null;
 		clipboard.on('success', function(e) {

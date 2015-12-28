@@ -1,31 +1,131 @@
+/* CSS reset to ensure browser consistency from
+   http://meyerweb.com/eric/tools/css/reset/ 
+   v2.0 | 20110126
+   License: none (public domain)
+*/
+
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed, 
+figure, figcaption, footer, header, hgroup, 
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-size: 100%;
+	font: inherit;
+	vertical-align: baseline;
+}
+
+/* HTML5 display-role reset for older browsers */
+article, aside, details, figcaption, figure, 
+footer, header, hgroup, menu, nav, section {
+	display: block;
+}
 body {
-	background-color: rgba(0,0,0,1);
+	line-height: 1;
+}
+ol, ul {
+	list-style: none;
+}
+blockquote, q {
+	quotes: none;
+}
+blockquote:before, blockquote:after,
+q:before, q:after {
+	content: '';
+	content: none;
+}
+table {
+	border-collapse: collapse;
+	border-spacing: 0;
+}
+
+/* Begin actual style */
+
+body {
+	background-color: white;
 }
 
 ::selection {
-  background: rgba(40,80,173,0.8); /* WebKit/Blink Browsers */
+  background: rgba(236,93,87,0.7); /* WebKit/Blink Browsers */
 }
 
 ::-moz-selection {
-  background: rgba(40,80,173,0.8); /* Gecko Browsers */
+  background: rgba(236,93,87,0.7); /* Gecko Browsers */
 }
 
-div#outer {
+div.hemmed {
 	margin: 0 auto;
-	margin-top: 0.8em;
-	padding: 0.5em;
-	min-width: 19em;
-	max-width: 48em;
-	font-family: Helvetica, Arial, sans-serif;
-	font-weight: 300;
-	text-align: justify;
-	color: white;
-	line-height: 180%;
-	letter-spacing: 0.16em;
 	min-width: 1em;
-	-webkit-border-radius: 30px 0px 20px 0px;
-	-moz-border-radius: 30px 0px 20px 0px;
-	border-radius: 30px 0px 20px 0px;
+	max-width: 48em;
+	font-family: Helvetica, sans-serif;
+	line-height: 1.8;
+	padding-left: 0.7em;
+	padding-right: 0.7em;
+	word-wrap: break-word;
+}
+
+img#logo {
+	position: relative;
+	top: 0.27em;
+}
+
+h1 {
+	font-family: Helvetica, sans-serif;
+	font-size: 1.55em;
+	line-height: 1.2em;
+	margin: 0.15em;
+	letter-spacing: 0.04em;
+	font-weight: 500;
+}
+
+h2 {
+	font-family: Helvetica, sans-serif;
+	font-size: 0.84em;
+	line-height: 1.2em;
+	margin: 0.15em;
+	letter-spacing: 0.04em;
+	font-weight: 500;
+}
+
+.orange {
+	color: rgba(236,93,87,1);
+}
+
+header {
+	background-color: black;
+}
+
+div#thin {
+	height: 0.8em;
+	border-bottom: thin solid white;
+}
+
+div#top {
+	color: white;
+	letter-spacing: 0.15em;
+	position: relative;
+	font-weight: 300;
+}
+
+div#bottom {
+	text-align: justify;
+	background-color: rgba(255,255,255,1);
+	color: black;
+	background-color: white;
+	height: 100%;
+	padding-top: 0.3em;
+	letter-spacing: 0.03em;
+	font-weight: 400;
 }
 
 nav {
@@ -33,13 +133,14 @@ nav {
 	text-align: left;
 	line-height: 340%;
 	display: inline-block;
+	padding-top: 0.6em;
 	padding-left: 0.8em;
 	z-index: 5;
 }
 
 div.navblock {
-	display: inline-block;
 	position: relative;
+	display: inline-block;
 }
 
 div.bracketrotate {
@@ -67,18 +168,15 @@ div#mkblock {
 	margin-right: 1em;
 }
 
-header {
-	margin-top: 0.5em;
-}
-
 div#textarea {
 	position: relative;
 	word-wrap: break-word;
     border: ridge 0.1em;
-   	border-color: rgba(255,255,255,0.2);
+   	border-color: rgba(0,0,0,0.5);
     padding: 0.5em;
     margin: 1em;
     width: 20em;
+    font-weight: 600;
     min-height: 3em;
     overflow: auto;
     display: block;
@@ -88,7 +186,7 @@ div#textarea {
 	margin-right: auto;
 	font-family: "Courier New", Courier, monospace;
 	font-size: 0.85em;
-	width: 80%;
+	width: 75%;
 	overflow: visible;
 	line-height: 140%;
 	padding-right: 5em;
@@ -112,11 +210,6 @@ img#docs {
 	top: 0.2em;
 }
 
-img#logo {
-	position: relative;
-	top: .3em;
-}
-
 img#clippy {
 	position: absolute;
 	margin: auto;
@@ -127,18 +220,28 @@ img#clippy {
 }
 
 a {
-	font-size: 1.1em;
-	color: rgba(236,93,87,1);
+	font-size: 1.5em;
+	color: rgba(40,80,173,1);
 	text-decoration: none;
 	line-height: 130%;
 }
 
+a.sameline {
+	font-size: 1em;
+	color: rgba(236,93,87,1);
+}
+
 a.nohighlight {
 	font-size: 1.1em;
+	color: rgba(236,93,87,1);
+}
+
+a.footer {
+	font-size: 1em;
 }
 
 .hover {
-	background-color: rgba(255,255,255,0.1);
+	text-decoration: underline;
 }
 
 .nohighlighthover {
@@ -151,28 +254,42 @@ hr {
 	margin-bottom: 1.2em;
 }
 
+footer {
+	font-size: 0.6em;
+}
+
+.oversize {
+	font-size: 4em;
+}
+
+#contributors {
+	font-size: 1.5em;
+}
+
+#preprint {
+	font-size: 2em;
+}
+
+#tutorial {
+	font-size: 2.5em;
+}
+
+#dbgap {
+	font-size: 3.5em;
+}
 @media only screen and (max-device-width: 480px) {
-	img#clippy {
-		display: none;
-	}
-	img#logo {
-		width: 200px;
-		height: auto;
-	}
-	div#outer {
-		font-weight: 500;
-	}
-	header, article, footer {
-		text-align: justify;
-		font-size: 1em;
+
+	article {
+		font-size: 0.9em;
 		letter-spacing: 0;
-		line-height: 115%;
 	}
+
 	a {
 		font-size: 1em;
 	}
-	div#textarea {
-		padding-right: 0.5em;
-		width: 98%;
+
+	div#top {
+		font-weight: 500;
 	}
+
 }
