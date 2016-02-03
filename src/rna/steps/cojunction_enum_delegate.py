@@ -22,7 +22,7 @@ site.addsitedir(base_path)
 
 from dooplicity.tools import xstream
 from alignment_handlers import multiread_with_junctions, \
-    indels_junctions_and_exons
+    indels_junctions_exons_mismatches
 
 import string
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
@@ -235,8 +235,9 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
                         if field[:5] == 'XS:A:'][0][5:]
             if (rname, sense) not in all_junctions:
                 all_junctions[(rname, sense)] = defaultdict(list)
-            _, _, junctions, _ = indels_junctions_and_exons(
-                                                cigar, md, pos, seq
+            _, _, junctions, _, _ = indels_junctions_exons_mismatches(
+                                                cigar, md, pos, seq,
+                                                junctions_only=True
                                             )
             cojunctions[(rname, sense)].add(
                     tuple([(junction[0], junction[1])

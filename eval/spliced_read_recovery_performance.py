@@ -52,7 +52,7 @@ src_path = os.path.join(base_path, 'src')
 site.addsitedir(utils_path)
 site.addsitedir(src_path)
 
-from alignment_handlers import indels_junctions_and_exons
+from alignment_handlers import indels_junctions_exons_mismatches
 from dooplicity.tools import xstream
 
 def dummy_md_index(cigar):
@@ -191,7 +191,7 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream,
             if 'N' not in cigar or flag & 256:
                 continue
             #md = [token[5:] for token in tokens if token[:5] == 'MD:Z:'][0]
-            _, _, introns, _ = indels_junctions_and_exons(cigar,
+            _, _, introns, _, _ = indels_junctions_exons_mismatches(cigar,
                                         dummy_md_index(cigar), pos, seq)
             introns = [intron[:2] for intron in introns]
             introns = [rname 
