@@ -444,7 +444,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 if sra_paired_end:
                     source_streams = [sra_process.stdout, sra_process.stdout]
                 else:
-                    source_streams = [sra_process.stdout, os.devnull]
+                    source_streams = [sra_process.stdout, open(os.devnull)]
             break_outer_loop = False
             while True:
                 if not to_stdout:

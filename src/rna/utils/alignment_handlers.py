@@ -602,13 +602,15 @@ class AlignmentPrinter(object):
     def __init__(self, manifest_object, reference_index,
                  output_stream=sys.stdout, bin_size=5000, exon_ivals=False,
                  exon_diffs=True, drop_deletions=False,
-                 output_bam_by_chr=True, tie_margin=0):
+                 output_bam_by_chr=True, tie_margin=0,
+                 mismatch_diffs=True):
         """
             manifest_object: object of type LabelsAndIndices; see manifest.py
             reference_index: object of type BowtieIndexReference; see bowtie.py
             output_stream: where to print output
             exon_ivals: True iff exon_ivals should be output
             exon_diffs: True iff exon_diffs should be output
+            mismatch_diffs: True iff mismatch_diffs should be output
             drop_deletions: counts deletions in coverage vectors iff False
             tie_margin: score difference from primary alignment per
                 100 bases under which a primary alignment should be considered
@@ -619,6 +621,7 @@ class AlignmentPrinter(object):
         self.reference_index = reference_index
         self.exon_ivals = exon_ivals
         self.exon_diffs = exon_diffs
+        self.mismatch_diffs = mismatch_diffs
         self.bin_size = bin_size
         self.output_stream = output_stream
         self.drop_deletions = drop_deletions
@@ -683,6 +686,46 @@ class AlignmentPrinter(object):
                             self.reference_index.rname_to_string['*']
                         ), 0, qname.partition('\x1d')[0], seq, qual)
         return 1
+
+    def _print_exon_diffs(self, rname, exon_pos, exon_end_pos,
+                            uniqueness, count, sample_index):
+        """ Prints exon diffs/mismatch diffs.
+
+            rname: reference name
+            exon_pos: exon start pos (or mismatch position)
+            exon_end_pos: exon end position (or 1 + mismatch position)
+            uniqueness: '1' if alignment is unique else '0'
+            count: value of exon diff
+            sample_index: sample index (+ '[ATCGN]' as necessary)
+
+            Return value: number of lines output
+        """
+        output_line_count = 0
+        partitions = partition.partition(
+                                rname, exon_pos, exon_end_pos, self.bin_size
+                            )
+        for (partition_id, partition_start, partition_end) in partitions:
+            assert exon_pos <= partition_end
+            # Print increment at interval start
+            print >>self.output_stream, 'exon_diff\t%s\t%012d\t%s\t%s\t%d' % (
+                    partition_id, max(partition_start, exon_pos),
+                    sample_index, uniqueness, count
+                )
+            output_line_count += 1
+            assert exon_end_pos > partition_start
+            if exon_end_pos <= partition_end:
+                '''Print decrement at interval end iff exon ends before
+                partition ends.'''
+                print >>self.output_stream, ('exon_diff\t%s\t%012d\t'
+                                             '%s\t%s\t-%d') % (
+                                                            partition_id,
+                                                            exon_end_pos,
+                                                            sample_index,
+                                                            uniqueness,
+                                                            count
+                                                        )
+                output_line_count += 1
+        return output_line_count
 
     def print_alignment_data(self, multiread_reports_and_ties, count=1):
         """ Prints almost-SAM alignments, junctions/indels, and exon coverage.
@@ -813,6 +856,8 @@ class AlignmentPrinter(object):
             output_stream: where to print output
             exon_ivals: True iff exon_ivals should be output
             exon_diffs: True iff exon_diffs should be output
+            mismatch_diffs: True iff mismatch_diffs should be output; these
+                are an exon_diff subtype
             count: number of alignments for which to output exon_ivals,
                 exon_diffs, indels, and junctions
 
@@ -875,43 +920,24 @@ class AlignmentPrinter(object):
                                         exon_pos, exon_end_pos, 
                                         sample_index)
                                 output_line_count += 1
-                if self.exon_diffs:
-                    '''Compare arguments of AS:i: and XS:i: to determine
-                    whether an alignment is unique.'''
-                    if self.unique(alignment):
-                        uniqueness = '1'
-                    else:
-                        uniqueness = '0'
-                    for exon_pos, exon_end_pos in exons:
-                        partitions = partition.partition(
-                                rname, exon_pos, exon_end_pos, self.bin_size
+                '''Compare arguments of AS:i: and XS:i: to determine
+                whether an alignment is unique.'''
+                if self.unique(alignment):
+                    uniqueness = '1'
+                else:
+                    uniqueness = '0'
+                if self.mismatch_diffs:
+                    for mismatch_pos, base in mismatches:
+                        output_line_count += self._print_exon_diffs(
+                                rname, mismatch_pos, mismatch_pos + 1,
+                                uniqueness, count, sample_index + '.' + base
                             )
-                        for (partition_id, partition_start, 
-                                partition_end) in partitions:
-                            assert exon_pos <= partition_end
-                            # Print increment at interval start
-                            print >>self.output_stream, \
-                                'exon_diff\t%s\t%012d\t%s\t%s\t%d' \
-                                % (partition_id,
-                                    max(partition_start, exon_pos),
-                                    sample_index,
-                                    uniqueness,
-                                    count)
-                            output_line_count += 1
-                            assert exon_end_pos > partition_start
-                            if exon_end_pos <= partition_end:
-                                '''Print decrement at interval end 
-                                iff exon ends before partition
-                                ends.'''
-                                print >>self.output_stream, \
-                                    'exon_diff\t%s\t%012d\t' \
-                                    '%s\t%s\t-%d' \
-                                    % (partition_id,
-                                        exon_end_pos,
-                                        sample_index,
-                                        uniqueness,
-                                        count)
-                                output_line_count += 1
+                if self.exon_diffs:
+                    for exon_pos, exon_end_pos in exons:
+                        output_line_count += self._print_exon_diffs(
+                                rname, exon_pos, exon_end_pos,
+                                uniqueness, count, sample_index
+                            )
                 try:
                     reverse_strand_string = [field for field in alignment
                                     if field[:5] == 'XS:A:'][0][5:]
