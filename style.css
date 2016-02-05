@@ -258,7 +258,7 @@ hr {
 	font-size: 2.5em;
 }
 
-@media only screen and (max-device-width: 480px) {
+/*@media only screen and (max-device-width: 480px) {*/
 
 	article {
 		font-size: 0.9em;
@@ -277,4 +277,4 @@ hr {
 		display: none;
 	}
 
-}
+/*}*/
