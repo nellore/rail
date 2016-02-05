@@ -1,7 +1,7 @@
 ![Rail-RNA logo](https://github.com/nellore/rail/blob/master/assets/railrnalogodark.png)
 ====
 
-This is the official repo for Rail-RNA, software for RNA-seq analysis.
+is software for RNA-seq analysis.
 ### [Visit](http://rail.bio)
 
 **the website.**
