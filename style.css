@@ -201,10 +201,6 @@ div#copied {
   	color: rgba(40,80,173,1);
 }
 
-.oversize {
-	font-size: 4em;
-}
-
 img#docs {
 	position: relative;
 	top: 0.2em;
@@ -254,11 +250,11 @@ hr {
 	font-size: 4em;
 }
 
-#dbgap {
+#intropolis {
 	font-size: 2.5em;
 }
 
-/*@media only screen and (max-device-width: 480px) {*/
+@media only screen and (max-device-width: 480px) {
 
 	article {
 		font-size: 0.9em;
@@ -273,8 +269,12 @@ hr {
 		font-weight: 500;
 	}
 
+	div#textarea {
+		padding-right: 0.5em;
+	}
+
 	img#clippy {
 		display: none;
 	}
 
-/*}*/
+}
