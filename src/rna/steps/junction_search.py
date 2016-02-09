@@ -453,7 +453,6 @@ def maximum_clique(cluster):
         
         Return value: maximum clique -- a list of alignments.
     """
-    clique_time = time.time()
     cliques = []
     # Cache nbrs and find first pivot (highest degree)
     maxconn=-1
@@ -639,34 +638,86 @@ def selected_readlet_alignments_by_clustering(readlets):
             else:
                 new_unclustered_alignments.append(j)
         clustered_alignments.append(
-                [alignments[j][:-1] for j in alignment_cluster]
+                [alignments[j] for j in alignment_cluster]
             )
         unclustered_alignments = new_unclustered_alignments
     clustered_alignments.sort(key=len, reverse=True)
     maximum_cliques = []
+    done_one = False
     for i, cluster in enumerate(clustered_alignments):
         current_maximum_clique = maximum_clique(cluster)
         maximum_cliques.append(current_maximum_clique)
         try:
             if len(current_maximum_clique) > len(clustered_alignments[i+1]):
-                break
+                if done_one:
+                    break
+                else:
+                    done_one = True
         except IndexError:
             pass
-    largest_maximum_clique_size = max(map(len, maximum_cliques))
+    maximum_cliques.sort(key=len, reverse=True)
+    largest_maximum_clique_size = len(maximum_cliques[0])
     largest_maximum_cliques = [clique for clique in maximum_cliques
                                if len(clique) == largest_maximum_clique_size]
+    fish = []
     if len(largest_maximum_cliques) == 1:
-        return largest_maximum_cliques[0]
+        try:
+            second_largest_maximum_clique_size = len(maximum_cliques[1])
+        except IndexError:
+            pass
+        else:
+            second_largest_maximum_cliques = [
+                                        clique for clique in maximum_cliques
+                                        if len(clique)
+                                        == second_largest_maximum_clique_size
+                                    ]
+            if len(second_largest_maximum_cliques) == 1 and (
+                    largest_maximum_cliques[0][0][:2] ==
+                        second_largest_maximum_cliques[0][0][:2]
+                ):
+                left_cluster = largest_maximum_cliques[0]
+                right_cluster = second_largest_maximum_cliques[0]
+                min_left_cluster = min(left_cluster, key=lambda x: x[2])
+                max_left_cluster = max(left_cluster, key=lambda x: x[3])
+                min_right_cluster = min(right_cluster, key=lambda x: x[2])
+                max_right_cluster = max(right_cluster, key=lambda x: x[3])
+                onward = False
+                if min_right_cluster[2] >= max_left_cluster[3] + 20 and (
+                        min_right_cluster[4]
+                        + min_right_cluster[3] - min_right_cluster[2]
+                        <= max_left_cluster[4]
+                    ):
+                    onward = True
+                elif max_right_cluster[3] + 20 <= min_left_cluster[2] and (
+                        min_left_cluster[4]
+                        + min_left_cluster[3] - min_left_cluster[2]
+                        <= max_left_cluster[4]
+                    ):
+                    onward = True
+                    left_cluster, right_cluster = right_cluster, left_cluster
+                    min_left_cluster, min_right_cluster = (min_right_cluster,
+                                                            min_left_cluster)
+                    max_left_cluster, max_right_cluster = (max_right_cluster,
+                                                            max_left_cluster)
+                if onward and not set(
+                        [alignment[-1] for alignment in left_cluster]
+                    ).intersection(
+                        set([alignment[-1] for alignment in right_cluster])
+                    ):
+                    # Go fishing
+                    fish = [min_right_cluster[:-1], max_left_cluster[:-1]]
+        return [[alignment[:-1] for alignment in largest_maximum_cliques[0]],
+                fish]
     else:
         '''Alignment is in general too repetitive; postpone treatment until
         a nice systematic way to handle this case is found.'''
-        pass
+        return [[], []]
 
 def junctions_from_clique(clique, read_seq, reference_index,
         min_exon_size=8, min_intron_size=10, max_intron_size=500000,
         search_window_size=1000, stranded=False, motif_radius=1,
         reverse_reverse_strand=False, global_alignment=GlobalAlignment(),
-        max_gaps_mismatches=5):
+        max_gaps_mismatches=5, sign=1):
     """ 
         NOTE THAT clique LIST IS SORTED ASSUMING THE ONLY READLETS WHOSE
         DISPLACEMENTS ARE THE SAME ARE CAPPING READLETS. IF THE READLETIZING
@@ -695,11 +746,13 @@ def junctions_from_clique(clique, read_seq, reference_index,
         max_gaps_mismatches: maximum number of (gaps + mismatches) to permit
             in realignments to reference minus intron per 100 bp or None if
             unlimited
+        sign: '+' for standard; '-' for nonstandard
     """
     if not clique:
         return
     read_seq = read_seq.upper()
     read_seq_size = len(read_seq)
+    rname, reverse_strand = clique[0][:2]
     if stranded:
         if reverse_strand:
             search_motifs = _reverse_strand_motifs
@@ -713,21 +766,22 @@ def junctions_from_clique(clique, read_seq, reference_index,
         search_motifs = _all_motifs
         left_search_motifs = _left_elements
         right_search_motifs = _right_elements
-    rname, reverse_strand = clique[0][:2]
     if reverse_strand:
         read_seq = read_seq[::-1].translate(
             _reversed_complement_translation_table
         )
     if reverse_reverse_strand:
         reverse_strand = not reverse_strand
-    # Arrange sort so that longest aligning capping readlet is used as flank
-    clique.sort(key=lambda alignment: (alignment[-1], alignment[-2] if
+    if sign == 1:
+        '''Arrange sort so that longest aligning capping readlet is used as
+        flank.'''
+        clique.sort(key=lambda alignment: (alignment[-1], alignment[-2] if
                                                         alignment[-1] == 0
                                                         else alignment[-3]))
     _, _, prefix_pos, prefix_end_pos, prefix_displacement = clique[0]
     _, _, suffix_pos, suffix_end_pos, suffix_displacement = clique[-1]
     new_prefix, new_suffix = [], []
-    if clique[0][-1] >= min_exon_size and search_window_size:
+    if sign == 1 and clique[0][-1] >= min_exon_size and search_window_size:
         # Find possible maximal matching prefixes
         search_pos = max(0, prefix_pos - 1 - search_window_size)
         search_window = reference_index.get_stretch(
@@ -756,7 +810,9 @@ def junctions_from_clique(clique, read_seq, reference_index,
         > reference_index.length[rname]:
         # Skip this part if too close to edge of reference
         unmapped_base_count = 0
-    if unmapped_base_count >= min_exon_size and search_window_size:
+    if sign == 1 and (
+            unmapped_base_count >= min_exon_size and search_window_size
+        ):
         search_pos = suffix_end_pos - 1
         search_window = reference_index.get_stretch(
                 rname,
@@ -789,7 +845,7 @@ def junctions_from_clique(clique, read_seq, reference_index,
                         - left_displacement
         # Store number of intronic bases in intevening region
         intronic_base_count = right_end_pos - left_pos - read_span
-        if intronic_base_count <= min_intron_size:
+        if sign * intronic_base_count <= min_intron_size:
             # Filter out introns that are too small
             continue
         left_motif_search_pos_1 = left_end_pos - motif_radius
@@ -846,17 +902,22 @@ def junctions_from_clique(clique, read_seq, reference_index,
                 intron_end_pos \
                     = right_motif_search_bounds[0] + product_offsets[i][1] + 2
                 intron_size = intron_end_pos - intron_pos
-                if intron_size < intronic_base_count:
-                    '''Intervening exonic bases should only split up the single
-                    intron and be mistakenly counted as intronic bases,
-                    increasing intron_size. If intron_size
-                    < intronic_base_count, a deletion or a mismap may be
-                    responsible, but admitting the option increases the
-                    false positive rate. Ignore.'''
-                    continue
-                # Assume at most ONE intermediate small exon
-                small_exon_size = intron_size - intronic_base_count
-                if min_intron_size <= intron_size <= max_intron_size:
+                if sign == 1:
+                    if intron_size < intronic_base_count:
+                        '''Intervening exonic bases should only split up the
+                        single intron and be mistakenly counted as intronic
+                        bases, increasing intron_size. If intron_size
+                        < intronic_base_count, a deletion or a mismap may be
+                        responsible, but admitting the option increases the
+                        false positive rate. Ignore.'''
+                        continue
+                    # Assume at most ONE intermediate small exon
+                    small_exon_size = intron_size - intronic_base_count
+                else:
+                    small_exon_size = 0
+                if sign == -1 or (
+                        min_intron_size <= intron_size <= max_intron_size
+                    ):
                     if small_exon_size == 0:
                         '''No need to search for intermediate exon. Realign
                         and add to list of candidate exons.'''
@@ -1162,12 +1223,14 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                                 in enumerate(collected_readlets)]
             # Set seed for each read so results for read are reproducible
             random.seed(seq)
+            selected_readlets = selected_readlet_alignments_by_clustering(
+                                            multireadlets
+                                        )
+            fake_junctions = []
             if stranded:
                 if sample_indexes:
                     junctions = list(junctions_from_clique(
-                                    selected_readlet_alignments_by_clustering(
-                                            multireadlets
-                                        ),
+                            selected_readlets[0],
                             seq,
                             reference_index,
                             min_exon_size=min_exon_size,
@@ -1180,8 +1243,26 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             global_alignment=global_alignment,
                             max_gaps_mismatches=max_gaps_mismatches
                         ))
+                    if selected_readlets[1]:
+                        fake_junctions = list(junctions_from_clique(
+                                selected_readlets[1],
+                                seq,
+                                reference_index,
+                                min_exon_size=min_exon_size,
+                                min_intron_size=20,
+                                max_intron_size=max_intron_size,
+                                search_window_size=search_window_size,
+                                stranded=stranded,
+                                motif_radius=motif_radius,
+                                reverse_reverse_strand=False,
+                                global_alignment=global_alignment,
+                                max_gaps_mismatches=max_gaps_mismatches,
+                                sign=-1
+                            ))
                     for (junction_rname, junction_reverse_strand,
-                            intron_pos, intron_end_pos) in junctions:
+                            intron_pos, intron_end_pos) in itertools.chain(
+                                junctions, fake_junctions
+                            ):
                         print '%s%s\t%d\t%d\t%s\t%s' % (
                                 junction_rname,
                                 '-' if junction_reverse_strand else '+',
@@ -1193,9 +1274,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         _output_line_count += 1
                 if reversed_complement_sample_indexes:
                     junctions = junctions_from_clique(
-                                    selected_readlet_alignments_by_clustering(
-                                            multireadlets
-                                        ),
+                            selected_readlets[0],
                             seq,
                             reference_index,
                             min_exon_size=min_exon_size,
@@ -1208,8 +1287,26 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             global_alignment=global_alignment,
                             max_gaps_mismatches=max_gaps_mismatches
                         )
+                    if selected_readlets[1]:
+                        fake_junctions = list(junctions_from_clique(
+                                selected_readlets[1],
+                                seq,
+                                reference_index,
+                                min_exon_size=min_exon_size,
+                                min_intron_size=20,
+                                max_intron_size=max_intron_size,
+                                search_window_size=search_window_size,
+                                stranded=stranded,
+                                motif_radius=motif_radius,
+                                reverse_reverse_strand=False,
+                                global_alignment=global_alignment,
+                                max_gaps_mismatches=max_gaps_mismatches,
+                                sign=-1
+                            ))
                     for (junction_rname, junction_reverse_strand,
-                             intron_pos, intron_end_pos) in junctions:
+                             intron_pos, intron_end_pos) in itertools.chain(
+                                junctions, fake_junctions
+                            ):
                         print '%s%s\t%d\t%d\t%s\t%s' % (
                                 junction_rname,
                                 '-' if junction_reverse_strand else '+',
@@ -1238,9 +1335,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             reversed_complement_seq_counts[i]
                         )
                 junctions = junctions_from_clique(
-                                selected_readlet_alignments_by_clustering(
-                                        multireadlets
-                                    ),
+                        selected_readlets[0],
                         seq,
                         reference_index,
                         min_exon_size=min_exon_size,
@@ -1252,8 +1347,26 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         global_alignment=global_alignment,
                         max_gaps_mismatches=max_gaps_mismatches
                     )
+                if selected_readlets[1]:
+                    fake_junctions = list(junctions_from_clique(
+                                selected_readlets[1],
+                                seq,
+                                reference_index,
+                                min_exon_size=min_exon_size,
+                                min_intron_size=20,
+                                max_intron_size=max_intron_size,
+                                search_window_size=search_window_size,
+                                stranded=stranded,
+                                motif_radius=motif_radius,
+                                reverse_reverse_strand=False,
+                                global_alignment=global_alignment,
+                                max_gaps_mismatches=max_gaps_mismatches,
+                                sign=-1
+                            ))
                 for (junction_rname, junction_reverse_strand,
-                            intron_pos, intron_end_pos) in junctions:
+                            intron_pos, intron_end_pos) in itertools.chain(
+                            junctions, fake_junctions
+                        ):
                     print '%s%s\t%d\t%d\t%s\t%s' % (
                             junction_rname,
                             '-' if junction_reverse_strand else '+',

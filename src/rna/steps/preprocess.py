@@ -95,6 +95,9 @@ _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 _input_line_count, _output_line_count = 0, 0
 
+# Maximum length of read to ignore if dealing with barcodes
+_max_stubby_read_length = 10
+
 '''Set Bowtie 2's default quality-based mismatch penalties; see
 http://bowtie-bio.sourceforge.net/bowtie2/manual.shtml#bowtie2-options-mp
 for more information.'''
@@ -131,6 +134,20 @@ def qname_from_read(qname, seq, sample_label, mate=None):
                     hex(hash(qname + seq + sample_label))[-12:],
                     ':', encode_sequence(mate) if mate is not None else '',
                     '\x1d', sample_label])
+
+def max_min_read_lengths_from_fastq_stream(fastq_stream):
+    """ Grabs maximum and minimum read lengths from a FASTQ stream.
+
+        fastq_stream: input fastq stream
+
+        Return value: tuple (max read length, min read length)
+    """
+    max_len, min_len = 0, 1000000000
+    for i, line in enumerate(fastq_stream):
+        if (i - 1) % 4 == 0:
+            max_len = max(max_len, len(line.strip()))
+            min_len = min(min_len, len(line.strip()))
+    return max_len, min_len
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         to_stdout=False, push='.', mover=filemover.FileMover(),
@@ -249,6 +266,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             """
             return qual
     global _input_line_count, _output_line_count
+    skip_stubs = False
     temp_dir = make_temp_dir(scratch)
     print >>sys.stderr, 'Created local destination directory "%s".' % temp_dir
     register_cleanup(tempdel.remove_temporary_directories, [temp_dir])
@@ -386,18 +404,52 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     for sra_fastq_file in sra_fastq_files:
                         register_cleanup(silent_remove, sra_fastq_file)
                     sra_file_count = len(sra_fastq_files)
+                    check_for_paired = False
                     if sra_file_count == 1:
                         sra_paired_end = False
                         print >>sys.stderr, 'Detected single-end SRA sample.'
-                    elif sra_file_count == 2:
-                        sra_paired_end = True
-                        print >>sys.stderr, 'Detected paired-end SRA sample.'
+                    elif sra_file_count in [2, 3]:
+                        print >>sys.stderr, ('2 or 3 FASTQ files detected. '
+                                             'Checking for barcodes...')
+                        check_for_paired = True
                     else:
                         raise RuntimeError(
                                 ('Unexpected number of files "%d" output '
                                  'by fastq-dump command "%s".')
                                     % (sra_file_count, fastq_dump_command)
                             )
+                    if check_for_paired:
+                        # Get max/min read lengths from FASTQ
+                        with open(
+                                    sra_fastq_files[sra_file_count - 2]
+                                ) as fastq_stream:
+                            max_len, min_len = (
+                                    max_min_read_lengths_from_fastq_stream(
+                                        fastq_stream
+                                    )
+                                )
+                            print >>sys.stderr, (
+                                    'Max/min read length found in candidate '
+                                    'barcode FASTQ was {}/{}.'
+                                ).format(max_len, min_len)
+                            if max_len <= _max_stubby_read_length:
+                                print >>sys.stderr, (
+                                        'Assumed barcode FASTQ.'
+                                    )
+                                skip_stubs = True
+                                if sra_file_count == 2:
+                                    sra_paired_end = False
+                                else:
+                                    sra_paired_end = True
+                            else:
+                                if sra_file_count == 2:
+                                    sra_paired_end = True
+                                else:
+                                    raise RuntimeError(
+                                        '3 FASTQs detected, but one of them '
+                                        'was not recognized as containing '
+                                        'barcodes.'
+                                    )
                     # Guess quality from first 10k lines
                     with xopen(None, sra_fastq_files[0]) as source_stream:
                         qual_getter = phred_converter(
@@ -413,6 +465,15 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                         ).format(download_dir=download_dir,
                                     fastq_dump_exe=fastq_dump_exe,
                                     sra_accession=sra_accession)
+                    if skip_stubs:
+                        fastq_dump_command += (
+                                ' | awk \'BEGIN {{OFS = "\\n"}} '
+                                '{{header = $0; '
+                                'getline seq; getline qheader; getline qseq; '
+                                'if (length(seq) > {min_len}) {{print header, '
+                                'seq, qheader, qseq}}}}\''
+                            ).format(min_len=_max_stubby_read_length)
+                    print >>sys.stderr, fastq_dump_command
                     sra_process = subprocess.Popen(fastq_dump_command,
                                                     shell=True,
                                                     executable='/bin/bash',

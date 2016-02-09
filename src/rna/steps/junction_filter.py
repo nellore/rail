@@ -149,7 +149,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
             output_line_count += 1
         sample_count = len(sample_indexes)
         max_coverage = max(sample_indexes.values())
-        if (sample_count >= min_sample_count
+        if end_pos > pos and (sample_count >= min_sample_count
             or (max_coverage >= coverage_threshold
                 and coverage_threshold != -1)):
             for sample_index in sample_indexes:

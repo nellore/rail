@@ -1930,6 +1930,28 @@ class RailRnaLocal(object):
                 '-i', '--input', type=str, required=True, metavar='<dir>',
                 help='input directory with preprocessed reads; must be local'
             )
+        else:
+            # prep or go flows
+            exec_parser.add_argument(
+                '--fastq-dump', type=str, required=False,
+                metavar='<exe>',
+                default=exe_paths.fastq_dump,
+                help=('path to SRA Tools fastq-dump executable '
+                      '(def: %s)' 
+                        % (exe_paths.fastq_dump
+                            if exe_paths.fastq_dump is not None
+                            else 'fastq-dump'))
+            )
+            exec_parser.add_argument(
+                '--vdb-config', type=str, required=False,
+                metavar='<exe>',
+                default=exe_paths.vdb_config,
+                help=('path to SRA Tools vdb-config executable '
+                      '(def: %s)' 
+                        % (exe_paths.vdb_config
+                            if exe_paths.vdb_config is not None
+                            else 'vdb-config'))
+            )
         '''else:
             # "prep" or "go" flows
             general_parser.add_argument(
@@ -4376,26 +4398,6 @@ class RailRnaAlign(object):
                         % (exe_paths.bedgraphtobigwig
                             if exe_paths.bedgraphtobigwig is not None
                             else 'bedGraphToBigWig'))
-            )
-            exec_parser.add_argument(
-                '--fastq-dump', type=str, required=False,
-                metavar='<exe>',
-                default=exe_paths.fastq_dump,
-                help=('path to SRA Tools fastq-dump executable '
-                      '(def: %s)' 
-                        % (exe_paths.fastq_dump
-                            if exe_paths.fastq_dump is not None
-                            else 'fastq-dump'))
-            )
-            exec_parser.add_argument(
-                '--vdb-config', type=str, required=False,
-                metavar='<exe>',
-                default=exe_paths.vdb_config,
-                help=('path to SRA Tools vdb-config executable '
-                      '(def: %s)' 
-                        % (exe_paths.vdb_config
-                            if exe_paths.vdb_config is not None
-                            else 'vdb-config'))
             )
         else:
             required_parser.add_argument(
