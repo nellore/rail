@@ -699,7 +699,14 @@ def selected_readlet_alignments_by_clustering(readlets):
                                                             min_left_cluster)
                     max_left_cluster, max_right_cluster = (max_right_cluster,
                                                             max_left_cluster)
-                if onward and not set(
+                # Be stringent: require at least 1 >= 25mer in each cluster
+                if onward and max(
+                        [alignment[3] - alignment[2]
+                            for alignment in left_cluster]
+                     ) >= 25 and max(
+                        [alignment[3] - alignment[2]
+                            for alignment in right_cluster]
+                     ) >= 25 and not set(
                         [alignment[-1] for alignment in left_cluster]
                     ).intersection(
                         set([alignment[-1] for alignment in right_cluster])

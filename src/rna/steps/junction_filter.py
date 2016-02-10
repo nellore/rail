@@ -138,11 +138,12 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                                         current_sample_indexes.split('\x1f')
                                     ):
                 sample_indexes[sample_index] += int(current_sample_counts[i])
+        pos, end_pos = int(pos), int(end_pos)
         if collect_junctions:
             samples_to_dump = sorted(sample_indexes.items(),
                                         key=lambda sample: int(sample[0]))
             print >>output_stream, 'collect\t%s\t%012d\t%012d\t%s\t%s' % (
-                    rname_and_strand, int(pos), int(end_pos),
+                    rname_and_strand, pos, end_pos,
                     ','.join([sample[0] for sample in samples_to_dump]),
                     ','.join([str(sample[1]) for sample in samples_to_dump])
                 )
@@ -155,12 +156,12 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
             for sample_index in sample_indexes:
                 print >>output_stream, 'filter\t%s\t%s\t%012d\t%012d' % (
                         rname_and_strand, sample_index,
-                        int(pos), int(end_pos)
+                        pos, end_pos
                     )
                 output_line_count += 1
         elif verbose:
             print >>sys.stderr, (
-                    'Junction (%s, %s, %s) filtered out; it appeared in %d '
+                    'Junction (%s, %d, %d) filtered out; it appeared in %d '
                     'sample(s), and its coverage in any one sample did '
                     'not exceed %d.'
                 ) % (rname_and_strand, pos, end_pos,
