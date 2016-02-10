@@ -3748,9 +3748,9 @@ class RailRnaAlign(object):
         min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        max_refs_per_strand=300, junction_criteria='0.5,5',
-        indel_criteria='0.5,5', tie_margin=6,
+        transcriptome_bowtie2_args='-k 30', experimental=False,
+        count_multiplier=15, max_refs_per_strand=300,
+        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, output_sam=False,
@@ -4110,6 +4110,7 @@ class RailRnaAlign(object):
                                                     count_multiplier
                                                 ))
         base.count_multiplier = count_multiplier
+        base.experimental = experimental
         if not (float(max_refs_per_strand).is_integer() and
                     max_refs_per_strand >= 1):
             base.errors.append('Maximum enumerated reference sequences per '
@@ -4537,6 +4538,11 @@ class RailRnaAlign(object):
             help=argparse.SUPPRESS
         )
         algo_parser.add_argument(
+            '--experimental', '-e', action='store_const', const=True,
+            default=False,
+            help=argparse.SUPPRESS
+        )
+        algo_parser.add_argument(
             '--count-multiplier', type=int, required=False,
             default=15,
             help=argparse.SUPPRESS
@@ -4761,8 +4767,8 @@ class RailRnaAlign(object):
                          'junction_search.py --bowtie-idx={0} '
                          '--partition-length={1} --max-intron-size={2} '
                          '--min-intron-size={3} --min-exon-size={4} '
-                         '--search-window-size={5} {6} '
-                         '--motif-radius={7} {8}').format(
+                         '--search-window-size={5} {6} {7} '
+                         '--motif-radius={8} {9}').format(
                                                 base.bowtie1_idx,
                                                 base.partition_length,
                                                 base.max_intron_size,
@@ -4773,6 +4779,8 @@ class RailRnaAlign(object):
                                                  base.max_gaps_mismatches)
                                                 if base.max_gaps_mismatches
                                                 is not None else '',
+                                                '--experimental'
+                                                if base.experimental else '',
                                                 base.motif_radius,
                                                 verbose
                                             ),
@@ -5619,9 +5627,9 @@ class RailRnaLocalAlignJson(object):
         min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        max_refs_per_strand=300, junction_criteria='0.5,5',
-        indel_criteria='0.5,5', tie_margin=6,
+        transcriptome_bowtie2_args='-k 30', experimental=False,
+        count_multiplier=15, max_refs_per_strand=300,
+        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -5664,6 +5672,7 @@ class RailRnaLocalAlignJson(object):
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
             count_multiplier=count_multiplier,
+            experimental=experimental,
             max_refs_per_strand=max_refs_per_strand,
             tie_margin=tie_margin,
             normalize_percentile=normalize_percentile,
@@ -5703,9 +5712,9 @@ class RailRnaParallelAlignJson(object):
         min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        max_refs_per_strand=300, junction_criteria='0.5,5',
-        indel_criteria='0.5,5', tie_margin=6,
+        transcriptome_bowtie2_args='-k 30', experimental=False,
+        count_multiplier=15, max_refs_per_strand=300,
+        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -5758,6 +5767,7 @@ class RailRnaParallelAlignJson(object):
             junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            experimental=experimental,
             count_multiplier=count_multiplier,
             max_refs_per_strand=max_refs_per_strand,
             tie_margin=tie_margin,
@@ -5810,6 +5820,7 @@ class RailRnaParallelAlignJson(object):
             junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            experimental=experimental,
             count_multiplier=count_multiplier,
             max_refs_per_strand=max_refs_per_strand,
             tie_margin=tie_margin,
@@ -5864,9 +5875,9 @@ class RailRnaElasticAlignJson(object):
         min_exon_size=9, library_size=40, search_filter='none',
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
-        transcriptome_bowtie2_args='-k 30', count_multiplier=15,
-        max_refs_per_strand=300, junction_criteria='0.5,5',
-        indel_criteria='0.5,5', tie_margin=6,
+        transcriptome_bowtie2_args='-k 30', experimental=False,
+        count_multiplier=15, max_refs_per_strand=300,
+        junction_criteria='0.5,5', indel_criteria='0.5,5', tie_margin=6,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -5936,6 +5947,7 @@ class RailRnaElasticAlignJson(object):
             junction_criteria=junction_criteria,
             indel_criteria=indel_criteria,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            experimental=experimental,
             count_multiplier=count_multiplier,
             max_refs_per_strand=max_refs_per_strand,
             tie_margin=tie_margin,
@@ -6010,7 +6022,7 @@ class RailRnaLocalAllJson(object):
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         junction_criteria='0.5,5', indel_criteria='0.5,5',
         transcriptome_bowtie2_args='-k 30', tie_margin=6,
-        max_refs_per_strand=300, count_multiplier=15,
+        max_refs_per_strand=300, experimental=False, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -6056,6 +6068,7 @@ class RailRnaLocalAllJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            experimental=experimental,
             count_multiplier=count_multiplier,
             max_refs_per_strand=max_refs_per_strand,
             junction_criteria=junction_criteria,
@@ -6110,7 +6123,7 @@ class RailRnaParallelAllJson(object):
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         junction_criteria='0.5,5', indel_criteria='0.5,5',
         transcriptome_bowtie2_args='-k 30', tie_margin=6,
-        max_refs_per_strand=300, count_multiplier=15,
+        max_refs_per_strand=300, experimental=False, count_multiplier=15,
         transcriptome_indexes_per_sample=500, normalize_percentile=0.75,
         drop_deletions=False, do_not_output_bam_by_chr=False,
         do_not_output_ave_bw_by_chr=False, do_not_drop_polyA_tails=False,
@@ -6164,6 +6177,7 @@ class RailRnaParallelAllJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            experimental=experimental,
             count_multiplier=count_multiplier,
             max_refs_per_strand=max_refs_per_strand,
             junction_criteria=junction_criteria,
@@ -6218,6 +6232,7 @@ class RailRnaParallelAllJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            experimental=experimental,
             count_multiplier=count_multiplier,
             max_refs_per_strand=max_refs_per_strand,
             junction_criteria=junction_criteria,
@@ -6285,7 +6300,7 @@ class RailRnaElasticAllJson(object):
         motif_search_window_size=1000, max_gaps_mismatches=3,
         motif_radius=5, genome_bowtie1_args='-v 0 -a -m 80',
         transcriptome_bowtie2_args='-k 30', tie_margin=6,
-        max_refs_per_strand=300, count_multiplier=15,
+        max_refs_per_strand=300, experimental=False, count_multiplier=15,
         junction_criteria='0.5,5', indel_criteria='0.5,5',
         normalize_percentile=0.75, transcriptome_indexes_per_sample=500,
         drop_deletions=False, do_not_output_bam_by_chr=False,
@@ -6357,6 +6372,7 @@ class RailRnaElasticAllJson(object):
             motif_radius=motif_radius,
             genome_bowtie1_args=genome_bowtie1_args,
             transcriptome_bowtie2_args=transcriptome_bowtie2_args,
+            experimental=experimental,
             count_multiplier=count_multiplier,
             max_refs_per_strand=max_refs_per_strand,
             junction_criteria=junction_criteria,

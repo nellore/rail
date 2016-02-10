@@ -550,7 +550,7 @@ def maximum_clique(cluster):
         return largest_cliques[0]
     return random.choice(largest_cliques)
 
-def selected_readlet_alignments_by_clustering(readlets):
+def selected_readlet_alignments_by_clustering(readlets, experimental=False):
     """ Selects multireadlet alignment via a correlation clustering algorithm.
     
         Consider a list "readlets" whose items {R_i} correspond to the aligned
@@ -605,6 +605,7 @@ def selected_readlet_alignments_by_clustering(readlets):
             alignments {R_ij} of a readlet. Each R_ij is a tuple
             (rname, reverse_strand, pos, end_pos, displacement).
             See above for a detailed explanation.
+        experimental: True iff experimental algos should be run.
 
         Return value: a list of selected alignment tuples
             (rname, reverse_strand, pos, end_pos, displacement).
@@ -661,60 +662,68 @@ def selected_readlet_alignments_by_clustering(readlets):
                                if len(clique) == largest_maximum_clique_size]
     fish = []
     if len(largest_maximum_cliques) == 1:
-        try:
-            second_largest_maximum_clique_size = len(maximum_cliques[1])
-        except IndexError:
-            pass
-        else:
-            second_largest_maximum_cliques = [
+        if experimental:
+            try:
+                second_largest_maximum_clique_size = len(maximum_cliques[1])
+            except IndexError:
+                pass
+            else:
+                second_largest_maximum_cliques = [
                                         clique for clique in maximum_cliques
                                         if len(clique)
                                         == second_largest_maximum_clique_size
                                     ]
-            if len(second_largest_maximum_cliques) == 1 and (
-                    largest_maximum_cliques[0][0][:2] ==
-                        second_largest_maximum_cliques[0][0][:2]
-                ):
-                left_cluster = largest_maximum_cliques[0]
-                right_cluster = second_largest_maximum_cliques[0]
-                min_left_cluster = min(left_cluster, key=lambda x: x[2])
-                max_left_cluster = max(left_cluster, key=lambda x: x[3])
-                min_right_cluster = min(right_cluster, key=lambda x: x[2])
-                max_right_cluster = max(right_cluster, key=lambda x: x[3])
-                onward = False
-                if min_right_cluster[2] >= max_left_cluster[3] + 20 and (
-                        min_right_cluster[4]
-                        + min_right_cluster[3] - min_right_cluster[2]
-                        <= max_left_cluster[4]
+                if len(second_largest_maximum_cliques) == 1 and (
+                        largest_maximum_cliques[0][0][:2] ==
+                            second_largest_maximum_cliques[0][0][:2]
                     ):
-                    onward = True
-                elif max_right_cluster[3] + 20 <= min_left_cluster[2] and (
-                        min_left_cluster[4]
-                        + min_left_cluster[3] - min_left_cluster[2]
-                        <= max_left_cluster[4]
-                    ):
-                    onward = True
-                    left_cluster, right_cluster = right_cluster, left_cluster
-                    min_left_cluster, min_right_cluster = (min_right_cluster,
-                                                            min_left_cluster)
-                    max_left_cluster, max_right_cluster = (max_right_cluster,
-                                                            max_left_cluster)
-                # Be stringent: require at least 1 >= 25mer in each cluster
-                if onward and max(
-                        [alignment[3] - alignment[2]
-                            for alignment in left_cluster]
-                     ) >= 25 and max(
-                        [alignment[3] - alignment[2]
-                            for alignment in right_cluster]
-                     ) >= 25 and not set(
-                        [alignment[-1] for alignment in left_cluster]
-                    ).intersection(
-                        set([alignment[-1] for alignment in right_cluster])
-                    ):
-                    # Go fishing
-                    fish = [min_right_cluster[:-1], max_left_cluster[:-1]]
-        return [[alignment[:-1] for alignment in largest_maximum_cliques[0]],
-                fish]
+                    left_cluster = largest_maximum_cliques[0]
+                    right_cluster = second_largest_maximum_cliques[0]
+                    min_left_cluster = min(left_cluster, key=lambda x: x[2])
+                    max_left_cluster = max(left_cluster, key=lambda x: x[3])
+                    min_right_cluster = min(right_cluster, key=lambda x: x[2])
+                    max_right_cluster = max(right_cluster, key=lambda x: x[3])
+                    onward = False
+                    if min_right_cluster[2] >= max_left_cluster[3] + 20 and (
+                            min_right_cluster[4]
+                            + min_right_cluster[3] - min_right_cluster[2]
+                            <= max_left_cluster[4]
+                        ):
+                        onward = True
+                    elif max_right_cluster[3] + 20 <= min_left_cluster[2] and (
+                            min_left_cluster[4]
+                            + min_left_cluster[3] - min_left_cluster[2]
+                            <= max_left_cluster[4]
+                        ):
+                        onward = True
+                        left_cluster, right_cluster = (
+                                    right_cluster, left_cluster
+                                )
+                        min_left_cluster, min_right_cluster = (
+                                        min_right_cluster,
+                                        min_left_cluster
+                                    )
+                        max_left_cluster, max_right_cluster = (
+                                        max_right_cluster,
+                                        max_left_cluster
+                                    )
+                    # Be stringent: require at least 1 >= 25mer in each cluster
+                    if onward and max(
+                            [alignment[3] - alignment[2]
+                                for alignment in left_cluster]
+                         ) >= 25 and max(
+                            [alignment[3] - alignment[2]
+                                for alignment in right_cluster]
+                         ) >= 25 and not set(
+                            [alignment[-1] for alignment in left_cluster]
+                        ).intersection(
+                            set([alignment[-1] for alignment in right_cluster])
+                        ):
+                        # Go fishing
+                        fish = [min_right_cluster[:-1], max_left_cluster[:-1]]
+        return [[alignment[:-1]
+                    for alignment in largest_maximum_cliques[0]],
+                    fish]
     else:
         '''Alignment is in general too repetitive; postpone treatment until
         a nice systematic way to handle this case is found.'''
@@ -1099,7 +1108,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
     bowtie_index_base='genome', verbose=False, stranded=False, min_exon_size=8,
     min_intron_size=15, max_intron_size=500000, motif_radius=1,
     search_window_size=1000, global_alignment=GlobalAlignment(),
-    max_gaps_mismatches=5):
+    max_gaps_mismatches=5, experimental=False):
     """ Runs Rail-RNA-junction_search.
 
         Input (read from stdin)
@@ -1179,6 +1188,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
         report_multiplier: if verbose is True, the line number of an alignment,
             read, or first readlet of a read written to stderr increases
             exponentially with base report_multiplier.
+        experimental: True iff experimental algos should be run
 
         No return value.
     """
@@ -1231,7 +1241,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
             # Set seed for each read so results for read are reproducible
             random.seed(seq)
             selected_readlets = selected_readlet_alignments_by_clustering(
-                                            multireadlets
+                                            multireadlets,
+                                            experimental=experimental
                                         )
             fake_junctions = []
             if stranded:
@@ -1250,7 +1261,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             global_alignment=global_alignment,
                             max_gaps_mismatches=max_gaps_mismatches
                         ))
-                    if selected_readlets[1]:
+                    if experimental and selected_readlets[1]:
                         fake_junctions = list(junctions_from_clique(
                                 selected_readlets[1],
                                 seq,
@@ -1294,7 +1305,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                             global_alignment=global_alignment,
                             max_gaps_mismatches=max_gaps_mismatches
                         )
-                    if selected_readlets[1]:
+                    if experimental and selected_readlets[1]:
                         fake_junctions = list(junctions_from_clique(
                                 selected_readlets[1],
                                 seq,
@@ -1354,7 +1365,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout,
                         global_alignment=global_alignment,
                         max_gaps_mismatches=max_gaps_mismatches
                     )
-                if selected_readlets[1]:
+                if experimental and selected_readlets[1]:
                     fake_junctions = list(junctions_from_clique(
                                 selected_readlets[1],
                                 seq,
@@ -1403,6 +1414,9 @@ if __name__ == '__main__':
         default=False,
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
              'WRITE EXONS AND JUNCTIONS TO STDOUT')
+    parser.add_argument('--experimental', action='store_const', const=True,
+        default=False,
+        help='includes experimental algorithms')
     parser.add_argument('--min-intron-size', type=int, required=False,
         default=5,
         help='Filters introns of length smaller than this value')
@@ -1447,6 +1461,7 @@ if __name__ == '__main__' and not args.test:
         motif_radius=args.motif_radius,
         search_window_size=args.search_window_size,
         max_gaps_mismatches=args.max_gaps_mismatches,
+        experimental=args.experimental,
         global_alignment=global_alignment)
     print >> sys.stderr, 'DONE with junction_search.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,

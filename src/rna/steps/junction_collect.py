@@ -102,16 +102,21 @@ if args.out is not None:
         output_filename = os.path.join(temp_dir_path, output_filename)
     with xopen(True, output_filename, 'w', args.gzip_level) as output_stream:
         for line in sys.stdin:
-            output_stream.write(line)
+            tokens = line.strip().split('\t')
+            # Remove leading zeros from ints
+            print >>output_stream, '\t'.join(
+                    [tokens[0], str(int(tokens[1])),
+                        str(int(tokens[2]) - 1), tokens[3], tokens[4]]
+                )
             input_line_count += 1
 else:
     # Default --out is stdout
     for line in sys.stdin:
         tokens = line.strip().split('\t')
         # Remove leading zeros from ints
-        sys.stdout.write('\t'.join([tokens[0], str(int(tokens[1])),
+        print '\t'.join([tokens[0], str(int(tokens[1])),
                                     str(int(tokens[2]) - 1), tokens[3],
-                                    tokens[4]]))
+                                    tokens[4]])
         input_line_count += 1
 
 if args.out is not None and not output_url.is_local:
