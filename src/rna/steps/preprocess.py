@@ -153,7 +153,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         to_stdout=False, push='.', mover=filemover.FileMover(),
         verbose=False, scratch=None, bin_qualities=True, short_qnames=False,
         skip_bad_records=False, workspace_dir=None,
-        fastq_dump_exe='fastq-dump'):
+        fastq_dump_exe='fastq-dump', ignore_missing_sra_samples=False):
     """ Runs Rail-RNA-preprocess
 
         Input (read from stdin)
@@ -234,6 +234,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         workspace_dir: where to use fastq-dump -- needed for working with
             dbGaP data. None if temporary dir should be used.
         fastq_dump_exe: path to fastq-dump executable
+        ignore_missing_sra_samples: does not return error if fastq-dump doesn't
+            find a sample
 
         No return value
     """
@@ -283,6 +285,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     fastq_cues = set(['@'])
     fasta_cues = set(['>', ';'])
     source_dict = {}
+    onward = False
     for line in sys.stdin:
         _input_line_count += 1
         if not line.strip(): continue
@@ -387,8 +390,13 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             stdout=sys.stderr
                         )
                     except subprocess.CalledProcessError as e:
-                        raise RuntimeError(('Error "%s" encountered executing '
-                                            'command "%s".') % (e.output,
+                        if e.returncode == 3 and ignore_missing_sra_samples:
+                            onward = True
+                            break
+                        else:
+                            raise RuntimeError(
+                                ('Error "%s" encountered executing '
+                                 'command "%s".') % (e.output,
                                                         fastq_dump_command))
                     import glob
                     sra_fastq_files = sorted(
@@ -487,6 +495,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     sources.append(os.path.join(temp_dir, list(downloaded)[0]))
             else:
                 sources.append(source_url.to_url())
+        if onward: continue
         '''Use os.devnull so single- and paired-end data can be handled in one
         loop.'''
         if len(sources) == 1:
@@ -974,6 +983,10 @@ if __name__ == '__main__':
             default='fastq-dump',
             help='Path to fastq-dump executable'
         )
+    parser.add_argument('--ignore-missing-sra-samples', action='store_const',
+        const=True, default=False,
+        help='Does not raise exception if fastq-dump doesn\'t find an SRA '
+             'sample; instead, sample is skipped')
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
@@ -1000,7 +1013,8 @@ if __name__ == '__main__':
         verbose=args.verbose,
         mover=mover,
         workspace_dir=args.workspace_dir,
-        fastq_dump_exe=args.fastq_dump_exe)
+        fastq_dump_exe=args.fastq_dump_exe,
+        ignore_missing_sra_samples=args.ignore_missing_sra_samples)
     print >>sys.stderr, 'DONE with preprocess.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)

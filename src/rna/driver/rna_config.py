@@ -3510,7 +3510,7 @@ class RailRnaPreprocess(object):
     """
     def __init__(self, base, nucleotides_per_input=8000000, gzip_input=True,
                     do_not_bin_quals=False, short_read_names=False,
-                    skip_bad_records=False):
+                    skip_bad_records=False, ignore_missing_sra_samples=False):
         if not (float(nucleotides_per_input).is_integer() and
                 nucleotides_per_input > 0):
             base.errors.append('Nucleotides per input '
@@ -3522,6 +3522,7 @@ class RailRnaPreprocess(object):
         base.gzip_input = gzip_input
         base.do_not_bin_quals = do_not_bin_quals
         base.skip_bad_records = skip_bad_records
+        base.ignore_missing_sra_samples = ignore_missing_sra_samples
         base.short_read_names = short_read_names
 
 
@@ -3561,8 +3562,15 @@ class RailRnaPreprocess(object):
         output_parser.add_argument(
                 '--skip-bad-records', action='store_const', const=True,
                 default=False,
-                help=('skips all bad records rather than raising an exception '
+                help=('skips all bad records rather than raising exception '
                       'on encountering a bad record')
+            )
+        output_parser.add_argument(
+                '--ignore-missing-sra-samples', action='store_const',
+                const=True, default=False,
+                help=('ignores SRA samples in manifest file that fastq-dump '
+                      'doesn\'t find on server rather than raising '
+                      'exception')
             )
         general_parser.add_argument(
             '--do-not-check-manifest', action='store_const', const=True,
@@ -3608,7 +3616,7 @@ class RailRnaPreprocess(object):
                     'name' : 'Preprocess reads',
                     'mapper' : ('preprocess.py --nucs-per-file={0} {1} '
                                 '--push={2} --gzip-level {3} {4} {5} '
-                                '{6} {7} {8} {9}').format(
+                                '{6} {7} {8} {9} {10}').format(
                                                 base.nucleotides_per_input,
                                                 '--gzip-output' if
                                                 base.gzip_input else '',
@@ -3636,7 +3644,11 @@ class RailRnaPreprocess(object):
                                                     % (base.fastq_dump_exe
                                                         if hasattr(base,
                                                             'fastq_dump_exe')
-                                                        else 'fastq-dump')
+                                                        else 'fastq-dump'),
+                                                '--ignore-missing-sra-samples'
+                                                if
+                                                base.ignore_missing_sra_samples
+                                                else ''
                                             ),
                     'inputs' : [os.path.join(base.intermediate_dir,
                                                 'split.manifest')],
@@ -3654,7 +3666,7 @@ class RailRnaPreprocess(object):
                     'name' : 'Preprocess reads',
                     'mapper' : ('preprocess.py --nucs-per-file={0} {1} '
                                 '--push={2} --gzip-level {3} {4} {5} {6} {7} '
-                                '--keep-alive {8} {9}').format(
+                                '--keep-alive {8} {9} {10}').format(
                                                 base.nucleotides_per_input,
                                                 '--gzip-output' if
                                                 base.gzip_input else '',
@@ -3684,7 +3696,11 @@ class RailRnaPreprocess(object):
                                                     % (base.fastq_dump_exe
                                                         if hasattr(base,
                                                             'fastq_dump_exe')
-                                                        else 'fastq-dump')
+                                                        else 'fastq-dump'),
+                                                '--ignore-missing-sra-samples'
+                                                if
+                                                base.ignore_missing_sra_samples
+                                                else ''
                                             ),
                     'inputs' : [base.old_manifest
                                 if hasattr(base, 'old_manifest')
@@ -5386,7 +5402,8 @@ class RailRnaLocalPreprocessJson(object):
         intermediate_dir='./intermediate', force=False, aws_exe=None,
         profile='default', region=None, verbose=False,
         nucleotides_per_input=8000000, gzip_input=True,
-        do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
+        do_not_bin_quals=False, short_read_names=False,
+        skip_bad_records=False, ignore_missing_sra_samples=False,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4, 
         keep_intermediates=False, check_manifest=True,
@@ -5406,7 +5423,8 @@ class RailRnaLocalPreprocessJson(object):
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
-            skip_bad_records=skip_bad_records)
+            skip_bad_records=skip_bad_records,
+            ignore_missing_sra_samples=ignore_missing_sra_samples)
         raise_runtime_error(base)
         self._json_serial = {}
         step_dir = os.path.join(base_path, 'rna', 'steps')
@@ -5429,7 +5447,8 @@ class RailRnaParallelPreprocessJson(object):
         intermediate_dir='./intermediate', force=False, aws_exe=None,
         profile='default', region=None, verbose=False,
         nucleotides_per_input=8000000, gzip_input=True,
-        do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
+        do_not_bin_quals=False, short_read_names=False,
+        skip_bad_records=False, ignore_missing_sra_samples=False,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
         sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
         ipcontroller_json=None, scratch=None, direct_write=False,
@@ -5461,7 +5480,8 @@ class RailRnaParallelPreprocessJson(object):
                 gzip_input=gzip_input,
                 do_not_bin_quals=do_not_bin_quals,
                 short_read_names=short_read_names,
-                skip_bad_recoreds=skip_bad_records
+                skip_bad_records=skip_bad_records,
+                ignore_missing_sra_samples=ignore_missing_sra_samples
             )
         raise_runtime_error(base)
         temp_base_path = ready_engines(rc, base, prep=True)
@@ -5519,7 +5539,8 @@ class RailRnaElasticPreprocessJson(object):
         profile='default', region=None,
         service_role=None, instance_profile=None,
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
+        do_not_bin_quals=False, short_read_names=False,
+        skip_bad_records=False, ignore_missing_sra_samples=False,
         log_uri=None, ami_version='3.11.0',
         visible_to_all_users=False, tags='',
         name='Rail-RNA Job Flow',
@@ -5567,7 +5588,8 @@ class RailRnaElasticPreprocessJson(object):
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
-            skip_bad_records=skip_bad_records)
+            skip_bad_records=skip_bad_records,
+            ignore_missing_sra_samples=ignore_missing_sra_samples)
         raise_runtime_error(base)
         self._json_serial = {}
         if base.core_instance_count > 0:
@@ -6010,7 +6032,8 @@ class RailRnaLocalAllJson(object):
         intermediate_dir='./intermediate', force=False, aws_exe=None,
         profile='default', region=None,
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
+        do_not_bin_quals=False, short_read_names=False,
+        skip_bad_records=False, ignore_missing_sra_samples=False,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
         bowtie2_exe=None, bowtie2_build_exe=None, k=1, bowtie2_args='',
         samtools_exe=None, bedgraphtobigwig_exe=None,
@@ -6041,7 +6064,8 @@ class RailRnaLocalAllJson(object):
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
-            skip_bad_records=skip_bad_records)
+            skip_bad_records=skip_bad_records,
+            ignore_missing_sra_samples=ignore_missing_sra_samples)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
@@ -6111,7 +6135,8 @@ class RailRnaParallelAllJson(object):
         intermediate_dir='./intermediate', force=False, aws_exe=None,
         profile='default', region=None,
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
+        do_not_bin_quals=False, short_read_names=False,
+        skip_bad_records=False, ignore_missing_sra_samples=False,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
         bowtie2_exe=None, bowtie2_build_exe=None, k=1, bowtie2_args='',
         samtools_exe=None, bedgraphtobigwig_exe=None,
@@ -6156,7 +6181,8 @@ class RailRnaParallelAllJson(object):
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
-            skip_bad_records=skip_bad_records)
+            skip_bad_records=skip_bad_records,
+            ignore_missing_sra_samples=ignore_missing_sra_samples)
         RailRnaAlign(base, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
             bowtie2_exe=bowtie2_exe, bowtie2_build_exe=bowtie2_build_exe,
@@ -6289,7 +6315,8 @@ class RailRnaElasticAllJson(object):
         profile='default', region=None,
         service_role=None, instance_profile=None,
         verbose=False, nucleotides_per_input=8000000, gzip_input=True,
-        do_not_bin_quals=False, short_read_names=False, skip_bad_records=False,
+        do_not_bin_quals=False, short_read_names=False,
+        skip_bad_records=False, ignore_missing_sra_samples=False,
         bowtie1_exe=None, bowtie_idx='genome', bowtie1_build_exe=None,
         bowtie2_exe=None, bowtie2_build_exe=None, k=1, bowtie2_args='',
         samtools_exe=None, bedgraphtobigwig_exe=None,
@@ -6350,7 +6377,8 @@ class RailRnaElasticAllJson(object):
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
-            skip_bad_records=skip_bad_records)
+            skip_bad_records=skip_bad_records,
+            ignore_missing_sra_samples=ignore_missing_sra_samples)
         RailRnaAlign(base, elastic=True,
             assembly=assembly, bowtie1_exe=bowtie1_exe,
             bowtie_idx=bowtie_idx, bowtie1_build_exe=bowtie1_build_exe,
