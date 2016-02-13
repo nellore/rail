@@ -132,7 +132,7 @@ class Launcher(object):
 
     def __init__(self, force=False, num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3,
-                    sort_memory_cap=0.2, max_task_attempts=4,
+                    sort_memory_cap=(300*1024), max_task_attempts=4,
                     region='us-east-1', log=None, scratch=None,
                     ipython_profile=None, ipcontroller_json=None, common=None,
                     direct_write=False, json=False, sort=None,
@@ -179,6 +179,7 @@ class Launcher(object):
             # Parent process; read from child after determining executable
             if mode == 'local':
                 print_to_screen(_warning_message)
+                print_to_screen(str(self.sort_memory_cap))
                 runner_args = [_executable, os.path.join(
                                                     base_path,
                                                     'dooplicity',
@@ -1127,7 +1128,7 @@ if __name__ == '__main__':
                                     sort_memory_cap=(
                                         args.sort_memory_cap
                                         if mode in ['local', 'parallel']
-                                        else 0.2
+                                        else (300*1024)
                                     ),
                                     max_task_attempts=(
                                         args.max_task_attempts

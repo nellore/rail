@@ -2049,8 +2049,8 @@ class RailRnaLocal(object):
                  'if applicable'
         )
         general_parser.add_argument(
-            '-r', '--sort-memory-cap', type=float, required=False,
-            metavar='<dec>',
+            '-r', '--sort-memory-cap', type=int, required=False,
+            metavar='<int>',
             default=(300*1024),
             help=('maximum amount of memory (in bytes) used by UNIX sort '
                   'per process')
