@@ -179,7 +179,6 @@ class Launcher(object):
             # Parent process; read from child after determining executable
             if mode == 'local':
                 print_to_screen(_warning_message)
-                print_to_screen(str(self.sort_memory_cap))
                 runner_args = [_executable, os.path.join(
                                                     base_path,
                                                     'dooplicity',
