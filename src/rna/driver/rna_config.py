@@ -4756,6 +4756,7 @@ class RailRnaAlign(object):
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}',
