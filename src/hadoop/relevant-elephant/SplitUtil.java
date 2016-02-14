@@ -175,7 +175,7 @@ public class SplitUtil {
           List<InputSplit> oneInputSplits, long maxCombinedSplitSize, Configuration conf)
           throws IOException, InterruptedException {
     int combinedSplitCount = conf.getInt(COMBINED_SPLIT_COUNT, -1);
-    LOG.info("Combining splits into " + combinedSplitCount + " task(s).");
+    LOG.info("Distributing/combining splits into " + combinedSplitCount + " task(s).");
     if (combinedSplitCount <= 0) {
       // Do whatever Pig does if combined split count is unspecified or invalid
       LOG.warn("Combined split count is either unspecified or invalid; combining splits using combine split size.");

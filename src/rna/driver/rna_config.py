@@ -687,7 +687,7 @@ def step(name, inputs, output,
     action_on_failure='TERMINATE_JOB_FLOW', jar=_hadoop_streaming_jar,
     tasks=0, partition_options=None, sort_options=None, archives=None,
     files=None, multiple_outputs=False, mod_partitioner=False,
-    inputformat=None, extra_args=[]):
+    inputformat=None, outputformat=None, extra_args=[]):
     """ Outputs JSON for a given step.
 
         name: name of step
@@ -705,6 +705,7 @@ def step(name, inputs, output,
         mod_partitioner: True iff the mod partitioner should be used for
             the step; this partitioner assumes the key is a tuple of integers
         inputformat: -inputformat option
+        outputformat: -outputformat option; overridden by multiple_outputs
         extra_args: extra '-D' args
 
         Return value: step dictionary
@@ -786,6 +787,10 @@ def step(name, inputs, output,
     if multiple_outputs:
         to_return['HadoopJarStep']['Args'].extend([
                 '-outputformat', 'edu.jhu.cs.MultipleOutputFormat'
+            ])
+    elif outputformat is not None:
+        to_return['HadoopJarStep']['Args'].extend([
+                '-outputformat', outputformat
             ])
     if inputformat is not None:
         to_return['HadoopJarStep']['Args'].extend([
@@ -950,6 +955,8 @@ def steps(protosteps, action_on_failure, jar, step_dir, reducer_count,
                     ),
                 inputformat=(protostep['inputformat']
                     if 'inputformat' in protostep else None),
+                outputformat=(protostep['outputformat']
+                    if 'outputformat' in protostep else None),
                 extra_args=([extra_arg.format(task_count=reducer_count)
                     for extra_arg in protostep['extra_args']]
                     if 'extra_args' in protostep else [])
@@ -3708,9 +3715,18 @@ class RailRnaPreprocess(object):
                     'no_input_prefix' : True,
                     'output' : push_dir if elastic else prep_dir,
                     'no_output_prefix' : True,
+                    'outputformat' : (
+                           'com.twitter.elephantbird.mapred.output'
+                           '.DeprecatedLzoTextOutputFormat'
+                        ),
                     'inputformat' : (
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
-                        )
+                        ),
+                    'extra_args' : [
+                        ('mapreduce.output.fileoutputformat.compress.codec='
+                         'org.apache.hadoop.io.compress.DefaultCodec'),
+                        'elephantbird.lzo.output.index=true'
+                    ]
                 },
             ]
         return steps_to_return
