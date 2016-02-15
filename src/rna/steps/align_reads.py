@@ -430,12 +430,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             if no_polyA and (
                     all(seq[i] == 'A' 
                          for i in xrange(seq_length - remaining_seq_size))
+                    or all(seq[i] == 'T' 
+                         for i in xrange(remaining_seq_size, seq_length))
                     or all(seq[i] == 'A' 
                          for i in xrange(remaining_seq_size, seq_length))
                     or all(seq[i] == 'T' 
                          for i in xrange(seq_length - remaining_seq_size))
-                    or all(seq[i] == 'T' 
-                         for i in xrange(remaining_seq_size, seq_length))
                 ):
                 if not no_realign:
                     '''If a sequence is too short without its poly(A) tail,
