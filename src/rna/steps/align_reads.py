@@ -389,13 +389,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         No return value.
     """
     global _input_line_count
-    # Required length of prefix after poly(A) is trimmed
-    remaining_seq_size = max(min_exon_size - 1, 1)
-    polyA_set = frozenset(
-            ['A'*i for i in xrange(1, remaining_seq_size+1)]
-            + ['T'*i for i in xrange(1, remaining_seq_size+1)]
-            + ['']
-        )
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
     alignment_printer = AlignmentPrinter(
@@ -426,14 +419,23 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     second_pass_file = os.path.join(temp_dir, 'second_pass_reads.temp.gz')
     k_value, _, _ = bowtie.parsed_bowtie_args(bowtie2_args)
     nothing_doing = True
+    # Required length of prefix after poly(A) is trimmed
+    remaining_seq_size = max(min_exon_size, 1)
     with xopen(True, align_file, 'w', gzip_level) as align_stream, \
         xopen(True, other_reads_file, 'w', gzip_level) as other_stream:
         for seq_number, ((seq,), xpartition) in enumerate(
                                                         xstream(sys.stdin, 1)
                                                     ):
+            seq_length = len(seq)
             if no_polyA and (
-                    seq[:-remaining_seq_size] in polyA_set
-                    or seq[remaining_seq_size:] in polyA_set
+                    all(seq[i] == 'A' 
+                         for i in xrange(seq_length - remaining_seq_size))
+                    or all(seq[i] == 'A' 
+                         for i in xrange(remaining_seq_size, seq_length))
+                    or all(seq[i] == 'T' 
+                         for i in xrange(seq_length - remaining_seq_size))
+                    or all(seq[i] == 'T' 
+                         for i in xrange(remaining_seq_size, seq_length))
                 ):
                 if not no_realign:
                     '''If a sequence is too short without its poly(A) tail,
