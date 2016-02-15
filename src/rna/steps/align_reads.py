@@ -420,7 +420,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     k_value, _, _ = bowtie.parsed_bowtie_args(bowtie2_args)
     nothing_doing = True
     # Required length of prefix after poly(A) is trimmed
-    remaining_seq_size = max(min_exon_size, 1)
+    remaining_seq_size = max(min_exon_size - 1, 1)
     with xopen(True, align_file, 'w', gzip_level) as align_stream, \
         xopen(True, other_reads_file, 'w', gzip_level) as other_stream:
         for seq_number, ((seq,), xpartition) in enumerate(
