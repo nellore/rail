@@ -3395,9 +3395,9 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                         '-y',
                         'yarn.nodemanager.localizer.fetch.thread-count=1',
                         '-m',
-                        'mapreduce.map.speculative=true',
+                        'mapreduce.map.speculative=false',
                         '-m',
-                        'mapreduce.reduce.speculative=true',
+                        'mapreduce.reduce.speculative=false',
                         '-m',
                         'mapreduce.map.memory.mb=%d'
                         % (base.nodemanager_mem / base.max_tasks),

@@ -53,13 +53,13 @@ public class LzoUtils {
 
     final Path file = path;
     final FileSystem fs = file.getFileSystem(conf);
-    FSDataOutputStream fileOut = fs.create(file, false);
+    FSDataOutputStream fileOut = fs.create(file, true);
 
     FSDataOutputStream indexOut = null;
     if (conf.getBoolean("elephantbird.lzo.output.index", false)) {
       if ( isLzopIndexSupported ) {
         Path indexPath = file.suffix(LzoIndex.LZO_INDEX_SUFFIX);
-        indexOut = fs.create(indexPath, false);
+        indexOut = fs.create(indexPath, true);
       } else {
         LOG.warn("elephantbird.lzo.output.index is enabled, but LzopCodec "
             + "does not have createIndexedOutputStream method. "
