@@ -3399,6 +3399,8 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                         '-m',
                         'mapreduce.reduce.speculative=false',
                         '-m',
+                        'mapreduce.task.timeout=1800000',
+                        '-m',
                         'mapreduce.map.memory.mb=%d'
                         % (base.nodemanager_mem / base.max_tasks),
                         '-m',
