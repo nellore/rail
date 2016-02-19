@@ -126,7 +126,7 @@ def rail_help_wrapper(prog):
 on EMR depending on bootstraps.'''
 _hadoop_streaming_jar = '/home/hadoop/contrib/streaming/hadoop-streaming.jar'
 _jar_target = '/mnt/lib'
-_multiple_files_jar = _jar_target + '/multiple-files.jar'
+_custom_output_formats_jar = _jar_target + '/custom-output-formats.jar'
 _relevant_elephant_jar = _jar_target + '/relevant-elephant.jar'
 _mod_partitioner_jar = _jar_target + '/mod-partitioner.jar'
 _hadoop_lzo_jar = ('/home/hadoop/.versions/2.4.0/share/hadoop'
@@ -705,7 +705,7 @@ def step(name, inputs, output,
         mod_partitioner: True iff the mod partitioner should be used for
             the step; this partitioner assumes the key is a tuple of integers
         inputformat: -inputformat option
-        outputformat: -outputformat option; overridden by multiple_outputs
+        outputformat: -outputformat option; overrides multiple_outputs
         extra_args: extra '-D' args
 
         Return value: step dictionary
@@ -748,13 +748,11 @@ def step(name, inputs, output,
         to_return['HadoopJarStep']['Args'].extend(
             ['-D', extra_arg]
         )
-    # Add libjar for splittable LZO
+    # Add libjars for splittable LZO input and custom outputs
     to_return['HadoopJarStep']['Args'].extend(
-            ['-libjars', _relevant_elephant_jar]
+            ['-libjars', ','.join([_relevant_elephant_jar,
+                                   _custom_output_formats_jar])]
         )
-    if multiple_outputs:
-        to_return['HadoopJarStep']['Args'][-1] \
-            +=  (',%s' % _multiple_files_jar)
     if mod_partitioner:
         to_return['HadoopJarStep']['Args'][-1] \
             +=  (',%s' % _mod_partitioner_jar)
@@ -784,13 +782,18 @@ def step(name, inputs, output,
             '-mapper', mapper,
             '-reducer', reducer
         ])
-    if multiple_outputs:
-        to_return['HadoopJarStep']['Args'].extend([
-                '-outputformat', 'edu.jhu.cs.MultipleOutputFormat'
-            ])
-    elif outputformat is not None:
+    if outputformat is not None:
         to_return['HadoopJarStep']['Args'].extend([
                 '-outputformat', outputformat
+            ])
+    elif multiple_outputs:
+        to_return['HadoopJarStep']['Args'].extend([
+                '-outputformat', 'edu.jhu.cs.'
+                                 'MultipleIndexedLzoTextOutputFormat'
+            ])
+    else:
+        to_return['HadoopJarStep']['Args'].extend([
+                '-outputformat', 'edu.jhu.cs.IndexedLzoTextOutputFormat'
             ])
     if inputformat is not None:
         to_return['HadoopJarStep']['Args'].extend([
@@ -2664,7 +2667,7 @@ mkdir -p sandbox
 cd sandbox
 unzip ../{rail_zipped} -d ./
 cd hadoop
-for JAR in relevant-elephant multiple-files mod-partitioner
+for JAR in relevant-elephant custom-output-formats mod-partitioner
 do
     rm -rf ${{JAR}}_out
     mkdir -p ${{JAR}}_out
@@ -3425,9 +3428,6 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                         'mapreduce.map.maxattempts=%d'
                         % base.max_task_attempts,
                         '-m',
-                        ('mapreduce.output.fileoutputformat.compress.codec='
-                         'com.hadoop.compression.lzo.LzopCodec'),
-                        '-m',
                         'mapreduce.job.maps=%d' % base.total_cores,
                         '-e',
                         'fs.s3.enableServerSideEncryption=true'
@@ -3717,16 +3717,10 @@ class RailRnaPreprocess(object):
                     'no_input_prefix' : True,
                     'output' : push_dir if elastic else prep_dir,
                     'no_output_prefix' : True,
-                    'outputformat' : (
-                           'com.twitter.elephantbird.mapred.output'
-                           '.DeprecatedLzoTextOutputFormat'
-                        ),
                     'inputformat' : (
                            'org.apache.hadoop.mapred.lib.NLineInputFormat'
                         ),
                     'extra_args' : [
-                        ('mapreduce.output.fileoutputformat.compress.codec='
-                         'org.apache.hadoop.io.compress.DefaultCodec'),
                         'elephantbird.lzo.output.index=true'
                     ]
                 },
@@ -4759,6 +4753,7 @@ class RailRnaAlign(object):
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
                         'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}',
@@ -4791,6 +4786,8 @@ class RailRnaAlign(object):
                 'partition' : '-k1,1',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
@@ -4826,6 +4823,8 @@ class RailRnaAlign(object):
                 'partition' : '-k1,1',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
@@ -4852,6 +4851,8 @@ class RailRnaAlign(object):
                 'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -4881,6 +4882,8 @@ class RailRnaAlign(object):
                 'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -4902,6 +4905,8 @@ class RailRnaAlign(object):
                 'sort' : '-k1,2 -k3,4',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -4919,6 +4924,8 @@ class RailRnaAlign(object):
                 'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -4942,6 +4949,8 @@ class RailRnaAlign(object):
                 'sort' : '-k1,1 -k2,2', # ensures ref names in uniform order!
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -4976,6 +4985,8 @@ class RailRnaAlign(object):
                 'partition' : '-k1,1',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
@@ -4997,6 +5008,8 @@ class RailRnaAlign(object):
                 'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -5031,6 +5044,8 @@ class RailRnaAlign(object):
                 'sort' : '-k1,1 -k2,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}'
@@ -5060,6 +5075,8 @@ class RailRnaAlign(object):
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}',
@@ -5084,6 +5101,8 @@ class RailRnaAlign(object):
                 'sort' : '-k1,6 -k7,7',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -5112,6 +5131,8 @@ class RailRnaAlign(object):
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -5163,6 +5184,8 @@ class RailRnaAlign(object):
                         'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
                         'mapreduce.reduce.shuffle.merge.percent=0.4',
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -5191,6 +5214,8 @@ class RailRnaAlign(object):
                 'sort' : '-k1,1 -k2,2n',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -5211,6 +5236,8 @@ class RailRnaAlign(object):
                 'partition' : '-k1,4',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -5238,6 +5265,8 @@ class RailRnaAlign(object):
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -5271,6 +5300,8 @@ class RailRnaAlign(object):
                 'sort' : '-k1,1 -k2,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -5301,6 +5332,8 @@ class RailRnaAlign(object):
                 'sort' : '-k1,5 -k6,6n',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -5340,6 +5373,8 @@ class RailRnaAlign(object):
                 'sort' : '-k1,1 -k2,5',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'
@@ -5373,6 +5408,8 @@ class RailRnaAlign(object):
                 'sort' : '-k1,2 -k3,5',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
+                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
                         'elephantbird.combined.split.count={task_count}'

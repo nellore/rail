@@ -1699,7 +1699,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     try:
                         if ('multiple_outputs' in step_data) or \
                             step_data['outputformat'] \
-                            == 'edu.jhu.cs.MultipleOutputFormat':
+                            in ['edu.jhu.cs.MultipleOutputFormat',
+                                'edu.jhu.cs.'
+                                'MultipleIndexedLzoTextOutputFormat']:
                             multiple_outputs = True
                         else:
                             multiple_outputs = False
@@ -1737,7 +1739,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         try:
                             if ('multiple_outputs' in step_data) or \
                                 step_data['outputformat'] \
-                                == 'edu.jhu.cs.MultipleOutputFormat':
+                                in ['edu.jhu.cs.MultipleOutputFormat',
+                                    'edu.jhu.cs.'
+                                    'MultipleIndexedLzoTextOutputFormat']:
                                 # Multiple outputs apply AFTER reduce step
                                 multiple_outputs = False
                         except KeyError:
@@ -1868,8 +1872,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     try:
                         multiple_outputs = (
                                 ('multiple_outputs' in step_data) or
-                                step_data['outputformat']
-                                == 'edu.jhu.cs.MultipleOutputFormat'
+                                    step_data['outputformat']
+                                    in ['edu.jhu.cs.MultipleOutputFormat',
+                                        'edu.jhu.cs.'
+                                        'MultipleIndexedLzoTextOutputFormat']
                             )
                     except KeyError:
                         multiple_outputs = False

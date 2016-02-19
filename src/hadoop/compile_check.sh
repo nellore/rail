@@ -9,7 +9,7 @@
 CWD=$(pwd)
 cd $(dirname "${BASH_SOURCE[0]}")
 NEW_UUID=$(LC_CTYPE=C tr -dc A-Za-z < /dev/urandom | head -c 32 | xargs)
-for JAR in relevant-elephant multiple-files mod-partitioner
+for JAR in relevant-elephant custom-output-formats mod-partitioner
 do
 	rm -f ${JAR}.tar.gz
 	tar cvzf ${JAR}.tar.gz ${JAR}
@@ -17,7 +17,7 @@ do
 done
 ssh -t -t -i $2 hadoop@${1} <<ENDSSH
 rm -f compile_${NEW_UUID}.log
-for JAR in relevant-elephant multiple-files mod-partitioner
+for JAR in relevant-elephant custom-output-formats mod-partitioner
 do
 	tar xvzf \${JAR}.tar.gz
     rm -rf \${JAR}_out
@@ -27,7 +27,7 @@ done
 logout
 ENDSSH
 scp -i $2 hadoop@$1:~/compile_${NEW_UUID}.log ${CWD}/
-for JAR in relevant-elephant multiple-files mod-partitioner
+for JAR in relevant-elephant custom-output-formats mod-partitioner
 do
 	rm -f ${JAR}.tar.gz
 done
