@@ -316,7 +316,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     input_command = 'gzip -cd %s' % reads_filename
     bowtie_command = ' ' .join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
-        '{0} --local -t --no-hd --mm -x'.format(
+        '{0} --local -t --no-hd --mm --reorder -x'.format(
                 '-k {0}'.format(alignment_count_to_report * count_multiplier)
             ),
         bowtie2_index_base, '--12 -'])

@@ -4739,7 +4739,9 @@ class RailRnaAlign(object):
                                     if not base.do_not_drop_polyA_tails
                                     else '',
                                     base.bowtie2_args + (
-                                            ' -p 2 --reorder '
+                                            ' -p {} --reorder '.format(
+                                                    min(4, max_tasks)
+                                                )
                                             if elastic else ''
                                         ) # 2x threads on EMR cuz reducers/2
                                 ),
@@ -4758,7 +4760,7 @@ class RailRnaAlign(object):
                             % (_base_combine_split_size * 2),
                         'elephantbird.combined.split.count={task_count}',
                         'mapreduce.reduce.memory.mb=%d'
-                        % (nodemanager_mem / max_tasks * 2),
+                        % (nodemanager_mem / max_tasks * min(4, max_tasks)),
                         'mapreduce.reduce.java.opts=-Xmx%dm'
                         % (nodemanager_mem / max_tasks * 16 / 10)
                     ]
