@@ -62,7 +62,7 @@ mac_dependencies = {
                  'http://verve.webfactional.com/mirror/mac/'
                  'bowtie-1.1.2-macos-x86_64.zip'],
     'bowtie2' : ['http://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie2/2.2.5/bowtie2-2.2.5-macos-x86_64.zip',
+                 'bowtie2/2.2.7/bowtie2-2.2.7-macos-x86_64.zip',
                  'http://verve.webfactional.com/mirror/mac/'
                  'bowtie2-2.2.7-macos-x86_64.zip'],
     'bedgraphtobigwig' : ['ftp://ftp.ccb.jhu.edu/pub/langmead/rail/'
