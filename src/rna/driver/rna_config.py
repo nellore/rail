@@ -4825,7 +4825,7 @@ class RailRnaAlign(object):
                 'partition' : '-k1,1',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
@@ -4853,7 +4853,7 @@ class RailRnaAlign(object):
                 'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -4884,7 +4884,7 @@ class RailRnaAlign(object):
                 'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -4907,7 +4907,7 @@ class RailRnaAlign(object):
                 'sort' : '-k1,2 -k3,4',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -4926,7 +4926,7 @@ class RailRnaAlign(object):
                 'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -4951,7 +4951,7 @@ class RailRnaAlign(object):
                 'sort' : '-k1,1 -k2,2', # ensures ref names in uniform order!
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -4987,7 +4987,7 @@ class RailRnaAlign(object):
                 'partition' : '-k1,1',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
@@ -5010,7 +5010,7 @@ class RailRnaAlign(object):
                 'partition' : '-k1,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -5077,7 +5077,7 @@ class RailRnaAlign(object):
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size * 2),
@@ -5103,7 +5103,7 @@ class RailRnaAlign(object):
                 'sort' : '-k1,6 -k7,7',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -5133,7 +5133,7 @@ class RailRnaAlign(object):
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -5186,7 +5186,7 @@ class RailRnaAlign(object):
                         'mapreduce.reduce.shuffle.input.buffer.percent=0.4',
                         'mapreduce.reduce.shuffle.merge.percent=0.4',
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -5216,7 +5216,7 @@ class RailRnaAlign(object):
                 'sort' : '-k1,1 -k2,2n',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -5238,7 +5238,7 @@ class RailRnaAlign(object):
                 'partition' : '-k1,4',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -5267,7 +5267,7 @@ class RailRnaAlign(object):
                 'multiple_outputs' : True,
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -5302,7 +5302,7 @@ class RailRnaAlign(object):
                 'sort' : '-k1,1 -k2,3',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -5334,7 +5334,7 @@ class RailRnaAlign(object):
                 'sort' : '-k1,5 -k6,6n',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -5375,7 +5375,7 @@ class RailRnaAlign(object):
                 'sort' : '-k1,1 -k2,5',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
@@ -5410,7 +5410,7 @@ class RailRnaAlign(object):
                 'sort' : '-k1,2 -k3,5',
                 'extra_args' : [
                         'elephantbird.use.combine.input.format=true',
-                        'elephantbird.check.is.splitable=true',
+                        'elephantbird.check.is.splitable=false',
                         'elephantbird.lzo.output.index=true',
                         'elephantbird.combine.split.size=%d'
                             % (_base_combine_split_size),
