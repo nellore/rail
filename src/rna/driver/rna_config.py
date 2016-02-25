@@ -2605,9 +2605,9 @@ export HOME=/home/hadoop
 printf '\\nexport HOME=/home/hadoop\\n' >>/home/hadoop/conf/hadoop-user-env.sh
 sudo ln -s /home/hadoop/.s3cfg /home/.s3cfg
 
-curl -OL https://github.com/s3tools/s3cmd/releases/download/v1.5.2/s3cmd-1.5.2.tar.gz
-tar xvzf s3cmd-1.5.2.tar.gz
-cd s3cmd-1.5.2
+curl -OL https://github.com/s3tools/s3cmd/releases/download/v1.6.1/s3cmd-1.6.1.tar.gz
+tar xvzf s3cmd-1.6.1.tar.gz
+cd s3cmd-1.6.1
 sudo ln -s $(pwd)/s3cmd /usr/bin/s3cmd
 
 cat >~/.s3cfg <<EOF

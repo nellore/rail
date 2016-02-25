@@ -69,7 +69,8 @@ class FileMover(object):
                 command_list.append("--acl-public")
             command_list.extend(
                     [filename, url.to_nonnative_url(),
-                        '--server-side-encryption']
+                        '--server-side-encryption',
+                        '--stop-on-error']
                 )
         elif url.is_curlable:
             raise RuntimeError('Can\'t upload to http/ftp URLs.')
