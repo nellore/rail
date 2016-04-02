@@ -49,8 +49,8 @@ def go(qname_stream, output_stream=sys.stdout, input_stream=sys.stdin,
 
         qname_stream: where to retrieve extended qnames
         input_stream: where to retrieve Bowtie output
-        output_stream: where to emit exon and intron tuples; typically, this is
-            sys.stdout.
+        output_stream: where to emit exon and junction tuples; typically, this
+            is sys.stdout.
         verbose: True if alignments should occasionally be written to stderr.
         report_multiplier: if verbose is True, the line number of an
             alignment written to stderr increases exponentially with base

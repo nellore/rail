@@ -20,9 +20,13 @@ cd ..
 mkdir -p $RELEASES
 TARGET=${RELEASES}/install_rail-rna-${VER}
 rm -rf $TARGET
-echo '#!/usr/bin/env python' | cat - $INTERMEDIATE >$TARGET
+echo '#!/usr/bin/env python2.7' | cat - $INTERMEDIATE >$TARGET
 rm -rf $INTERMEDIATE
 chmod 755 $TARGET
 cd $RELEASES
 FULLRELEASE=$(pwd)
 echo "Installer created at ${FULLRELEASE}/install_rail-rna-${VER} ."
+echo "Copying to webfactional... ."
+scp ${FULLRELEASE}/install_rail-rna-${VER} verve@verve.webfactional.com:/home/verve/webapps/burn1/rail
+echo "Installer also available at http://verve.webfactional.com/rail ."
+

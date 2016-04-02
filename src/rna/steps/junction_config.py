@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 """
-Rail-RNA-intron_config
+Rail-RNA-junction_config
 
-Follows Rail-RNA-intron_filter
-Precedes Rail-RNA-intron_fasta
+Follows Rail-RNA-junction_filter
+Precedes Rail-RNA-junction_fasta
 
 Reduce step in MapReduce pipelines that outputs all possible configurations of
-nonoverlapping introns on the same strand that a readlet of length readlet_size
-(the maximum read length in the data being analyzed) + args.fudge can span,
-given a minimum exon size min_exon_size.
+nonoverlapping junctions on the same strand that a readlet of length
+readlet_size (the maximum read length in the data being analyzed) + args.fudge
+can span, given a minimum exon size min_exon_size.
 
 Input (read from stdin)
 ----------------------------
@@ -64,14 +64,15 @@ def edges_from_input_stream(input_stream, readlet_size=20,
     """ Generates edges of directed acyclic graph (DAG) of introns.
 
         A DAG is constructed for each strand. Each node of the DAG represents
-        a unique intron and is labeled by the tuple (intron_start, intron_end),
-        where intron_start is the (1-based) coordinate of the first base of the
+        a unique intron and is labeled by the tuple
+        (intron_start, intron_end), where intron_start is the (1-based)
+        coordinate of the first base of the
         intron, and intron_end is the coordinate of the first base after the
         intron. An edge occurs between two introns A and B iff they do not
         overlap, and no intron C occurs between A and B such that A, B, and C 
         do not overlap. The intron with larger coordinates is the child of
-        the intron with smaller coordinates. Weight each edge by the number of
-        exonic bases between the introns it connects.
+        the intron with smaller coordinates. Weight each edge by the number
+        of exonic bases between the junctions it connects.
 
         The DAG has sources and sinks. Pad the DAG with new sources and sinks
         as follows. Extend an edge to each original source
@@ -84,8 +85,8 @@ def edges_from_input_stream(input_stream, readlet_size=20,
 
         The paths through this DAG span all possible combinations of
         nonoverlapping introns on the strand. Finding all subpaths (sequences
-        of introns), each of whose weights is <= readlet_size, redundantly
-        enumerates all possible combinations of introns a readlet
+        of junctions), each of whose weights is <= readlet_size, redundantly
+        enumerates all possible combinations of junctions a readlet
         can overlap. Unfortunately, obtaining such combinations in
         "hot spots," where there are many alternative splicings and short
         exons, can become computationally intractable for large readlet sizes.
@@ -201,20 +202,20 @@ def edges_from_input_stream(input_stream, readlet_size=20,
 
 def paths(graph, source, in_node, readlet_size, last_node, edge_span=2,
     min_edge_span_size=25, can_yield=False):
-    """ Generates intron combos spanning readlet_size exonic bases.
+    """ Generates junction combos spanning readlet_size exonic bases.
 
         The algorithm is nonrecursive to ensure Python doesn't choke. Consider
         all paths through "graph" that originate at "source" and pass through
         "in_node." This generator yields all possible maximal subpaths
         (possibly repetitively) (source, in_node, ... , next_to_last_node,
-        last_node), each of which represents a sequence of introns beginning at
-        in_node and ending at next_to_last_node that a readlet of length
-        readlet_size can overlap. But there is a caveat: if an intron sequence
+        last_node), each of which represents a sequence of junctions beginning
+        at in_node and ending at next_to_last_node that a readlet of length
+        readlet_size can overlap. But there is a caveat: if a junction sequence
         itself has a subpath composed of "edge_span" number of edges whose
         total weight is not at least min_edge_span_size, that path is
         suppressed. This controls blowups around many short exons/alternative
         splicings. source and last_node are included in yielded paths to
-        determine by how many bases on either side of the intron sequence the
+        determine by how many bases on either side of the junction sequence the
         reference should be extended.
 
         graph: a dictionary. Each key is an out node (intron_start, intron_end)
@@ -223,7 +224,7 @@ def paths(graph, source, in_node, readlet_size, last_node, edge_span=2,
         source, in_node: an edge that terminates on in_node originates at
             source.
         readlet_size: maximum readlet size
-        edge_span, min_edge_span_size: if an intron sequence from a
+        edge_span, min_edge_span_size: if a junction sequence from a
             maximal subpath itself has a subpath composed of edge_span number
             of edges whose total weight is not at least min_edge_span_size,
             that path is suppressed
@@ -257,7 +258,7 @@ def paths(graph, source, in_node, readlet_size, last_node, edge_span=2,
         node_count = len(path)
         yielded = False
         if node_count >= 3:
-            '''When the path spans at least three nodes, the intron sequence
+            '''When the path spans at least three nodes, the junction sequence
             spans at least one node. If the path weight is >= readlet_size - 1,
             the terminal node cannot possibly be overlapped by a readlet
             overlapping the start node.'''
@@ -293,21 +294,21 @@ def paths(graph, source, in_node, readlet_size, last_node, edge_span=2,
 def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
     last_node, output_stream, edge_span=2, min_edge_span_size=25,
     full_graph=False):
-    """ Consumes graph, printing intron combos that can be overlapped by reads.
+    """ Consumes graph, printing junction combos overlappable by reads.
 
         See edges_from_input_stream()'s docstring for a detailed description of
         the directed acylic graph (DAG).
 
-        To enumerate all possible combinations of introns that can be
+        To enumerate all possible combinations of junctions that can be
         overlapped by a readlet, consider each node separately, and find the
-        ways the intron represented by that node can be the first intron on a
+        ways the intron represented by that node can be the first junction on a
         read; that is, walk every path starting from that node edge by edge
         until its weight exceeds readlet_size, the maximal readlet length.
 
         It is not necessary to keep the entire graph in memory, however. The 
         DAG has one or more sources. A source S is removed from the graph
         when all paths originating at every child node C_i of S have been
-        reviewed to find intron sequences that can be overlapped by
+        reviewed to find junction sequences that can be overlapped by
         readlet_size exonic bases; then S is no longer needed to find by how
         many exonic bases to the left of C_i the reference should extend.
         More specifically, an edge from S to C_i is removed iff:
@@ -324,7 +325,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
         be "consumed." So the DAG can alternately be generated, making it
         expand towards the right end of a strand, and consumed, making it
         retreat from the left end of the strand. The code contained here also
-        prints intron combinations for maximal paths as described below:
+        prints junction combinations for maximal paths as described below:
 
         Tab-delimited tuple columns:
         1. Reference name (RNAME in SAM format) + 
@@ -425,16 +426,16 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
 def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
         min_overlap_exon_size=1, edge_span=2, min_edge_span_size=25, 
         verbose=False, fudge=0, flush_base_count=10000000):
-    """ Runs Rail-RNA-intron_config.
+    """ Runs Rail-RNA-junction_config.
 
         Reduce step in MapReduce pipelines that outputs all possible
-        configurations of nonoverlapping introns on the same strand that a
+        configurations of junctions on the same strand that a
         readlet of length readlet_size (the maximum readlet length in the data
         being analyzed) + args.fudge can span, given a minimum exon size
         min_exon_size.
 
         The code contained here switches between generating and consuming
-        the DAG/printing intron combos. The switch occurs every
+        the DAG/printing junction combos. The switch occurs every
         flush_base_count bases along a given strand. See docstrings for
         functions as well as comments for more information about the algorithm.
 
@@ -469,7 +470,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
 
         input_stream: where to get input
         output_stream: where to write output
-        min_overlap_exon_size: if two introns are separated by
+        min_overlap_exon_size: if two junctions are separated by
             min_overlap_exon_size bases, they are regarded as overlapping
         edge_span, min_edge_span_size: see paths() and
             consume_graph_and_print_combos() for information about these
@@ -597,12 +598,12 @@ if __name__ == '__main__':
                         'to overlap if the number of bases between them on '
                         'the reference is less than this value')
     parser.add_argument('--edge-span', type=int, required=False,
-        default=1, help='--edge-span edges of path from DAG representing an '
-                        'intron combination must have weight >= '
+        default=1, help='--edge-span edges of path from DAG representing a '
+                        'junction combination must have weight >= '
                          '--min-edge-span-size to be output')
     parser.add_argument('--min-edge-span-size', type=int, required=False,
-        default=1, help='--edge-span edges of path from DAG representing an '
-                         'intron combination must have weight >= '
+        default=1, help='--edge-span edges of path from DAG representing a '
+                         'junction combination must have weight >= '
                          '--min-edge-span-size to be output')
     parser.add_argument('--readlet-size', type=int, required=False,
         default=20, help='Size of readlets to be aligned to reference '
@@ -627,7 +628,7 @@ if __name__ == '__main__' and not args.test:
         readlet_size=args.readlet_size,
         verbose=args.verbose,
         fudge=args.fudge)
-    print >>sys.stderr, 'DONE with intron_config.py; in/out=%d/%d; ' \
+    print >>sys.stderr, 'DONE with junction_config.py; in/out=%d/%d; ' \
                         'time=%0.3f s' % (_input_line_count, 
                                             _output_line_count,
                                             time.time() - start_time)
@@ -646,8 +647,8 @@ elif __name__ == '__main__':
             self.input_file = os.path.join(self.temp_dir_path, 'introns.temp')
             self.output_file = os.path.join(self.temp_dir_path, 'configs.temp')
 
-        def test_overlapping_intron_configuration_1(self):
-            """ Fails if intron configurations are not enumerated properly. """
+        def test_overlapping_junction_configuration_1(self):
+            """ Fails if jxn configurations are not enumerated properly. """
             with open(self.input_file, 'w') as input_stream:
                 '''Recall that input is partitioned by first column and 
                 sorted by the next three columns.'''
@@ -665,11 +666,11 @@ elif __name__ == '__main__':
                         readlet_size=20)
             '''Read output; store configurations as frozen sets so there are
             no duplicate configurations.'''
-            intron_configs = set()
+            junction_configs = set()
             with open(self.output_file) as result_stream:
                 for line in result_stream:
                     tokens = line.strip().split('\t')
-                    intron_configs.add(frozenset(zip(
+                    junction_configs.add(frozenset(zip(
                             [int(pos) for pos in tokens[1].split(',')],
                             [int(end_pos) for end_pos in tokens[2].split(',')]
                         )))
@@ -681,11 +682,11 @@ elif __name__ == '__main__':
                         frozenset([(75, 101)]),
                         frozenset([(90, 1300)]),
                         frozenset([(91, 101)]),
-                    ]), intron_configs
+                    ]), junction_configs
                 )
 
-        def test_overlapping_intron_configuration_2(self):
-            """ Fails if intron configurations are not enumerated properly. """
+        def test_overlapping_junction_configuration_2(self):
+            """ Fails if jxn configurations are not enumerated properly. """
             with open(self.input_file, 'w') as input_stream:
                 '''Recall that input is partitioned by first column and 
                 sorted by the next three columns.'''
@@ -703,11 +704,11 @@ elif __name__ == '__main__':
                         fudge=1, readlet_size=20)
             '''Read output; store configurations as frozen sets so there are
             no duplicate configurations.'''
-            intron_configs = defaultdict(set)
+            junction_configs = defaultdict(set)
             with open(self.output_file) as result_stream:
                 for line in result_stream:
                     tokens = line.strip().split('\t')
-                    intron_configs[tokens[0]].add(frozenset(zip(
+                    junction_configs[tokens[0]].add(frozenset(zip(
                             [int(pos) for pos in tokens[1].split(',')],
                             [int(end_pos) for end_pos in tokens[2].split(',')]
                         )))
@@ -719,12 +720,12 @@ elif __name__ == '__main__':
                         frozenset([(75, 201), (205, 225)]),
                         frozenset([(91, 101)]),
                         frozenset([(205, 225)])
-                    ]), intron_configs['chr1']
+                    ]), junction_configs['chr1']
                 )
             self.assertEqual(
                     set([
                         frozenset([(21, 76)])
-                    ]), intron_configs['chr2']
+                    ]), junction_configs['chr2']
                 )
 
         def tearDown(self):

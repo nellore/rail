@@ -72,6 +72,7 @@ import bowtie_index
 import manifest
 from dooplicity.tools import xstream, xopen
 from collections import defaultdict
+from re import search
 
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -120,8 +121,12 @@ start_time = time.time()
 input_line_count, output_line_count = 0, 0
 bin_count = 0
 # For converting RNAMEs to number strings
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
-manifest_object = manifest.LabelsAndIndices(args.manifest)
+reference_index = bowtie_index.BowtieIndexReference(
+                        os.path.expandvars(args.bowtie_idx)
+                    )
+manifest_object = manifest.LabelsAndIndices(
+                        os.path.expandvars(args.manifest)
+                    )
 # Grab read counts
 mapped_read_counts, unique_mapped_read_counts = {}, {}
 with xopen(None, args.read_counts) as read_count_stream:
@@ -149,8 +154,13 @@ for (partition_id,), xpartition in xstream(sys.stdin, 1):
     bin_count += 1
     bin_start_time, bin_diff_count = time.time(), 0
     rname = partition_id.rpartition(';')[0]
+    maybe_rname = (('.' + rname)
+                            if args.output_ave_bigwig_by_chr else '')
     rname_index = reference_index.l_rname_to_string[rname]
     coverages, unique_coverages = defaultdict(int), defaultdict(int)
+    nonref_coverages, unique_nonref_coverages = (
+            defaultdict(int), defaultdict(int)
+        )
     for (pos, sample_indexes_and_diffs) in itertools.groupby(
                                             xpartition, lambda val: val[0]
                                         ):
@@ -160,13 +170,22 @@ for (partition_id,), xpartition in xstream(sys.stdin, 1):
                                 sample_indexes_and_diffs, lambda val: val[1]
                             ):
             for _, _, uniqueness, diff in diffs:
-                coverages[sample_index] += int(diff)
+                diff = int(diff)
+                coverages[sample_index] += diff
                 if uniqueness == '1':
-                    unique_coverages[sample_index] += int(diff)
+                    unique_coverages[sample_index] += diff
+                if search('\.[ATCG]', sample_index):
+                    # All non-N nonreference bases go here
+                    real_sample_index = sample_index[:-2]
+                    nonref_coverages[real_sample_index] += diff
+                    if uniqueness == '1':
+                        unique_nonref_coverages[real_sample_index] += diff
                 bin_diff_count += 1
-            print 'coverage\t%s\t%s\t%012d\t%d\t%d' % (sample_index, 
-                    rname_index, pos, coverages[sample_index],
-                        unique_coverages[sample_index])
+            print 'coverage\t%s\t%s\t%012d\t%d\t%d' % (
+                        sample_index, 
+                        rname_index, pos, coverages[sample_index],
+                        unique_coverages[sample_index]
+                    )
             output_line_count += 1
         # Now output measures of center
         coverage_row = [float(coverages[sample_index])
@@ -180,19 +199,43 @@ for (partition_id,), xpartition in xstream(sys.stdin, 1):
                                for sample_index
                                in manifest_object.index_to_label
                                if unique_mapped_read_counts[sample_index]]
+        nonref_coverage_row = [float(nonref_coverages[sample_index])
+                                / mapped_read_counts[sample_index]
+                                * library_size
+                                for sample_index
+                                in manifest_object.index_to_label
+                                if mapped_read_counts[sample_index]]
+        unique_nonref_coverage_row = [
+                    float(unique_nonref_coverages[sample_index])
+                        / unique_mapped_read_counts[sample_index]
+                        * library_size
+                        for sample_index in manifest_object.index_to_label
+                        if unique_mapped_read_counts[sample_index]
+                ]
         print 'coverage\t%s\t%s\t%012d\t%08f\t%08f' % (
-                'mean' + (('.' + rname)
-                            if args.output_ave_bigwig_by_chr else ''), 
+                'mean' + maybe_rname, 
                 rname_index, pos,
                 sum([cov * mean_weight for cov in coverage_row]),
                 sum([cov * unique_mean_weight for cov in unique_coverage_row])
             )
         print 'coverage\t%s\t%s\t%012d\t%08f\t%08f' % (
-                'median' + (('.' + rname)
-                            if args.output_ave_bigwig_by_chr else ''), 
+                'median' + maybe_rname, 
                 rname_index, pos,
                 median(coverage_row),
                 median(unique_coverage_row)
+            )
+        print 'coverage\t%s\t%s\t%012d\t%08f\t%08f' % (
+                'mean.nonref' + maybe_rname, 
+                rname_index, pos,
+                sum([cov * mean_weight for cov in nonref_coverage_row]),
+                sum([cov * unique_mean_weight for cov
+                        in unique_nonref_coverage_row])
+            )
+        print 'coverage\t%s\t%s\t%012d\t%08f\t%08f' % (
+                'median.nonref' + maybe_rname, 
+                rname_index, pos,
+                median(nonref_coverage_row),
+                median(unique_nonref_coverage_row)
             )
 
     if args.partition_stats:

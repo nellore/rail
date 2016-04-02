@@ -221,7 +221,7 @@ class RailRnaInstaller(object):
                 if url[-8:] == '.tar.bz2':
                     explode_command = ['tar', 'xvjf', filename]
                 elif url[-7:] == '.tar.gz' or url[-4:] == '.tgz':
-                    explode_command = ['tar', 'xvjf', filename]
+                    explode_command = ['tar', 'xvzf', filename]
                 elif url[-4:] == '.zip':
                     self._print_to_screen_and_log(
                             '[Installing] Extracting %s...' % name,
@@ -366,6 +366,7 @@ class RailRnaInstaller(object):
                 zip_object.extractall('./rail-rna')
             if not self.no_dependencies:
                 self._grab_and_explode(self.depends['pypy'], 'PyPy')
+                self._grab_and_explode(self.depends['sra_tools'], 'SRA Tools')
                 if not self.prep_dependencies:
                     self._grab_and_explode(self.depends['bowtie1'], 'Bowtie 1')
                     self._grab_and_explode(self.depends['bowtie2'], 'Bowtie 2')
@@ -373,7 +374,7 @@ class RailRnaInstaller(object):
                                             'BedGraphToBigWig')
                     self._grab_and_explode(self.depends['samtools'],
                                                                 'SAMTools')
-            if not self.prep_dependencies:
+            if not self.prep_dependencies and not self.no_dependencies:
                 # Have to make SAMTools (annoying; maybe change this)
                 samtools_dir = os.path.join(temp_install_dir,
                         self.depends['samtools'][0].rpartition('/')[2][:-8]
@@ -394,6 +395,15 @@ class RailRnaInstaller(object):
                                     '#include <string.h>',
                                     '#include <string.h>\n#include <unistd.h>'
                                 ))
+                    makefile = 'Makefile'
+                    with open(makefile) as makefile_stream:
+                        all_makefile = makefile_stream.read()
+                    with open(makefile, 'w') as makefile_stream:
+                        makefile_stream.write(
+                            all_makefile.replace(
+                                    '-D_CURSES_LIB=1', '-D_CURSES_LIB=0'
+                                ).replace('LIBCURSES=','#LIBCURSES=')
+                        )
                     # Make on all but one cylinder
                     thread_count = max(1, multiprocessing.cpu_count() - 1)
                     samtools_command = ['make', '-j%d' % thread_count]
@@ -440,11 +450,26 @@ class RailRnaInstaller(object):
             else:
                 bowtie1 = bowtie1_build = bowtie2 = bowtie2_build \
                     = bedgraphtobigwig = samtools = 'None'
-            pypy = os.path.join(self.final_install_dir,
-                    self.depends['pypy'][0].rpartition(
-                            '/'
-                        )[2][:-8], 'bin', 'pypy'
-                )
+            if self.no_dependencies:
+                pypy = 'None'
+                fastq_dump = 'None'
+                vdb_config = 'None'
+            else:
+                pypy = os.path.join(self.final_install_dir,
+                        self.depends['pypy'][0].rpartition(
+                                '/'
+                            )[2][:-8], 'bin', 'pypy'
+                    )
+                fastq_dump = os.path.join(self.final_install_dir,
+                                self.depends['sra_tools'][0].rpartition(
+                                '/'
+                            )[2][:-7], 'bin', 'fastq-dump'
+                    )
+                vdb_config = os.path.join(self.final_install_dir,
+                                self.depends['sra_tools'][0].rpartition(
+                                '/'
+                            )[2][:-7], 'bin', 'vdb-config'
+                    )
             # Write paths to exe_paths
             with open(
                             os.path.join(temp_install_dir, 'rail-rna',
@@ -469,13 +494,17 @@ bowtie2 = {bowtie2}
 bowtie2_build = {bowtie2_build}
 samtools = {samtools}
 bedgraphtobigwig = {bedgraphtobigwig}
+fastq_dump = {fastq_dump}
+vdb_config = {vdb_config}
 """
                 ).format(pypy=self._quote(pypy), bowtie1=self._quote(bowtie1),
                             bowtie1_build=self._quote(bowtie1_build),
                             bowtie2=self._quote(bowtie2),
                             bowtie2_build=self._quote(bowtie2_build),
                             samtools=self._quote(samtools),
-                            bedgraphtobigwig=self._quote(bedgraphtobigwig))
+                            bedgraphtobigwig=self._quote(bedgraphtobigwig),
+                            fastq_dump=self._quote(fastq_dump),
+                            vdb_config=self._quote(vdb_config))
         # Move to final directory
         try:
             shutil.move(temp_install_dir, self.final_install_dir)
@@ -500,6 +529,9 @@ bedgraphtobigwig = {bedgraphtobigwig}
                                                 )
                                             )
                 self._bail()
+        install_dir_replacement = os.path.join(
+                                self.final_install_dir, 'rail-rna'
+                            )
         with open(rail_exe, 'w') as rail_exe_stream:
             print >>rail_exe_stream, (
 """#!/usr/bin/env bash
@@ -507,9 +539,7 @@ bedgraphtobigwig = {bedgraphtobigwig}
 {python_executable} {install_dir} $@
 """
                 ).format(python_executable=sys.executable,
-                            install_dir=os.path.join(
-                                self.final_install_dir, 'rail-rna'
-                            ))
+                            install_dir=install_dir_replacement)
         if self.local:
             '''Have to add Rail to PATH. Do this in bashrc and bash_profile
             contingent on whether it's present already because of
@@ -520,40 +550,52 @@ bedgraphtobigwig = {bedgraphtobigwig}
 if [ -d "{bin_dir}" ] && [[ ":$PATH:" != *":{bin_dir}:"* ]]; then
     PATH="${{PATH:+"$PATH:"}}{bin_dir}"
 fi
+export RAILDOTBIO={install_dir}
 ## End Rail-RNA additions
 """
-                ).format(bin_dir=bin_dir)
-            import mmap
-            bashrc = os.path.expanduser('~/.bashrc')
-            bash_profile = os.path.expanduser('~/.bash_profile')
-            try:
-                with open(bashrc) as bashrc_stream:
-                    mmapped = mmap.mmap(bashrc_stream.fileno(), 0, 
-                                            access=mmap.ACCESS_READ)
-                    if mmapped.find(to_print) == -1:
-                        print_to_bashrc = True
-                    else:
-                        print_to_bashrc = False
-            except (IOError, ValueError):
-                # No file
-                print_to_bashrc = True
-            try:
-                with open(bash_profile) as bash_profile_stream:
-                    mmapped = mmap.mmap(bash_profile_stream.fileno(), 0, 
-                                            access=mmap.ACCESS_READ)
-                    if mmapped.find(to_print) == -1:
-                        print_to_bash_profile = True
-                    else:
-                        print_to_bash_profile = False
-            except (IOError, ValueError):
-                # No file
-                print_to_bash_profile = True
-            if print_to_bashrc:
-                with open(bashrc, 'a') as bashrc_stream:
-                    print >>bashrc_stream, to_print
-            if print_to_bash_profile:
-                with open(bash_profile, 'a') as bash_profile_stream:
-                    print >>bash_profile_stream, to_print
+                ).format(bin_dir=bin_dir,
+                            install_dir=install_dir_replacement)
+        else:
+            # Just define raildotbio directory
+            to_print = (
+"""
+## Rail-RNA addition
+export RAILDOTBIO={install_dir}
+## End Rail-RNA addition
+"""
+                ).format(bin_dir=bin_dir,
+                            install_dir=install_dir_replacement)
+        import mmap
+        bashrc = os.path.expanduser('~/.bashrc')
+        bash_profile = os.path.expanduser('~/.bash_profile')
+        try:
+            with open(bashrc) as bashrc_stream:
+                mmapped = mmap.mmap(bashrc_stream.fileno(), 0, 
+                                        access=mmap.ACCESS_READ)
+                if mmapped.find(to_print) == -1:
+                    print_to_bashrc = True
+                else:
+                    print_to_bashrc = False
+        except (IOError, ValueError):
+            # No file
+            print_to_bashrc = True
+        try:
+            with open(bash_profile) as bash_profile_stream:
+                mmapped = mmap.mmap(bash_profile_stream.fileno(), 0, 
+                                        access=mmap.ACCESS_READ)
+                if mmapped.find(to_print) == -1:
+                    print_to_bash_profile = True
+                else:
+                    print_to_bash_profile = False
+        except (IOError, ValueError):
+            # No file
+            print_to_bash_profile = True
+        if print_to_bashrc:
+            with open(bashrc, 'a') as bashrc_stream:
+                print >>bashrc_stream, to_print
+        if print_to_bash_profile:
+            with open(bash_profile, 'a') as bash_profile_stream:
+                print >>bash_profile_stream, to_print
         # Set 755 permissions across Rail's dirs and 644 across files
         dir_command = ['find', self.final_install_dir, '-type', 'd',
                             '-exec', 'chmod', '755', '{}', ';']
@@ -585,6 +627,8 @@ fi
         os.chmod(rail_exe, 0755)
         if not self.no_dependencies:
             os.chmod(pypy, 0755)
+            os.chmod(fastq_dump, 0755)
+            os.chmod(vdb_config, 0755)
             if not self.prep_dependencies:
                 for program in [bowtie1, bowtie1_build, bowtie2, bowtie2_build,
                                 samtools, bedgraphtobigwig]:
@@ -601,6 +645,8 @@ fi
             if self.add_symlinks:
                 # Write appropriate symlinks
                 self._add_symlink_to_exe(pypy)
+                self._add_symlink_to_exe(fastq_dump)
+                self._add_symlink_to_exe(vdb_config)
                 if not self.prep_dependencies:
                     for program in [bowtie1, bowtie1_build, bowtie2,
                                     bowtie2_build, samtools, bedgraphtobigwig]:
@@ -693,9 +739,8 @@ fi
             shutil.copyfile(self.log_file, new_log_file)
             print_to_screen('Installation log may be found at %s.'
                                                         % new_log_file)
-            if self.local:
-                print_to_screen('*Before running any commands below, enter '
-                                '"source ~/.bash_profile".*')
+            print_to_screen('*Before running any commands below, enter '
+                            '"source ~/.bash_profile".*')
             if self.installed_aws:
                 print_to_screen('Configure the AWS CLI by running '
                                 '"aws configure". Afterwards, run '

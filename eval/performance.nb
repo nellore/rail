@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[    116868,       3035]
-NotebookOptionsPosition[    113408,       2918]
-NotebookOutlinePosition[    113766,       2934]
-CellTagsIndexPosition[    113723,       2931]
+NotebookDataLength[    118620,       3088]
+NotebookOptionsPosition[    114856,       2961]
+NotebookOutlinePosition[    115214,       2977]
+CellTagsIndexPosition[    115171,       2974]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -2914,10 +2914,53 @@ Cell[BoxData[
   3.647088896474279*^9, 3.647088940278699*^9, {3.64708921673945*^9, 
    3.6470892230355186`*^9}, {3.6478352496365757`*^9, 3.64783525827769*^9}, 
    3.647860811589353*^9}]
+}, Open  ]],
+
+Cell[BoxData[
+ RowBox[{"(*", 
+  RowBox[{
+  "Compute", " ", "mean", " ", "and", " ", "stdev", " ", "of", " ", "numbers",
+    " ", "of", " ", "true", " ", "introns", " ", "across", " "}]}]], "Input",
+ CellChangeTimes->{{3.648205264585713*^9, 3.648205279282299*^9}}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"intronCountsAcrossTwentySamples", " ", "=", " ", 
+   RowBox[{"{", 
+    RowBox[{
+    "166909", ",", "167081", ",", "169021", ",", "169980", ",", "165247", ",",
+      "167945", ",", "162844", ",", "169031", ",", "162854", ",", "164294", 
+     ",", "164361", ",", "162714", ",", "166674", ",", "159816", ",", 
+     "170328", ",", "164604", ",", "162167", ",", "161989", ",", "166711", 
+     ",", "164876"}], "}"}]}], ";"}]], "Input",
+ CellChangeTimes->{{3.648209257470394*^9, 3.6482092653601007`*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"Mean", "[", "intronCountsAcrossTwentySamples", "]"}], "//", 
+  "N"}]], "Input",
+ CellChangeTimes->{{3.648209267728012*^9, 3.6482092746826982`*^9}}],
+
+Cell[BoxData["165472.3`"], "Output",
+ CellChangeTimes->{{3.648209272478701*^9, 3.64820927516387*^9}}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"StandardDeviation", "[", "intronCountsAcrossTwentySamples", "]"}], 
+  "//", "N"}]], "Input",
+ CellChangeTimes->{{3.648209286553434*^9, 3.648209288604471*^9}}],
+
+Cell[BoxData["2929.9449985856118`"], "Output",
+ CellChangeTimes->{3.6482092890459414`*^9}]
 }, Open  ]]
 },
 WindowSize->{932, 723},
-WindowMargins->{{189, Automatic}, {Automatic, 0}},
+WindowMargins->{{197, Automatic}, {Automatic, 0}},
 FrontEndVersion->"10.0 for Mac OS X x86 (32-bit, 64-bit Kernel) (September 9, \
 2014)",
 StyleDefinitions->"Default.nb"
@@ -2961,7 +3004,7 @@ Cell[31179, 896, 430, 7, 28, "Input"],
 Cell[31612, 905, 466, 7, 28, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[32115, 917, 525, 11, 46, InheritFromParent],
+Cell[32115, 917, 525, 11, 46, "Input"],
 Cell[32643, 930, 910, 17, 131, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
@@ -3036,6 +3079,16 @@ Cell[104887, 2695, 549, 18, 28, "Input"],
 Cell[CellGroupData[{
 Cell[105461, 2717, 5893, 149, 216, "Input"],
 Cell[111357, 2868, 2035, 47, 547, "Output"]
+}, Open  ]],
+Cell[113407, 2918, 263, 5, 28, "Input"],
+Cell[113673, 2925, 533, 10, 63, "Input"],
+Cell[CellGroupData[{
+Cell[114231, 2939, 182, 4, 28, "Input"],
+Cell[114416, 2945, 101, 1, 28, "Output"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[114554, 2951, 193, 4, 28, "Input"],
+Cell[114750, 2957, 90, 1, 62, "Output"]
 }, Open  ]]
 }
 ]

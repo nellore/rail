@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 """
-Rail-RNA-cointron_enum
+Rail-RNA-cojunction_enum
 
-Follows Rail-RNA-intron_index
-Precedes Rail-RNA-cointron_fasta
+Follows Rail-RNA-junction_index
+Precedes Rail-RNA-cojunction_fasta
 
-Alignment script for MapReduce pipelines that wraps Bowtie 2. Finds introns
+Alignment script for MapReduce pipelines that wraps Bowtie 2. Finds junctions
 that cooccur on reads by local alignments to transcriptome elements.
 
 Input (read from stdin)
 ----------------------------
 Single input tuple column:
-1. SEQ or its reversed complement, whichever is first in alphabetical order
-    --- must be unique
+1. SEQ or its reversed complement -- must be unique
+    (but not necessarily in alphabetical order)
 
 Hadoop output (written to stdout)
 ----------------------------
@@ -25,7 +25,7 @@ Tab-delimited tuple columns:
     reference should extend
 5. right_extend_size: by how many bases on the right side of an intron the
     reference should extend
-6. Read sequence
+6. Read sequence or reversed complement, whatever's first in alphabetical order
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -57,13 +57,13 @@ _input_line_count = 0
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base='genome', bowtie2_args='', verbose=False,
-    report_multiplier=1.2, stranded=False, fudge=5, score_min=60,
+    report_multiplier=1.2, stranded=False, fudge=5, max_refs=300, score_min=60,
     gzip_level=3, mover=filemover.FileMover(), intermediate_dir='.',
     scratch=None):
-    """ Runs Rail-RNA-cointron_enum 
+    """ Runs Rail-RNA-cojunction_enum 
 
         Alignment script for MapReduce pipelines that wraps Bowtie 2. Finds
-        introns that cooccur on reads by local alignments to transcriptome
+        junctions that cooccur on reads by local alignments to transcriptome
         elements from Bowtie 2.
 
         Input (read from stdin)
@@ -90,7 +90,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         6. Read sequence
 
         input_stream: where to find input reads.
-        output_stream: where to emit exonic chunks and introns.
+        output_stream: where to emit exonic chunks and junctions.
         bowtie2_exe: filename of Bowtie 2 executable; include path if not in
             $PATH.
         bowtie2_index_base: the basename of the Bowtie index files associated
@@ -105,9 +105,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         stranded: True iff input reads are strand-specific; this affects
             whether an output partition has a terminal '+' or '-' indicating
             the sense strand. Further, if stranded is True, an alignment is
-            returned only if its strand agrees with the intron's strand.
+            returned only if its strand agrees with the junction's strand.
         fudge: by how many bases to extend left and right extend sizes
                 to accommodate potential indels
+        max_refs: hard limit on number of reference seqs to enumerate per
+            read per strand
         score_min: Bowtie2 CONSTANT minimum alignment score
         gzip_level: compression level to use for temporary files
         mover: FileMover object, for use in case Bowtie2 idx needs to be
@@ -153,10 +155,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         '-D 24 -R 3 -N 1 -L 20 -i L,4,0'])
     delegate_command = ''.join(
             [sys.executable, ' ', os.path.realpath(__file__)[:-3],
-                '_delegate.py --report-multiplier %08f --fudge %d %s %s'
-                    % (report_multiplier, fudge,
-                        '--stranded' if stranded else '',
-                        '--verbose' if verbose else '')]
+                ('_delegate.py --report-multiplier %08f --fudge %d '
+                 '--max-refs %d %s %s') % (report_multiplier, fudge, max_refs,
+                                            '--stranded' if stranded else '',
+                                            '--verbose' if verbose else '')]
         )
     full_command = ' | '.join([input_command,
                                 bowtie_command, delegate_command])
@@ -165,6 +167,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                 ['set -exo pipefail;', full_command]
             ), bufsize=-1, stdout=sys.stdout, stderr=sys.stderr,
         shell=True, executable='/bin/bash')
+    _input_line_count += 1
     return_code = bowtie_process.wait()
     if return_code:
         raise RuntimeError('Error occurred while reading Bowtie 2 output; '
@@ -192,9 +195,9 @@ if __name__ == '__main__':
              'job alive')
     parser.add_argument('--fudge', type=int, required=False,
         default=5,
-        help='Permits a sum of exonic bases for an intron combo to be within '
-             'the specified number of bases of a read sequence\'s size; '
-             'this allows for indels with respect to the reference')
+        help='Permits a sum of exonic bases for a junction combo to be '
+             'within the specified number of bases of a read sequence\'s '
+             'size; this allows for indels with respect to the reference')
     parser.add_argument(
         '--stranded', action='store_const', const=True, default=False,
         help='Assume input reads come from the sense strand; then partitions '
@@ -202,6 +205,11 @@ if __name__ == '__main__':
     parser.add_argument('--score-min', type=int, required=False,
         default=48,
         help='Bowtie2 minimum CONSTANT score to use')
+    parser.add_argument('--max-refs', type=int, required=False,
+        default=300,
+        help='Hard limit on the number of reference sequences to emit '
+             'per read per strand. Prioritizes reference sequences that '
+             'overlap the fewest junctions')
     parser.add_argument('--gzip-level', type=int, required=False,
         default=3,
         help='Gzip compression level to use for temporary Bowtie input file')
@@ -240,19 +248,21 @@ if __name__ == '__main__':
 if __name__ == '__main__' and not args.test:
     import time
     start_time = time.time()
-    go(bowtie2_exe=args.bowtie2_exe,
-        bowtie2_index_base=args.bowtie2_idx,
+    go(bowtie2_exe=os.path.expandvars(args.bowtie2_exe),
+        bowtie2_index_base=os.path.expandvars(args.bowtie2_idx),
         bowtie2_args=bowtie2_args, 
         verbose=args.verbose,
         report_multiplier=args.report_multiplier,
         stranded=args.stranded,
         fudge=args.fudge,
+        max_refs=args.max_refs,
         score_min=args.score_min,
         mover=mover,
         intermediate_dir=args.intermediate_dir,
-        scratch=args.scratch)
-    print >>sys.stderr, ('DONE with cointron_enum.py; in=%d; time=%0.3f s') % \
-        (_input_line_count, time.time() - start_time)
+        scratch=tempdel.silentexpandvars(args.scratch))
+    print >>sys.stderr, ('DONE with cojunction_enum.py; in=%d; '
+                            'time=%0.3f s') % (_input_line_count,
+                                                time.time() - start_time)
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters

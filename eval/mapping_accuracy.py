@@ -44,7 +44,7 @@ src_path = os.path.join(base_path, 'src')
 site.addsitedir(utils_path)
 site.addsitedir(src_path)
 
-from alignment_handlers import indels_introns_and_exons
+from alignment_handlers import indels_junctions_exons_mismatches
 from dooplicity.tools import xstream
 
 def dummy_md_and_mapped_offsets(cigar, clip_threshold=1.0):
@@ -260,7 +260,7 @@ def go(true_bed_stream, sam_stream=sys.stdin, generous=False,
                         if unmapped:
                             # Too much clipping
                             continue
-                        _, _, _, exons = indels_introns_and_exons(
+                        _, _, _, exons, _ = indels_junctions_exons_mismatches(
                                                         cigar,
                                                         dummy_md, pos, seq,
                                                         drop_deletions=True

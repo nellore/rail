@@ -72,6 +72,7 @@ from collections import defaultdict
 from dooplicity.tools import xstream, register_cleanup, make_temp_dir
 from dooplicity.ansibles import Url
 import tempdel
+from re import search
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -151,7 +152,7 @@ def percentile(histogram, percentile=0.75):
 import time
 start_time = time.time()
 
-temp_dir_path = make_temp_dir(args.scratch)
+temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
 # Clean up after script
 register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 bed_filename = os.path.join(temp_dir_path, 'temp.bed')
@@ -165,9 +166,13 @@ output_filename, output_url = None, None
 
 '''Make RNAME lengths available from reference FASTA so SAM header can be
 formed; reference_index.rname_lengths[RNAME] is the length of RNAME.''' 
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
+reference_index = bowtie_index.BowtieIndexReference(
+                        os.path.expandvars(args.bowtie_idx)
+                    )
 # For mapping sample indices back to original sample labels
-manifest_object = manifest.LabelsAndIndices(args.manifest)
+manifest_object = manifest.LabelsAndIndices(
+                        os.path.expandvars(args.manifest)
+                    )
 # Create file with chromosome sizes for bedTobigwig
 sizes_filename = os.path.join(temp_dir_path, 'chrom.sizes')
 if args.verbose:
@@ -188,15 +193,26 @@ track_line = ('track type=bedGraph name="{name}" '
          'description="{description}" visibility=full '
          'color=227,29,118 altColor=0,179,220 priority=400')
 for (sample_index,), xpartition in xstream(sys.stdin, 1):
+    real_sample = True
     try:
         sample_label = manifest_object.index_to_label[sample_index]
     except KeyError:
-        # It's a mean or median
-        if 'mean' in sample_index or 'median' in sample_index:
+        # It's a nonref track, a mean, or a median
+        real_sample = False
+        if search('\.[ATCGN]', sample_index):
+            try:
+                sample_label = (
+                        manifest_object.index_to_label[sample_index[:-2]]
+                        + sample_index[-2:]
+                    )
+            except KeyError:
+                raise RuntimeError('Sample label index "%s" was not recorded.'
+                                    % sample_index)
+        elif 'mean' in sample_index or 'median' in sample_index:
             sample_label = sample_index
         else:
             raise RuntimeError('Sample label index "%s" was not recorded.'
-                                % sample_label)
+                                % sample_index)
     '''Dictionary for which each key is a coverage (i.e., number of ECs
     covering a given base). Its corresponding value is the number of bases with
     that coverage.'''
@@ -269,7 +285,7 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
                         unique_coverage
                     )
     # Output normalization factors iff working with real sample
-    if 'mean' not in sample_label and 'median' not in sample_label:
+    if real_sample:
         print '3\t%s\t\x1c\t\x1c\t\x1c\t%d\t%d' % (sample_index,
                                                 percentile(coverage_histogram,
                                                             args.percentile),

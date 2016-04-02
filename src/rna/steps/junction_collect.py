@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """
-Rail-RNA-intron_collect
-Follows Rail-RNA-intron_filter
+Rail-RNA-junction_collect
+Follows Rail-RNA-junction_filter
 TERMINUS: no steps follow.
 
-Reduce step in MapReduce pipelines that takes introns output by intron_filter
-and writes/compresses/uploads a single output file containing introns and their
-initially detected coverages by sample
+Reduce step in MapReduce pipelines that takes junctions output by
+junction_filter and writes/compresses/uploads a single output file containing
+junctions and their initially detected coverages by sample
  
 Input (read from stdin)
 ----------------------------
@@ -15,8 +15,8 @@ Tab-delimited tuple columns:
     '+' or '-' indicating which strand is the sense strand
 2. Intron start position (inclusive)
 3. Intron end position (exclusive)
-4. comma-separated list of sample indexes in which intron was found
-5. comma-separated list of numbers of reads in which intron was found
+4. comma-separated list of sample indexes in which junction was found
+5. comma-separated list of numbers of reads in which junction was found
     in respective sample specified by field 4
 
 Input is keyed and sorted by the first three fields.
@@ -27,14 +27,14 @@ None.
 
 Other output (written to directory specified by command-line parameter --out)
 ----------------------------
-File whose name is collected_introns.tsv.gz by default.
+File whose name is collected_junctions.tsv.gz by default.
 Tab-delimited tuple columns:
 1. Reference name (RNAME in SAM format) +
     '+' or '-' indicating which strand is the sense strand
 2. Intron start position (inclusive)
-3. Intron end position (exclusive)
-4. comma-separated list of sample indexes in which intron was found
-5. comma-separated list of numbers of reads in which intron was found
+3. Intron end position (inclusive)
+4. comma-separated list of sample indexes in which junction was found
+5. comma-separated list of numbers of reads in which junction was found
     in respective sample specified by field 4
 """
 import os
@@ -64,8 +64,8 @@ parser.add_argument(\
     '--out', metavar='URL', type=str, required=False, default=None,
     help='URL to which output should be written. Default is stdout')
 parser.add_argument(\
-    '--intron-filename', type=str, required=False, 
-    default='collected_introns.tsv.gz',
+    '--junction-filename', type=str, required=False, 
+    default='first_pass_junctions.tsv.gz',
     help='The output filename (excluding path). '
          'Ignored if --out is not specified (that is, if --out is stdout)')
 parser.add_argument('--gzip-level', type=int, required=False,
@@ -93,30 +93,35 @@ if args.out is not None:
     if output_url.is_local:
         try: os.makedirs(output_url.to_url())
         except: pass
-        output_filename = os.path.join(args.out, args.intron_filename)
+        output_filename = os.path.join(args.out, args.junction_filename)
     else:
-        temp_dir_path = make_temp_dir(args.scratch)
+        temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
         register_cleanup(tempdel.remove_temporary_directories,
                             [temp_dir_path])
-        output_filename = args.intron_filename + '.temp'
+        output_filename = args.junction_filename + '.temp'
         output_filename = os.path.join(temp_dir_path, output_filename)
     with xopen(True, output_filename, 'w', args.gzip_level) as output_stream:
         for line in sys.stdin:
-            output_stream.write(line)
+            tokens = line.strip().split('\t')
+            # Remove leading zeros from ints
+            print >>output_stream, '\t'.join(
+                    [tokens[0], str(int(tokens[1])),
+                        str(int(tokens[2]) - 1), tokens[3], tokens[4]]
+                )
             input_line_count += 1
 else:
     # Default --out is stdout
     for line in sys.stdin:
         tokens = line.strip().split('\t')
         # Remove leading zeros from ints
-        sys.stdout.write('\t'.join([tokens[0], str(int(tokens[1])),
-                                    str(int(tokens[2])), tokens[3],
-                                    tokens[4]]))
+        print '\t'.join([tokens[0], str(int(tokens[1])),
+                                    str(int(tokens[2]) - 1), tokens[3],
+                                    tokens[4]])
         input_line_count += 1
 
 if args.out is not None and not output_url.is_local:
     mover = filemover.FileMover(args=args)
-    mover.put(output_filename, output_url.plus(args.intron_filename))
+    mover.put(output_filename, output_url.plus(args.junction_filename))
 
-print >>sys.stderr, 'DONE with intron_collect.py; in = %d; time=%0.3f s' \
+print >>sys.stderr, 'DONE with junction_collect.py; in = %d; time=%0.3f s' \
                         % (input_line_count, time.time() - start_time)

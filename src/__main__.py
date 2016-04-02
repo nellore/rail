@@ -132,10 +132,11 @@ class Launcher(object):
 
     def __init__(self, force=False, num_processes=1, keep_intermediates=False,
                     gzip_intermediates=False, gzip_level=3,
-                    sort_memory_cap=0.2, max_task_attempts=4,
+                    sort_memory_cap=(300*1024), max_task_attempts=4,
                     region='us-east-1', log=None, scratch=None,
                     ipython_profile=None, ipcontroller_json=None, common=None,
-                    json=False, sort=None):
+                    direct_write=False, json=False, sort=None,
+                    profile=None):
         self.force = force
         self.num_processes = num_processes
         self.keep_intermediates = keep_intermediates
@@ -146,11 +147,13 @@ class Launcher(object):
         self.region = region
         self.log = log
         self.scratch = scratch
+        self.direct_write = direct_write
         self.ipython_profile = ipython_profile
         self.ipcontroller_json = ipcontroller_json
         self.common = common
         self.json = json
         self.sort = sort
+        self.profile = profile
 
     def run(self, mode, payload):
         """ Replaces current process, using PyPy if it's available.
@@ -221,6 +224,8 @@ class Launcher(object):
                     runner_args.append('-f')
                 if self.keep_intermediates:
                     runner_args.append('--keep-intermediates')
+                if self.direct_write:
+                    runner_args.append('--direct-write')
                 if self.gzip_intermediates:
                     runner_args.extend(['--gzip-outputs', '--gzip-level',
                                             str(self.gzip_level)])
@@ -252,8 +257,9 @@ class Launcher(object):
                                         'rna', 'driver', 'rail-rna.txt')]
                 if self.force:
                     runner_args.append('-f')
-                if self.region != 'us-east-1':
-                    runner_args.extend(['-r', self.region])
+                if self.profile:
+                    runner_args.extend(['--profile', self.profile])
+                runner_args.extend(['-r', self.region])
                 os.dup2(read_pipe, sys.stdin.fileno())
                 os.close(read_pipe)
                 os.close(write_pipe)
@@ -599,6 +605,7 @@ if __name__ == '__main__':
                 do_not_bin_quals=args.do_not_bin_quals,
                 short_read_names=args.short_read_names,
                 skip_bad_records=args.skip_bad_records,
+                ignore_missing_sra_samples=args.ignore_missing_sra_samples,
                 bowtie_idx=args.bowtie_idx,
                 bowtie1_exe=args.bowtie1, bowtie2_exe=args.bowtie2,
                 bowtie1_build_exe=args.bowtie1_build,
@@ -621,10 +628,12 @@ if __name__ == '__main__':
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
                 genome_bowtie1_args=args.genome_bowtie1_args,
-                intron_criteria=args.intron_criteria,
+                junction_criteria=args.junction_criteria,
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
+                experimental=args.experimental,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -645,7 +654,9 @@ if __name__ == '__main__':
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
-                scratch=args.scratch
+                scratch=args.scratch,
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'align' and args.align_mode == 'local':
         mode = 'local'
@@ -677,10 +688,12 @@ if __name__ == '__main__':
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
                 genome_bowtie1_args=args.genome_bowtie1_args,
-                intron_criteria=args.intron_criteria,
+                junction_criteria=args.junction_criteria,
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
+                experimental=args.experimental,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -714,6 +727,7 @@ if __name__ == '__main__':
                 do_not_bin_quals=args.do_not_bin_quals,
                 short_read_names=args.short_read_names,
                 skip_bad_records=args.skip_bad_records,
+                ignore_missing_sra_samples=args.ignore_missing_sra_samples,
                 num_processes=args.num_processes,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
@@ -722,7 +736,9 @@ if __name__ == '__main__':
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
-                scratch=args.scratch
+                scratch=args.scratch,
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'go' and args.go_mode == 'parallel':
         mode = 'parallel'
@@ -737,6 +753,7 @@ if __name__ == '__main__':
                 do_not_bin_quals=args.do_not_bin_quals,
                 short_read_names=args.short_read_names,
                 skip_bad_records=args.skip_bad_records,
+                ignore_missing_sra_samples=args.ignore_missing_sra_samples,
                 bowtie_idx=args.bowtie_idx,
                 bowtie1_exe=args.bowtie1, bowtie2_exe=args.bowtie2,
                 bowtie1_build_exe=args.bowtie1_build,
@@ -759,10 +776,12 @@ if __name__ == '__main__':
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
                 genome_bowtie1_args=args.genome_bowtie1_args,
-                intron_criteria=args.intron_criteria,
+                junction_criteria=args.junction_criteria,
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
+                experimental=args.experimental,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -784,8 +803,11 @@ if __name__ == '__main__':
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
                 scratch=args.scratch,
+                direct_write=args.direct_write,
                 do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes,
-                sort_exe=args.sort
+                sort_exe=args.sort,
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'align' and args.align_mode == 'parallel':
         mode = 'parallel'
@@ -817,10 +839,12 @@ if __name__ == '__main__':
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
                 genome_bowtie1_args=args.genome_bowtie1_args,
-                intron_criteria=args.intron_criteria,
+                junction_criteria=args.junction_criteria,
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
+                experimental=args.experimental,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -841,6 +865,7 @@ if __name__ == '__main__':
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
                 scratch=args.scratch,
+                direct_write=args.direct_write,
                 do_not_copy_index_to_nodes=args.do_not_copy_index_to_nodes,
                 sort_exe=args.sort
             )
@@ -856,6 +881,7 @@ if __name__ == '__main__':
                 do_not_bin_quals=args.do_not_bin_quals,
                 short_read_names=args.short_read_names,
                 skip_bad_records=args.skip_bad_records,
+                ignore_missing_sra_samples=args.ignore_missing_sra_samples,
                 gzip_intermediates=args.gzip_intermediates,
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
@@ -865,15 +891,20 @@ if __name__ == '__main__':
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
                 scratch=args.scratch,
-                sort_exe=args.sort
+                direct_write=args.direct_write,
+                sort_exe=args.sort,
+                fastq_dump_exe=args.fastq_dump,
+                vdb_config_exe=args.vdb_config
             )
     elif args.job_flow == 'go' and args.go_mode == 'elastic':
         mode = 'elastic'
         json_creator = RailRnaElasticAllJson(
                 args.manifest, args.output,
+                assembly=args.assembly,
                 do_not_bin_quals=args.do_not_bin_quals,
                 short_read_names=args.short_read_names,
                 skip_bad_records=args.skip_bad_records,
+                ignore_missing_sra_samples=args.ignore_missing_sra_samples,
                 isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
@@ -897,10 +928,12 @@ if __name__ == '__main__':
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
                 genome_bowtie1_args=args.genome_bowtie1_args,
-                intron_criteria=args.intron_criteria,
+                junction_criteria=args.junction_criteria,
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
+                experimental=args.experimental,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -934,12 +967,18 @@ if __name__ == '__main__':
                 no_direct_copy=args.no_direct_copy,
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime,
-                max_task_attempts=args.max_task_attempts
+                max_task_attempts=args.max_task_attempts,
+                dbgap_key=args.dbgap_key,
+                secure_stack_name=args.secure_stack_name,
+                ec2_subnet_id=args.ec2_subnet_id,
+                ec2_master_security_group_id=args.ec2_master_security_group_id,
+                ec2_slave_security_group_id=args.ec2_slave_security_group_id
             )
     elif args.job_flow == 'align' and args.align_mode == 'elastic':
         mode = 'elastic'
         json_creator = RailRnaElasticAlignJson(
                 args.manifest, args.output,
+                assembly=args.assembly,
                 isofrag_idx=args.isofrag_idx,
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
@@ -964,10 +1003,12 @@ if __name__ == '__main__':
                 max_gaps_mismatches=args.max_gaps_mismatches,
                 motif_radius=args.motif_radius,
                 genome_bowtie1_args=args.genome_bowtie1_args,
-                intron_criteria=args.intron_criteria,
+                junction_criteria=args.junction_criteria,
                 indel_criteria=args.indel_criteria,
                 transcriptome_bowtie2_args=args.transcriptome_bowtie2_args,
+                experimental=args.experimental,
                 count_multiplier=args.count_multiplier,
+                max_refs_per_strand=args.max_refs_per_strand,
                 tie_margin=args.tie_margin,
                 normalize_percentile=args.normalize_percentile,
                 transcriptome_indexes_per_sample=\
@@ -999,7 +1040,11 @@ if __name__ == '__main__':
                 consistent_view=args.consistent_view,
                 no_direct_copy=args.no_direct_copy,
                 intermediate_lifetime=args.intermediate_lifetime,
-                max_task_attempts=args.max_task_attempts
+                max_task_attempts=args.max_task_attempts,
+                secure_stack_name=args.secure_stack_name,
+                ec2_subnet_id=args.ec2_subnet_id,
+                ec2_master_security_group_id=args.ec2_master_security_group_id,
+                ec2_slave_security_group_id=args.ec2_slave_security_group_id
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'elastic':
         mode = 'elastic'
@@ -1008,6 +1053,7 @@ if __name__ == '__main__':
                 do_not_bin_quals=args.do_not_bin_quals,
                 short_read_names=args.short_read_names,
                 skip_bad_records=args.skip_bad_records,
+                ignore_missing_sra_samples=args.ignore_missing_sra_samples,
                 intermediate_dir=args.intermediate,
                 force=args.force, aws_exe=args.aws, profile=args.profile,
                 region=args.region,
@@ -1036,7 +1082,12 @@ if __name__ == '__main__':
                 no_direct_copy=args.no_direct_copy,
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime,
-                max_task_attempts=args.max_task_attempts
+                max_task_attempts=args.max_task_attempts,
+                dbgap_key=args.dbgap_key,
+                secure_stack_name=args.secure_stack_name,
+                ec2_subnet_id=args.ec2_subnet_id,
+                ec2_master_security_group_id=args.ec2_master_security_group_id,
+                ec2_slave_security_group_id=args.ec2_slave_security_group_id
             )
     # Launch
     try:
@@ -1076,7 +1127,7 @@ if __name__ == '__main__':
                                     sort_memory_cap=(
                                         args.sort_memory_cap
                                         if mode in ['local', 'parallel']
-                                        else 0.2
+                                        else (300*1024)
                                     ),
                                     max_task_attempts=(
                                         args.max_task_attempts
@@ -1109,11 +1160,21 @@ if __name__ == '__main__':
                                         if mode in ['local', 'parallel']
                                         else None
                                     ),
+                                    direct_write=(
+                                        args.direct_write
+                                        if mode == 'parallel'
+                                        else False
+                                    ),
                                     sort=(
                                         json_creator.base.sort_exe
                                         if mode in ['local', 'parallel']
                                         else None
                                     ),
-                                    json=args.json
+                                    json=args.json,
+                                    profile=(
+                                        args.profile
+                                        if mode == 'elastic'
+                                        else None
+                                    ),
                                 )
     launcher.run(mode, json.dumps(json_creator.json_serial))

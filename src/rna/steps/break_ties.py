@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 """
 Rail-RNA-break-ties
-Follows Rail-RNA-intron_coverage, Rail-RNA-realign_reads
+Follows Rail-RNA-junction_coverage, Rail-RNA-realign_reads
 Precedes Rail-RNA-bed_pre, Rail-RNA-bam
 
 Decides primary alignments from among ties according to the read coverage
-(by "uniquely" aligning reads) of the minimally covered intron overlapped
+(by "uniquely" aligning reads) of the minimally covered junction overlapped
 by the alignment. The rules are as follows.
 -Break ties first by selecting from among alignments that overlap the fewest
-introns.
--If no introns are overlapped in this group of alignments, break ties
+junctions.
+-If no junctions are overlapped in this group of alignments, break ties
 uniformly at random from among max scores
 -Otherwise, each alignment is weighted by the read coverage of its minimally
-covered intron, and the tie is broken at random according to these weights.
+covered junction, and the tie is broken at random according to these weights.
 Examples: if all weights are 0, the tie is broken uniformly at random. If there
 are two alignments, and one is weighted 0 while the other is weighted 2, the
 second alignment is always chosen. If there are two alignments, and one is
@@ -23,11 +23,11 @@ The seed qname + seq + qual is used.
 
 Input (read from stdin)
 ----------------------------
-Tab-delimited input columns (introns):
+Tab-delimited input columns (junctions):
 [ALL SAM FIELDS; see SAM format specification for details]
-Last field (only for alignments overlapping introns): XC:i:(coverage of an
-intron from the read); there are as many lines for a given alignment
-(i.e., QNAMEs) as there are introns overlapped by the alignment
+Last field (only for alignments overlapping junctions): XC:i:(coverage of an
+junction from the read); there are as many lines for a given alignment
+(i.e., QNAMEs) as there are junctions overlapped by the alignment
 
 Input is partitioned by QNAME (field 1).
 
@@ -56,13 +56,13 @@ Format 2 (exon_diff); tab-delimited output tuple columns:
 
 Note that only unique alignments are currently output as ivals and/or diffs.
 
-Exonic chunks / introns
+Exonic chunks / junctions
 
 Format 3 (sam); tab-delimited output tuple columns:
 Standard 11-column SAM output except fields are in different order, and the
 first field corresponds to sample label. (Fields are reordered to facilitate
 partitioning by sample name/RNAME and sorting by POS.) Each line corresponds to
-read overlapping at least one intron in the reference. The CIGAR string
+read overlapping at least one junction in the reference. The CIGAR string
 represents intronic bases with N's and exonic bases with M's.
 The order of the fields is as follows.
 1. Sample index if outputting BAMs by sample OR sample-rname index if
@@ -79,22 +79,22 @@ The order of the fields is as follows.
 10. TLEN
 11. SEQ
 12. QUAL
-... + optional fields, including -- for reads overlapping introns --:
+... + optional fields, including -- for reads overlapping junctions --:
 XS:A:'+' or '-' depending on which strand is the sense strand
 
-Introns (intron_bed), insertions/deletions (indel_bed)
+Junctions (junction_bed), insertions/deletions (indel_bed)
 
 Format 4; tab-delimited output tuple columns:
-1. 'I', 'D', or 'N' for insertion, deletion, or intron line
+1. 'I', 'D', or 'N' for insertion, deletion, or junction line
 2. Sample label
 3. Number string representing RNAME
 4. Start position (Last base before insertion, first base of deletion,
-                    or first base of intron)
+                    or first base of junction)
 5. End position (Last base before insertion, last base of deletion (exclusive),
-                    or last base of intron (exclusive))
-6. '+' or '-' indicating which strand is the sense strand for introns,
+                    or last base of junction (exclusive))
+6. '+' or '-' indicating which strand is the sense strand for junctions,
    inserted sequence for insertions, or deleted sequence for deletions
-----Next fields are for introns only; they are '\x1c' for indels----
+----Next fields are for junctions only; they are '\x1c' for indels----
 7. Number of nucleotides between 5' end of intron and 5' end of read from which
     it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND. That is,
     if the sense strand is the reverse strand, this is the distance between the
@@ -102,7 +102,7 @@ Format 4; tab-delimited output tuple columns:
 8. Number of nucleotides between 3' end of intron and 3' end of read from which
     it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
 --------------------------------------------------------------------
-9. Number of instances of intron, insertion, or deletion in sample; this is
+9. Number of instances of junction, insertion, or deletion in sample; this is
     always +1 before bed_pre combiner/reducer
 
 ALL OUTPUT COORDINATES ARE 1-INDEXED.
@@ -172,8 +172,12 @@ global, properties of args are also arguments of the go() function so
 different command-line arguments can be passed to it for unit tests.'''
 args = parser.parse_args(argv[1:])
 
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
-manifest_object = manifest.LabelsAndIndices(args.manifest)
+reference_index = bowtie_index.BowtieIndexReference(
+                            os.path.expandvars(args.bowtie_idx)
+                        )
+manifest_object = manifest.LabelsAndIndices(
+                            os.path.expandvars(args.manifest)
+                        )
 alignment_count_to_report, seed, non_deterministic \
     = bowtie.parsed_bowtie_args(bowtie_args)
 
@@ -194,14 +198,15 @@ start_time = time.time()
 for (qname,), xpartition in xstream(sys.stdin, 1):
     alignments = [(qname,) + alignment for alignment in xpartition]
     input_line_count += len(alignments)
-    intron_counts = [alignment[5].count('N') for alignment in alignments]
-    min_intron_count = min(intron_counts)
-    if not min_intron_count:
-        '''There is at least one alignment that overlaps no introns; report 
+    junction_counts = [alignment[5].count('N') for alignment in alignments]
+    min_junction_count = min(junction_counts)
+    if not min_junction_count:
+        '''There is at least one alignment that overlaps no junctions; report 
         an alignment with the highest score at random. Separate into alignments
-        that overlap the fewest introns and alignments that don't.'''
-        clipped_alignments = [alignments[i] for i in xrange(len(intron_counts))
-                                if intron_counts[i] == 0]
+        that overlap the fewest junctions and alignments that don't.'''
+        clipped_alignments = [alignments[i] for i in xrange(
+                                                        len(junction_counts)
+                                            ) if junction_counts[i] == 0]
         alignments_and_scores = [(alignment, [int(tokens[5:])
                                                 for tokens in alignment
                                                 if tokens[:5] == 'AS:i:'][0])
@@ -222,12 +227,13 @@ for (qname,), xpartition in xstream(sys.stdin, 1):
                     )
                 )
     else:
-        # All alignments overlap introns
-        intron_alignments = [alignments[i] for i in xrange(len(intron_counts))
-                                if intron_counts[i] == min_intron_count]
+        # All alignments overlap junctions
+        junction_alignments = [alignments[i]
+                                for i in xrange(len(junction_counts))
+                                if junction_counts[i] == min_junction_count]
         # Compute min coverage for alignments that are the same
         alignment_dict = defaultdict(int)
-        for alignment in intron_alignments:
+        for alignment in junction_alignments:
             if alignment[:-1] not in alignment_dict:
                 alignment_dict[alignment[:-1]] = int(alignment[-1][5:])
             else:

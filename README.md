@@ -1,8 +1,12 @@
 ![Rail-RNA logo](https://github.com/nellore/rail/blob/master/assets/railrnalogodark.png)
 ====
 
-This is the official repo for Rail-RNA, software for RNA-seq analysis. 
-### [Download](https://github.com/nellore/rail/raw/v0.1.9b/releases/install_rail-rna-0.1.9b)
+is software for RNA-seq analysis.
+### [Visit](http://rail.bio)
+
+**the website.**
+
+### [Download](https://github.com/nellore/rail/raw/v0.2.3b/releases/install_rail-rna-0.2.3b)
 
 **the latest stable release. Read the**
 
@@ -14,7 +18,7 @@ This is the official repo for Rail-RNA, software for RNA-seq analysis.
 
 **Ask questions in the repo's**
 
-### [Gitter](https://gitter.im/nellore/rail): [![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .
+[![Join the chat at https://gitter.im/nellore/rail](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/nellore/rail?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) .
 
 Get interested
 -----
@@ -23,7 +27,8 @@ Rail-RNA's distinguishing features are
 * **Reduced redundancy**. The software identifies and eliminates redundant alignment work, making the end-to-end analysis time per sample *decrease* for fixed computer cluster size as the number of samples increases.
 * **Integrative analysis**. The software borrows strength across replicates to achieve more accurate splice junction detection, especially in genomic regions with low coverage.
 * **Mode agnosticism**. The software integrates its own parallel abstraction layer that allows it to be run in various distributed computing environments, including the Amazon Web Services (AWS) [Elastic MapReduce (EMR) service](http://aws.amazon.com/elasticmapreduce/), or any distributed environment supported by [IPython](http://ipython.org/), including clusters using batch schedulers like PBS or SGE, Message Passing Interface (MPI), or any cluster with a shared filesystem and mutual SSH access. Alternately, Rail-RNA can be run on a single multi-core computer, without the aid of a batch system or MapReduce implementation.
-* **Inexpensive cloud implementation**. An EMR run on > ~100 samples costs < $1/sample with spot instances.
+* **Inexpensive cloud implementation**. An EMR run on > ~100 samples costs ~ $1/sample with spot instances.
+* **Secure analysis of dbGaP-protected data on EMR**. See [this](http://docs.rail.bio/dbgap/) guide for information on setup.
 
 Outputs currently include
 * Alignment BAMs with only primary alignments by default (for more, use `--bowtie2-args "-k <N>"`, where `<N>` is the maximum number of alignments to report per read)
@@ -32,21 +37,27 @@ Outputs currently include
 
 and will likely expand in future versions.
 
-Read the [preprint](http://biorxiv.org/content/early/2015/05/07/019067) for more details. Methods explained there correspond to Rail-RNA 0.1.0a.
+Read the [preprint](http://biorxiv.org/content/early/2015/08/11/019067) for more details. Methods explained there correspond to Rail-RNA 0.2.3b.
 
 Get set up
 -----
-Start with a recent (>= 2009) Mac OS or Linux box. Download [`install_rail-rna-0.1.9b`](https://github.com/nellore/rail/raw/v0.1.9b/releases/install_rail-rna-0.1.9b), change to the directory containing it, and make the installer executable with
+Start with a recent (>= 2009) OS X or Linux box. For a no-fuss install, enter
 ```
-chmod +x install_rail-rna-0.1.9b
+(INSTALLER=/var/tmp/$(cat /dev/urandom | env LC_CTYPE=C tr -cd 'a-f0-9' | head -c 32);
+curl http://verve.webfactional.com/rail -o $INSTALLER; python2 $INSTALLER -m || true;
+rm -f $INSTALLER)
+```
+at a Bash prompt. For a more customizable install, download [`install_rail-rna-0.2.3b`](https://github.com/nellore/rail/raw/v0.2.3b/releases/install_rail-rna-0.2.3b), change to the directory containing it, and make the installer executable with
+```
+chmod +x install_rail-rna-0.2.3b
 ```
 Now run
 ```
-sudo ./install_rail-rna-0.1.9b
+sudo ./install_rail-rna-0.2.3b
 ```
 to install for all users or
 ```
-./install_rail-rna-0.1.9b
+./install_rail-rna-0.2.3b
 ```
 to install for just you. Refer to [these](http://docs.rail.bio/installation/) detailed installation instructions from the [docs](http://docs.rail.bio) for more information. If the executable doesn't work, you may need [Python](http://www.python.org). You'll also need Bowtie 1 and 2 indexes of the appropriate genome assembly if you will be running Rail-RNA in either its single-computer (local) or IPython Parallel (parallel) modes. The easiest way to get these is by downloading an [Illumina iGenome](http://support.illumina.com/sequencing/sequencing_software/igenome.html). If running Rail-RNA on EMR (elastic mode) and aligning to hg19, the assembly can be specified at the command line with the `-a` parameter.
 
@@ -56,8 +67,6 @@ Rail-RNA takes as input a [Myrna](http://bowtie-bio.sourceforge.net/myrna/)-styl
 
 1. (for a set of unpaired input reads) `<FASTQ URL>(tab)<optional MD5>(tab)<sample label>`
 2. (for a set of paired input reads) `<FASTQ URL 1>(tab)<optional MD5 1>(tab)<FASTQ URL 2>(tab)<optional MD5 2>(tab)<sample label>`
-
-`<sample label>` must be formatted as `<group ID>-<biorep ID>-<techrep ID>`.
 
 **Find some RNA-seq data, create a manifest file, run**
 ```
@@ -73,13 +82,12 @@ Renting AWS resources costs money, regardless of whether your run ultimately suc
 
 Licenses
 -----
-[MIT](http://choosealicense.com/licenses/mit/) except for:
-* code borrowed from [NetworkX](http://networkx.lanl.gov/) in `src/rna/steps/cointron_enum_delegate.py`, which is [BSD](http://networkx.lanl.gov/reference/legal.html)-licensed. See the source there for the appropriate copyright notice.
-* code adapted from the Twitter's [Elephant Bird](https://github.com/twitter/elephant-bird/) project in `src/hadoop/relevant-elephant`, which is [Apache](http://apache.org/licenses/LICENSE-2.0)-licensed.
+[MIT](http://choosealicense.com/licenses/mit/) except for the directory `src/hadoop/relevant-elephant`, which contains [Apache](http://apache.org/licenses/LICENSE-2.0)-licensed code adapted from the Twitter's [Elephant Bird](https://github.com/twitter/elephant-bird/) project.
 
 Contributors
 -----
 * [Abhi Nellore]
+* [Chris Wilks]
 * [Leo Collado-Torres]
 * [Andrew Jaffe]
 * [Jamie Morton]
@@ -89,6 +97,7 @@ Contributors
 * [Ben Langmead]
 
 [Abhi Nellore]: http://nellore.github.io/
+[Chris Wilks]: https://github.com/ChristopherWilks
 [Leo Collado-Torres]: http://www.biostat.jhsph.edu/~lcollado/
 [Andrew Jaffe]: http://www.aejaffe.com/
 [Jamie Morton]: https://github.com/mortonjt

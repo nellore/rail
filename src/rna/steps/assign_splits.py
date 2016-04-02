@@ -98,7 +98,7 @@ else:
     # Set up temporary destination
     import tempfile
     from dooplicity.tools import make_temp_dir
-    temp_dir_path = make_temp_dir(args.scratch)
+    temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
     register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
     output_path = os.path.join(temp_dir_path, args.filename)
 samples = {}

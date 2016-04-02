@@ -44,9 +44,6 @@ public class LzoUtils {
    * Creates an lzop output stream. The index for the lzop is
    * also written to another at the same time if
    * <code>elephantbird.lzo.output.index</code> is set in configuration. <p>
-   *
-   * If the file size at closing is not larger than a single block,
-   * the index file is deleted (in line with {@link LzoIndexer} behavior).
    */
   public static DataOutputStream
   getIndexedLzoOutputStream(Configuration conf, Path path) throws IOException {
@@ -56,13 +53,13 @@ public class LzoUtils {
 
     final Path file = path;
     final FileSystem fs = file.getFileSystem(conf);
-    FSDataOutputStream fileOut = fs.create(file, false);
+    FSDataOutputStream fileOut = fs.create(file, true);
 
     FSDataOutputStream indexOut = null;
     if (conf.getBoolean("elephantbird.lzo.output.index", false)) {
       if ( isLzopIndexSupported ) {
-        Path indexPath = file.suffix(LzoIndex.LZO_TMP_INDEX_SUFFIX);
-        indexOut = fs.create(indexPath, false);
+        Path indexPath = file.suffix(LzoIndex.LZO_INDEX_SUFFIX);
+        indexOut = fs.create(indexPath, true);
       } else {
         LOG.warn("elephantbird.lzo.output.index is enabled, but LzopCodec "
             + "does not have createIndexedOutputStream method. "
@@ -76,7 +73,7 @@ public class LzoUtils {
         codec.createIndexedOutputStream(fileOut, indexOut) :
         codec.createOutputStream(fileOut) );
 
-    return new DataOutputStream(out) {
+    return new DataOutputStream(out); /*{
       // override close() to handle renaming index file.
 
       public void close() throws IOException {
@@ -94,7 +91,7 @@ public class LzoUtils {
           }
         }
       }
-    };
+    };*/
   }
 
 }

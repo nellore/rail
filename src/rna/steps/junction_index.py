@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """
-Rail-RNA-intron_index
-Follows Rail-RNA-intron_fasta
+Rail-RNA-junction_index
+Follows Rail-RNA-junction_fasta
 Precedes Rail-RNA-realign
 
 Reduce step in MapReduce pipelines that builds a new Bowtie index from the
-FASTA output by RailRNA-intron_fasta.
+FASTA output by RailRNA-junction_fasta.
 
 Input (read from stdin)
 ----------------------------
@@ -16,7 +16,7 @@ Tab-delimited tuple columns:
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
     subsequence sizes framing introns + '\x1d' + comma-separated list of intron
     sizes + '\x1d' + base-36-encoded integer A such that A & sample index != 0
-    iff sample contains intron combo
+    iff sample contains junction combo
 3. Sequence
 
 Input is partitioned by the first column and sorted on the second column to
@@ -35,7 +35,7 @@ A given reference name in the index is in the following format:
     original RNAME + '+' or '-' indicating which strand is the sense
     strand + '\x1d' + start position of sequence + '\x1d' + comma-separated
     list of subsequence sizes framing introns + '\x1d' + comma-separated
-    list of intron sizes.
+    list of junction sizes.
 """
 import os
 import sys
@@ -70,7 +70,7 @@ parser.add_argument(\
          'WORKING DIRECTORY.')
 parser.add_argument(\
     '--basename', type=str, required=False,
-    default='intron',
+    default='junction',
     help='Basename for index to be written')
 parser.add_argument(\
     '--keep-alive', action='store_const', const=True, default=False,
@@ -90,7 +90,7 @@ output_url = Url(args.out) if args.out is not None \
     else Url(os.getcwd())
 # Set up temporary destination
 import tempfile
-temp_dir_path = make_temp_dir(args.scratch)
+temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
 # For deleting temporary directory, even on unexpected exit
 register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 # Set up temporary destination
@@ -169,18 +169,18 @@ else:
                                 % bowtie_build_process.returncode)
 
 # Compress index files
-print >>sys.stderr, 'Compressing intron index...'
-intron_index_filename = args.basename + '.tar.gz'
-intron_index_path = os.path.join(temp_dir_path, intron_index_filename)
+print >>sys.stderr, 'Compressing isofrag index...'
+junction_index_filename = args.basename + '.tar.gz'
+junction_index_path = os.path.join(temp_dir_path, junction_index_filename)
 index_path = os.path.join(temp_dir_path, 'index')
-tar = tarfile.TarFile.gzopen(intron_index_path, mode='w', compresslevel=3)
+tar = tarfile.TarFile.gzopen(junction_index_path, mode='w', compresslevel=3)
 for index_file in os.listdir(index_path):
     tar.add(os.path.join(index_path, index_file), arcname=index_file)
 tar.close()
 # Upload compressed index
 print >>sys.stderr, 'Uploading or copying compressed index...'
 mover = filemover.FileMover(args=args)
-mover.put(intron_index_path, output_url.plus(intron_index_filename))
+mover.put(junction_index_path, output_url.plus(junction_index_filename))
 
-print >>sys.stderr, 'DONE with intron_index.py; in=%d; time=%0.3f s' \
+print >>sys.stderr, 'DONE with junction_index.py; in=%d; time=%0.3f s' \
                         % (input_line_count, time.time() - start_time)

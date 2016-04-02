@@ -5,14 +5,14 @@ Follows Rail-RNA-bed_pre / Rail-RNA-coverage
 TERMINUS: no steps follow.
 
 Reducer for MapReduce pipelines that writes cross-sample tables storing
-coverages of introns, insertions, and deletions across samples.
+coverages of junctions, insertions, and deletions across samples.
 
 Input (read from stdin)
 ----------------------------
 Tab-delimited output tuple columns (collect)
-1. '0' if insertion, '1' if deletion, '2' if intron line, '3'
+1. '0' if insertion, '1' if deletion, '2' if junction line, '3'
     if normalization factor
-2. Number string representing RNAME (+ '+ or -' if intron; same as field 6)
+2. Number string representing RNAME (+ '+ or -' if junction; same as field 6)
     or sample index if field 1 is '3'
 3. Start position (Last base before insertion, first base of deletion,
                     or first base of intron)
@@ -20,7 +20,7 @@ Tab-delimited output tuple columns (collect)
 4. End position (Last base before insertion, last base of deletion (exclusive),
                     or last base of intron (INCLUSIVE))
     or '\x1c' if field 1 is '3'
-5. '+' or '-' indicating which strand is the sense strand for introns,
+5. '+' or '-' indicating which strand is the sense strand for junctions,
    inserted sequence for insertions, or deleted sequence for deletions
    or '\x1c' if field 1 is '3'
 6. Coverage of feature for sample with index N
@@ -37,12 +37,12 @@ None.
 Other output (written to directory specified by command-line parameter --out)
 ----------------------------
 1) Three coverage matrices, each stored in a different TSV file: one is for
-introns, one is for insertions, and one is for deletions. A given element
+junctions, one is for insertions, and one is for deletions. A given element
 (i, j) of a given matrix specifies the number of reads in which the feature
-(intron, insertion, or deletion) i was found in sample j.
+(junction, insertion, or deletion) i was found in sample j.
 
 A feature i is specified as
-RNAME + ';' + strand for introns or inserted sequence for insertions or
+RNAME + ';' + strand for junctions or inserted sequence for insertions or
 deleted sequence for deletions + ';' + start position (last base before
 insertion, first base of deletion, or first base of intron) + ';' +
 end position (last base before insertion, last base of deletion (exclusive), or
@@ -113,9 +113,13 @@ if args.keep_alive:
 import time
 start_time = time.time()
 
-reference_index = bowtie_index.BowtieIndexReference(args.bowtie_idx)
+reference_index = bowtie_index.BowtieIndexReference(
+                        os.path.expandvars(args.bowtie_idx)
+                    )
 # For mapping sample indices back to original sample labels
-manifest_object = manifest.LabelsAndIndices(args.manifest)
+manifest_object = manifest.LabelsAndIndices(
+                        os.path.expandvars(args.manifest)
+                    )
 output_url = Url(args.out) if args.out is not None \
     else Url(os.getcwd())
 input_line_count = 0
@@ -127,7 +131,7 @@ else:
     mover = filemover.FileMover(args=args)
     # Set up temporary destination
     import tempfile
-    temp_dir_path = make_temp_dir(args.scratch)
+    temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
     register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 
 input_line_count = 0

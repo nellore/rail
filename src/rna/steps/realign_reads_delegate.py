@@ -32,8 +32,8 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin,
         are printed. This way, the compare_alignments step always has enough
         information to fill the XS field.
 
-        output_stream: where to emit exon and intron tuples; typically, this is
-            sys.stdout.
+        output_stream: where to emit exon and junction tuples; typically, this
+            is sys.stdout.
         input_stream: where to find input to process
         verbose: True if alignments should occasionally be written to stderr.
         report_multiplier: if verbose is True, the line number of an

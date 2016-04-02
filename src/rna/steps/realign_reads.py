@@ -2,7 +2,7 @@
 """
 Rail-RNA-realign_reads
 
-Follows Rail-RNA-cointron_fasta, Rail-RNA-align_reads
+Follows Rail-RNA-cojunction_fasta, Rail-RNA-align_reads
 Precedes Rail-RNA-compare_alignments
 
 Realignment script for MapReduce pipelines that wraps Bowtie2. Creates Bowtie2
@@ -11,7 +11,7 @@ which Bowtie2 did not report alignments in Rail-RNA-align. Each group of
 input reads (specified by first field below) is associated with a distinct
 set of transcript fragments to which they are aligned. Reference names in
 the index encode intron sizes and locations in the (presmably) exonic
-sequences it records. Exonic chunks and introns are inferred from alignments
+sequences it records. Exonic chunks and junctions are inferred from alignments
 in the next step.
 
 Input (read from stdin)
@@ -27,7 +27,7 @@ Type 1:
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of
     subsequence sizes framing introns + '\x1d' + comma-separated list of intron
     sizes) + '\x1d' + 'p' if derived from primary alignment to genome; 's' if
-    derived from secondary alignment to genome; 'i' if derived from cointron
+    derived from secondary alignment to genome; 'i' if derived from cojunction
     search
 4. FASTA sequence
 
@@ -244,7 +244,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         below) is associated with a distinct set of transcript fragments to
         which they are aligned. Reference names in the index encode intron
         sizes and locations in the (presmably) exonic sequences it records.
-        Exonic chunks and introns are inferred from alignments in the next 
+        Exonic chunks and junctions are inferred from alignments in the next 
         step.
 
         Input (read from stdin)
@@ -258,10 +258,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         3. '\x1c' + FASTA reference name including '>'. The following format is
             used: original RNAME + '+' or '-' indicating which strand is the
             sense strand + '\x1d' + start position of sequence + '\x1d'
-            + comma-separated list of subsequence sizes framing introns
+            + comma-separated list of subsequence sizes framing junctions
             + '\x1d' + comma-separated list of intron sizes) + '\x1d'
             + 'p' if derived from primary alignment to genome; 's' if derived
-            from secondary alignment to genome; 'i' if derived from cointron
+            from secondary alignment to genome; 'i' if derived from cojunction
             search
         4. FASTA sequence
 
@@ -285,7 +285,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
         input_stream: where to find input reads.
-        output_stream: where to emit exonic chunks and introns.
+        output_stream: where to emit exonic chunks and junctions.
         bowtie2_exe: filename of Bowtie executable; include path if not in
             $PATH.
         bowtie2_build_exe: path to bowtie2-build executable
@@ -398,7 +398,7 @@ if __name__ == '__main__':
     parser.add_argument('--test', action='store_const', const=True,
         default=False,
         help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, AND DOES NOT '
-             'WRITE EXONS AND INTRONS TO STDOUT')
+             'WRITE EXONS AND JUNCTIONS TO STDOUT')
     parser.add_argument('--archive', metavar='PATH', type=str, 
         default=None,
         help='Save output and Bowtie command to a subdirectory (named using ' 
@@ -436,7 +436,7 @@ if __name__ == '__main__':
         keep_alive_thread.start()
 
 if __name__ == '__main__' and not args.test:
-    temp_dir_path = make_temp_dir(args.scratch)
+    temp_dir_path = make_temp_dir(tempdel.silentexpandvars(args.scratch))
     archive = os.path.join(args.archive,
         str(os.getpid())) if args.archive is not None else None
     # Handle temporary directory if CTRL+C'd
@@ -444,8 +444,8 @@ if __name__ == '__main__' and not args.test:
     if args.verbose:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path
-    go(bowtie2_exe=args.bowtie2_exe,
-        bowtie2_build_exe=args.bowtie2_build_exe,
+    go(bowtie2_exe=os.path.expandvars(args.bowtie2_exe),
+        bowtie2_build_exe=os.path.expandvars(args.bowtie2_build_exe),
         bowtie2_args=bowtie_args,
         temp_dir_path=temp_dir_path,
         verbose=args.verbose, 

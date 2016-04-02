@@ -1,0 +1,25 @@
+	(28, 10)	(28, 20)	(28-DUP, 40)	(28, 40)	(28, 40)	(28, 40)	(56, 40)	(112, 40)
+Provisioning, bootstrapping, Hadoop setup	40	54	38	48	56	50	45	44
+Align reads and segment them into readlets	207	124	86	74	75	75	117	223
+Align unique readlets to genome	34	18	6	9	9	9	14	24
+Search for introns using readlet alignments	87	52	12	23	23	22	40	70
+Filter out introns that violate confidence criteria	1	58 s	56 s	56 s	54 s	56 s	58 s	1
+Enumerate possible intron cooccurrences on readlets	1	58 s	56 s	56 s	54 s	56 s	58 s	1
+Get isofrags for index construction	54 s	54 s	54 s	52 s	52 s	54 s	54 s	54 s
+Build isofrag index	1	1	1	2	1	1	1	1
+Finalize intron cooccurrences on readlets	92	50	14	27	27	28	29	52
+Get transcriptome elements for read realignment	14	10	3	4	4	4	4	7
+Align reads to transcriptome elements	260	133	62	70	68	69	117	162
+Collect and compare read alignments	76	39	23	19	19	19	34	67
+Associate spliced alignments with intron coverages	8	4	2	2	2	3	4	7
+Finalize primary alignments of spliced reads	6	3	2	2	2	2	2	4
+Write BAMs with alignments by sample	41	23	13	12	12	12	22	41
+Write mapped read counts	40 s	36 s	38 s	36 s	36 s	38 s	36 s	38 s
+Merge exon differentials at same genomic positions	16	9	5	5	5	5	8	17
+Compile sample coverages from exon differentials	9	5	3	3	3	2	4	9
+Write bigWigs with exome coverage by sample	15	10	9	8	8	7	10	16
+Aggregate introns/indels	5	3	2	2	2	2	3	5
+Write normalization factors/introns/indels	1	1	1	1	1	1	1	56 s
+Write BEDs with introns/indels by sample	1	1	1	1	56 s	1	56 s	1
+WCT	917	543	287	315	321	315	459	754
+WCT-B 	877	489	249	267	265	265	414	710

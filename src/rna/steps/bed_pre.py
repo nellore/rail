@@ -4,22 +4,22 @@ Rail-RNA-bed_pre
 Follows Rail-RNA-realign_reads
 Precedes Rail-RNA-bed / Rail-RNA-tsv
 
-Reducer for MapReduce pipelines that sums coverage of indels/introns and
+Reducer for MapReduce pipelines that sums coverage of indels/junctions and
 computes other statistics by sample from Rail-RNA-realign.
 
 Input (read from stdin)
 ----------------------------
 Tab-delimited input tuple columns:
-1. 'I', 'D', or 'N' for insertion, deletion, or intron line
+1. 'I', 'D', or 'N' for insertion, deletion, or junction line
 2. Number string representing RNAME
 3. Start position (Last base before insertion, first base of deletion,
                     or first base of intron)
 4. End position (Last base before insertion, last base of deletion (exclusive),
                     or last base of intron (exclusive))
-5. '+' or '-' indicating which strand is the sense strand for introns,
+5. '+' or '-' indicating which strand is the sense strand for junctions,
    inserted sequence for insertions, or deleted sequence for deletions
 6. Sample index
-----Next fields are for introns only; they are '\x1c' for indels----
+----Next fields are for junctions only; they are '\x1c' for indels----
 7. Number of nucleotides between 5' end of intron and 5' end of read from which
     it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND. That is,
     if the sense strand is the reverse strand, this is the distance between the
@@ -27,7 +27,7 @@ Tab-delimited input tuple columns:
 8. Number of nucleotides between 3' end of intron and 3' end of read from which
     it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
 --------------------------------------------------------------------
-9. Number of instances of intron, insertion, or deletion in sample; this is
+9. Number of instances of junction, insertion, or deletion in sample; this is
     always +1 before bed_pre combiner/reducer
 
 Input is partitioned by fields 1-5 and sorted by field 6.
@@ -35,16 +35,16 @@ Input is partitioned by fields 1-5 and sorted by field 6.
 Hadoop output (written to stdout)
 ----------------------------
 Tab-delimited output tuple columns (bed):
-1. 'I', 'D', or 'N' for insertion, deletion, or intron line
+1. 'I', 'D', or 'N' for insertion, deletion, or junction line
 2. Sample index
-3. Number string representing RNAME (+ '+ or -' if intron; same as field 6)
+3. Number string representing RNAME (+ '+ or -' if junction; same as field 6)
 4. Start position (Last base before insertion, first base of deletion,
                     or first base of intron)
 5. End position (Last base before insertion, last base of deletion (exclusive),
                     or last base of intron (exclusive))
-6. '+' or '-' indicating which strand is the sense strand for introns,
+6. '+' or '-' indicating which strand is the sense strand for junctions,
    inserted sequence for insertions, or deleted sequence for deletions
-----Next fields are for introns only; they are '\x1c' for indels----
+----Next fields are for junctions only; they are '\x1c' for indels----
 7. MAX number of nucleotides between 5' end of intron and 5' end of read from
     which it was inferred, ASSUMING THE SENSE STRAND IS THE FORWARD STRAND.
     That is, if the sense strand is the reverse strand, this is the distance
@@ -56,19 +56,19 @@ Tab-delimited output tuple columns (bed):
    min is between the args above; max is across reads.
 
 Tab-delimited output tuple columns (collect)
-1. '0' if insertion, '1' if deletion, or '2' if intron line
-2. Number string representing RNAME (+ '+ or -' if intron; same as field 6)
+1. '0' if insertion, '1' if deletion, or '2' if junction line
+2. Number string representing RNAME (+ '+ or -' if junction; same as field 6)
 3. Start position (Last base before insertion, first base of deletion,
                     or first base of intron)
 4. End position (Last base before insertion, last base of deletion (exclusive),
                     or last base of intron (INCLUSIVE HERE))
-5. '+' or '-' indicating which strand is the sense strand for introns,
+5. '+' or '-' indicating which strand is the sense strand for junctions,
    inserted sequence for insertions, or deleted sequence for deletions
 6. Coverage of feature for sample with index N
 ...
 N + 6. Coverage of feature in sample with index N
 --------------------------------------------------------------------
-10. SUMMED number of instances of intron, insertion, or deletion in sample
+10. SUMMED number of instances of junction, insertion, or deletion in sample
 
 OUTPUT COORDINATES ARE 1-INDEXED.
 """
@@ -94,22 +94,23 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         sample_fraction=0.05, coverage_threshold=5, verbose=False):
     """ Runs Rail-RNA-bed_pre
 
-        Writes indels and introns for outputting BEDs by sample and
+        Writes indels and junctions for outputting BEDs by sample and
         TSVs across samples.
 
         Input (read from stdin)
         ----------------------------
         Tab-delimited input tuple columns:
-        1. 'I', 'D', or 'N' for insertion, deletion, or intron line
+        1. 'I', 'D', or 'N' for insertion, deletion, or junction line
         2. Number string representing RNAME
         3. Start position (Last base before insertion, first base of deletion,
                             or first base of intron)
         4. End position (Last base before insertion, last base of deletion
                             (exclusive), or last base of intron (exclusive))
-        5. '+' or '-' indicating which strand is the sense strand for introns,
-           inserted sequence for insertions, or deleted sequence for deletions
+        5. '+' or '-' indicating which strand is the sense strand for
+            junctions, inserted sequence for insertions, or deleted sequence
+            for deletions
         6. Sample index
-        ----Next fields are for introns only; they are '\x1c' for indels----
+        ----Next fields are for junctions only; they are '\x1c' for indels----
         7. Number of nucleotides between 5' end of intron and 5' end of read
             from which it was inferred, ASSUMING THE SENSE STRAND IS THE
             FORWARD STRAND. That is, if the sense strand is the reverse strand,
@@ -119,7 +120,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
             from which it was inferred, ASSUMING THE SENSE STRAND IS THE
             FORWARD STRAND.
         --------------------------------------------------------------------
-        9. Number of instances of intron, insertion, or deletion in sample;
+        9. Number of instances of junction, insertion, or deletion in sample;
             this is always +1 before bed_pre combiner/reducer
 
         Input is partitioned by fields 1-5 and sorted by field 6.
@@ -127,17 +128,18 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         Hadoop output (written to stdout)
         ----------------------------
         Tab-delimited output tuple columns (bed):
-        1. 'I', 'D', or 'N' for insertion, deletion, or intron line
+        1. 'I', 'D', or 'N' for insertion, deletion, or junction line
         2. Sample index
-        3. Number string representing RNAME (+ '+ or -' if intron; same as
+        3. Number string representing RNAME (+ '+ or -' if junction; same as
             field 6)
         4. Start position (Last base before insertion, first base of deletion,
                             or first base of intron)
         5. End position (Last base before insertion, last base of deletion
                             (exclusive), or last base of intron (exclusive))
-        6. '+' or '-' indicating which strand is the sense strand for introns,
-           inserted sequence for insertions, or deleted sequence for deletions
-        ----Next fields are for introns only; they are '\x1c' for indels----
+        6. '+' or '-' indicating which strand is the sense strand for
+            junctions, inserted sequence for insertions, or deleted sequence
+            for deletions
+        ----Next fields are for junctions only; they are '\x1c' for indels----
         7. MAX number of nucleotides between 5' end of intron and 5' end of
             read from which it was inferred, ASSUMING THE SENSE STRAND IS THE
             FORWARD STRAND. That is, if the sense strand is the reverse strand,
@@ -152,25 +154,26 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
            min is between the args above; max is across reads.
 
         Tab-delimited output tuple columns (collect)
-        1. '0' if insertion, '1' if deletion, or '2' if intron line
-        2. Number string representing RNAME (+ '+ or -' if intron; same as
+        1. '0' if insertion, '1' if deletion, or '2' if junction line
+        2. Number string representing RNAME (+ '+ or -' if junction; same as
                                                 field 6)
         3. Start position (Last base before insertion, first base of deletion,
                             or first base of intron)
         4. End position (Last base before insertion, last base of deletion
                             (exclusive), or last base of intron (exclusive))
-        5. '+' or '-' indicating which strand is the sense strand for introns,
-           inserted sequence for insertions, or deleted sequence for deletions
+        5. '+' or '-' indicating which strand is the sense strand for
+            junctions, inserted sequence for insertions, or deleted sequence
+            for deletions
         6. Coverage of feature for sample with index N
         ...
         N + 6. Coverage of feature in sample with index N
         --------------------------------------------------------------------
-        10. SUMMED number of instances of intron, insertion, or deletion in
+        10. SUMMED number of instances of junction, insertion, or deletion in
             sample
 
         OUTPUT COORDINATES ARE 1-INDEXED.
 
-        input_stream: where to find input indels/introns
+        input_stream: where to find input indels/junctions
         output_stream: where to write output
         manifest_object: object of class LabelsAndIndices that maps indices
             to labels and back; used to count number of samples.
@@ -207,7 +210,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                                                 ):
                 sample_index = int(sample_index)
                 while i != sample_index:
-                    # Write 0 coverage for sample indexes reporting 0 introns
+                    # Write 0 coverage for sample indexes reporting 0 junctions
                     coverages.append(0)
                     i += 1
                 coverage_sum = 0
@@ -337,7 +340,9 @@ if __name__ == '__main__':
 
 if __name__ == '__main__' and not args.test:
     start_time = time.time()
-    manifest_object = manifest.LabelsAndIndices(args.manifest)
+    manifest_object = manifest.LabelsAndIndices(
+                                os.path.expandvars(args.manifest)
+                            )
     input_line_count, output_line_count = go(
             manifest_object=manifest_object,
             input_stream=sys.stdin,
@@ -377,7 +382,7 @@ elif __name__ == '__main__':
                 )
             with open(self.manifest_file, 'w') as manifest_stream:
                 manifest_stream.write(manifest_content)
-            introns_and_indels = (
+            junctions_and_indels = (
                     'I\t000000000000\t140\t140\tATAC\t0\t\x1c\t\x1c\t6\n'
                     'I\t000000000000\t140\t140\tATAC\t0\t\x1c\t\x1c\t6\n'
                     'I\t000000000002\t170\t170\tCT\t1\t\x1c\t\x1c\t4\n'
@@ -388,9 +393,9 @@ elif __name__ == '__main__':
             '''Above, for a coverage_threshold 5 and a sample_fraction 0.5,
             the first insertion should be kept, the second insertion
             (third line) should be filtered out, the deletion should be kept,
-            and the intron must be kept; introns are not filtered.'''
+            and the junction must be kept; junctions are not filtered.'''
             with open(self.input_file, 'w') as output_stream:
-                output_stream.write(introns_and_indels)
+                output_stream.write(junctions_and_indels)
             manifest_object = manifest.LabelsAndIndices(self.manifest_file)
             with open(self.input_file) as input_stream, \
                 open(self.output_file, 'w') as output_stream:

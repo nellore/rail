@@ -1,0 +1,429 @@
+
+R version 3.2.0 Patched (2015-04-29 r68274) -- "Full of Ingredients"
+Copyright (C) 2015 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> ####
+> 
+> library('derfinder')
+Creating a generic function for ‘nchar’ from package ‘base’ in package ‘S4Vectors’
+> library('GenomicRanges')
+Loading required package: BiocGenerics
+Loading required package: parallel
+
+Attaching package: ‘BiocGenerics’
+
+The following objects are masked from ‘package:parallel’:
+
+    clusterApply, clusterApplyLB, clusterCall, clusterEvalQ,
+    clusterExport, clusterMap, parApply, parCapply, parLapply,
+    parLapplyLB, parRapply, parSapply, parSapplyLB
+
+The following object is masked from ‘package:stats’:
+
+    xtabs
+
+The following objects are masked from ‘package:base’:
+
+    anyDuplicated, append, as.data.frame, as.vector, cbind, colnames,
+    do.call, duplicated, eval, evalq, Filter, Find, get, intersect,
+    is.unsorted, lapply, Map, mapply, match, mget, order, paste, pmax,
+    pmax.int, pmin, pmin.int, Position, rank, rbind, Reduce, rep.int,
+    rownames, sapply, setdiff, sort, table, tapply, union, unique,
+    unlist, unsplit
+
+Loading required package: S4Vectors
+Loading required package: stats4
+Loading required package: IRanges
+Loading required package: GenomeInfoDb
+> library('devtools')
+> library('RColorBrewer')
+> library('limma')
+
+Attaching package: ‘limma’
+
+The following object is masked from ‘package:BiocGenerics’:
+
+    plotMA
+
+> 
+> ### phenotype data
+> pd = read.delim("GD667.QCstats.masterfile.txt",	 as.is=TRUE)
+> pd = pd[,1:37]
+> 
+> # ## Load matching IDs
+> load("/dcs01/ajaffe/Brain/derRuns/railDER/railGEU/fixSampleNames/pMatch.Rdata")
+> pd$RailID = pMatch$railName[match(rownames(pd), pMatch$bgName)]
+> 
+> ## Load regions data
+> load("/dcs01/ajaffe/Brain/derRuns/railDER/resub/regionMatrix/regionMat-cut5.Rdata")
+> regions = unlist(GRangesList(lapply(regionMat, '[[', 'regions')))
+> coverageMatrix = do.call("rbind", lapply(regionMat, '[[', 'coverageMatrix'))
+> coverageMatrix = coverageMatrix[,pd$RailID] # put in order
+> 
+> #################
+> #### analysis ###
+> 
+> ## expressed region 
+> load("/home/epi/ajaffe/GenomicStates/GenomicState.Hsapiens.ensembl.GRCh37.p12.rda")
+> gs = GenomicState.Hsapiens.ensembl.GRCh37.p12$fullGenome
+> ensemblAnno = annotateRegions(regions,gs)
+2015-08-08 11:05:35 annotateRegions: counting
+2015-08-08 11:05:37 annotateRegions: annotating
+> save(ensemblAnno, file = 'ensemblAnno.Rdata')
+> # load('ensemblAnno.Rdata')
+> countTable = ensemblAnno$countTable
+> 
+> ## annotation ####
+> dim(countTable)
+[1] 285695      3
+> annoClassList = list(strictExonic = 
++ 	which(countTable[,"exon"] > 0 & countTable[,"intron"] == 0 &
++ 		countTable[,"intergenic"] == 0),
++ 	strictIntronic = 
++ 	which(countTable[,"intron"] > 0 & countTable[,"exon"] == 0 &
++ 		countTable[,"intergenic"] == 0),
++ 	strictIntergenic = which(countTable[,"intergenic"] > 0 & countTable[,"exon"] == 0 &
++     countTable[,"intron"] == 0),
++ 	exonIntron = which(countTable[,"exon"] > 0 & countTable[,"intron"] > 0 &
++ 		countTable[,"intergenic"] == 0))
+> sapply(annoClassList, length)
+    strictExonic   strictIntronic strictIntergenic       exonIntron 
+          151581            72367            19649            39784 
+> 100*sapply(annoClassList, length)/nrow(countTable)
+    strictExonic   strictIntronic strictIntergenic       exonIntron 
+       53.056931        25.330160         6.877614        13.925340 
+> 
+> quantile(width(regions))
+   0%   25%   50%   75%  100% 
+    1     7    70   145 18159 
+> 
+> sapply(annoClassList, function(ii) quantile(width(regions[ii])))
+     strictExonic strictIntronic strictIntergenic exonIntron
+0%              1              1                1          1
+25%            21              2                3         76
+50%            93              9               15        132
+75%           155             37               71        269
+100%        18159           9172             8543      15636
+> 
+> ## Venn diagram: code modified from limma::vennDiagram
+> vennDiagram_custom <- function (object, include = "both", names = NULL, 
++     mar = rep(1, 4), cex = c(1.5, 1, 0.7), lwd = 1, circle.col = NULL,
++     counts.col = NULL, text.col = NULL, ...) 
++ {
++     include <- as.character(include)
++     LenInc <- min(length(include), 2)
++     if (is(object, "VennCounts")) {
++         include <- include[1]
++         LenInc <- 1
++     }
++     else {
++         if (LenInc > 1) 
++             z2 <- vennCounts(object, include = include[2])[, 
++                 "Counts"]
++         object <- vennCounts(object, include = include[1])
++     }
++     z <- object[, "Counts"]
++     nsets <- ncol(object) - 1
++     if (nsets > 5) 
++         stop("Can't plot Venn diagram for more than 5 sets")
++     VennZone <- object[, 1:nsets, drop = FALSE]
++     VennZone <- apply(VennZone, 1, function(x) paste(x, sep = "", 
++         collapse = ""))
++     names(z) <- VennZone
++     if (length(include) == 2) 
++         names(z2) <- VennZone
++     if (is.null(names)) 
++         names <- colnames(object)[1:nsets]
++     FILL.COL <- TRUE
++     if (is.null(circle.col)) {
++         circle.col <- par("col")
++         FILL.COL <- FALSE
++     }
++     if (length(circle.col) < nsets) 
++         circle.col <- rep(circle.col, length.out = nsets)
++     if (is.null(counts.col)) 
++         counts.col <- par("col")
++     if (length(counts.col) < LenInc) 
++         counts.col <- rep(counts.col, length.out = LenInc)
++     if(is.null(text.col)) text.col <- rep('black', switch(nsets, counts.col[1], counts.col[1], 8))
++     old.par <- par()$mar
++     on.exit(par(mar = old.par))
++     par(mar = mar)
++     if (nsets <= 3) {
++         plot(x = 0, y = 0, type = "n", xlim = c(-4, 4), ylim = c(-4, 
++             4), xlab = "", ylab = "", axes = FALSE, ...)
++             
++         theta <- 2 * pi * (0:360)/360
++         xcentres <- switch(nsets, 0, c(-1, 1), c(-1, 1, 0))
++         ycentres <- switch(nsets, 0, c(0, 0), c(1, 1, -2)/sqrt(3))
++         r <- 2
++         xtext <- switch(nsets, -1.2, c(-1.2, 1.2), c(-1.2, 1.2, 
++             0))
++         ytext <- switch(nsets, 1.8, c(1.8, 1.8), c(3, 3, 
++             -3.5))
++         for (circle in 1:nsets) {
++             if (!FILL.COL) 
++                 lines(xcentres[circle] + r * cos(theta), ycentres[circle] + 
++                   r * sin(theta), lwd = lwd, col = circle.col[circle])
++             if (FILL.COL) {
++                 RGB <- col2rgb(circle.col[circle])/255
++                 ALPHA <- 0.06
++                 RGB.ALP <- rgb(RGB[1, 1], RGB[2, 1], RGB[3, 1], 
++                   alpha = ALPHA)
++                 polygon(xcentres[circle] + r * cos(theta), ycentres[circle] + 
++                   r * sin(theta), border = circle.col[circle], 
++                   lwd = lwd, col = RGB.ALP)
++             }
++             text(xtext[circle], ytext[circle], names[circle], 
++                 cex = cex * 1.3, col = circle.col[circle])
++         }
++         switch(nsets, rect(-3, -2.5, 3, 2.5), rect(-3, -2.5, 
++             3, 2.5), rect(-3.9, -3.9, 3.9, 3.9))
++         showCounts <- switch(nsets, function(counts, cex, adj, 
++             col, leg) {
++             text(2.3, -2.1, counts[1], cex = cex, col = col, 
++                 adj = adj)
++             text(0, 0, counts[2], cex = cex, col = col, adj = adj)
++         }, function(counts, cex, adj, col, leg) {
++             text(2.3, -2.1, counts[1], cex = cex, col = col, 
++                 adj = adj)
++             text(1.5, 0.1, counts[2], cex = cex, col = col, adj = adj)
++             text(-1.5, 0.1, counts[3], cex = cex, col = col, 
++                 adj = adj)
++             text(0, 0.1, counts[4], cex = cex, col = col, adj = adj)
++         }, function(counts, cex, adj, col, leg) {
++             text(3, -3, counts[1], cex = cex, col = col[1], adj = adj)
++             text(0, -2.2, counts[2], cex = cex * 1.5, col = col[2], adj = adj)
++             text(2, 1, counts[3], cex = cex * 1.5, col = col[3], adj = adj)
++             text(1.3, -0.5, counts[4], cex = cex, col = col[4], 
++                 adj = adj)
++             text(-2, 1, counts[5], cex = cex * 1.5, col = col[5], adj = adj)
++             text(-1.3, -0.5, counts[6], cex = cex * 1.3, col = col[6], 
++                 adj = adj)
++             text(0, 1.3, counts[7], cex = cex, col = col[7], adj = adj)
++             text(0, 0, counts[8], cex = cex, col = col[8], adj = adj)
++         })
++         if (LenInc == 1) 
++             adj <- c(0.5, 0.5)
++         else adj <- c(0.5, 0)
++         showCounts(counts = z, cex = cex[1], adj = adj, col = text.col, 
++             leg = include[1])
++         return(invisible())
++     }
++ }
+> 
+> 
+> 
+> pdf('ensemblVenn.pdf', width = 10, height = 10)
+> venn_col <- brewer.pal(7, "Dark2")[c(1, 3, 2, 4)]
+> vennDiagram_custom(vennCounts(countTable > 0), 
++     main = 'Expressed Regions overlap with Ensembl v75 features', cex.main = 2,
++     circle.col = venn_col[1:3], lwd = 1.5, cex = 2, mar = c(0, 0, 2, 0),
++     text.col = c('black', venn_col[3:2], 'black', venn_col[c(1, 4)], 'black',
++         'black')#, oma = rep(0, 4), pty = 'm'
++ )
+> dev.off()
+null device 
+          1 
+> 
+> #################################
+> ###### reproduce their figure ###
+> 
+> ### joint modeling ####
+> y = log2(coverageMatrix+1)
+> colnames(y) = rownames(pd)
+> sumSqList = parallel::mclapply(1:nrow(y), function(i) {
++ 	if(i %% 1000 == 0) cat(".")
++ 	t(anova(lm(y[i,] ~ Population + RIN + RNAExtractionBatch + 
++ 		RNAConcentration_ng.ul + RNAQuantityLibraryPrep_ng + 
++ 		LibraryPrepDate + PrimerIndex + LibraryConcentrationMethod + 
++ 		LibraryConcentration_ng.ul + BioanalyzerSize_bp + 
++ 		LibraryQuantitySequencing_pM + ClusterKitBatch + 
++ 		SequencingKitBatch + ClusterDensityPass + Lane, data=pd))[2])
++ },mc.cores=12)
+.............................................................................................................................................................................................................................................................................................> 
+> ssOut = do.call("rbind", sumSqList)
+> rownames(ssOut) = NULL
+> bg = matrix(rep(rowSums(ssOut), ncol(ssOut)), 
++ 	nc = ncol(ssOut),nrow = nrow(ssOut))
+> ssMat= ssOut / bg
+> lab = c("Population", "RIN value", "RNA extraction batch",
++ 	"RNA concentration", "RNA quantity used",
++ 	"Library preparation date", "Primer index",
++ 	"Method concentration measure", "Library concentration",
++ 	"Library size", "Library concentration used","Cluster kit",
++ 	"Sequencing kit", "Cluster density", "Lane", "Residual variation")
+> save(ssMat, lab, file="ssMat_geuvadis.rda",compress=TRUE)
+> 
+> # load("ssMat_geuvadis.rda")
+> 
+> ## overall boxplot
+> pdf("r2_boxplots_overall.pdf", h = 5, w = 12)
+> par(mar=c(9,5,2,2))
+> palette(brewer.pal(7, "Dark2"))
+> boxplot(100*ssMat,xaxt="n", ylim = c(0,90), 
++ 	cex.axis=1.3,cex.lab=1.1, range=2,
++ 	ylab="Percentage variance explained", cex=0.5)
+> text(1:ncol(ssMat)+0.2, y = -8, lab, xpd=TRUE, srt=45, pos=2)
+> text(x = 8.5, y= 80, "All Regions", cex=1.7)
+> for(i in seq(along=annoClassList)) {
++ 	ii= annoClassList[[i]]
++ 	boxplot(100*ssMat[ii,],xaxt="n", ylim = c(0,90), 
++ 		cex.axis=1.3,cex.lab=1.1,range=2, col = i,
++ 		ylab="Percentage variance explained", cex=0.5)
++ 	text(1:ncol(ssMat)+0.1, y = -8, lab, xpd=TRUE, srt=45, pos=2)
++ 	text(x = 8.5, y= 80, names(annoClassList)[i], cex=1.7)
++ }
+> dev.off()
+null device 
+          1 
+> 
+> ## Without population term
+> sumSqList2 = parallel::mclapply(1:nrow(y), function(i) {
++ 	if(i %% 1000 == 0) cat(".")
++ 	t(anova(lm(y[i,] ~ RIN + RNAExtractionBatch + 
++ 		RNAConcentration_ng.ul + RNAQuantityLibraryPrep_ng + 
++ 		LibraryPrepDate + PrimerIndex + LibraryConcentrationMethod + 
++ 		LibraryConcentration_ng.ul + BioanalyzerSize_bp + 
++ 		LibraryQuantitySequencing_pM + ClusterKitBatch + 
++ 		SequencingKitBatch + ClusterDensityPass + Lane, data=pd))[2])
++ }, mc.cores=12)
+.............................................................................................................................................................................................................................................................................................> 
+> ssOut2 = do.call("rbind", sumSqList2)
+> rownames(ssOut2) = NULL
+> bg2 = matrix(rep(rowSums(ssOut2), ncol(ssOut2)), 
++ 	nc = ncol(ssOut2),nrow = nrow(ssOut2))
+> ssMat2 = ssOut2 / bg2
+> lab2 = c("RIN value", "RNA extraction batch",
++ 	"RNA concentration", "RNA quantity used",
++ 	"Library preparation date", "Primer index",
++ 	"Method concentration measure", "Library concentration",
++ 	"Library size", "Library concentration used","Cluster kit",
++ 	"Sequencing kit", "Cluster density", "Lane", "Residual variation")
+> save(ssMat2, lab2, file="ssMat_geuvadis_noPop.rda", compress=TRUE)
+> 
+> ## overall boxplot no pop
+> pdf("r2_boxplots_overall_noPop.pdf", h = 5, w = 12)
+> par(mar=c(9,5,2,2))
+> palette(brewer.pal(7, "Dark2"))
+> boxplot(100*ssMat2,xaxt="n", ylim = c(0,90), 
++ 	cex.axis=1.3,cex.lab=1.1, range=2,
++ 	ylab="Percentage variance explained", cex=0.5)
+> text(1:ncol(ssMat2)+0.2, y = -8, lab2, xpd=TRUE, srt=45, pos=2)
+> text(x = 8.5, y= 80, "All Regions", cex=1.7)
+> for(i in seq(along=annoClassList)) {
++ 	ii= annoClassList[[i]]
++ 	boxplot(100*ssMat2[ii,],xaxt="n", ylim = c(0,90), 
++ 		cex.axis=1.3,cex.lab=1.1,range=2, col = i,
++ 		ylab="Percentage variance explained", cex=0.5)
++ 	text(1:ncol(ssMat2)+0.1, y = -8, lab2, xpd=TRUE, srt=45, pos=2)
++ 	text(x = 8.5, y= 80, names(annoClassList)[i], cex=1.7)
++ }
+> dev.off()
+null device 
+          1 
+> 
+> ## Reproducibility info
+> Sys.time() # date generated
+[1] "2015-08-08 11:24:22 EDT"
+> options(width = 120)
+> session_info()
+Session info -----------------------------------------------------------------------------------------------------------
+ setting  value                                      
+ version  R version 3.2.0 Patched (2015-04-29 r68274)
+ system   x86_64, linux-gnu                          
+ ui       X11                                        
+ language (EN)                                       
+ collate  en_US.UTF-8                                
+ tz       <NA>                                       
+
+Packages ---------------------------------------------------------------------------------------------------------------
+ package           * version  date       source        
+ acepack           * 1.3-3.3  2014-11-24 CRAN (R 3.2.0)
+ AnnotationDbi     * 1.30.1   2015-04-27 Bioconductor  
+ Biobase           * 2.28.0   2015-04-18 Bioconductor  
+ BiocGenerics        0.14.0   2015-04-18 Bioconductor  
+ BiocParallel      * 1.2.9    2015-07-11 Bioconductor  
+ biomaRt           * 2.24.0   2015-04-18 Bioconductor  
+ Biostrings        * 2.36.2   2015-08-06 Bioconductor  
+ bitops            * 1.0-6    2013-08-17 CRAN (R 3.2.0)
+ bumphunter        * 1.8.0    2015-04-18 Bioconductor  
+ cluster           * 2.0.1    2015-01-31 CRAN (R 3.2.0)
+ codetools         * 0.2-11   2015-03-10 CRAN (R 3.2.0)
+ colorspace        * 1.2-6    2015-03-11 CRAN (R 3.2.0)
+ DBI               * 0.3.1    2014-09-24 CRAN (R 3.2.0)
+ derfinder           1.2.0    2015-04-20 Bioconductor  
+ derfinderHelper   * 1.2.0    2015-04-20 Bioconductor  
+ devtools            1.7.0    2015-01-17 CRAN (R 3.2.0)
+ digest            * 0.6.8    2014-12-31 CRAN (R 3.2.0)
+ doRNG             * 1.6      2014-03-07 CRAN (R 3.2.0)
+ foreach           * 1.4.2    2014-04-11 CRAN (R 3.2.0)
+ foreign           * 0.8-63   2015-02-20 CRAN (R 3.2.0)
+ Formula           * 1.2-1    2015-04-07 CRAN (R 3.2.0)
+ futile.logger     * 1.4.1    2015-04-20 CRAN (R 3.2.0)
+ futile.options    * 1.0.0    2010-04-06 CRAN (R 3.2.0)
+ GenomeInfoDb        1.4.1    2015-06-19 Bioconductor  
+ GenomicAlignments * 1.4.1    2015-04-25 Bioconductor  
+ GenomicFeatures   * 1.20.1   2015-05-08 Bioconductor  
+ GenomicFiles      * 1.4.0    2015-04-20 Bioconductor  
+ GenomicRanges       1.20.5   2015-06-10 Bioconductor  
+ ggplot2           * 1.0.1    2015-03-17 CRAN (R 3.2.0)
+ gridExtra         * 2.0.0    2015-07-14 CRAN (R 3.2.0)
+ gtable            * 0.1.2    2012-12-05 CRAN (R 3.2.0)
+ Hmisc             * 3.16-0   2015-04-30 CRAN (R 3.2.0)
+ IRanges             2.2.6    2015-08-07 Bioconductor  
+ iterators         * 1.0.7    2014-04-11 CRAN (R 3.2.0)
+ lambda.r          * 1.1.7    2015-03-20 CRAN (R 3.2.0)
+ lattice           * 0.20-31  2015-03-30 CRAN (R 3.2.0)
+ latticeExtra      * 0.6-26   2013-08-15 CRAN (R 3.2.0)
+ limma               3.24.15  2015-08-07 Bioconductor  
+ locfit            * 1.5-9.1  2013-04-20 CRAN (R 3.2.0)
+ magrittr          * 1.5      2014-11-22 CRAN (R 3.2.0)
+ MASS              * 7.3-40   2015-03-21 CRAN (R 3.2.0)
+ Matrix            * 1.2-0    2015-04-04 CRAN (R 3.2.0)
+ matrixStats       * 0.14.2   2015-06-24 CRAN (R 3.2.0)
+ munsell           * 0.4.2    2013-07-11 CRAN (R 3.2.0)
+ nnet              * 7.3-9    2015-02-11 CRAN (R 3.2.0)
+ pkgmaker          * 0.22     2014-05-14 CRAN (R 3.2.0)
+ plyr              * 1.8.3    2015-06-12 CRAN (R 3.2.0)
+ proto             * 0.3-10   2012-12-22 CRAN (R 3.2.0)
+ qvalue            * 2.0.0    2015-04-18 Bioconductor  
+ RColorBrewer        1.1-2    2014-12-07 CRAN (R 3.2.0)
+ Rcpp              * 0.12.0   2015-07-25 CRAN (R 3.2.0)
+ RCurl             * 1.95-4.7 2015-06-30 CRAN (R 3.2.0)
+ registry          * 0.3      2015-07-08 CRAN (R 3.2.0)
+ reshape2          * 1.4.1    2014-12-06 CRAN (R 3.2.0)
+ rngtools          * 1.2.4    2014-03-06 CRAN (R 3.2.0)
+ rpart             * 4.1-9    2015-02-24 CRAN (R 3.2.0)
+ Rsamtools         * 1.20.4   2015-06-02 Bioconductor  
+ RSQLite           * 1.0.0    2014-10-25 CRAN (R 3.2.0)
+ rstudioapi        * 0.3.1    2015-04-07 CRAN (R 3.2.0)
+ rtracklayer       * 1.28.7   2015-08-07 Bioconductor  
+ S4Vectors           0.6.3    2015-08-01 Bioconductor  
+ scales            * 0.2.5    2015-06-12 CRAN (R 3.2.0)
+ stringi           * 0.5-5    2015-06-29 CRAN (R 3.2.0)
+ stringr           * 1.0.0    2015-04-30 CRAN (R 3.2.0)
+ survival          * 2.38-1   2015-02-24 CRAN (R 3.2.0)
+ XML               * 3.98-1.3 2015-06-30 CRAN (R 3.2.0)
+ xtable            * 1.7-4    2014-09-12 CRAN (R 3.2.0)
+ XVector           * 0.8.0    2015-04-18 Bioconductor  
+ zlibbioc          * 1.14.0   2015-04-18 Bioconductor  
+> 
+> proc.time()
+     user    system   elapsed 
+12135.706    31.255  1192.829 

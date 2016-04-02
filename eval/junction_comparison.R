@@ -44,24 +44,6 @@ jMapRail$code = ifelse(jMapRail$inEnsembl, "InEns",
 	ifelse(jMapRail$inEnsemblStart & jMapRail$inEnsemblEnd, "NovelTrans",
 	ifelse(jMapRail$inEnsemblStart | jMapRail$inEnsemblEnd, "NovelJxn", "NewJxn")))
 
-######## novel transcripts #######
-## gene ranges ###################
-jList = split(theJunctions, theJunctions$ensemblID)
-geneRanges = unlist(range(jList))
-geneRanges = geneRanges[order(geneRanges)]
-
-oo = findOverlaps(jMapRail, geneRanges,maxgap=100)
-jRailList = CharacterList(split(jMapRail$code[queryHits(oo)], 
-	names(geneRanges)[subjectHits(oo)]))
-jRailTab = as.data.frame(sapply(unique(jMapRail$code), 
-	function(x) sum(jRailList == x)))
-jRailTab$Symbol = theJunctions$symbol[
-	match(rownames(jRailTab), theJunctions$ensemblID)]
-
-write.csv(jRailTab, file="junctionBreakdown_byLocusRange.csv")
-
-#### any genes with many novel transcripts?
-	
 	
 ###### compare #####	
 length(jMapTop)	# number of jxns
@@ -71,7 +53,65 @@ topFilter = rowMeans(jCountTop > 0) > 0.05 |
 	rowSums(jCountTop > 4) > 0
 mean(topFilter)
 
-### proportion table
+######## novel transcripts #######
+## gene ranges ###################
+jList = split(theJunctions, theJunctions$ensemblID)
+geneRanges = unlist(range(jList))
+geneRanges = geneRanges[order(geneRanges)]
+geneRanges$coordRange = paste0(seqnames(geneRanges), ":",
+	start(geneRanges), "-", end(geneRanges))
+hla = GRanges("chr6", IRanges(29691116,33054976)) ## hla region
+geneRanges$inHLA = countOverlaps(geneRanges, hla) > 0
+
+## check rail
+jMapRailHi = jMapRail[jMapRail$meanReads > 10]
+oo = findOverlaps(jMapRailHi, geneRanges)
+jRailList = CharacterList(split(jMapRailHi$code[queryHits(oo)], 
+	names(geneRanges)[subjectHits(oo)]))
+jRailTab = as.data.frame(sapply(unique(jMapRailHi$code), 
+	function(x) sum(jRailList == x)))
+jRailTab$Symbol = theJunctions$symbol[
+	match(rownames(jRailTab), theJunctions$ensemblID)]
+jRailTab$Coords = geneRanges$coordRange[match(rownames(jRailTab), names(geneRanges))]
+jRailTab$inHLA = geneRanges$inHLA[match(rownames(jRailTab), names(geneRanges))]
+
+## pseudogene
+pseudo = read.delim("/nexsan2/disk3/ajaffe/RNASeq/PseudoPipeHuman61.txt",
+	as.is=TRUE)[,-22]
+jRailTab$hasPseudo = rownames(jRailTab) %in% pseudo$Parent.Gene
+write.csv(jRailTab, file="junctionBreakdown_byLocusRange.csv")
+	
+#### any genes with many novel transcripts?
+jRailTab2 = jRailTab[order(jRailTab$NovelTrans,decreasing=TRUE),]	
+mean(jRailTab2$hasPseudo[1:50])
+# jRailTab2 = jRailTab2[!is.na(jRailTab2$Symbol),]
+mean(jRailTab2$inHLA[1:50])
+hlaRailIndex = grep("HLA", jRailTab2$Symbol)
+jRailTab2[hlaRailIndex,]
+
+## tophat results	
+jMapTopHi = jMapTop[topFilter & jMapTop$meanReads > 10]
+oo = findOverlaps(jMapTopHi, geneRanges)
+jTopList = CharacterList(split(jMapTopHi$code[queryHits(oo)], 
+	names(geneRanges)[subjectHits(oo)]))
+jTopTab = as.data.frame(sapply(unique(jMapRailHi$code), 
+	function(x) sum(jTopList == x)))
+jTopTab$Symbol = theJunctions$symbol[
+	match(rownames(jTopTab), theJunctions$ensemblID)]
+jTopTab$Coords = geneRanges$coordRange[match(rownames(jTopTab), names(geneRanges))]
+jTopTab$inHLA = geneRanges$inHLA[match(rownames(jTopTab), names(geneRanges))]
+jTopTab$hasPseudo = rownames(jTopTab) %in% pseudo$Parent.Gene
+
+#### any genes with many novel transcripts?
+jTopTab2 = jTopTab[order(jTopTab$NovelTrans,decreasing=TRUE),]	
+mean(jTopTab2$inHLA[1:50])
+jTopTab2 = jTopTab2[!is.na(jTopTab2$Symbol),]
+head(jTopTab2, 25)
+hlaTopIndex =  grep("HLA", jTopTab2$Symbol)
+
+
+############################
+### proportion table #######
 tabOut = rbind(table(jMapTop$code),
 	table(jMapTop$code[topFilter]),
 	table(jMapRail$code))

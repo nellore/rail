@@ -15,11 +15,10 @@ load("/dcl01/lieber/ajaffe/derRuns/railDER/railGEU/fixSampleNames/pMatch.Rdata")
 pd$RailID = pMatch$railName[match(rownames(pd), pMatch$bgName)]
 
 ## Load regions data
-load("/dcl01/lieber/ajaffe/derRuns/railDER/railGEU/fixSampleNames/regions.Rdata")
-load("/dcl01/lieber/ajaffe/derRuns/railDER/railGEU/fixSampleNames/coverageMatrix.Rdata")
-
-### filter to the same set of people ####
-coverageMatrix = coverageMatrix[,pd$RailID]
+load("/dcl01/lieber/ajaffe/derRuns/railDER/resub/regionMatrix/regionMat-cut5.Rdata")
+regions = unlist(GRangesList(lapply(regionMat, '[[', 'regions')))
+coverageMatrix = do.call("rbind", lapply(regionMat, '[[', 'coverageMatrix'))
+coverageMatrix = coverageMatrix[,pd$RailID] # put in order
 
 #################
 #### analysis ###
@@ -46,6 +45,10 @@ annoClassList = list(strictExonic =
 		countTable[,"intergenic"] == 0))
 sapply(annoClassList, length)
 100*sapply(annoClassList, length)/nrow(countTable)
+
+quantile(width(regions))
+
+sapply(annoClassList, function(ii) quantile(width(regions[ii])))
 
 ## Venn diagram: code modified from limma::vennDiagram
 vennDiagram_custom <- function (object, include = "both", names = NULL, 

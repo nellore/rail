@@ -8,7 +8,7 @@ Precedes Rail-RNA-align_readlets, Rail-RNA-collapse, Rail-RNA-realign, and
 
 Alignment script for MapReduce pipelines that wraps Bowtie. Obtains exonic 
 chunks from end-to-end alignments. Outputs sequences that do not align for
-readletizing and, later, intron inference.
+readletizing and, later, junction inference.
 
 Input (read from stdin)
 ----------------------------
@@ -97,7 +97,7 @@ Tab-delimited output tuple columns:
                     (exclusive))
 5. Inserted sequence for insertions or deleted sequence for deletions'
 6. Sample index
-----Next fields are for introns only; they are '\x1c' for indels----
+----Next fields are for junctions only; they are '\x1c' for indels----
 7. '\x1c'
 8. '\x1c'
 --------------------------------------------------------------------
@@ -139,7 +139,7 @@ Standard 11+ -column raw SAM output
 Single column (unique):
 1. A unique read sequence
 
-Two columns, exactly one line (dummy); ensures creation of intron index:
+Two columns, exactly one line (dummy); ensures creation of junction index:
 1. character "-"
 2. the word "dummy"
 
@@ -189,7 +189,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     """ Runs Rail-RNA-align_reads.
 
         A single pass of Bowtie is run to find end-to-end alignments. Unmapped
-        reads are saved for readletizing to determine introns in sucessive
+        reads are saved for readletizing to determine junctions in sucessive
         reduce steps as well as for realignment in a later map step.
 
         Input (read from stdin)
@@ -285,7 +285,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                             (exclusive))
         5. Inserted sequence for insertions or deleted sequence for deletions
         6. Sample index
-        ----Next fields are for introns only; they are '\x1c' for indels----
+        ----Next fields are for junctions only; they are '\x1c' for indels----
         7. '\x1c'
         8. '\x1c'
         --------------------------------------------------------------------
@@ -328,7 +328,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         Single column (unique):
         1. A unique read sequence
 
-        Two columns, exactly one line (dummy); ensures creation of intron
+        Two columns, exactly one line (dummy); ensures creation of junction
             index:
         1. character "-"
         2. the word "dummy"
@@ -336,7 +336,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         ALL OUTPUT COORDINATES ARE 1-INDEXED.
 
         input_stream: where to find input reads.
-        output_stream: where to emit exonic chunks and introns.
+        output_stream: where to emit exonic chunks and junctions.
         bowtie2_exe: filename of Bowtie2 executable; include path if not in
             $PATH.
         bowtie_index_base: the basename of the Bowtie1 index files associated
@@ -355,11 +355,12 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         report_multiplier: if verbose is True, the line number of an alignment
             or read written to stderr increases exponentially with base
             report_multiplier.
-        min_exon_size: minimum exon size searched for in intron_search.py later
-            in pipeline; used to determine how large a soft clip on one side of
-            a read is necessary to pass it on to intron search pipeline
+        min_exon_size: minimum exon size searched for in junction_search.py
+            later in pipeline; used to determine how large a soft clip on one
+            side of a read is necessary to pass it on to junction search
+            pipeline
         search_filter: how large a soft clip on one side of a read is necessary
-            to pass it on to intron search pipeline
+            to pass it on to junction search pipeline
         min_readlet_size: "capping" readlets (that is, readlets that terminate
             at a given end of the read) are never smaller than this value
         max_readlet_size: size of every noncapping readlet
@@ -388,13 +389,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         No return value.
     """
     global _input_line_count
-    # Required length of prefix after poly(A) is trimmed
-    remaining_seq_size = max(min_exon_size - 1, 1)
-    polyA_set = frozenset(
-            ['A'*i for i in xrange(1, remaining_seq_size+1)]
-            + ['T'*i for i in xrange(1, remaining_seq_size+1)]
-            + ['']
-        )
     reference_index = bowtie_index.BowtieIndexReference(bowtie_index_base)
     manifest_object = manifest.LabelsAndIndices(manifest_file)
     alignment_printer = AlignmentPrinter(
@@ -425,14 +419,23 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     second_pass_file = os.path.join(temp_dir, 'second_pass_reads.temp.gz')
     k_value, _, _ = bowtie.parsed_bowtie_args(bowtie2_args)
     nothing_doing = True
+    # Required length of prefix after poly(A) is trimmed
+    remaining_seq_size = max(min_exon_size - 1, 1)
     with xopen(True, align_file, 'w', gzip_level) as align_stream, \
         xopen(True, other_reads_file, 'w', gzip_level) as other_stream:
         for seq_number, ((seq,), xpartition) in enumerate(
                                                         xstream(sys.stdin, 1)
                                                     ):
+            seq_length = len(seq)
             if no_polyA and (
-                    seq[:-remaining_seq_size] in polyA_set
-                    or seq[remaining_seq_size:] in polyA_set
+                    all(seq[i] == 'A' 
+                         for i in xrange(seq_length - remaining_seq_size))
+                    or all(seq[i] == 'T' 
+                         for i in xrange(remaining_seq_size, seq_length))
+                    or all(seq[i] == 'A' 
+                         for i in xrange(remaining_seq_size, seq_length))
+                    or all(seq[i] == 'T' 
+                         for i in xrange(seq_length - remaining_seq_size))
                 ):
                 if not no_realign:
                     '''If a sequence is too short without its poly(A) tail,
@@ -670,11 +673,11 @@ if __name__ == '__main__':
         help='Print exon intervals')
     parser.add_argument('--min-exon-size', type=int, required=False,
         default=8,
-        help='Minimum size of exons searched for in intron_search.py')
+        help='Minimum size of exons searched for in junction_search.py')
     parser.add_argument('--search-filter', type=int, required=False,
         default=1,
         help=('Minimum size of soft-clipped end that dispatches a read for '
-              'intron search'))
+              'junction search'))
     parser.add_argument('--min-readlet-size', type=int, required=False,
         default=15, 
         help='Capping readlets (that is, readlets that terminate '
@@ -735,11 +738,11 @@ if __name__ == '__main__':
         keep_alive_thread.start()
 
     start_time = time.time()
-    go(bowtie2_exe=args.bowtie2_exe,
-        bowtie_index_base=args.bowtie_idx,
-        bowtie2_index_base=args.bowtie2_idx,
+    go(bowtie2_exe=os.path.expandvars(args.bowtie2_exe),
+        bowtie_index_base=os.path.expandvars(args.bowtie_idx),
+        bowtie2_index_base=os.path.expandvars(args.bowtie2_idx),
         bowtie2_args=bowtie_args,
-        manifest_file=args.manifest,
+        manifest_file=os.path.expandvars(args.manifest),
         verbose=args.verbose, 
         bin_size=args.partition_length,
         exon_differentials=args.exon_differentials,
@@ -753,7 +756,7 @@ if __name__ == '__main__':
         capping_multiplier=args.capping_multiplier,
         drop_deletions=args.drop_deletions,
         gzip_level=args.gzip_level,
-        scratch=args.scratch,
+        scratch=tempdel.silentexpandvars(args.scratch),
         index_count=args.index_count,
         output_bam_by_chr=args.output_bam_by_chr,
         tie_margin=args.tie_margin,

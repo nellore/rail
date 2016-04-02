@@ -87,12 +87,16 @@ from dooplicity.ansibles import Url
 from dooplicity.tools import xopen, register_cleanup, make_temp_dir
 import filemover
 import tempdel
+import subprocess
 from guess import phred_converter
 from encode import encode, encode_sequence
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 _input_line_count, _output_line_count = 0, 0
+
+# Maximum length of read to ignore if dealing with barcodes
+_max_stubby_read_length = 10
 
 '''Set Bowtie 2's default quality-based mismatch penalties; see
 http://bowtie-bio.sourceforge.net/bowtie2/manual.shtml#bowtie2-options-mp
@@ -108,8 +112,8 @@ def qname_from_read(qname, seq, sample_label, mate=None):
         New QNAME takes the form:
             <qname> + '\x1d'
             + <short hash of original_qname + seq + sample label> + 
-            comma character + base 36-encoded mate sequence if present, else
-            blank
+            colon character + (base 36-encoded mate sequence if present else
+            blank)
             '\x1d'
             + <sample_label>
 
@@ -131,10 +135,25 @@ def qname_from_read(qname, seq, sample_label, mate=None):
                     ':', encode_sequence(mate) if mate is not None else '',
                     '\x1d', sample_label])
 
+def max_min_read_lengths_from_fastq_stream(fastq_stream):
+    """ Grabs maximum and minimum read lengths from a FASTQ stream.
+
+        fastq_stream: input fastq stream
+
+        Return value: tuple (max read length, min read length)
+    """
+    max_len, min_len = 0, 1000000000
+    for i, line in enumerate(fastq_stream):
+        if (i - 1) % 4 == 0:
+            max_len = max(max_len, len(line.strip()))
+            min_len = min(min_len, len(line.strip()))
+    return max_len, min_len
+
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         to_stdout=False, push='.', mover=filemover.FileMover(),
         verbose=False, scratch=None, bin_qualities=True, short_qnames=False,
-        skip_bad_records=False):
+        skip_bad_records=False, workspace_dir=None,
+        fastq_dump_exe='fastq-dump', ignore_missing_sra_samples=False):
     """ Runs Rail-RNA-preprocess
 
         Input (read from stdin)
@@ -212,6 +231,11 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             should be written in a short base64-encoded format
         skip_bad_records: True iff bad records should be skipped; otherwise,
             raises exception if bad record is encountered
+        workspace_dir: where to use fastq-dump -- needed for working with
+            dbGaP data. None if temporary dir should be used.
+        fastq_dump_exe: path to fastq-dump executable
+        ignore_missing_sra_samples: does not return error if fastq-dump doesn't
+            find a sample
 
         No return value
     """
@@ -244,6 +268,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             """
             return qual
     global _input_line_count, _output_line_count
+    skip_stubs = False
     temp_dir = make_temp_dir(scratch)
     print >>sys.stderr, 'Created local destination directory "%s".' % temp_dir
     register_cleanup(tempdel.remove_temporary_directories, [temp_dir])
@@ -260,6 +285,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
     fastq_cues = set(['@'])
     fasta_cues = set(['>', ';'])
     source_dict = {}
+    onward = False
     for line in sys.stdin:
         _input_line_count += 1
         if not line.strip(): continue
@@ -302,7 +328,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                                         int(read_counts[i])
                                                     )
         elif token_count == 3:
-            # Single-end reads
+            # SRA or single-end reads
             source_dict[(Url(tokens[0]),)] = (tokens[-1],)
         elif token_count == 5:
             # Paired-end reads
@@ -344,13 +370,132 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 # Download
                 print >>sys.stderr, 'Retrieving URL "%s"...' \
                     % source_url.to_url()
-                mover.get(source_url, temp_dir)
-                downloaded = list(
-                        set(os.listdir(temp_dir)).difference(downloaded)
-                    )
-                sources.append(os.path.join(temp_dir, list(downloaded)[0]))
+                if source_url.is_dbgap:
+                    download_dir = workspace_dir
+                elif source_url.is_sra:
+                    download_dir = temp_dir
+                if source_url.is_sra:
+                    sra_accession = source_url.to_url()
+                    fastq_dump_command = (
+                            'set -exo pipefail; cd {download_dir}; '
+                            '{fastq_dump_exe} -I -X 10000 --split-files '
+                            '{sra_accession}'
+                        ).format(download_dir=download_dir,
+                                    fastq_dump_exe=fastq_dump_exe,
+                                    sra_accession=sra_accession)
+                    try:
+                        subprocess.check_call(
+                            fastq_dump_command, shell=True, 
+                            executable='/bin/bash',
+                            stdout=sys.stderr
+                        )
+                    except subprocess.CalledProcessError as e:
+                        if e.returncode == 3 and ignore_missing_sra_samples:
+                            onward = True
+                            break
+                        else:
+                            raise RuntimeError(
+                                ('Error "%s" encountered executing '
+                                 'command "%s".') % (e.output,
+                                                        fastq_dump_command))
+                    import glob
+                    sra_fastq_files = sorted(
+                                        glob.glob(os.path.join(download_dir,
+                                            '%s[_.]*' % sra_accession))
+                                        ) # ensure 1 before 2 if paired-end
+                    # Schedule for deletion
+                    def silent_remove(filename):
+                        try:
+                            os.remove(filename)
+                        except OSError as e:
+                            pass
+                    for sra_fastq_file in sra_fastq_files:
+                        register_cleanup(silent_remove, sra_fastq_file)
+                    sra_file_count = len(sra_fastq_files)
+                    check_for_paired = False
+                    if sra_file_count == 1:
+                        sra_paired_end = False
+                        print >>sys.stderr, 'Detected single-end SRA sample.'
+                    elif sra_file_count in [2, 3]:
+                        print >>sys.stderr, ('2 or 3 FASTQ files detected. '
+                                             'Checking for barcodes...')
+                        check_for_paired = True
+                    else:
+                        raise RuntimeError(
+                                ('Unexpected number of files "%d" output '
+                                 'by fastq-dump command "%s".')
+                                    % (sra_file_count, fastq_dump_command)
+                            )
+                    if check_for_paired:
+                        # Get max/min read lengths from FASTQ
+                        with open(
+                                    sra_fastq_files[sra_file_count - 2]
+                                ) as fastq_stream:
+                            max_len, min_len = (
+                                    max_min_read_lengths_from_fastq_stream(
+                                        fastq_stream
+                                    )
+                                )
+                            print >>sys.stderr, (
+                                    'Max/min read length found in candidate '
+                                    'barcode FASTQ was {}/{}.'
+                                ).format(max_len, min_len)
+                            if max_len <= _max_stubby_read_length:
+                                print >>sys.stderr, (
+                                        'Assumed barcode FASTQ.'
+                                    )
+                                skip_stubs = True
+                                if sra_file_count == 2:
+                                    sra_paired_end = False
+                                else:
+                                    sra_paired_end = True
+                            else:
+                                if sra_file_count == 2:
+                                    sra_paired_end = True
+                                else:
+                                    raise RuntimeError(
+                                        '3 FASTQs detected, but one of them '
+                                        'was not recognized as containing '
+                                        'barcodes.'
+                                    )
+                    # Guess quality from first 10k lines
+                    with xopen(None, sra_fastq_files[0]) as source_stream:
+                        qual_getter = phred_converter(
+                                            fastq_stream=source_stream
+                                        )
+                    for sra_fastq_file in sra_fastq_files:
+                        os.remove(sra_fastq_file)
+                    sources.append(os.devnull)
+                    fastq_dump_command = (
+                            'set -exo pipefail; cd {download_dir}; '
+                            '{fastq_dump_exe} --split-spot -I --stdout '
+                            '{sra_accession}'
+                        ).format(download_dir=download_dir,
+                                    fastq_dump_exe=fastq_dump_exe,
+                                    sra_accession=sra_accession)
+                    if skip_stubs:
+                        fastq_dump_command += (
+                                ' | awk \'BEGIN {{OFS = "\\n"}} '
+                                '{{header = $0; '
+                                'getline seq; getline qheader; getline qseq; '
+                                'if (length(seq) > {min_len}) {{print header, '
+                                'seq, qheader, qseq}}}}\''
+                            ).format(min_len=_max_stubby_read_length)
+                    print >>sys.stderr, fastq_dump_command
+                    sra_process = subprocess.Popen(fastq_dump_command,
+                                                    shell=True,
+                                                    executable='/bin/bash',
+                                                    stdout=subprocess.PIPE,
+                                                    bufsize=-1)
+                else:
+                    mover.get(source_url, temp_dir)
+                    downloaded = list(
+                            set(os.listdir(temp_dir)).difference(downloaded)
+                        )
+                    sources.append(os.path.join(temp_dir, list(downloaded)[0]))
             else:
                 sources.append(source_url.to_url())
+        if onward: continue
         '''Use os.devnull so single- and paired-end data can be handled in one
         loop.'''
         if len(sources) == 1:
@@ -363,6 +508,13 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 None, sources[1]
             ) as source_stream_2:
             source_streams = [source_stream_1, source_stream_2]
+            reorganize = all([source == os.devnull for source in sources])
+            if reorganize:
+                # SRA data is live
+                if sra_paired_end:
+                    source_streams = [sra_process.stdout, sra_process.stdout]
+                else:
+                    source_streams = [sra_process.stdout, open(os.devnull)]
             break_outer_loop = False
             while True:
                 if not to_stdout:
@@ -471,6 +623,16 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                             for source_stream
                                             in source_streams]
                             line_numbers = [i + 1 for i in line_numbers]
+                            quals = [source_stream.readline().strip()
+                                        for source_stream in source_streams]
+                            if reorganize and sra_paired_end:
+                                # Fix order!
+                                lines, seqs, plus_lines, quals = (
+                                        [lines[0], plus_lines[0]],
+                                        [lines[1], plus_lines[1]],
+                                        [seqs[0], quals[0]],
+                                        [seqs[1], quals[1]]
+                                    )
                             try:
                                 assert plus_lines[0][0] == '+', (
                                         'Malformed read "%s" at line %d of '
@@ -513,9 +675,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             else:
                                 try:
                                     quals = [
-                                        qual_getter(
-                                            source_stream.readline().strip()
-                                          ) for source_stream in source_streams
+                                            qual_getter(qual) for qual in quals
                                         ]
                                 except Exception as e:
                                     if skip_bad_records:
@@ -546,89 +706,72 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                     else:
                                         raise
                         elif lines[0][0] in fasta_cues:
-                            if records_to_consume and not skipped:
-                                '''Skip lines as necessary; for paired-end
-                                reads skip the largest even number of records 
-                                less than records_to_consume.'''
-                                if len(source_urls) == 1:
-                                    # single-end
-                                    line_skip_count = max(
-                                            skip_count * 2 - 1, 0
-                                        )
-                                else:
-                                    # paired-end
-                                    line_skip_count = max(
-                                            ((skip_count / 2) * 2 - 1), 0
-                                        )
-                                    for _ in xrange(line_skip_count):
-                                        next(source_stream_2)
-                                for _ in xrange(line_skip_count):
-                                    next(source_stream_1)
-                                if skip_count:
-                                    lines = []
-                                    for source_stream in source_streams:
-                                        lines.append(source_stream.readline())
-                                    if not lines[0]:
-                                        break_outer_loop = True
-                                        break
-                                    lines = [line.strip() for line in lines]
-                                skipped = True
-                            original_qnames, seqs, quals, lines = []*4
-                            for i, source_stream in enumerate(source_streams):
-                                next_line = source_stream.readline()
-                                if not next_line: break
-                                line_numbers[i] += 1
-                                while next_line[0] == ';':
-                                    # Skip comment lines
-                                    next_line = source_stream.readline()
-                                    line_numbers[i] += 1
-                                try:
+                            seqs = [[], []]
+                            next_lines = []
+                            for p, source_stream in enumerate(source_streams):
+                                while True:
+                                    next_line \
+                                        = source_stream.readline().strip()
                                     try:
-                                        # Kill spaces in name
-                                        original_qnames.append(
-                                                line[1:].replace(' ', '_')
-                                            )
+                                        if next_line[0] in fasta_cues:
+                                            break
+                                        else:
+                                            try:
+                                                seqs[p].append(next_line)
+                                            except IndexError:
+                                                raise
                                     except IndexError:
-                                        raise RuntimeError(
-                                            ('No QNAME for read '
-                                             'above line %d in file "%s".') % (
-                                                            line_numbers[i],
-                                                            sources[i]
-                                                        ) 
+                                        break
+                                next_lines.append(next_line)
+                            seqs = [''.join(seq) for seq in seqs]
+                            line_numbers = [i + 1 for i in line_numbers]
+                            try:
+                                try:
+                                    # Kill spaces in name
+                                    original_qnames = \
+                                        [line[1:].replace(' ', '_')
+                                            for line in lines]
+                                except IndexError:
+                                    raise RuntimeError(
+                                            'Error finding QNAME at ' 
+                                            'line %d of either %s or %s' % (
+                                                        sources[0],
+                                                        sources[1]
+                                                    )
                                         )
-                                    assert next_line[0] not in fasta_cues, (
-                                            'No read sequence for read named '
-                                            '"%s" above line %d in file "%s".'
-                                        ) % (
-                                            original_qnames[i],
-                                            line_numbers[i],
-                                            sources[i]
-                                        )
-                                except (IndexError, 
-                                        RuntimeError, AssertionError) as e:
+                            except (AssertionError,
+                                    IndexError, RuntimeError) as e:
+                                if skip_bad_records:
+                                    print >>sys.stderr, ('Error "%s" '
+                                            'encountered; skipping bad record.'
+                                        ) % e.message
+                                    for source_stream in source_streams:
+                                        source_stream.readline()
+                                    line_numbers = [
+                                            i + 1 for i in line_numbers
+                                        ]
+                                    bad_record_skip = True
+                                else:
+                                    raise
+                            else:
+                                try:
+                                    quals = [
+                                        'h'*len(seq) for seq in seqs
+                                        ]
+                                except Exception as e:
                                     if skip_bad_records:
                                         print >>sys.stderr, (
-                                                'Error "%s" encountered; '
+                                                'Error "%s" encountered '
+                                                'trying to convert quality '
+                                                'string to Sanger format; '
                                                 'skipping bad record.'
                                             ) % e.message
-                                        while next_line[0] not in fasta_cues:
-                                            next_line \
-                                                = source_stream.readline()
-                                            line_numbers[i] += 1
-                                        lines.append(next_line)
-                                        read_next_line = False
                                         bad_record_skip = True
                                     else:
                                         raise
-                                read_lines = []
-                                while next_line[0] not in fasta_cues:
-                                    read_lines.append(next_line.strip())
-                                    next_line = source_stream.readline()
-                                    line_numbers[i] += 1
-                                seqs.append(''.join(read_lines))
-                                quals.append('I'*len(seqs[-1]))
-                                lines.append(next_line)
-                                read_next_line = False
+                                line_numbers = [i + 1 for i in line_numbers]
+                            lines = next_lines
+                            read_next_line = False
                         if bad_record_skip:
                             seqs = []
                             # Fake record-printing to get to records_to_consume
@@ -781,6 +924,15 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 os.remove(os.path.join(temp_dir, input_file))
             except OSError:
                 pass
+        if 'sra_process' in locals():
+            sra_process.stdout.close()
+            sra_return_code = sra_process.wait()
+            if sra_return_code > 0:
+                raise RuntimeError(('fastq-dump terminated with exit '
+                                    'code %d. Command run was "%s".')
+                                        % (sra_return_code,
+                                            fastq_dump_command))
+            del sra_process
 
 if __name__ == '__main__':
     import argparse
@@ -820,6 +972,21 @@ if __name__ == '__main__':
               '"bad" could mean that the quality sequence length does '
               'not match the read length or the record is not in the '
               'proper format'))
+    parser.add_argument(
+            '--workspace-dir', required=False, 
+            default=None,
+            help='Path to SRA Tools workspace directory; needed if '
+                 'downloading dbGaP data'
+        )
+    parser.add_argument(
+            '--fastq-dump-exe', required=False, 
+            default='fastq-dump',
+            help='Path to fastq-dump executable'
+        )
+    parser.add_argument('--ignore-missing-sra-samples', action='store_const',
+        const=True, default=False,
+        help='Does not raise exception if fastq-dump doesn\'t find an SRA '
+             'sample; instead, sample is skipped')
     parser.add_argument('--verbose', action='store_const', const=True,
         default=False,
         help='Print out extra debugging statements')
@@ -842,8 +1009,12 @@ if __name__ == '__main__':
         bin_qualities=args.bin_qualities,
         short_qnames=args.shorten_read_names,
         skip_bad_records=args.skip_bad_records,
+        scratch=tempdel.silentexpandvars(args.scratch),
         verbose=args.verbose,
-        mover=mover)
+        mover=mover,
+        workspace_dir=args.workspace_dir,
+        fastq_dump_exe=args.fastq_dump_exe,
+        ignore_missing_sra_samples=args.ignore_missing_sra_samples)
     print >>sys.stderr, 'DONE with preprocess.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (_input_line_count, _output_line_count,
                             time.time() - start_time)

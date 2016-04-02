@@ -4,10 +4,33 @@
 # Cost per sample including provisioning and bootstrap is estimated by rounding up 3rd column to the nearest # hours and charging ($0.11/instance/hr (spot price upper bound) + $0.105/instance/hr (EMR surcharge)). Result is rounded up to the nearest cent.
 # Note that the first column is off by 1 from the number of instances reserved; there's always one additional master instance.
 c3.2xlarge instance count - 1	geuvadis sample count	wall clock running time (min; including provisioning and bootstrap)	wall clock running time (min; excluding provisioning and bootstrap)	cost per sample (including provisioning and bootstrap)
-40	112	754	711	$1.02
+40	112	754	710	$1.02
 40	56	459	414	$1.26
 40	28	315	265	$1.89
 40  28	321	265	$1.89
 40  28	315	267	$1.89
-20	28	543	490	$1.62
+20	28	543	489	$1.62
 10	28	917	877	$1.36
+
+Preprocessing times and costs
+c3.2xlarge instance count - 1	geuvadis sample count	wall clock running time (min; including provisioning and bootstrap)	cost per sample
+20	28	63	$0.32
+20	56	74	$0.16
+20	112	134	$0.12
+
+All-of-GEUVADIS run
+used 61 c3.8xlarges including the master instance. bid price: $0.35/instance + $0.27/instance EMR surcharge
+wall clock running time, including provisioning and bootstrap: 15 hours, 47 minutes
+cost per sample: $0.91
+total cost: $605.12
+
+preprocessing all of GEUVADIS:
+21 c3.2xlarges at $0.11/hour + $0.105/hour
+wall clock running time, including provisioning and bootstrap: 7 hours, 29 minutes
+cost per sample: $0.05
+total cost: $36.12
+
+28-DUP experiment:
+41 c3.2xlarge instances at $0.11/hour + $0.105/hour
+wall-clock time: 287 min
+wall-clock time, excluding provisioning and bootstrap: 266 min
