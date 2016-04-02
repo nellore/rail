@@ -11,12 +11,12 @@ pd = read.delim("GD667.QCstats.masterfile.txt",	 as.is=TRUE)
 pd = pd[,1:37]
 
 # ## Load matching IDs
-load("/dcs01/ajaffe/Brain/derRuns/railDER/railGEU/fixSampleNames/pMatch.Rdata")
+load("/dcl01/lieber/ajaffe/derRuns/railDER/railGEU/fixSampleNames/pMatch.Rdata")
 pd$RailID = pMatch$railName[match(rownames(pd), pMatch$bgName)]
 
 ## Load regions data
-load("/dcs01/ajaffe/Brain/derRuns/railDER/railGEU/fixSampleNames/regions.Rdata")
-load("/dcs01/ajaffe/Brain/derRuns/railDER/railGEU/fixSampleNames/coverageMatrix.Rdata")
+load("/dcl01/lieber/ajaffe/derRuns/railDER/railGEU/fixSampleNames/regions.Rdata")
+load("/dcl01/lieber/ajaffe/derRuns/railDER/railGEU/fixSampleNames/coverageMatrix.Rdata")
 
 ### filter to the same set of people ####
 coverageMatrix = coverageMatrix[,pd$RailID]

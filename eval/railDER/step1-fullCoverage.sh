@@ -12,13 +12,13 @@ SHORT="fullCov-${EXPERIMENT}"
 CORES=10
 
 # Directories
-ROOTDIR=/dcs01/ajaffe/Brain/derRuns/railDER
+ROOTDIR=/dcl01/lieber/ajaffe/derRuns/railDER
 MAINDIR=${ROOTDIR}/${EXPERIMENT}
 WDIR=${MAINDIR}/CoverageInfo
 
 if [[ "${EXPERIMENT}" == "railGEU" ]]
 then
-    DATADIR=/dcs01/ajaffe/Brain/derRuns/railDER/bigwig
+    DATADIR=/dcl01/lieber/ajaffe/derRuns/railDER/bigwig
     CUTOFF=5
 elif [[ "${EXPERIMENT}" == "resub" ]]
 then

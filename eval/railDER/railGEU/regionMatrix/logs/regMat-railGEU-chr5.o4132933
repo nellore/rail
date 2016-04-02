@@ -19,7 +19,7 @@ Type 'demo()' for some demos, 'help()' for on-line help, or
 'help.start()' for an HTML browser interface to help.
 Type 'q()' to quit R.
 
-> maindir <- '/dcs01/ajaffe/Brain/derRuns/railDER/railGEU'; cutoff <- 5; readLen <- 75; chr <- 'chr5'; source('/dcs01/ajaffe/Brain/derRuns/railDER/step6-regionMatrix.R')
+> maindir <- '/dcl01/lieber/ajaffe/derRuns/railDER/railGEU'; cutoff <- 5; readLen <- 75; chr <- 'chr5'; source('/dcl01/lieber/ajaffe/derRuns/railDER/step6-regionMatrix.R')
 > 
 > 
 **** Job ends ****

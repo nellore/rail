@@ -9,7 +9,7 @@ EXPERIMENT=$1
 SHORT="regMat-${EXPERIMENT}"
 
 # Directories
-ROOTDIR=/dcs01/ajaffe/Brain/derRuns/railDER
+ROOTDIR=/dcl01/lieber/ajaffe/derRuns/railDER
 MAINDIR=${ROOTDIR}/${EXPERIMENT}
 WDIR=${MAINDIR}/regionMatrix
 
