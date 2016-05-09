@@ -39,6 +39,7 @@ Make it easy to run a consistent analysis across many datasets at once.
 
 * `src` -- Executable directory; entry point for Rail
 * `src/dooplicity` -- Dooplicity!
+* `src/dooplicity/tests` -- End-to-end tests for Dooplicity
 * `src/rail/core` -- Rail 
     * Generic aspects of driver & installer
 * `src/rail/steps` -- scripts to drive individual map or reduce steps in Rail-*
@@ -47,6 +48,7 @@ Make it easy to run a consistent analysis across many datasets at once.
     * Steps & stretches may be included in many different lines.  E.g. `src/steps/coverage` might be used in both RNA and ChIP lines
 * `src/rail/lines`
     * Assay-specific workflows, e.g. `src/rail/lines/rna`
+* `src/rail/tests` -- end-to-end tests for Rail
 
 ## Testing Dooplicity
 
@@ -70,13 +72,22 @@ for i in `find . -name '*.py'` ; do python $i --test ; done
 
 Could be disguised as unit tests so that above command also runs stretch tests.  E.g. `src/rail/steps/coverage/test_coverage.py` with tests for the `coverage` stretch and no other functionality.
 
-### Line tests
+### End-to-end tests
 
 The tutorial is the closest thing to an end-to-end test.
 
 * See `rail/ex` and docs.rail.bio repo
 
 But there's no real check being done on the output.
+
+## Counters
+
+Counters are an important debugging asset.  Currently, Dooplicity does not recognize or compile counters.  Suggestions for adding counters:
+
+* Counters and logging and keepalive all tied together?
+* Counters periodically flushed in coordination with keepalive
+* Counters finally flushed using Python atexit
+* Up-to-date thread-local counters maintained in an object that "gets passed around" so that unit tests can interrogate how a specific function updated the counters 
 
 ## TODO
 
@@ -86,4 +97,5 @@ But there's no real check being done on the output.
 * Dooplicity unit tests
 * Rail step unit tests
 * Rail stretch tests
+* Logger/Counters
 * Possibly relegate `eval` to separate repo
