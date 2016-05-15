@@ -519,47 +519,36 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             while True:
                 if not to_stdout:
                     '''Name files using Hadoop task environment property
-                    mapred.task.partition.'''
+                    mapred.task.partition, and tack ".gz" onto output filename
+                    and gzip compression level onto arguments passed to opener
+                    as appropriate.'''
                     if gzip_output:
-                        try:
-                            output_file = os.path.join(
-                                    destination, 
-                                    '.'.join([
-                                        os.environ['mapred_task_partition'],
-                                        str(file_number), 'gz'
-                                    ])
-                                )
-                        except KeyError:
-                            '''Hadoop 2.x: mapreduce.task.partition; see 
-                            http://hadoop.apache.org/docs/r2.0.3-alpha/
-                            hadoop-project-dist/hadoop-common/
-                            DeprecatedProperties.html.'''
-                            output_file = os.path.join(
-                                    destination, 
-                                    '.'.join([
-                                        os.environ['mapreduce_task_partition'],
-                                        str(file_number), 'gz'
-                                    ])
-                                )
-                        open_args = [output_file, 'a', gzip_level]
+                        filename_suffix = '.gz'
+                        open_args_suffix = [gzip_level]
                     else:
-                        try:
-                            output_file = os.path.join(
-                                    destination, 
-                                    '.'.join([
-                                        os.environ['mapred_task_partition'],
-                                        str(file_number)
-                                    ])
-                                )
-                        except KeyError:
-                            output_file = os.path.join(
-                                    destination, 
-                                    '.'.join([
-                                        os.environ['mapreduce_task_partition'],
-                                        str(k), str(file_number)
-                                    ])
-                                )
-                        open_args = [output_file, 'a']
+                        filename_suffix = ''
+                        open_args_suffix = []
+                    try:
+                        output_file = os.path.join(
+                                destination, 
+                                '.'.join([
+                                    os.environ['mapred_task_partition'],
+                                    str(file_number)
+                                ]) + filename_suffix
+                            )
+                    except KeyError:
+                        '''Hadoop 2.x: mapreduce.task.partition; see 
+                        http://hadoop.apache.org/docs/r2.0.3-alpha/
+                        hadoop-project-dist/hadoop-common/
+                        DeprecatedProperties.html.'''
+                        output_file = os.path.join(
+                                destination, 
+                                '.'.join([
+                                    os.environ['mapreduce_task_partition'],
+                                    str(file_number)
+                                ]) + filename_suffix
+                            )
+                    open_args = [output_file, 'a'] + open_args_suffix
                     try:
                         os.makedirs(os.path.dirname(output_file))
                     except OSError:
@@ -652,10 +641,10 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                             for line in lines]
                                 except IndexError:
                                     raise RuntimeError(
-                                            'Error finding QNAME at ' 
-                                            'line %d of either %s or %s' % (
-                                                        sources[0],
-                                                        sources[1]
+                                            'Read name not found at ' 
+                                            'line %d of %s.' % (
+                                                        line_numbers[0],
+                                                        sources
                                                     )
                                         )
                             except (AssertionError,
