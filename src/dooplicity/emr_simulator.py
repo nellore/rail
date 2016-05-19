@@ -222,11 +222,62 @@ def parsed_keys(partition_options, key_fields):
         )
         return partitioned_key
 
+def cleanup(file_, is_dir=False, override_DONT_CLEANUP=False, try_file_remove=False):
+    DONT_CLEANUP=False
+    if DONT_CLEANUP:
+        return
+    try:
+        if is_dir:
+            shutil.rmtree(file_)
+        else:
+            os.remove(file_)
+    except OSError:
+        if try_file_remove and is_dir:
+            try:
+                os.remove(file_)
+            except OSError:
+                pass
+        pass
+
+def cleanup_glob(glob_, glob_forsure=False, override_DONT_CLEANUP=False):
+    DONT_CLEANUP=False
+    if DONT_CLEANUP:
+        return
+    if not glob_forsure:
+        try:
+            os.remove(glob_)
+            return
+        except OSError:
+            pass
+    # Not a file; treat as dir
+    for detritus in glob.iglob(
+                    os.path.join(glob_, '*')
+                ):
+        if detritus[-4:] != '.log':
+            try:
+                os.remove(detritus)
+            except OSError:
+                # Not a file
+                try:
+                    shutil.rmtree(detritus)
+                except OSError:
+                    # Phantom; maybe user deleted it
+                    pass                
+
+
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, partition_options, task_count,
                     memcap, gzip=False, gzip_level=3, scratch=None,
                     direct_write=False, sort='sort', mod_partition=False,
                     max_attempts=4):
+    import inspect
+    import tempfile
+    import os
+    args1 = inspect.getargvalues(inspect.currentframe())
+    all_args = "_".join(map(lambda x: "%s:%s" % (x,str(args1.locals[x])),args1.args))
+    with os.fdopen(tempfile.mkstemp(prefix="presorted_tasks.",dir="./")[0],"w") as f:
+        f.write("%s\n" % (all_args))
+    
     """ Partitions input data into tasks and presorts them.
 
         Files in output directory are in the format x.y, where x is a task
@@ -377,7 +428,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                     unsorted_file, e.returncode,
                                     sort_command))
                 finally:
-                    os.remove(unsorted_file)
+                    cleanup(unsorted_file, override_DONT_CLEANUP=True)
         else:
             for unsorted_file in glob.glob(os.path.join(
                                                     output_dir,
@@ -406,7 +457,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                     unsorted_file, e.returncode,
                                     sort_command))
                 finally:
-                    os.remove(unsorted_file)
+                    cleanup(unsorted_file, override_DONT_CLEANUP=True)
         return None
     except Exception:
         # Uncaught miscellaneous exception
@@ -435,7 +486,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             os.path.join(root, filename),
                             os.path.join(destination, filename)
                         )
-            shutil.rmtree(output_dir)
+            cleanup(output_dir,is_dir=True)
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
@@ -677,7 +728,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                             os.path.join(root, filename),
                             os.path.join(destination, filename)
                         )
-            shutil.rmtree(output_dir)
+            cleanup(output_dir,is_dir=True)
 
 def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
@@ -832,7 +883,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     step_runner_with_error_return=\
                         step_runner_with_error_return,
                     presorted_tasks=presorted_tasks,
-                    parsed_keys=parsed_keys
+                    parsed_keys=parsed_keys,
+                    cleanup=cleanup,
+                    cleanup_glob=cleanup_glob
                 ))
             iface.step('Loaded dependencies on IPython engines.')
             # Get host-to-engine and engine pids relations
@@ -1463,16 +1516,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             )
                         failed = True
                         raise RuntimeError
-                    try:
-                        os.remove(destination_path)
-                    except OSError:
-                        pass
+                    cleanup(destination_path, override_DONT_CLEANUP=True)
                 iface.step('Cached %s.' % file_or_archive_basename)
                 try:
                     yield temp_dir
                 finally:
                     # Cleanup
-                    shutil.rmtree(temp_dir)
+                    cleanup(temp_dir,is_dir=True)
         # Serialize JSON configuration
         if json_config is not None:
             with open(json_config) as json_stream:
@@ -1622,15 +1672,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         marked_intermediates.add(step_input)
         # Create intermediate directories
         for step in steps:
-            try:
-                shutil.rmtree(steps[step]['output'])
-            except OSError:
-                # May be a file then
-                try:
-                    os.remove(steps[step]['output'])
-                except OSError:
-                    # Just didn't exist
-                    pass
+            cleanup(steps[step]['output'], is_dir=True, override_DONT_CLEANUP=True, try_file_remove=True)
             try:
                 os.makedirs(steps[step]['output'])
             except OSError:
@@ -1903,98 +1945,40 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         )
             # Really close open file handles in PyPy
             gc.collect()
+
             if not keep_intermediates:
                 iface.status('    Deleting temporary files...')
                 # Kill NLineInput files if they're there
                 try:
-                    shutil.rmtree(split_input_dir)
-                except (NameError, OSError):
+                    cleanup(split_input_dir,is_dir=True)
+                except NameError:
                     pass
-                try:
-                    # Intermediate map output should be deleted if it exists
-                    shutil.rmtree(
-                                os.path.join(
-                                        step_data['output'], 'dp.map'
-                                    )
-                            )
-                except OSError:
-                    pass
-                try:
-                    # Remove dp.tasks directory
-                    shutil.rmtree(
-                            os.path.join(step_data['output'], 'dp.tasks')
-                        )
-                except OSError:
-                    pass
+                # Intermediate map output should be deleted if it exists
+                cleanup(os.path.join(step_data['output'], 'dp.map'),
+                            is_dir=True)
+                cleanup(os.path.join(step_data['output'], 'dp.tasks'),
+                            is_dir=True)
                 for to_remove in post_step_cleanups[step_number]:
                     if to_remove not in all_outputs:
                         '''Remove directory only if it's an -output of some
                         step and an -input of another step.'''
                         continue
                     if os.path.isfile(to_remove):
-                        try:
-                            os.remove(to_remove)
-                        except OSError:
-                            pass
+                        cleanup(to_remove)
                     elif os.path.isdir(to_remove):
-                        for detritus in glob.iglob(
-                                            os.path.join(to_remove, '*')
-                                        ):
-                            if detritus[-4:] != '.log':
-                                try:
-                                    os.remove(detritus)
-                                except OSError:
-                                    try:
-                                        shutil.rmtree(detritus)
-                                    except OSError:
-                                        pass
+                        cleanup_glob(to_remove,glob_forsure=True)
                         if not os.listdir(to_remove):
-                            try:
-                                os.rmdir(to_remove)
-                            except OSError:
-                                pass
+                            cleanup(to_remove)
                 iface.step('    Deleted temporary files.')
             step_number += 1
         if not ipy:
             pool.close()
         if not keep_last_output and not keep_intermediates:
-            try:
-                os.remove(step_data['output'])
-            except OSError:
-                # Not a file; treat as dir
-                for detritus in glob.iglob(
-                                os.path.join(step_data['output'], '*')
-                            ):
-                    if detritus[-4:] != '.log':
-                        try:
-                            os.remove(detritus)
-                        except OSError:
-                            # Not a file
-                            try:
-                                shutil.rmtree(detritus)
-                            except OSError:
-                                # Phantom; maybe user deleted it
-                                pass
+            cleanup_glob(step_data['output'],glob_forsure=False)
         if not keep_intermediates:
             for step in steps:
                 step_data = steps[step]
-                try:
-                    os.remove(step_data['output'])
-                except OSError:
-                    # Not a file; treat as dir
-                    for detritus in glob.iglob(
-                                    os.path.join(step_data['output'], '*')
-                                ):
-                        if detritus[-4:] != '.log':
-                            try:
-                                os.remove(detritus)
-                            except OSError:
-                                # Not a file
-                                try:
-                                    shutil.rmtree(detritus)
-                                except OSError:
-                                    # Phantom; maybe user deleted it
-                                    pass
+                cleanup_glob(step_data['output'],glob_forsure=False)
         iface.done()
     except (Exception, GeneratorExit):
         # GeneratorExit added just in case this happens on modifying code
@@ -2011,7 +1995,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             '''raise below refers to last exception, so can't try-except
             OSError here'''
             if os.path.isdir(split_input_dir):
-                shutil.rmtree(split_input_dir)
+                cleanup(split_input_dir,is_dir=True)
         raise
     except (KeyboardInterrupt, SystemExit):
         if 'interrupt_engines' in locals():
@@ -2026,10 +2010,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             pool.terminate()
             pool.join()
         if 'split_input_dir' in locals():
-            try:
-                shutil.rmtree(split_input_dir)
-            except OSError:
-                pass
+            cleanup(split_input_dir,is_dir=True)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, 
