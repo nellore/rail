@@ -222,27 +222,31 @@ def parsed_keys(partition_options, key_fields):
         )
         return partitioned_key
 
-def cleanup(file_, is_dir=False, override_DONT_CLEANUP=False, try_file_remove=False):
-    DONT_CLEANUP=False
-    if DONT_CLEANUP:
-        return
+def cleanup(file_, try_file_remove=False):
+    """ Removes either an individual file or a directory;
+        catches OSError and tries a further remove, 
+        then just passes if a second OSError is thrown 
+    """
     try:
-        if is_dir:
+        if os.path.isdir(file_):
             shutil.rmtree(file_)
         else:
             os.remove(file_)
     except OSError:
-        if try_file_remove and is_dir:
+        if try_file_remove and os.path.isdir(file_):
             try:
                 os.remove(file_)
             except OSError:
                 pass
         pass
 
-def cleanup_glob(glob_, glob_forsure=False, override_DONT_CLEANUP=False):
-    DONT_CLEANUP=False
-    if DONT_CLEANUP:
-        return
+def cleanup_glob(glob_, glob_forsure=False):
+    """ Removes a single file or groups of
+        files/subdirs if a directory is passed in.
+        Excepts files with a ".log" suffix unless
+        passed in as a single file to remove.
+        Passes on OSErrors
+    """
     if not glob_forsure:
         try:
             os.remove(glob_)
@@ -428,7 +432,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                     unsorted_file, e.returncode,
                                     sort_command))
                 finally:
-                    cleanup(unsorted_file, override_DONT_CLEANUP=True)
+                    cleanup(unsorted_file)
         else:
             for unsorted_file in glob.glob(os.path.join(
                                                     output_dir,
@@ -457,7 +461,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                                     unsorted_file, e.returncode,
                                     sort_command))
                 finally:
-                    cleanup(unsorted_file, override_DONT_CLEANUP=True)
+                    cleanup(unsorted_file)
         return None
     except Exception:
         # Uncaught miscellaneous exception
@@ -486,7 +490,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             os.path.join(root, filename),
                             os.path.join(destination, filename)
                         )
-            cleanup(output_dir,is_dir=True)
+            cleanup(output_dir)
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                   err_dir, task_id, multiple_outputs,
@@ -728,7 +732,7 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                             os.path.join(root, filename),
                             os.path.join(destination, filename)
                         )
-            cleanup(output_dir,is_dir=True)
+            cleanup(output_dir)
 
 def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
@@ -1516,13 +1520,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             )
                         failed = True
                         raise RuntimeError
-                    cleanup(destination_path, override_DONT_CLEANUP=True)
+                    cleanup(destination_path)
                 iface.step('Cached %s.' % file_or_archive_basename)
                 try:
                     yield temp_dir
                 finally:
                     # Cleanup
-                    cleanup(temp_dir,is_dir=True)
+                    cleanup(temp_dir)
         # Serialize JSON configuration
         if json_config is not None:
             with open(json_config) as json_stream:
@@ -1672,7 +1676,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                         marked_intermediates.add(step_input)
         # Create intermediate directories
         for step in steps:
-            cleanup(steps[step]['output'], is_dir=True, override_DONT_CLEANUP=True, try_file_remove=True)
+            cleanup(steps[step]['output'], try_file_remove=True)
             try:
                 os.makedirs(steps[step]['output'])
             except OSError:
@@ -1950,14 +1954,12 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 iface.status('    Deleting temporary files...')
                 # Kill NLineInput files if they're there
                 try:
-                    cleanup(split_input_dir,is_dir=True)
+                    cleanup(split_input_dir)
                 except NameError:
                     pass
                 # Intermediate map output should be deleted if it exists
-                cleanup(os.path.join(step_data['output'], 'dp.map'),
-                            is_dir=True)
-                cleanup(os.path.join(step_data['output'], 'dp.tasks'),
-                            is_dir=True)
+                cleanup(os.path.join(step_data['output'], 'dp.map'))
+                cleanup(os.path.join(step_data['output'], 'dp.tasks'))
                 for to_remove in post_step_cleanups[step_number]:
                     if to_remove not in all_outputs:
                         '''Remove directory only if it's an -output of some
@@ -1995,7 +1997,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             '''raise below refers to last exception, so can't try-except
             OSError here'''
             if os.path.isdir(split_input_dir):
-                cleanup(split_input_dir,is_dir=True)
+                cleanup(split_input_dir)
         raise
     except (KeyboardInterrupt, SystemExit):
         if 'interrupt_engines' in locals():
@@ -2010,7 +2012,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             pool.terminate()
             pool.join()
         if 'split_input_dir' in locals():
-            cleanup(split_input_dir,is_dir=True)
+            cleanup(split_input_dir)
 
 
 if __name__ == '__main__':
