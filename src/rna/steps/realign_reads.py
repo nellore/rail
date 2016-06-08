@@ -56,7 +56,6 @@ import tempfile
 import subprocess
 import time
 import string
-import glob
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(

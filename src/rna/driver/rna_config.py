@@ -30,12 +30,9 @@ import tempfile
 import shutil
 from dooplicity.tools import path_join, is_exe, which, register_cleanup, \
     apply_async_with_errors, engine_string_from_list, cd
-from version import version_number
 import sys
 import argparse
 import subprocess
-import time
-from traceback import format_exc
 from collections import defaultdict
 import random
 import string

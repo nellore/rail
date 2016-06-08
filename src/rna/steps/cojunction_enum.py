@@ -33,8 +33,6 @@ import sys
 import os
 import site
 import subprocess
-import tempfile
-from collections import defaultdict
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(

@@ -149,8 +149,6 @@ import sys
 import os
 import site
 import subprocess
-import shutil
-import tempfile
 import time
 import string
 

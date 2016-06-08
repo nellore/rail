@@ -39,8 +39,6 @@ import time
 import os
 import site
 import argparse
-import copy
-import string
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(

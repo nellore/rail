@@ -70,7 +70,6 @@ Files are gzipped by default.
 
 import os
 import sys
-import tempfile
 import site
 import string
 

@@ -51,7 +51,6 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-import manifest
 from dooplicity.ansibles import Url
 from dooplicity.tools import register_cleanup, make_temp_dir, xopen
 import filemover

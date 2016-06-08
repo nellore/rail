@@ -50,7 +50,6 @@ site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
 from dooplicity.tools import xopen
-import subprocess
 import argparse
 from guess import inferred_phred_format
 # Print file's docstring if -h is invoked

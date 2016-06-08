@@ -33,15 +33,11 @@ THE SOFTWARE.
 """
 
 from itertools import groupby
-import os
 import threading
 import signal
 import subprocess
-import sys
 import gzip
-import io
 import contextlib
-import tempfile
 from collections import defaultdict
 import time
 from traceback import format_exc

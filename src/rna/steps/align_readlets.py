@@ -64,7 +64,6 @@ import sys
 import os
 import site
 import subprocess
-import tempfile
 
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(

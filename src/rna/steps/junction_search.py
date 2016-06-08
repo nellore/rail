@@ -1468,8 +1468,7 @@ if __name__ == '__main__' and not args.test:
                                 time.time() - start_time)
 elif __name__ == '__main__':
     # Test units
-    del sys.argv[1:] # Don't choke on extra command-line parameters
-    import random
+    del sys.argv[1:]  # Don't choke on extra command-line parameters
     import unittest
     import shutil
     import tempfile

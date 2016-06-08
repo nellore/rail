@@ -45,9 +45,7 @@ import time
 import json
 import interface as dp_iface
 import gc
-import shutil
 import signal
-import itertools
 import socket
 import subprocess
 import glob
@@ -728,10 +726,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         No return value.
     """
     global failed
-    import shutil
     import os
-    import tempfile
-    import glob
     if log is not None:
         try:
             os.makedirs(os.path.dirname(log))
