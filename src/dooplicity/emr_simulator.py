@@ -726,7 +726,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         No return value.
     """
     global failed
+    import shutil
     import os
+    import tempfile
+    import glob
     if log is not None:
         try:
             os.makedirs(os.path.dirname(log))
