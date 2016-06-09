@@ -32,6 +32,8 @@ def kill_dir(dir_to_kill):
     """ Removes directory and contents if _should_delete is True
 
         dir_to_kill: directory to remove
+
+        No return value.
     """
     if _should_delete:
         rmtree(dir_to_kill)
@@ -200,19 +202,25 @@ if __name__ == '__main__':
     atexit.register(kill_dir, working_dir)
 
     rail_dir = os.path.join(
-                        os.path.dirname(os.path.dirname(__file__)), 'src'
+                        os.path.dirname(
+                            os.path.dirname(
+                                os.path.abspath(__file__)
+                                )
+                            ),
+                        'src'
                     )
+    print rail_dir
     os.chdir(working_dir)
     print >>sys.stderr, 'Running Rail on manifest file "{}"...'.format(
                                                                 args.manifest
                                                             )
     try:
         subprocess.check_call([sys.executable, rail_dir, 'go', 'local',
-                                 '-m', args.manifest, '-x', bowtie_idx,
-                                 bowtie2_idx, '-d',
-                                 'tsv,bed,bam,bw'], stderr=sys.stderr,
-                                 shell=True)
+                                 '-m', args.manifest, '-x', args.bowtie_idx,
+                                 args.bowtie2_idx, '-d',
+                                 'tsv,bed,bam,bw'], stderr=sys.stderr)
     except subprocess.CalledProcessError as e:
+        print >>sys.stderr, e.message
         raise RuntimeError(error_out(e))
 
     # Check consistency of BAM and bigwig

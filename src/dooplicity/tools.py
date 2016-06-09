@@ -41,6 +41,8 @@ import contextlib
 from collections import defaultdict
 import time
 from traceback import format_exc
+import os
+import tempfile
 
 @contextlib.contextmanager
 def cd(dir_name):
@@ -594,7 +596,6 @@ class xstream(object):
 if __name__ == '__main__':
     # Run unit tests
     import unittest
-    import tempfile
     import os
     import shutil
 
