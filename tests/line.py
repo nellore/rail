@@ -222,6 +222,7 @@ if __name__ == '__main__':
                 samtools=args.samtools, bedgraphtobigwig=args.bedgraphtobigwig
             )
         if not success:
+            _should_delete = False
             raise RuntimeError(
                     'BAM and bigWig are inconsistent for sample {}. See diffs '
                     'between bedGraphs obtained from either output in '
