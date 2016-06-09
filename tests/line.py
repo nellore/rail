@@ -26,7 +26,7 @@ from itertools import product
 from shutil import rmtree
 
 # Global determines whether temp dir should be removed
-_should_delete = True
+_should_delete = False
 
 def kill_dir(dir_to_kill):
     """ Removes directory and contents if _should_delete is True
@@ -56,9 +56,9 @@ def error_out(e, command=None):
                                                 )
 
 
-def compare_bam_and_bw(sample, working_dir, unique=False,
+def compare_bam_and_bw(sample, working_dir, filter_script, unique=False,
                         bedtools='bedtools', samtools='samtools',
-                        bedgraphtobigwig='bedGraphToBigWig'):
+                        bigwigtobedgraph='bigWigToBedGraph'):
     """ Compares BAM and bigwig for a given sample.
 
         Uses bedtools genomecov to obtain bedGraph encoding coverage vector
@@ -71,38 +71,42 @@ def compare_bam_and_bw(sample, working_dir, unique=False,
         unique: True iff only unique alignments should be included
         bedtools: path to bedtools executable
         samtools: path to samtools executable
-        bedgraphtobigwig: path to bedgraphtobigwig executable
+        filter_script: location of filter.py
+        bigwigtobedgraph: path to bigwigtobedgraph executable
 
         Return value: tuple (True iff no diffs,
                                 file containing diffs between bedGraphs)
     """
     print >>sys.stderr, (
                 'Comparing {}BAM to bw with bedtools for sample {}...'
-            ).format('unique alignments from ' if unique else '')
-    alignments_basename = os.path.join(working_dir, 'alignments')
+            ).format('unique alignments from ' if unique else '', sample)
+    alignments_basename = os.path.join(
+                            working_dir, 'rail-rna_out',
+                            'alignments', 'alignments'
+                        )
+    coverage_dir = os.path.join(
+                            working_dir, 'rail-rna_out',
+                            'coverage_bigwigs'
+                        )
     bedgraph_from_bam = os.path.join(working_dir, 'from_bam.bedGraph')
     unsorted_bedgraph_from_bw = os.path.join(working_dir,
                                                 'from_bw.temp.bedGraph')
     bedgraph_from_bw = os.path.join(working_dir, 'from_bw.bedGraph')
-    bam_to_bedgraph_command = (
-                    '{samtools} view -H {first_bam}; '
-                    'for i in {alignments_basename}.{sample}.bam; '
-                    'do {samtools} view $i; done '
-                    '| {executable} filter.py --deletions-to-matches ' +
+    bam_to_bedgraph_command = ('set -exo pipefail; '
+                    '({samtools} view -H {first_bam};'
+                    ' for i in {alignments_basename}.{sample}.*.bam;'
+                    ' do {samtools} view $i; done) '
+                    '| {executable} {filter_script} '
+                    '--deletions-to-matches ' +
                     ('--uniques ' if unique else '') +
                     '| {samtools} view -bS - '
                     '| {bedtools} genomecov -ibam - -bga -split '
-                    '| sort -k1,1 -k2,2n >{output_bedgraph}'
+                    '| sort -k1,1 -k2,2n -k3,3n >{output_bedgraph}'
                 ).format(
                     samtools=samtools,
-                    first_bam=glob.glob(os.path.join(
-                                                working_dir,
-                                                'alignments.*.bam'
-                                            ))[0],
-                    alignments_basename=os.path.join(
-                                                working_dir,
-                                                'alignments'
-                                            ),
+                    first_bam=glob.glob(alignments_basename + '.*.bam')[0],
+                    alignments_basename=alignments_basename,
+                    filter_script=filter_script,
                     sample=sample,
                     executable=sys.executable,
                     bedtools=bedtools,
@@ -116,14 +120,20 @@ def compare_bam_and_bw(sample, working_dir, unique=False,
         raise RuntimeError(error_out(e, bam_to_bedgraph_command))
     bw_to_bedgraph_command = (
                 'set -exo pipefail; '
-                '{bigwigtobedgraph} {sample}{unique}.bw '
+                '{bigwigtobedgraph} {coverage_bigwig} '
                 '{unsorted_bedgraph}; '
-                'sort -k1,1 -k2,2n {unsorted_bedgraph} >{final_bedgraph}; '
+                'sort -k1,1 -k2,2n -k3,3n {unsorted_bedgraph} '
+                '>{final_bedgraph}; '
                 'rm {unsorted_bedgraph};'
             ).format(
                     bigwigtobedgraph=bigwigtobedgraph,
-                    sample=sample,
-                    unique=('.unique' if unique else ''),
+                    coverage_bigwig=os.path.join(
+                                coverage_dir,
+                                '{sample}{unique}.bw'.format(
+                                        sample=sample,
+                                        unique=('.unique' if unique else ''),
+                                )
+                            ),
                     unsorted_bedgraph=unsorted_bedgraph_from_bw,
                     final_bedgraph=bedgraph_from_bw
                 )
@@ -151,7 +161,8 @@ def compare_bam_and_bw(sample, working_dir, unique=False,
                 diff_command, executable='/bin/bash', shell=True
             )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(error_out(e, diff_command))
+        if e.returncode > 1:
+            raise RuntimeError(error_out(e, diff_command))
     if os.path.getsize(diff_output):
         print >>sys.stderr, 'FAIL'
         return (False, diff_output)
@@ -209,7 +220,9 @@ if __name__ == '__main__':
                             ),
                         'src'
                     )
-    print rail_dir
+    filter_script = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), 'filter.py'
+            )
     os.chdir(working_dir)
     print >>sys.stderr, 'Running Rail on manifest file "{}"...'.format(
                                                                 args.manifest
@@ -226,8 +239,9 @@ if __name__ == '__main__':
     # Check consistency of BAM and bigwig
     for sample, unique in product(samples, (True, False)):
         success, diff_output = compare_bam_and_bw(
-                sample, working_dir, unique=unique, bedtools=args.bedtools,
-                samtools=args.samtools, bedgraphtobigwig=args.bedgraphtobigwig
+                sample, working_dir, filter_script=filter_script,
+                unique=unique, bedtools=args.bedtools,
+                samtools=args.samtools, bigwigtobedgraph=args.bigwigtobedgraph
             )
         if not success:
             _should_delete = False

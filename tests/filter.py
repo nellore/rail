@@ -39,12 +39,22 @@ if __name__ == '__main__':
             default=False,
             help='filters out multimapping reads'
         )
+    args = parser.parse_args()
     for line in sys.stdin:
         if line[0] == '@':
             sys.stdout.write(line)
             continue
         tokens = line.strip().split('\t')
-        if args.uniques and 'NH:i:1' not in tokens: continue
+        if args.uniques:
+            alignment_score = [token[1:] for token in tokens
+                                if token[:5] == 'AS:i:']
+            secondary_score = [token[1:] for token in tokens
+                                if token[:5] == 'ZS:i:']
+            try:
+                if alignment_score[0] == secondary_score[0]: continue
+            except IndexError:
+                # No secondary score
+                pass
         if args.deletions_to_matches:
             to_add = 0
             split_cigar = re.split(r'([MINDS])', tokens[5])[:-1]
