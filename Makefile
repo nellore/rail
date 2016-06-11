@@ -7,5 +7,5 @@ dooplicity-unit-tests:
 	make -C src/dooplicity tests
 
 .PHONY: rna-unit-tests
-rna-tests:
+rna-unit-tests:
 	make -C src/rna/steps tests
