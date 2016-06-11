@@ -1,15 +1,17 @@
 language: python
 python:
   - "2.7"
-  - "3.2"
-  - "3.3"
-  - "3.4"
-  - "3.5"
-  - "3.5-dev" # 3.5 development branch
-  - "nightly" # currently points to 3.6-dev
+  #- "3.2"     # Rail currently python2 only
+  #- "3.3"     # Rail currently python2 only
+  #- "3.4"     # Rail currently python2 only
+  #- "3.5"     # Rail currently python2 only
+  #- "3.5-dev" # Rail currently python2 only
+  #- "nightly" # Rail currently python2 only
   - "pypy"
-  - "pypy3"
+  #- "pypy3"   # Rail currently python2 only
 before_install:
+  - sudo apt-get install bowtie
+  - sudo apt-get install bowtie2
   - sudo apt-get install libblas-dev    # for scipy
   - sudo apt-get install liblapack-dev  # for scipy
   - sudo apt-get install gfortran       # for scipy
