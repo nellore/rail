@@ -12,14 +12,20 @@ addons:
     - liblapack-dev
     - gfortran
 before_install:
+  # so that we can use conda to get scipy and bioconda to get bowtie
   - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
   - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH="$HOME/miniconda/bin:$PATH"
-  - conda update --yes conda
-  - conda config --add channels r
-  - conda config --add channels bioconda
+  - if [ "${$TRAVIS_PYTHON_VERSION}" = "2.7" ]; then
+      export PATH="$HOME/miniconda/bin:$PATH";
+    fi
+  - $HOME/miniconda/conda update --yes conda
+  - $HOME/miniconda/conda conda config --add channels r
+  - $HOME/miniconda/conda conda config --add channels bioconda
+  # debug message to diagnose issues with system python version
   - python -c "import sys; print(sys.version.lower())"
 install:
-  - if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy; fi
-  - conda install --yes bowtie bowtie2
+  - if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then
+      $HOME/miniconda/conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy;
+    fi
+  - $HOME/miniconda/conda install --yes bowtie bowtie2
 script: make
