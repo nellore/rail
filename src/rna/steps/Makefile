@@ -3,4 +3,4 @@
 .PHONY: tests
 
 tests:
-	ls *.py | xargs -I '{}' python '{}' --test
+	for i in *.py ; do echo $$i ; python $$i --test; done
