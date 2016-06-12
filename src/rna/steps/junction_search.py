@@ -1473,10 +1473,6 @@ elif __name__ == '__main__':
     import shutil
     import tempfile
 
-    # Precompile global_alignment
-    if 'pypy' not in sys.version.lower():
-        global_alignment = GlobalAlignment()
-
     def random_sequence(seq_size):
         """ Gets random sequence of nucleotides.
 
