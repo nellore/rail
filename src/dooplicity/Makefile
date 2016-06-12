@@ -3,4 +3,4 @@
 .PHONY: tests
 
 tests:
-	for i in `grep 'import unittest' *.py | sed 's/:.*//'` ; do python $$i ; done
+	grep 'import unittest' *.py | sed 's/:.*//' | xargs -I % sh -c "echo %; python %;"
