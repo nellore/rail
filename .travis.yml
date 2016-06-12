@@ -36,3 +36,5 @@ install:
   - which bowtie2
   - bowtie2 --version
 script: make
+notifications:
+  slack: jhu-genomics:1fgWyP9jJsDi15cdZ0GDZU6Y
