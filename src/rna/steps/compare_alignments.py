@@ -134,6 +134,11 @@ import string
 import time
 import argparse
 
+if '--test' in sys.argv:
+    print("No unit tests")
+    #unittest.main(argv=[sys.argv[0]])
+    sys.exit(0)
+
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
                         os.path.realpath(__file__)))
