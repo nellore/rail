@@ -10,6 +10,7 @@ python:
   - "pypy"
   #- "pypy3"   # Rail currently python2 only
 before_install:
+  - sudo apt-get update
   - sudo apt-get install bowtie
   - sudo apt-get install bowtie2
   - sudo apt-get install libblas-dev    # for scipy
