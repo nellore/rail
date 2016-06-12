@@ -19,7 +19,5 @@ before_install:
   - conda config --add channels r
   - conda config --add channels bioconda
 install:
-  - conda install --yes python=$TRAVIS_PYTHON_VERSION pip numpy scipy nose
-  - conda install bowtie
-  - conda install bowtie2
+  - conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy bowtie bowtie2
 script: make
