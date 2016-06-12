@@ -19,8 +19,8 @@ before_install:
       export PATH="$HOME/miniconda/bin:$PATH";
     fi
   - $HOME/miniconda/bin/conda update --yes conda
-  - $HOME/miniconda/bin/conda conda config --add channels r
-  - $HOME/miniconda/bin/conda conda config --add channels bioconda
+  - $HOME/miniconda/bin/conda config --add channels r
+  - $HOME/miniconda/bin/conda config --add channels bioconda
   # debug message to diagnose issues with system python version
   - python -c "import sys; print(sys.version.lower())"
 install:
