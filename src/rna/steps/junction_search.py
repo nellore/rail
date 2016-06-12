@@ -1473,7 +1473,7 @@ elif __name__ == '__main__':
     import shutil
     import tempfile
 
-    # Precomile global_alignment
+    # Precompile global_alignment
     if 'pypy' not in sys.version.lower():
         global_alignment = GlobalAlignment()
 
@@ -1581,7 +1581,6 @@ elif __name__ == '__main__':
                                             search_window_size=1000,
                                             stranded=False,
                                             motif_radius=0,
-                                            global_alignment=global_alignment,
                                             max_gaps_mismatches=5)
             self.assertEquals(
                     list(junctions),
