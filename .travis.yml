@@ -1,20 +1,25 @@
+sudo: false
 language: python
 python:
   - "2.7"
-  #- "3.2"     # Rail currently python2 only
-  #- "3.3"     # Rail currently python2 only
-  #- "3.4"     # Rail currently python2 only
-  #- "3.5"     # Rail currently python2 only
-  #- "3.5-dev" # Rail currently python2 only
-  #- "nightly" # Rail currently python2 only
   - "pypy"
-  #- "pypy3"   # Rail currently python2 only
+cache: apt
+addons:
+  apt:
+    packages:
+    - libatlas-dev
+    - libatlas-base-dev
+    - liblapack-dev
+    - gfortran
 before_install:
-  - sudo apt-get update
-  - sudo apt-get install bowtie
-  - sudo apt-get install bowtie2
-  - sudo apt-get install libblas-dev    # for scipy
-  - sudo apt-get install liblapack-dev  # for scipy
-  - sudo apt-get install gfortran       # for scipy
-  - pip install scipy                   # for scipy
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - conda update --yes conda
+  - conda config --add channels r
+  - conda config --add channels bioconda
+install:
+  - conda install --yes python=$TRAVIS_PYTHON_VERSION pip numpy scipy nose
+  - conda install bowtie
+  - conda install bowtie2
 script: make
