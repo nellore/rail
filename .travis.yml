@@ -15,7 +15,7 @@ before_install:
   # so that we can use conda to get scipy and bioconda to get bowtie
   - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
   - bash miniconda.sh -b -p $HOME/miniconda
-  - if [ "${$TRAVIS_PYTHON_VERSION}" = "2.7" ]; then
+  - if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then
       export PATH="$HOME/miniconda/bin:$PATH";
     fi
   - $HOME/miniconda/conda update --yes conda
