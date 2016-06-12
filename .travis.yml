@@ -18,6 +18,7 @@ before_install:
   - conda update --yes conda
   - conda config --add channels r
   - conda config --add channels bioconda
+  - python -c "import sys; print(sys.version.lower())"
 install:
   - if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy; fi
   - conda install --yes bowtie bowtie2
