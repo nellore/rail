@@ -1468,15 +1468,10 @@ if __name__ == '__main__' and not args.test:
                                 time.time() - start_time)
 elif __name__ == '__main__':
     # Test units
-    del sys.argv[1:] # Don't choke on extra command-line parameters
-    import random
+    del sys.argv[1:]  # Don't choke on extra command-line parameters
     import unittest
     import shutil
     import tempfile
-
-    # Precomile global_alignment
-    if 'pypy' not in sys.version.lower():
-        global_alignment = GlobalAlignment()
 
     def random_sequence(seq_size):
         """ Gets random sequence of nucleotides.
@@ -1582,7 +1577,6 @@ elif __name__ == '__main__':
                                             search_window_size=1000,
                                             stranded=False,
                                             motif_radius=0,
-                                            global_alignment=global_alignment,
                                             max_gaps_mismatches=5)
             self.assertEquals(
                     list(junctions),

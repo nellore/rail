@@ -33,18 +33,16 @@ THE SOFTWARE.
 """
 
 from itertools import groupby
-import os
 import threading
 import signal
 import subprocess
-import sys
 import gzip
-import io
 import contextlib
-import tempfile
 from collections import defaultdict
 import time
 from traceback import format_exc
+import os
+import tempfile
 
 @contextlib.contextmanager
 def cd(dir_name):
@@ -210,7 +208,7 @@ def xopen(gzipped, *args):
         fh = sys.stdout
     else:
         if not args:
-            raise IOError, 'Must provide filename'
+            raise IOError('Must provide filename')
         import gzip
         if gzipped is None:
             with open(args[0], 'rb') as binary_input_stream:
@@ -245,7 +243,7 @@ def xopen(gzipped, *args):
                                                     stdout=output_stream)
                 fh = gzip_process.stdin
             else:
-                raise IOError, 'Mode ' + mode + ' not supported'
+                raise IOError('Mode ' + mode + ' not supported')
         else:
             fh = open(*args)
     try:
@@ -598,7 +596,6 @@ class xstream(object):
 if __name__ == '__main__':
     # Run unit tests
     import unittest
-    import tempfile
     import os
     import shutil
 

@@ -39,6 +39,11 @@ import sys
 import site
 import time
 
+if '--test' in sys.argv:
+    print("No unit tests")
+    #unittest.main(argv=[sys.argv[0]])
+    sys.exit(0)
+
 base_path = os.path.abspath(
                     os.path.dirname(os.path.dirname(os.path.dirname(
                         os.path.realpath(__file__)))
@@ -50,7 +55,6 @@ site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
 from dooplicity.tools import xopen
-import subprocess
 import argparse
 from guess import inferred_phred_format
 # Print file's docstring if -h is invoked

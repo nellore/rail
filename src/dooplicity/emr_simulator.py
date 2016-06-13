@@ -45,9 +45,7 @@ import time
 import json
 import interface as dp_iface
 import gc
-import shutil
 import signal
-import itertools
 import socket
 import subprocess
 import glob

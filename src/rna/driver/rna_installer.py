@@ -6,7 +6,6 @@ Part of Rail-RNA
 Contains a class for installing Rail-RNA.
 """
 import sys
-import contextlib
 import os
 base_path = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 utils_path = os.path.join(base_path, 'rna', 'utils')

@@ -149,8 +149,6 @@ import sys
 import os
 import site
 import subprocess
-import shutil
-import tempfile
 import time
 import string
 
@@ -639,6 +637,18 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     sys.stdout.flush()
 
 if __name__ == '__main__':
+
+    import unittest
+
+    class TestEmpty(unittest.TestCase):
+
+        def test_empty(self):
+            pass
+
+    if '--test' in sys.argv:
+        unittest.main(argv=[sys.argv[0]])
+        sys.exit(0)
+
     import argparse
     # Print file's docstring if -h is invoked
     parser = argparse.ArgumentParser(description=__doc__, 
