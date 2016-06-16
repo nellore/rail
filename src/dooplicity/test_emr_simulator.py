@@ -47,5 +47,9 @@ class Test_presorted_tasks(unittest.TestCase):
         error = esim.presorted_tasks(input_files,process_id,sort_options,output_dir,key_fields,separator,partition_options,task_count,memcap,gzip=gzip,gzip_level=gzip_level,scratch=scratch,direct_write=direct_write,sort=sort,mod_partition=mod_partition,max_attempts=max_attempts)
         self.assertEqual(error,None)
         
+        gzip = True
+        error = esim.presorted_tasks(input_files,process_id,sort_options,output_dir,key_fields,separator,partition_options,task_count,memcap,gzip=gzip,gzip_level=gzip_level,scratch=scratch,direct_write=direct_write,sort=sort,mod_partition=mod_partition,max_attempts=max_attempts)
+        self.assertEqual(error,None)
+        
 if __name__ == '__main__':
     unittest.main()

@@ -267,6 +267,49 @@ def cleanup_glob(glob_, glob_forsure=False):
                     pass                
 
 
+def presort_task(sort, sort_options, memcap, output_dir, process_id, 
+                                        separator, gzip=True, gzip_level=6):
+    file_glob = '*.%s.unsorted' % process_id
+    pref_cmd = ''
+    suff_cmd = '%s >%s'
+    if gzip:
+       file_glob = "%s.gz" % file_glob
+       pref_cmd = 'set -eo pipefail; gzip -cd %s | '
+       suff_cmd = 'gzip -c -%d' % (gzip_level) + ' >%s'
+    sort_cmd = 'LC_ALL=C %s -S %d %s -t$\'%s\' ' % (sort, 
+                                                      memcap, 
+                                                      sort_options, 
+                                   separator.encode('string_escape'))
+    for unsorted_file in glob.glob(os.path.join(
+                                            output_dir,
+                                            file_glob
+                                        )):
+        suff_cmd_ = suff_cmd
+        pref_cmd_ = pref_cmd
+        if gzip:
+            pref_cmd_ = pref_cmd % unsorted_file
+            suff_cmd_ = (" | %s" % (suff_cmd % (unsorted_file[:-12]+'.gz')))
+        else:
+            suff_cmd_ = suff_cmd % (unsorted_file, unsorted_file[:-9])
+
+        sort_command = ("%s %s %s" % (pref_cmd_, sort_cmd, suff_cmd_))
+        sys.stderr.write("%s\n" % sort_command)
+        try:
+            subprocess.check_output(sort_command,
+                                    shell=True,
+                                    executable='/bin/bash',
+                                    bufsize=-1,
+                                    stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as e:
+            return (('Error "%s" encountered sorting file %s; exit '
+                     'code was %d; command invoked was "%s".') %
+                        (e.output.strip(),
+                            unsorted_file, e.returncode,
+                            sort_command))
+        finally:
+            cleanup(unsorted_file)
+
+
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, partition_options, task_count,
                     memcap, gzip=False, gzip_level=3, scratch=None,
@@ -403,63 +446,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
             for task in task_stream_processes:
                 task_stream_processes[task].wait()
         # Presort task files
-        if gzip:
-            for unsorted_file in glob.glob(os.path.join(
-                                                    output_dir,
-                                                    '*.%s.unsorted.gz'
-                                                    % process_id
-                                                )):
-                sort_command = (('set -eo pipefail; gzip -cd %s | '
-                                 'LC_ALL=C %s -S %d %s -t$\'%s\' | '
-                                 'gzip -c -%d >%s')
-                                    % (unsorted_file, sort, memcap,
-                                        sort_options,
-                                        separator.encode('string_escape'),
-                                        gzip_level,
-                                        unsorted_file[:-12] + '.gz'))
-                try:
-                    subprocess.check_output(sort_command,
-                                            shell=True,
-                                            executable='/bin/bash',
-                                            bufsize=-1,
-                                            stderr=subprocess.STDOUT)
-                except subprocess.CalledProcessError as e:
-                    return (('Error "%s" encountered sorting file %s; exit '
-                             'code was %d; command invoked was "%s".') %
-                                (e.output.strip(),
-                                    unsorted_file, e.returncode,
-                                    sort_command))
-                finally:
-                    cleanup(unsorted_file)
-        else:
-            for unsorted_file in glob.glob(os.path.join(
-                                                    output_dir,
-                                                    '*.%s.unsorted'
-                                                    % process_id
-                                                )):
-                sort_command = 'LC_ALL=C %s -S %d %s -t$\'%s\' %s >%s' % (
-                                                            sort, memcap,
-                                                            sort_options,
-                                                            separator.encode(
-                                                                'string_escape'
-                                                            ),
-                                                            unsorted_file,
-                                                            unsorted_file[:-9]
-                                                        )
-                try:
-                    subprocess.check_output(sort_command,
-                                              shell=True,
-                                              executable='/bin/bash',
-                                              bufsize=-1,
-                                              stderr=subprocess.STDOUT)
-                except subprocess.CalledProcessError as e:
-                    return (('Error "%s" encountered sorting file %s; exit '
-                             'code was %d; command invoked was "%s".') %
-                                (e.output.strip(),
-                                    unsorted_file, e.returncode,
-                                    sort_command))
-                finally:
-                    cleanup(unsorted_file)
+        presort_task(sort, sort_options, memcap, output_dir, process_id, 
+                                separator, gzip=gzip,gzip_level=gzip_level)
         return None
     except Exception:
         # Uncaught miscellaneous exception
@@ -887,7 +875,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     presorted_tasks=presorted_tasks,
                     parsed_keys=parsed_keys,
                     cleanup=cleanup,
-                    cleanup_glob=cleanup_glob
+                    cleanup_glob=cleanup_glob,
+                    presort_task=presort_task
                 ))
             iface.step('Loaded dependencies on IPython engines.')
             # Get host-to-engine and engine pids relations
