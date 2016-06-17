@@ -415,11 +415,23 @@ if __name__ == '__main__':
                                                                 args.manifest
                                                             )
     try:
-        subprocess.check_call([sys.executable, rail_dir, 'go', 'local',
-                                 '-m', manifest, '-x', bowtie_idx, bowtie2_idx,
-                                 '-d', 'tsv,bed,bam,bw'], stderr=sys.stderr)
+        rail_output = subprocess.check_output(
+                [sys.executable, rail_dir, 'go', 'local',
+                    '-m', manifest, '-x', bowtie_idx, bowtie2_idx,
+                    '-d', 'tsv,bed,bam,bw'],
+            stderr=sys.stdout)
     except subprocess.CalledProcessError as e:
-        print >>sys.stderr, e.message
+        error_match = re.search(r'2>(.*\.log)" failed;', e.output)
+        if error_match:
+            log_file = error_match.string[
+                                error_match.start(1):error_match.end(1)
+                            ]
+            print >>sys.stderr, (
+                    'Error occurred running a step. Contents of '
+                    'log file {}:'.format(log_file)
+                )
+            with open(log_file) as log_stream:
+                print >>sys.stderr, log_stream.read()
         raise RuntimeError(error_out(e))
 
     # Check consistency of BAM and bigwig
