@@ -407,7 +407,8 @@ if __name__ == '__main__':
             )
     manifest, bowtie_idx, bowtie2_idx = map(
                                     os.path.abspath,
-                                    [args.manifest, bowtie_idx, bowtie2_idx]
+                                    [args.manifest,
+                                        args.bowtie_idx, args.bowtie2_idx]
                                 )
     os.chdir(working_dir)
     print >>sys.stderr, 'Running Rail on manifest file "{}"...'.format(
