@@ -405,15 +405,18 @@ if __name__ == '__main__':
     filter_script = os.path.join(
                 os.path.dirname(os.path.abspath(__file__)), 'filter.py'
             )
+    manifest, bowtie_idx, bowtie2_idx = map(
+                                    os.path.abspath,
+                                    [args.manifest, bowtie_idx, bowtie2_idx]
+                                )
     os.chdir(working_dir)
     print >>sys.stderr, 'Running Rail on manifest file "{}"...'.format(
                                                                 args.manifest
                                                             )
     try:
         subprocess.check_call([sys.executable, rail_dir, 'go', 'local',
-                                 '-m', args.manifest, '-x', args.bowtie_idx,
-                                 args.bowtie2_idx, '-d',
-                                 'tsv,bed,bam,bw'], stderr=sys.stderr)
+                                 '-m', manifest, '-x', bowtie_idx, bowtie2_idx,
+                                 '-d', 'tsv,bed,bam,bw'], stderr=sys.stderr)
     except subprocess.CalledProcessError as e:
         print >>sys.stderr, e.message
         raise RuntimeError(error_out(e))
