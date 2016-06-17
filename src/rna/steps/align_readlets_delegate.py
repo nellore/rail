@@ -61,6 +61,7 @@ def go(qname_stream, output_stream=sys.stdout, input_stream=sys.stdin,
         '''While labeled multireadlet, this list may end up simply a
         unireadlet.'''
         multireadlet = []
+        flag = 4
         for tokens in xpartition:
             (flag, rname, pos, mapq, cigar,
                 rnext, pnext, tlen, seq, qual) = tokens[:10]
