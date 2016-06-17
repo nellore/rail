@@ -418,7 +418,7 @@ if __name__ == '__main__':
         rail_output = subprocess.check_output(
                 [sys.executable, rail_dir, 'go', 'local',
                     '-m', manifest, '-x', bowtie_idx, bowtie2_idx,
-                    '-d', 'tsv,bed,bam,bw'],
+                    '-d', 'tsv,bed,bam,bw', '--gzip-intermediates'],
                 stderr=subprocess.STDOUT
             )
     except subprocess.CalledProcessError as e:
