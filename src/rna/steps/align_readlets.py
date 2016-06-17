@@ -201,6 +201,18 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
                            'exitlevel was %d.' % return_code)
 
 if __name__ == '__main__':
+
+    import unittest
+
+    class TestEmpty(unittest.TestCase):
+
+        def test_empty(self):
+            pass
+
+    if '--test' in sys.argv:
+        unittest.main(argv=[sys.argv[0]])
+        sys.exit(0)
+
     import argparse
     # Print file's docstring if -h is invoked
     parser = argparse.ArgumentParser(description=__doc__, 
@@ -248,7 +260,6 @@ if __name__ == '__main__':
         keep_alive_thread = KeepAlive(sys.stderr)
         keep_alive_thread.start()
 
-if __name__ == '__main__':
     import time
     start_time = time.time()
     go(bowtie_exe=os.path.expandvars(args.bowtie_exe),

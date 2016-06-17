@@ -120,6 +120,18 @@ def go(qname_stream, output_stream=sys.stdout, input_stream=sys.stdin,
                             % output_line_count)
 
 if __name__ == '__main__':
+
+    import unittest
+
+    class TestEmpty(unittest.TestCase):
+
+        def test_empty(self):
+            pass
+
+    if '--test' in sys.argv:
+        unittest.main(argv=[sys.argv[0]])
+        sys.exit(0)
+
     import argparse
     parser = argparse.ArgumentParser(description=__doc__, 
                 formatter_class=argparse.RawDescriptionHelpFormatter)

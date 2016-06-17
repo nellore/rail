@@ -923,6 +923,17 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             del sra_process
 
 if __name__ == '__main__':
+    import unittest
+
+    class TestEmpty(unittest.TestCase):
+
+        def test_empty(self):
+            pass
+
+    if '--test' in sys.argv:
+        unittest.main(argv=[sys.argv[0]])
+        sys.exit(0)
+
     import argparse
     # Print file's docstring if -h is invoked
     parser = argparse.ArgumentParser(description=__doc__, 

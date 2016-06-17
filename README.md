@@ -2,6 +2,9 @@
 ====
 
 is software for RNA-seq analysis.
+
+[![Build Status](https://travis-ci.org/nellore/rail.svg?branch=master)](https://travis-ci.org/nellore/rail)
+
 ### [Visit](http://rail.bio)
 
 **the website.**

@@ -208,7 +208,7 @@ def xopen(gzipped, *args):
         fh = sys.stdout
     else:
         if not args:
-            raise IOError, 'Must provide filename'
+            raise IOError('Must provide filename')
         import gzip
         if gzipped is None:
             with open(args[0], 'rb') as binary_input_stream:
@@ -243,7 +243,7 @@ def xopen(gzipped, *args):
                                                     stdout=output_stream)
                 fh = gzip_process.stdin
             else:
-                raise IOError, 'Mode ' + mode + ' not supported'
+                raise IOError('Mode ' + mode + ' not supported')
         else:
             fh = open(*args)
     try:

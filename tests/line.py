@@ -101,7 +101,8 @@ def compare_bam_and_bw(sample, working_dir, filter_script, unique=False,
                     ('--uniques ' if unique else '') +
                     '| {samtools} view -bS - '
                     '| {bedtools} genomecov -ibam - -bga -split '
-                    '| sort -k1,1 -k2,2n -k3,3n >{output_bedgraph}'
+                    '| sort -k1,1 -k2,2n -k3,3n '
+                    '| awk \'$4 != 0\' >{output_bedgraph}'
                 ).format(
                     samtools=samtools,
                     first_bam=glob.glob(alignments_basename + '.*.bam')[0],
@@ -123,7 +124,7 @@ def compare_bam_and_bw(sample, working_dir, filter_script, unique=False,
                 '{bigwigtobedgraph} {coverage_bigwig} '
                 '{unsorted_bedgraph}; '
                 'sort -k1,1 -k2,2n -k3,3n {unsorted_bedgraph} '
-                '>{final_bedgraph}; '
+                '| awk \'$4 != 0\' >{final_bedgraph}; '
                 'rm {unsorted_bedgraph};'
             ).format(
                     bigwigtobedgraph=bigwigtobedgraph,
