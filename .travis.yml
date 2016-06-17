@@ -46,4 +46,8 @@ script:
   - make
   - python tests/line.py --bowtie-idx Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/genome --bowtie2-idx Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/genome --manifest ex.dm3_example.manifest
 notifications:
-  slack: jhu-genomics:1fgWyP9jJsDi15cdZ0GDZU6Y
+  slack:
+    matrix:
+    - jhu-genomics:1fgWyP9jJsDi15cdZ0GDZU6Y
+    rooms:
+      secure: HiJEsOpApAMu+lev2n/vf71hGF3xC7PVtAz9OiSf0FCP6iwKyPT7FlpIB8v7av+mTR8M4/oAIT3kDQCt+YV1RvAoAQV5Z9wLJNPLTotVq+/L8K1nN2UrDFacNmTMZZoXIJN8Tf0vXB/jK6iE7BFcjU6Y7z0M0d6SJLisZpl8hcw=
