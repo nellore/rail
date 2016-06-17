@@ -30,6 +30,8 @@ before_install:
   - tar xf Drosophila_melanogaster_UCSC_dm6.tar.gz
   - ls Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/
   - ls Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/
+  - rm -rf Drosophila_melanogaster/UCSC/dm6/Annotation
+  - for sd in BWAIndex AbundantSequences Chromosomes WholeGenomeFasta ; do rm -rf Drosophila_melanogaster/UCSC/dm6/Sequence/$sd ; done
   - wget http://verve.webfactional.com/mirror/linux/bedGraphToBigWig
   - chmod a+x bedGraphToBigWig
   - export PATH="$PATH:"`pwd`
