@@ -419,7 +419,8 @@ if __name__ == '__main__':
                 [sys.executable, rail_dir, 'go', 'local',
                     '-m', manifest, '-x', bowtie_idx, bowtie2_idx,
                     '-d', 'tsv,bed,bam,bw'],
-            stderr=sys.stdout)
+                stderr=subprocess.STDOUT
+            )
     except subprocess.CalledProcessError as e:
         error_match = re.search(r'2>(.*\.log)" failed;', e.output)
         if error_match:
