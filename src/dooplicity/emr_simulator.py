@@ -293,7 +293,6 @@ def presort_task(sort, sort_options, memcap, output_dir, process_id,
             suff_cmd_ = suff_cmd % (unsorted_file, unsorted_file[:-9])
 
         sort_command = ("%s %s %s" % (pref_cmd_, sort_cmd, suff_cmd_))
-        sys.stderr.write("%s\n" % sort_command)
         try:
             subprocess.check_output(sort_command,
                                     shell=True,
