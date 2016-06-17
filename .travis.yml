@@ -1,8 +1,8 @@
 sudo: false
 language: python
 python:
-  - "2.7"
-  - "pypy"
+- '2.7'
+- pypy
 cache: apt
 addons:
   apt:
@@ -12,29 +12,27 @@ addons:
     - liblapack-dev
     - gfortran
 before_install:
-  # so that we can use conda to get scipy and bioconda to get bowtie
-  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then
-      export PATH="$HOME/miniconda/bin:$PATH";
-    else
-      export PATH="$PATH:$HOME/miniconda/bin";
-    fi
-  - conda update --yes conda
-  - conda config --add channels r
-  - conda config --add channels bioconda
-  # debug message to diagnose issues with system python version
-  - which python
-  - python -c "import sys; print(sys.version.lower())"
+- wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+- bash miniconda.sh -b -p $HOME/miniconda
+- if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then export PATH="$HOME/miniconda/bin:$PATH";
+  else export PATH="$PATH:$HOME/miniconda/bin"; fi
+- conda update --yes conda
+- conda config --add channels r
+- conda config --add channels bioconda
+- which python
+- python -c "import sys; print(sys.version.lower())"
 install:
-  - if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then
-      conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy;
-    fi
-  - conda install --yes bowtie bowtie2
-  - which bowtie
-  - bowtie --version
-  - which bowtie2
-  - bowtie2 --version
+- if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then conda install --yes python=$TRAVIS_PYTHON_VERSION
+  numpy scipy; fi
+- conda install --yes bowtie bowtie2
+- which bowtie
+- bowtie --version
+- which bowtie2
+- bowtie2 --version
 script: make
 notifications:
-  slack: jhu-genomics:1fgWyP9jJsDi15cdZ0GDZU6Y
+  slack:
+    matrix:
+    - jhu-genomics:1fgWyP9jJsDi15cdZ0GDZU6Y
+    rooms:
+      secure: HiJEsOpApAMu+lev2n/vf71hGF3xC7PVtAz9OiSf0FCP6iwKyPT7FlpIB8v7av+mTR8M4/oAIT3kDQCt+YV1RvAoAQV5Z9wLJNPLTotVq+/L8K1nN2UrDFacNmTMZZoXIJN8Tf0vXB/jK6iE7BFcjU6Y7z0M0d6SJLisZpl8hcw=
