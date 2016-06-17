@@ -26,15 +26,24 @@ before_install:
   # debug message to diagnose issues with system python version
   - which python
   - python -c "import sys; print(sys.version.lower())"
+  - wget ftp://igenome:G3nom3s4u@ussd-ftp.illumina.com/Drosophila_melanogaster/UCSC/dm6/Drosophila_melanogaster_UCSC_dm6.tar.gz
+  - tar xf Drosophila_melanogaster_UCSC_dm6.tar.gz
+  - ls Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/
+  - ls Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/
+  - wget http://verve.webfactional.com/mirror/linux/bedGraphToBigWig
+  - chmod a+x bedGraphToBigWig
+  - export PATH="$PATH:."
 install:
   - if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then
-      conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy;
+      conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy ucsc-bigwigtobedgraph;
     fi
   - conda install --yes bowtie bowtie2
   - which bowtie
   - bowtie --version
   - which bowtie2
   - bowtie2 --version
-script: make
+script:
+  - make
+  - python tests/line.py --bowtie-idx Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/genome --bowtie2-idx Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/genome --manifest ex.dm3_example.manifest
 notifications:
   slack: jhu-genomics:1fgWyP9jJsDi15cdZ0GDZU6Y
