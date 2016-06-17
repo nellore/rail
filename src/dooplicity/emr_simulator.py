@@ -293,6 +293,7 @@ def presort_task(sort, sort_options, memcap, output_dir, process_id,
             suff_cmd_ = suff_cmd % (unsorted_file, unsorted_file[:-9])
 
         sort_command = ("%s %s %s" % (pref_cmd_, sort_cmd, suff_cmd_))
+        #sys.stderr.write("%s\n" % sort_command)
         try:
             subprocess.check_output(sort_command,
                                     shell=True,
@@ -719,6 +720,41 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                         )
             cleanup(output_dir)
 
+def interrupt_engines(pool, iface, host_map, pid_map):
+    """ Interrupts IPython engines spanned by view
+
+        Taken from:
+        http://mail.scipy.org/pipermail/ipython-dev/
+        2014-March/013426.html
+
+        pool: IPython Client object
+        iface: instance of DooplicityInterface
+
+        No return value.
+    """
+    iface.status('Interrupting IPython engines...')
+    for engine_id in pool.ids:
+        host = host_map[engine_id]
+        kill_command = (
+              'CPIDS=$(pgrep -P {}); echo $CPIDS;'
+              '(sleep 33 && kill -9 $CPIDS &); '
+              'kill -9 $CPIDS'
+            ).format(pid_map[engine_id])
+        if host == socket.gethostname():
+            pass
+            # local
+            #subprocess.Popen(kill_command,
+            #        bufsize=-1, shell=True
+            #    )
+        else:
+            #subprocess.Popen(
+            #    ('ssh -oStrictHostKeyChecking=no '
+            #     '-oBatchMode=yes {} \'{}\'').format(
+            #        host, kill_command
+            #    ), bufsize=-1, shell=True
+            #)
+            pass
+
 def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
                     log, gzip=False, gzip_level=3, ipy=False,
@@ -785,6 +821,9 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         log_stream = None
     iface = dp_iface.DooplicityInterface(branding=branding,
                                          log_stream=log_stream)
+    host_map = {}
+    pid_map = {}
+
     failed = False
     try:
         # Using IPython?
@@ -891,40 +930,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     pool, all_engines, os.getpid,
                                     dict_format=True
                                 )
-            def interrupt_engines(pool, iface):
-                """ Interrupts IPython engines spanned by view
-
-                    Taken from:
-                    http://mail.scipy.org/pipermail/ipython-dev/
-                    2014-March/013426.html
-
-                    pool: IPython Client object
-                    iface: instance of DooplicityInterface
-
-                    No return value.
-                """
-                iface.status('Interrupting IPython engines...')
-                for engine_id in pool.ids:
-                    host = host_map[engine_id]
-                    kill_command = (
-                          'CPIDS=$(pgrep -P {}); echo $CPIDS;'
-                          '(sleep 33 && kill -9 $CPIDS &); '
-                          'kill -9 $CPIDS'
-                        ).format(pid_map[engine_id])
-                    if host == socket.gethostname():
-                        pass
-                        # local
-                        #subprocess.Popen(kill_command,
-                        #        bufsize=-1, shell=True
-                        #    )
-                    else:
-                        #subprocess.Popen(
-                        #    ('ssh -oStrictHostKeyChecking=no '
-                        #     '-oBatchMode=yes {} \'{}\'').format(
-                        #        host, kill_command
-                        #    ), bufsize=-1, shell=True
-                        #)
-                        pass
+           
             import random
             def execute_balanced_job_with_retries(pool, iface,
                 task_function, task_function_args,
@@ -1971,7 +1977,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
     except (Exception, GeneratorExit):
         # GeneratorExit added just in case this happens on modifying code
         if 'interrupt_engines' in locals():
-            interrupt_engines(pool, iface)
+            interrupt_engines(pool, iface, host_map, pid_map)
         if not failed:
             time.sleep(0.2)
             if 'step_number' in locals():
@@ -1987,7 +1993,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         raise
     except (KeyboardInterrupt, SystemExit):
         if 'interrupt_engines' in locals():
-            interrupt_engines(pool, iface)
+            interrupt_engines(pool, ifac, host_map, pid_map)
         if 'step_number' in locals():
             iface.fail(steps=(job_flow[step_number:]
                         if step_number != 0 else None),
