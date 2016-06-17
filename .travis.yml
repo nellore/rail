@@ -35,9 +35,9 @@ before_install:
   - export PATH="$PATH:."
 install:
   - if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then
-      conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy ucsc-bigwigtobedgraph;
+      conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy ;
     fi
-  - conda install --yes bowtie bowtie2
+  - conda install --yes bowtie bowtie2 samtools bedtools ucsc-bigwigtobedgraph
   - which bowtie
   - bowtie --version
   - which bowtie2
