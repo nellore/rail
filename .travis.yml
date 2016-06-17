@@ -44,7 +44,7 @@ install:
   - bowtie2 --version
 script:
   - make
-  - python tests/line.py --bowtie-idx Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/genome --bowtie2-idx Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/genome --manifest ex.dm3_example.manifest
+  - python tests/line.py --bowtie-idx Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/genome --bowtie2-idx Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/genome --manifest ex/dm3_example.manifest
 notifications:
   slack:
     matrix:
