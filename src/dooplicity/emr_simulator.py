@@ -755,6 +755,610 @@ def interrupt_engines(pool, iface, host_map, pid_map):
             #)
             pass
 
+import random
+def execute_balanced_job_with_retries_ipy(pool, iface,
+    task_function, task_function_args,
+    all_engines, host_map, engine_map,
+    job_flow, step_number,
+    status_message='Tasks completed',
+    finish_message='Completed tasks.', max_attempts=4):
+    """ Executes parallel job over IPython engines with retries.
+
+        Tasks are assigned to free engines as they become
+        available. If a task fails on one engine, it is retried on
+        another engine. If a task has been tried on all engines but
+        fails before max_attempts is exceeded, the step is failed.
+
+        pool: IPython Client object; all engines it spans are used
+        iface: DooplicityInterface object for spewing log messages
+            to console
+        task_function: name if function to execute
+        task_function_args: iterable of lists, each of whose
+            items are task_function's arguments, WITH THE EXCEPTION
+            OF A SINGLE KEYWORD ARGUMENT "attempt_count". This
+            argument must be the final keyword argument of the
+            function but _excluded_ from the arguments in any item
+            of task_function_args.
+        status_message: status message about tasks completed
+        finish_message: message to output when all tasks are
+            completed
+        max_attempts: max number of times to attempt any given
+            task
+
+        No return value.
+    """
+    global failed
+    random.seed(pool.ids[-1])
+    used_engines, free_engines = set(), set(pool.ids)
+    completed_tasks = 0
+    tasks_to_assign = deque([
+            [task_function_arg, i, []] for i, task_function_arg
+            in enumerate(task_function_args)
+        ])
+    task_count = len(tasks_to_assign)
+    assigned_tasks, asyncresults = {}, {}
+    max_task_fails = 0
+    iface.status(('    %s: '
+                  '%d/%d | \\max_i (task_i fails): %d/%d')
+                    % (status_message, completed_tasks,
+                        task_count, max_task_fails,
+                        max_attempts - 1))
+    while completed_tasks < task_count:
+        if tasks_to_assign:
+            task_to_assign = tasks_to_assign.popleft()
+            forbidden_engines = set(task_to_assign[2])
+            if len(forbidden_engines) >= 2:
+                # After two fails, do not allow reused nodes
+                for forbidden_engine in task_to_assign[2]:
+                    forbidden_engines.update(
+                        engine_map[host_map[forbidden_engine]]
+                    )
+            if all_engines <= forbidden_engines:
+                iface.fail(('No more running IPython engines '
+                            'and/or nodes on which function-arg '
+                            'combo (%s, %s) has not failed '
+                            'attempt to execute. Check the '
+                            'IPython cluster\'s integrity and '
+                            'resource availability.')
+                             % (task_function, task_to_assign[0]),
+                             steps=(job_flow[step_number:]
+                                if step_number != 0 else None))
+                failed = True
+                raise RuntimeError
+            try:
+                assigned_engine = random.choice(
+                        list(free_engines - forbidden_engines)
+                    )
+            except IndexError:
+                # No engine to assign yet; add back to queue
+                tasks_to_assign.append(task_to_assign)
+            else:
+                asyncresults[task_to_assign[1]] = (
+                    pool[assigned_engine].apply_async(
+                        task_function,
+                        *(task_to_assign[0] +
+                          [len(task_to_assign[2])])
+                    )
+                )
+                assigned_tasks[task_to_assign[1]] = [
+                        task_to_assign[0], task_to_assign[1],
+                        task_to_assign[2] + [assigned_engine]
+                    ]
+                used_engines.add(assigned_engine)
+                free_engines.remove(assigned_engine)
+        asyncresults_to_remove = []
+        for task in asyncresults:
+            if asyncresults[task].ready():
+                return_value = asyncresults[task].get()
+                if return_value is not None:
+                    if max_attempts > len(assigned_tasks[task][2]):
+                        # Add to queue for reattempt
+                        tasks_to_assign.append(
+                                assigned_tasks[task]
+                            )
+                        max_task_fails = max(
+                                len(assigned_tasks[task][2]),
+                                max_task_fails
+                            )
+                        asyncresults_to_remove.append(task)
+                    else:
+                        # Bail if max_attempts is saturated
+                        iface.fail(return_value,
+                        steps=(job_flow[step_number:]
+                                if step_number != 0 else None))
+                        failed = True
+                        raise RuntimeError
+                else:
+                    # Success
+                    completed_tasks += 1
+                    asyncresults_to_remove.append(task)
+                iface.status(('    %s: '
+                              '%d/%d | '
+                              '\\max_i (task_i fails): '
+                              '%d/%d')
+                    % (status_message, completed_tasks,
+                        task_count, max_task_fails,
+                        max_attempts - 1))
+                assert assigned_tasks[task][-1][-1] == \
+                    asyncresults[task].engine_id
+                # Free engine
+                used_engines.remove(
+                        assigned_tasks[task][-1][-1]
+                    )
+                free_engines.add(assigned_tasks[task][-1][-1])
+        for task in asyncresults_to_remove:
+            del asyncresults[task]
+            del assigned_tasks[task]
+        time.sleep(0.1)
+    assert not used_engines
+    iface.step(finish_message)
+
+@contextlib.contextmanager
+def cache_ipy(iface,  
+              all_engines, host_map, engine_map,
+              job_flow, step_number,
+              scratch, pid_map, current_hostname,
+              pool=None, file_or_archive=None, archive=True):
+    """ Places X.[tar.gz/tgz]#Y in dir Y, unpacked if archive
+
+        pool: IPython Client object; all engines it spans are used
+        archive: file in format X.tar.gz#Y; None if nothing should
+            be done
+
+        Yields before deleting all files.
+    """
+    global failed
+    from tools import apply_async_with_errors
+    if file_or_archive is None:
+        '''So with statements can be used all the time, even
+        when there's nothing to be archived'''
+        assert pool is None
+        yield None
+        return
+    try:
+        (file_or_archive, destination_filename) = \
+            file_or_archive.split('#')
+    except TypeError:
+        iface.fail(('%s is an invalid cache argument.'
+                        % file_or_archive),
+                    steps=(job_flow[step_number:]
+                                if step_number != 0 else None))
+        failed = True
+        raise RuntimeError
+    file_or_archive = os.path.expanduser(
+            os.path.expandvars(file_or_archive)
+        )
+    file_or_archive_url = Url(file_or_archive)
+    if not (file_or_archive_url.is_nfs
+                or file_or_archive_url.is_local):
+        iface.fail(('The file %s is not local or on NFS.'
+                        % file_or_archive),
+                    steps=(job_flow[step_number:]
+                                if step_number != 0 else None))
+        failed = True
+        raise
+    file_or_archive = file_or_archive_url.to_url()
+    file_or_archive_basename = os.path.basename(file_or_archive)
+    if archive:
+        archive_dir = destination_filename
+        destination_filename = os.path.basename(file_or_archive)
+    if not os.path.isfile(file_or_archive):
+        iface.fail(('The file %s does not exist and thus cannot '
+                    'be cached.') % file_or_archive,
+                    steps=(job_flow[step_number:]
+                                if step_number != 0 else None))
+        failed = True
+        raise RuntimeError
+    iface.status('Preparing temporary directories for storing '
+                 '%s on slave nodes.' % file_or_archive_basename)
+    '''Select engines to do "heavy lifting"; that is, they remove
+    files copied to hosts on SIGINT/SIGTERM. Do it randomly
+    (NO SEED) so if IWF occurs, second try will be different.
+    IWF = intermittent weird failure. Set random seed so temp
+    directory is reused if restarting job.'''
+    random.seed(str(sorted(pid_map.keys())))
+    engines_for_copying = [random.choice(list(engines)) 
+                            for engines in engine_map.values()
+                            if len(engines) > 0]
+    '''Herd won't work with local engines; work around this by
+    separating engines into two groups: local and remote.'''
+    remote_hostnames_for_copying = list(
+            set(engine_map.keys()).difference(
+                set([current_hostname]))
+        )
+    local_engines_for_copying = [
+            engine for engine in engines_for_copying
+            if engine in engine_map[current_hostname]
+        ]
+    '''Create temporary directories on selected nodes; NOT
+    WINDOWS-COMPATIBLE; must be changed if porting to Windows.'''
+    if scratch == '-':
+        scratch_dir = tempfile.gettempdir()
+    else:
+        scratch_dir = scratch
+    temp_dir = os.path.join(
+                    scratch_dir,
+                    'dooplicity-%s' % ''.join(
+                            random.choice(string.ascii_uppercase
+                                            + string.digits)
+                            for _ in xrange(12)
+                        )
+                )
+    '''To accommodate any slot-local BASH variables that may be in
+    --scratch, echo them on all engines before adding to engine
+    PYTHONPATHs.'''
+    temp_dirs = apply_async_with_errors(pool, all_engines,
+        subprocess.check_output,
+        'echo "%s"' % temp_dir,
+        shell=True,
+        executable='/bin/bash',
+        message=('Error obtaining full paths of temporary '
+                 'directories on cluster nodes. Restart IPython '
+                 'engines and try again.'),
+        dict_format=True)
+    for engine in temp_dirs:
+        temp_dirs[engine].strip()
+    engines_with_unique_scratch, engines_to_symlink = [], []
+    engine_to_copy_engine = {}
+    for engine_for_copying in engines_for_copying:
+        for engine in engine_map[
+                    host_map[engine_for_copying]
+                ]:
+            engine_to_copy_engine[engine] = engine_for_copying
+            if (engine != engine_for_copying
+                and temp_dirs[engine]
+                != temp_dirs[engine_for_copying]):
+                engines_with_unique_scratch.append(engine)
+                engines_to_symlink.append(engine)
+            elif engine == engine_for_copying:
+                engines_with_unique_scratch.append(engine)
+    apply_async_with_errors(
+        pool, engines_for_copying, subprocess.check_output,
+        'mkdir -p %s' % temp_dir, shell=True,
+        executable='/bin/bash',
+        message=(('Error(s) encountered creating temporary '
+                  'directories for storing {} on slave nodes. '
+                  'Restart IPython engines and try again.').format(
+                                            file_or_archive
+                                        ))
+    )
+    if engines_to_symlink:
+        '''Create symlinks to resources in case of slot-local
+        scratch dirs'''
+        source_paths, destination_paths = {}, {}
+        for engine_to_symlink in engines_to_symlink:
+            source_paths[engine_to_symlink] = temp_dirs[
+                    engine_to_copy_engine[engine_to_symlink]
+                ]
+            destination_paths[engine_to_symlink] = temp_dirs[
+                    engine_to_symlink
+                ]
+        apply_async_with_errors(pool, engines_to_symlink,
+            os.remove, destination_paths,
+            message=('Error(s) encountered removing symlinks '
+                     'in slot-local scratch directories.'),
+            errors_to_ignore=['OSError'])
+        apply_async_with_errors(pool, engines_to_symlink,
+            os.symlink, source_paths, destination_paths,
+            message=('Error(s) encountered symlinking '
+                     'among slot-local scratch directories.'))
+    # Add temp dirs to path
+    apply_async_with_errors(
+        pool, all_engines, site.addsitedir, temp_dirs,
+        message=(('Error(s) encountered adding temporary '
+                  'directories for storing {} to path on '
+                  'slave nodes.').format(
+                                            file_or_archive
+                                        ))
+    )
+    '''Only foolproof way to die is by process polling. See
+    http://stackoverflow.com/questions/284325/
+    how-to-make-child-process-die-after-parent-exits for more
+    information.'''
+    apply_async_with_errors(
+        pool, engines_for_copying, subprocess.check_output,
+        ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
+         'SIGHUP SIGINT SIGTERM EXIT; '
+         'while [[ \$(ps -p \$\$ -o ppid=) -gt 1 ]]; '
+         'do sleep 1; done & wait" '
+         '>{temp_dir}/delscript.sh').format(temp_dir=temp_dir),
+        shell=True,
+        executable='/bin/bash',
+        message=(
+                'Error creating script for scheduling temporary '
+                'directories on cluster nodes for deletion. '
+                'Restart IPython engines and try again.'
+            )
+    )
+    apply_async_with_errors(
+        pool, engines_for_copying, subprocess.Popen,
+        '/usr/bin/env bash %s/delscript.sh' % temp_dir, shell=True,
+        executable='/bin/bash',
+        message=(
+            'Error scheduling temporary directories on slave '
+            'nodes for deletion. Restart IPython engines and try '
+            'again.'
+        )
+    )
+    iface.status('Caching %s.' % file_or_archive_basename)
+    destination_path = os.path.join(temp_dir, destination_filename)
+    try:
+        import herd.herd as herd
+    except ImportError:
+        '''Torrent distribution channel for compressed archive not
+        available.'''
+        apply_async_with_errors(
+            pool,
+            engines_for_copying,
+            shutil.copyfile,
+            file_or_archive, destination_path,
+            message=(('Error(s) encountered copying %s to '
+                      'slave nodes. Refer to the errors above '
+                      '-- and especially make sure $TMPDIR is not '
+                      'out of space on any node supporting an '
+                      'IPython engine -- before trying again.')
+                        % file_or_archive),
+        )
+    else:
+        if local_engines_for_copying:
+            apply_async_with_errors(pool,
+                local_engines_for_copying,
+                 subprocess.check_output, 'cp %s %s' % (
+                        file_or_archive, destination_path
+                    ), shell=True, executable='/bin/bash',
+                message=(('Error(s) encountered copying %s to '
+                          'local filesystem. Refer to the errors '
+                          'above -- and especially make sure '
+                          '$TMPDIR is not out of space on any '
+                          'node supporting an IPython engine '
+                          '-- before trying again.')
+                            % file_or_archive),
+            )
+        if remote_hostnames_for_copying:
+            herd.run_with_opts(
+                    file_or_archive,
+                    destination_path,
+                    hostlist=','.join(remote_hostnames_for_copying)
+                )
+    # Extract if necessary
+    if archive:
+        apply_async_with_errors(
+                pool, engines_for_copying, subprocess.check_output,
+                'rm -rf {}'.format(
+                        os.path.join(temp_dir, archive_dir)
+                    ), shell=True, executable='/bin/bash'
+            )
+        apply_async_with_errors(
+                pool, engines_for_copying, subprocess.check_output,
+                'mkdir -p {}'.format(
+                    os.path.join(temp_dir, archive_dir)
+                ), shell=True, executable='/bin/bash'
+        )
+        apply_async_with_errors(
+                pool, engines_for_copying, subprocess.check_output,
+                'tar xzf {} -C {}'.format(
+                    destination_path,
+                    os.path.join(temp_dir, archive_dir)),
+                shell=True,
+                executable='/bin/bash'
+        )
+        apply_async_with_errors(
+                pool, engines_for_copying, subprocess.check_output,
+                'rm -f {}'.format(destination_path),
+                shell=True, executable='/bin/bash'
+        )
+    iface.step('Cached %s.' % file_or_archive_basename)
+    try:
+        yield temp_dir
+    finally:
+        # Cleanup
+        apply_async_with_errors(
+                pool,
+                engines_for_copying, subprocess.check_output,
+                'rm -rf {}'.format(temp_dir), shell=True,
+                executable='/bin/bash',
+                message=('Error(s) encountered removing temporary '
+                         'directories.')
+            )
+
+import multiprocessing
+def execute_balanced_job_with_retries_mp(pool, iface,
+    task_function, task_function_args,
+    all_engines, host_map, engine_map,
+    job_flow, step_number,
+    status_message='Tasks completed',
+    finish_message='Completed tasks.', max_attempts=4):
+    """ Executes parallel job locally with multiprocessing module.
+
+        Tasks are added to queue if they fail, and max_attempts-1
+        failures are permitted per task. 
+
+        pool: multiprocessing.Pool object
+        iface: DooplicityInterface object for spewing log messages
+            to console
+        task_function: name if function to execute
+        task_function_args: iterable of lists, each of whose
+            items are task_function's arguments, WITH THE EXCEPTION
+            OF A SINGLE KEYWORD ARGUMENT "attempt_count". This
+            argument must be the final keyword argument of the
+            function but _excluded_ from the arguments in any item
+            of task_function_args.
+        status_message: status message about tasks completed
+        finish_message: message to output when all tasks are
+            completed
+        max_attempts: max number of times to attempt any given
+            task
+
+        No return value.
+    """
+    global failed
+    completed_tasks = 0
+    tasks_to_assign = deque([
+            [task_function_arg, i, 0] for i, task_function_arg
+            in enumerate(task_function_args)
+        ])
+    task_count = len(tasks_to_assign)
+    assigned_tasks, asyncresults = {}, {}
+    max_task_fails = 0
+    iface.status(('    %s: %d/%d%s')
+                    % (status_message, completed_tasks, task_count,
+                         (' | \\max_i (task_i fails): %d/%d'
+                           % (max_task_fails,
+                                max_attempts - 1)
+                           if max_attempts > 1 else '')))
+    while completed_tasks < task_count:
+        if tasks_to_assign:
+            task_to_assign = tasks_to_assign.popleft()
+            asyncresults[task_to_assign[1]] = (
+                    pool.apply_async(
+                        task_function,
+                        args=(task_to_assign[0] +
+                                [task_to_assign[2]])
+                    )
+                )
+            assigned_tasks[task_to_assign[1]] = [
+                    task_to_assign[0], task_to_assign[1],
+                    task_to_assign[2] + 1
+                ]
+        asyncresults_to_remove = []
+        for task in asyncresults:
+            if asyncresults[task].ready():
+                return_value = asyncresults[task].get()
+                if return_value is not None:
+                    if max_attempts > assigned_tasks[task][2]:
+                        # Add to queue for reattempt
+                        tasks_to_assign.append(
+                                assigned_tasks[task]
+                            )
+                        max_task_fails = max(
+                                assigned_tasks[task][2],
+                                max_task_fails
+                            )
+                        asyncresults_to_remove.append(task)
+                    else:
+                        # Bail if max_attempts is saturated
+                        iface.fail(return_value,
+                        steps=(job_flow[step_number:]
+                                if step_number != 0 else None))
+                        failed = True
+                        raise RuntimeError
+                else:
+                    # Success
+                    completed_tasks += 1
+                    asyncresults_to_remove.append(task)
+                iface.status(('    %s: %d/%d%s')
+                        % (status_message, completed_tasks,
+                            task_count,
+                            (' | \\max_i (task_i fails): %d/%d'
+                                % (max_task_fails,
+                                    max_attempts - 1)
+                                if max_attempts > 1 else '')))
+        for task in asyncresults_to_remove:
+            del asyncresults[task]
+            del assigned_tasks[task]
+        time.sleep(0.1)
+    iface.step(finish_message)
+
+@contextlib.contextmanager
+def cache_mp(iface, 
+              all_engines, host_map, engine_map,
+              job_flow, step_number,
+              scratch, pid_map, current_hostname,
+             pool=None, file_or_archive=None, archive=True):
+    """ Places X.[tar.gz/tgz]#Y in dir Y, unpacked if archive
+
+        pool: IPython Client object; all engines it spans are used
+        archive: file in format X.tar.gz#Y; False if nothing should
+            be done
+
+        Yields before deleting all files.
+    """
+    global failed
+    if file_or_archive is None:
+        '''So with statements can be used all the time, even
+        when there's nothing to be archived'''
+        assert pool is None
+        yield None
+        return
+    try:
+        (file_or_archive, destination_filename) = \
+            file_or_archive.split('#')
+    except TypeError:
+        iface.fail(('%s is an invalid cache argument.'
+                        % file_or_archive),
+                    steps=(job_flow[step_number:]
+                                if step_number != 0 else None))
+        failed = True
+        raise
+    destination_filename = os.path.expanduser(
+            os.path.expandvars(destination_filename)
+        )
+    file_or_archive_url = Url(file_or_archive)
+    if not file_or_archive_url.is_local:
+        iface.fail(('The file %s is not local.'
+                        % file_or_archive),
+                    steps=(job_flow[step_number:]
+                                if step_number != 0 else None))
+        failed = True
+        raise
+    file_or_archive = file_or_archive_url.to_url()
+    file_or_archive_basename = os.path.basename(file_or_archive)
+    if archive:
+        archive_dir = destination_filename
+        destination_filename = os.path.basename(file_or_archive)
+    if not os.path.isfile(file_or_archive):
+        iface.fail(('The file %s does not exist and thus cannot '
+                    'be cached.') % file_or_archive,
+                    steps=(job_flow[step_number:]
+                                if step_number != 0 else None))
+        failed = True
+        raise RuntimeError
+    temp_dir = make_temp_dir_and_register_cleanup(
+                                        None if scratch == '-'
+                                        else scratch
+                                    )
+    iface.status('Caching %s.' % file_or_archive_basename)
+    destination_path = os.path.join(temp_dir, destination_filename)
+    shutil.copyfile(file_or_archive, destination_path)
+    # Extract if necessary
+    if archive:
+        try:
+            os.makedirs(os.path.join(temp_dir, archive_dir))
+        except OSError:
+            # Hopefully, directory is already created
+            pass
+        import subprocess
+        try:
+            subprocess.check_output(
+                            'tar xzf {} -C {}'.format(
+                                destination_path,
+                                os.path.join(temp_dir, archive_dir)
+                            ),
+                            shell=True,
+                            bufsize=-1,
+                            stderr=subprocess.STDOUT,
+                            executable='/bin/bash'
+                        )
+        except subprocess.CalledProcessError as e:
+            iface.fail(
+                    ('Decompression of archive failed; exit code '
+                     'was %s, and reason was "%s".') % (
+                        e.returncode,
+                        e.output.strip()
+                    ),
+                    steps=(job_flow[step_number:]
+                                if step_number != 0 else None)
+                )
+            failed = True
+            raise RuntimeError
+        cleanup(destination_path)
+    iface.step('Cached %s.' % file_or_archive_basename)
+    try:
+        yield temp_dir
+    finally:
+        # Cleanup
+        cleanup(temp_dir)
+
 def run_simulation(branding, json_config, force, memcap, num_processes,
                     separator, keep_intermediates, keep_last_output,
                     log, gzip=False, gzip_level=3, ipy=False,
@@ -930,595 +1534,12 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     pool, all_engines, os.getpid,
                                     dict_format=True
                                 )
-           
-            import random
-            def execute_balanced_job_with_retries(pool, iface,
-                task_function, task_function_args,
-                status_message='Tasks completed',
-                finish_message='Completed tasks.', max_attempts=4):
-                """ Executes parallel job over IPython engines with retries.
-
-                    Tasks are assigned to free engines as they become
-                    available. If a task fails on one engine, it is retried on
-                    another engine. If a task has been tried on all engines but
-                    fails before max_attempts is exceeded, the step is failed.
-
-                    pool: IPython Client object; all engines it spans are used
-                    iface: DooplicityInterface object for spewing log messages
-                        to console
-                    task_function: name if function to execute
-                    task_function_args: iterable of lists, each of whose
-                        items are task_function's arguments, WITH THE EXCEPTION
-                        OF A SINGLE KEYWORD ARGUMENT "attempt_count". This
-                        argument must be the final keyword argument of the
-                        function but _excluded_ from the arguments in any item
-                        of task_function_args.
-                    status_message: status message about tasks completed
-                    finish_message: message to output when all tasks are
-                        completed
-                    max_attempts: max number of times to attempt any given
-                        task
-
-                    No return value.
-                """
-                global failed
-                random.seed(pool.ids[-1])
-                used_engines, free_engines = set(), set(pool.ids)
-                completed_tasks = 0
-                tasks_to_assign = deque([
-                        [task_function_arg, i, []] for i, task_function_arg
-                        in enumerate(task_function_args)
-                    ])
-                task_count = len(tasks_to_assign)
-                assigned_tasks, asyncresults = {}, {}
-                max_task_fails = 0
-                iface.status(('    %s: '
-                              '%d/%d | \\max_i (task_i fails): %d/%d')
-                                % (status_message, completed_tasks,
-                                    task_count, max_task_fails,
-                                    max_attempts - 1))
-                while completed_tasks < task_count:
-                    if tasks_to_assign:
-                        task_to_assign = tasks_to_assign.popleft()
-                        forbidden_engines = set(task_to_assign[2])
-                        if len(forbidden_engines) >= 2:
-                            # After two fails, do not allow reused nodes
-                            for forbidden_engine in task_to_assign[2]:
-                                forbidden_engines.update(
-                                    engine_map[host_map[forbidden_engine]]
-                                )
-                        if all_engines <= forbidden_engines:
-                            iface.fail(('No more running IPython engines '
-                                        'and/or nodes on which function-arg '
-                                        'combo (%s, %s) has not failed '
-                                        'attempt to execute. Check the '
-                                        'IPython cluster\'s integrity and '
-                                        'resource availability.')
-                                         % (task_function, task_to_assign[0]),
-                                         steps=(job_flow[step_number:]
-                                            if step_number != 0 else None))
-                            failed = True
-                            raise RuntimeError
-                        try:
-                            assigned_engine = random.choice(
-                                    list(free_engines - forbidden_engines)
-                                )
-                        except IndexError:
-                            # No engine to assign yet; add back to queue
-                            tasks_to_assign.append(task_to_assign)
-                        else:
-                            asyncresults[task_to_assign[1]] = (
-                                pool[assigned_engine].apply_async(
-                                    task_function,
-                                    *(task_to_assign[0] +
-                                      [len(task_to_assign[2])])
-                                )
-                            )
-                            assigned_tasks[task_to_assign[1]] = [
-                                    task_to_assign[0], task_to_assign[1],
-                                    task_to_assign[2] + [assigned_engine]
-                                ]
-                            used_engines.add(assigned_engine)
-                            free_engines.remove(assigned_engine)
-                    asyncresults_to_remove = []
-                    for task in asyncresults:
-                        if asyncresults[task].ready():
-                            return_value = asyncresults[task].get()
-                            if return_value is not None:
-                                if max_attempts > len(assigned_tasks[task][2]):
-                                    # Add to queue for reattempt
-                                    tasks_to_assign.append(
-                                            assigned_tasks[task]
-                                        )
-                                    max_task_fails = max(
-                                            len(assigned_tasks[task][2]),
-                                            max_task_fails
-                                        )
-                                    asyncresults_to_remove.append(task)
-                                else:
-                                    # Bail if max_attempts is saturated
-                                    iface.fail(return_value,
-                                    steps=(job_flow[step_number:]
-                                            if step_number != 0 else None))
-                                    failed = True
-                                    raise RuntimeError
-                            else:
-                                # Success
-                                completed_tasks += 1
-                                asyncresults_to_remove.append(task)
-                            iface.status(('    %s: '
-                                          '%d/%d | '
-                                          '\\max_i (task_i fails): '
-                                          '%d/%d')
-                                % (status_message, completed_tasks,
-                                    task_count, max_task_fails,
-                                    max_attempts - 1))
-                            assert assigned_tasks[task][-1][-1] == \
-                                asyncresults[task].engine_id
-                            # Free engine
-                            used_engines.remove(
-                                    assigned_tasks[task][-1][-1]
-                                )
-                            free_engines.add(assigned_tasks[task][-1][-1])
-                    for task in asyncresults_to_remove:
-                        del asyncresults[task]
-                        del assigned_tasks[task]
-                    time.sleep(0.1)
-                assert not used_engines
-                iface.step(finish_message)
-            @contextlib.contextmanager
-            def cache(pool=None, file_or_archive=None, archive=True):
-                """ Places X.[tar.gz/tgz]#Y in dir Y, unpacked if archive
-
-                    pool: IPython Client object; all engines it spans are used
-                    archive: file in format X.tar.gz#Y; None if nothing should
-                        be done
-
-                    Yields before deleting all files.
-                """
-                global failed
-                if file_or_archive is None:
-                    '''So with statements can be used all the time, even
-                    when there's nothing to be archived'''
-                    assert pool is None
-                    yield None
-                    return
-                try:
-                    (file_or_archive, destination_filename) = \
-                        file_or_archive.split('#')
-                except TypeError:
-                    iface.fail(('%s is an invalid cache argument.'
-                                    % file_or_archive),
-                                steps=(job_flow[step_number:]
-                                            if step_number != 0 else None))
-                    failed = True
-                    raise RuntimeError
-                file_or_archive = os.path.expanduser(
-                        os.path.expandvars(file_or_archive)
-                    )
-                file_or_archive_url = Url(file_or_archive)
-                if not (file_or_archive_url.is_nfs
-                            or file_or_archive_url.is_local):
-                    iface.fail(('The file %s is not local or on NFS.'
-                                    % file_or_archive),
-                                steps=(job_flow[step_number:]
-                                            if step_number != 0 else None))
-                    failed = True
-                    raise
-                file_or_archive = file_or_archive_url.to_url()
-                file_or_archive_basename = os.path.basename(file_or_archive)
-                if archive:
-                    archive_dir = destination_filename
-                    destination_filename = os.path.basename(file_or_archive)
-                if not os.path.isfile(file_or_archive):
-                    iface.fail(('The file %s does not exist and thus cannot '
-                                'be cached.') % file_or_archive,
-                                steps=(job_flow[step_number:]
-                                            if step_number != 0 else None))
-                    failed = True
-                    raise RuntimeError
-                iface.status('Preparing temporary directories for storing '
-                             '%s on slave nodes.' % file_or_archive_basename)
-                '''Select engines to do "heavy lifting"; that is, they remove
-                files copied to hosts on SIGINT/SIGTERM. Do it randomly
-                (NO SEED) so if IWF occurs, second try will be different.
-                IWF = intermittent weird failure. Set random seed so temp
-                directory is reused if restarting job.'''
-                random.seed(str(sorted(pid_map.keys())))
-                engines_for_copying = [random.choice(list(engines)) 
-                                        for engines in engine_map.values()
-                                        if len(engines) > 0]
-                '''Herd won't work with local engines; work around this by
-                separating engines into two groups: local and remote.'''
-                remote_hostnames_for_copying = list(
-                        set(engine_map.keys()).difference(
-                            set([current_hostname]))
-                    )
-                local_engines_for_copying = [
-                        engine for engine in engines_for_copying
-                        if engine in engine_map[current_hostname]
-                    ]
-                '''Create temporary directories on selected nodes; NOT
-                WINDOWS-COMPATIBLE; must be changed if porting to Windows.'''
-                if scratch == '-':
-                    scratch_dir = tempfile.gettempdir()
-                else:
-                    scratch_dir = scratch
-                temp_dir = os.path.join(
-                                scratch_dir,
-                                'dooplicity-%s' % ''.join(
-                                        random.choice(string.ascii_uppercase
-                                                        + string.digits)
-                                        for _ in xrange(12)
-                                    )
-                            )
-                '''To accommodate any slot-local BASH variables that may be in
-                --scratch, echo them on all engines before adding to engine
-                PYTHONPATHs.'''
-                temp_dirs = apply_async_with_errors(pool, all_engines,
-                    subprocess.check_output,
-                    'echo "%s"' % temp_dir,
-                    shell=True,
-                    executable='/bin/bash',
-                    message=('Error obtaining full paths of temporary '
-                             'directories on cluster nodes. Restart IPython '
-                             'engines and try again.'),
-                    dict_format=True)
-                for engine in temp_dirs:
-                    temp_dirs[engine].strip()
-                engines_with_unique_scratch, engines_to_symlink = [], []
-                engine_to_copy_engine = {}
-                for engine_for_copying in engines_for_copying:
-                    for engine in engine_map[
-                                host_map[engine_for_copying]
-                            ]:
-                        engine_to_copy_engine[engine] = engine_for_copying
-                        if (engine != engine_for_copying
-                            and temp_dirs[engine]
-                            != temp_dirs[engine_for_copying]):
-                            engines_with_unique_scratch.append(engine)
-                            engines_to_symlink.append(engine)
-                        elif engine == engine_for_copying:
-                            engines_with_unique_scratch.append(engine)
-                apply_async_with_errors(
-                    pool, engines_for_copying, subprocess.check_output,
-                    'mkdir -p %s' % temp_dir, shell=True,
-                    executable='/bin/bash',
-                    message=(('Error(s) encountered creating temporary '
-                              'directories for storing {} on slave nodes. '
-                              'Restart IPython engines and try again.').format(
-                                                        file_or_archive
-                                                    ))
-                )
-                if engines_to_symlink:
-                    '''Create symlinks to resources in case of slot-local
-                    scratch dirs'''
-                    source_paths, destination_paths = {}, {}
-                    for engine_to_symlink in engines_to_symlink:
-                        source_paths[engine_to_symlink] = temp_dirs[
-                                engine_to_copy_engine[engine_to_symlink]
-                            ]
-                        destination_paths[engine_to_symlink] = temp_dirs[
-                                engine_to_symlink
-                            ]
-                    apply_async_with_errors(pool, engines_to_symlink,
-                        os.remove, destination_paths,
-                        message=('Error(s) encountered removing symlinks '
-                                 'in slot-local scratch directories.'),
-                        errors_to_ignore=['OSError'])
-                    apply_async_with_errors(pool, engines_to_symlink,
-                        os.symlink, source_paths, destination_paths,
-                        message=('Error(s) encountered symlinking '
-                                 'among slot-local scratch directories.'))
-                # Add temp dirs to path
-                apply_async_with_errors(
-                    pool, all_engines, site.addsitedir, temp_dirs,
-                    message=(('Error(s) encountered adding temporary '
-                              'directories for storing {} to path on '
-                              'slave nodes.').format(
-                                                        file_or_archive
-                                                    ))
-                )
-                '''Only foolproof way to die is by process polling. See
-                http://stackoverflow.com/questions/284325/
-                how-to-make-child-process-die-after-parent-exits for more
-                information.'''
-                apply_async_with_errors(
-                    pool, engines_for_copying, subprocess.check_output,
-                    ('echo "trap \\"{{ rm -rf {temp_dir}; exit 0; }}\\" '
-                     'SIGHUP SIGINT SIGTERM EXIT; '
-                     'while [[ \$(ps -p \$\$ -o ppid=) -gt 1 ]]; '
-                     'do sleep 1; done & wait" '
-                     '>{temp_dir}/delscript.sh').format(temp_dir=temp_dir),
-                    shell=True,
-                    executable='/bin/bash',
-                    message=(
-                            'Error creating script for scheduling temporary '
-                            'directories on cluster nodes for deletion. '
-                            'Restart IPython engines and try again.'
-                        )
-                )
-                apply_async_with_errors(
-                    pool, engines_for_copying, subprocess.Popen,
-                    '/usr/bin/env bash %s/delscript.sh' % temp_dir, shell=True,
-                    executable='/bin/bash',
-                    message=(
-                        'Error scheduling temporary directories on slave '
-                        'nodes for deletion. Restart IPython engines and try '
-                        'again.'
-                    )
-                )
-                iface.status('Caching %s.' % file_or_archive_basename)
-                destination_path = os.path.join(temp_dir, destination_filename)
-                try:
-                    import herd.herd as herd
-                except ImportError:
-                    '''Torrent distribution channel for compressed archive not
-                    available.'''
-                    apply_async_with_errors(
-                        pool,
-                        engines_for_copying,
-                        shutil.copyfile,
-                        file_or_archive, destination_path,
-                        message=(('Error(s) encountered copying %s to '
-                                  'slave nodes. Refer to the errors above '
-                                  '-- and especially make sure $TMPDIR is not '
-                                  'out of space on any node supporting an '
-                                  'IPython engine -- before trying again.')
-                                    % file_or_archive),
-                    )
-                else:
-                    if local_engines_for_copying:
-                        apply_async_with_errors(pool,
-                            local_engines_for_copying,
-                             subprocess.check_output, 'cp %s %s' % (
-                                    file_or_archive, destination_path
-                                ), shell=True, executable='/bin/bash',
-                            message=(('Error(s) encountered copying %s to '
-                                      'local filesystem. Refer to the errors '
-                                      'above -- and especially make sure '
-                                      '$TMPDIR is not out of space on any '
-                                      'node supporting an IPython engine '
-                                      '-- before trying again.')
-                                        % file_or_archive),
-                        )
-                    if remote_hostnames_for_copying:
-                        herd.run_with_opts(
-                                file_or_archive,
-                                destination_path,
-                                hostlist=','.join(remote_hostnames_for_copying)
-                            )
-                # Extract if necessary
-                if archive:
-                    apply_async_with_errors(
-                            pool, engines_for_copying, subprocess.check_output,
-                            'rm -rf {}'.format(
-                                    os.path.join(temp_dir, archive_dir)
-                                ), shell=True, executable='/bin/bash'
-                        )
-                    apply_async_with_errors(
-                            pool, engines_for_copying, subprocess.check_output,
-                            'mkdir -p {}'.format(
-                                os.path.join(temp_dir, archive_dir)
-                            ), shell=True, executable='/bin/bash'
-                    )
-                    apply_async_with_errors(
-                            pool, engines_for_copying, subprocess.check_output,
-                            'tar xzf {} -C {}'.format(
-                                destination_path,
-                                os.path.join(temp_dir, archive_dir)),
-                            shell=True,
-                            executable='/bin/bash'
-                    )
-                    apply_async_with_errors(
-                            pool, engines_for_copying, subprocess.check_output,
-                            'rm -f {}'.format(destination_path),
-                            shell=True, executable='/bin/bash'
-                    )
-                iface.step('Cached %s.' % file_or_archive_basename)
-                try:
-                    yield temp_dir
-                finally:
-                    # Cleanup
-                    apply_async_with_errors(
-                            pool,
-                            engines_for_copying, subprocess.check_output,
-                            'rm -rf {}'.format(temp_dir), shell=True,
-                            executable='/bin/bash',
-                            message=('Error(s) encountered removing temporary '
-                                     'directories.')
-                        )
+            execute_balanced_job_with_retries = execute_balanced_job_with_retries_ipy
+            cache = cache_ipy
         else:
-            import multiprocessing
-            def execute_balanced_job_with_retries(pool, iface,
-                task_function, task_function_args,
-                status_message='Tasks completed',
-                finish_message='Completed tasks.', max_attempts=4):
-                """ Executes parallel job locally with multiprocessing module.
+            execute_balanced_job_with_retries = execute_balanced_job_with_retries_mp
+            cache = cache_mp
 
-                    Tasks are added to queue if they fail, and max_attempts-1
-                    failures are permitted per task. 
-
-                    pool: multiprocessing.Pool object
-                    iface: DooplicityInterface object for spewing log messages
-                        to console
-                    task_function: name if function to execute
-                    task_function_args: iterable of lists, each of whose
-                        items are task_function's arguments, WITH THE EXCEPTION
-                        OF A SINGLE KEYWORD ARGUMENT "attempt_count". This
-                        argument must be the final keyword argument of the
-                        function but _excluded_ from the arguments in any item
-                        of task_function_args.
-                    status_message: status message about tasks completed
-                    finish_message: message to output when all tasks are
-                        completed
-                    max_attempts: max number of times to attempt any given
-                        task
-
-                    No return value.
-                """
-                global failed
-                completed_tasks = 0
-                tasks_to_assign = deque([
-                        [task_function_arg, i, 0] for i, task_function_arg
-                        in enumerate(task_function_args)
-                    ])
-                task_count = len(tasks_to_assign)
-                assigned_tasks, asyncresults = {}, {}
-                max_task_fails = 0
-                iface.status(('    %s: %d/%d%s')
-                                % (status_message, completed_tasks, task_count,
-                                     (' | \\max_i (task_i fails): %d/%d'
-                                       % (max_task_fails,
-                                            max_attempts - 1)
-                                       if max_attempts > 1 else '')))
-                while completed_tasks < task_count:
-                    if tasks_to_assign:
-                        task_to_assign = tasks_to_assign.popleft()
-                        asyncresults[task_to_assign[1]] = (
-                                pool.apply_async(
-                                    task_function,
-                                    args=(task_to_assign[0] +
-                                            [task_to_assign[2]])
-                                )
-                            )
-                        assigned_tasks[task_to_assign[1]] = [
-                                task_to_assign[0], task_to_assign[1],
-                                task_to_assign[2] + 1
-                            ]
-                    asyncresults_to_remove = []
-                    for task in asyncresults:
-                        if asyncresults[task].ready():
-                            return_value = asyncresults[task].get()
-                            if return_value is not None:
-                                if max_attempts > assigned_tasks[task][2]:
-                                    # Add to queue for reattempt
-                                    tasks_to_assign.append(
-                                            assigned_tasks[task]
-                                        )
-                                    max_task_fails = max(
-                                            assigned_tasks[task][2],
-                                            max_task_fails
-                                        )
-                                    asyncresults_to_remove.append(task)
-                                else:
-                                    # Bail if max_attempts is saturated
-                                    iface.fail(return_value,
-                                    steps=(job_flow[step_number:]
-                                            if step_number != 0 else None))
-                                    failed = True
-                                    raise RuntimeError
-                            else:
-                                # Success
-                                completed_tasks += 1
-                                asyncresults_to_remove.append(task)
-                            iface.status(('    %s: %d/%d%s')
-                                    % (status_message, completed_tasks,
-                                        task_count,
-                                        (' | \\max_i (task_i fails): %d/%d'
-                                            % (max_task_fails,
-                                                max_attempts - 1)
-                                            if max_attempts > 1 else '')))
-                    for task in asyncresults_to_remove:
-                        del asyncresults[task]
-                        del assigned_tasks[task]
-                    time.sleep(0.1)
-                iface.step(finish_message)
-            @contextlib.contextmanager
-            def cache(pool=None, file_or_archive=None, archive=True):
-                """ Places X.[tar.gz/tgz]#Y in dir Y, unpacked if archive
-
-                    pool: IPython Client object; all engines it spans are used
-                    archive: file in format X.tar.gz#Y; False if nothing should
-                        be done
-
-                    Yields before deleting all files.
-                """
-                global failed
-                if file_or_archive is None:
-                    '''So with statements can be used all the time, even
-                    when there's nothing to be archived'''
-                    assert pool is None
-                    yield None
-                    return
-                try:
-                    (file_or_archive, destination_filename) = \
-                        file_or_archive.split('#')
-                except TypeError:
-                    iface.fail(('%s is an invalid cache argument.'
-                                    % file_or_archive),
-                                steps=(job_flow[step_number:]
-                                            if step_number != 0 else None))
-                    failed = True
-                    raise
-                destination_filename = os.path.expanduser(
-                        os.path.expandvars(destination_filename)
-                    )
-                file_or_archive_url = Url(file_or_archive)
-                if not file_or_archive_url.is_local:
-                    iface.fail(('The file %s is not local.'
-                                    % file_or_archive),
-                                steps=(job_flow[step_number:]
-                                            if step_number != 0 else None))
-                    failed = True
-                    raise
-                file_or_archive = file_or_archive_url.to_url()
-                file_or_archive_basename = os.path.basename(file_or_archive)
-                if archive:
-                    archive_dir = destination_filename
-                    destination_filename = os.path.basename(file_or_archive)
-                if not os.path.isfile(file_or_archive):
-                    iface.fail(('The file %s does not exist and thus cannot '
-                                'be cached.') % file_or_archive,
-                                steps=(job_flow[step_number:]
-                                            if step_number != 0 else None))
-                    failed = True
-                    raise RuntimeError
-                temp_dir = make_temp_dir_and_register_cleanup(
-                                                    None if scratch == '-'
-                                                    else scratch
-                                                )
-                iface.status('Caching %s.' % file_or_archive_basename)
-                destination_path = os.path.join(temp_dir, destination_filename)
-                shutil.copyfile(file_or_archive, destination_path)
-                # Extract if necessary
-                if archive:
-                    try:
-                        os.makedirs(os.path.join(temp_dir, archive_dir))
-                    except OSError:
-                        # Hopefully, directory is already created
-                        pass
-                    import subprocess
-                    try:
-                        subprocess.check_output(
-                                        'tar xzf {} -C {}'.format(
-                                            destination_path,
-                                            os.path.join(temp_dir, archive_dir)
-                                        ),
-                                        shell=True,
-                                        bufsize=-1,
-                                        stderr=subprocess.STDOUT,
-                                        executable='/bin/bash'
-                                    )
-                    except subprocess.CalledProcessError as e:
-                        iface.fail(
-                                ('Decompression of archive failed; exit code '
-                                 'was %s, and reason was "%s".') % (
-                                    e.returncode,
-                                    e.output.strip()
-                                ),
-                                steps=(job_flow[step_number:]
-                                            if step_number != 0 else None)
-                            )
-                        failed = True
-                        raise RuntimeError
-                    cleanup(destination_path)
-                iface.step('Cached %s.' % file_or_archive_basename)
-                try:
-                    yield temp_dir
-                finally:
-                    # Cleanup
-                    cleanup(temp_dir)
         # Serialize JSON configuration
         if json_config is not None:
             with open(json_config) as json_stream:
@@ -1729,7 +1750,11 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     to_cache = step_data['cacheFile']
             else:
                 to_cache = None
-            with cache(pool if to_cache else None, to_cache,
+            with cache(iface,  
+                        all_engines, host_map, engine_map,
+                        job_flow, step_number,
+                        scratch, pid_map, current_hostname,
+                        pool if to_cache else None, to_cache,
                         True if 'archives'
                         in step_data else False) as dir_to_path:
                 if step_data['mapper'] not in identity_mappers:
@@ -1827,6 +1852,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                          for i, input_file
                                          in enumerate(input_files)
                                          if os.path.isfile(input_file)],
+                                         all_engines, host_map, engine_map,
+                                         job_flow, step_number,
                             status_message='Tasks completed',
                             finish_message=(
                                 '    Completed %s.'
@@ -1892,6 +1919,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 sort, mod_partition]
                                     for i, input_file_group
                                     in enumerate(input_file_groups)],
+                                    all_engines, host_map, engine_map,
+                                    job_flow, step_number,
                             status_message='Inputs partitioned',
                             finish_message=(
                                 '    Partitioned %s into tasks.'
@@ -1932,6 +1961,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                 sort, dir_to_path]
                                     for i, input_file
                                     in enumerate(input_files)],
+                                    all_engines, host_map, engine_map,
+                                    job_flow, step_number,
                             status_message='Tasks completed',
                             finish_message=(
                                 '    Completed %s.'
@@ -1993,7 +2024,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         raise
     except (KeyboardInterrupt, SystemExit):
         if 'interrupt_engines' in locals():
-            interrupt_engines(pool, ifac, host_map, pid_map)
+            interrupt_engines(pool, iface, host_map, pid_map)
         if 'step_number' in locals():
             iface.fail(steps=(job_flow[step_number:]
                         if step_number != 0 else None),
