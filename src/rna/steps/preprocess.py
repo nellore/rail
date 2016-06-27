@@ -84,6 +84,7 @@ site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
 from dooplicity.tools import xopen, register_cleanup, make_temp_dir
+from dooplicity.counters import Counter
 import filemover
 import tempdel
 import subprocess
@@ -93,6 +94,7 @@ from encode import encode, encode_sequence
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 _input_line_count, _output_line_count = 0, 0
+counter = Counter('preprocessing')
 
 # Maximum length of read to ignore if dealing with barcodes
 _max_stubby_read_length = 10
@@ -302,6 +304,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         if tokens[0] == '#!splitload':
             '''Line specifies precisely how records from files should be
             placed.'''
+            counter.add('splitload_lines')
             assert not to_stdout, ('Split manifest line inconsistent with '
                                    'writing to stdout.')
             qual_getter = phred_converter(phred_format=tokens[-1])
@@ -328,14 +331,17 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                                     )
         elif token_count == 3:
             # SRA or single-end reads
+            counter.add('single_end_lines')
             source_dict[(Url(tokens[0]),)] = (tokens[-1],)
         elif token_count == 5:
             # Paired-end reads
+            counter.add('paired_end_lines')
             source_dict[(Url(tokens[0]), Url(tokens[2]))] = (tokens[-1],)
         else:
             # Not a valid line, but continue for robustness
             continue
     file_number = 0
+    counter.flush()
     for source_urls in source_dict:
         sample_label = source_dict[source_urls][0]
         downloaded = set()
