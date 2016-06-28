@@ -213,8 +213,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
             i += 1
             multiread.append((qname,) + tokens)
         if flag & 4: continue
-        corrected_multiread = multiread_with_junctions(multiread,
-                                                        stranded)
         cojunctions, all_junctions = defaultdict(set), {}
         for alignment in multiread_with_junctions(multiread, stranded):
             cigar = alignment[5]
