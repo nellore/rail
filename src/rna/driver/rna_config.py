@@ -41,6 +41,7 @@ import exe_paths
 import unicodedata
 import json
 from distutils.util import strtobool
+import re
 
 _help_set = set(['--help', '-h'])
 _argv_set = set(sys.argv)
@@ -157,7 +158,7 @@ _assemblies = {
 _transcript_fragment_idx_basename = 'isofrags'
 
 # Decide Python executable
-if 'pypy 2.' in sys.version.lower():
+if re.search(r'pypy [24]\.', sys.version, re.IGNORECASE):
     # Executable has the user's desired version of PyPy
     _warning_message = 'Launching Dooplicity runner with PyPy...'
     _executable = sys.executable
@@ -173,11 +174,14 @@ else:
     _print_warning = False
     if _pypy_exe is not None:
         try:
-            if 'pypy 2.' in \
-                subprocess.check_output(
-                        [_pypy_exe, '--version'],
-                        stderr=subprocess.STDOUT
-                    ).lower():
+            if re.search(
+                        r'pypy [24]\.', 
+                        subprocess.check_output(
+                                [_pypy_exe, '--version'],
+                                stderr=subprocess.STDOUT
+                            ),
+                        re.IGNORECASE
+                    ):
                 _executable = _pypy_exe
             else:
                 _executable = sys.executable
@@ -188,7 +192,7 @@ else:
     else:
         _print_warning = True
     if _print_warning:
-        _warning_message = ('WARNING: PyPy 2.x not found. '
+        _warning_message = ('WARNING: PyPy v2 or greater not found. '
             'Installation is recommended to optimize performance '
             'of Rail-RNA in "local" or "parallel" mode. If it is installed, '
             'make sure the "pypy" executable is in PATH, or use '
