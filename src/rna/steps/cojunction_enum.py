@@ -130,7 +130,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                 print >>started_stream, 'STARTED'
             for extension in ['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', 
                                 '.rev.1.bt2', '.rev.2.bt2']:
-                mover.get(bowtie2_index_base_url, index_directory)
+                mover.get(bowtie2_index_base_url + extension, index_directory)
             with open(os.path.join(index_directory, '_SUCCESS'), 'w') \
                 as success_stream:
                 print >>success_stream, 'SUCCESS'
