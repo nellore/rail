@@ -63,7 +63,8 @@ site.addsitedir(base_path)
 import bowtie
 import bowtie_index
 import partition
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
+from dooplicity.counters import Counter
 from alignment_handlers import pairwise
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
@@ -71,6 +72,8 @@ _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 # Initialize global variables for tracking number of input/output lines
 _input_line_count = 0
 _output_line_count = 0
+counter = Counter('junction_search')
+register_cleanup(counter.flush)
 
 # Initialize forward- and reverse-strand motifs
 
@@ -475,6 +478,7 @@ def maximum_clique(cluster):
     clique_so_far=[]
     # Start main loop
     while smallcand or stack:
+        counter.add('maximum_clique_loops')
         try:
             # Any nodes left to check?
             n=smallcand.pop()
@@ -548,6 +552,7 @@ def maximum_clique(cluster):
     assert largest_clique_count >= 1
     if largest_clique_count == 1:
         return largest_cliques[0]
+    counter.add('largest_clique_ties')
     return random.choice(largest_cliques)
 
 def selected_readlet_alignments_by_clustering(readlets, experimental=False):
@@ -727,6 +732,7 @@ def selected_readlet_alignments_by_clustering(readlets, experimental=False):
     else:
         '''Alignment is in general too repetitive; postpone treatment until
         a nice systematic way to handle this case is found.'''
+        counter.add('largest_maximum_clique_tie')
         return [[], []]
 
 def junctions_from_clique(clique, read_seq, reference_index,
@@ -956,6 +962,9 @@ def junctions_from_clique(clique, read_seq, reference_index,
                                                     left_displacement+read_span
                                                 ],
                                                 reference_minus_intron)[-1][-1]
+                        counter.add('candidate_without_small_exon')
+                        tmpmotif = product_motifs[i][0] + '_' + product_motifs[i][1]
+                        counter.add('candidate_with_motif_' + tmpmotif)
                         candidate_junctions.append(
                                 (
                                     rname,
@@ -1065,6 +1074,9 @@ def junctions_from_clique(clique, read_seq, reference_index,
                                     if min_intron_size \
                                         <= first_intron_end_pos - intron_pos \
                                         <= max_intron_size:
+                                        tmpmotif = product_motifs[i][0] + '_' + cap_combo[0]
+                                        counter.add('candidate_with_small_exon')
+                                        counter.add('candidate_with_motif_' + tmpmotif)
                                         candidate_junctions.append(
                                                 (rname,
                                                   True if
@@ -1079,6 +1091,9 @@ def junctions_from_clique(clique, read_seq, reference_index,
                                     if min_intron_size \
                                         <= intron_end_pos - second_intron_pos \
                                         <= max_intron_size:
+                                        tmpmotif = cap_combo[1] + '_' + product_motifs[i][1]
+                                        counter.add('candidate_with_small_exon')
+                                        counter.add('candidate_with_motif_' + tmpmotif)
                                         candidate_junctions.append(
                                                 (rname,
                                                   True if

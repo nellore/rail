@@ -75,6 +75,7 @@ site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
 from dooplicity.tools import xstream, register_cleanup, make_temp_dir, xopen
+from dooplicity.counters import Counter
 import bowtie
 import bowtie_index
 import manifest
@@ -140,12 +141,16 @@ else:
     register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 
 input_line_count = 0
+counter = Counter('realign_reads_delegate')
+register_cleanup(counter.flush)
+
 for (line_type,), xpartition in xstream(sys.stdin, 1):
     type_string = ('insertions' if line_type == '0' else
                     ('deletions' if line_type == '1' else
                       ('junctions' if line_type == '2' else
                         'normalization')))
-    output_filename = ((args.tsv_basename + '.' 
+    counter.add(type_string + '_partitions')
+    output_filename = ((args.tsv_basename + '.'
                           if args.tsv_basename != '' else '')
                           + type_string + '.tsv.gz')
     if output_url.is_local:
@@ -168,6 +173,7 @@ for (line_type,), xpartition in xstream(sys.stdin, 1):
                 '''Handle missing zeros at end of line here; in previous step,
                 the total number of samples was unknown, so this was not
                 done.'''
+                counter.add(type_string + '_outputs')
                 print >>output_stream, '\t'.join(
                     (';'.join(
                         [reference_index.string_to_rname[rname],
@@ -178,12 +184,14 @@ for (line_type,), xpartition in xstream(sys.stdin, 1):
         else:
             for (sample_index, _, _, _, factor, unique_factor) in xpartition:
                 input_line_count += 1
+                counter.add('normalization_outputs')
                 print >>output_stream, '\t'.join([
                         manifest_object.index_to_label[sample_index],
                         factor, unique_factor
                     ])
 
     if not output_url.is_local:
+        counter.add('files_moved')
         mover.put(output_path, output_url.plus(output_filename))
         os.remove(output_path)
 

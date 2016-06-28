@@ -56,8 +56,11 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
+from dooplicity.counters import Counter
 _input_line_count, _output_line_count = 0, 0
+counter = Counter('junction_collect')
+register_cleanup(counter.flush)
 
 def edges_from_input_stream(input_stream, readlet_size=20,
     min_overlap_exon_size=1):
@@ -142,12 +145,16 @@ def edges_from_input_stream(input_stream, readlet_size=20,
     """
     global _input_line_count
     for key, xpartition in xstream(input_stream, 2, skip_duplicates=True):
+        counter.add('partitions')
         unlinked_nodes = set()
         for q, value in enumerate(xpartition):
+            counter.add('inputs')
             assert len(value) == 2
             _input_line_count += 1
             if not q:
                 # Denote start of new partition
+                counter.add('new_partition')
+                counter.add('introns')
                 yield None
                 # Handle first intron from partition
                 intron_start, intron_end = int(value[0]), int(value[1])
@@ -164,11 +171,12 @@ def edges_from_input_stream(input_stream, readlet_size=20,
                 unlinked_nodes = set([1])
                 index = 2
                 # Yield first edge for strand (before first intron)
+                counter.add('yielded_edges')
                 yield key + (fake_source,
                                 (intron_start, intron_end))
-                first_intron = False
             else:
                 # Handle next introns from partition
+                counter.add('introns')
                 intron_start, intron_end = int(value[0]), int(value[1])
                 introns[index] = (intron_start, intron_end)
                 nodes_to_trash = []
@@ -186,6 +194,7 @@ def edges_from_input_stream(input_stream, readlet_size=20,
                     if intermediate_node in linked_nodes:
                         nodes_to_trash.append(node)
                     else:
+                        counter.add('yielded_edges')
                         yield key + (introns[node],
                                             (intron_start, intron_end))
                         if introns[intermediate_node][1] > intron_end:
@@ -197,6 +206,7 @@ def edges_from_input_stream(input_stream, readlet_size=20,
         # Yield final edges for strand
         for node in unlinked_nodes:
             current_intron = introns[node]
+            counter.add('yielded_edges')
             yield key + (current_intron, (current_intron[1]
                                             + readlet_size - 1, None))
 
@@ -254,6 +264,7 @@ def paths(graph, source, in_node, readlet_size, last_node, edge_span=2,
     path_queue = deque([(in_node, base_sum, path)])
     while path_queue:
         in_node, base_sum, path = path_queue.popleft()
+        counter.add('path_queue_pops')
         path = path + [in_node]
         node_count = len(path)
         yielded = False
@@ -264,6 +275,7 @@ def paths(graph, source, in_node, readlet_size, last_node, edge_span=2,
             overlapping the start node.'''
             base_sum += path[-1][0] - path[-2][1]
             if base_sum >= readlet_size - 1:
+                counter.add('yielded_paths')
                 yield path
                 yielded = True
             elif node_count >= edge_span + 2 and \
@@ -287,6 +299,7 @@ def paths(graph, source, in_node, readlet_size, last_node, edge_span=2,
                 extension.'''
                 try:
                     yield path + [(path[-1][1] + readlet_size - 1, None)]
+                    counter.add('yielded_paths')
                 except TypeError:
                     # Path terminates on final fake intron; don't do anything
                     assert path[-1][1] is None
@@ -360,6 +373,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
     global _output_line_count
     source_queue = deque([node for node in DAG if node not in reverse_DAG])
     while source_queue:
+        counter.add('source_queue_pops')
         source = source_queue.popleft()
         nodes_to_remove = []
         for m, node in enumerate(DAG[source]):
@@ -378,6 +392,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
                     DAG[parent].remove(node)
             for parent in parents_to_remove:
                 reverse_DAG[node].remove(parent)
+            counter.add('parents_removed', len(parents_to_remove))
             for i, path in enumerate(
                                 paths(DAG, source, node, readlet_size,
                                         last_node,
@@ -385,6 +400,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
                                         min_edge_span_size=min_edge_span_size,
                                         can_yield=full_graph)
                             ):
+                counter.add('paths_enumerated')
                 try:
                     node_count = len(path)
                     left_size = path[1][0] - path[0][1]
@@ -401,6 +417,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
                         str(left_size) if path[0][0] is not None else 'NA',
                         str(right_size) if path[-1][1] is not None else 'NA'
                     )
+                    counter.add('outputs')
                     _output_line_count += 1
                     sys.stdout.flush()
                 except TypeError:
@@ -419,6 +436,7 @@ def consume_graph_and_print_combos(DAG, reverse_DAG, readlet_size, strand,
                 nodes_to_remove.append(node)
         for node in nodes_to_remove:
             DAG[source].remove(node)
+        counter.add('nodes_removed', len(nodes_to_remove))
         if not len(DAG[source]):
             # Edges from source are no longer needed to construct extensions
             del DAG[source]
@@ -493,6 +511,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
                         readlet_size=effective_readlet_size,
                         min_overlap_exon_size=min_overlap_exon_size
                     ):
+        counter.add('edges_from_input_stream')
         try:
             strand, sample_index, start_node, end_node = edge
         except TypeError:
@@ -523,9 +542,11 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, readlet_size=20,
                     print >>sys.stderr, 'Time taken: %0.3f s' \
                         % (time.time() - consume_start_time)
             except NameError: pass
+            counter.add('new_dags')
             DAG, reverse_DAG = defaultdict(set), defaultdict(set)
             flush_threshold = flush_base_count
             continue
+        counter.add('added_dag_nodes')
         DAG[start_node].add(end_node)
         reverse_DAG[end_node].add(start_node)
         if end_node[0] >= flush_threshold:

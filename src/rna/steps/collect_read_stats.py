@@ -50,6 +50,7 @@ site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
 from dooplicity.tools import xstream, register_cleanup, make_temp_dir, xopen
+from dooplicity.counters import Counter
 import bowtie
 import bowtie_index
 import manifest
@@ -104,6 +105,8 @@ manifest_object = manifest.LabelsAndIndices(
 output_url = Url(args.out) if args.out is not None \
     else Url(os.getcwd())
 input_line_count = 0
+counter = Counter('collect_read_stats')
+register_cleanup(counter.flush)
 if output_url.is_local:
     # Set up destination directory
     try: os.makedirs(output_url.to_url())
@@ -136,9 +139,11 @@ with xopen(True, output_path, 'w', args.gzip_level) as output_stream:
                     + ['total mapped reads', 'total reads']
                 )
     for (_, sample_index), xpartition in xstream(sys.stdin, 2):
+        counter.add('partitions')
         sample_label = manifest_object.index_to_label[sample_index]
         total_counts, unique_counts = defaultdict(int), defaultdict(int)
         for rname_index, total_count, unique_count in xpartition:
+            counter.add('inputs')
             rname = reference_index.string_to_rname[rname_index]
             total_counts[rname] = int(total_count)
             unique_counts[rname] = int(unique_count)
@@ -146,6 +151,10 @@ with xopen(True, output_path, 'w', args.gzip_level) as output_stream:
         total_mapped_reads = total_reads - total_counts['*']
         total_uniques = sum(unique_counts.values())
         total_mapped_uniques = total_uniques - unique_counts['*']
+        counter.add('total_reads', total_reads)
+        counter.add('total_mapped_reads', total_mapped_reads)
+        counter.add('total_uniques', total_uniques)
+        counter.add('total_mapped_uniques', total_mapped_uniques)
         print >>output_stream, '\t'.join(
                 [sample_label] + ['%d,%d' % (total_counts[rname],
                                                 unique_counts[rname])
@@ -164,6 +173,7 @@ with xopen(True, output_path, 'w', args.gzip_level) as output_stream:
             )
 
 if not output_url.is_local:
+    counter.add('files_moved')
     mover.put(output_path, output_url.plus(output_filename))
     os.remove(output_path)
 

@@ -95,6 +95,7 @@ _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
 _input_line_count, _output_line_count = 0, 0
 counter = Counter('preprocessing')
+register_cleanup(counter.flush)
 
 # Maximum length of read to ignore if dealing with barcodes
 _max_stubby_read_length = 10

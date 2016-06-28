@@ -83,6 +83,7 @@ import version
 import filemover
 from dooplicity.ansibles import Url
 from dooplicity.tools import register_cleanup, make_temp_dir, xstream
+from dooplicity.counters import Counter
 from alignment_handlers import SampleAndRnameIndexes
 import subprocess
 import tempdel
@@ -158,6 +159,9 @@ from alignment_handlers import AlignmentPrinter
 alignment_printer = AlignmentPrinter(manifest_object, reference_index,
                                         tie_margin=args.tie_margin)
 input_line_count = 0
+counter = Counter('bam')
+register_cleanup(counter.flush)
+
 if args.suppress_bam:
     # Just grab stats
     if args.output_by_chromosome:
@@ -178,6 +182,7 @@ if args.suppress_bam:
                         unique_count += 1
                 input_line_count += 1
             # Only primary alignments (flag & 256 != 1)
+            counter.add('print_stats')
             print 'counts\t-\t%s\t%s\t%d\t%d' % (sample_index, rname_index,
                                                  total_count, unique_count)
     else:
@@ -193,6 +198,7 @@ if args.suppress_bam:
                         # Unmapped read; it's unique
                         unique_count += 1
             # Only primary alignments (flag & 256 != 1)
+            counter.add('print_stats')
             print 'counts\t-\t%s\t%s\t%d\t%d' % (sample_index, rname_index,
                                                  total_count, unique_count)
 else:
@@ -243,6 +249,7 @@ else:
         """
         '''Write SAM header; always include all reference sequences to
         avoid confusing users.'''
+        counter.add('stream_and_upload')
         header = '\n'.join(
                 ['@HD\tVN:1.0\tSO:coordinate']
                 + [('@SQ\tSN:%s\tLN:%d' % (
@@ -310,6 +317,7 @@ else:
                         os.remove(bai)
                     os.remove(filename)
 
+    counter.flush()
     if args.output_by_chromosome:
         for (index, _), xpartition in xstream(sys.stdin, 2):
             sample_index, rname_index = (
@@ -346,6 +354,7 @@ else:
                                                 for token in record[3:]]
                     try:
                         print >>output_stream, '\t'.join(sam_line_to_print)
+                        counter.add('sam_line')
                     except IOError:
                         raise IOError(
                                 'Error writing line "%s".' % sam_line_to_print
@@ -394,6 +403,7 @@ else:
                                                 for token in record[3:]]
                     try:
                         print >>output_stream, '\t'.join(sam_line_to_print)
+                        counter.add('sam_line')
                     except IOError:
                         raise IOError(
                                 'Error writing line "%s".' % sam_line_to_print

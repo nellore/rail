@@ -65,7 +65,8 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import dlist
+from dooplicity.tools import dlist, register_cleanup
+from dooplicity.counters import Counter
 
 start_time = time.time()
 
@@ -95,6 +96,8 @@ if args.keep_alive:
     keep_alive_thread = KeepAlive(sys.stderr)
 
 input_line_count, output_line_count = 0, 0
+counter = Counter('realign_reads_delegate')
+register_cleanup(counter.flush)
 
 # Must consume a line of stdin before outputting status messages
 line = sys.stdin.readline()
@@ -103,6 +106,7 @@ if args.keep_alive: keep_alive_thread.start()
 if args.type == 1:
     last_key, totals, write_line = None, [0]*args.value_count, False
     while True:
+        counter.add('type1_inputs')
         if not line:
             if last_key is None:
                 # Input is empty
@@ -117,6 +121,7 @@ if args.type == 1:
             if key != last_key and last_key is not None:
                 write_line = True
         if write_line:
+            counter.add('type1_outputs')
             print '\t'.join(last_key + [('%d' % totals[i])
                                             for i in xrange(len(totals))])
             output_line_count += 1
@@ -129,6 +134,7 @@ if args.type == 1:
 elif args.type == 2:
     last_key, totals, write_line = None, [0.0]*args.value_count, False
     while True:
+        counter.add('type2_inputs')
         if not line:
             if last_key is None:
                 # Input is empty
@@ -143,6 +149,7 @@ elif args.type == 2:
             if key != last_key and last_key is not None:
                 write_line = True
         if write_line:
+            counter.add('type2_outputs')
             print '\t'.join(last_key + [('%0.11f' % totals[i])
                                             for i in xrange(len(totals))])
             output_line_count += 1
@@ -156,6 +163,7 @@ else:
     last_key, totals, write_line \
         = None, [dlist() for i in xrange(args.value_count)], False
     while True:
+        counter.add('type3_inputs')
         if not line:
             if last_key is None:
                 # Input is empty
@@ -180,6 +188,7 @@ else:
                 if j is None:
                     sys.stdout.write('\x1c')
             sys.stdout.write('\n')
+            counter.add('type3_outputs')
             output_line_count += 1
             for a_list in totals:
                 a_list.tear_down()

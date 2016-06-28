@@ -46,12 +46,15 @@ site.addsitedir(base_path)
 import bowtie
 from dooplicity.tools import xstream, register_cleanup, xopen, \
     make_temp_dir
+from dooplicity.counters import Counter
 from dooplicity.ansibles import Url
 import tempdel
 import filemover
 
 # Initialize global variable for tracking number of input lines
 _input_line_count = 0
+counter = Counter('cojunction_enum')
+register_cleanup(counter.flush)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base='genome', bowtie2_args='', verbose=False,
@@ -125,6 +128,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         index_directory = os.path.join(intermediate_dir, 'transcript_index')
         if not os.path.exists(os.path.join(index_directory, '_STARTED')):
             # Download index
+            counter.add('index_download')
             with open(os.path.join(index_directory, '_STARTED'), 'w') \
                 as started_stream:
                 print >>started_stream, 'STARTED'
@@ -144,6 +148,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     with xopen(True, reads_file, 'w', gzip_level) as reads_stream:
         for _input_line_count, line in enumerate(input_stream):
             seq = line.strip()
+            counter.add('reads_to_temp')
             print >>reads_stream, '\t'.join([seq, seq, 'I'*len(seq)])
     input_command = 'gzip -cd %s' % reads_file
     bowtie_command = ' '.join([bowtie2_exe,
@@ -167,6 +172,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         shell=True, executable='/bin/bash')
     _input_line_count += 1
     return_code = bowtie_process.wait()
+    counter.add('bowtie2_subprocess_done')
     if return_code:
         raise RuntimeError('Error occurred while reading Bowtie 2 output; '
                            'exitlevel was %d.' % return_code)

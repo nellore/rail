@@ -82,6 +82,7 @@ import tempdel
 # Initialize global variable for tracking number of input lines
 _input_line_count = 0
 counter = Counter('align_readlets')
+register_cleanup(counter.flush)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     bowtie_index_base='genome', bowtie_args='', gzip_level=3, verbose=False,

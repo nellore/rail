@@ -169,10 +169,13 @@ import tempdel
 import group_reads
 from dooplicity.tools import xstream, dlist, register_cleanup, xopen, \
     make_temp_dir
+from dooplicity.counters import Counter
 from alignment_handlers import AlignmentPrinter
 
 # Initialize global variables for tracking number of input lines
 _input_line_count = 0
+counter = Counter('align_reads')
+register_cleanup(counter.flush)
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -435,6 +438,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                     or all(seq[i] == 'T' 
                          for i in xrange(seq_length - remaining_seq_size))
                 ):
+                counter.add('polyA_read')
                 if not no_realign:
                     '''If a sequence is too short without its poly(A) tail,
                     make all reads with that sequence unmapped. Technically,
@@ -493,6 +497,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     # Print dummy line
     print 'dummy\t-\tdummy'
     sys.stdout.flush() # this is REALLY important b/c called script will stdout
+    counter.flush()
     if nothing_doing:
         # No input
         sys.exit(0)

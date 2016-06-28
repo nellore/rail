@@ -148,13 +148,17 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
+from dooplicity.counters import Counter
 from alignment_handlers \
     import multiread_with_junctions, AlignmentPrinter, multiread_to_report
 import partition
 import manifest
 import bowtie
 import bowtie_index
+
+counter = Counter('count_inputs')
+register_cleanup(counter.flush)
 
 if __name__ == '__main__':
     # Print file's docstring if -h is invoked
@@ -231,14 +235,17 @@ if __name__ == '__main__':
 
     start_time = time.time()
     for (qname,), xpartition in xstream(sys.stdin, 1):
+        counter.add('partitions')
         # While labeled multiread, this list may end up simply a uniread
         initial_multiread \
             = [(qname,) + rest_of_line for rest_of_line in xpartition]
+        assert len(initial_multiread[0]) > 1, (initial_multiread[0], input_line_count)
         input_line_count += len(initial_multiread)
         multiread = [alignment for alignment in initial_multiread
                         if not (int(alignment[1]) & 4)]
         flag = int(initial_multiread[0][1])
         if not multiread:
+            counter.add('unmapped')
             # Write only the SAM output if the read was unmapped
             output_line_count += alignment_printer.print_unmapped_read(
                                                     qname,
@@ -275,7 +282,7 @@ if __name__ == '__main__':
                                                     qual_to_write
                                                 )
                 continue
-            output_line_count += alignment_printer.print_alignment_data(
+            count = alignment_printer.print_alignment_data(
                 multiread_to_report(
                     corrected_multiread,
                     alignment_count_to_report=alignment_count_to_report,
@@ -284,6 +291,8 @@ if __name__ == '__main__':
                     tie_margin=args.tie_margin
                 )
             )
+            counter.add('output_lines', count)
+            output_line_count += count
 
     print >>sys.stderr, 'DONE with compare_alignments.py; in/out=%d/%d; ' \
         'time=%0.3f s' % (input_line_count, output_line_count,

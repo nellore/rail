@@ -68,6 +68,7 @@ site.addsitedir(base_path)
 
 from dooplicity.tools import xstream, register_cleanup, xopen, \
     make_temp_dir
+from dooplicity.counters import Counter
 import bowtie
 import argparse
 import tempdel
@@ -75,6 +76,8 @@ import itertools
 
 # Initialize global variable for tracking number of input lines
 _input_line_count = 0
+counter = Counter('realign_reads')
+register_cleanup(counter.flush)
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -103,19 +106,21 @@ def input_files_from_input_stream(input_stream,
     deduped_fasta_filename = os.path.join(temp_dir_path, 'temp.deduped.prefa')
     final_fasta_filename = os.path.join(temp_dir_path, 'temp.fa')
     reads_filename = os.path.join(temp_dir_path, 'reads.temp.gz')
-    for (counter, ((index_group,), xpartition)) in enumerate(
+    for (group_counter, ((index_group,), xpartition)) in enumerate(
                                                     xstream(input_stream, 1)
                                                 ):
+        counter.add('partitions')
         if verbose:
             print >>sys.stderr, (
                         'Group %d: Writing prefasta and input reads...'
-                        % counter
+                        % group_counter
                     )
         with open(prefasta_filename, 'w') as fasta_stream:
             with xopen(True, reads_filename, 'w') as read_stream:
                 for read_seq, values in itertools.groupby(xpartition, 
                                                     key=lambda val: val[0]):
                     fasta_printed = False
+                    counter.add('inputs')
                     for value in values:
                         _input_line_count += 1
                         if value[1][0] == '0':
@@ -160,7 +165,7 @@ def input_files_from_input_stream(input_stream,
         if verbose:
             print >>sys.stderr, (
                         'Group %d: Done! Sorting and deduplicating prefasta...'
-                        % counter
+                        % group_counter
                     )
         # Sort prefasta and eliminate duplicate lines
         dedup_process_return = subprocess.call(
@@ -174,7 +179,7 @@ def input_files_from_input_stream(input_stream,
                 )
         if verbose:
             print >>sys.stderr, (
-                    'Group %d Done! Writing final FASTA.' % counter
+                    'Group %d Done! Writing final FASTA.' % group_counter
                 )
         with open(final_fasta_filename, 'w') as final_fasta_stream:
             with open(deduped_fasta_filename) as fasta_stream:
@@ -343,6 +348,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                         fasta_file,
                                         bowtie2_index_base
                                     )
+        counter.add('bowtie_build_invocations')
+        counter.add('bowtie_build_return_%d' % bowtie_build_return_code)
         if bowtie_build_return_code == 0:
             try:
                 os.remove(fasta_file)

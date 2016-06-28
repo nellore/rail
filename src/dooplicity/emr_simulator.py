@@ -440,7 +440,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
 def counter_cmd(outfn):
     return ("grep '^reporter:counter:' | "
             "sed 's/.*://' | "
-            "awk -v FS=',' '{tot[$1,$2] += $3} END {for(d in tot) {print d,tot[d]}}' > %s" % outfn)
+            "awk -v FS=',' '{tot[$1,\" \",$2] += $3} END {for(d in tot) {print d,tot[d]}}' > %s" % outfn)
 
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,

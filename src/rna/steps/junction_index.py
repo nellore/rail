@@ -62,8 +62,12 @@ site.addsitedir(base_path)
 import bowtie
 from dooplicity.ansibles import Url
 from dooplicity.tools import register_cleanup, make_temp_dir
+from dooplicity.counters import Counter
 import filemover
 import tempdel
+
+counter = Counter('junction_index')
+register_cleanup(counter.flush)
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -108,6 +112,7 @@ print >>sys.stderr, 'Opened %s for writing....' % fasta_file
 with open(fasta_file, 'w') as fasta_stream:
     input_line_count = 0
     for line in sys.stdin:
+        counter.add('inputs')
         if args.keep_alive and not (input_line_count % 1000):
             print >>sys.stderr, 'reporter:status:alive'
         tokens = line.rstrip().split('\t')
@@ -131,6 +136,7 @@ with open(fasta_file, 'w') as fasta_stream:
     if not input_line_count:
         '''There were no input FASTA files. Write one bum line so the
         pipeline doesn't fail.'''
+        counter.add('empty_fasta')
         print >>fasta_stream, '>bum\nNA'
         print >>sys.stderr, ('Wrote bum index because no transcripts were '
                              'passed.')
@@ -149,6 +155,7 @@ if args.keep_alive:
         def run(self):
             self.bowtie_build_process = subprocess.Popen(self.command_list,
                                             stdout=sys.stderr).wait()
+    counter.add('bowtie_build_threads')
     bowtie_build_thread = BowtieBuildThread([args.bowtie2_build_exe,
                                                 fasta_file,
                                                 index_basename])
@@ -161,6 +168,7 @@ if args.keep_alive:
         raise RuntimeError('Bowtie index construction failed w/ exitlevel %d.'
                                 % bowtie_build_thread.bowtie_build_process)
 else:
+    counter.add('bowtie_build_processes')
     bowtie_build_process = subprocess.Popen(
                                 [args.bowtie2_build_exe,
                                     fasta_file,
@@ -182,8 +190,10 @@ tar = tarfile.TarFile.gzopen(junction_index_path, mode='w', compresslevel=3)
 for index_file in os.listdir(index_path):
     tar.add(os.path.join(index_path, index_file), arcname=index_file)
 tar.close()
+counter.add('junction_index_archive_bytes', os.path.getsize(junction_index_path))
 # Upload compressed index
 print >>sys.stderr, 'Uploading or copying compressed index...'
+counter.add('files_moved')
 mover = filemover.FileMover(args=args)
 mover.put(junction_index_path, output_url.plus(junction_index_filename))
 

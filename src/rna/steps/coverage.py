@@ -75,6 +75,7 @@ import filemover
 import itertools
 from collections import defaultdict
 from dooplicity.tools import xstream, register_cleanup, make_temp_dir
+from dooplicity.counters import Counter
 from dooplicity.ansibles import Url
 import tempdel
 from re import search
@@ -109,6 +110,9 @@ parser.add_argument(
         '--verbose', action='store_const', const=True, default=False,
         help='Print out extra debugging statements'
     )
+
+counter = Counter('coverage')
+register_cleanup(counter.flush)
 
 filemover.add_args(parser)
 bowtie.add_args(parser)
@@ -198,6 +202,7 @@ track_line = ('track type=bedGraph name="{name}" '
          'description="{description}" visibility=full '
          'color=227,29,118 altColor=0,179,220 priority=400')
 for (sample_index,), xpartition in xstream(sys.stdin, 1):
+    counter.add('partitions')
     real_sample = True
     try:
         sample_label = manifest_object.index_to_label[sample_index]
@@ -256,6 +261,7 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
                     )
                 input_line_count += 1
                 if coverage != last_coverage:
+                    counter.add('bed_lines')
                     print >>bed_stream, '%s\t%d\t%d\t%08f' % (rname,
                         last_pos, pos, last_coverage)
                     if last_coverage != 0:
@@ -263,6 +269,7 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
                         coverage_histogram[last_coverage] += pos - last_pos
                     last_pos, last_coverage = pos, coverage
                 if unique_coverage != last_unique_coverage:
+                    counter.add('unique_bed_lines')
                     print >>unique_bed_stream, '%s\t%d\t%d\t%08f' % (rname,
                         last_unique_pos, pos, last_unique_coverage)
                     if last_unique_coverage != 0:
@@ -275,6 +282,7 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
                         )
             if last_pos != reference_index.rname_lengths[rname]:
                 # Print coverage up to end of strand
+                counter.add('bed_lines')
                 print >>bed_stream, '%s\t%d\t%d\t%08f' % (
                         rname,
                         last_pos,
@@ -283,6 +291,7 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
                     )
             if last_unique_pos != reference_index.rname_lengths[rname]:
                 # Print unique coverage up to end of strand
+                counter.add('unique_bed_lines')
                 print >>unique_bed_stream, '%s\t%d\t%d\t%08f' % (
                         rname,
                         last_unique_pos,
@@ -321,6 +330,7 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
         if args.verbose:
             print >>sys.stderr, 'Writing bigwig with command %s .' \
                 % ' '.join(bigwig_command)
+        counter.add('call_bedgraphtobigwig')
         bedtobigwig_process = subprocess.Popen(
                                     bigwig_command,
                                     stderr=sys.stderr,
@@ -337,6 +347,7 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
                                   % ' '.join(bigwig_command))
         if not output_url.is_local:
             # bigwig must be uploaded to URL and deleted
+            counter.add('files_moved')
             mover.put(bigwig_file_paths[i],
                         output_url.plus(bigwig_filenames[i]))
             os.remove(bigwig_file_paths[i])

@@ -20,9 +20,13 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
+from dooplicity.counters import Counter
 from alignment_handlers import multiread_with_junctions, \
     indels_junctions_exons_mismatches
+
+counter = Counter('cojunction_enum_delegate')
+register_cleanup(counter.flush)
 
 import string
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
@@ -75,7 +79,9 @@ def paths_from_cojunctions(cojunctions, span=50):
             span bases; junction combos with "edge" junctions removed are
             also included
     """
+    counter.add('paths_from_cojunctions')
     cojunctions_count = len(cojunctions)
+    counter.add('cojunctions', cojunctions_count)
     if cojunctions_count <= 1: return cojunctions
     '''Make each node of DAG a cojunction; cojunctions are linear subgraphs
     anyway'''
@@ -116,6 +122,7 @@ def paths_from_cojunctions(cojunctions, span=50):
                     if (-negative_separation
                         + cojunction_length(cojunctions[k])
                         + source_cojunction_length + 2) <= span:
+                        counter.add('dag_edge')
                         DAG[i].add(k)
                         reverse_DAG[k].add(i)
                 else:
@@ -136,6 +143,7 @@ def paths_from_cojunctions(cojunctions, span=50):
                         paths.append(path + [next_vertex])
                     else:
                         stack.append((next_vertex, path + [next_vertex]))
+    counter.add('paths', len(paths))
     prereturn = [[j for i in [cojunctions[k] for k in path] for j in i]
                  for path in paths]
     to_return = set()
@@ -289,6 +297,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, fudge=5,
                                         + fudge),
                             seq=seq_to_print
                        ))
+            counter.add('paths_out', len(to_write))
             for line_to_write in to_write:
                 print line_to_write
                 output_line_count += 1
