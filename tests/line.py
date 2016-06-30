@@ -301,6 +301,38 @@ def compare_bam_and_variants(sample, working_dir, filter_script, unique=False,
     finally:
         pileup_process.stdout.close()
         pileup_process.wait()
+    # Store mismatch tracks from bw via bigWigToBedGraph
+    unsorted_bedgraph_from_bw = os.path.join(working_dir,
+                                             'from_bw.temp.bedGraph')
+    for base in 'ATCGN':
+        bedgraph_from_bw = os.path.join(working_dir,
+                                        'from_bw.{base}.bedGraph'.format(base))
+        bw_to_bedgraph_command = (
+                    'set -exo pipefail; '
+                    '{bigwigtobedgraph} {coverage_bigwig} '
+                    '{unsorted_bedgraph}; '
+                    'sort -k1,1 -k2,2n -k3,3n {unsorted_bedgraph} '
+                    '| awk \'$4 != 0\' >{final_bedgraph}; '
+                    'rm {unsorted_bedgraph};'
+                ).format(
+                        bigwigtobedgraph=bigwigtobedgraph,
+                        coverage_bigwig=os.path.join(
+                                    coverage_dir,
+                                    '{sample}{unique}.{base}.bw'.format(
+                                        sample=sample,
+                                        unique=('.unique' if unique else ''),
+                                        base=base
+                                )
+                            ),
+                        unsorted_bedgraph=unsorted_bedgraph_from_bw,
+                        final_bedgraph=bedgraph_from_bw
+                    )
+        try:
+            subprocess.check_call(
+                    bw_to_bedgraph_command, executable='/bin/bash', shell=True
+                )
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(error_out(e, bw_to_bedgraph_command))
     diff_output = { diff_type : os.path.join(
                         working_dir,
                         '{diff_type}_diffs.{sample}{unique}.txt'.format(
