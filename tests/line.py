@@ -416,7 +416,7 @@ if __name__ == '__main__':
                                                             )
     try:
         rail_output = subprocess.check_output(
-                [sys.executable, rail_dir, 'go', 'local', '-p', '1'
+                [sys.executable, rail_dir, 'go', 'local', '-p', '1',
                     '-m', manifest, '-x', bowtie_idx, bowtie2_idx,
                     '-d', 'tsv,bed,bam,bw', '--gzip-intermediates'],
                 stderr=subprocess.STDOUT
