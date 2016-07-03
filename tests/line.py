@@ -237,7 +237,8 @@ def compare_bam_and_variants(sample, working_dir, filter_script, genome,
                       '| {executable} {filter_script} ' + 
                       ('--uniques ' if unique else '') + 
                       '| {samtools} mpileup -B -d 2147483647 -A -B -o 0 -F 0 '
-                      '-Q 0 -q 0 -x -f {genome} '
+                      '-Q 0 -q 0 -x -f {genome} ' +
+                      ('-I ' if unique else '') + 
                       '--ff UNMAP,SECONDARY -').format(
                         first_bam_view=first_bam_view,
                         bams=bams,
@@ -274,58 +275,59 @@ def compare_bam_and_variants(sample, working_dir, filter_script, genome,
                 chrom, pos, _, _, bases, _ = line.strip().split('\t')
                 pos = int(pos) - 1
                 pos_str = str(pos)
-                insertions = defaultdict(int)
                 mismatches = []
-                for insertion in re.finditer(
-                                    r'\+([0-9]+)([ACGTNacgtn]+)', bases
-                                ):
-                    insertion_string = insertion.string[
-                            insertion.start(2):insertion.start(2)
-                                + int(insertion.string[
-                                            insertion.start(1):insertion.end(1)
-                                        ])
-                        ].upper()
-                    mismatches.append(
-                                insertion.string[
-                                    insertion.start(2):insertion.end(2)
-                                ][len(insertion_string) - 1:]
+                if not unique:
+                    insertions = defaultdict(int)
+                    for insertion in re.finditer(
+                                        r'\+([0-9]+)([ACGTNacgtn]+)', bases
+                                    ):
+                        insertion_string = insertion.string[
+                                insertion.start(2):insertion.start(2)
+                                    + int(insertion.string[
+                                                insertion.start(1):insertion.end(1)
+                                            ])
+                            ].upper()
+                        mismatches.append(
+                                    insertion.string[
+                                        insertion.start(2):insertion.end(2)
+                                    ][len(insertion_string):]
+                                )
+                        insertions[insertion_string] += 1
+                    for insertion in insertions:
+                        print >>bam_insertions, '\t'.join(map(str,
+                                    [chrom, pos_str, pos_str, insertion,
+                                        insertions[insertion_string]]
+                                )
                             )
-                    insertions[insertion_string] += 1
-                for insertion in insertions:
-                    print >>bam_insertions, '\t'.join(map(str,
-                                [chrom, pos_str, pos_str, insertion,
-                                    insertions[insertion_string]]
+                    deletions = defaultdict(int)
+                    for deletion in re.finditer(
+                                        r'\-([0-9]+)([ACGTNacgtn]+)', bases
+                                    ):
+                        deletion_string = deletion.string[
+                                deletion.start(2):deletion.start(2)
+                                    + int(deletion.string[
+                                                deletion.start(1):deletion.end(1)
+                                            ])
+                            ].upper()
+                        mismatches.append(
+                                    deletion.string[
+                                        deletion.start(2):deletion.end(2)
+                                    ][len(deletion_string):]
+                                )
+                        deletions[deletion_string] += 1
+                    for deletion in deletions:
+                        print >>bam_deletions, '\t'.join(map(str, 
+                                    [chrom, pos + 1, pos + 1 + len(deletion),
+                                        deletion, deletions[deletion]]
+                                )
                             )
-                        )
-                deletions = defaultdict(int)
-                for deletion in re.finditer(
-                                    r'\-([0-9]+)([ACGTNacgtn]+)', bases
-                                ):
-                    deletion_string = deletion.string[
-                            deletion.start(2):deletion.start(2)
-                                + int(deletion.string[
-                                            deletion.start(1):deletion.end(1)
-                                        ])
-                        ].upper()
-                    mismatches.append(
-                                deletion.string[
-                                    deletion.start(2):deletion.end(2)
-                                ][len(deletion_string) - 1:]
-                            )
-                    deletions[deletion_string] += 1
-                for deletion in deletions:
-                    print >>bam_deletions, '\t'.join(map(str, 
-                                [chrom, pos + 1, pos + 1 + len(deletion),
-                                    deletion, deletions[deletion]]
-                            )
-                        )
                 '''Residual mismatches are preceded by neither deletion
                 nor insertion'''
                 for mismatch in re.finditer(
-                        r'[^0-9ACGTNacgtn]([ACGTNacgtn])', bases
+                        r'(^|,|\.|\^.|<|>|\$)([ACGTNacgtn]+)', bases
                     ):
                     mismatches.append(mismatch.string[
-                            mismatch.start(1):mismatch.end(1)
+                            mismatch.start(2):mismatch.end(2)
                         ].upper())
                 mismatches = ''.join(mismatches)
                 mismatches = { base : mismatches.count(base)
@@ -355,6 +357,16 @@ def compare_bam_and_variants(sample, working_dir, filter_script, genome,
                     last_mismatches[mismatch] = mismatches[mismatch]
                     last_pos[mismatch] = pos
                     last_chrom[mismatch] = chrom
+            # Last stretch has yet to be printed
+            for mismatch in last_mismatches:
+                print >>bam_base[mismatch], '\t'.join(map(str,
+                                    [last_chrom[mismatch],
+                                        last_pos[mismatch] + 1
+                                            - stretch[mismatch],
+                                        last_pos[mismatch] + 1,
+                                        last_mismatches[mismatch]]
+                                )
+                            )
     finally:
         pileup_process.stdout.close()
         pileup_process.wait()
@@ -401,14 +413,14 @@ def compare_bam_and_variants(sample, working_dir, filter_script, genome,
                             )
                     ) for diff_type in ['insertions', 'deletions',
                                         'A', 'C', 'G', 'T', 'N'] }
-    for diff_type, from_rail, from_bam in [
+    for diff_type, from_rail, from_bam in ([
                 (indel_which,
                  os.path.join(working_dir, 'rail-rna_out',
                                 'junctions_and_indels',
                                 indel_which + '.' + sample + '.bed'),
                  os.path.join(working_dir, 'from_bam.' + indel_which + '.bed'))
                 for indel_which in ['insertions', 'deletions']
-            ] + [
+            ] if not unique else []) + [
             (base,
              os.path.join(working_dir, 'from_bw.' + base + '.bedgraph'),
              os.path.join(working_dir, 'from_bam.' + base + '.bedgraph'))
