@@ -682,4 +682,4 @@ if __name__ == '__main__':
                     'outputs in {}.'.format(sample, diff_output)
                 )
 
-    print >>sys.stderr, 'All line tests completed successfully.'
+    print >>sys.stderr, 'All line tests finished successfully.'
