@@ -66,6 +66,23 @@ def error_out(e, command=None):
                                                     traceback.format_exc()
                                                 )
 
+def diff_exit(output_file):
+    """ Returns file contents if using Travis CI; else prints filename.
+
+        output_file: path to output file
+
+        Return value: string with file contents if using Travis; else filename
+    """
+    if 'HAS_JOSH_K_SEAL_OF_APPROVAL' in os.environ:
+        # Inside joke? that means we're in Travis CI environment
+        with open(output_file) as output_stream:
+            return '\n'.join(
+                    ['Diffs from {}:'.format(output_file),
+                     output_stream.read()]
+                )
+    return 'See diffs in {}.'.format(output_file)
+
+
 def compare_bam_and_raw_data(sample, working_dir, samtools='samtools'):
     """ Tests whether read sequences in raw data and BAMs are the same.
 
@@ -656,8 +673,8 @@ if __name__ == '__main__':
                 _should_delete = False
                 raise RuntimeError(
                         ('Sequences from BAM and preprocessed inputs do not '
-                         'agree for sample {}. See diffs in {}.').format(
-                                sample, diff_output
+                         'agree for sample {}. {}').format(
+                                sample, diff_exit(diff_output)
                             )
                     )
         # Check consistency of BAM and bigwig
@@ -669,9 +686,8 @@ if __name__ == '__main__':
         if not success:
             _should_delete = False
             raise RuntimeError(
-                    ('BAM and bigWig are inconsistent for sample {}. '
-                     'See diffs between bedGraphs obtained from outputs in '
-                     '{}.').format(sample, diff_output)
+                    ('BAM and bigWig are inconsistent for sample {}. {}'
+                     ).format(sample, diff_exit(diff_output))
                 )
         # Check consistency of BAM and variant files
         success, diff_output = compare_bam_and_variants(
@@ -683,8 +699,7 @@ if __name__ == '__main__':
             _should_delete = False
             raise RuntimeError(
                     'BAM and variant BEDs/bigWigs are inconsistent for sample '
-                    '{}. See diffs between BEDs/bedGraphs obtained from '
-                    'outputs in {}.'.format(sample, diff_output)
+                    '{}. {}'.format(sample, diff_exit(diff_output))
                 )
 
     print >>sys.stderr, 'All line tests finished successfully.'
