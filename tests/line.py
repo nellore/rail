@@ -596,11 +596,11 @@ if __name__ == '__main__':
         )
     parser.add_argument('--bedtools', type=str, required=False,
             default='bedtools',
-            help='Bedtools executable; known to work on v'
+            help='Bedtools executable; known to work on v2.25'
         )
     parser.add_argument('--samtools', type=str, required=False,
             default='samtools',
-            help='SAMTools executable; known to work on v1.2'
+            help='SAMTools executable; known to work on v1.3'
         )
     parser.add_argument('--bigwigtobedgraph', type=str, required=False,
             default='bigWigToBedGraph',
@@ -612,6 +612,8 @@ if __name__ == '__main__':
         raise IOError(
                 'Reference FASTA "{}" does not exist.'.format(args.genome)
             )
+    # Get absolute path to FASTA since we'll be changing dir
+    args.genome = os.path.abspath(args.genome)
     # Get sample names
     with open(args.manifest) as manifest_stream:
         samples = [line.strip().split('\t')[-1] for line in manifest_stream]
