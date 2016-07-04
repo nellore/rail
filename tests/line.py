@@ -600,7 +600,7 @@ if __name__ == '__main__':
         )
     parser.add_argument('--samtools', type=str, required=False,
             default='samtools',
-            help='SAMTools executable; known to work on v'
+            help='SAMTools executable; known to work on v1.2'
         )
     parser.add_argument('--bigwigtobedgraph', type=str, required=False,
             default='bigWigToBedGraph',
