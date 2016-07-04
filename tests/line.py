@@ -11,9 +11,15 @@ tools:
   2) samtools mpileup to check that:
      a) mismatch bigWigs and BAMs agree
      b) indel beds and BAMs agree
+  3) samtools view to verify that sequences from BAM are the same as
+    intermediate sequences obtained after preprocessing
 
-Requires that bedtools, samtools, and SAM2Tsv are installed. Performs all tests
-in local mode for now.
+Requires that bedtools an samtools are installed. Performs all tests in local
+mode for now.
+
+TODO: 1) Check that junction BEDs agree with cross-sample junction outputs
+    from _both_ first and second-pass alignment
+    2) Check that indel BEDs agree with cross-sample indel TSVs
 """
 import tempfile
 import atexit
@@ -27,6 +33,8 @@ from itertools import product
 from shutil import rmtree
 import re
 from collections import defaultdict
+import string
+import gzip
 
 # Global determines whether temp dir should be removed
 _should_delete = False
@@ -58,6 +66,91 @@ def error_out(e, command=None):
                                                     traceback.format_exc()
                                                 )
 
+def compare_bam_and_raw_data(sample, working_dir, samtools='samtools'):
+    """ Tests whether read sequences in raw data and BAMs are the same.
+
+        Accounts for how FLAG in BAM may indicate that an alignment record's
+        SEQ field is reverse-complemented. Here, raw data is the output of 
+        preprocess.py.
+
+        sample: sample name
+        working_dir: directory containing rail-rna_out after running Rail-RNA
+        samtools: path to samtools executable
+
+        Return value: tuple (True iff no diffs,
+                                file containing diffs between name-sequence
+                                combinations)
+    """
+    print >>sys.stderr, (
+            'Comparing preprocessed SEQs with BAM SEQs for sample {}...'
+        ).format(sample)
+    # Output files before sorting and diffing
+    from_prep = os.path.join(working_dir, 'from_prep.tsv')
+    from_bam = os.path.join(working_dir, 'from_bam.tsv')
+    # For reverse complementing
+    translation_table = string.maketrans('ATCGN', 'TAGCN')
+    with open(from_prep, 'w') as output_stream:
+        for prep_file in glob.glob(os.path.join(
+                                working_dir, 'rail-rna_logs',
+                                'preprocess', 'push', '*.gz'
+                            )):
+            with gzip.open(prep_file) as prep_stream:
+                for line in prep_stream:
+                    (seq, reverse_complemented,
+                            qname, _) = line.strip().split('\t')
+                    qname, _, current_sample = qname.split('\x1d')
+                    if current_sample != sample: continue
+                    if reverse_complemented == '1':
+                        seq = seq[::-1].translate(translation_table)
+                    if qname.endswith('/1') or qname.endswith('/2'):
+                        qname = qname[:-2]
+                    print >>output_stream, '\t'.join([qname, seq])
+    bams = os.path.join(
+                        working_dir, 'rail-rna_out', 'alignments',
+                        'alignments.' + sample + '.*.bam'
+                    )
+    samtools_command = ('set -exo pipefail; '
+                        'for i in {bams}; '
+                        'do {samtools} view $i; done').format(
+                            bams=bams,
+                            samtools=samtools
+                        )
+    samtools_process = subprocess.Popen(samtools_command,
+                                        stdout=subprocess.PIPE,
+                                        executable='/bin/bash',
+                                        shell=True)
+    try:
+        with open(from_bam, 'w') as output_stream:
+            for line in samtools_process.stdout:
+                (qname, flag, _, _, _, _,
+                    _, _, _, seq) = line.strip().split('\t')[:10]
+                if int(flag) & 16:
+                    seq = seq[::-1].translate(translation_table)
+                if qname.endswith('/1') or qname.endswith('/2'):
+                    qname = qname[:-2]
+                print >>output_stream, '\t'.join([qname, seq])
+    finally:
+        samtools_process.stdout.close()
+        samtools_process.wait()
+    diff_output = os.path.join(working_dir, 'seq_diffs.' + sample + '.txt')
+    diff_command = ('diff <(sort {from_bam}) '
+                    '<(sort {from_prep}) >{diffs}').format(
+                        from_bam=from_bam,
+                        from_prep=from_prep,
+                        diffs=diff_output
+                    )
+    try:
+        subprocess.check_call(
+                diff_command, executable='/bin/bash', shell=True
+            )
+    except subprocess.CalledProcessError as e:
+        if e.returncode > 1:
+            raise RuntimeError(error_out(e, diff_command))
+    if os.path.getsize(diff_output):
+        print >>sys.stderr, 'FAIL'
+        return (False, diff_output)
+    print >>sys.stderr, 'SUCCESS'
+    return (True, diff_output)
 
 def compare_bam_and_bw(sample, working_dir, filter_script, unique=False,
                         bedtools='bedtools', samtools='samtools',
@@ -95,6 +188,8 @@ def compare_bam_and_bw(sample, working_dir, filter_script, unique=False,
     unsorted_bedgraph_from_bw = os.path.join(working_dir,
                                                 'from_bw.temp.bedgraph')
     bedgraph_from_bw = os.path.join(working_dir, 'from_bw.bedgraph')
+    '''awk below eliminates all coverage-0 lines because bedGraphToBigWig
+    will leave out empty chromosomes, making for diffs on comparison.'''
     bam_to_bedgraph_command = ('set -exo pipefail; '
                     '({samtools} view -H {first_bam};'
                     ' for i in {alignments_basename}.{sample}.*.bam;'
@@ -283,9 +378,9 @@ def compare_bam_and_variants(sample, working_dir, filter_script, genome,
                                     ):
                         insertion_string = insertion.string[
                                 insertion.start(2):insertion.start(2)
-                                    + int(insertion.string[
-                                                insertion.start(1):insertion.end(1)
-                                            ])
+                                + int(insertion.string[
+                                            insertion.start(1):insertion.end(1)
+                                        ])
                             ].upper()
                         mismatches.append(
                                     insertion.string[
@@ -305,9 +400,9 @@ def compare_bam_and_variants(sample, working_dir, filter_script, genome,
                                     ):
                         deletion_string = deletion.string[
                                 deletion.start(2):deletion.start(2)
-                                    + int(deletion.string[
-                                                deletion.start(1):deletion.end(1)
-                                            ])
+                                + int(deletion.string[
+                                            deletion.start(1):deletion.end(1)
+                                        ])
                             ].upper()
                         mismatches.append(
                                     deletion.string[
@@ -528,7 +623,8 @@ if __name__ == '__main__':
         rail_output = subprocess.check_output(
                 [sys.executable, rail_dir, 'go', 'local', '-p', '1',
                     '-m', manifest, '-x', bowtie_idx, bowtie2_idx,
-                    '-d', 'tsv,bed,bam,bw', '--gzip-intermediates'],
+                    '-d', 'tsv,bed,bam,bw', '--gzip-intermediates',
+                    '--keep-intermediates'],
                 stderr=subprocess.STDOUT
             )
     except subprocess.CalledProcessError as e:
@@ -545,8 +641,21 @@ if __name__ == '__main__':
                 print >>sys.stderr, log_stream.read()
         raise RuntimeError(error_out(e))
 
-    # Check consistency of BAM and bigwig
     for sample, unique in product(samples, (False, True)):
+        if not unique:
+            # Compare seqs between BAM and preprocessed intermediates
+            success, diff_output = compare_bam_and_raw_data(
+                    sample, working_dir, samtools=args.samtools
+                )
+            if not success:
+                _should_delete = False
+                raise RuntimeError(
+                        ('Sequences from BAM and preprocessed inputs do not '
+                         'agree for sample {}. See diffs in {}.').format(
+                                sample, diff_output
+                            )
+                    )
+        # Check consistency of BAM and bigwig
         success, diff_output = compare_bam_and_bw(
                 sample, working_dir, filter_script=filter_script,
                 unique=unique, bedtools=args.bedtools,
@@ -555,10 +664,11 @@ if __name__ == '__main__':
         if not success:
             _should_delete = False
             raise RuntimeError(
-                    'BAM and bigWig are inconsistent for sample {}. See diffs '
-                    'between bedgraphs obtained from either output in '
-                    '{}.'.format(sample, diff_output)
+                    ('BAM and bigWig are inconsistent for sample {}. '
+                     'See diffs between bedGraphs obtained from outputs in '
+                     '{}.').format(sample, diff_output)
                 )
+        # Check consistency of BAM and variant files
         success, diff_output = compare_bam_and_variants(
                 sample, working_dir, filter_script=filter_script,
                 genome=args.genome, unique=unique, bedtools=args.bedtools,
@@ -568,6 +678,8 @@ if __name__ == '__main__':
             _should_delete = False
             raise RuntimeError(
                     'BAM and variant BEDs/bigWigs are inconsistent for sample '
-                    '{}. See diffs between bedgraphs obtained from '
+                    '{}. See diffs between BEDs/bedGraphs obtained from '
                     'outputs in {}.'.format(sample, diff_output)
                 )
+
+    print >>sys.stderr, 'All line tests completed successfully.'

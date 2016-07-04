@@ -31,7 +31,7 @@ before_install:
   - ls Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/
   - ls Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/
   - rm -rf Drosophila_melanogaster/UCSC/dm6/Annotation
-  - for sd in BWAIndex AbundantSequences Chromosomes WholeGenomeFasta ; do rm -rf Drosophila_melanogaster/UCSC/dm6/Sequence/$sd ; done
+  - for sd in BWAIndex AbundantSequences Chromosomes ; do rm -rf Drosophila_melanogaster/UCSC/dm6/Sequence/$sd ; done
   - wget http://verve.webfactional.com/mirror/linux/bedGraphToBigWig
   - chmod a+x bedGraphToBigWig
   - export PATH="$PATH:"`pwd`
@@ -48,7 +48,7 @@ script:
   - make
   - df -h
   - mkdir -p $HOME/railtemp
-  - TMPDIR="$HOME/railtemp" python tests/line.py --bowtie-idx Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/genome --bowtie2-idx Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/genome --manifest ex/dm3_example.manifest
+  - TMPDIR="$HOME/railtemp" python tests/line.py --bowtie-idx Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/genome --bowtie2-idx Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/genome --genome Drosophila_melanogaster/UCSC/dm6/WholeGenomeFasta/genome.fa --manifest ex/dm3_example.manifest
 after_failure:
   - df -h
 notifications:
