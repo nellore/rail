@@ -590,6 +590,11 @@ if __name__ == '__main__':
             help='bigWigToBedGraph executable; unversioned Kent Tool'
         )
     args = parser.parse_args()
+    # Check that genome exists because SAMTools doesn't do this!
+    if not os.path.isfile(args.genome):
+        raise IOError(
+                'Reference FASTA "{}" does not exist.'.format(args.genome)
+            )
     # Get sample names
     with open(args.manifest) as manifest_stream:
         samples = [line.strip().split('\t')[-1] for line in manifest_stream]
