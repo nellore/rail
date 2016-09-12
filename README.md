@@ -85,7 +85,7 @@ Renting AWS resources costs money, regardless of whether your run ultimately suc
 
 Licenses
 -----
-[MIT](http://choosealicense.com/licenses/mit/) except for the directory `src/hadoop/relevant-elephant`, which contains [Apache](http://apache.org/licenses/LICENSE-2.0)-licensed code adapted from the Twitter's [Elephant Bird](https://github.com/twitter/elephant-bird/) project.
+[MIT](http://choosealicense.com/licenses/mit/) except for the directory `src/hadoop/relevant-elephant`, which contains [Apache](http://apache.org/licenses/LICENSE-2.0)-licensed code adapted from Twitter's [Elephant Bird](https://github.com/twitter/elephant-bird/) project.
 
 Contributors
 -----
