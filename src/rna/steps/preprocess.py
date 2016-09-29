@@ -369,7 +369,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 # Download
                 print >>sys.stderr, 'Retrieving URL "%s"...' \
                     % source_url.to_url()
-                if source_url.is_dbgap:
+                if workspace_dir is not None:
                     download_dir = workspace_dir
                 elif source_url.is_sra:
                     download_dir = temp_dir
@@ -487,11 +487,15 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                                     stdout=subprocess.PIPE,
                                                     bufsize=-1)
                 else:
-                    mover.get(source_url, temp_dir)
+                    mover.get(source_url, download_dir)
                     downloaded = list(
-                            set(os.listdir(temp_dir)).difference(downloaded)
+                            set(os.listdir(download_dir)).difference(
+                                                                downloaded
+                                                            )
                         )
-                    sources.append(os.path.join(temp_dir, list(downloaded)[0]))
+                    sources.append(
+                            os.path.join(download_dir, list(downloaded)[0])
+                        )
             else:
                 sources.append(source_url.to_url())
         if onward: continue
