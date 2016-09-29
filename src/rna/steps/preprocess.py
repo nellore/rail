@@ -493,9 +493,41 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                                                 downloaded
                                                             )
                         )[0]
-                    sources.append(
-                            os.path.join(download_dir, downloaded)
-                        )
+                    if (downloaded.endswith('.tar.gz')
+                            or downloaded.endswith('.tar')
+                            or downloaded.endswith('.tar.bz2')):
+                        if len(source_urls) != 1:
+                            raise RuntimError(
+                                    'More than one source URL is present '
+                                    'on a manifest line, but one URL points '
+                                    'to a TAR archive. If working with '
+                                    'TARs, all files for a given sample '
+                                    'should be in the archive. Offending URLs '
+                                    'are "{}".'.format(source_urls)
+                                )
+                        open_mode = 'r|' + ('' if downloaded.endswith('.tar')
+                                            else
+                                            downloaded.rpartition('.')[-1])
+                        # Extract and kill tar file
+                        import tarfile
+                        tar_object = tarfile.open(downloaded, open_mode)
+                        tar_object.extractall(path=download_dir)
+                        tar_object.close()
+                        os.remove(downloaded)
+                        sources = [os.path.join(download_dir, downloaded_file)
+                                    for downloaded_file in
+                                    sorted(os.listdir(download_dir))]
+                        if len(sources) > 2:
+                            raise RuntimeError(
+                                        '{} files detected in archive {}, but '
+                                        'there should be no more '
+                                        'than 2.'.format(downloaded,
+                                                            len(sources))
+                                    )
+                    else:
+                        sources.append(
+                                os.path.join(download_dir, downloaded)
+                            )
             else:
                 sources.append(source_url.to_url())
         if onward: continue
