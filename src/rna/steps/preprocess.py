@@ -371,7 +371,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     % source_url.to_url()
                 if workspace_dir is not None:
                     download_dir = workspace_dir
-                elif source_url.is_sra:
+                else:
                     download_dir = temp_dir
                 if source_url.is_sra:
                     sra_accession = source_url.to_url()
@@ -492,9 +492,9 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             set(os.listdir(download_dir)).difference(
                                                                 downloaded
                                                             )
-                        )
+                        )[0]
                     sources.append(
-                            os.path.join(download_dir, list(downloaded)[0])
+                            os.path.join(download_dir, downloaded)
                         )
             else:
                 sources.append(source_url.to_url())
