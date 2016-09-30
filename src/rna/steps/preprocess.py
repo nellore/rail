@@ -184,9 +184,9 @@ def tar_processes_streams_and_qual_getter(tar_path):
                 )
     for tarinfo in sorted(tar_object.getmembers(), key=lambda x: x.name):
         if tarinfo.name.endswith('.bz2'):
-            decompress_command = ' | bzip2 -cd | '
+            decompress_command = ' | bzip2 -cd '
         elif tarinfo.name.endswith('.gz'):
-            decompress_command = ' | gzip -cd | '
+            decompress_command = ' | gzip -cd '
         else:
             decompress_command = ''
         tar_command = (
@@ -229,6 +229,8 @@ def tar_processes_streams_and_qual_getter(tar_path):
         tar_source_streams.append(
                 tar_processes[-1][0].stdout
             )
+    if len(tar_source_streams) == 1:
+        tar_source_streams.append(open(os.devnull))
     return tar_processes, tar_source_streams, qual_getter
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
@@ -638,11 +640,13 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             ) as source_stream_2:
             source_streams = [source_stream_1, source_stream_2]
             reorganize = all([source == os.devnull for source in sources])
+            sra_live = False
             if reorganize:
                 if 'tar_streams' in locals():
                     # TARred data is live
                     source_streams = tar_streams
                 else:
+                    sra_live = True
                     # SRA data is live
                     if sra_paired_end:
                         source_streams = [
@@ -749,7 +753,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             line_numbers = [i + 1 for i in line_numbers]
                             quals = [source_stream.readline().strip()
                                         for source_stream in source_streams]
-                            if reorganize and sra_paired_end:
+                            if sra_live and sra_paired_end:
                                 # Fix order!
                                 lines, seqs, plus_lines, quals = (
                                         [lines[0], plus_lines[0]],
