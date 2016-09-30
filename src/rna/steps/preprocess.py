@@ -148,6 +148,89 @@ def max_min_read_lengths_from_fastq_stream(fastq_stream):
             min_len = min(min_len, len(line.strip()))
     return max_len, min_len
 
+def tar_processes_streams_and_qual_getter(tar_path):
+    """ Gives subprocesses, file handles, and phred_converter for tarred sample
+        
+        tar_path: path to tarred sample
+
+        Return value: tuple (list of subprocess.Popen objects,
+                                list of file handles,
+                                qual getter from phred_converter)
+    """
+    import tarfile
+    tar_object = tarfile.open(tar_path)
+    if tar_path.endswith('.bz2'):
+        tar_parameters = '-xOjf'
+    elif tar_path.endswith('.gz'):
+        tar_parameters = '-xOzf'
+    else:
+        tar_parameters = '-xOf'
+    tar_source_streams, tar_processes = [], []
+    obtained_quality = False
+    # Put _1 first in list with sort if it's present
+    tarinfos = sorted(tar_object.getmembers(), key=lambda x: x.name)
+    if len(tarinfos) > 2:
+        raise RuntimeError(
+                    '{} files detected in archive {} from manifest file, but '
+                    'there should be no more '
+                    'than 2.'.format(len(tarinfos),
+                                        os.path.basename(tar_path))
+                )
+    elif not tarinfos:
+        raise RuntimeError(
+                'TAR archive {} from manifest file contains no files.'.format(
+                        os.path.basename(tar_path)
+                    )
+                )
+    for tarinfo in sorted(tar_object.getmembers(), key=lambda x: x.name):
+        if tarinfo.name.endswith('.bz2'):
+            decompress_command = ' | bzip2 -cd | '
+        elif tarinfo.name.endswith('.gz'):
+            decompress_command = ' | gzip -cd | '
+        else:
+            decompress_command = ''
+        tar_command = (
+                'set -exo pipefail; '
+                'tar {tar_parameters} {tar_path} '
+                '{member_name}{decompress_command}'
+            ).format(
+                    tar_parameters=tar_parameters,
+                    tar_path=tar_path,
+                    member_name=tarinfo.name,
+                    decompress_command=decompress_command
+                )
+        if not obtained_quality:
+            # Get quality from first FASTQ
+            quality_process = subprocess.Popen(
+                    tar_command,
+                    shell=True,
+                    executable='/bin/bash',
+                    bufsize=-1,
+                    stdout=subprocess.PIPE
+                )
+            qual_getter = phred_converter(fastq_stream=quality_process.stdout)
+            quality_process.stdout.close()
+            quality_return_code = quality_process.wait()
+            if quality_return_code > 0:
+                raise RuntimeError(('tar terminated with exit '
+                                    'code %d. Command run was "%s".')
+                                        % (quality_return_code,
+                                            tar_command))
+            obtained_quality = True
+        tar_processes.append(
+                (subprocess.Popen(
+                    tar_command,
+                    shell=True,
+                    executable='/bin/bash',
+                    bufsize=-1,
+                    stdout=subprocess.PIPE),
+                    tar_command)
+            )
+        tar_source_streams.append(
+                tar_processes[-1][0].stdout
+            )
+    return tar_processes, tar_source_streams, qual_getter
+
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         to_stdout=False, push='.', mover=filemover.FileMover(),
         verbose=False, scratch=None, bin_qualities=True, short_qnames=False,
@@ -505,25 +588,15 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                     'should be in the archive. Offending URLs '
                                     'are "{}".'.format(source_urls)
                                 )
-                        open_mode = 'r|' + ('' if downloaded.endswith('.tar')
-                                            else
-                                            downloaded.rpartition('.')[-1])
-                        # Extract and kill tar file
-                        import tarfile
-                        tar_object = tarfile.open(downloaded[0], open_mode)
-                        tar_object.extractall(path=download_dir)
-                        tar_object.close()
-                        os.remove(downloaded[0])
-                        sources = [os.path.join(download_dir, downloaded_file)
-                                    for downloaded_file in
-                                    sorted(os.listdir(download_dir))]
-                        if len(sources) > 2:
-                            raise RuntimeError(
-                                        '{} files detected in archive {}, but '
-                                        'there should be no more '
-                                        'than 2.'.format(downloaded,
-                                                            len(sources))
-                                    )
+                        # Get streams ready from tar file
+                        tar_path = os.path.join(download_dir, downloaded[0])
+                        (tar_processes, tar_streams, qual_getter) = (
+                                tar_processes_streams_and_qual_getter(
+                                    os.path.join(download_dir, downloaded[0])
+                                )
+                            )
+                        # Use dummy source, as for SRA
+                        sources = [os.devnull]
                     else:
                         sources.append(
                                 os.path.join(download_dir, downloaded[0])
@@ -542,30 +615,13 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                     'should be in the archive. Offending URLs '
                                     'are "{}".'.format(source_urls)
                                 )
-                        open_mode = 'r|' + ('' if current_file.endswith('.tar')
-                                            else
-                                            current_file.rpartition('.')[-1])
-                        # Extract and kill tar file
-                        import tarfile
-                        tar_object = tarfile.open(current_file, open_mode)
-                        extract_dir = os.path.join(temp_dir, 'extracted_files')
-                        try:
-                            os.makedirs(extract_dir)
-                        except OSError as e:
-                            if e.errno != errno.EEXIST:
-                                raise
-                        tar_object.extractall(path=extract_dir)
-                        tar_object.close()
-                        sources = [os.path.join(extract_dir, temp_file)
-                                    for temp_file in
-                                    sorted(os.listdir(extract_dir))]
-                        if len(sources) > 2:
-                            raise RuntimeError(
-                                        '{} files detected in archive {}, but '
-                                        'there should be no more '
-                                        'than 2.'.format(downloaded,
-                                                            len(sources))
-                                    )
+                        (tar_processes, tar_streams, qual_getter) = (
+                                tar_processes_streams_and_qual_getter(
+                                    current_file
+                                )
+                            )
+                        # Use dummy source, as for SRA
+                        sources = [os.devnull]
                 else:
                     sources.append(source_url.to_url())
         if onward: continue
@@ -583,11 +639,17 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             source_streams = [source_stream_1, source_stream_2]
             reorganize = all([source == os.devnull for source in sources])
             if reorganize:
-                # SRA data is live
-                if sra_paired_end:
-                    source_streams = [sra_process.stdout, sra_process.stdout]
+                if 'tar_streams' in locals():
+                    # TARred data is live
+                    source_streams = tar_streams
                 else:
-                    source_streams = [sra_process.stdout, open(os.devnull)]
+                    # SRA data is live
+                    if sra_paired_end:
+                        source_streams = [
+                                sra_process.stdout, sra_process.stdout
+                            ]
+                    else:
+                        source_streams = [sra_process.stdout, open(os.devnull)]
             break_outer_loop = False
             while True:
                 if not to_stdout:
@@ -995,6 +1057,19 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                         % (sra_return_code,
                                             fastq_dump_command))
             del sra_process
+        if 'tar_processes' in locals():
+            for tar_process, tar_command in tar_processes:
+                tar_process.stdout.close()
+                tar_return_code = tar_process.wait()
+                if tar_return_code > 0:
+                    raise RuntimeError(
+                            'tar command terminated with exit code %d. '
+                            'Command run was "%s".' % (
+                                    tar_return_code,
+                                    tar_command
+                                )
+                        )
+            del tar_processes
 
 if __name__ == '__main__':
     import unittest
