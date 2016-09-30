@@ -492,12 +492,12 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             set(os.listdir(download_dir)).difference(
                                                                 downloaded
                                                             )
-                        )[0]
-                    if (downloaded.endswith('.tar.gz')
-                            or downloaded.endswith('.tar')
-                            or downloaded.endswith('.tar.bz2')):
+                        )
+                    if (downloaded[0].endswith('.tar.gz')
+                            or downloaded[0].endswith('.tar')
+                            or downloaded[0].endswith('.tar.bz2')):
                         if len(source_urls) != 1:
-                            raise RuntimError(
+                            raise RuntimeError(
                                     'More than one source URL is present '
                                     'on a manifest line, but one URL points '
                                     'to a TAR archive. If working with '
@@ -510,10 +510,10 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                             downloaded.rpartition('.')[-1])
                         # Extract and kill tar file
                         import tarfile
-                        tar_object = tarfile.open(downloaded, open_mode)
+                        tar_object = tarfile.open(downloaded[0], open_mode)
                         tar_object.extractall(path=download_dir)
                         tar_object.close()
-                        os.remove(downloaded)
+                        os.remove(downloaded[0])
                         sources = [os.path.join(download_dir, downloaded_file)
                                     for downloaded_file in
                                     sorted(os.listdir(download_dir))]
@@ -526,10 +526,48 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                     )
                     else:
                         sources.append(
-                                os.path.join(download_dir, downloaded)
+                                os.path.join(download_dir, downloaded[0])
                             )
             else:
-                sources.append(source_url.to_url())
+                current_file = source_url.to_url()
+                if (current_file.endswith('.tar.gz')
+                            or current_file.endswith('.tar')
+                            or current_file.endswith('.tar.bz2')):
+                        if len(source_urls) != 1:
+                            raise RuntimeError(
+                                    'More than one source URL is present '
+                                    'on a manifest line, but one URL points '
+                                    'to a TAR archive. If working with '
+                                    'TARs, all files for a given sample '
+                                    'should be in the archive. Offending URLs '
+                                    'are "{}".'.format(source_urls)
+                                )
+                        open_mode = 'r|' + ('' if current_file.endswith('.tar')
+                                            else
+                                            current_file.rpartition('.')[-1])
+                        # Extract and kill tar file
+                        import tarfile
+                        tar_object = tarfile.open(current_file, open_mode)
+                        extract_dir = os.path.join(temp_dir, 'extracted_files')
+                        try:
+                            os.makedirs(extract_dir)
+                        except OSError as e:
+                            if e.errno != errno.EEXIST:
+                                raise
+                        tar_object.extractall(path=extract_dir)
+                        tar_object.close()
+                        sources = [os.path.join(extract_dir, temp_file)
+                                    for temp_file in
+                                    sorted(os.listdir(extract_dir))]
+                        if len(sources) > 2:
+                            raise RuntimeError(
+                                        '{} files detected in archive {}, but '
+                                        'there should be no more '
+                                        'than 2.'.format(downloaded,
+                                                            len(sources))
+                                    )
+                else:
+                    sources.append(source_url.to_url())
         if onward: continue
         '''Use os.devnull so single- and paired-end data can be handled in one
         loop.'''
