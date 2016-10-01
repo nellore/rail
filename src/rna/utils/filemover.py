@@ -44,6 +44,10 @@ class CommandThread(threading.Thread):
                 match = re.search(r'filename=(.+)', line, re.I)
                 if match and match.group(1):
                     self.content_disposition_filename = match.group(1)
+                    print >>sys.stderr, (
+                                'Filename {} from content-disposition header '
+                                'found.'
+                            ).format(self.content_disposition_filename)
             else:
                 print >>sys.stderr, line,
         self.process_return = self.process.wait()
