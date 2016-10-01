@@ -40,7 +40,7 @@ class CommandThread(threading.Thread):
                                     stderr=subprocess.STDOUT)
         # This is just for getting Content-Disposition from cURL
         for line in self.process.stdout:
-            if re.match(line[1:].lstrip(), 'content-disposition:', re.I):
+            if re.match('content-disposition:', line[1:].lstrip(), re.I):
                 match = re.search(r'filename=(.+)', line, re.I)
                 if match and match.group(1):
                     self.content_disposition_filename = match.group(1)
