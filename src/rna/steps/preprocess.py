@@ -89,6 +89,7 @@ import tempdel
 import subprocess
 from guess import phred_converter
 from encode import encode, encode_sequence
+import re
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -915,7 +916,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 original_qnames[1] += '/2'
                             assert seqs[1]
                             assert quals[1]
-                            seqs = [seq.upper() for seq in seqs]
+                            seqs = [re.sub(r'[^ATCGN]', 'N', seq.upper())
+                                    for seq in seqs]
                             reversed_complement_seqs = [
                                     seqs[0][::-1].translate(
                                         _reversed_complement_translation_table
@@ -976,7 +978,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             records_printed += 2
                             _output_line_count += 1
                         else:
-                            seqs[0] = seqs[0].upper()
+                            seqs[0] = re.sub(r'[^ATCGN]', 'N', seqs[0].upper())
                             reversed_complement_seqs = [
                                     seqs[0][::-1].translate(
                                         _reversed_complement_translation_table
