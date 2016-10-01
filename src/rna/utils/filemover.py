@@ -43,7 +43,9 @@ class CommandThread(threading.Thread):
             if re.match('content-disposition:', line[1:].lstrip(), re.I):
                 match = re.search(r'filename=(.+)', line, re.I)
                 if match and match.group(1):
-                    self.content_disposition_filename = match.group(1)
+                    self.content_disposition_filename = (
+                                match.group(1).strip().strip('"')
+                            )
                     print >>sys.stderr, (
                                 'Filename {} from content-disposition header '
                                 'found.'
@@ -232,8 +234,8 @@ class FileMover(object):
                 except OSError:
                     if curl_thread.content_disposition_filename:
                         print >>sys.stderr, (
-                                'Filename {} from content-disposition header '
-                                'found.'
+                                'Switching to filename {} from '
+                                'content-disposition header.'
                             ).format(curl_thread.content_disposition_filename)
                         filename = curl_thread.content_disposition_filename
                         try:
@@ -254,8 +256,8 @@ class FileMover(object):
                                     and filename !=
                                     curl_thread.content_disposition_filename):
                                 print >>sys.stderr, (
-                                    'Filename {} from content-disposition '
-                                    'header found.'
+                                    'Switching to filename {} from '
+                                    'content-disposition header.'
                                 ).format(
                                     curl_thread.content_disposition_filename
                                 )
