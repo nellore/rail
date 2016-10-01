@@ -12,6 +12,7 @@ import subprocess
 import time
 import threading
 import pipes
+import re
 
 def add_args(parser):
     """ Sets up arguments related to moving files around. """
@@ -30,12 +31,21 @@ class CommandThread(threading.Thread):
         super(CommandThread, self).__init__()
         self.command_list = command_list
         self.process_return, self.process = None, None
+        self.content_disposition_filename = None
     def run(self):
         self.process \
             = subprocess.Popen(self.command_list,
                                     bufsize=-1,
-                                    stdout=sys.stderr,
-                                    stderr=sys.stderr)
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT)
+        # This is just for getting Content-Disposition from cURL
+        for line in self.process.stdout:
+            if re.match(line[1:].lstrip(), 'content-disposition:', re.I):
+                match = re.search(r'filename=(.+)', line, re.I)
+                if match and match.group(1):
+                    self.content_disposition_filename = match.group(1)
+            else:
+                print >>sys.stderr, line,
         self.process_return = self.process.wait()
 
 class FileMover(object):
@@ -201,7 +211,9 @@ class FileMover(object):
         elif url.is_curlable:
             oldp = os.getcwd()
             os.chdir(dest)
-            command_list = ['curl', '-s', '-O', '-J', '--connect-timeout', '600']
+            command_list = [
+                    'curl', '-s', '-O', '-J', '-v', '--connect-timeout', '600'
+                ]
             command_list.append(url.to_url())
             command = ' '.join(command_list)
             filename = os.path.join(dest, url.to_url().rpartition('/')[2])
@@ -214,7 +226,18 @@ class FileMover(object):
                 try:
                     last_size = os.path.getsize(filename)
                 except OSError:
-                    last_size = 0
+                    if curl_thread.content_disposition_filename:
+                        print >>sys.stderr, (
+                                'Filename {} from content-disposition header '
+                                'found.'
+                            ).format(curl_thread.content_disposition_filename)
+                        filename = curl_thread.content_disposition_filename
+                        try:
+                            last_size = os.path.getsize(filename)
+                        except OSError:
+                            last_size = 0
+                    else:
+                        last_size = 0
                 while curl_thread.is_alive():
                     now_time = time.time()
                     if now_time - last_print_time > 160:
@@ -223,7 +246,23 @@ class FileMover(object):
                         try:
                             new_size = os.path.getsize(filename)
                         except OSError:
-                            new_size = 0
+                            if (curl_thread.content_disposition_filename
+                                    and filename !=
+                                    curl_thread.content_disposition_filename):
+                                print >>sys.stderr, (
+                                    'Filename {} from content-disposition '
+                                    'header found.'
+                                ).format(
+                                    curl_thread.content_disposition_filename
+                                )
+                                filename = \
+                                    curl_thread.content_disposition_filename
+                                try:
+                                    new_size = os.path.getsize(filename)
+                                except OSError:
+                                    new_size = 0
+                            else:
+                                new_size = 0
                         if new_size == last_size:
                             # Download stalled
                             break_outer_loop = True
