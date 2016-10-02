@@ -1862,7 +1862,7 @@ class RailRnaLocal(object):
                              'write permissions are active.')
                                 % expanded_scratch
                         )
-        base.scratch = os.path.expandvars(os.path.expanduser(scratch))
+        base.scratch = scratch
         if sort_exe:
             sort_exe_parameters = [parameter.strip()
                                     for parameter in sort_exe.split(' ')]

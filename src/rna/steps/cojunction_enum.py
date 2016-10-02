@@ -139,7 +139,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
         bowtie2_index_base = os.path.join(index_directory, index_basename)  
     global _input_line_count
     temp_dir_path = make_temp_dir(scratch)
-    #register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
+    register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
     reads_file = os.path.join(temp_dir_path, 'reads.temp.gz')
     with xopen(True, reads_file, 'w', gzip_level) as reads_stream:
         for _input_line_count, line in enumerate(input_stream):
