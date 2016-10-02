@@ -1692,7 +1692,6 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             with cache(pool if to_cache else None, to_cache,
                         True if 'archives'
                         in step_data else False) as dir_to_path:
-                print '|||' + dir_to_path + '|||'
                 if step_data['mapper'] not in identity_mappers:
                     # Perform map step only if mapper isn't identity
                     try:
