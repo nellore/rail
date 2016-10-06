@@ -5,7 +5,7 @@
 
   "Mappings" : {
     "SubnetConfig" : {
-      "VPC"     : { "CIDR" : "10.0.0.0/16" },
+      "VPC"     : { "CIDR" : "10.0.0.0/24" },
       "Public"  : { "CIDR" : "10.0.0.0/24" }
     }
   },
