@@ -175,7 +175,7 @@ def tar_processes_streams_and_qual_getter(tar_path):
         without_mate_label = []
         for tarinfo in tarinfos:
             tarinfo_prefix = tarinfo.name.partition('.')[0]
-            if tarinfo_prefix[-1] in [1, 2]:
+            if tarinfo_prefix[-1] in ['1', '2']:
                 without_mate_label.append(tarinfo_prefix[:-1])
             else:
                 without_mate_label.append(tarinfo_prefix)
