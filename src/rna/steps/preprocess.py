@@ -170,36 +170,63 @@ def tar_processes_streams_and_qual_getter(tar_path):
     obtained_quality = False
     # Put _1 first in list with sort if it's present
     tarinfos = sorted(tar_object.getmembers(), key=lambda x: x.name)
-    if len(tarinfos) > 2:
-        raise RuntimeError(
-                    '{} files detected in archive {} from manifest file, but '
-                    'there should be no more '
-                    'than 2.'.format(len(tarinfos),
+    # Group lanes if multiple appear to be present
+    if len(tarinfos) >= 2:
+        without_mate_label = []
+        for tarinfo in tarinfos:
+            tarinfo_prefix = tarinfo.name.partition('.')[0]
+            if tarinfo_prefix[-1] in [1, 2]:
+                without_mate_label.append(tarinfo_prefix[:-1])
+            else:
+                without_mate_label.append(tarinfo_prefix)
+        seems_paired = False
+        if without_mate_label[1] == without_mate_label[0]:
+            seems_paired = True
+            show_message = False
+            for i in xrange(3, len(tarinfos), 2):
+                if without_math_label[i-1] != without_mate_label:
+                    show_message = True
+            if show_message or len(tarinfos) % 2 != 0:
+                raise RuntimeError(
+                    ('{} files detected in archive {} from manifest file, and '
+                     'they appear to span both single- and paired-end '
+                     'samples. Separate the samples in the TAR and try '
+                     'again.').format(len(tarinfos),
                                         os.path.basename(tar_path))
                 )
+        if seems_paired:
+            tarinfo_groups = [[tarinfo for i, tarinfo in enumerate(tarinfos)
+                                if i % 2 == 0],
+                                [tarinfo for i, tarinfo in enumerate(tarinfos)
+                                if i % 2 == 1]]
+        else:
+            tarinfo_groups = [tarinfos]
     elif not tarinfos:
         raise RuntimeError(
                 'TAR archive {} from manifest file contains no files.'.format(
                         os.path.basename(tar_path)
                     )
                 )
-    for tarinfo in sorted(tar_object.getmembers(), key=lambda x: x.name):
-        if tarinfo.name.endswith('.bz2'):
-            decompress_command = ' | bzip2 -cd '
-        elif tarinfo.name.endswith('.gz'):
-            decompress_command = ' | gzip -cd '
-        else:
-            decompress_command = ''
-        tar_command = (
-                'set -exo pipefail; '
-                'tar {tar_parameters} {tar_path} '
-                '{member_name}{decompress_command}'
-            ).format(
-                    tar_parameters=tar_parameters,
-                    tar_path=tar_path,
-                    member_name=tarinfo.name,
-                    decompress_command=decompress_command
-                )
+    for tarinfo_group in tarinfo_groups:
+        tar_command = ['set -exo pipefail']
+        for tarinfo in tarinfo_group:
+            if tarinfo.name.endswith('.bz2'):
+                decompress_command = ' | bzip2 -cd '
+            elif tarinfo.name.endswith('.gz'):
+                decompress_command = ' | gzip -cd '
+            else:
+                decompress_command = ''
+            # awk 1 below adds a newline to the end of a file if it's not there
+            tar_command.append(
+                    'tar {tar_parameters} {tar_path} '
+                    '{member_name}{decompress_command} | awk 1'
+                ).format(
+                        tar_parameters=tar_parameters,
+                        tar_path=tar_path,
+                        member_name=tarinfo.name,
+                        decompress_command=decompress_command
+                    )
+        tar_command = '; '.join(tar_command)
         if not obtained_quality:
             # Get quality from first FASTQ
             quality_process = subprocess.Popen(
