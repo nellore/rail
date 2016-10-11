@@ -342,9 +342,20 @@ class S3Ansible(object):
             # No Lifecycle Configuration
             rules = []
         return_value = lifecycle_process.wait()
-        if return_value and not 'NoSuchLifecycleConfiguration' in errors:
-            # Raise exception iff lifecycle config exists
-            raise RuntimeError(errors)
+        if return_value:
+            if 'AccessDenied' in errors:
+                # Just proceed with a warning
+                print >>sys.stderr, (
+                        'Warning: account does not have access to bucket '
+                        'lifecycle. Skipping scheduling of deletion of '
+                        'intermediate data. Perform this deletion manually '
+                        'with the console or the AWS CLI after the '
+                        'job flow is complete.'
+                    )
+                return
+            if 'NoSuchLifecycleConfiguration' in errors:
+                # Raise exception iff lifecycle config exists
+                raise RuntimeError(errors)
         add_rule = True
         for rule in rules:
             try:
