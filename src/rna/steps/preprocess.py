@@ -195,11 +195,13 @@ def tar_processes_streams_and_qual_getter(tar_path):
                                         os.path.basename(tar_path))
                 )
         if seems_paired:
+            print >>sys.stderr, 'Detected paired-end sample.'
             tarinfo_groups = [[tarinfo for i, tarinfo in enumerate(tarinfos)
                                 if i % 2 == 0],
                                 [tarinfo for i, tarinfo in enumerate(tarinfos)
                                 if i % 2 == 1]]
         else:
+            print >>sys.stderr, 'Detected single-end sample.'
             tarinfo_groups = [tarinfos]
     elif not tarinfos:
         raise RuntimeError(
@@ -209,6 +211,9 @@ def tar_processes_streams_and_qual_getter(tar_path):
                 )
     else:
         tarinfo_groups = [tarinfos]
+    print >>sys.stderr, 'Tarinfo groups are as follows.'
+    print >>sys.stderr, [[tarinfo.name for tarinfo in tarinfo_group]
+                        for tarinfo_group in tarinfo_groups]
     for tarinfo_group in tarinfo_groups:
         tar_command = ['set -exo pipefail']
         for tarinfo in tarinfo_group:
