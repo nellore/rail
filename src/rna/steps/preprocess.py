@@ -184,7 +184,7 @@ def tar_processes_streams_and_qual_getter(tar_path):
             seems_paired = True
             show_message = False
             for i in xrange(3, len(tarinfos), 2):
-                if without_math_label[i-1] != without_mate_label:
+                if without_mate_label[i-1] != without_mate_label:
                     show_message = True
             if show_message or len(tarinfos) % 2 != 0:
                 raise RuntimeError(
