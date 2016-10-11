@@ -207,6 +207,8 @@ def tar_processes_streams_and_qual_getter(tar_path):
                         os.path.basename(tar_path)
                     )
                 )
+    else:
+        tarinfo_groups = [tarinfos]
     for tarinfo_group in tarinfo_groups:
         tar_command = ['set -exo pipefail']
         for tarinfo in tarinfo_group:
