@@ -348,10 +348,10 @@ class S3Ansible(object):
                 print >>sys.stderr, (
                         'Warning: account does not have access to bucket '
                         'lifecycle. Skipping scheduling of deletion of '
-                        'intermediate data. Perform this deletion manually '
-                        'with the console or the AWS CLI after the '
+                        'data with prefix "{}". Perform this deletion '
+                        'manually with the console or the AWS CLI after the '
                         'job flow is complete.'
-                    )
+                    ).format(prefix)
                 return
             if 'NoSuchLifecycleConfiguration' in errors:
                 # Raise exception iff lifecycle config exists
