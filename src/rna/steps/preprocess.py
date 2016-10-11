@@ -213,7 +213,7 @@ def tar_processes_streams_and_qual_getter(tar_path):
         tarinfo_groups = [tarinfos]
     print >>sys.stderr, 'Tarinfo groups are as follows.'
     print >>sys.stderr, [[tarinfo.name for tarinfo in tarinfo_group]
-                        for tarinfo_group in tarinfo_groups]
+                         for tarinfo_group in tarinfo_groups]
     for tarinfo_group in tarinfo_groups:
         tar_command = ['set -exo pipefail']
         for tarinfo in tarinfo_group:
@@ -809,9 +809,9 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                         lines[1], line_numbers[1], sources[1]
                                     )
                                 try:
-                                    # Kill spaces in name
+                                    # Remove spaces in name
                                     original_qnames = \
-                                        [line[1:].replace(' ', '_')
+                                        [line[1:].partition(' ')[0]
                                             for line in lines]
                                 except IndexError:
                                     raise RuntimeError(
@@ -892,7 +892,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 try:
                                     # Kill spaces in name
                                     original_qnames = \
-                                        [line[1:].replace(' ', '_')
+                                        [line[1:].partition(' ')[0]
                                             for line in lines]
                                 except IndexError:
                                     raise RuntimeError(
