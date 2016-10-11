@@ -219,7 +219,7 @@ def tar_processes_streams_and_qual_getter(tar_path):
             else:
                 decompress_command = ''
             # awk 1 below adds a newline to the end of a file if it's not there
-            tar_command.append(
+            tar_command.append((
                     'tar {tar_parameters} {tar_path} '
                     '{member_name}{decompress_command} | awk 1'
                 ).format(
@@ -227,7 +227,7 @@ def tar_processes_streams_and_qual_getter(tar_path):
                         tar_path=tar_path,
                         member_name=tarinfo.name,
                         decompress_command=decompress_command
-                    )
+                    ))
         tar_command = '; '.join(tar_command)
         if not obtained_quality:
             # Get quality from first FASTQ
