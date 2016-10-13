@@ -1,4 +1,4 @@
-Note on preprint versioning
+Note on versioning
 -----
 This version of the readme describes how to reproduce results in both [v2 of the Rail-RNA preprint](http://biorxiv.org/content/early/2015/08/11/019067) and [the final paper published in Bioinformatics](http://bioinformatics.oxfordjournals.org/content/early/2016/09/02/bioinformatics.btw575.abstract). To view the README that reproduces the results contained in v1, see [this](https://github.com/nellore/rail/tree/7db1e4e506224e156ae1ac271ceb88d5e465b7b9/eval) commit.
 
