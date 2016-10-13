@@ -40,7 +40,7 @@ Outputs currently include
 
 and will likely expand in future versions.
 
-Read the [preprint](http://biorxiv.org/content/early/2015/08/11/019067) for more details. Methods explained there correspond to Rail-RNA 0.2.4b.
+Read our [paper](http://bioinformatics.oxfordjournals.org/content/early/2016/09/02/bioinformatics.btw575.abstract) for more details. Methods explained there correspond to Rail-RNA 0.1.9.
 
 Get set up
 -----
