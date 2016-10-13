@@ -1,13 +1,13 @@
 Note on preprint versioning
 -----
-This version of the readme describes how to reproduce results in [v2 of the Rail-RNA preprint](http://biorxiv.org/content/early/2015/08/11/019067). To view the README that reproduces the results contained in v1, see [this](https://github.com/nellore/rail/tree/7db1e4e506224e156ae1ac271ceb88d5e465b7b9/eval) commit.
+This version of the readme describes how to reproduce results in both [v2 of the Rail-RNA preprint](http://biorxiv.org/content/early/2015/08/11/019067) and [the final paper published in Bioinformatics](http://bioinformatics.oxfordjournals.org/content/early/2016/09/02/bioinformatics.btw575.abstract). To view the README that reproduces the results contained in v1, see [this](https://github.com/nellore/rail/tree/7db1e4e506224e156ae1ac271ceb88d5e465b7b9/eval) commit.
 
 Reproducing preprint results
 -----
 **Use Rail-RNA v0.1.9b**. Rail-RNA has several dependencies. In the experiments we conducted, Rail-RNA wrapped Bowtie 1 v1.1.1, Bowtie 2 v2.2.5, and SAMTools v1.2, and PyPy 2.5. Version 2.1.0 of TopHat 2 was used and, like Rail-RNA, it wrapped Bowtie 2 v2.2.5. Version 2.4.2a of STAR was used, and version 0.1.6-beta of HISAT was used. Subjunc is a
 tool in the Subread package, and version 1.4.6-p4 of the Subread package was used. Flux Simulator 1.2.1 was used to obtain simulated samples as described below.
 
-To reproduce results from v2 of the Rail-RNA [preprint](http://biorxiv.org/content/early/2015/08/11/019067), perform the following steps. Note that input and output directories in scripts may need to be changed. If you're having trouble, ask questions in our [Gitter](https://gitter.im/nellore/rail).
+To reproduce all our results, perform the following steps. Note that input and output directories in scripts may need to be changed. If you're having trouble, ask questions in our [Gitter](https://gitter.im/nellore/rail).
 
 Generating genome indexes for all experiments
 -----
