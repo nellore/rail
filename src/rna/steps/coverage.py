@@ -2,7 +2,6 @@
 """
 Rail-RNA-coverage
 Follows Rail-RNA-coverage_pre
-Precedes Rail-RNA-coverage_post
 
 Reduce step in MapReduce pipelines that outputs normalization factors for
 sample coverages, both for all primary alignments and for "uniquely mapping"
@@ -289,14 +288,22 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
                         reference_index.rname_lengths[rname],
                         unique_coverage
                     )
-    # Output normalization factors iff working with real sample
+    '''Output normalization factors iff working with real sample'''
     if real_sample:
-        print '3\t%s\t\x1c\t\x1c\t\x1c\t%d\t%d' % (sample_index,
+        auc = sum(coverage_value * coverage_histogram[coverage_value]
+                    for coverage_value in coverage_histogram)
+        unique_auc = sum(coverage_value
+                            * unique_coverage_histogram[coverage_value]
+                        for coverage_value in unique_coverage_histogram)
+        print '3\t%s\t\x1c\t\x1c\t\x1c\t%d\t%d\t%d\t%d' % (sample_index,
                                                 percentile(coverage_histogram,
                                                             args.percentile),
                                                 percentile(
                                                     unique_coverage_histogram,
-                                                    args.percentile))
+                                                    args.percentile),
+                                                auc,
+                                                unique_auc
+                                            )
     output_line_count += 1
     # Write bigwigs
     assert os.path.exists(sizes_filename)
