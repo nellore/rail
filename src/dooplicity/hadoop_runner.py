@@ -116,7 +116,6 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
     with open(args.job_flow, 'r') as job_flow_file:
         job_flow = json.load(job_flow_file)
-    job_flow_file.close()
     hadoop_commands = get_hadoop_streaming_command(
                              args.hadoop_path, job_flow, args.keep_intermediates)
     if args.print_command:
@@ -126,4 +125,3 @@ if __name__ == '__main__':
             for hadoop_command in hadoop_commands:
                 hadoop_command_file.write(hadoop_command)
                 hadoop_command_file.write("\n")
-        hadoop_command_file.close()
