@@ -40,67 +40,82 @@ def add_args(parser):
 
         No return value.
     """
-    parser.add_argument(
-            '-d', '--hadoop-path', type=str, required=True, default=None,
-            help=('Location of hadoop for running the hadoop job flow. '
-                  'Type `which hadoop` to find the location.')
-    )
-    parser.add_argument(
-            '-j', '--job-flow', required=True, default=None,
-            help=('File that contains Hadoop job flow described in json format.')
-    )
-    parser.add_argument(
-        '-p', '--print-command',
-        action='store_const', const=True, required=False,
-        default=False, help=('Print the hadoop command line and \
-        exit. ' 'Default is false.')
-    )
-    parser.add_argument(
-            '-o', '--output-path', type=str, required=False, default=None,
-            help=('Output path to save the hadoop streaming jar command.')
-    )
+    parser.add_argument('-d', '--hadoop-path', type=str,
+                        required=True, default=None, help=('Location \
+                        of hadoop for running the hadoop job \
+                        flow. Type `which hadoop` to find the \
+                        location.'))
+    parser.add_argument('-j', '--job-flow', required=True,
+                        default=None, help=('File that contains Hadoop \
+                        job flow described in json format.')  )
+    parser.add_argument('-k', '--keep-intermediates',
+                        action='store_const', const=True,
+                        default=False, help='Keeps all intermediate \
+                        output.')
+    parser.add_argument('-o', '--output-path', type=str,
+                        required=False, default=None, help=('Output \
+                        path to save the hadoop streaming jar \
+                        command.'))
+    parser.add_argument('-p', '--print-command', action='store_const',
+                        const=True, required=False, default=False,
+                        help=('Print the hadoop command line and \
+                        exit. ' 'Default is false.'))
 
-# Scan the entire job flow
-# Create a dictionary for each input file. Value will be the latest step it was seen
-# Same time, create hadoop commands and add to a list
-# Later, create deletion step and insert into the list of commands
-
-def extract_hadoop_commands_input_dir(hadoop_path, job_flow):
-    # TODO doc
-    # Return a dictionary of the input files and a list of hadoop commands.
-    hadoop_commands = []
-    hadoop_command = hadoop_path
-    input_dict = {}
+def extract_steps_input_output(hadoop_path, job_flow):
+    # TODO: documentation
+    # Return a dictionary of the inputs, a set of outputs, and a list of hadoop commands.
+    steps = []
+    hadoop_step = hadoop_path
+    input_last_seen = {}
+    all_outputs = set()
     currently_input = False
+    currently_output = False
 
     for step in job_flow["Steps"]:
         for arg in step["HadoopJarStep"]["Args"]:
-            hadoop_command += " " + arg
-            # If currently seeing input, record the latest step it was seen.
+            hadoop_step += " " + arg
+            # If currently seeing an input, record the latest step it
+            # was seen, which is the current step.
             if currently_input:
-                input_dict[arg] = len(hadoop_commands)
+                for step_input in arg.split(','):
+                    input_last_seen[step_input] = len(steps)
                 currently_input = False
-            # If current argument is "-input", the next argument will be an input directory.
+            # If currently seeing an output, add it to the set.
+            elif currently_output:
+                print arg
+                all_outputs.add(arg)
+                currently_output = False
+            # If current argument is "-input", the next argument will
+            # be an input directory.
             if arg == "-input":
                 currently_input = True
-        hadoop_commands.append(hadoop_command)
-        hadoop_command = hadoop_path
+            elif arg == "-output":
+                currently_output = True
+        steps.append(hadoop_step)
+        hadoop_step = hadoop_path
 
-    return input_dict, hadoop_commands
+    return input_last_seen, all_outputs, steps
+
+def add_delete_intermediate_steps(steps, input_last_seen):
+    # TODO: documentation
+    # TODO: write function
+    return steps
+
+def get_hadoop_streaming_command(hadoop_path, job_flow, keep_intermediates):
+    # TODO: documentation
+    input_last_seen, all_outputs, steps = extract_steps_input_output(hadoop_path, job_flow)
+    if not keep_intermediates:
+        steps = add_delete_intermediate_steps(steps, input_last_seen)
+
+    return steps
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__,
                     formatter_class=argparse.RawDescriptionHelpFormatter)
     add_args(parser)
     args = parser.parse_args(sys.argv[1:])
-    # TODO:
-    # Handle -p argument
-    # Handle -o argument
     with open(args.job_flow, 'r') as job_flow_file:
         job_flow = json.load(job_flow_file)
     job_flow_file.close()
-    dictionary, hadoop_commands = extract_hadoop_commands_input_dir(
-                                      args.hadoop_path, job_flow)
-
-    if args.print_command:
-          print hadoop_commands
+    hadoop_commands = get_hadoop_streaming_command(
+                             args.hadoop_path, job_flow, args.keep_intermediates)
