@@ -33,6 +33,7 @@ import argparse
 import sys
 import json
 
+
 def add_args(parser):
     """ Adds args relevant to Hadoop runner.
 
@@ -47,7 +48,7 @@ def add_args(parser):
                         location.'))
     parser.add_argument('-j', '--job-flow', required=True,
                         default=None, help=('File that contains Hadoop \
-                        job flow described in json format.')  )
+                        job flow described in json format.'))
     parser.add_argument('-k', '--keep-intermediates',
                         action='store_const', const=True,
                         default=False, help='Keeps all intermediate \
@@ -61,9 +62,11 @@ def add_args(parser):
                         help=('Print the hadoop command line and \
                         exit. ' 'Default is false.'))
 
+
 def extract_steps_input_output(hadoop_path, job_flow):
     # TODO: documentation
-    # Return a dictionary of the inputs, a set of outputs, and a list of hadoop commands.
+    # Return a dictionary of the inputs, a set of outputs,
+    # and a list of hadoop commands.
     steps = []
     hadoop_step = hadoop_path
     input_last_seen = {}
@@ -95,14 +98,17 @@ def extract_steps_input_output(hadoop_path, job_flow):
 
     return input_last_seen, all_outputs, steps
 
+
 def add_delete_intermediate_steps(steps, input_last_seen):
     # TODO: documentation
     # TODO: write function
     return steps
 
+
 def get_hadoop_streaming_command(hadoop_path, job_flow, keep_intermediates):
     # TODO: documentation
-    input_last_seen, all_outputs, steps = extract_steps_input_output(hadoop_path, job_flow)
+    input_last_seen, all_outputs, steps = extract_steps_input_output(
+        hadoop_path, job_flow)
     if not keep_intermediates:
         steps = add_delete_intermediate_steps(steps, input_last_seen)
 
@@ -110,17 +116,18 @@ def get_hadoop_streaming_command(hadoop_path, job_flow, keep_intermediates):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__,
-                    formatter_class=argparse.RawDescriptionHelpFormatter)
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     add_args(parser)
     args = parser.parse_args(sys.argv[1:])
     with open(args.job_flow, 'r') as job_flow_file:
         job_flow = json.load(job_flow_file)
     hadoop_commands = get_hadoop_streaming_command(
-                             args.hadoop_path, job_flow, args.keep_intermediates)
+        args.hadoop_path, job_flow, args.keep_intermediates)
     if args.print_command:
-          print hadoop_commands
+        print hadoop_commands
     if args.output_path:
         with open(args.output_path, 'w') as hadoop_command_file:
             for hadoop_command in hadoop_commands:
                 hadoop_command_file.write(hadoop_command)
                 hadoop_command_file.write("\n")
+
