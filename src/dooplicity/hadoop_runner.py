@@ -68,29 +68,28 @@ def extract_steps_input_output(hadoop_path, job_flow):
     hadoop_step = hadoop_path
     input_last_seen = {}
     all_outputs = set()
-    currently_input = False
-    currently_output = False
+    # `state` shows the type of argument currently it's reading.
+    state = None
 
     for step in job_flow["Steps"]:
         for arg in step["HadoopJarStep"]["Args"]:
             hadoop_step += " " + arg
-            # If currently seeing an input, record the latest step it
-            # was seen, which is the current step.
-            if currently_input:
+            # If current state is input, record the latest step the
+            # input was seen, which is the current step.
+            if state == "-input":
                 for step_input in arg.split(','):
                     input_last_seen[step_input] = len(steps)
-                currently_input = False
-            # If currently seeing an output, add it to the set.
-            elif currently_output:
-                print arg
+                state = None
+            # If current state is output, add output to the output set.
+            elif state == "-output":
                 all_outputs.add(arg)
-                currently_output = False
+                state = None
             # If current argument is "-input", the next argument will
             # be an input directory.
             if arg == "-input":
-                currently_input = True
+                state = "-input"
             elif arg == "-output":
-                currently_output = True
+                state = "-output"
         steps.append(hadoop_step)
         hadoop_step = hadoop_path
 
