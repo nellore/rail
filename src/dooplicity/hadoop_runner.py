@@ -60,7 +60,11 @@ def add_args(parser):
     parser.add_argument('-p', '--print-command', action='store_const',
                         const=True, required=False, default=False,
                         help=('Print the hadoop command line and \
-                        exit. ' 'Default is false.'))
+                        exit. ' 'Default is False.'))
+    parser.add_argument('-t', '--skip-trash', action='store_const',
+                        const=True, required=False, default=True,
+                        help=('When deleting files, skip trash and \
+                        delete permanantly. Default is True.'))
 
 
 def extract_steps_input_output(hadoop_path, job_flow):
@@ -96,21 +100,52 @@ def extract_steps_input_output(hadoop_path, job_flow):
         steps.append(hadoop_step)
         hadoop_step = hadoop_path
 
-    return input_last_seen, all_outputs, steps
+    return steps, input_last_seen, all_outputs
 
 
-def add_delete_intermediate_steps(steps, input_last_seen):
+def add_delete_intermediate_steps(hadoop_path, steps,
+                                  input_last_seen, all_outputs, skip_trash):
     # TODO: documentation
     # TODO: write function
+    # steps: list of hadoop commands
+    # input_last_seen: a dictionary {input file: last seen}
+    # all_outputs: set of outputs
+
+    delete_command = hadoop_path + " fs -rmr "
+    if skip_trash:
+        delete_command += "-skipTrash "
+
+    # Change `input_last_seen` to be a list of tuples sorted in
+    # descending order by the step last seen so that it does not
+    # change the true index once the delete step has been inserted
+    # into `steps`.
+    input_last_seen = [x for x in input_last_seen.iteritems()]
+    input_last_seen = sorted(input_last_seen, key=lambda x: x[1], reverse=True)
+
+    for to_remove, last_seen in input_last_seen:
+        if to_remove not in all_outputs:
+            '''Remove directory only if it's an -output of some
+            step and an -input of another step.'''
+            continue
+        else:
+            delete_command += to_remove
+            print delete_command, last_seen
+            print "\n"
+            steps.insert(last_seen + 1, delete_command)
+        delete_command = hadoop_path + " fs -rmr "
+        if skip_trash:
+            delete_command += "-skipTrash "
+
     return steps
 
 
-def get_hadoop_streaming_command(hadoop_path, job_flow, keep_intermediates):
+def get_hadoop_streaming_command(hadoop_path, job_flow, keep_intermediates, skip_trash):
     # TODO: documentation
-    input_last_seen, all_outputs, steps = extract_steps_input_output(
+    steps, input_last_seen, all_outputs  = extract_steps_input_output(
         hadoop_path, job_flow)
     if not keep_intermediates:
-        steps = add_delete_intermediate_steps(steps, input_last_seen)
+        steps = add_delete_intermediate_steps(hadoop_path, steps,
+                                              input_last_seen, all_outputs, skip_trash)
 
     return steps
 
@@ -121,8 +156,10 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
     with open(args.job_flow, 'r') as job_flow_file:
         job_flow = json.load(job_flow_file)
-    hadoop_commands = get_hadoop_streaming_command(
-        args.hadoop_path, job_flow, args.keep_intermediates)
+    hadoop_commands = get_hadoop_streaming_command(args.hadoop_path,
+                                                   job_flow,
+                                                   args.keep_intermediates,
+                                                   args.skip_trash)
     if args.print_command:
         print hadoop_commands
     if args.output_path:
