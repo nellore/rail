@@ -34,6 +34,13 @@ import sys
 import json
 
 
+class InputLastSeen:
+    # TODO: documentation
+    def __init__(self, input, step):
+        self.input = input
+        self.step = step
+
+
 def add_args(parser):
     """ Adds args relevant to Hadoop runner.
 
@@ -69,11 +76,11 @@ def add_args(parser):
 
 def extract_steps_input_output(hadoop_path, job_flow):
     # TODO: documentation
-    # Return a dictionary of the inputs, a set of outputs,
-    # and a list of hadoop commands.
+    # Return a list of the inputs sorted by last
+    # seen steps, a set of outputs, and a list of hadoop commands.
     steps = []
     hadoop_step = hadoop_path
-    input_last_seen = {}
+    input_last_seen = []
     all_outputs = set()
     # `state` shows the type of argument currently it's reading.
     state = None
@@ -85,7 +92,8 @@ def extract_steps_input_output(hadoop_path, job_flow):
             # input was seen, which is the current step.
             if state == "-input":
                 for step_input in arg.split(','):
-                    input_last_seen[step_input] = len(steps)
+                    input_last_seen = update_input_last_seen(step_input, len(steps),
+                                                             input_last_seen)
                 state = None
             # If current state is output, add output to the output set.
             elif state == "-output":
@@ -99,39 +107,43 @@ def extract_steps_input_output(hadoop_path, job_flow):
                 state = "-output"
         steps.append(hadoop_step)
         hadoop_step = hadoop_path
+    input_last_seen = sorted(input_last_seen, key=lambda x: x.step, reverse=True)
 
     return steps, input_last_seen, all_outputs
+
+
+def update_input_last_seen(step_input, step_length, input_last_seen):
+    seen_before = False
+    for input_step_pair in input_last_seen:
+        if input_step_pair.input == step_input:
+            input_step_pair.step = step_length
+            seen_before = True
+    if not seen_before:
+        input_last_seen.append(InputLastSeen(step_input, step_length))
+
+    return input_last_seen
 
 
 def add_delete_intermediate_steps(hadoop_path, steps,
                                   input_last_seen, all_outputs, skip_trash):
     # TODO: documentation
     # TODO: write function
-    # steps: list of hadoop commands
-    # input_last_seen: a dictionary {input file: last seen}
-    # all_outputs: set of outputs
+    # steps: a list of hadoop commands
+    # input_last_seen: a list of InputLastSeen objects
+    # all_outputs: a set of outputs
 
     delete_command = hadoop_path + " fs -rmr "
     if skip_trash:
         delete_command += "-skipTrash "
 
-    # Change `input_last_seen` to be a list of tuples sorted in
-    # descending order by the step last seen so that it does not
-    # change the true index once the delete step has been inserted
-    # into `steps`.
-    input_last_seen = [x for x in input_last_seen.iteritems()]
-    input_last_seen = sorted(input_last_seen, key=lambda x: x[1], reverse=True)
-
-    for to_remove, last_seen in input_last_seen:
-        if to_remove not in all_outputs:
+    for to_remove in input_last_seen:
+        if to_remove.input not in all_outputs:
             '''Remove directory only if it's an -output of some
             step and an -input of another step.'''
             continue
         else:
-            delete_command += to_remove
-            print delete_command, last_seen
-            print "\n"
-            steps.insert(last_seen + 1, delete_command)
+            delete_command += to_remove.input
+            steps.insert(to_remove.step + 1, delete_command)
         delete_command = hadoop_path + " fs -rmr "
         if skip_trash:
             delete_command += "-skipTrash "
