@@ -34,9 +34,17 @@ import sys
 import json
 
 
+# TODO: Should probably replace `input` with something else.
+
 class InputLastSeen:
-    # TODO: documentation
+    """ Stores the hadoop input file and its last seen step.
+
+        Attributes:
+            input: A string of a hadoop input file for a hadoop step.
+            step: An integer for a step the input file was last seen.
+    """
     def __init__(self, input, step):
+        """ Inits InputLastSeen with input and step. """
         self.input = input
         self.step = step
 
@@ -75,14 +83,22 @@ def add_args(parser):
 
 
 def extract_steps_input_output(hadoop_path, job_flow):
-    # TODO: documentation
-    # Return a list of the inputs sorted by last
-    # seen steps, a set of outputs, and a list of hadoop commands.
+    """ Extracts hadoop steps, inputs, and outputs from a hadoop job flow.
+
+        hadoop_path: Path to hadoop given by user.
+        job_flow: JSON object that describes a hadoop job flow.
+
+        Return values:
+            steps: A list of hadoop commands without
+                   intermediate data deletion steps.
+            input_last_seen: A list of InputLastSeen objects.
+            all_outputs: A set of all outputs found in job_flow.
+    """
     steps = []
     hadoop_step = hadoop_path
     input_last_seen = []
     all_outputs = set()
-    # `state` shows the type of argument currently it's reading.
+    # `state` is the type of argument currently it's reading.
     state = None
 
     for step in job_flow["Steps"]:
@@ -114,6 +130,15 @@ def extract_steps_input_output(hadoop_path, job_flow):
 
 
 def update_input_last_seen(step_input, step_length, input_last_seen):
+    """ Updates input_last_seen to correctly reflect its last seen step.
+
+        step_input: An input for a step.
+        step_length: Total number of steps that were seen so far.
+        input_last_seen: A list of InputLastSeen objects.
+
+        Return values:
+            input_last_seen: A list of InputLastSeen objects.
+    """
     seen_before = False
     for input_step_pair in input_last_seen:
         if input_step_pair.input == step_input:
@@ -127,12 +152,20 @@ def update_input_last_seen(step_input, step_length, input_last_seen):
 
 def add_delete_intermediate_steps(hadoop_path, steps,
                                   input_last_seen, all_outputs, skip_trash):
-    # TODO: documentation
-    # TODO: write function
-    # steps: a list of hadoop commands
-    # input_last_seen: a list of InputLastSeen objects
-    # all_outputs: a set of outputs
+    """ Adds steps to delete intermediates to a list of hadoop commands.
 
+        hadoop_path: Path to hadoop given by user.
+        steps: A list of hadoop commands without
+              intermediate data deletion steps.
+        input_last_seen: A list of InputLastSeen objects.
+        all_outputs: A set of all outputs found in job_flow.
+        skip_trash: A boolean for whether to skip trash
+                   when deleting intermediates from HDFS.
+
+        Return values:
+            steps: A list of hadoop commands with
+                  intermediate data deletion steps.
+    """
     delete_command = hadoop_path + " fs -rmr "
     if skip_trash:
         delete_command += "-skipTrash "
@@ -156,7 +189,20 @@ def get_hadoop_streaming_command(hadoop_path,
                                  job_flow,
                                  keep_intermediates,
                                  skip_trash):
-    # TODO: documentation
+    """ Add steps to delete intermediates to a list of hadoop commands.
+
+        hadoop_path: Path to hadoop given by user.
+        job_flow: JSON object that describes a hadoop job flow.
+        keep_intermediates: A boolean for whether to store
+                            intermediate data.
+        skip_trash: A boolean for whether to skip trash
+                   when deleting intermediates from HDFS.
+
+        Return values:
+            steps: A list of hadoop commands with or without
+                  intermediate data deletion steps depending on
+                  keep_intermediates.
+    """
     steps, input_last_seen, all_outputs = extract_steps_input_output(
         hadoop_path, job_flow)
     if not keep_intermediates:
