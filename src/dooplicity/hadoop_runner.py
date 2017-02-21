@@ -34,18 +34,16 @@ import sys
 import json
 
 
-# TODO: Should probably replace `input` with something else.
-
-class InputLastSeen:
+class HadoopInputLastSeen:
     """ Stores the hadoop input file and its last seen step.
 
         Attributes:
-            input: A string of a hadoop input file for a hadoop step.
+            hadoop_input: A string of a hadoop input file for a hadoop step.
             step: An integer for a step the input file was last seen.
     """
-    def __init__(self, input, step):
-        """ Inits InputLastSeen with input and step. """
-        self.input = input
+    def __init__(self, hadoop_input, step):
+        """ Inits HadoopInputLastSeen with input and step. """
+        self.hadoop_input = hadoop_input
         self.step = step
 
 
@@ -91,7 +89,7 @@ def extract_steps_input_output(hadoop_path, job_flow):
         Return values:
             steps: A list of hadoop commands without
                    intermediate data deletion steps.
-            input_last_seen: A list of InputLastSeen objects.
+            input_last_seen: A list of HadoopInputLastSeen objects.
             all_outputs: A set of all outputs found in job_flow.
     """
     steps = []
@@ -134,18 +132,18 @@ def update_input_last_seen(step_input, step_length, input_last_seen):
 
         step_input: An input for a step.
         step_length: Total number of steps that were seen so far.
-        input_last_seen: A list of InputLastSeen objects.
+        input_last_seen: A list of HadoopInputLastSeen objects.
 
         Return values:
-            input_last_seen: A list of InputLastSeen objects.
+            input_last_seen: A list of HadoopInputLastSeen objects.
     """
     seen_before = False
     for input_step_pair in input_last_seen:
-        if input_step_pair.input == step_input:
+        if input_step_pair.hadoop_input == step_input:
             input_step_pair.step = step_length
             seen_before = True
     if not seen_before:
-        input_last_seen.append(InputLastSeen(step_input, step_length))
+        input_last_seen.append(HadoopInputLastSeen(step_input, step_length))
 
     return input_last_seen
 
@@ -157,7 +155,7 @@ def add_delete_intermediate_steps(hadoop_path, steps,
         hadoop_path: Path to hadoop given by user.
         steps: A list of hadoop commands without
               intermediate data deletion steps.
-        input_last_seen: A list of InputLastSeen objects.
+        input_last_seen: A list of HadoopInputLastSeen objects.
         all_outputs: A set of all outputs found in job_flow.
         skip_trash: A boolean for whether to skip trash
                    when deleting intermediates from HDFS.
@@ -171,12 +169,12 @@ def add_delete_intermediate_steps(hadoop_path, steps,
         delete_command += "-skipTrash "
 
     for to_remove in input_last_seen:
-        if to_remove.input not in all_outputs:
+        if to_remove.hadoop_input not in all_outputs:
             '''Remove directory only if it's an -output of some
             step and an -input of another step.'''
             continue
         else:
-            delete_command += to_remove.input
+            delete_command += to_remove.hadoop_input
             steps.insert(to_remove.step + 1, delete_command)
         delete_command = hadoop_path + " fs -rmr "
         if skip_trash:
