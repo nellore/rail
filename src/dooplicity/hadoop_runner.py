@@ -92,8 +92,8 @@ def extract_steps_input_output(hadoop_path, job_flow):
             # input was seen, which is the current step.
             if state == "-input":
                 for step_input in arg.split(','):
-                    input_last_seen = update_input_last_seen(step_input, len(steps),
-                                                             input_last_seen)
+                    input_last_seen = update_input_last_seen(
+                        step_input, len(steps), input_last_seen)
                 state = None
             # If current state is output, add output to the output set.
             elif state == "-output":
@@ -107,7 +107,8 @@ def extract_steps_input_output(hadoop_path, job_flow):
                 state = "-output"
         steps.append(hadoop_step)
         hadoop_step = hadoop_path
-    input_last_seen = sorted(input_last_seen, key=lambda x: x.step, reverse=True)
+    input_last_seen = sorted(input_last_seen,
+                             key=lambda x: x.step, reverse=True)
 
     return steps, input_last_seen, all_outputs
 
@@ -151,13 +152,19 @@ def add_delete_intermediate_steps(hadoop_path, steps,
     return steps
 
 
-def get_hadoop_streaming_command(hadoop_path, job_flow, keep_intermediates, skip_trash):
+def get_hadoop_streaming_command(hadoop_path,
+                                 job_flow,
+                                 keep_intermediates,
+                                 skip_trash):
     # TODO: documentation
-    steps, input_last_seen, all_outputs  = extract_steps_input_output(
+    steps, input_last_seen, all_outputs = extract_steps_input_output(
         hadoop_path, job_flow)
     if not keep_intermediates:
-        steps = add_delete_intermediate_steps(hadoop_path, steps,
-                                              input_last_seen, all_outputs, skip_trash)
+        steps = add_delete_intermediate_steps(hadoop_path,
+                                              steps,
+                                              input_last_seen,
+                                              all_outputs,
+                                              skip_trash)
 
     return steps
 
@@ -179,4 +186,3 @@ if __name__ == '__main__':
             for hadoop_command in hadoop_commands:
                 hadoop_command_file.write(hadoop_command)
                 hadoop_command_file.write("\n")
-
