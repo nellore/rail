@@ -34,7 +34,7 @@ import sys
 import json
 
 
-class HadoopInputLastSeen:
+class HadoopInputLastSeen(object):
     """ Stores the hadoop input file and its last seen step.
 
         Attributes:
