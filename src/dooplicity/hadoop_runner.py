@@ -59,6 +59,10 @@ def add_args(parser):
                         of hadoop for running the hadoop job \
                         flow. Type `which hadoop` to find the \
                         location.'))
+    parser.add_argument('-s', '--hadoop-streaming-path', type=str,
+                        required=True, default=None, help=('Location \
+                        of hadoop streaming jar for running the hadoop job \
+                        flow.'))
     parser.add_argument('-j', '--job-flow', required=True,
                         default=None, help=('File that contains Hadoop \
                         job flow described in json format.'))
@@ -80,10 +84,11 @@ def add_args(parser):
                         delete permanantly. Default is True.'))
 
 
-def extract_steps_input_output(hadoop_path, job_flow):
+def extract_steps_input_output(hadoop_path, hadoop_streaming_path, job_flow):
     """ Extracts hadoop steps, inputs, and outputs from a hadoop job flow.
 
         hadoop_path: Path to hadoop given by user.
+        hadoop_streaming_path: Path to hadoop streaming jar given by user.
         job_flow: JSON object that describes a hadoop job flow.
 
         Return values:
@@ -93,7 +98,7 @@ def extract_steps_input_output(hadoop_path, job_flow):
             all_outputs: A set of all outputs found in job_flow.
     """
     steps = []
-    hadoop_step = hadoop_path
+    hadoop_step = hadoop_path + " jar " + hadoop_streaming_path
     input_last_seen = []
     all_outputs = set()
     # `state` is the type of argument currently it's reading.
@@ -184,6 +189,7 @@ def add_delete_intermediate_steps(hadoop_path, steps,
 
 
 def get_hadoop_streaming_command(hadoop_path,
+                                 hadoop_streaming_path,
                                  job_flow,
                                  keep_intermediates,
                                  skip_trash):
@@ -202,7 +208,7 @@ def get_hadoop_streaming_command(hadoop_path,
                   keep_intermediates.
     """
     steps, input_last_seen, all_outputs = extract_steps_input_output(
-        hadoop_path, job_flow)
+        hadoop_path, hadoop_streaming_path, job_flow)
     if not keep_intermediates:
         steps = add_delete_intermediate_steps(hadoop_path,
                                               steps,
@@ -220,6 +226,7 @@ if __name__ == '__main__':
     with open(args.job_flow, 'r') as job_flow_file:
         job_flow = json.load(job_flow_file)
     hadoop_commands = get_hadoop_streaming_command(args.hadoop_path,
+                                                   args.hadoop_streaming_path,
                                                    job_flow,
                                                    args.keep_intermediates,
                                                    args.skip_trash)
