@@ -54,18 +54,16 @@ def add_args(parser):
 
         No return value.
     """
-    parser.add_argument('-d', '--hadoop-path', type=str,
-                        required=True, default=None, help=('Location \
-                        of hadoop for running the hadoop job \
-                        flow. Type `which hadoop` to find the \
+    parser.add_argument('-d', '--hadoop-path', type=str, default=None,
+                        required=True, help=('Location of hadoop for running \
+                        the hadoop job flow. Type `which hadoop` to find the \
                         location.'))
-    parser.add_argument('-s', '--hadoop-streaming-path', type=str,
-                        required=True, default=None, help=('Location \
-                        of hadoop streaming jar for running the hadoop job \
-                        flow.'))
-    parser.add_argument('-j', '--job-flow', required=True,
-                        default=None, help=('File that contains Hadoop \
-                        job flow described in json format.'))
+    parser.add_argument('-s', '--hadoop-streaming-path', type=str, default=None,
+                        required=True, help=('Location of hadoop streaming jar \
+                        for running the hadoop job flow.'))
+    parser.add_argument('-j', '--job-flow', default=None, required=True,
+                        help=('File that contains Hadoop job flow described in \
+                        json format.'))
     parser.add_argument('-k', '--keep-intermediates',
                         action='store_const', const=True,
                         default=False, help='Keeps all intermediate \
@@ -82,7 +80,10 @@ def add_args(parser):
                         const=True, required=False, default=True,
                         help=('When deleting files, skip trash and \
                         delete permanantly. Default is True.'))
-
+    parser.add_argument('--test', action='store_const', const=True,
+                        default=False,
+                        help='Run unit tests; DOES NOT NEED INPUT FROM STDIN, \
+                        AND DOES NOT WRITE EXONS AND JUNCTIONS TO STDOUT')
 
 def extract_steps_input_output(hadoop_path, hadoop_streaming_path, job_flow):
     """ Extracts hadoop steps, inputs, and outputs from a hadoop job flow.
@@ -218,7 +219,89 @@ def get_hadoop_streaming_command(hadoop_path,
 
     return steps
 
+import unittest
+class TestHadoopCommandOutput(unittest.TestCase):
+    """ Unit tests for getting hadoop streaming command from a json job flow.
+    """
+    def setUp(self):
+        self.job_flow = {'Steps':
+                         [{'HadoopJarStep':
+                           {'Args':
+                            ['-input', 'file_0', '-output', 'file_1'], 'Jar': ''},
+                           'Name': 'First step'
+                         },
+                          {'HadoopJarStep':
+                           {'Args':
+                            ['-input', 'file_1', '-output', 'file_2'], 'Jar': ''},
+                           'Name': 'Second step'
+                          },
+                          {'HadoopJarStep':
+                           {'Args':
+                            ['-input', 'file_1', '-output', 'file_3'], 'Jar': ''},
+                           'Name': 'Third step'
+                              },
+                          {'HadoopJarStep':
+                           {'Args':
+                            ['-input', 'file_3,file_2', '-output', 'file_4'], 'Jar': ''},
+                           'Name': 'Fourth step'
+                          }
+                         ]}
+
+    def tearDown(self):
+        self.job_flow = None
+
+    def test_keep_intermediate_and_skip_trash(self):
+        hadoop_commands = get_hadoop_streaming_command("hadoop",
+                                                       "hadoop-streaming-jar",
+                                                       self.job_flow,
+                                                       keep_intermediates=False,
+                                                       skip_trash=True)
+        expected_hadoop_commands = [
+            'hadoop jar hadoop-streaming-jar -input file_0 -output file_1', \
+            'hadoop -input file_1 -output file_2', \
+            'hadoop -input file_1 -output file_3', \
+            'hadoop fs -rmr -skipTrash file_1', \
+            'hadoop -input file_3,file_2 -output file_4', \
+            'hadoop fs -rmr -skipTrash file_2', \
+            'hadoop fs -rmr -skipTrash file_3']
+        self.assertEqual(hadoop_commands, expected_hadoop_commands)
+
+    def test_keep_intermediate_and_not_skip_trash(self):
+        hadoop_commands = get_hadoop_streaming_command("hadoop",
+                                                       "hadoop-streaming-jar",
+                                                       self.job_flow,
+                                                       keep_intermediates=False,
+                                                       skip_trash=False)
+        expected_hadoop_commands = [
+            'hadoop jar hadoop-streaming-jar -input file_0 -output file_1', \
+            'hadoop -input file_1 -output file_2', \
+            'hadoop -input file_1 -output file_3', \
+            'hadoop fs -rmr file_1', \
+            'hadoop -input file_3,file_2 -output file_4', \
+            'hadoop fs -rmr file_2', \
+            'hadoop fs -rmr file_3']
+        self.assertEqual(hadoop_commands, expected_hadoop_commands)
+
+    def test_basic_hadoop_command_output(self):
+        hadoop_commands = get_hadoop_streaming_command("hadoop",
+                                                       "hadoop-streaming-jar",
+                                                       self.job_flow,
+                                                       keep_intermediates=True,
+                                                       skip_trash=False)
+        expected_hadoop_commands = [
+            'hadoop jar hadoop-streaming-jar -input file_0 -output file_1', \
+            'hadoop -input file_1 -output file_2', \
+            'hadoop -input file_1 -output file_3', \
+            'hadoop -input file_3,file_2 -output file_4']
+        self.assertEqual(hadoop_commands, expected_hadoop_commands)
+
 if __name__ == '__main__':
+    # if `--test` is given, run unittests.
+    if '--test' in sys.argv:
+        del sys.argv[1:]
+        unittest.main()
+        quit()
+
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     add_args(parser)
