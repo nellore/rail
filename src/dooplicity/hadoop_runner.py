@@ -110,8 +110,11 @@ def extract_steps_input_output(hadoop_path, hadoop_streaming_path, job_flow):
             if state == "-D":
                 hadoop_step += arg
                 state = None
+            elif state == "-mapper" or state == "-reducer":
+                hadoop_step += ' "' + arg + '"'
+                state = None
             else:
-                hadoop_step += " " + arg
+                hadoop_step += ' ' + arg
             # If current state is input, record the latest step the
             # input was seen, which is the current step.
             if state == "-input":
@@ -131,6 +134,10 @@ def extract_steps_input_output(hadoop_path, hadoop_streaming_path, job_flow):
                 state = "-output"
             elif arg == "-D":
                 state = "-D"
+            elif arg =="-mapper":
+                state = "-mapper"
+            elif arg =="-reducer":
+                state = "-reducer"
         steps.append(hadoop_step)
         hadoop_step = hadoop_path + " jar " + hadoop_streaming_path
     input_last_seen = sorted(input_last_seen,
@@ -247,7 +254,8 @@ class TestHadoopCommandOutput(unittest.TestCase):
                           {'HadoopJarStep':
                            {'Args':
                             ['-D', 'mapreduce.job.reduces=2',
-                             '-input', 'file_1', '-output', 'file_3'], 'Jar': ''},
+                             '-input', 'file_1', '-output', 'file_3',
+                             '-mapper', 'cat'], 'Jar': ''},
                            'Name': 'Third step'
                               },
                           {'HadoopJarStep':
@@ -273,7 +281,7 @@ class TestHadoopCommandOutput(unittest.TestCase):
             'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=1 \
 -Dstream.num.map.output.key.fields=1 -input file_1 -output file_2', \
             'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=2 \
--input file_1 -output file_3', \
+-input file_1 -output file_3 -mapper "cat"', \
             'hadoop fs -rm -r -skipTrash file_1', \
             'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=3 \
 -input file_3,file_2 -output file_4', \
@@ -293,7 +301,7 @@ class TestHadoopCommandOutput(unittest.TestCase):
             'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=1 \
 -Dstream.num.map.output.key.fields=1 -input file_1 -output file_2', \
             'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=2 \
--input file_1 -output file_3', \
+-input file_1 -output file_3 -mapper "cat"', \
             'hadoop fs -rm -r file_1', \
             'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=3 \
 -input file_3,file_2 -output file_4', \
@@ -313,7 +321,7 @@ class TestHadoopCommandOutput(unittest.TestCase):
             'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=1 \
 -Dstream.num.map.output.key.fields=1 -input file_1 -output file_2', \
             'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=2 \
--input file_1 -output file_3', \
+-input file_1 -output file_3 -mapper "cat"', \
             'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=3 \
 -input file_3,file_2 -output file_4']
         self.assertEqual(hadoop_commands, expected_hadoop_commands)
