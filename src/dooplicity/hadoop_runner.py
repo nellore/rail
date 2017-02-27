@@ -107,7 +107,11 @@ def extract_steps_input_output(hadoop_path, hadoop_streaming_path, job_flow):
 
     for step in job_flow["Steps"]:
         for arg in step["HadoopJarStep"]["Args"]:
-            hadoop_step += " " + arg
+            if state == "-D":
+                hadoop_step += arg
+                state = None
+            else:
+                hadoop_step += " " + arg
             # If current state is input, record the latest step the
             # input was seen, which is the current step.
             if state == "-input":
@@ -125,8 +129,10 @@ def extract_steps_input_output(hadoop_path, hadoop_streaming_path, job_flow):
                 state = "-input"
             elif arg == "-output":
                 state = "-output"
+            elif arg == "-D":
+                state = "-D"
         steps.append(hadoop_step)
-        hadoop_step = hadoop_path
+        hadoop_step = hadoop_path + " jar " + hadoop_streaming_path
     input_last_seen = sorted(input_last_seen,
                              key=lambda x: x.step, reverse=True)
 
@@ -170,7 +176,7 @@ def add_delete_intermediate_steps(hadoop_path, steps,
             steps: A list of hadoop commands with
                   intermediate data deletion steps.
     """
-    delete_command = hadoop_path + " fs -rmr "
+    delete_command = hadoop_path + " fs -rm -r "
     if skip_trash:
         delete_command += "-skipTrash "
 
@@ -182,7 +188,7 @@ def add_delete_intermediate_steps(hadoop_path, steps,
         else:
             delete_command += to_remove.hadoop_input
             steps.insert(to_remove.step + 1, delete_command)
-        delete_command = hadoop_path + " fs -rmr "
+        delete_command = hadoop_path + " fs -rm -r "
         if skip_trash:
             delete_command += "-skipTrash "
 
@@ -227,22 +233,27 @@ class TestHadoopCommandOutput(unittest.TestCase):
         self.job_flow = {'Steps':
                          [{'HadoopJarStep':
                            {'Args':
-                            ['-input', 'file_0', '-output', 'file_1'], 'Jar': ''},
+                            ['-D', 'mapreduce.job.reduces=0',
+                              '-input', 'file_0', '-output', 'file_1'], 'Jar': ''},
                            'Name': 'First step'
                          },
                           {'HadoopJarStep':
                            {'Args':
-                            ['-input', 'file_1', '-output', 'file_2'], 'Jar': ''},
+                            ['-D', 'mapreduce.job.reduces=1', '-D',
+                             'stream.num.map.output.key.fields=1',
+                             '-input', 'file_1', '-output', 'file_2'], 'Jar': ''},
                            'Name': 'Second step'
                           },
                           {'HadoopJarStep':
                            {'Args':
-                            ['-input', 'file_1', '-output', 'file_3'], 'Jar': ''},
+                            ['-D', 'mapreduce.job.reduces=2',
+                             '-input', 'file_1', '-output', 'file_3'], 'Jar': ''},
                            'Name': 'Third step'
                               },
                           {'HadoopJarStep':
                            {'Args':
-                            ['-input', 'file_3,file_2', '-output', 'file_4'], 'Jar': ''},
+                            ['-D', 'mapreduce.job.reduces=3',
+                             '-input', 'file_3,file_2', '-output', 'file_4'], 'Jar': ''},
                            'Name': 'Fourth step'
                           }
                          ]}
@@ -257,13 +268,17 @@ class TestHadoopCommandOutput(unittest.TestCase):
                                                        keep_intermediates=False,
                                                        skip_trash=True)
         expected_hadoop_commands = [
-            'hadoop jar hadoop-streaming-jar -input file_0 -output file_1', \
-            'hadoop -input file_1 -output file_2', \
-            'hadoop -input file_1 -output file_3', \
-            'hadoop fs -rmr -skipTrash file_1', \
-            'hadoop -input file_3,file_2 -output file_4', \
-            'hadoop fs -rmr -skipTrash file_2', \
-            'hadoop fs -rmr -skipTrash file_3']
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=0 \
+-input file_0 -output file_1', \
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=1 \
+-Dstream.num.map.output.key.fields=1 -input file_1 -output file_2', \
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=2 \
+-input file_1 -output file_3', \
+            'hadoop fs -rm -r -skipTrash file_1', \
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=3 \
+-input file_3,file_2 -output file_4', \
+            'hadoop fs -rm -r -skipTrash file_2', \
+            'hadoop fs -rm -r -skipTrash file_3']
         self.assertEqual(hadoop_commands, expected_hadoop_commands)
 
     def test_keep_intermediate_and_not_skip_trash(self):
@@ -273,13 +288,17 @@ class TestHadoopCommandOutput(unittest.TestCase):
                                                        keep_intermediates=False,
                                                        skip_trash=False)
         expected_hadoop_commands = [
-            'hadoop jar hadoop-streaming-jar -input file_0 -output file_1', \
-            'hadoop -input file_1 -output file_2', \
-            'hadoop -input file_1 -output file_3', \
-            'hadoop fs -rmr file_1', \
-            'hadoop -input file_3,file_2 -output file_4', \
-            'hadoop fs -rmr file_2', \
-            'hadoop fs -rmr file_3']
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=0 \
+-input file_0 -output file_1', \
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=1 \
+-Dstream.num.map.output.key.fields=1 -input file_1 -output file_2', \
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=2 \
+-input file_1 -output file_3', \
+            'hadoop fs -rm -r file_1', \
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=3 \
+-input file_3,file_2 -output file_4', \
+            'hadoop fs -rm -r file_2', \
+            'hadoop fs -rm -r file_3']
         self.assertEqual(hadoop_commands, expected_hadoop_commands)
 
     def test_basic_hadoop_command_output(self):
@@ -289,10 +308,14 @@ class TestHadoopCommandOutput(unittest.TestCase):
                                                        keep_intermediates=True,
                                                        skip_trash=False)
         expected_hadoop_commands = [
-            'hadoop jar hadoop-streaming-jar -input file_0 -output file_1', \
-            'hadoop -input file_1 -output file_2', \
-            'hadoop -input file_1 -output file_3', \
-            'hadoop -input file_3,file_2 -output file_4']
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=0 \
+-input file_0 -output file_1', \
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=1 \
+-Dstream.num.map.output.key.fields=1 -input file_1 -output file_2', \
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=2 \
+-input file_1 -output file_3', \
+            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=3 \
+-input file_3,file_2 -output file_4']
         self.assertEqual(hadoop_commands, expected_hadoop_commands)
 
 if __name__ == '__main__':
