@@ -108,7 +108,7 @@ def extract_steps_input_output(hadoop_path, hadoop_streaming_path, job_flow):
     for step in job_flow["Steps"]:
         for arg in step["HadoopJarStep"]["Args"]:
             if state == "-D":
-                hadoop_step += arg
+                hadoop_step += '"' + arg + '"'
                 state = None
             elif state == "-mapper" or state == "-reducer":
                 hadoop_step += ' "' + arg + '"'
@@ -276,14 +276,14 @@ class TestHadoopCommandOutput(unittest.TestCase):
                                                        keep_intermediates=False,
                                                        skip_trash=True)
         expected_hadoop_commands = [
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=0 \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
 -input file_0 -output file_1', \
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=1 \
--Dstream.num.map.output.key.fields=1 -input file_1 -output file_2', \
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=2 \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
+-D"stream.num.map.output.key.fields=1" -input file_1 -output file_2', \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=2" \
 -input file_1 -output file_3 -mapper "cat"', \
             'hadoop fs -rm -r -skipTrash file_1', \
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=3 \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=3" \
 -input file_3,file_2 -output file_4', \
             'hadoop fs -rm -r -skipTrash file_2', \
             'hadoop fs -rm -r -skipTrash file_3']
@@ -296,14 +296,14 @@ class TestHadoopCommandOutput(unittest.TestCase):
                                                        keep_intermediates=False,
                                                        skip_trash=False)
         expected_hadoop_commands = [
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=0 \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
 -input file_0 -output file_1', \
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=1 \
--Dstream.num.map.output.key.fields=1 -input file_1 -output file_2', \
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=2 \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
+-D"stream.num.map.output.key.fields=1" -input file_1 -output file_2', \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=2" \
 -input file_1 -output file_3 -mapper "cat"', \
             'hadoop fs -rm -r file_1', \
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=3 \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=3" \
 -input file_3,file_2 -output file_4', \
             'hadoop fs -rm -r file_2', \
             'hadoop fs -rm -r file_3']
@@ -316,13 +316,13 @@ class TestHadoopCommandOutput(unittest.TestCase):
                                                        keep_intermediates=True,
                                                        skip_trash=False)
         expected_hadoop_commands = [
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=0 \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
 -input file_0 -output file_1', \
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=1 \
--Dstream.num.map.output.key.fields=1 -input file_1 -output file_2', \
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=2 \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
+-D"stream.num.map.output.key.fields=1" -input file_1 -output file_2', \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=2" \
 -input file_1 -output file_3 -mapper "cat"', \
-            'hadoop jar hadoop-streaming-jar -Dmapreduce.job.reduces=3 \
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=3" \
 -input file_3,file_2 -output file_4']
         self.assertEqual(hadoop_commands, expected_hadoop_commands)
 
