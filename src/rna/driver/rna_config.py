@@ -175,7 +175,7 @@ else:
     if _pypy_exe is not None:
         try:
             if re.search(
-                        r'pypy [24]\.', 
+                        r'pypy [2456]\.', 
                         subprocess.check_output(
                                 [_pypy_exe, '--version'],
                                 stderr=subprocess.STDOUT
