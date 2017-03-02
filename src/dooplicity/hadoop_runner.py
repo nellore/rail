@@ -58,6 +58,10 @@ def add_args(parser):
                         required=True, help=('Location of hadoop for running \
                         the hadoop job flow. Type `which hadoop` to find the \
                         location.'))
+    # TODO
+    # When the json formatter is correctly written, hadoop
+    # streaming path will be written in the json file. Therefore, `-s`
+    # argument can be removed.
     parser.add_argument('-s', '--hadoop-streaming-path', type=str, default=None,
                         required=True, help=('Location of hadoop streaming jar \
                         for running the hadoop job flow.'))
@@ -99,14 +103,27 @@ def extract_steps_input_output(hadoop_path, hadoop_streaming_path, job_flow):
             all_outputs: A set of all outputs found in job_flow.
     """
     steps = []
-    hadoop_step = hadoop_path + " jar " + hadoop_streaming_path
+    hadoop_step = hadoop_path + " jar "
     input_last_seen = []
     all_outputs = set()
     # `state` is the type of argument currently it's reading.
     state = None
 
     for step in job_flow["Steps"]:
+        # TODO
+        # In the future when dooplicity creates correct json
+        # workflow with the appropriate jar file location, remove
+        # manually giving hadoop_streaming_path as an argument to
+        # hadoop_runner.py.
+        if step["HadoopJarStep"]["Jar"] == "":
+            hadoop_step += hadoop_streaming_path
+        else:
+            hadoop_step += step["HadoopJarStep"]["Jar"]
+
+        # Process the arguments for a hadoop streaming step.
         for arg in step["HadoopJarStep"]["Args"]:
+            # For `-mapper` and `-reducer` args, they must be wrapped
+            # in `"`. Otherwise, append the arg as it is.
             if state == "-D":
                 hadoop_step += '"' + arg + '"'
                 state = None
@@ -115,6 +132,7 @@ def extract_steps_input_output(hadoop_path, hadoop_streaming_path, job_flow):
                 state = None
             else:
                 hadoop_step += ' ' + arg
+
             # If current state is input, record the latest step the
             # input was seen, which is the current step.
             if state == "-input":
@@ -126,20 +144,42 @@ def extract_steps_input_output(hadoop_path, hadoop_streaming_path, job_flow):
             elif state == "-output":
                 all_outputs.add(arg)
                 state = None
-            # If current argument is "-input", the next argument will
-            # be an input directory.
+
+            # TODO
+            # This will be removed when the json formatter is
+            # improved. The inputformat `com.twitter.elephantbird. \
+            # mapred.input.DeprecatedCombineLzoTextInputFormat`, when
+            # run on hadoop, appends the line number in front of the
+            # line, increasing the line length by 1. This disrupts the
+            # downstream process, and therefore the first column of a
+            # line should be removed at the map step if and only if
+            # `-mapper` is `cat`. `-mapper` should be changed to `cut -f2-`.
+            elif state == "-inputformat":
+                if arg == "com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat":
+                    if '-mapper "cat"' in hadoop_step:
+                        hadoop_step = hadoop_step.replace('-mapper "cat"',
+                                                          '-mapper "cut -f2-"')
+                state = None
+
+            # Depending on the current argument, set the `state`.
             if arg == "-input":
                 state = "-input"
             elif arg == "-output":
                 state = "-output"
             elif arg == "-D":
                 state = "-D"
-            elif arg =="-mapper":
+            elif arg == "-mapper":
                 state = "-mapper"
-            elif arg =="-reducer":
+            elif arg == "-reducer":
                 state = "-reducer"
+            elif arg == "-inputformat":
+                state = "-inputformat"
         steps.append(hadoop_step)
-        hadoop_step = hadoop_path + " jar " + hadoop_streaming_path
+
+        hadoop_step = hadoop_path + " jar "
+
+    # `input_last_seen` is reversely sorted so that we can add steps
+    # for deleting intermediate data later if needed.
     input_last_seen = sorted(input_last_seen,
                              key=lambda x: x.step, reverse=True)
 
@@ -266,8 +306,31 @@ class TestHadoopCommandOutput(unittest.TestCase):
                           }
                          ]}
 
+        self.job_flow_map = {'Steps':
+                             [{'HadoopJarStep':
+                               {'Args':
+                                ['-D', 'mapreduce.job.reduces=0',
+                                 '-input', 'file_0', '-output', 'file_1',
+                                 '-mapper', 'cat', '-inputformat',
+                                 'com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat'
+                            ], 'Jar': ''},
+                               'Name': 'First step'
+                             },
+                              {'HadoopJarStep':
+                               {'Args':
+                                ['-D', 'mapreduce.job.reduces=1', '-D',
+                                 'stream.num.map.output.key.fields=1',
+                                 '-input', 'file_1', '-output', 'file_2',
+                                 '-mapper', 'count.py', '-inputformat',
+                                 'com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat'
+                                ], 'Jar': ''},
+                               'Name': 'Second step'
+                              }
+                             ]}
+
     def tearDown(self):
         self.job_flow = None
+        self.job_flow_map = None
 
     def test_keep_intermediate_and_skip_trash(self):
         hadoop_commands = get_hadoop_streaming_command("hadoop",
@@ -325,6 +388,23 @@ class TestHadoopCommandOutput(unittest.TestCase):
             'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=3" \
 -input file_3,file_2 -output file_4']
         self.assertEqual(hadoop_commands, expected_hadoop_commands)
+
+    def test_mapper_hadoop_command_output(self):
+        hadoop_commands = get_hadoop_streaming_command("hadoop",
+                                                       "hadoop-streaming-jar",
+                                                       self.job_flow_map,
+                                                       keep_intermediates=True,
+                                                       skip_trash=False)
+        expected_hadoop_commands = [
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
+-input file_0 -output file_1 -mapper "cut -f2-" -inputformat \
+com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat',
+            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
+-D"stream.num.map.output.key.fields=1" -input file_1 -output file_2 \
+-mapper "count.py" -inputformat \
+com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat']
+        self.assertEqual(hadoop_commands, expected_hadoop_commands)
+
 
 if __name__ == '__main__':
     # if `--test` is given, run unittests.
