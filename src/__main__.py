@@ -10,7 +10,8 @@ Command-line interface is inspired by git's and bowtie's.
 
 import sys
 # Check for Python 2.7 immediately
-if not (2 == sys.version_info[0] and sys.version_info[1] >= 7):
+if not (sys.version_info[0] > 2
+        or 2 == sys.version_info[0] and sys.version_info[1] >= 7):
     print >>sys.stderr, ('Rail-RNA requires a version of Python >= 2.7 but '
                          '< 3.0. If an appropriate version of Python is '
                          'available at some path P that is not in PATH, try '
