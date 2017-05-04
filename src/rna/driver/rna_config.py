@@ -2659,6 +2659,9 @@ EOF
 set -e
 export HOME=/home/hadoop
 
+# Must make sure /mnt/space exists before subsequent bootstraps
+mkdir -p /mnt/space
+
 RAILZIP=$1
 JARTARGET=$2
 mkdir -p ${{JARTARGET}}
