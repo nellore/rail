@@ -272,7 +272,6 @@ def get_hadoop_streaming_command(hadoop_path,
 
     return steps
 
-import unittest
 class TestHadoopCommandOutput(unittest.TestCase):
     """ Unit tests for getting hadoop streaming command from a json job flow.
     """
