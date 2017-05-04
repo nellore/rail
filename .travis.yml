@@ -37,7 +37,8 @@ before_install:
   - export PATH="$PATH:"`pwd`
 install:
   - if [[ $TRAVIS_PYTHON_VERSION == "2.7" ]]; then
-      conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy weave;
+      conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy;
+      pip install weave;
     fi
   - conda install --yes bowtie bowtie2=2.2.5 samtools bedtools ucsc-bigwigtobedgraph
   - which bowtie
