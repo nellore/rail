@@ -43,10 +43,10 @@ linux_dependencies = {
                  'rel-3.0.0/ipython-3.0.0.zip',
                  'http://verve.webfactional.com/mirror/linux/'
                  'ipython-3.0.0.zip'],
-    'sra_tools' : ['http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.5.2/'
-                   'sratoolkit.2.5.2-centos_linux64.tar.gz',
+    'sra_tools' : ['http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.8.2/'
+                   'sratoolkit.2.8.2-centos_linux64.tar.gz',
                    'http://verve.webfactional.com/mirror/linux/'
-                   'sratoolkit.2.5.2-centos_linux64.tar.gz']
+                   'sratoolkit.2.8.2-centos_linux64.tar.gz']
 }
 
 ec2_dependencies = {}
@@ -83,8 +83,8 @@ mac_dependencies = {
                  'rel-3.0.0/ipython-3.0.0.zip',
                  'http://verve.webfactional.com/mirror/mac/'
                  'ipython-3.0.0.zip'],
-    'sra_tools' : ['http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.5.2/'
-                   'sratoolkit.2.5.2-mac64.tar.gz',
+    'sra_tools' : ['http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.8.2/'
+                   'sratoolkit.2.8.2-mac64.tar.gz',
                    'http://verve.webfactional.com/mirror/mac/'
-                   'sratoolkit.2.5.2-mac64.tar.gz']
+                   'sratoolkit.2.8.2-mac64.tar.gz']
 }
