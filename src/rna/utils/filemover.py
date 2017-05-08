@@ -218,7 +218,7 @@ class FileMover(object):
             oldp = os.getcwd()
             os.chdir(dest)
             command_list = [
-                    'curl', '-s', '-O', '-J', '-v', '--connect-timeout', '600'
+                    'curl', '-s', '-O', '-J', '-v', '-L', '--connect-timeout', '600'
                 ]
             command_list.append(url.to_url())
             command = ' '.join(command_list)

@@ -736,6 +736,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     perform_push = False
                     line_numbers = [0, 0]
                     read_next_line = True
+                    lines = []
                     nucs_read = 0
                     pairs_read = 0
                     while True:
@@ -935,6 +936,14 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 line_numbers = [i + 1 for i in line_numbers]
                             lines = next_lines
                             read_next_line = False
+                        else:
+                            print >> sys.stderr, ('First input line: "%s"\n'
+                                                  'First character is none of '
+                                                  'the expected cues: %d'
+                                                  ) % (lines[0],
+                                                       ord(lines[0][0]))
+                            raise RuntimeError('First input line had no cues')
+
                         if bad_record_skip:
                             seqs = []
                             # Fake record-printing to get to records_to_consume
