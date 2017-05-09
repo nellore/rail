@@ -56,7 +56,7 @@ def dummy_md_and_mapped_offsets(cigar, clip_threshold=1.0):
         clip_threshold: proportion of a read's bases that must be clipped
             for a read to be considered unmapped
 
-        Return value: tuple (dummy MD string, list of offsets of of mapped
+        Return value: tuple (dummy MD string, list of offsets of mapped
                                 bases from beginning of read,
                                 True iff read should be considered unmapped,
                                 number of clipped bases, length of read)

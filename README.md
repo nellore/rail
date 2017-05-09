@@ -9,7 +9,7 @@ is software for RNA-seq analysis.
 
 **the website.**
 
-### [Download](https://github.com/nellore/rail/raw/v0.2.3b/releases/install_rail-rna-0.2.3b)
+### [Download](https://github.com/nellore/rail/raw/v0.2.4b/releases/install_rail-rna-0.2.4b)
 
 **the latest stable release. Read the**
 
@@ -40,7 +40,7 @@ Outputs currently include
 
 and will likely expand in future versions.
 
-Read the [preprint](http://biorxiv.org/content/early/2015/08/11/019067) for more details. Methods explained there correspond to Rail-RNA 0.2.3b.
+Read our [paper](http://bioinformatics.oxfordjournals.org/content/early/2016/09/02/bioinformatics.btw575.abstract) for more details. Methods explained there correspond to Rail-RNA 0.1.9.
 
 Get set up
 -----
@@ -50,17 +50,17 @@ Start with a recent (>= 2009) OS X or Linux box. For a no-fuss install, enter
 curl http://verve.webfactional.com/rail -o $INSTALLER; python2 $INSTALLER -m || true;
 rm -f $INSTALLER)
 ```
-at a Bash prompt. For a more customizable install, download [`install_rail-rna-0.2.3b`](https://github.com/nellore/rail/raw/v0.2.3b/releases/install_rail-rna-0.2.3b), change to the directory containing it, and make the installer executable with
+at a Bash prompt. For a more customizable install, download [`install_rail-rna-0.2.4b`](https://github.com/nellore/rail/raw/v0.2.4b/releases/install_rail-rna-0.2.4b), change to the directory containing it, and make the installer executable with
 ```
-chmod +x install_rail-rna-0.2.3b
+chmod +x install_rail-rna-0.2.4b
 ```
 Now run
 ```
-sudo ./install_rail-rna-0.2.3b
+sudo ./install_rail-rna-0.2.4b
 ```
 to install for all users or
 ```
-./install_rail-rna-0.2.3b
+./install_rail-rna-0.2.4b
 ```
 to install for just you. Refer to [these](http://docs.rail.bio/installation/) detailed installation instructions from the [docs](http://docs.rail.bio) for more information. If the executable doesn't work, you may need [Python](http://www.python.org). You'll also need Bowtie 1 and 2 indexes of the appropriate genome assembly if you will be running Rail-RNA in either its single-computer (local) or IPython Parallel (parallel) modes. The easiest way to get these is by downloading an [Illumina iGenome](http://support.illumina.com/sequencing/sequencing_software/igenome.html). If running Rail-RNA on EMR (elastic mode) and aligning to hg19, the assembly can be specified at the command line with the `-a` parameter.
 
@@ -85,7 +85,7 @@ Renting AWS resources costs money, regardless of whether your run ultimately suc
 
 Licenses
 -----
-[MIT](http://choosealicense.com/licenses/mit/) except for the directory `src/hadoop/relevant-elephant`, which contains [Apache](http://apache.org/licenses/LICENSE-2.0)-licensed code adapted from the Twitter's [Elephant Bird](https://github.com/twitter/elephant-bird/) project.
+[MIT](http://choosealicense.com/licenses/mit/) except for the directory `src/hadoop/relevant-elephant`, which contains [Apache](http://apache.org/licenses/LICENSE-2.0)-licensed code adapted from Twitter's [Elephant Bird](https://github.com/twitter/elephant-bird/) project.
 
 Contributors
 -----

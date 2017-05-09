@@ -90,6 +90,7 @@ import tempdel
 import subprocess
 from guess import phred_converter
 from encode import encode, encode_sequence
+import re
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -150,6 +151,125 @@ def max_min_read_lengths_from_fastq_stream(fastq_stream):
             max_len = max(max_len, len(line.strip()))
             min_len = min(min_len, len(line.strip()))
     return max_len, min_len
+
+def tar_processes_streams_and_qual_getter(tar_path):
+    """ Gives subprocesses, file handles, and phred_converter for tarred sample
+        
+        tar_path: path to tarred sample
+
+        Return value: tuple (list of subprocess.Popen objects,
+                                list of file handles,
+                                qual getter from phred_converter)
+    """
+    import tarfile
+    tar_object = tarfile.open(tar_path)
+    if tar_path.endswith('.bz2'):
+        tar_parameters = '-xOjf'
+    elif tar_path.endswith('.gz'):
+        tar_parameters = '-xOzf'
+    else:
+        tar_parameters = '-xOf'
+    tar_source_streams, tar_processes = [], []
+    obtained_quality = False
+    # Put _1 first in list with sort if it's present
+    tarinfos = sorted(tar_object.getmembers(), key=lambda x: x.name)
+    # Group lanes if multiple appear to be present
+    if len(tarinfos) >= 2:
+        without_mate_label = []
+        for tarinfo in tarinfos:
+            tarinfo_prefix = tarinfo.name.partition('.')[0]
+            if tarinfo_prefix[-1] in ['1', '2']:
+                without_mate_label.append(tarinfo_prefix[:-1])
+            else:
+                without_mate_label.append(tarinfo_prefix)
+        seems_paired = False
+        if without_mate_label[1] == without_mate_label[0]:
+            seems_paired = True
+            show_message = False
+            for i in xrange(3, len(tarinfos), 2):
+                if without_mate_label[i-1] != without_mate_label[i]:
+                    show_message = True
+            if show_message or len(tarinfos) % 2 != 0:
+                raise RuntimeError(
+                    ('{} files detected in archive {} from manifest file, and '
+                     'they appear to span both single- and paired-end '
+                     'samples. Separate the samples in the TAR and try '
+                     'again.').format(len(tarinfos),
+                                        os.path.basename(tar_path))
+                )
+        if seems_paired:
+            print >>sys.stderr, 'Detected paired-end sample.'
+            tarinfo_groups = [[tarinfo for i, tarinfo in enumerate(tarinfos)
+                                if i % 2 == 0],
+                                [tarinfo for i, tarinfo in enumerate(tarinfos)
+                                if i % 2 == 1]]
+        else:
+            print >>sys.stderr, 'Detected single-end sample.'
+            tarinfo_groups = [tarinfos]
+    elif not tarinfos:
+        raise RuntimeError(
+                'TAR archive {} from manifest file contains no files.'.format(
+                        os.path.basename(tar_path)
+                    )
+                )
+    else:
+        tarinfo_groups = [tarinfos]
+    print >>sys.stderr, 'Tarinfo groups are as follows.'
+    print >>sys.stderr, [[tarinfo.name for tarinfo in tarinfo_group]
+                         for tarinfo_group in tarinfo_groups]
+    for tarinfo_group in tarinfo_groups:
+        tar_command = ['set -exo pipefail']
+        for tarinfo in tarinfo_group:
+            if tarinfo.name.endswith('.bz2'):
+                decompress_command = ' | bzip2 -cd '
+            elif tarinfo.name.endswith('.gz'):
+                decompress_command = ' | gzip -cd '
+            else:
+                decompress_command = ''
+            # awk 1 below adds a newline to the end of a file if it's not there
+            tar_command.append((
+                    'tar {tar_parameters} {tar_path} '
+                    '{member_name}{decompress_command} | awk 1'
+                ).format(
+                        tar_parameters=tar_parameters,
+                        tar_path=tar_path,
+                        member_name=tarinfo.name,
+                        decompress_command=decompress_command
+                    ))
+        tar_command = '; '.join(tar_command)
+        if not obtained_quality:
+            # Get quality from first FASTQ
+            quality_process = subprocess.Popen(
+                    tar_command,
+                    shell=True,
+                    executable='/bin/bash',
+                    bufsize=-1,
+                    stdout=subprocess.PIPE
+                )
+            qual_getter = phred_converter(fastq_stream=quality_process.stdout)
+            quality_process.stdout.close()
+            quality_return_code = quality_process.wait()
+            if quality_return_code > 0:
+                raise RuntimeError(('tar terminated with exit '
+                                    'code %d. Command run was "%s".')
+                                        % (quality_return_code,
+                                            tar_command))
+            obtained_quality = True
+        tar_processes.append(
+                (subprocess.Popen(
+                    tar_command,
+                    shell=True,
+                    executable='/bin/bash',
+                    bufsize=-1,
+                    stdout=subprocess.PIPE),
+                    tar_command)
+            )
+        tar_source_streams.append(
+                tar_processes[-1][0].stdout
+            )
+    if len(tar_source_streams) == 1:
+        tar_source_streams.append(open(os.devnull))
+    return tar_processes, tar_source_streams, qual_getter
 
 def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
         to_stdout=False, push='.', mover=filemover.FileMover(),
@@ -376,9 +496,9 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                 # Download
                 print >>sys.stderr, 'Retrieving URL "%s"...' \
                     % source_url.to_url()
-                if source_url.is_dbgap:
+                if workspace_dir is not None:
                     download_dir = workspace_dir
-                elif source_url.is_sra:
+                else:
                     download_dir = temp_dir
                 if source_url.is_sra:
                     sra_accession = source_url.to_url()
@@ -494,13 +614,60 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                                     stdout=subprocess.PIPE,
                                                     bufsize=-1)
                 else:
-                    mover.get(source_url, temp_dir)
+                    mover.get(source_url, download_dir)
                     downloaded = list(
-                            set(os.listdir(temp_dir)).difference(downloaded)
+                            set(os.listdir(download_dir)).difference(
+                                                                downloaded
+                                                            )
                         )
-                    sources.append(os.path.join(temp_dir, list(downloaded)[0]))
+                    if (downloaded[0].endswith('.tar.gz')
+                            or downloaded[0].endswith('.tar')
+                            or downloaded[0].endswith('.tar.bz2')):
+                        if len(source_urls) != 1:
+                            raise RuntimeError(
+                                    'More than one source URL is present '
+                                    'on a manifest line, but one URL points '
+                                    'to a TAR archive. If working with '
+                                    'TARs, all files for a given sample '
+                                    'should be in the archive. Offending URLs '
+                                    'are "{}".'.format(source_urls)
+                                )
+                        # Get streams ready from tar file
+                        tar_path = os.path.join(download_dir, downloaded[0])
+                        (tar_processes, tar_streams, qual_getter) = (
+                                tar_processes_streams_and_qual_getter(
+                                    os.path.join(download_dir, downloaded[0])
+                                )
+                            )
+                        # Use dummy source, as for SRA
+                        sources = [os.devnull]
+                    else:
+                        sources.append(
+                                os.path.join(download_dir, downloaded[0])
+                            )
             else:
-                sources.append(source_url.to_url())
+                current_file = source_url.to_url()
+                if (current_file.endswith('.tar.gz')
+                            or current_file.endswith('.tar')
+                            or current_file.endswith('.tar.bz2')):
+                        if len(source_urls) != 1:
+                            raise RuntimeError(
+                                    'More than one source URL is present '
+                                    'on a manifest line, but one URL points '
+                                    'to a TAR archive. If working with '
+                                    'TARs, all files for a given sample '
+                                    'should be in the archive. Offending URLs '
+                                    'are "{}".'.format(source_urls)
+                                )
+                        (tar_processes, tar_streams, qual_getter) = (
+                                tar_processes_streams_and_qual_getter(
+                                    current_file
+                                )
+                            )
+                        # Use dummy source, as for SRA
+                        sources = [os.devnull]
+                else:
+                    sources.append(source_url.to_url())
         if onward: continue
         '''Use os.devnull so single- and paired-end data can be handled in one
         loop.'''
@@ -515,12 +682,20 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
             ) as source_stream_2:
             source_streams = [source_stream_1, source_stream_2]
             reorganize = all([source == os.devnull for source in sources])
+            sra_live = False
             if reorganize:
-                # SRA data is live
-                if sra_paired_end:
-                    source_streams = [sra_process.stdout, sra_process.stdout]
+                if 'tar_streams' in locals():
+                    # TARred data is live
+                    source_streams = tar_streams
                 else:
-                    source_streams = [sra_process.stdout, open(os.devnull)]
+                    sra_live = True
+                    # SRA data is live
+                    if sra_paired_end:
+                        source_streams = [
+                                sra_process.stdout, sra_process.stdout
+                            ]
+                    else:
+                        source_streams = [sra_process.stdout, open(os.devnull)]
             break_outer_loop = False
             while True:
                 if not to_stdout:
@@ -568,6 +743,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                     perform_push = False
                     line_numbers = [0, 0]
                     read_next_line = True
+                    lines = []
                     nucs_read = 0
                     pairs_read = 0
                     while True:
@@ -620,7 +796,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             line_numbers = [i + 1 for i in line_numbers]
                             quals = [source_stream.readline().strip()
                                         for source_stream in source_streams]
-                            if reorganize and sra_paired_end:
+                            if sra_live and sra_paired_end:
                                 # Fix order!
                                 lines, seqs, plus_lines, quals = (
                                         [lines[0], plus_lines[0]],
@@ -641,9 +817,9 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                         lines[1], line_numbers[1], sources[1]
                                     )
                                 try:
-                                    # Kill spaces in name
+                                    # Remove spaces in name
                                     original_qnames = \
-                                        [line[1:].replace(' ', '_')
+                                        [line[1:].partition(' ')[0]
                                             for line in lines]
                                 except IndexError:
                                     raise RuntimeError(
@@ -724,7 +900,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 try:
                                     # Kill spaces in name
                                     original_qnames = \
-                                        [line[1:].replace(' ', '_')
+                                        [line[1:].partition(' ')[0]
                                             for line in lines]
                                 except IndexError:
                                     raise RuntimeError(
@@ -767,6 +943,14 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 line_numbers = [i + 1 for i in line_numbers]
                             lines = next_lines
                             read_next_line = False
+                        else:
+                            print >> sys.stderr, ('First input line: "%s"\n'
+                                                  'First character is none of '
+                                                  'the expected cues: %d'
+                                                  ) % (lines[0],
+                                                       ord(lines[0][0]))
+                            raise RuntimeError('First input line had no cues')
+
                         if bad_record_skip:
                             seqs = []
                             # Fake record-printing to get to records_to_consume
@@ -782,7 +966,8 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                 original_qnames[1] += '/2'
                             assert seqs[1]
                             assert quals[1]
-                            seqs = [seq.upper() for seq in seqs]
+                            seqs = [re.sub(r'[^ATCGN]', 'N', seq.upper())
+                                    for seq in seqs]
                             reversed_complement_seqs = [
                                     seqs[0][::-1].translate(
                                         _reversed_complement_translation_table
@@ -843,7 +1028,7 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                             records_printed += 2
                             _output_line_count += 1
                         else:
-                            seqs[0] = seqs[0].upper()
+                            seqs[0] = re.sub(r'[^ATCGN]', 'N', seqs[0].upper())
                             reversed_complement_seqs = [
                                     seqs[0][::-1].translate(
                                         _reversed_complement_translation_table
@@ -928,6 +1113,19 @@ def go(nucleotides_per_input=8000000, gzip_output=True, gzip_level=3,
                                         % (sra_return_code,
                                             fastq_dump_command))
             del sra_process
+        if 'tar_processes' in locals():
+            for tar_process, tar_command in tar_processes:
+                tar_process.stdout.close()
+                tar_return_code = tar_process.wait()
+                if tar_return_code > 0:
+                    raise RuntimeError(
+                            'tar command terminated with exit code %d. '
+                            'Command run was "%s".' % (
+                                    tar_return_code,
+                                    tar_command
+                                )
+                        )
+            del tar_processes
 
 if __name__ == '__main__':
     import unittest

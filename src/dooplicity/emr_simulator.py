@@ -728,7 +728,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         scratch: scratch directory, typically local. Files are written here by
             tasks before copying to final destination. If None, files are
             written directly to final destination. If '-', files are written
-            to safely created temporary directory.
+            to securely created temporary directory.
         common: path to directory accessible across nodes in --ipy mode
         sort: sort executable including command-line arguments
         max_attempts: maximum number of times to attempt a task in ipy mode.

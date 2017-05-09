@@ -182,12 +182,22 @@ for (line_type,), xpartition in xstream(sys.stdin, 1):
                                                         + sample_count)
                 )
         else:
-            for (sample_index, _, _, _, factor, unique_factor) in xpartition:
+            # Print label
+            print >>output_stream, '\t'.join(
+                    ['sample label',
+                        'normalization factor (primary alignments)',
+                        'normalization factor (unique alignments)',
+                        'AUC (primary alignments)',
+                        'AUC (unique alignments)']
+                )
+            for (sample_index, _, _, _,
+                    factor, unique_factor,
+                    auc, unique_auc) in xpartition:
                 input_line_count += 1
                 counter.add('normalization_outputs')
                 print >>output_stream, '\t'.join([
                         manifest_object.index_to_label[sample_index],
-                        factor, unique_factor
+                        factor, unique_factor, auc, unique_auc
                     ])
 
     if not output_url.is_local:

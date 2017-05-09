@@ -117,21 +117,37 @@ class S3Ansible(object):
             No return value.
         """
         cleaned_url = clean_url(bucket)
-        create_bucket_command = [self.aws, '--profile', self.profile,
-                                    's3', 'mb', cleaned_url, '--region',
+        # Check if bucket exists
+        check_bucket_command = [self.aws, '--profile', self.profile,
+                                    's3', 'ls', cleaned_url, '--region',
                                     region]
         try:
-            subprocess.check_output(create_bucket_command,
-                                    bufsize=-1,
+            subprocess.check_output(check_bucket_command, bufsize=-1,
                                     stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
-            if 'BucketAlreadyOwnedByYou' not in e.output:
-                raise RuntimeError(('Error "{}" encountered trying to make '
+            if 'AccessDenied' in e.output:
+                raise RuntimeError(('Error "{}" encountered trying to list '
                                     'bucket with command "{}".').format(
                                             e.output, ' '.join(
                                                     create_bucket_command
                                                 )
                                         ))
+            if 'NoSuchBucket' in e.output:
+                create_bucket_command = [self.aws, '--profile', self.profile,
+                                         's3', 'mb', cleaned_url, '--region',
+                                         region]
+                try:
+                    subprocess.check_output(create_bucket_command,
+                                            bufsize=-1,
+                                            stderr=subprocess.STDOUT)
+                except subprocess.CalledProcessError as e:
+                    raise RuntimeError(
+                            'Error "{}" encountered trying to make bucket '
+                            'with command "{}".').format(
+                                            e.output, ' '.join(
+                                                    create_bucket_command
+                                                )
+                                        )
 
     def exists(self, path):
         """ Checks whether a file on S3 exists.
@@ -326,9 +342,20 @@ class S3Ansible(object):
             # No Lifecycle Configuration
             rules = []
         return_value = lifecycle_process.wait()
-        if return_value and not 'NoSuchLifecycleConfiguration' in errors:
-            # Raise exception iff lifecycle config exists
-            raise RuntimeError(errors)
+        if return_value:
+            if 'AccessDenied' in errors:
+                # Just proceed with a warning
+                print >>sys.stderr, (
+                        'Warning: account does not have access to bucket '
+                        'lifecycle. Skipping scheduling of deletion of '
+                        'data with prefix "{}". Perform this deletion '
+                        'manually with the console or the AWS CLI after the '
+                        'job flow is complete.'
+                    ).format(prefix)
+                return
+            if 'NoSuchLifecycleConfiguration' in errors:
+                # Raise exception iff lifecycle config exists
+                raise RuntimeError(errors)
         add_rule = True
         for rule in rules:
             try:

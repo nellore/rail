@@ -91,7 +91,12 @@ for input_line_count, line in enumerate(sys.stdin):
     file_to_count = tokens[0]
     if (not ((token_count == 3 and Url(tokens[0]).is_local) or
         (token_count == 5 and Url(tokens[0]).is_local
-            and Url(tokens[2]).is_local))):
+            and Url(tokens[2]).is_local)) or 
+            (Url(tokens[0]).is_local and 
+                (tokens[0].endswith('.tar.gz')
+                    or tokens[0].endswith('.tar.bz2')
+                    or tokens[0].endswith('.tar')))
+            ):
         sys.stdout.write(line)
         output_line_count += 1
         continue

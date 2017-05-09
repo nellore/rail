@@ -175,7 +175,7 @@ else:
     if _pypy_exe is not None:
         try:
             if re.search(
-                        r'pypy [24]\.', 
+                        r'pypy [2456]\.', 
                         subprocess.check_output(
                                 [_pypy_exe, '--version'],
                                 stderr=subprocess.STDOUT
@@ -1850,17 +1850,17 @@ class RailRnaLocal(object):
                                                         sort_memory_cap
                                                     ))
             base.sort_memory_cap = sort_memory_cap
-        if parallel and scratch:
-            expanded_scratch = os.path.expandvars(scratch)
-            if not os.path.exists(expanded_scratch):
+        if scratch:
+            scratch = os.path.expandvars(os.path.expanduser(scratch))
+            if not os.path.exists(scratch):
                 try:
-                    os.makedirs(expanded_scratch)
+                    os.makedirs(scratch)
                 except OSError:
                     base.errors.append(
                             ('Could not create scratch directory %s; '
                              'check that it\'s not a file and that '
                              'write permissions are active.')
-                                % expanded_scratch
+                                % base.scratch
                         )
         base.scratch = scratch
         if sort_exe:
@@ -2659,6 +2659,9 @@ EOF
 set -e
 export HOME=/home/hadoop
 
+# Must make sure /mnt/space exists before subsequent bootstraps
+mkdir -p /mnt/space
+
 RAILZIP=$1
 JARTARGET=$2
 mkdir -p ${{JARTARGET}}
@@ -3399,9 +3402,9 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                         '-y',
                         'yarn.nodemanager.localizer.fetch.thread-count=1',
                         '-m',
-                        'mapreduce.map.speculative=false',
+                        'mapreduce.map.speculative=true',
                         '-m',
-                        'mapreduce.reduce.speculative=false',
+                        'mapreduce.reduce.speculative=true',
                         '-m',
                         'mapreduce.task.timeout=1800000',
                         '-m',
