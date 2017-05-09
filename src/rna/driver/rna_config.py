@@ -2119,7 +2119,8 @@ class RailRnaElastic(object):
             "m3.2xlarge"  : 8,
             "c3.2xlarge"  : 8,
             "c3.4xlarge"  : 16,
-            "c3.8xlarge"  : 32
+            "c3.8xlarge"  : 32,
+            "cc2.8xlarge" : 32
         }
 
         base.instance_mems = {
@@ -2136,7 +2137,8 @@ class RailRnaElastic(object):
             "cc1.4xlarge" : (16*1024), # 23.0 GB
             "c3.2xlarge" : (15*1024), # 15.0 GB
             "c3.4xlarge" : (30*1024), # 30 GB
-            "c3.8xlarge" : (60*1024) # 60 GB
+            "c3.8xlarge" : (60*1024), # 60 GB
+            "cc2.8xlarge" : (60*1024) # 60 GB
         }
 
         # From http://docs.aws.amazon.com/ElasticMapReduce/latest/
@@ -2155,7 +2157,8 @@ class RailRnaElastic(object):
             "m3.2xlarge"  : 23040,
             "c3.2xlarge" : 11520,
             "c3.4xlarge" : 23040,
-            "c3.8xlarge" : 53248
+            "c3.8xlarge" : 53248,
+            "cc2.8xlarge" : 53248
         }
 
         '''Not currently in use, but may become important if there are
