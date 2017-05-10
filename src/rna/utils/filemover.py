@@ -59,10 +59,14 @@ class FileMover(object):
     
     def __init__(self, args=None, s3cmd_exe='s3cmd', s3cred=None,
                     s3public=False):
-        if args is not None:
-            self.s3cred, self.s3public = args.s3cfg, args.acl_public
-        else:
-            self.s3cred, self.s3public = s3cred, s3public
+        try:
+            self.s3cred = args.s3cfg
+        except AttributeError:
+            self.s3cred = s3cred
+        try:
+            self.s3public = args.acl_public
+        except AttributeError:
+            self.s3public = s3public
         self.s3cmd_exe = s3cmd_exe
     
     def put(self, filename, url):

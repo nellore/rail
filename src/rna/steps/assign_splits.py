@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Rail-RNA-assign_splits
 
