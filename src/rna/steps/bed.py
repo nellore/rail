@@ -61,6 +61,7 @@ site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
 from dooplicity.tools import xstream, register_cleanup, make_temp_dir
+from dooplicity.counters import Counter
 import bowtie
 import bowtie_index
 import manifest
@@ -113,6 +114,9 @@ manifest_object = manifest.LabelsAndIndices(
 output_url = Url(args.out) if args.out is not None \
     else Url(os.getcwd())
 input_line_count = 0
+counter = Counter('bed')
+register_cleanup(counter.flush)
+
 if output_url.is_local:
     # Set up destination directory
     try: os.makedirs(output_url.to_url())
@@ -144,6 +148,7 @@ for (line_type, sample_label), xpartition in xstream(sys.stdin, 2):
                                                          type_string,
                                                          sample_label)
         if line_type == 'N':
+            counter.add('junction_line')
             for i, (rname, pos, end_pos, reverse_strand_string,
                     max_left_overhang, max_right_overhang, 
                     maximin_overhang, coverage) \
@@ -172,6 +177,7 @@ for (line_type, sample_label), xpartition in xstream(sys.stdin, 2):
                                         )
             input_line_count += i
         else:
+            counter.add('insertion_line' if line_type == 'I' else 'deletion_line')
             for i, (rname, pos, end_pos, seq, _, _, _, coverage) \
                 in enumerate(xpartition):
                 pos, end_pos = int(pos) - 1, int(end_pos) - 1
@@ -180,7 +186,9 @@ for (line_type, sample_label), xpartition in xstream(sys.stdin, 2):
                                                 rname
                                             ], pos, end_pos, seq, coverage)
             input_line_count += i
+    counter.flush()
     if not output_url.is_local:
+        counter.add('files_uploaded')
         mover.put(output_path, output_url.plus(output_filename))
         os.remove(output_path)
 

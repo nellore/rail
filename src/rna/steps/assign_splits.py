@@ -65,6 +65,7 @@ import math
 import time
 from dooplicity.ansibles import Url
 from dooplicity.tools import register_cleanup, make_temp_dir
+from dooplicity.counters import Counter
 import filemover
 import tempdel
 
@@ -92,6 +93,9 @@ args = parser.parse_args(sys.argv[1:])
 
 start_time = time.time()
 input_line_count, output_line_count = 0, 0
+counter = Counter('assign_splits')
+register_cleanup(counter.flush)
+
 output_url = Url(args.out) if args.out is not None else Url(os.getcwd())
 if output_url.is_local:
     # Set up destination directory
@@ -125,6 +129,7 @@ for input_line_count, line in enumerate(sys.stdin):
                                             + tuple(tokens[2:-1])
     phred_format = tokens[-1]
 input_line_count += 1
+counter.add('input_lines', input_line_count)
 critical_sample_values = [
             (critical_value, True) for critical_value in 
             running_sum([sample_data[0] for sample_data in samples.values()])

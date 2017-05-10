@@ -61,8 +61,12 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
+from dooplicity.counters import Counter
 import manifest
+
+counter = Counter('junction_filter')
+register_cleanup(counter.flush)
 
 def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         sample_fraction=0.05, coverage_threshold=5, collect_junctions=False,
@@ -130,9 +134,11 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
     for (rname_and_strand, pos, end_pos), xpartition in xstream(
                                                                 input_stream, 3
                                                             ):
+        counter.add('partitions')
         sample_indexes = defaultdict(int)
         for current_sample_indexes, current_sample_counts in xpartition:
             input_line_count += 1
+            counter.add('inputs')
             current_sample_counts = current_sample_counts.split('\x1f')
             for i, sample_index in enumerate(
                                         current_sample_indexes.split('\x1f')
@@ -142,6 +148,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         if collect_junctions:
             samples_to_dump = sorted(sample_indexes.items(),
                                         key=lambda sample: int(sample[0]))
+            counter.add('collect_junction_lines')
             print >>output_stream, 'collect\t%s\t%012d\t%012d\t%s\t%s' % (
                     rname_and_strand, pos, end_pos,
                     ','.join([sample[0] for sample in samples_to_dump]),
@@ -154,18 +161,21 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
             or (max_coverage >= coverage_threshold
                 and coverage_threshold != -1)):
             for sample_index in sample_indexes:
+                counter.add('junctions_passing_filter')
                 print >>output_stream, 'filter\t%s\t%s\t%012d\t%012d' % (
                         rname_and_strand, sample_index,
                         pos, end_pos
                     )
                 output_line_count += 1
-        elif verbose:
-            print >>sys.stderr, (
-                    'Junction (%s, %d, %d) filtered out; it appeared in %d '
-                    'sample(s), and its coverage in any one sample did '
-                    'not exceed %d.'
-                ) % (rname_and_strand, pos, end_pos,
-                        sample_count, max_coverage)
+        else:
+            counter.add('junctions_failing_filter')
+            if verbose:
+                print >>sys.stderr, (
+                        'Junction (%s, %d, %d) filtered out; it appeared in %d '
+                        'sample(s), and its coverage in any one sample did '
+                        'not exceed %d.'
+                    ) % (rname_and_strand, pos, end_pos,
+                            sample_count, max_coverage)
     return input_line_count, output_line_count
 
 if __name__ == '__main__':

@@ -75,7 +75,8 @@ site.addsitedir(base_path)
 import bowtie
 import bowtie_index
 import manifest
-from dooplicity.tools import xstream, xopen
+from dooplicity.tools import xstream, xopen, register_cleanup
+from dooplicity.counters import Counter
 from collections import defaultdict
 from re import search
 
@@ -124,6 +125,8 @@ def median(a_list):
 library_size = args.library_size * 1000000
 start_time = time.time()
 input_line_count, output_line_count = 0, 0
+counter = Counter('coverage')
+register_cleanup(counter.flush)
 bin_count = 0
 # For converting RNAMEs to number strings
 reference_index = bowtie_index.BowtieIndexReference(
@@ -156,6 +159,7 @@ except ZeroDivisionError:
     unique_mean_weight = 0.0
 
 for (partition_id,), xpartition in xstream(sys.stdin, 1):
+    counter.add('partitions')
     bin_count += 1
     bin_start_time, bin_diff_count = time.time(), 0
     rname = partition_id.rpartition(';')[0]
@@ -170,6 +174,7 @@ for (partition_id,), xpartition in xstream(sys.stdin, 1):
                                             xpartition, lambda val: val[0]
                                         ):
         input_line_count += 1
+        counter.add('inputs')
         pos = int(pos)
         for sample_index, diffs in itertools.groupby(
                                 sample_indexes_and_diffs, lambda val: val[1]
@@ -186,6 +191,7 @@ for (partition_id,), xpartition in xstream(sys.stdin, 1):
                     if uniqueness == '1':
                         unique_nonref_coverages[real_sample_index] += diff
                 bin_diff_count += 1
+            counter.add('coverage_lines')
             print 'coverage\t%s\t%s\t%012d\t%d\t%d' % (
                         sample_index, 
                         rname_index, pos, coverages[sample_index],

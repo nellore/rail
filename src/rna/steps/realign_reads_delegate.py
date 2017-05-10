@@ -23,7 +23,11 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream, xopen
+from dooplicity.tools import xstream, xopen, register_cleanup
+from dooplicity.counters import Counter
+
+counter = Counter('realign_reads_delegate')
+register_cleanup(counter.flush)
 
 import string
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
@@ -51,14 +55,17 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin,
     output_line_count, next_report_line = 0, 0
     threshold_alignment_count = max(2, alignment_count_to_report)
     for (qname,), xpartition in xstream(input_stream, 1):
+        counter.add('partitions')
         max_score, alignments_output, current_tie_margin = None, 0, None
         for rest_of_line in xpartition:
+            counter.add('inputs')
             # Note Bowtie 2 outputs alignments in order of descending score
             try:
                 score = int([field[5:] for field in rest_of_line
                                 if field[:5] == 'AS:i:'][0])
             except IndexError:
                 # Unmapped read; flag should be 4. Print only essentials.
+                counter.add('unaligned_records')
                 assert int(rest_of_line[0]) == 4
                 print >>output_stream, ('%s\t4\t\x1c\t\x1c\t\x1c\t\x1c'
                                          '\t\x1c\t\x1c\t\x1c\t%s\t%s') % (
@@ -76,6 +83,7 @@ def go(output_stream=sys.stdout, input_stream=sys.stdin,
                     max_score = max(max_score, score)
                 elif alignments_output >= threshold_alignment_count:
                     break
+                counter.add('aligned_records')
                 print >>output_stream, '\t'.join((qname,) + rest_of_line)
                 alignments_output += 1
                 output_line_count += 1

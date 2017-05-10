@@ -220,6 +220,14 @@ def parsed_keys(partition_options, key_fields):
         )
         return partitioned_key
 
+
+def gzip_into(gzip_level, outfn):
+    return subprocess.Popen('gzip -%d >%s' % (gzip_level, outfn),
+        shell=True, bufsize=-1,
+        executable='/bin/bash',
+        stdin=subprocess.PIPE)
+
+
 def presorted_tasks(input_files, process_id, sort_options, output_dir,
                     key_fields, separator, partition_options, task_count,
                     memcap, gzip=False, gzip_level=3, scratch=None,
@@ -242,7 +250,6 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
         key_fields: number of fields from a line to consider the key.
         separator: separator between successive fields from line.
         partition_options: sort-like options to use when partitioning.
-        streaming_command: streaming command to run.
         task_count: number of tasks in which to partition input.
         memcap: maximum percent of memory to use per UNIX sort instance.
         gzip: True iff all files written should be gzipped; else False.
@@ -327,13 +334,7 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                             task_file = os.path.join(output_dir, str(task) +
                                                         '.' + str(process_id)
                                                         + '.unsorted.gz')
-                            task_stream_processes[task] = subprocess.Popen(
-                                    'gzip -%d >%s' % 
-                                    (gzip_level, task_file),
-                                    shell=True, bufsize=-1,
-                                    executable='/bin/bash',
-                                    stdin=subprocess.PIPE
-                                )
+                            task_stream_processes[task] = gzip_into(gzip_level, task_file)
                             task_streams[task] \
                                 = task_stream_processes[task].stdin
                         else:
@@ -435,8 +436,15 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
                         )
             shutil.rmtree(output_dir)
 
+
+def counter_cmd(outfn):
+    return ("grep '^reporter:counter:' | "
+            "sed 's/.*://' | "
+            "awk -v FS=',' '{tot[$1,\" \",$2] += $3} END {for(d in tot) {print d,tot[d]}}' > %s" % outfn)
+
+
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
-                                  err_dir, task_id, multiple_outputs,
+                                  err_dir, counter_dir, task_id, multiple_outputs,
                                   separator, sort_options, memcap,
                                   gzip=False, gzip_level=3, scratch=None,
                                   direct_write=False, sort='sort',
@@ -549,13 +557,21 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                                 )
                                             )
                                         ))
+        counter_file = os.path.abspath(os.path.join(counter_dir, (
+                                            ('%d.counts' % task_id)
+                                                if attempt_number is None
+                                                else ('%d.%d.counts'
+                                                    % (task_id, attempt_number)
+                                                )
+                                            )
+                                        ))
         new_env = os.environ.copy()
         new_env['mapreduce_task_partition'] \
             = new_env['mapred_task_partition'] = str(task_id)
         if multiple_outputs:
             # Must grab each line of output and separate by directory
             command_to_run \
-                = prefix + ' | ' + streaming_command + (' 2>%s' % err_file)
+                = prefix + ' | ' + streaming_command + (' 2> >(tee %s | %s)' % (err_file, counter_cmd(counter_file)))
             # Need bash or zsh for process substitution
             multiple_output_process = subprocess.Popen(
                     ' '.join([('set -eo pipefail; cd %s;' % dir_to_path)
@@ -589,14 +605,8 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                      'directory %s.') % (command_to_run,
                                                           key_dir))
                     if gzip:
-                        task_file_stream_processes[key] = subprocess.Popen(
-                                'gzip -%d >%s' % 
-                                (gzip_level,
-                                 os.path.join(key_dir, str(task_id) + '.gz')),
-                                shell=True, bufsize=-1,
-                                executable='/bin/bash',
-                                stdin=subprocess.PIPE
-                            )
+                        task_file_stream_processes[key] = gzip_into(gzip_level,
+                            os.path.join(key_dir, str(task_id) + '.gz'))
                         task_file_streams[key] \
                             = task_file_stream_processes[key].stdin
                     else:
@@ -617,8 +627,9 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                             )
                 command_to_run \
                     = prefix + ' | ' + streaming_command + (
-                            ' 2>%s | gzip -%d >%s'
+                            ' 2> >(tee %s | %s) | gzip -%d >%s'
                                 % (err_file,
+                                    counter_cmd(counter_file),
                                     gzip_level,
                                     out_file)
                         )
@@ -627,9 +638,10 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                 os.path.join(output_dir, str(task_id))
                             )
                 command_to_run \
-                    = prefix + ' | ' + streaming_command + (' >%s 2>%s'
+                    = prefix + ' | ' + streaming_command + (' >%s 2> >(tee %s | %s)'
                                                              % (out_file,
-                                                                err_file))
+                                                                err_file,
+                                                                counter_cmd(counter_file)))
             try:
                 # Need bash or zsh for process substitution
                 subprocess.check_output(' '.join([('set -eo pipefail; cd %s;'
@@ -1636,23 +1648,17 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                             'directory %s.') % steps[step]['output'])
                 failed = True
                 raise
-            map_err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
-            try:
-                os.makedirs(map_err_dir)
-            except OSError:
-                iface.fail(('Problem encountered trying to create '
-                            'directory %s.') % map_err_dir)
-                failed = True
-                raise
-            reduce_err_dir = os.path.join(steps[step]['output'],
-                                            'dp.reduce.log')
-            try:
-                os.makedirs(reduce_err_dir)
-            except OSError:
-                iface.fail(('Problem encountered trying to create '
-                            'directory %s.') % reduce_err_dir)
-                failed = True
-                raise
+
+            for dr in ['dp.map.log', 'dp.map.counters', 'dp.reduce.log', 'dp.reduce.counters']:
+
+                full_dir = os.path.join(steps[step]['output'], dr)
+                try:
+                    os.makedirs(full_dir)
+                except OSError:
+                    iface.fail(('Problem encountered trying to create '
+                                'directory %s.') % dr)
+                    failed = True
+                    raise
         # Run steps
         step_number = 0
         total_steps = len(steps)
@@ -1773,13 +1779,15 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     if not input_file_count:
                         iface.step('No input found; skipping step.')
                     err_dir = os.path.join(steps[step]['output'], 'dp.map.log')
-                    iface.step('Step %d/%d: %s' % 
+                    counter_dir = os.path.join(steps[step]['output'], 'dp.map.counters')
+                    iface.step('Step %d/%d: %s' %
                                 (step_number + 1, total_steps, step))
                     iface.status('    Starting step runner...')
                     execute_balanced_job_with_retries(
                             pool, iface, step_runner_with_error_return,
                                        [[step_data['mapper'], input_file,
                                          output_dir, err_dir,
+                                         counter_dir,
                                          i, multiple_outputs,
                                          separator, None, None, gzip,
                                          gzip_level, scratch, direct_write,
@@ -1881,12 +1889,16 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     steps[step]['output'],
                                     'dp.reduce.log'
                                 )
+                    counter_dir = os.path.join(
+                                    steps[step]['output'],
+                                    'dp.reduce.counters'
+                                )
                     output_dir = step_data['output']
                     return_values = []
                     execute_balanced_job_with_retries(
                             pool, iface, step_runner_with_error_return,
                                 [[step_data['reducer'], input_file, output_dir, 
-                                err_dir, i, multiple_outputs, separator,
+                                err_dir, counter_dir, i, multiple_outputs, separator,
                                 step_data['sort_options'], memcap, gzip,
                                 gzip_level, scratch, direct_write,
                                 sort, dir_to_path]

@@ -18,7 +18,11 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream, xopen
+from dooplicity.tools import xstream, register_cleanup, xopen
+from dooplicity.counters import Counter
+
+counter = Counter('align_readlets_delegate')
+register_cleanup(counter.flush)
 
 def go(qname_stream, output_stream=sys.stdout, input_stream=sys.stdin,
         verbose=False, report_multiplier=1.2):

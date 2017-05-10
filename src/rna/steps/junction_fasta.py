@@ -61,7 +61,8 @@ site.addsitedir(base_path)
 
 import bowtie
 import bowtie_index
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
+from dooplicity.counters import Counter
 
 parser = argparse.ArgumentParser(description=__doc__, 
             formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -73,16 +74,20 @@ args = parser.parse_args()
 
 start_time = time.time()
 input_line_count = 0
+counter = Counter('junction_fasta')
+register_cleanup(counter.flush)
 reference_index = bowtie_index.BowtieIndexReference(
                         os.path.expandvars(args.bowtie_idx)
                     )
 for key, xpartition in xstream(sys.stdin, 3, skip_duplicates=True):
     '''For computing maximum left and right extend sizes for every key --
     that is, every junction combo (fields 1-3 of input).'''
+    counter.add('partitions')
     left_extend_size, right_extend_size = None, None
     left_size, right_size = None, None
     for value in xpartition:
         assert len(value) == 4
+        counter.add('inputs')
         input_line_count += 1
         left_extend_size = max(left_extend_size, int(value[-4]))
         right_extend_size = max(right_extend_size, int(value[-3]))
@@ -124,6 +129,8 @@ for key, xpartition in xstream(sys.stdin, 3, skip_duplicates=True):
                 min(right_extend_size, reference_length - 
                                     junction_combo[-1][1] + 1))
         )
+    counter.add('get_stretch', len(junction_combo)+1)
+    counter.add('ref_bases_extracted', reference_length)
     '''A given reference name in the index will be in the following format:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + '\x1d' + start position of sequence + '\x1d' + comma-separated list of

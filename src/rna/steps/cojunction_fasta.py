@@ -56,7 +56,8 @@ site.addsitedir(base_path)
 
 import bowtie
 import bowtie_index
-from dooplicity.tools import xstream, dlist
+from dooplicity.tools import xstream, dlist, register_cleanup
+from dooplicity.counters import Counter
 import group_reads
 
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -70,12 +71,15 @@ args = parser.parse_args()
 
 start_time = time.time()
 input_line_count = 0
+counter = Counter('cojunction_fasta')
+register_cleanup(counter.flush)
 reference_index = bowtie_index.BowtieIndexReference(
                             os.path.expandvars(args.bowtie_idx)
                         )
 group_reads_object = group_reads.IndexGroup(args.index_count)
 for (rname, poses, end_poses), xpartition in xstream(sys.stdin, 3,
                                                         skip_duplicates=True):
+    counter.add('partitions')
     reverse_strand_string = rname[-1]
     rname = rname[:-1]
     read_seqs = dlist()
@@ -83,6 +87,7 @@ for (rname, poses, end_poses), xpartition in xstream(sys.stdin, 3,
     end_poses = [int(end_pos) for end_pos in end_poses.split(',')]
     max_left_extend_size, max_right_extend_size = None, None
     for left_extend_size, right_extend_size, read_seq in xpartition:
+        counter.add('inputs')
         input_line_count += 1
         max_left_extend_size = max(max_left_extend_size, int(left_extend_size))
         max_right_extend_size \
@@ -115,6 +120,8 @@ for (rname, poses, end_poses), xpartition in xstream(sys.stdin, 3,
                 min(max_right_extend_size, reference_length - 
                                     junction_combo[-1][1] + 1))
         )
+    counter.add('get_stretch', len(junction_combo)+1)
+    counter.add('ref_bases_extracted', reference_length)
     '''A given reference name in the index will be in the following format:
     original RNAME + '+' or '-' indicating which strand is the sense strand
     + ';' + start position of sequence + ';' + comma-separated list of

@@ -26,7 +26,8 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream, xopen
+from dooplicity.tools import xstream, xopen, register_cleanup
+from dooplicity.counters import Counter
 from alignment_handlers import AlignmentPrinter
 import bowtie_index
 import bowtie
@@ -38,6 +39,9 @@ from encode import decode_sequence
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 _output_line_count = 0
 _polyA = set(['A'])
+counter = Counter('align_readlets_delegate')
+register_cleanup(counter.flush)
+
 
 def print_readletized_output(seq, sample_indexes,
         reversed_complement_sample_indexes, seq_id, cap_sizes,
@@ -109,11 +113,13 @@ def print_readletized_output(seq, sample_indexes,
                     )
         if readlet_seq < reversed_complement_readlet_seq:
             if not no_polyA or set(readlet_seq) != _polyA:
+                counter.add('capping_readlets')
                 to_write.append('%s\t%s\x1e%d\x1e%d' % (readlet_seq, seq_id 
                                                         + '+', 0,
                                                         seq_size - cap_size))
         else:
             if not no_polyA or set(reversed_complement_readlet_seq) != _polyA:
+                counter.add('capping_readlets')
                 to_write.append('%s\t%s\x1e%d\x1e%d' \
                                     % (reversed_complement_readlet_seq,
                                         seq_id + '-', 0, seq_size - cap_size))
@@ -123,11 +129,13 @@ def print_readletized_output(seq, sample_indexes,
                     )
         if readlet_seq < reversed_complement_readlet_seq:
             if not no_polyA or set(readlet_seq) != _polyA:
+                counter.add('capping_readlets')
                 to_write.append('%s\t%s\x1e%d\x1e%d' % (readlet_seq,
                                                     seq_id + '+',
                                                     seq_size - cap_size, 0))
         else:
             if not no_polyA or set(reversed_complement_readlet_seq) != _polyA:
+                counter.add('capping_readlets')
                 to_write.append('%s\t%s\x1e%d\x1e%d' \
                                     % (reversed_complement_readlet_seq,
                                         seq_id + '-', seq_size - cap_size, 0))
@@ -140,12 +148,14 @@ def print_readletized_output(seq, sample_indexes,
                     )
         if readlet_seq < reversed_complement_readlet_seq:
             if not no_polyA or set(readlet_seq) != _polyA:
+                counter.add('non_capping_readlets')
                 to_write.append('%s\t%s\x1e%d\x1e%d' % (readlet_seq,
                                                     seq_id + '+', j, 
                                                     seq_size - j
                                                         - max_readlet_size))
         else:
             if not no_polyA or set(reversed_complement_readlet_seq) != _polyA:
+                counter.add('non_capping_readlets')
                 to_write.append('%s\t%s\x1e%d\x1e%d' \
                                     % (reversed_complement_readlet_seq,
                                         seq_id + '-', j, 
@@ -164,6 +174,7 @@ def print_readletized_output(seq, sample_indexes,
                             [str(count) for count
                                 in reversed_complement_sample_indexes.values()]
                         )])
+        counter.add('reads')
     except IndexError:
         # No readlets because polyAs were present!
         return
@@ -303,7 +314,11 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             # extra keywords for grepping: tie margin tie_margin break
             tie_present = (len(scores) == 2) and (scores[0] == scores[1])
             clip_present = 'S' in cigar
+            if clip_present:
+                counter.add('soft_clipped_alignments')
             exact_match = 'NM:i:0' in multiread[0]
+            if exact_match:
+                counter.add('exact_matches')
             alignment_reversed = [
                                     int(alignment[1]) & 16
                                     for alignment in multiread
@@ -358,6 +373,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                         reversed_complement_sample_indexes[sample_index] += 1
                     else:
                         sample_indexes[sample_index] += 1
+                    counter.add('print_readletized_output')
                     print_readletized_output(
                             seq=seq_to_print,
                             sample_indexes=sample_indexes,
@@ -456,7 +472,11 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
             # extra keywords for grepping: tie margin tie_margin break
             tie_present = (len(scores) == 2) and (scores[0] == scores[1])
             clip_present = 'S' in cigar
+            if clip_present:
+                counter.add('soft_clipped_alignments')
             exact_match = 'NM:i:0' in multiread[0]
+            if exact_match:
+                counter.add('exact_matches')
             alignment_reversed = [
                                     int(alignment[1]) & 16
                                     for alignment in multiread
@@ -647,6 +667,7 @@ def handle_bowtie_output(input_stream, reference_index, manifest_object,
                         reversed_complement_sample_indexes[sample_index] += 1
                     else:
                         sample_indexes[sample_index] += 1
+                    counter.add('print_readletized_output')
                     print_readletized_output(
                             seq=seq_to_print,
                             sample_indexes=sample_indexes,

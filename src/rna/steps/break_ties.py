@@ -127,7 +127,8 @@ utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
+from dooplicity.counters import Counter
 from alignment_handlers import AlignmentPrinter, multiread_to_report
 import bowtie
 import bowtie_index
@@ -198,6 +199,8 @@ alignment_printer = AlignmentPrinter(
                                 tie_margin=args.tie_margin
                             )
 input_line_count, output_line_count = 0, 0
+counter = Counter('break_ties')
+register_cleanup(counter.flush)
 start_time = time.time()
 
 for (qname,), xpartition in xstream(sys.stdin, 1):
@@ -209,6 +212,7 @@ for (qname,), xpartition in xstream(sys.stdin, 1):
         '''There is at least one alignment that overlaps no junctions; report 
         an alignment with the highest score at random. Separate into alignments
         that overlap the fewest junctions and alignments that don't.'''
+        counter.add('no_junction_partitions')
         clipped_alignments = [alignments[i] for i in xrange(
                                                         len(junction_counts)
                                             ) if junction_counts[i] == 0]
@@ -222,7 +226,7 @@ for (qname,), xpartition in xstream(sys.stdin, 1):
         alignments_to_report = [alignment for alignment, score
                                     in alignments_and_scores
                                     if score == max_score]
-        output_line_count += alignment_printer.print_alignment_data(
+        count = alignment_printer.print_alignment_data(
                     multiread_to_report(
                         alignments_to_report,
                         alignment_count_to_report=alignment_count_to_report,
@@ -232,6 +236,7 @@ for (qname,), xpartition in xstream(sys.stdin, 1):
                     )
                 )
     else:
+        counter.add('junction_partitions')
         # All alignments overlap junctions
         junction_alignments = [alignments[i]
                                 for i in xrange(len(junction_counts))
@@ -247,7 +252,7 @@ for (qname,), xpartition in xstream(sys.stdin, 1):
                             int(alignment[-1][5:]))
         weights = alignment_dict.values()
         if not any(weights): weights = [1] * len(weights)
-        output_line_count += alignment_printer.print_alignment_data(
+        count = alignment_printer.print_alignment_data(
                     multiread_to_report(
                         [alignment + ('XC:i:%s' % alignment_dict[alignment],)
                             for alignment in alignment_dict.keys()],
@@ -257,6 +262,9 @@ for (qname,), xpartition in xstream(sys.stdin, 1):
                         weights=weights
                     )
                 )
+    output_line_count += count
+    counter.add('alignments_out', count)
+
 
 print >>sys.stderr, 'DONE with break_ties.py; in/out=%d/%d; ' \
                     'time=%0.3f s' % (input_line_count, output_line_count,

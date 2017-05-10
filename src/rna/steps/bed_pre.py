@@ -87,8 +87,12 @@ base_path = os.path.abspath(
 utils_path = os.path.join(base_path, 'rna', 'utils')
 site.addsitedir(utils_path)
 site.addsitedir(base_path)
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
+from dooplicity.counters import Counter
 import manifest
+
+counter = Counter('bed_pre')
+register_cleanup(counter.flush)
 
 def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         sample_fraction=0.05, coverage_threshold=5, verbose=False):
@@ -204,6 +208,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         coverages = []
         i = 0
         if line_type == 'N':
+            counter.add('junction_line')
             for sample_index, data in itertools.groupby(
                                                     xpartition, 
                                                     key=lambda val: val[0]
@@ -232,6 +237,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                 assert max_left_displacement is not None
                 assert max_right_displacement is not None
                 assert maximin_displacement is not None
+                counter.add('bed_line')
                 print >>output_stream, \
                     'bed\tN\t%d\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d' % (
                         sample_index, rname, pos, end_pos, strand_or_seq,
@@ -241,6 +247,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                 coverages.append(coverage_sum)
                 i += 1
                 output_line_count += 1
+            counter.add('collect_line')
             output_stream.write('collect\t2\t')
             print >>output_stream, '\t'.join(
                         collect_specs
@@ -249,6 +256,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                     )
             output_line_count += 1
         else:
+            counter.add('insertion_line' if line_type == 'I' else 'deletion_line')
             assert line_type in 'ID'
             sample_count = 0
             for sample_index, data in itertools.groupby(
@@ -264,6 +272,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                 for _, _, _, coverage in data:
                     input_line_count += 1
                     coverage_sum += int(coverage)
+                counter.add('bed_line')
                 print >>output_stream, \
                     'bed\t%s\t%s\t%s\t%s\t%s\t%s\t\x1c\t\x1c\t\x1c\t%d' % (
                         line_type, sample_index, rname, pos, end_pos,
@@ -277,6 +286,7 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
             if (sample_count >= min_sample_count
                 or (max_coverage >= coverage_threshold
                     and coverage_threshold != -1)):
+                counter.add('collect_line')
                 if line_type == 'I':
                     output_stream.write('collect\t0\t')
                 else:
@@ -288,13 +298,16 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                         + ['0']*(total_sample_count - len(coverages))
                     )
                 output_line_count += 1
-            elif verbose:
-                print >>sys.stderr, (
-                        'Indel (%s, %s, %s, %s) filtered out; it appeared in '
-                        '%d sample(s), and its coverage in any one sample did '
-                        'not exceed %d.'
-                    ) % (rname, strand_or_seq, pos, end_pos, sample_count,
-                            max_coverage)
+            else:
+                counter.add('indel_filtered_out')
+                if verbose:
+                    print >>sys.stderr, (
+                            'Indel (%s, %s, %s, %s) filtered out; it appeared in '
+                            '%d sample(s), and its coverage in any one sample did '
+                            'not exceed %d.'
+                        ) % (rname, strand_or_seq, pos, end_pos, sample_count,
+                                max_coverage)
+    counter.flush()
     return input_line_count, output_line_count
 
 if __name__ == '__main__':

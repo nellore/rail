@@ -87,7 +87,8 @@ site.addsitedir(base_path)
 
 import bowtie
 import bowtie_index
-from dooplicity.tools import xstream
+from dooplicity.tools import xstream, register_cleanup
+from dooplicity.counters import Counter
 
 # Print file's docstring if -h is invoked
 parser = argparse.ArgumentParser(description=__doc__, 
@@ -95,6 +96,8 @@ parser = argparse.ArgumentParser(description=__doc__,
 bowtie.add_args(parser)
 args = parser.parse_args()
 input_line_count, output_line_count = 0, 0
+counter = Counter('junction_collect')
+register_cleanup(counter.flush)
 
 start_time = time.time()
 
@@ -103,8 +106,10 @@ reference_index = bowtie_index.BowtieIndexReference(
                     )
 for (_, rname_string, intron_pos, intron_end_pos,
         sense, sample_index), xpartition in xstream(sys.stdin, 6):
+    counter.add('partitions')
     coverage = 0
     for value in xpartition:
+        counter.add('inputs')
         input_line_count += 1
         try:
             # Assume junction line

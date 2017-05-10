@@ -45,7 +45,7 @@ class Counter(object):
         self.report_style = report_style
         self.output_fh = output_fh
 
-    def add(self, counter, amt):
+    def add(self, counter, amt=1):
         """ Add given amount to given group """
         self.counts[counter] += amt
         self.counts_flushable[counter] += amt

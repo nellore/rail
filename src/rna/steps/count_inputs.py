@@ -54,7 +54,8 @@ site.addsitedir(utils_path)
 site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
-from dooplicity.tools import xopen
+from dooplicity.tools import xopen, register_cleanup
+from dooplicity.counters import Counter
 import argparse
 from guess import inferred_phred_format
 # Print file's docstring if -h is invoked
@@ -69,6 +70,8 @@ fastq_cues = set(['@'])
 fasta_cues = set(['>', ';'])
 
 input_line_count, output_line_count = 0, 0
+counter = Counter('count_inputs')
+register_cleanup(counter.flush)
 line_divider = 4
 
 for input_line_count, line in enumerate(sys.stdin):
@@ -77,6 +80,7 @@ for input_line_count, line in enumerate(sys.stdin):
     try:
         stripped = tokens[0].strip()
         if stripped[0] == '#' or not line.strip():
+            counter.add('comment_lines')
             continue
     except IndexError:
         continue
@@ -100,9 +104,11 @@ for input_line_count, line in enumerate(sys.stdin):
         first_char = input_stream.readline()[0]
         if first_char in fasta_cues:
             sys.stdout.write(line)
+            counter.add('fasta_line')
             output_line_count += 1
-            continue
-        elif first_char not in fastq_cues:
+        elif first_char in fastq_cues:
+            counter.add('fastq_line')
+        else:
             raise RuntimeError(
                     'File "{}" is neither a FASTA nor a FASTQ file.'.format(
                             file_to_count
@@ -110,12 +116,14 @@ for input_line_count, line in enumerate(sys.stdin):
                 )
     with xopen(None, file_to_count) as input_stream:
         phred_format, line_count = inferred_phred_format(input_stream)
+        counter.add('inferred_' + phred_format)
     lines_and_bytes = str((int(line_count) + 1) / line_divider)
     print '\t'.join(
             ['#!splitload', lines_and_bytes, line.partition('\t')[2].strip(),
                 phred_format]
         )
     output_line_count += 1
+    counter.flush()
 
 sys.stdout.flush()
 print >>sys.stderr, 'DONE with count_inputs.py; in/out=%d/%d; ' \

@@ -58,6 +58,7 @@ site.addsitedir(base_path)
 
 from dooplicity.ansibles import Url
 from dooplicity.tools import register_cleanup, make_temp_dir, xopen
+from dooplicity.counters import Counter
 import filemover
 import tempdel
 
@@ -88,6 +89,8 @@ import time
 start_time = time.time()
 
 input_line_count = 0
+counter = Counter('junction_collect')
+register_cleanup(counter.flush)
 
 if args.out is not None:
     '''If --out is a local file, just write directly to that file. Otherwise,
@@ -106,6 +109,7 @@ if args.out is not None:
         output_filename = os.path.join(temp_dir_path, output_filename)
     with xopen(True, output_filename, 'w', args.gzip_level) as output_stream:
         for line in sys.stdin:
+            counter.add('inputs')
             tokens = line.strip().split('\t')
             # Remove leading zeros from ints
             print >>output_stream, '\t'.join(
@@ -116,6 +120,7 @@ if args.out is not None:
 else:
     # Default --out is stdout
     for line in sys.stdin:
+        counter.add('inputs')
         tokens = line.strip().split('\t')
         # Remove leading zeros from ints
         print '\t'.join([tokens[0], str(int(tokens[1])),

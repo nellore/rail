@@ -76,10 +76,13 @@ site.addsitedir(base_path)
 
 import bowtie
 from dooplicity.tools import xstream, register_cleanup, xopen, make_temp_dir
+from dooplicity.counters import Counter
 import tempdel
 
 # Initialize global variable for tracking number of input lines
 _input_line_count = 0
+counter = Counter('align_readlets')
+register_cleanup(counter.flush)
 
 def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
     bowtie_index_base='genome', bowtie_args='', gzip_level=3, verbose=False,
@@ -170,14 +173,17 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
         with xopen(True, readlet_file, 'w', gzip_level) as readlet_stream:
             for (seq_count, ((seq,), xpartition)) \
                 in enumerate(xstream(input_stream, 1)):
+                counter.add('seqs')
                 print >>readlet_stream, \
                     '\t'.join([str(seq_count), seq, 'I'*len(seq)])
                 print >>qname_stream, next(iter(xpartition))[0]
                 for (qname,) in xpartition:
+                    counter.add('seq_qnames')
                     _input_line_count += 1
                     print >>qname_stream, qname
                 # Separate qnames with single + character
                 print >>qname_stream, '+'
+    counter.flush()
     input_command = 'gzip -cd %s' % readlet_file
     bowtie_command = ' '.join([bowtie_exe, bowtie_args,
         '-S -t --sam-nohead --mm', bowtie_index_base, '--12 -'])
