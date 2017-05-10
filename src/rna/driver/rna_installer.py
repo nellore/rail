@@ -424,20 +424,20 @@ class RailRnaInstaller(object):
                 samtools = os.path.join(self.final_install_dir,
                         self.depends['samtools'][0].rpartition('/')[2][:-8],
                         'samtools')
-                bowtie1_base = '-'.join(
-                    self.depends['bowtie1'][0].rpartition(
+                bowtie1_toks = self.depends['bowtie1'][0].rpartition(
                             '/'
-                        )[2].split('-')[:2]
-                )
+                        )[2].split('-')
+                bowtie1_legacy = len(bowtie1_toks) > 2 and bowtie1_toks[2] == 'legacy'
+                bowtie1_base = '-'.join(bowtie1_toks[:3 if bowtie1_legacy else 2])
                 bowtie1 = os.path.join(self.final_install_dir,
                                                 bowtie1_base, 'bowtie')
                 bowtie1_build = os.path.join(self.final_install_dir,
                                                 bowtie1_base, 'bowtie-build')
-                bowtie2_base = '-'.join(
-                    self.depends['bowtie2'][0].rpartition(
+                bowtie2_toks = self.depends['bowtie2'][0].rpartition(
                             '/'
-                        )[2].split('-')[:2]
-                )
+                        )[2].split('-')
+                bowtie2_legacy = len(bowtie2_toks) > 2 and bowtie2_toks[2] == 'legacy'
+                bowtie2_base = '-'.join(bowtie2_toks[:3 if bowtie2_legacy else 2])
                 bowtie2 = os.path.join(self.final_install_dir,
                                                 bowtie2_base, 'bowtie2')
                 bowtie2_build = os.path.join(self.final_install_dir,
