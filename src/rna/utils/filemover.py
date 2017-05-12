@@ -109,6 +109,9 @@ class FileMover(object):
                 parent_dir = os.path.dirname(filename)
             for dir_to_create in dir_chain[::-1]:
                 command_list = ['hdfs', 'dfs', '-mkdir', dir_to_create]
+                print >>sys.stderr, (
+                        'Creating directory with command "{}".'
+                    ).format(''.join(command_list))
                 subprocess.Popen(command_list, stdout=sys.stderr).wait()
             command_list = ['hdfs', 'dfs', '-put']
             command_list.append(filename)
