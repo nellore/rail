@@ -114,9 +114,12 @@ class FileMover(object):
             command_list.append(filename)
             command_list.append('/'.join([url.to_url(),
                                             os.path.basename(filename)]))
+        command = ' '.join(command_list)
+        print >>sys.stderr, 'Uploading with command "{}"....'.format(
+                command
+            )
         exit_level = subprocess.Popen(command_list, stdout=sys.stderr).wait()
         if exit_level > 0:
-            command = ' '.join(command_list)
             raise RuntimeError('Non-zero exitlevel %d from push command "%s".'
                                % (exit_level, command))
 
