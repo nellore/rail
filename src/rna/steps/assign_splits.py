@@ -193,6 +193,7 @@ with open(output_path, 'w') as output_stream:
     for line in saved:
         print >>output_stream, line.strip()
 if not output_url.is_local:
+    print >>sys.stderr, 'Uploading {} to {}....'.format(output_path, args.out)
     mover.put(output_path, output_url.plus(args.filename))
     os.remove(output_path)
 
