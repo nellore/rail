@@ -105,6 +105,7 @@ if output_url.is_local:
     output_path = os.path.join(args.out, args.filename)
 else:
     mover = filemover.FileMover(args=args)
+    print >>sys.stderr, 'Instantiated FileMover.'
     # Set up temporary destination
     import tempfile
     from dooplicity.tools import make_temp_dir
@@ -130,7 +131,9 @@ for input_line_count, line in enumerate(sys.stdin):
                                             + tuple(tokens[2:-1])
     phred_format = tokens[-1]
 input_line_count += 1
+print >>sys.stderr, 'Before counter.add'
 counter.add('input_lines', input_line_count)
+print >>sys.stderr, 'After counter.add'
 critical_sample_values = [
             (critical_value, True) for critical_value in 
             running_sum([sample_data[0] for sample_data in samples.values()])
@@ -175,6 +178,7 @@ else:
             reads_assigned += span
             if not (reads_assigned % reads_per_file):
                 lines_assigned.append([])
+print >>sys.stderr, 'Finished crit block'
 with open(output_path, 'w') as output_stream:
     for line_tuples in lines_assigned:
         if not line_tuples: continue
