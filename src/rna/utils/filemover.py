@@ -102,21 +102,16 @@ class FileMover(object):
                 pass
             command_list = ['cp', filename, url.to_url()]
         else:
-            parent_dir = os.path.dirname(filename)
-            dir_chain = []
-            while parent_dir != 'hdfs:':
-                dir_chain.append(parent_dir)
-                parent_dir = os.path.dirname(filename)
-            for dir_to_create in dir_chain[::-1]:
-                command_list = ['hdfs', 'dfs', '-mkdir', dir_to_create]
-                print >>sys.stderr, (
-                        'Creating directory with command "{}".'
-                    ).format(''.join(command_list))
-                subprocess.Popen(command_list, stdout=sys.stderr).wait()
-            command_list = ['hdfs', 'dfs', '-put']
-            command_list.append(filename)
-            command_list.append('/'.join([url.to_url(),
-                                            os.path.basename(filename)]))
+            assert filename.startswith('hdfs:'), (
+                    'Cannot identify filesystem for "{}".'
+                ).format(filename)
+            command_list = ['hdfs', 'dfs', '-mkdir', '-p',
+                                    os.path.dirname(filename)]
+            print >>sys.stderr, (
+                    'Creating directory with command "{}".'
+                ).format(''.join(command_list))
+            subprocess.Popen(command_list, stdout=sys.stderr).wait()
+            command_list = ['hdfs', 'dfs', '-put', filename]
         command = ' '.join(command_list)
         print >>sys.stderr, 'Uploading with command "{}"....'.format(
                 command
@@ -228,7 +223,8 @@ class FileMover(object):
             oldp = os.getcwd()
             os.chdir(dest)
             command_list = [
-                    'curl', '-s', '-O', '-J', '-v', '-L', '--connect-timeout', '600'
+                    'curl', '-s', '-O', '-J', '-v', '-L',
+                    '--connect-timeout', '600'
                 ]
             command_list.append(url.to_url())
             command = ' '.join(command_list)

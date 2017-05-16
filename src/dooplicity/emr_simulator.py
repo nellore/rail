@@ -440,7 +440,8 @@ def presorted_tasks(input_files, process_id, sort_options, output_dir,
 def counter_cmd(outfn):
     return ("grep '^reporter:counter:' | "
             "sed 's/.*://' | "
-            "awk -v FS=',' '{tot[$1,\" \",$2] += $3} END {for(d in tot) {print d,tot[d]}}' > %s" % outfn)
+            "awk -v FS=',' "
+            "'{tot[$1,\" \",$2] += $3} END {for(d in tot) {print d,tot[d]}}' > %s") % outfn
 
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
@@ -571,7 +572,9 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
         if multiple_outputs:
             # Must grab each line of output and separate by directory
             command_to_run \
-                = prefix + ' | ' + streaming_command + (' 2> >(tee %s | %s)' % (err_file, counter_cmd(counter_file)))
+                = prefix + ' | ' + streaming_command + (
+                        ' 2> >(tee %s | %s)'
+                    ) % (err_file, counter_cmd(counter_file))
             # Need bash or zsh for process substitution
             multiple_output_process = subprocess.Popen(
                     ' '.join([('set -eo pipefail; cd %s;' % dir_to_path)
