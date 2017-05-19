@@ -106,10 +106,10 @@ class FileMover(object):
                     'Cannot identify filesystem for "{}".'
                 ).format(url.to_url())
             command_list = ['hdfs', 'dfs', '-mkdir', '-p',
-                                    os.path.dirname(filename)]
+                                    os.path.dirname(url.to_url())]
             print >>sys.stderr, (
                     'Creating directory with command "{}".'
-                ).format(''.join(command_list))
+                ).format(' '.join(command_list))
             subprocess.Popen(command_list, stdout=sys.stderr).wait()
             command_list = ['hdfs', 'dfs', '-put', filename, url.to_url()]
         command = ' '.join(command_list)
