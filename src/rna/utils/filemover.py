@@ -102,16 +102,16 @@ class FileMover(object):
                 pass
             command_list = ['cp', filename, url.to_url()]
         else:
-            assert filename.startswith('hdfs:'), (
+            assert url.to_url().startswith('hdfs:'), (
                     'Cannot identify filesystem for "{}".'
-                ).format(filename)
+                ).format(url.to_url())
             command_list = ['hdfs', 'dfs', '-mkdir', '-p',
                                     os.path.dirname(filename)]
             print >>sys.stderr, (
                     'Creating directory with command "{}".'
                 ).format(''.join(command_list))
             subprocess.Popen(command_list, stdout=sys.stderr).wait()
-            command_list = ['hdfs', 'dfs', '-put', filename]
+            command_list = ['hdfs', 'dfs', '-put', filename, url.to_url()]
         command = ' '.join(command_list)
         print >>sys.stderr, 'Uploading with command "{}"....'.format(
                 command
