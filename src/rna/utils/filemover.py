@@ -107,16 +107,21 @@ class FileMover(object):
                 ).format(url.to_url())
             command_list = ['hdfs', 'dfs', '-mkdir', '-p',
                                     os.path.dirname(url.to_url())]
+            command = ' '.join(command_list)
             print >>sys.stderr, (
                     'Creating directory with command "{}".'
                 ).format(' '.join(command_list))
-            subprocess.Popen(command_list, stdout=sys.stderr).wait()
+            subprocess.Popen(command,
+                stdout=sys.stderr, shell=True,
+                executable='/bin/bash').wait()
             command_list = ['hdfs', 'dfs', '-put', filename, url.to_url()]
         command = ' '.join(command_list)
         print >>sys.stderr, 'Uploading with command "{}"....'.format(
                 command
             )
-        exit_level = subprocess.Popen(command_list, stdout=sys.stderr).wait()
+        exit_level = subprocess.Popen(
+                command, stdout=sys.stderr,
+                shell=True, executable='/bin/bash').wait()
         if exit_level > 0:
             raise RuntimeError('Non-zero exitlevel %d from push command "%s".'
                                % (exit_level, command))
