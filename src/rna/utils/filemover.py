@@ -30,14 +30,17 @@ class CommandThread(threading.Thread):
     def __init__(self, command_list):
         super(CommandThread, self).__init__()
         self.command_list = command_list
+        self.command = ' '.join(command_list)
         self.process_return, self.process = None, None
         self.content_disposition_filename = None
     def run(self):
         self.process \
-            = subprocess.Popen(self.command_list,
+            = subprocess.Popen(self.command,
                                     bufsize=-1,
                                     stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT)
+                                    stderr=subprocess.STDOUT,
+                                    shell=True,
+                                    executable='/bin/bash')
         # This is just for getting Content-Disposition from cURL
         for line in self.process.stdout:
             if re.match('content-disposition:', line[1:].lstrip(), re.I):
@@ -130,9 +133,11 @@ class FileMover(object):
         if url.is_local:
             return os.path.exists(url.to_url())
         elif url.is_curlable:
-            curl_process = subprocess.Popen(['curl', '--head', url.to_url()],
+            curl_command = ' '.join(['curl', '--head', url.to_url()])
+            curl_process = subprocess.Popen(curl_command,
                                 bufsize=-1, stderr=subprocess.PIPE,
-                                stdout=subprocess.PIPE)
+                                stdout=subprocess.PIPE,
+                                shell=True, executable='/bin/bash')
             curl_err = curl_process.stderr.read()
             curl_process.wait()
             if 'resolve host' in curl_err:
