@@ -108,7 +108,7 @@ class FileMover(object):
             assert url.to_url().startswith('hdfs:'), (
                     'Cannot identify filesystem for "{}".'
                 ).format(url.to_url())
-            command_list = ['hdfs', 'dfs', '-mkdir', '-p',
+            command_list = ['/opt/hadoop/bin/hdfs', 'dfs', '-mkdir', '-p',
                                     os.path.dirname(url.to_url())]
             command = ' '.join(command_list)
             print >>sys.stderr, (
@@ -117,7 +117,7 @@ class FileMover(object):
             subprocess.Popen(command,
                 stdout=sys.stderr, shell=True,
                 executable='/bin/bash').wait()
-            command_list = ['hdfs', 'dfs', '-put', filename, url.to_url()]
+            command_list = ['/opt/hadoop/bin/hdfs', 'dfs', '-put', filename, url.to_url()]
         command = ' '.join(command_list)
         print >>sys.stderr, 'Uploading with command "{}"....'.format(
                 command
