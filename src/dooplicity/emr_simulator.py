@@ -127,7 +127,7 @@ def add_args(parser):
             help=('Where to write any intermediate output before copying to '
                   'consolidated intermediate directory. This is typically '
                   'a directory local to a given node. None means write '
-                  'directory to consolidated intermediate directory. The '
+                  'directly to consolidated intermediate directory. The '
                   'string \"-\" means write to a temporary directory securely '
                   'created by Python.')
         )
@@ -1485,7 +1485,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     yield temp_dir
                 finally:
                     # Cleanup
-                    shutil.rmtree(temp_dir)
+                    shutil.rmtree(temp_dir, ignore_errors=True)
         # Serialize JSON configuration
         if json_config is not None:
             with open(json_config) as json_stream:

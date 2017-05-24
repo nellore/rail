@@ -35,7 +35,7 @@ class CommandThread(threading.Thread):
         self.content_disposition_filename = None
     def run(self):
         self.process \
-            = subprocess.Popen('http_proxy=http://localhost:8123 ' + self.command,
+            = subprocess.Popen(self.command,
                                     bufsize=-1,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT,
