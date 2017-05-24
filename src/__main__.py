@@ -200,6 +200,10 @@ class Launcher(object):
                                             str(self.gzip_level)])
                 if self.log:
                     runner_args.extend(['-l', os.path.abspath(self.log)])
+                if self.scratch:
+                    runner_args.extend(
+                        ['--direct-write', '--scratch', self.scratch]
+                    )
                 os.dup2(read_pipe, sys.stdin.fileno())
                 os.close(read_pipe)
                 os.close(write_pipe)
