@@ -3376,7 +3376,7 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                 'Name' : 'Allocate swap space',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        '%d' % base.mem,
+                        '%d' % (base.mem / 16),
                         '/mnt/space/swapfile'
                     ],
                     'Path' : 's3://elasticmapreduce/bootstrap-actions/add-swap'
