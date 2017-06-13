@@ -331,12 +331,18 @@ class FileMover(object):
                                    'command "%s"' % (exit_level, 
                                         ''.join(command_list)))
         else:
-            command_list = ["hadoop", "fs", "-get"]
-            command_list.append(url.to_url())
-            command_list.append(dest)
+            command_list = [
+                    "/opt/hadoop/bin/hdfs", "dfs", "-get",
+                    url.to_url(),
+                    dest
+                ]
+            command = ''.join(command_ist)
+            print >>sys.stderr, 'Downloading with command "{}"....'.format(
+                command
+            )
             exit_level \
                 = subprocess.Popen(command_list, stdout=sys.stderr).wait()
             if exit_level > 0:
-                raise RuntimeError('Nonzero exitlevel %d from hadoop fs '
-                                   '-get command "%s"' % (exit_level,
-                                        ' '.join(command_list)))
+                raise RuntimeError('Nonzero exitlevel %d from get '
+                                   'command "%s"' % (exit_level,
+                                        command))

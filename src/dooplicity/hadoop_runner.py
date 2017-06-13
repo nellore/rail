@@ -32,6 +32,7 @@ THE SOFTWARE.
 import argparse
 import sys
 import json
+import unittest
 
 
 class HadoopInputLastSeen(object):
