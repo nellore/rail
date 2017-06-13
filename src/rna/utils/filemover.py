@@ -336,7 +336,7 @@ class FileMover(object):
                     url.to_url(),
                     dest
                 ]
-            command = ''.join(command_ist)
+            command = ''.join(command_list)
             print >>sys.stderr, 'Downloading with command "{}"....'.format(
                 command
             )
