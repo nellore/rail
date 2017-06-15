@@ -273,14 +273,189 @@ def get_hadoop_streaming_command(hadoop_path,
     return steps
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    if '--test' in sys.argv:
+        import unittest
+        del sys.argv[1:] # Don't choke on extra command-line parameters
+        import tempfile
+        import shutil
+
+        class TestHadoopCommandOutput(unittest.TestCase):
+            """ Unit tests for getting hadoop command from JSON. """
+            def setUp(self):
+                self.job_flow = {'Steps':
+                             [{'HadoopJarStep':
+                               {'Args':
+                                ['-D', 'mapreduce.job.reduces=0',
+                                  '-input', 'file_0', '-output', 'file_1'],
+                                  'Jar': ''},
+                               'Name': 'First step'
+                             },
+                              {'HadoopJarStep':
+                               {'Args':
+                                ['-D', 'mapreduce.job.reduces=1', '-D',
+                                 'stream.num.map.output.key.fields=1',
+                                 '-input', 'file_1', '-output', 'file_2'],
+                                 'Jar': ''},
+                               'Name': 'Second step'
+                              },
+                              {'HadoopJarStep':
+                               {'Args':
+                                ['-D', 'mapreduce.job.reduces=2',
+                                 '-input', 'file_1', '-output', 'file_3',
+                                 '-mapper', 'cat'], 'Jar': ''},
+                               'Name': 'Third step'
+                                  },
+                              {'HadoopJarStep':
+                               {'Args':
+                                ['-D', 'mapreduce.job.reduces=3',
+                                 '-input', 'file_3,file_2', '-output',
+                                    'file_4'],
+                                'Jar': ''},
+                               'Name': 'Fourth step'
+                              }
+                             ]}
+
+                self.job_flow_map = {'Steps':
+                                 [{'HadoopJarStep':
+                                   {'Args':
+                                    ['-D', 'mapreduce.job.reduces=0',
+                                     '-input', 'file_0', '-output', 'file_1',
+                                     '-mapper', 'cat', '-inputformat',
+                                     'com.twitter.elephantbird.mapred.input'
+                                     '.DeprecatedCombineLzoTextInputFormat'
+                                ], 'Jar': ''},
+                                   'Name': 'First step'
+                                 },
+                                  {'HadoopJarStep':
+                                   {'Args':
+                                    ['-D', 'mapreduce.job.reduces=1', '-D',
+                                     'stream.num.map.output.key.fields=1',
+                                     '-input', 'file_1', '-output', 'file_2',
+                                     '-mapper', 'count.py', '-inputformat',
+                                     'com.twitter.elephantbird.mapred.input'
+                                     '.DeprecatedCombineLzoTextInputFormat'
+                                    ], 'Jar': ''},
+                                   'Name': 'Second step'
+                                  }
+                                 ]}
+
+            def tearDown(self):
+                self.job_flow = None
+                self.job_flow_map = None
+
+            def test_keep_intermediate_and_skip_trash(self):
+                hadoop_commands = get_hadoop_streaming_command(
+                            "hadoop",
+                            "hadoop-streaming-jar",
+                            self.job_flow,
+                            keep_intermediates=False,
+                            skip_trash=True
+                        )
+                expected_hadoop_commands = [
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=0" '
+                        '-input file_0 -output file_1',
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=1" '
+                        '-D"stream.num.map.output.key.fields=1" '
+                        '-input file_1 -output file_2',
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=2" '
+                        '-input file_1 -output file_3 -mapper "cat"',
+                        'hadoop fs -rm -r -skipTrash file_1',
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=3" '
+                        '-input file_3,file_2 -output file_4',
+                        'hadoop fs -rm -r -skipTrash file_2',
+                        'hadoop fs -rm -r -skipTrash file_3'
+                    ]
+                self.assertEqual(hadoop_commands, expected_hadoop_commands)
+
+            def test_keep_intermediate_and_not_skip_trash(self):
+                hadoop_commands = get_hadoop_streaming_command(
+                                    "hadoop",
+                                    "hadoop-streaming-jar",
+                                    self.job_flow,
+                                    keep_intermediates=False,
+                                    skip_trash=False
+                                )
+                expected_hadoop_commands = [
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=0" '
+                        '-input file_0 -output file_1',
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=1" '
+                        '-D"stream.num.map.output.key.fields=1" '
+                        '-input file_1 -output file_2',
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=2" '
+                        '-input file_1 -output file_3 -mapper "cat"',
+                        'hadoop fs -rm -r file_1', \
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=3" -input file_3,file_2 '
+                        '-output file_4',
+                        'hadoop fs -rm -r file_2',
+                        'hadoop fs -rm -r file_3'
+                    ]
+                self.assertEqual(hadoop_commands, expected_hadoop_commands)
+
+            def test_basic_hadoop_command_output(self):
+                hadoop_commands = get_hadoop_streaming_command(
+                                                    "hadoop",
+                                                    "hadoop-streaming-jar",
+                                                    self.job_flow,
+                                                    keep_intermediates=True,
+                                                    skip_trash=False
+                                                )
+                expected_hadoop_commands = [
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=0" '
+                        '-input file_0 -output file_1',
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=1" '
+                        '-D"stream.num.map.output.key.fields=1" '
+                        '-input file_1 -output file_2',
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=2" '
+                        '-input file_1 -output file_3 -mapper "cat"',
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=3" '
+                        '-input file_3,file_2 -output file_4'
+                    ]
+                self.assertEqual(hadoop_commands, expected_hadoop_commands)
+
+            def test_mapper_hadoop_command_output(self):
+                hadoop_commands = get_hadoop_streaming_command(
+                                                    "hadoop",
+                                                    "hadoop-streaming-jar",
+                                                    self.job_flow_map,
+                                                    keep_intermediates=True,
+                                                    skip_trash=False
+                                                )
+                expected_hadoop_commands = [
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=0" '
+                        '-input file_0 -output file_1 -mapper "cut -f2-" '
+                        '-inputformat '
+                        'com.twitter.elephantbird.mapred.input'
+                        '.DeprecatedCombineLzoTextInputFormat',
+                        'hadoop jar hadoop-streaming-jar '
+                        '-D"mapreduce.job.reduces=1" '
+                        '-D"stream.num.map.output.key.fields=1" '
+                        '-input file_1 -output file_2 '
+                        '-mapper "count.py" -inputformat '
+                        'com.twitter.elephantbird.mapred.input.'
+                        'DeprecatedCombineLzoTextInputFormat'
+                    ]
+                self.assertEqual(hadoop_commands, expected_hadoop_commands)
+
+        unittest.main()
+    parser = argparse.ArgumentParser(
+                        description=__doc__,
+                        formatter_class=argparse.RawDescriptionHelpFormatter
+                    )
     add_args(parser)
     args = parser.parse_args(sys.argv[1:])
-
-if __name__ == '__main__' and not args.test:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     with open(args.job_flow) as job_flow_file:
         job_flow = json.load(job_flow_file)
     hadoop_commands = get_hadoop_streaming_command(args.hadoop_path,
@@ -299,142 +474,3 @@ set -e"""
                 )
             for hadoop_command in hadoop_commands:
                 print >>hadoop_command_file, hadoop_command
-elif __name__ == '__main__':
-  # Test units
-    del sys.argv[1:] # Don't choke on extra command-line parameters
-    import unittest
-    import tempfile
-    import shutil
-
-    class TestHadoopCommandOutput(unittest.TestCase):
-        """ Unit tests for getting hadoop streaming command from a json job flow. """
-        def setUp(self):
-            self.job_flow = {'Steps':
-                         [{'HadoopJarStep':
-                           {'Args':
-                            ['-D', 'mapreduce.job.reduces=0',
-                              '-input', 'file_0', '-output', 'file_1'], 'Jar': ''},
-                           'Name': 'First step'
-                         },
-                          {'HadoopJarStep':
-                           {'Args':
-                            ['-D', 'mapreduce.job.reduces=1', '-D',
-                             'stream.num.map.output.key.fields=1',
-                             '-input', 'file_1', '-output', 'file_2'], 'Jar': ''},
-                           'Name': 'Second step'
-                          },
-                          {'HadoopJarStep':
-                           {'Args':
-                            ['-D', 'mapreduce.job.reduces=2',
-                             '-input', 'file_1', '-output', 'file_3',
-                             '-mapper', 'cat'], 'Jar': ''},
-                           'Name': 'Third step'
-                              },
-                          {'HadoopJarStep':
-                           {'Args':
-                            ['-D', 'mapreduce.job.reduces=3',
-                             '-input', 'file_3,file_2', '-output', 'file_4'], 'Jar': ''},
-                           'Name': 'Fourth step'
-                          }
-                         ]}
-
-            self.job_flow_map = {'Steps':
-                             [{'HadoopJarStep':
-                               {'Args':
-                                ['-D', 'mapreduce.job.reduces=0',
-                                 '-input', 'file_0', '-output', 'file_1',
-                                 '-mapper', 'cat', '-inputformat',
-                                 'com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat'
-                            ], 'Jar': ''},
-                               'Name': 'First step'
-                             },
-                              {'HadoopJarStep':
-                               {'Args':
-                                ['-D', 'mapreduce.job.reduces=1', '-D',
-                                 'stream.num.map.output.key.fields=1',
-                                 '-input', 'file_1', '-output', 'file_2',
-                                 '-mapper', 'count.py', '-inputformat',
-                                 'com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat'
-                                ], 'Jar': ''},
-                               'Name': 'Second step'
-                              }
-                             ]}
-
-        def tearDown(self):
-            self.job_flow = None
-            self.job_flow_map = None
-
-        def test_keep_intermediate_and_skip_trash(self):
-            hadoop_commands = get_hadoop_streaming_command("hadoop",
-                                                       "hadoop-streaming-jar",
-                                                       self.job_flow,
-                                                       keep_intermediates=False,
-                                                       skip_trash=True)
-            expected_hadoop_commands = [
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
--input file_0 -output file_1', \
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
--D"stream.num.map.output.key.fields=1" -input file_1 -output file_2', \
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=2" \
--input file_1 -output file_3 -mapper "cat"', \
-            'hadoop fs -rm -r -skipTrash file_1', \
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=3" \
--input file_3,file_2 -output file_4', \
-            'hadoop fs -rm -r -skipTrash file_2', \
-            'hadoop fs -rm -r -skipTrash file_3']
-            self.assertEqual(hadoop_commands, expected_hadoop_commands)
-
-        def test_keep_intermediate_and_not_skip_trash(self):
-            hadoop_commands = get_hadoop_streaming_command("hadoop",
-                                                       "hadoop-streaming-jar",
-                                                       self.job_flow,
-                                                       keep_intermediates=False,
-                                                       skip_trash=False)
-            expected_hadoop_commands = [
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
--input file_0 -output file_1', \
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
--D"stream.num.map.output.key.fields=1" -input file_1 -output file_2', \
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=2" \
--input file_1 -output file_3 -mapper "cat"', \
-            'hadoop fs -rm -r file_1', \
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=3" \
--input file_3,file_2 -output file_4', \
-            'hadoop fs -rm -r file_2', \
-            'hadoop fs -rm -r file_3']
-        self.assertEqual(hadoop_commands, expected_hadoop_commands)
-
-        def test_basic_hadoop_command_output(self):
-            hadoop_commands = get_hadoop_streaming_command("hadoop",
-                                                       "hadoop-streaming-jar",
-                                                       self.job_flow,
-                                                       keep_intermediates=True,
-                                                       skip_trash=False)
-            expected_hadoop_commands = [
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
--input file_0 -output file_1', \
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
--D"stream.num.map.output.key.fields=1" -input file_1 -output file_2', \
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=2" \
--input file_1 -output file_3 -mapper "cat"', \
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=3" \
--input file_3,file_2 -output file_4']
-        self.assertEqual(hadoop_commands, expected_hadoop_commands)
-
-        def test_mapper_hadoop_command_output(self):
-            hadoop_commands = get_hadoop_streaming_command("hadoop",
-                                                       "hadoop-streaming-jar",
-                                                       self.job_flow_map,
-                                                       keep_intermediates=True,
-                                                       skip_trash=False)
-            expected_hadoop_commands = [
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
--input file_0 -output file_1 -mapper "cut -f2-" -inputformat \
-com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat',
-            'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
--D"stream.num.map.output.key.fields=1" -input file_1 -output file_2 \
--mapper "count.py" -inputformat \
-com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat']
-            self.assertEqual(hadoop_commands, expected_hadoop_commands)
-
-    unittest.main()
