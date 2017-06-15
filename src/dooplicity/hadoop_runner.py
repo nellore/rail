@@ -33,7 +33,6 @@ import argparse
 import sys
 import json
 
-
 class HadoopInputLastSeen(object):
     """ Stores the hadoop input file and its last seen step.
 
