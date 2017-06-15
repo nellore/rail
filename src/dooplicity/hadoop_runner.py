@@ -8,7 +8,7 @@ FUNCTIONALITY IS IDIOSYNCRATIC;
 
 Licensed under the MIT License:
 
-Copyright (c) 2017 Jeena Lee.
+Copyright (c) 2017 Jeena Lee and Abhi Nellore.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -272,11 +272,44 @@ def get_hadoop_streaming_command(hadoop_path,
 
     return steps
 
-class TestHadoopCommandOutput(unittest.TestCase):
-    """ Unit tests for getting hadoop streaming command from a json job flow.
-    """
-    def setUp(self):
-        self.job_flow = {'Steps':
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    add_args(parser)
+    args = parser.parse_args(sys.argv[1:])
+
+if __name__ == '__main__' and not args.test:
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    with open(args.job_flow) as job_flow_file:
+        job_flow = json.load(job_flow_file)
+    hadoop_commands = get_hadoop_streaming_command(args.hadoop_path,
+                                                   args.hadoop_streaming_path,
+                                                   job_flow,
+                                                   args.keep_intermediates,
+                                                   args.skip_trash)
+    if args.print_command:
+        print hadoop_commands
+    if args.output_path:
+        with open(args.output_path, 'w') as hadoop_command_file:
+            print >>hadoop_command_file, (
+"""#!/usr/bin/env bash
+
+set -e"""
+                )
+            for hadoop_command in hadoop_commands:
+                print >>hadoop_command_file, hadoop_command
+elif __name__ == '__main__':
+  # Test units
+    del sys.argv[1:] # Don't choke on extra command-line parameters
+    import unittest
+    import tempfile
+    import shutil
+
+    class TestHadoopCommandOutput(unittest.TestCase):
+        """ Unit tests for getting hadoop streaming command from a json job flow. """
+        def setUp(self):
+            self.job_flow = {'Steps':
                          [{'HadoopJarStep':
                            {'Args':
                             ['-D', 'mapreduce.job.reduces=0',
@@ -305,7 +338,7 @@ class TestHadoopCommandOutput(unittest.TestCase):
                           }
                          ]}
 
-        self.job_flow_map = {'Steps':
+            self.job_flow_map = {'Steps':
                              [{'HadoopJarStep':
                                {'Args':
                                 ['-D', 'mapreduce.job.reduces=0',
@@ -327,17 +360,17 @@ class TestHadoopCommandOutput(unittest.TestCase):
                               }
                              ]}
 
-    def tearDown(self):
-        self.job_flow = None
-        self.job_flow_map = None
+        def tearDown(self):
+            self.job_flow = None
+            self.job_flow_map = None
 
-    def test_keep_intermediate_and_skip_trash(self):
-        hadoop_commands = get_hadoop_streaming_command("hadoop",
+        def test_keep_intermediate_and_skip_trash(self):
+            hadoop_commands = get_hadoop_streaming_command("hadoop",
                                                        "hadoop-streaming-jar",
                                                        self.job_flow,
                                                        keep_intermediates=False,
                                                        skip_trash=True)
-        expected_hadoop_commands = [
+            expected_hadoop_commands = [
             'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
 -input file_0 -output file_1', \
             'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
@@ -349,15 +382,15 @@ class TestHadoopCommandOutput(unittest.TestCase):
 -input file_3,file_2 -output file_4', \
             'hadoop fs -rm -r -skipTrash file_2', \
             'hadoop fs -rm -r -skipTrash file_3']
-        self.assertEqual(hadoop_commands, expected_hadoop_commands)
+            self.assertEqual(hadoop_commands, expected_hadoop_commands)
 
-    def test_keep_intermediate_and_not_skip_trash(self):
-        hadoop_commands = get_hadoop_streaming_command("hadoop",
+        def test_keep_intermediate_and_not_skip_trash(self):
+            hadoop_commands = get_hadoop_streaming_command("hadoop",
                                                        "hadoop-streaming-jar",
                                                        self.job_flow,
                                                        keep_intermediates=False,
                                                        skip_trash=False)
-        expected_hadoop_commands = [
+            expected_hadoop_commands = [
             'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
 -input file_0 -output file_1', \
             'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
@@ -371,13 +404,13 @@ class TestHadoopCommandOutput(unittest.TestCase):
             'hadoop fs -rm -r file_3']
         self.assertEqual(hadoop_commands, expected_hadoop_commands)
 
-    def test_basic_hadoop_command_output(self):
-        hadoop_commands = get_hadoop_streaming_command("hadoop",
+        def test_basic_hadoop_command_output(self):
+            hadoop_commands = get_hadoop_streaming_command("hadoop",
                                                        "hadoop-streaming-jar",
                                                        self.job_flow,
                                                        keep_intermediates=True,
                                                        skip_trash=False)
-        expected_hadoop_commands = [
+            expected_hadoop_commands = [
             'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
 -input file_0 -output file_1', \
             'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=1" \
@@ -388,13 +421,13 @@ class TestHadoopCommandOutput(unittest.TestCase):
 -input file_3,file_2 -output file_4']
         self.assertEqual(hadoop_commands, expected_hadoop_commands)
 
-    def test_mapper_hadoop_command_output(self):
-        hadoop_commands = get_hadoop_streaming_command("hadoop",
+        def test_mapper_hadoop_command_output(self):
+            hadoop_commands = get_hadoop_streaming_command("hadoop",
                                                        "hadoop-streaming-jar",
                                                        self.job_flow_map,
                                                        keep_intermediates=True,
                                                        skip_trash=False)
-        expected_hadoop_commands = [
+            expected_hadoop_commands = [
             'hadoop jar hadoop-streaming-jar -D"mapreduce.job.reduces=0" \
 -input file_0 -output file_1 -mapper "cut -f2-" -inputformat \
 com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat',
@@ -402,31 +435,6 @@ com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat',
 -D"stream.num.map.output.key.fields=1" -input file_1 -output file_2 \
 -mapper "count.py" -inputformat \
 com.twitter.elephantbird.mapred.input.DeprecatedCombineLzoTextInputFormat']
-        self.assertEqual(hadoop_commands, expected_hadoop_commands)
+            self.assertEqual(hadoop_commands, expected_hadoop_commands)
 
-
-if __name__ == '__main__':
-    # if `--test` is given, run unittests.
-    if '--test' in sys.argv:
-        del sys.argv[1:]
-        unittest.main()
-        quit()
-
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    add_args(parser)
-    args = parser.parse_args(sys.argv[1:])
-    with open(args.job_flow, 'r') as job_flow_file:
-        job_flow = json.load(job_flow_file)
-    hadoop_commands = get_hadoop_streaming_command(args.hadoop_path,
-                                                   args.hadoop_streaming_path,
-                                                   job_flow,
-                                                   args.keep_intermediates,
-                                                   args.skip_trash)
-    if args.print_command:
-        print hadoop_commands
-    if args.output_path:
-        with open(args.output_path, 'w') as hadoop_command_file:
-            for hadoop_command in hadoop_commands:
-                hadoop_command_file.write(hadoop_command)
-                hadoop_command_file.write("\n")
+    unittest.main()
