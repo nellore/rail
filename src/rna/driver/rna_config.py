@@ -3320,6 +3320,38 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
             help=('IAM EC2 instance profile (def: from --profile if available'
                   '; otherwise, attempts "EMR_EC2_DefaultRole")')
         )
+        elastic_parser.add_argument('--use-ebs',
+            action='store_const',
+            const=True,
+            default=False,
+            help=('Use EBS block storage on all instances')
+        )
+        elastic_parser.add_argument('--ebs-gb', type=int,
+            metavar='<int>',
+            required=False,
+            default=500,
+            help=('Size in GB of single EBS storage device (def: 500)')
+        )
+        elastic_parser.add_argument('--ebs-volume-type', type=str,
+            metavar='<str>',
+            required=False,
+            default='st1',
+            help=('EBS volume type to use for block storage device.  Choices '
+                  'are gp2, io1, st1, sc1.  (def: st1)')
+        )
+        elastic_parser.add_argument('--ebs-iops', type=int,
+            metavar='<int>',
+            required=False,
+            default=None,
+            help=('IOPs to provision per EBS block storage device (def: AWS '
+                  'default for volume type')
+        )
+        elastic_parser.add_argument('--ebs-volumes-per-instance', type=str,
+            metavar='<str>',
+            required=False,
+            default=1,
+            help=('IOPs to provision per EBS block storage device')
+        )
         general_parser.add_argument(
             '--max-task-attempts', type=int, required=False,
             metavar='<int>',
@@ -3446,6 +3478,56 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                 }
             }
         ]
+
+    @staticmethod
+    def ebs_config(base):
+        """
+        Returns dict with contents of EbsConfiguration JSON.
+        EMR does not seem to support all the features that an EBS volume can
+        have, like encryption or the ability to mount a snapshot.  Presumably
+        they are deleted on cluster termination.
+
+        Some docs:
+        http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-emr-ebsconfiguration.html#cfn-emr-ebsconfiguration-ebsblockdeviceconfigs
+        http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_EbsBlockDevice.html
+        http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSEncryption.html
+        """
+
+        iops = base.ebs_iops
+        size_gb = base.ebs_gb
+        vol_type = base.ebs_volume_type
+        vols_per_instance = base.ebs_volumes_per_instance
+
+        assert vols_per_instance >= 1
+        assert vol_type in ['gp2', 'io1', 'st1', 'sc1']
+
+        def _is_optimized(typ):
+            return typ.startswith('c4.') or \
+                   typ.startswith('d2.') or \
+                   typ.startswith('f1.') or \
+                   typ.startswith('i3.') or \
+                   typ.startswith('m4.') or \
+                   typ.startswith('r4.') or \
+                   typ.startswith('x1.')
+
+        ebs_optimized = _is_optimized(base.master_instance_type) and \
+           base.core_instance_count == 0 or _is_optimized(base.core_instance_type) and \
+           base.task_instance_count == 0 or _is_optimized(base.task_instance_type)
+
+        block_config = {
+            "VolumeSpecification": {
+                "SizeInGB": size_gb,
+                "VolumeType": vol_type
+            },
+            "VolumesPerInstance": vols_per_instance
+        }
+        if iops is not None:
+            block_config['VolumeSpecification']['Iops'] = iops
+
+        return {
+            "EbsBlockDeviceConfigs": [block_config],
+            "EbsOptimized": "true" if ebs_optimized else "false"
+        }
 
     @staticmethod
     def instances(base):
@@ -5687,6 +5769,8 @@ class RailRnaElasticPreprocessJson(object):
                 'true' if base.visible_to_all_users else 'false'
             )
         self._json_serial['Instances'] = RailRnaElastic.instances(base)
+        if base.use_ebs:
+            self._json_serial['EbsConfiguration'] = RailRnaElastic.ebs_config(base)
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
                 + RailRnaPreprocess.bootstrap(base)
@@ -6080,6 +6164,8 @@ class RailRnaElasticAlignJson(object):
                 'true' if base.visible_to_all_users else 'false'
             )
         self._json_serial['Instances'] = RailRnaElastic.instances(base)
+        if base.use_ebs:
+            self._json_serial['EbsConfiguration'] = RailRnaElastic.ebs_config(base)
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
                 + RailRnaAlign.bootstrap(base)
@@ -6524,6 +6610,8 @@ class RailRnaElasticAllJson(object):
                 'true' if base.visible_to_all_users else 'false'
             )
         self._json_serial['Instances'] = RailRnaElastic.instances(base)
+        if base.use_ebs:
+            self._json_serial['EbsConfiguration'] = RailRnaElastic.ebs_config(base)
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
                 + RailRnaAlign.bootstrap(base)
