@@ -1007,7 +1007,8 @@ class RailRnaErrors(object):
             intermediate_dir='./intermediate', force=False, aws_exe=None,
             profile='default', region=None, service_role=None,
             instance_profile=None, verbose=False, curl_exe=None,
-            max_task_attempts=4, dbgap_key=None, align_flow=False
+            max_task_attempts=4, no_setup=False, dbgap_key=None,
+            align_flow=False
         ):
         '''Store all errors uncovered in a list, then output. This prevents the
         user from having to rerun Rail-RNA to find what else is wrong with
@@ -1029,6 +1030,7 @@ class RailRnaErrors(object):
         self.instance_profile = self.specified_instance_profile \
             = instance_profile
         self.dbgap_key = dbgap_key
+        self.no_setup = no_setup
         if not (float(max_task_attempts).is_integer()
                         and max_task_attempts >= 1):
             self.errors.append('Max task attempts (--max-task-attempts) '
@@ -1337,6 +1339,11 @@ class RailRnaErrors(object):
             help='overwrite output directory if it exists'
         )
         general_parser.add_argument(
+            '--no-setup', action='store_const', const=True,
+            default=False,
+            help='perform no checks/setup until creation of job flow JSON'
+        )
+        general_parser.add_argument(
             '--verbose', action='store_const', const=True,
             default=False,
             help='write extra debugging statements to stderr'
@@ -1490,7 +1497,9 @@ class RailRnaLocal(object):
         # Initialize ansible for easy checks
         if not ansible:
             ansible = ab.Ansible()
-        if not ab.Url(base.intermediate_dir).is_local:
+        base.do_not_copy_index_to_nodes = do_not_copy_index_to_nodes
+        base.direct_write = direct_write
+        if not base.no_setup and not ab.Url(base.intermediate_dir).is_local:
             base.errors.append(('Intermediate directory must be in locally '
                                 'accessible filesystem when running Rail-RNA '
                                 'in "local" or "parallel" mode, but {0} was '
@@ -1500,75 +1509,81 @@ class RailRnaLocal(object):
         else:
             base.intermediate_dir = os.path.abspath(base.intermediate_dir)
         output_dir_url = ab.Url(base.output_dir)
-        if output_dir_url.is_curlable:
-            base.errors.append(('Output directory must be in locally '
-                                'accessible filesystem or on S3 '
-                                'when running Rail-RNA in "local" '
-                                'or "parallel" mode, '
-                                'but {0} was entered.').format(
-                                        base.output_dir
-                                    ))
-        elif output_dir_url.is_s3 and 'AWS CLI' not in base.checked_programs:
-            base.check_s3(reason='the output directory is on S3',
-                            is_exe=is_exe,
-                            which=which)
-            # Change ansible params
-            ansible.aws_exe = base.aws_exe
-            ansible.profile = base.profile
+        if not base.no_setup:
+            if output_dir_url.is_curlable:
+                base.errors.append(('Output directory must be in locally '
+                                    'accessible filesystem or on S3 '
+                                    'when running Rail-RNA in "local" '
+                                    'or "parallel" mode, '
+                                    'but {0} was entered.').format(
+                                            base.output_dir
+                                        ))
+            elif (output_dir_url.is_s3
+                  and 'AWS CLI' not in base.checked_programs):
+                base.check_s3(reason='the output directory is on S3',
+                                is_exe=is_exe,
+                                which=which)
+                # Change ansible params
+                ansible.aws_exe = base.aws_exe
+                ansible.profile = base.profile
         base.check_s3_on_engines = None
         base.check_curl_on_engines = None
-        base.do_not_copy_index_to_nodes = do_not_copy_index_to_nodes
-        base.direct_write = direct_write
         if not parallel:
-            if output_dir_url.is_local:
-                if os.path.exists(output_dir_url.to_url()):
-                    if not base.force:
-                        base.errors.append(('Output directory {0} exists, '
-                                            'and --force was not invoked to '
-                                            'permit overwriting it.').format(
-                                                    base.output_dir)
-                                                )
-                    else:
-                        try:
-                            shutil.rmtree(base.output_dir)
-                        except OSError:
+            if not base.no_setup:
+                if output_dir_url.is_local:
+                    if os.path.exists(output_dir_url.to_url()):
+                        if not base.force:
+                            base.errors.append(
+                                            ('Output directory {0} exists, '
+                                             'and --force was not invoked to '
+                                             'permit overwriting it.').format(
+                                                        base.output_dir)
+                                        )
+                        else:
                             try:
-                                os.remove(base.output_dir)
+                                shutil.rmtree(base.output_dir)
                             except OSError:
-                                pass
-                base.output_dir = os.path.abspath(base.output_dir)
-            elif output_dir_url.is_s3 \
-                and ansible.s3_ansible.is_dir(base.output_dir):
-                if not base.force:
-                    base.errors.append(('Output directory {0} exists on S3, '
-                                        'and --force was not invoked to '
-                                        'permit overwriting it.').format(
-                                                base_output_dir)
-                                            )
-                else:
-                    ansible.s3ansible.remove_dir(base.output_dir)
+                                try:
+                                    os.remove(base.output_dir)
+                                except OSError:
+                                    pass
+                    base.output_dir = os.path.abspath(base.output_dir)
+                elif output_dir_url.is_s3 \
+                    and ansible.s3_ansible.is_dir(base.output_dir):
+                    if not base.force:
+                        base.errors.append(
+                                        ('Output directory {0} exists on S3, '
+                                         'and --force was not invoked to '
+                                         'permit overwriting it.').format(
+                                                    base_output_dir)
+                                    )
+                    else:
+                        ansible.s3ansible.remove_dir(base.output_dir)
             # Check transcript fragment index
             if base.isofrag_idx is not None:
                 isofrag_url = ab.Url(base.isofrag_idx)
-                if (isofrag_url.is_s3 and 'AWS CLI'
-                        not in base.checked_programs):
-                    base.check_s3(reason='the isofrag index is on S3',
-                                    is_exe=is_exe,
-                                    which=which)
-                    # Change ansible params
-                    ansible.aws_exe = base.aws_exe
-                    ansible.profile = base.profile
-                elif isofrag_url.is_curlable \
-                    and 'cURL' not in base.checked_programs:
-                    base.curl_exe = base.check_program(
-                                    'curl', 'cURL', '--curl',
-                                    entered_exe=base.curl_exe,
-                                    reason='the isofrag index is on the web',
-                                    is_exe=is_exe,
-                                    which=which
-                                )
-                    ansible.curl_exe = base.curl_exe
-                if not ansible.exists(isofrag_url.to_url()):
+                if not base.no_setup:
+                    if (isofrag_url.is_s3 and 'AWS CLI'
+                            not in base.checked_programs):
+                        base.check_s3(reason='the isofrag index is on S3',
+                                        is_exe=is_exe,
+                                        which=which)
+                        # Change ansible params
+                        ansible.aws_exe = base.aws_exe
+                        ansible.profile = base.profile
+                    elif isofrag_url.is_curlable \
+                        and 'cURL' not in base.checked_programs:
+                        base.curl_exe = base.check_program(
+                                        'curl', 'cURL', '--curl',
+                                        entered_exe=base.curl_exe,
+                                        reason='the isofrag index is on the web',
+                                        is_exe=is_exe,
+                                        which=which
+                                    )
+                        ansible.curl_exe = base.curl_exe
+                if not base.no_setup and not ansible.exists(
+                                                    isofrag_url.to_url()
+                                                ):
                     base.errors.append(('Isofrag index (--isofrag-idx) {0} '
                                         'does not exist. Check the URL and '
                                         'try again.').format(base.isofrag_idx))
@@ -1581,25 +1596,31 @@ class RailRnaLocal(object):
                                             base.isofrag_dir,
                                             os.path.basename(base.isofrag_idx)
                                         )
-                        ansible.get(isofrag_url.to_url(),
-                                    destination=base.isofrag_idx)
+                        if not base.no_setup:
+                            ansible.get(isofrag_url.to_url(),
+                                        destination=base.isofrag_idx)
                     base.isofrag_idx = os.path.abspath(base.isofrag_idx)
-            # Check manifest; download it if necessary
+            '''Check manifest; download it if necessary. Even in --no-setup
+            mode, we have to count the number of samples in the manifest, and
+            we have to see if dbGaP samples are present.'''
             manifest_url = ab.Url(base.manifest)
-            if manifest_url.is_s3 and 'AWS CLI' not in base.checked_programs:
+            if (manifest_url.is_s3
+                and 'AWS CLI' not in base.checked_programs):
                 base.check_s3(reason='the manifest file is on S3',
                                 is_exe=is_exe,
                                 which=which)
                 # Change ansible params
                 ansible.aws_exe = base.aws_exe
                 ansible.profile = base.profile
-            elif manifest_url.is_curlable \
-                and 'cURL' not in base.checked_programs:
-                base.curl_exe = base.check_program('curl', 'cURL', '--curl',
-                                    entered_exe=base.curl_exe,
-                                    reason='the manifest file is on the web',
-                                    is_exe=is_exe,
-                                    which=which)
+            elif (manifest_url.is_curlable
+                  and 'cURL' not in base.checked_programs):
+                base.curl_exe = base.check_program(
+                                'curl', 'cURL', '--curl',
+                                entered_exe=base.curl_exe,
+                                reason='the manifest file is on the web',
+                                is_exe=is_exe,
+                                which=which
+                            )
                 ansible.curl_exe = base.curl_exe
             if not ansible.exists(manifest_url.to_url()):
                 base.errors.append(('Manifest file (--manifest) {0} '
@@ -1659,7 +1680,7 @@ class RailRnaLocal(object):
                                        'repository key file (--dbgap-key) was '
                                        'provided. ')'''
                 if files_to_check:
-                    if check_manifest:
+                    if not base.no_setup and check_manifest:
                         # Check files in manifest only if in preprocess flow
                         file_count = len(files_to_check)
                         for k, filename in enumerate(files_to_check):
@@ -1852,7 +1873,7 @@ class RailRnaLocal(object):
             base.sort_memory_cap = sort_memory_cap
         if scratch:
             scratch = os.path.expandvars(os.path.expanduser(scratch))
-            if not os.path.exists(scratch):
+            if not base.no_setup and not os.path.exists(scratch):
                 try:
                     os.makedirs(scratch)
                 except OSError:
@@ -1868,7 +1889,7 @@ class RailRnaLocal(object):
                                     for parameter in sort_exe.split(' ')]
         else:
             sort_exe_parameters = []
-        check_scratch = True
+        check_scratch = True and not base.no_setup
         try:
             sort_scratch = sort_exe_parameters[
                     sort_exe_parameters.index('--temporary-directory')+1
@@ -2187,7 +2208,9 @@ class RailRnaElastic(object):
         # Initialize ansible for easy checks
         ansible = ab.Ansible(aws_exe=base.aws_exe, profile=base.profile)
         output_dir_url = ab.Url(base.output_dir)
-        if not output_dir_url.is_s3:
+        if not base.no_setup and output_dir_url.is_s3:
+            '''Don't check if output URL is on S3 when not setting up; might
+            be using elastic mode to prep Hadoop job flow JSON'''
             base.errors.append(('Output directory (--output) must be on S3 '
                                 'when running Rail-RNA in "elastic" '
                                 'mode, but {0} was entered.').format(
@@ -2196,35 +2219,47 @@ class RailRnaElastic(object):
         if base.intermediate_dir is None:
             base.intermediate_dir = base.output_dir + '.intermediate'
         intermediate_dir_url = ab.Url(base.intermediate_dir)
-        if intermediate_dir_url.is_local:
-            base.errors.append(('Intermediate directory (--intermediate) '
-                                'must be on HDFS or S3 when running Rail-RNA '
-                                'in "elastic" mode, '
-                                'but {0} was entered.').format(
-                                        base.intermediate_dir
-                                    ))
-        elif intermediate_dir_url.is_s3:
-            if not (float(intermediate_lifetime).is_integer() and
-                        intermediate_lifetime != 0):
-                base.errors.append(('Intermediate lifetime '
-                                    '(--intermediate-lifetime) must be '
-                                    '-1 or > 0, but {0} was entered.').format(
-                                            intermediate_lifetime
-                                        ))
-            else:
-                # Set up rule on S3 for deleting intermediate dir
-                final_intermediate_dir = intermediate_dir_url.to_url() + '/'
-                while final_intermediate_dir[-2] == '/':
-                    final_intermediate_dir = final_intermediate_dir[:-1]
-                ansible.s3_ansible.expire_prefix(final_intermediate_dir,
-                                                    days=intermediate_lifetime)
-        if ansible.s3_ansible.is_dir(base.output_dir):
-            if not base.force:
-                base.errors.append(('Output directory {0} exists on S3, and '
-                                    '--force was not invoked to permit '
-                                    'overwriting it.').format(base.output_dir))
-            else:
-                ansible.s3_ansible.remove_dir(base.output_dir)
+        if not base.no_setup:
+            if intermediate_dir_url.is_local:
+                base.errors.append(
+                                ('Intermediate directory (--intermediate) '
+                                 'must be on HDFS or S3 when running Rail-RNA '
+                                 'in "elastic" mode, '
+                                 'but {0} was entered.').format(
+                                         base.intermediate_dir
+                                     )
+                            )
+            elif intermediate_dir_url.is_s3:
+                if not (float(intermediate_lifetime).is_integer() and
+                            intermediate_lifetime != 0):
+                    base.errors.append(
+                                ('Intermediate lifetime '
+                                 '(--intermediate-lifetime) must be '
+                                 '-1 or > 0, but {0} was entered.').format(
+                                         intermediate_lifetime
+                                     ))
+                else:
+                    # Set up rule on S3 for deleting intermediate dir
+                    final_intermediate_dir = (
+                                    intermediate_dir_url.to_url() + '/'
+                                )
+                    while final_intermediate_dir[-2] == '/':
+                        final_intermediate_dir = final_intermediate_dir[:-1]
+                    ansible.s3_ansible.expire_prefix(
+                                                final_intermediate_dir,
+                                                days=intermediate_lifetime
+                                            )
+            if ansible.s3_ansible.is_dir(base.output_dir):
+                if not base.force:
+                    base.errors.append(
+                                    ('Output directory {0} exists on S3, and '
+                                     '--force was not invoked to permit '
+                                     'overwriting it.').format(
+                                                            base.output_dir
+                                                        )
+                                )
+                else:
+                    ansible.s3_ansible.remove_dir(base.output_dir)
         # Set directory for storing Rail-RNA, bootstraps, and possibly manifest
         base.dependency_dir = base.output_dir + '.dependencies'
         dependency_dir_url = ab.Url(base.dependency_dir)
@@ -2233,9 +2268,12 @@ class RailRnaElastic(object):
             final_dependency_dir = dependency_dir_url.to_url() + '/'
             while final_dependency_dir[-2] == '/':
                 final_dependency_dir = final_dependency_dir[:-1]
-            ansible.s3_ansible.expire_prefix(final_dependency_dir,
-                                                days=intermediate_lifetime)
-        # Check manifest; download it if necessary
+            if not base.no_setup:
+                ansible.s3_ansible.expire_prefix(final_dependency_dir,
+                                                    days=intermediate_lifetime)
+        '''Check manifest; download it if necessary. This must be done in
+        --no-setup mode as well because we need to know the number of samples
+        and whether there are any dbGaP samples.'''
         manifest_url = ab.Url(base.manifest)
         if manifest_url.is_curlable \
             and 'cURL' not in base.checked_programs:
@@ -2249,18 +2287,21 @@ class RailRnaElastic(object):
                                 'try again.').format(base.manifest))
         if base.isofrag_idx is not None:
             isofrag_url = ab.Url(base.isofrag_idx)
-            if isofrag_url.is_curlable \
-                and 'cURL' not in base.checked_programs:
-                base.curl_exe = base.check_program(
+            if not base.no_setup:
+                if isofrag_url.is_curlable \
+                    and 'cURL' not in base.checked_programs:
+                    base.curl_exe = base.check_program(
                                     'curl', 'cURL', '--curl',
                                     entered_exe=base.curl_exe,
                                     reason='the isofrag index is on the web'
                                 )
-                ansible.curl_exe = base.curl_exe
-            if not ansible.exists(isofrag_url.to_url()):
-                base.errors.append(('Isofrag index (--isofrag-idx) {0} '
-                                    'does not exist. Check the URL and '
-                                    'try again.').format(base.isofrag_idx))
+                    ansible.curl_exe = base.curl_exe
+                if not ansible.exists(isofrag_url.to_url()):
+                    base.errors.append(
+                                    ('Isofrag index (--isofrag-idx) {0} '
+                                     'does not exist. Check the URL and '
+                                     'try again.').format(base.isofrag_idx)
+                                )
         raise_runtime_error(base)
         if not manifest_url.is_local:
             temp_manifest_dir = tempfile.mkdtemp()
@@ -2271,7 +2312,7 @@ class RailRnaElastic(object):
             ansible.get(base.manifest, destination=manifest)
         else:
             manifest = manifest_url.to_url()
-        if base.dbgap_key is not None and \
+        if not base.no_setup and base.dbgap_key is not None and \
             not os.path.exists(base.dbgap_key):
             base.errors.append(('dbGaP repository key file '
                                 '(--dbgap-key) "{}" '
@@ -2327,7 +2368,7 @@ class RailRnaElastic(object):
                                'in elastic mode when analyzing dbGaP data.')
             raise_runtime_error(base)
         if files_to_check:
-            if check_manifest:
+            if not base.no_setup and check_manifest:
                 file_count = len(files_to_check)
                 # Check files in manifest only if in preprocess job flow
                 for k, filename in enumerate(files_to_check):
@@ -2404,7 +2445,7 @@ class RailRnaElastic(object):
                                    'can create the required stacks. Refer '
                                    'to the Rail documentation for '
                                    'instructions on their proper use.')
-            else:
+            elif not base.no_setup:
                 if (ab.bucket_from_url(base.intermediate_dir)
                     != base.secure_bucket_name):
                     print_to_screen(('Warning: intermediate directory '
@@ -2457,49 +2498,89 @@ class RailRnaElastic(object):
                     except ValueError:
                         sys.stdout.write('Please enter \'y\' or \'n\'.\n')
         # Download+upload isofrag index if necessary
-        if base.isofrag_idx is not None and isofrag_url.is_curlable:
-            temp_isofrag_dir = tempfile.mkdtemp()
-            from tempdel import remove_temporary_directories
-            register_cleanup(remove_temporary_directories,
-                                [temp_isofrag_dir])
-            isofrag = os.path.join(temp_isofrag_dir,
-                                    os.path.basename(base.isofrag_idx))
-            ansible.get(base.isofrag_idx, destination=isofrag)
-            base.isofrag_idx = path_join(
-                                    True,
-                                    base.output_dir + '.isofrag',
-                                    os.path.basename(base.isofrag_idx)
-                                )
-            ansible.put(isofrag, base.isofrag_idx)
-            shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
+        if not base.no_setup:
+            if base.isofrag_idx is not None and isofrag_url.is_curlable:
+                temp_isofrag_dir = tempfile.mkdtemp()
+                from tempdel import remove_temporary_directories
+                register_cleanup(remove_temporary_directories,
+                                    [temp_isofrag_dir])
+                isofrag = os.path.join(temp_isofrag_dir,
+                                        os.path.basename(base.isofrag_idx))
+                ansible.get(base.isofrag_idx, destination=isofrag)
+                base.isofrag_idx = path_join(
+                                        True,
+                                        base.output_dir + '.isofrag',
+                                        os.path.basename(base.isofrag_idx)
+                                    )
+                ansible.put(isofrag, base.isofrag_idx)
+                shutil.rmtree(temp_isofrag_dir, ignore_errors=True)
 
-        # Upload NGC file to S3
-        if not base.align_flow and base.dbgap_present:
-            base.dbgap_s3_path = path_join(
-                                    True,
-                                    base.intermediate_dir,
-                                    os.path.basename(base.dbgap_key)
-                                )
-            ansible.put(base.dbgap_key, base.dbgap_s3_path)
+            # Upload NGC file to S3
+            if not base.align_flow and base.dbgap_present:
+                base.dbgap_s3_path = path_join(
+                                        True,
+                                        base.intermediate_dir,
+                                        os.path.basename(base.dbgap_key)
+                                    )
+                ansible.put(base.dbgap_key, base.dbgap_s3_path)
 
-        if not manifest_url.is_s3 and output_dir_url.is_s3:
-            # Copy manifest file to S3 before job flow starts
-            base.manifest = path_join(True, base.dependency_dir,
-                                            'MANIFEST')
-            ansible.put(manifest, base.manifest)
+            if not manifest_url.is_s3 and output_dir_url.is_s3:
+                # Copy manifest file to S3 before job flow starts
+                base.manifest = path_join(True, base.dependency_dir,
+                                                'MANIFEST')
+                ansible.put(manifest, base.manifest)
         if not manifest_url.is_local:
             # Clean up
             shutil.rmtree(temp_manifest_dir)
-        print_to_screen('Copying Rail-RNA and bootstraps to S3...',
-                        newline=False, carriage_return=True)
-        # Create and copy bootstraps to S3; compress and copy Rail-RNA to S3
-        temp_dependency_dir = tempfile.mkdtemp()
-        from tempdel import remove_temporary_directories
-        register_cleanup(remove_temporary_directories, [temp_dependency_dir])
-        copy_index_bootstrap = os.path.join(temp_dependency_dir,
-                                                'install-index.sh')
-        with open(copy_index_bootstrap, 'w') as script_stream:
-             print >>script_stream, (
+        if base.no_setup:
+            # Just set properties for JSON
+            base.copy_index_bootstrap = path_join(
+                                        True, base.dependency_dir,
+                                        'install-index.sh'
+                                    )
+            base.install_s3cmd_bootstrap = path_join(
+                                            True, base.dependency_dir,
+                                            'install-s3cmd.sh'
+                                        )
+            base.elastic_rail_path = path_join(
+                                            True, base.dependency_dir,
+                                            'rail-rna.zip'
+                                        )
+            base.copy_bootstrap = path_join(
+                                            True, base.dependency_dir,
+                                            's3cmd_s3.sh'
+                                        )
+            base.install_rail_bootstrap = path_join(
+                                            True, base.dependency_dir,
+                                            'install_rail.sh'
+                                        )
+            if base.secure_stack_name is not None:
+                base.encrypt_bootstrap = path_join(
+                                                True, base.dependency_dir,
+                                                'encrypt.sh'
+                                            )
+            if base.sra_tools_needed:
+                vdb_bootstrap = os.path.join(temp_dependency_dir,
+                                                    'vdb.sh')
+                if base.dbgap_present:
+                    base.vdb_bootstrap = path_join(
+                                                True, base.dependency_dir,
+                                                os.path.basename(
+                                                        vdb_bootstrap
+                                                    )
+                                            )
+        else:
+            print_to_screen('Copying Rail-RNA and bootstraps to S3...',
+                            newline=False, carriage_return=True)
+            # Copy bootstraps to S3; compress and copy Rail-RNA to S3
+            temp_dependency_dir = tempfile.mkdtemp()
+            from tempdel import remove_temporary_directories
+            register_cleanup(remove_temporary_directories,
+                                [temp_dependency_dir])
+            copy_index_bootstrap = os.path.join(temp_dependency_dir,
+                                                    'install-index.sh')
+            with open(copy_index_bootstrap, 'w') as script_stream:
+                 print >>script_stream, (
 """#!/usr/bin/env bash
 set -e
 
@@ -2592,17 +2673,17 @@ cd index
 ln -s genome.4.bt2 genome.4.ebwt
 cd ..
 """
-                )
-        base.copy_index_bootstrap = path_join(
+                    )
+            base.copy_index_bootstrap = path_join(
                                         True, base.dependency_dir,
                                         os.path.basename(copy_index_bootstrap)
                                     )
-        ansible.put(copy_index_bootstrap, base.copy_index_bootstrap)
-        os.remove(copy_index_bootstrap)
-        install_s3cmd_bootstrap = os.path.join(temp_dependency_dir,
-                                                'install-s3cmd.sh')
-        with open(install_s3cmd_bootstrap, 'w') as script_stream:
-             print >>script_stream, (
+            ansible.put(copy_index_bootstrap, base.copy_index_bootstrap)
+            os.remove(copy_index_bootstrap)
+            install_s3cmd_bootstrap = os.path.join(temp_dependency_dir,
+                                                    'install-s3cmd.sh')
+            with open(install_s3cmd_bootstrap, 'w') as script_stream:
+                 print >>script_stream, (
 """#!/usr/bin/env bash
 set -e
 export HOME=/home/hadoop
@@ -2626,34 +2707,36 @@ send_chunk = 4096
 use_https = True
 EOF
 """
-                )
-        base.install_s3cmd_bootstrap = path_join(
-                                        True, base.dependency_dir,
-                                        os.path.basename(
-                                                install_s3cmd_bootstrap
-                                            )
-                                    )
-        ansible.put(install_s3cmd_bootstrap, base.install_s3cmd_bootstrap)
-        os.remove(install_s3cmd_bootstrap)
-        # Zip Rail and put it on S3
-        rail_zipped = os.path.join(temp_dependency_dir, 'rail-rna.zip')
-        target_to_zip = os.path.join(temp_dependency_dir, 'src')
-        shutil.copytree(base_path, target_to_zip,
-                        ignore=shutil.ignore_patterns('*.pyc', '.DS_Store'))
-        with cd(temp_dependency_dir):
-            shutil.make_archive(rail_zipped[:-4], 'zip', 'src')
-        base.elastic_rail_path = path_join(
-                                        True, base.dependency_dir,
-                                        os.path.basename(
-                                                rail_zipped
-                                            )
-                                    )
-        ansible.put(rail_zipped, base.elastic_rail_path)
-        shutil.rmtree(target_to_zip)
-        install_rail_bootstrap = os.path.join(temp_dependency_dir,
-                                                'install-rail.sh')
-        with open(install_rail_bootstrap, 'w') as script_stream:
-             print >>script_stream, (
+                    )
+            base.install_s3cmd_bootstrap = path_join(
+                                            True, base.dependency_dir,
+                                            os.path.basename(
+                                                    install_s3cmd_bootstrap
+                                                )
+                                        )
+            ansible.put(install_s3cmd_bootstrap, base.install_s3cmd_bootstrap)
+            os.remove(install_s3cmd_bootstrap)
+            # Zip Rail and put it on S3
+            rail_zipped = os.path.join(temp_dependency_dir, 'rail-rna.zip')
+            target_to_zip = os.path.join(temp_dependency_dir, 'src')
+            shutil.copytree(
+                        base_path, target_to_zip,
+                        ignore=shutil.ignore_patterns('*.pyc', '.DS_Store')
+                    )
+            with cd(temp_dependency_dir):
+                shutil.make_archive(rail_zipped[:-4], 'zip', 'src')
+            base.elastic_rail_path = path_join(
+                                            True, base.dependency_dir,
+                                            os.path.basename(
+                                                    rail_zipped
+                                                )
+                                        )
+            ansible.put(rail_zipped, base.elastic_rail_path)
+            shutil.rmtree(target_to_zip)
+            install_rail_bootstrap = os.path.join(temp_dependency_dir,
+                                                    'install-rail.sh')
+            with open(install_rail_bootstrap, 'w') as script_stream:
+                 print >>script_stream, (
 """#!/usr/bin/env bash
 # Installs Rail-RNA and compiles required classes
 # $1: where to find Rail
@@ -2686,20 +2769,20 @@ cd ../..
 rm -rf sandbox
 sudo python27 {rail_zipped} $@
 """.format(rail_zipped=os.path.basename(rail_zipped))
-            )
-        base.install_rail_bootstrap = path_join(
-                                        True, base.dependency_dir,
-                                        os.path.basename(
-                                                install_rail_bootstrap
-                                            )
-                                    )
-        ansible.put(install_rail_bootstrap, base.install_rail_bootstrap)
-        copy_bootstrap = os.path.join(temp_dependency_dir,
-                                                's3cmd_s3.sh')
-        base.fastq_dump_exe = _elastic_fastq_dump_exe
-        base.vdb_config_exe = _elastic_vdb_config_exe
-        with open(copy_bootstrap, 'w') as script_stream:
-             print >>script_stream, (
+                )
+            base.install_rail_bootstrap = path_join(
+                                            True, base.dependency_dir,
+                                            os.path.basename(
+                                                    install_rail_bootstrap
+                                                )
+                                        )
+            ansible.put(install_rail_bootstrap, base.install_rail_bootstrap)
+            copy_bootstrap = os.path.join(temp_dependency_dir,
+                                                    's3cmd_s3.sh')
+            base.fastq_dump_exe = _elastic_fastq_dump_exe
+            base.vdb_config_exe = _elastic_vdb_config_exe
+            with open(copy_bootstrap, 'w') as script_stream:
+                 print >>script_stream, (
 """#!/usr/bin/env bash
 # s3cmd_s3.sh
 #
@@ -2718,21 +2801,23 @@ if [ -n "${3}" ] ; then
     mv $fn ${3} || true
 fi
 """
-                )
-        base.copy_bootstrap = path_join(
-                                        True, base.dependency_dir,
-                                        os.path.basename(
-                                                copy_bootstrap
-                                            )
-                                    )
-        ansible.put(copy_bootstrap, base.copy_bootstrap)
-        os.remove(copy_bootstrap)
-        if base.secure_stack_name is not None:
-            encrypt_bootstrap = os.path.join(temp_dependency_dir,
-                                                'encrypt.sh')
-            with open(encrypt_bootstrap, 'w') as script_stream:
-                # Code taken from http://bddubois-emr.s3.amazonaws.com/emr-volume-encryption.sh
-                print >>script_stream, (
+                    )
+            base.copy_bootstrap = path_join(
+                                            True, base.dependency_dir,
+                                            os.path.basename(
+                                                    copy_bootstrap
+                                                )
+                                        )
+            ansible.put(copy_bootstrap, base.copy_bootstrap)
+            os.remove(copy_bootstrap)
+            if base.secure_stack_name is not None:
+                encrypt_bootstrap = os.path.join(temp_dependency_dir,
+                                                    'encrypt.sh')
+                with open(encrypt_bootstrap, 'w') as script_stream:
+                    '''Code taken from
+                       http://bddubois-emr.s3.amazonaws.com/
+                       emr-volume-encryption.sh'''
+                    print >>script_stream, (
 """#!/usr/bin/env bash
 set -ex
 
@@ -2898,21 +2983,21 @@ echo "everything done"
 echo $STATUS STATUS
 exit $STATUS
 """
-            )
-            base.encrypt_bootstrap = path_join(
-                                            True, base.dependency_dir,
-                                            os.path.basename(
-                                                    encrypt_bootstrap
-                                                )
-                                        )
-            ansible.put(encrypt_bootstrap, base.encrypt_bootstrap)
-            os.remove(encrypt_bootstrap)
-        if base.sra_tools_needed:
-            vdb_bootstrap = os.path.join(temp_dependency_dir,
-                                                'vdb.sh')
-            if base.dbgap_present:
-                with open(vdb_bootstrap, 'w') as script_stream:
-                    print >>script_stream, (
+                )
+                base.encrypt_bootstrap = path_join(
+                                                True, base.dependency_dir,
+                                                os.path.basename(
+                                                        encrypt_bootstrap
+                                                    )
+                                            )
+                ansible.put(encrypt_bootstrap, base.encrypt_bootstrap)
+                os.remove(encrypt_bootstrap)
+            if base.sra_tools_needed:
+                vdb_bootstrap = os.path.join(temp_dependency_dir,
+                                                    'vdb.sh')
+                if base.dbgap_present:
+                    with open(vdb_bootstrap, 'w') as script_stream:
+                        print >>script_stream, (
 """#!/usr/bin/env bash
 set -ex
 export HOME=/home/hadoop
@@ -2947,12 +3032,12 @@ cat ~/.ncbi/user-settings.mkfg | python .fix_config.py >new-user-settings.mkfg
 cp new-user-settings.mkfg ~/.ncbi/user-settings.mkfg
 sudo ln -s /home/hadoop/.ncbi /home/.ncbi
 """
-                    ).format(vdb_config=_elastic_vdb_config_exe,
-                             vdb_workspace=_elastic_vdb_workspace)
-            else:
-                # Don't need secure dir for workspace
-                with open(vdb_bootstrap, 'w') as script_stream:
-                    print >>script_stream, (
+                        ).format(vdb_config=_elastic_vdb_config_exe,
+                                 vdb_workspace=_elastic_vdb_workspace)
+                else:
+                    # Don't need secure dir for workspace
+                    with open(vdb_bootstrap, 'w') as script_stream:
+                        print >>script_stream, (
 """#!/usr/bin/env bash
 set -ex
 export HOME=/home/hadoop
@@ -2965,18 +3050,18 @@ cat >~/.ncbi/user-settings.mkfg <<EOF
 EOF
 sudo ln -s /home/hadoop/.ncbi /home/.ncbi
 """
-                    ).format(vdb_workspace=_elastic_vdb_workspace)
-            base.vdb_bootstrap = path_join(
-                                            True, base.dependency_dir,
-                                            os.path.basename(
-                                                    vdb_bootstrap
-                                                )
-                                        )
-            ansible.put(vdb_bootstrap, base.vdb_bootstrap)
-            os.remove(vdb_bootstrap)
-        shutil.rmtree(temp_dependency_dir)
-        print_to_screen('Copied Rail-RNA and bootstraps to S3.',
-                         newline=True, carriage_return=False)
+                        ).format(vdb_workspace=_elastic_vdb_workspace)
+                base.vdb_bootstrap = path_join(
+                                                True, base.dependency_dir,
+                                                os.path.basename(
+                                                        vdb_bootstrap
+                                                    )
+                                            )
+                ansible.put(vdb_bootstrap, base.vdb_bootstrap)
+                os.remove(vdb_bootstrap)
+            shutil.rmtree(temp_dependency_dir)
+            print_to_screen('Copied Rail-RNA and bootstraps to S3.',
+                             newline=True, carriage_return=False)
         actions_on_failure \
             = set(['TERMINATE_JOB_FLOW', 'CANCEL_AND_WAIT', 'CONTINUE',
                     'TERMINATE_CLUSTER'])
@@ -3857,7 +3942,7 @@ class RailRnaAlign(object):
                                     '"{1}" were entered.').format(
                                             bowtie1_idx, bowtie2_idx
                                         ))
-            else:
+            elif not base.no_setup:
                 import glob
                 bowtie1_idx_len = len(bowtie1_idx)
                 existing_bowtie1_extensions = set(
@@ -5470,7 +5555,7 @@ class RailRnaLocalPreprocessJson(object):
         do_not_bin_quals=False, short_read_names=False,
         skip_bad_records=False, ignore_missing_sra_samples=False,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), max_task_attempts=4, 
+        sort_memory_cap=(300*1024), max_task_attempts=4, no_setup=False, 
         keep_intermediates=False, check_manifest=True,
         scratch=None, sort_exe=None, dbgap_key=None,
         fastq_dump_exe=None, vdb_config_exe=None):
@@ -5478,7 +5563,8 @@ class RailRnaLocalPreprocessJson(object):
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
+            max_task_attempts=max_task_attempts,
+            no_setup=no_setup, dbgap_key=dbgap_key)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=num_processes, gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
@@ -5515,17 +5601,19 @@ class RailRnaParallelPreprocessJson(object):
         do_not_bin_quals=False, short_read_names=False,
         skip_bad_records=False, ignore_missing_sra_samples=False,
         num_processes=1, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), max_task_attempts=4, ipython_profile=None,
-        ipcontroller_json=None, scratch=None, direct_write=False,
-        keep_intermediates=False, check_manifest=True, sort_exe=None,
-        dbgap_key=None, fastq_dump_exe=None, vdb_config_exe=None):
+        sort_memory_cap=(300*1024), max_task_attempts=4, no_setup=False,
+        ipython_profile=None, ipcontroller_json=None, scratch=None,
+        direct_write=False, keep_intermediates=False, check_manifest=True,
+        sort_exe=None, dbgap_key=None, fastq_dump_exe=None,
+        vdb_config_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts, dbgap_key=None)
+            max_task_attempts=max_task_attempts, no_setup=no_setup,
+            dbgap_key=None)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
@@ -5558,6 +5646,7 @@ class RailRnaParallelPreprocessJson(object):
                     force=force, aws_exe=aws_exe, profile=profile,
                     region=region, verbose=verbose,
                     max_task_attempts=max_task_attempts,
+                    no_setup=no_setup,
                     dbgap_key=dbgap_key
                 )
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
@@ -5620,13 +5709,15 @@ class RailRnaElasticPreprocessJson(object):
         ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
-        max_task_attempts=4, secure_stack_name=None, dbgap_key=None):
+        max_task_attempts=4, no_setup=False,
+        secure_stack_name=None, dbgap_key=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, service_role=service_role,
             instance_profile=instance_profile, verbose=verbose,
-            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
+            max_task_attempts=max_task_attempts, no_setup=no_setup,
+            dbgap_key=dbgap_key)
         RailRnaElastic(base, check_manifest=check_manifest,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
@@ -5723,13 +5814,14 @@ class RailRnaLocalAlignJson(object):
         deliverables='idx,tsv,bed,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
-        max_task_attempts=4, keep_intermediates=False, scratch=None,
-        sort_exe=None):
+        max_task_attempts=4, no_setup=False, keep_intermediates=False,
+        scratch=None, sort_exe=None):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts, align_flow=True)
+            max_task_attempts=max_task_attempts, no_setup=no_setup,
+            align_flow=True)
         RailRnaLocal(base, check_manifest=False, num_processes=num_processes,
             gzip_intermediates=gzip_intermediates, gzip_level=gzip_level,
             sort_memory_cap=sort_memory_cap,
@@ -5809,7 +5901,7 @@ class RailRnaParallelAlignJson(object):
         bed_basename='', tsv_basename='', num_processes=1,
         ipython_profile=None, ipcontroller_json=None, scratch=None,
         direct_write=False, gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), max_task_attempts=4,
+        sort_memory_cap=(300*1024), max_task_attempts=4, no_setup=False,
         keep_intermediates=False, do_not_copy_index_to_nodes=False,
         sort_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
@@ -5818,7 +5910,8 @@ class RailRnaParallelAlignJson(object):
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts, align_flow=True)
+            max_task_attempts=max_task_attempts, no_setup=no_setup,
+            align_flow=True)
         RailRnaLocal(base, check_manifest=False,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
@@ -5874,7 +5967,7 @@ class RailRnaParallelAlignJson(object):
                     manifest, output_dir, isofrag_idx=isofrag_idx,
                     intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
-                    region=region, verbose=verbose,
+                    region=region, verbose=verbose, no_setup=no_setup,
                     max_task_attempts=max_task_attempts
                 )
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
@@ -5981,13 +6074,14 @@ class RailRnaElasticAlignJson(object):
         ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4,
-        secure_stack_name=None, assembly='hg19'):
+        no_setup=False, secure_stack_name=None, assembly='hg19'):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, service_role=service_role,
             instance_profile=instance_profile, verbose=verbose,
-            max_task_attempts=max_task_attempts, align_flow=True)
+            max_task_attempts=max_task_attempts, no_setup=no_setup,
+            align_flow=True)
         RailRnaElastic(base, check_manifest=False,
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
@@ -6117,7 +6211,7 @@ class RailRnaLocalAllJson(object):
         deliverables='idx,tsv,bed,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3,
-        sort_memory_cap=(300*1024), max_task_attempts=4,
+        sort_memory_cap=(300*1024), max_task_attempts=4, no_setup=False,
         keep_intermediates=False, check_manifest=True, scratch=None,
         sort_exe=None, dbgap_key=None, fastq_dump_exe=None,
         vdb_config_exe=None):
@@ -6125,7 +6219,8 @@ class RailRnaLocalAllJson(object):
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
+            max_task_attempts=max_task_attempts, no_setup=no_setup,
+            dbgap_key=dbgap_key)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -6220,9 +6315,10 @@ class RailRnaParallelAllJson(object):
         deliverables='idx,tsv,bed,bw', bam_basename='alignments',
         bed_basename='', tsv_basename='', num_processes=1,
         gzip_intermediates=False, gzip_level=3, sort_memory_cap=(300*1024),
-        max_task_attempts=4, ipython_profile=None, ipcontroller_json=None,
-        scratch=None, direct_write=False, keep_intermediates=False,
-        check_manifest=True, do_not_copy_index_to_nodes=False, sort_exe=None,
+        max_task_attempts=4, no_setup=False, ipython_profile=None,
+        ipcontroller_json=None, scratch=None, direct_write=False,
+        keep_intermediates=False, check_manifest=True,
+        do_not_copy_index_to_nodes=False, sort_exe=None,
         dbgap_key=None, fastq_dump_exe=None, vdb_config_exe=None):
         rc = ipython_client(ipython_profile=ipython_profile,
                                 ipcontroller_json=ipcontroller_json)
@@ -6230,7 +6326,8 @@ class RailRnaParallelAllJson(object):
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, verbose=verbose,
-            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
+            max_task_attempts=max_task_attempts, no_setup=no_setup,
+            dbgap_key=dbgap_key)
         RailRnaLocal(base, check_manifest=check_manifest,
             num_processes=len(rc), gzip_intermediates=gzip_intermediates,
             gzip_level=gzip_level, sort_memory_cap=sort_memory_cap,
@@ -6291,7 +6388,7 @@ class RailRnaParallelAllJson(object):
                     intermediate_dir=intermediate_dir,
                     force=force, aws_exe=aws_exe, profile=profile,
                     region=region, verbose=verbose,
-                    max_task_attempts=max_task_attempts,
+                    max_task_attempts=max_task_attempts, no_setup=no_setup,
                     dbgap_key=dbgap_key
                 )
         apply_async_with_errors(rc, rc.ids, RailRnaLocal, engine_bases,
@@ -6409,14 +6506,15 @@ class RailRnaElasticAllJson(object):
         ec2_master_security_group_id=None, ec2_slave_security_group_id=None,
         keep_alive=False, termination_protected=False, check_manifest=True,
         no_direct_copy=False, consistent_view=False,
-        intermediate_lifetime=4, max_task_attempts=4, dbgap_key=None,
-        secure_stack_name=None, assembly='hg19'):
+        intermediate_lifetime=4, max_task_attempts=4, no_setup=False,
+        dbgap_key=None, secure_stack_name=None, assembly='hg19'):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, service_role=service_role,
             instance_profile=instance_profile, verbose=verbose,
-            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
+            no_setup=no_setup, max_task_attempts=max_task_attempts,
+            dbgap_key=dbgap_key)
         RailRnaElastic(base, check_manifest=check_manifest, 
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
