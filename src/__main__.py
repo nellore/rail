@@ -976,7 +976,10 @@ if __name__ == '__main__':
                 secure_stack_name=args.secure_stack_name,
                 ec2_subnet_id=args.ec2_subnet_id,
                 ec2_master_security_group_id=args.ec2_master_security_group_id,
-                ec2_slave_security_group_id=args.ec2_slave_security_group_id
+                ec2_slave_security_group_id=args.ec2_slave_security_group_id,
+                use_ebs=args.use_ebs, ebs_gb=args.ebs_gb,
+                ebs_volume_type=args.ebs_volume_type, ebs_iops=args.ebs_iops,
+                ebs_volumes_per_instance=args.ebs_volumes_per_instance
             )
     elif args.job_flow == 'align' and args.align_mode == 'elastic':
         mode = 'elastic'
@@ -1048,7 +1051,10 @@ if __name__ == '__main__':
                 secure_stack_name=args.secure_stack_name,
                 ec2_subnet_id=args.ec2_subnet_id,
                 ec2_master_security_group_id=args.ec2_master_security_group_id,
-                ec2_slave_security_group_id=args.ec2_slave_security_group_id
+                ec2_slave_security_group_id=args.ec2_slave_security_group_id,
+                use_ebs=args.use_ebs, ebs_gb=args.ebs_gb,
+                ebs_volume_type=args.ebs_volume_type, ebs_iops=args.ebs_iops,
+                ebs_volumes_per_instance=args.ebs_volumes_per_instance
             )
     elif args.job_flow == 'prep' and args.prep_mode == 'elastic':
         mode = 'elastic'
@@ -1091,7 +1097,10 @@ if __name__ == '__main__':
                 secure_stack_name=args.secure_stack_name,
                 ec2_subnet_id=args.ec2_subnet_id,
                 ec2_master_security_group_id=args.ec2_master_security_group_id,
-                ec2_slave_security_group_id=args.ec2_slave_security_group_id
+                ec2_slave_security_group_id=args.ec2_slave_security_group_id,
+                use_ebs=args.use_ebs, ebs_gb=args.ebs_gb,
+                ebs_volume_type=args.ebs_volume_type, ebs_iops=args.ebs_iops,
+                ebs_volumes_per_instance=args.ebs_volumes_per_instance
             )
     # Launch
     try:
