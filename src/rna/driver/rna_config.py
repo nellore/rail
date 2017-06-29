@@ -1007,7 +1007,8 @@ class RailRnaErrors(object):
             intermediate_dir='./intermediate', force=False, aws_exe=None,
             profile='default', region=None, service_role=None,
             instance_profile=None, verbose=False, curl_exe=None,
-            max_task_attempts=4, dbgap_key=None, align_flow=False
+            max_task_attempts=4, dbgap_key=None, align_flow=False,
+            use_ebs=False
         ):
         '''Store all errors uncovered in a list, then output. This prevents the
         user from having to rerun Rail-RNA to find what else is wrong with
@@ -1029,6 +1030,7 @@ class RailRnaErrors(object):
         self.instance_profile = self.specified_instance_profile \
             = instance_profile
         self.dbgap_key = dbgap_key
+        self.use_ebs = use_ebs
         if not (float(max_task_attempts).is_integer()
                         and max_task_attempts >= 1):
             self.errors.append('Max task attempts (--max-task-attempts) '
@@ -2120,6 +2122,11 @@ class RailRnaElastic(object):
             "c3.2xlarge"  : 8,
             "c3.4xlarge"  : 16,
             "c3.8xlarge"  : 32,
+            "c4.large"    : 2,
+            "c4.xlarge"   : 4,
+            "c4.2xlarge"  : 8,
+            "c4.4xlarge"  : 16,
+            "c4.8xlarge"  : 36,
             "cc2.8xlarge" : 32
         }
 
@@ -2135,10 +2142,15 @@ class RailRnaElastic(object):
             "m3.xlarge"   : (15*1024),
             "m3.2xlarge"  : (30*1024),
             "cc1.4xlarge" : (16*1024), # 23.0 GB
-            "c3.2xlarge" : (15*1024), # 15.0 GB
-            "c3.4xlarge" : (30*1024), # 30 GB
-            "c3.8xlarge" : (60*1024), # 60 GB
-            "cc2.8xlarge" : (60*1024) # 60 GB
+            "c3.2xlarge"  : (15*1024), # 15.0 GB
+            "c3.4xlarge"  : (30*1024), # 30 GB
+            "c3.8xlarge"  : (60*1024), # 60 GB
+            "c4.large"    : int(3.75*1024), # 3.75 GB
+            "c4.xlarge"   : int(7.5*1024), # 60 GB
+            "c4.2xlarge"  : (15*1024), # 60 GB
+            "c4.4xlarge"  : (30*1024), # 60 GB
+            "c4.8xlarge"  : (60*1024), # 60 GB
+            "cc2.8xlarge" : (60*1024)  # 60 GB
         }
 
         # From http://docs.aws.amazon.com/ElasticMapReduce/latest/
@@ -2155,9 +2167,14 @@ class RailRnaElastic(object):
             "cc1.4xlarge" : 20480,
             "m3.xlarge"   : 11520,
             "m3.2xlarge"  : 23040,
-            "c3.2xlarge" : 11520,
-            "c3.4xlarge" : 23040,
-            "c3.8xlarge" : 53248,
+            "c3.2xlarge"  : 11520,
+            "c3.4xlarge"  : 23040,
+            "c3.8xlarge"  : 53248,
+            "c4.large"    : 1792,
+            "c4.xlarge"   : 5632,
+            "c4.2xlarge"  : 11520,
+            "c4.4xlarge"  : 23040,
+            "c4.8xlarge"  : 53248,
             "cc2.8xlarge" : 53248
         }
 
@@ -6502,7 +6519,8 @@ class RailRnaElasticAllJson(object):
             force=force, aws_exe=aws_exe, profile=profile,
             region=region, service_role=service_role,
             instance_profile=instance_profile, verbose=verbose,
-            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key)
+            max_task_attempts=max_task_attempts, dbgap_key=dbgap_key,
+            use_ebs=use_ebs)
         RailRnaElastic(base, check_manifest=check_manifest, 
             log_uri=log_uri, ami_version=ami_version,
             visible_to_all_users=visible_to_all_users, tags=tags,
