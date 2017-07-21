@@ -191,7 +191,7 @@ class RailRnaInstaller(object):
             url = url_deque.popleft()
             '''Follow redirects (-L), write to file (-O), respect
             content disposition'''
-            command = [self.curl_exe, '-L', '-O', '-J', url]
+            command = [self.curl_exe, '-L', '-O', url]
             filename = url.rpartition('/')[2]
             print >>self.log_stream, 'Downloading {} from {}...'.format(
                                                                     name, url
@@ -431,7 +431,8 @@ class RailRnaInstaller(object):
                         )[2].split('-')
                 bowtie1_legacy = (
                         len(bowtie1_toks) > 2 and bowtie1_toks[2] == 'legacy')
-                bowtie1_base = '-'.join(bowtie1_toks[:3 if bowtie1_legacy else 2])
+                bowtie1_base = '-'.join(
+                    bowtie1_toks[:3 if bowtie1_legacy else 2])
                 bowtie1 = os.path.join(self.final_install_dir,
                                                 bowtie1_base, 'bowtie')
                 bowtie1_build = os.path.join(self.final_install_dir,
@@ -441,7 +442,8 @@ class RailRnaInstaller(object):
                         )[2].split('-')
                 bowtie2_legacy = (
                         len(bowtie2_toks) > 2 and bowtie2_toks[2] == 'legacy')
-                bowtie2_base = '-'.join(bowtie2_toks[:3 if bowtie2_legacy else 2])
+                bowtie2_base = '-'.join(
+                    bowtie2_toks[:3 if bowtie2_legacy else 2])
                 bowtie2 = os.path.join(self.final_install_dir,
                                                 bowtie2_base, 'bowtie2')
                 bowtie2_build = os.path.join(self.final_install_dir,
