@@ -2116,7 +2116,8 @@ class RailRnaElastic(object):
         ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4,
-        secure_stack_name=None):
+        secure_stack_name=None, use_ebs=False, ebs_gb=500,
+        ebs_volume_type='st1', ebs_iops=None, ebs_volumes_per_instance=1):
 
         base.secure_stack_name = secure_stack_name
         # CLI is REQUIRED in elastic mode
@@ -2142,6 +2143,11 @@ class RailRnaElastic(object):
             "c3.2xlarge"  : 8,
             "c3.4xlarge"  : 16,
             "c3.8xlarge"  : 32,
+            "c4.large"    : 2,
+            "c4.xlarge"   : 4,
+            "c4.2xlarge"  : 8,
+            "c4.4xlarge"  : 16,
+            "c4.8xlarge"  : 36,
             "cc2.8xlarge" : 32
         }
 
@@ -2157,10 +2163,15 @@ class RailRnaElastic(object):
             "m3.xlarge"   : (15*1024),
             "m3.2xlarge"  : (30*1024),
             "cc1.4xlarge" : (16*1024), # 23.0 GB
-            "c3.2xlarge" : (15*1024), # 15.0 GB
-            "c3.4xlarge" : (30*1024), # 30 GB
-            "c3.8xlarge" : (60*1024), # 60 GB
-            "cc2.8xlarge" : (60*1024) # 60 GB
+            "c3.2xlarge"  : (15*1024), # 15.0 GB
+            "c3.4xlarge"  : (30*1024), # 30 GB
+            "c3.8xlarge"  : (60*1024), # 60 GB
+            "c4.large"    : int(3.75*1024), # 3.75 GB
+            "c4.xlarge"   : int(7.5*1024), # 60 GB
+            "c4.2xlarge"  : (15*1024), # 60 GB
+            "c4.4xlarge"  : (30*1024), # 60 GB
+            "c4.8xlarge"  : (60*1024), # 60 GB
+            "cc2.8xlarge" : (60*1024)  # 60 GB
         }
 
         # From http://docs.aws.amazon.com/ElasticMapReduce/latest/
@@ -2177,9 +2188,14 @@ class RailRnaElastic(object):
             "cc1.4xlarge" : 20480,
             "m3.xlarge"   : 11520,
             "m3.2xlarge"  : 23040,
-            "c3.2xlarge" : 11520,
-            "c3.4xlarge" : 23040,
-            "c3.8xlarge" : 53248,
+            "c3.2xlarge"  : 11520,
+            "c3.4xlarge"  : 23040,
+            "c3.8xlarge"  : 53248,
+            "c4.large"    : 1792,
+            "c4.xlarge"   : 5632,
+            "c4.2xlarge"  : 11520,
+            "c4.4xlarge"  : 23040,
+            "c4.8xlarge"  : 53248,
             "cc2.8xlarge" : 53248
         }
 
@@ -3195,6 +3211,11 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
         base.termination_protected = termination_protected
         base.consistent_view = consistent_view
         base.no_direct_copy = no_direct_copy
+        base.use_ebs = use_ebs
+        base.ebs_gb = ebs_gb
+        base.ebs_volume_type = ebs_volume_type
+        base.ebs_iops = ebs_iops
+        base.ebs_volumes_per_instance = ebs_volumes_per_instance
 
     @staticmethod
     def add_args(general_parser, required_parser, output_parser, 
@@ -3406,6 +3427,38 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
             help=('IAM EC2 instance profile (def: from --profile if available'
                   '; otherwise, attempts "EMR_EC2_DefaultRole")')
         )
+        elastic_parser.add_argument('--use-ebs',
+            action='store_const',
+            const=True,
+            default=False,
+            help=('Use EBS block storage on all instances')
+        )
+        elastic_parser.add_argument('--ebs-gb', type=int,
+            metavar='<int>',
+            required=False,
+            default=500,
+            help=('Size in GB of single EBS storage device (def: 500)')
+        )
+        elastic_parser.add_argument('--ebs-volume-type', type=str,
+            metavar='<str>',
+            required=False,
+            default='st1',
+            help=('EBS volume type to use for block storage device.  Choices '
+                  'are gp2, io1, st1, sc1.  (def: st1)')
+        )
+        elastic_parser.add_argument('--ebs-iops', type=int,
+            metavar='<int>',
+            required=False,
+            default=None,
+            help=('IOPs to provision per EBS block storage device (def: AWS '
+                  'default for volume type')
+        )
+        elastic_parser.add_argument('--ebs-volumes-per-instance', type=str,
+            metavar='<str>',
+            required=False,
+            default=1,
+            help=('IOPs to provision per EBS block storage device')
+        )
         general_parser.add_argument(
             '--max-task-attempts', type=int, required=False,
             metavar='<int>',
@@ -3462,7 +3515,7 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                 'Name' : 'Allocate swap space',
                 'ScriptBootstrapAction' : {
                     'Args' : [
-                        '%d' % base.mem,
+                        '%d' % (base.mem / 16),
                         '/mnt/space/swapfile'
                     ],
                     'Path' : 's3://elasticmapreduce/bootstrap-actions/add-swap'
@@ -3534,7 +3587,59 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
         ]
 
     @staticmethod
-    def instances(base):
+    def ebs_config(base):
+        """
+        Returns dict with contents of EbsBlockDevices JSON.
+        EMR does not seem to support all the features that an EBS volume can
+        have, like encryption or the ability to mount a snapshot.  Presumably
+        they are deleted on cluster termination.
+
+        Some docs:
+        http://boto3.readthedocs.io/en/latest/reference/services/emr.html
+        http://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_EbsBlockDevice.html
+        http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSEncryption.html
+        """
+
+        iops = base.ebs_iops
+        size_gb = base.ebs_gb
+        vol_type = base.ebs_volume_type
+        vols_per_instance = base.ebs_volumes_per_instance
+
+        assert vols_per_instance >= 1
+        assert vol_type in ['gp2', 'io1', 'st1', 'sc1']
+
+        def _is_optimized(typ):
+            return typ.startswith('c4.') or \
+                   typ.startswith('d2.') or \
+                   typ.startswith('f1.') or \
+                   typ.startswith('i3.') or \
+                   typ.startswith('m4.') or \
+                   typ.startswith('r4.') or \
+                   typ.startswith('x1.')
+
+        ebs_optimized = _is_optimized(base.master_instance_type) and \
+           base.core_instance_count == 0 or _is_optimized(base.core_instance_type) and \
+           base.task_instance_count == 0 or _is_optimized(base.task_instance_type)
+
+        block_configs = []
+        block_configs.append({
+            "VolumeSpecification": {
+                # "Iops" not required, but we might add it below
+                "SizeInGB": size_gb,
+                "VolumeType": vol_type
+            },
+            "VolumesPerInstance": vols_per_instance
+        })
+        if iops is not None:
+            block_configs[-1]['VolumeSpecification']['Iops'] = iops
+
+        return {
+            "EbsBlockDeviceConfigs": block_configs,
+            "EbsOptimized": ebs_optimized
+        }
+
+    @staticmethod
+    def instances(base, ebs_config):
         assert base.master_instance_count >= 1
         to_return = {
             'HadoopVersion' : '2.4.0',
@@ -3552,13 +3657,15 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                                         else 'false')
         }
         if base.master_instance_bid_price is not None:
-            to_return['InstanceGroups'][0]['BidPrice'] \
+            to_return['InstanceGroups'][-1]['BidPrice'] \
                 = '%0.03f' % base.master_instance_bid_price
-            to_return['InstanceGroups'][0]['Market'] \
+            to_return['InstanceGroups'][-1]['Market'] \
                 = 'SPOT'
         else:
-            to_return['InstanceGroups'][0]['Market'] \
+            to_return['InstanceGroups'][-1]['Market'] \
                 = 'ON_DEMAND'
+        if ebs_config is not None:
+            to_return['InstanceGroups'][-1]['EbsConfiguration'] = ebs_config
         if base.core_instance_count:
             to_return['InstanceGroups'].append(
                     {
@@ -3569,13 +3676,15 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                     }
                 )
             if base.core_instance_bid_price is not None:
-                to_return['InstanceGroups'][1]['BidPrice'] \
+                to_return['InstanceGroups'][-1]['BidPrice'] \
                     = '%0.03f' % base.core_instance_bid_price
-                to_return['InstanceGroups'][1]['Market'] \
+                to_return['InstanceGroups'][-1]['Market'] \
                     = 'SPOT'
             else:
-                to_return['InstanceGroups'][1]['Market'] \
+                to_return['InstanceGroups'][-1]['Market'] \
                     = 'ON_DEMAND'
+            if ebs_config is not None:
+                to_return['InstanceGroups'][-1]['EbsConfiguration'] = ebs_config
         if base.task_instance_count:
             to_return['InstanceGroups'].append(
                     {
@@ -3586,17 +3695,19 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
                     }
                 )
             if base.task_instance_bid_price is not None:
-                to_return['InstanceGroups'][1]['BidPrice'] \
+                to_return['InstanceGroups'][-1]['BidPrice'] \
                     = '%0.03f' % base.task_instance_bid_price
-                to_return['InstanceGroups'][1]['Market'] \
+                to_return['InstanceGroups'][-1]['Market'] \
                     = 'SPOT'
             else:
-                to_return['InstanceGroups'][1]['Market'] \
+                to_return['InstanceGroups'][-1]['Market'] \
                     = 'ON_DEMAND'
+            if ebs_config is not None:
+                to_return['InstanceGroups'][-1]['EbsConfiguration'] = ebs_config
         if base.ec2_key_name is not None:
             to_return['Ec2KeyName'] = base.ec2_key_name
         if hasattr(base, 'ec2_subnet_id') and base.ec2_subnet_id is not None:
-            to_return['Ec2SubnetId'] = base.ec2_subnet_id
+            to_return['Ec2SubnetIds'] = [base.ec2_subnet_id]
         if hasattr(base, 'ec2_master_security_group_id') \
             and base.ec2_master_security_group_id is not None:
             to_return['EmrManagedMasterSecurityGroup'] \
@@ -5710,8 +5821,9 @@ class RailRnaElasticPreprocessJson(object):
         ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
-        max_task_attempts=4, no_setup=False,
-        secure_stack_name=None, dbgap_key=None):
+        max_task_attempts=4, no_setup=False, secure_stack_name=None,
+        dbgap_key=None, use_ebs=False, ebs_gb=500, ebs_volume_type='st1',
+        ebs_iops=None, ebs_volumes_per_instance=1):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -5741,7 +5853,10 @@ class RailRnaElasticPreprocessJson(object):
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime,
-            secure_stack_name=secure_stack_name)
+            secure_stack_name=secure_stack_name,
+            use_ebs=use_ebs, ebs_gb=ebs_gb, ebs_volume_type=ebs_volume_type,
+            ebs_iops=ebs_iops,
+            ebs_volumes_per_instance=ebs_volumes_per_instance)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -5778,7 +5893,8 @@ class RailRnaElasticPreprocessJson(object):
         self._json_serial['VisibleToAllUsers'] = (
                 'true' if base.visible_to_all_users else 'false'
             )
-        self._json_serial['Instances'] = RailRnaElastic.instances(base)
+        ebs_config = RailRnaElastic.ebs_config(base) if base.use_ebs else None
+        self._json_serial['Instances'] = RailRnaElastic.instances(base, ebs_config)
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
                 + RailRnaPreprocess.bootstrap(base)
@@ -6075,7 +6191,9 @@ class RailRnaElasticAlignJson(object):
         ec2_slave_security_group_id=None, keep_alive=False,
         termination_protected=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4,
-        no_setup=False, secure_stack_name=None, assembly='hg19'):
+        no_setup=False, secure_stack_name=None, assembly='hg19',
+        use_ebs=False, ebs_gb=500, ebs_volume_type='st1', ebs_iops=None,
+        ebs_volumes_per_instance=1):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -6104,7 +6222,9 @@ class RailRnaElasticAlignJson(object):
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime,
-            secure_stack_name=secure_stack_name)
+            secure_stack_name=secure_stack_name, use_ebs=use_ebs,
+            ebs_gb=ebs_gb, ebs_volume_type=ebs_volume_type, ebs_iops=ebs_iops,
+            ebs_volumes_per_instance=ebs_volumes_per_instance)
         RailRnaAlign(base, input_dir=input_dir,
             assembly=assembly,
             elastic=True, bowtie1_exe=bowtie1_exe,
@@ -6174,7 +6294,8 @@ class RailRnaElasticAlignJson(object):
         self._json_serial['VisibleToAllUsers'] = (
                 'true' if base.visible_to_all_users else 'false'
             )
-        self._json_serial['Instances'] = RailRnaElastic.instances(base)
+        ebs_config = RailRnaElastic.ebs_config(base) if base.use_ebs else None
+        self._json_serial['Instances'] = RailRnaElastic.instances(base, ebs_config)
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
                 + RailRnaAlign.bootstrap(base)
@@ -6508,7 +6629,9 @@ class RailRnaElasticAllJson(object):
         keep_alive=False, termination_protected=False, check_manifest=True,
         no_direct_copy=False, consistent_view=False,
         intermediate_lifetime=4, max_task_attempts=4, no_setup=False,
-        dbgap_key=None, secure_stack_name=None, assembly='hg19'):
+        dbgap_key=None, secure_stack_name=None, assembly='hg19',
+        use_ebs=False, ebs_gb=500, ebs_volume_type='st1', ebs_iops=None,
+        ebs_volumes_per_instance=1):
         base = RailRnaErrors(manifest, output_dir, isofrag_idx=isofrag_idx,
             intermediate_dir=intermediate_dir,
             force=force, aws_exe=aws_exe, profile=profile,
@@ -6537,7 +6660,9 @@ class RailRnaElasticAllJson(object):
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime,
-            secure_stack_name=secure_stack_name)
+            secure_stack_name=secure_stack_name, use_ebs=use_ebs,
+            ebs_gb=ebs_gb, ebs_volume_type=ebs_volume_type, ebs_iops=ebs_iops,
+            ebs_volumes_per_instance=ebs_volumes_per_instance)
         RailRnaPreprocess(base, nucleotides_per_input=nucleotides_per_input,
             gzip_input=gzip_input, do_not_bin_quals=do_not_bin_quals,
             short_read_names=short_read_names,
@@ -6622,7 +6747,8 @@ class RailRnaElasticAllJson(object):
         self._json_serial['VisibleToAllUsers'] = (
                 'true' if base.visible_to_all_users else 'false'
             )
-        self._json_serial['Instances'] = RailRnaElastic.instances(base)
+        ebs_config = RailRnaElastic.ebs_config(base) if base.use_ebs else None
+        self._json_serial['Instances'] = RailRnaElastic.instances(base, ebs_config)
         self._json_serial['BootstrapActions'] = (
                 RailRnaElastic.prebootstrap(base)
                 + RailRnaAlign.bootstrap(base)
