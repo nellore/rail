@@ -9,9 +9,9 @@ mirrors that of StepConfig list from JSON sent to EMR via RunJobsFlow. Any
 files input to a mapper can be gzip'd, but inputs to a reducer currently cannot
 be.
 
-In --ipy mode, the script uses IPython to run tasks on different engines
-mediated by a controller. IPython controller and engines must be started before
-this script is invoked.
+In --ipy mode, the script uses IPython Parallel to run tasks on different
+engines mediated by a controller. IPython Parallel controller and engines must
+be started before this script is invoked.
 
 All paths in input JSON should be absolute.
 
@@ -105,22 +105,23 @@ def add_args(parser):
         )
     parser.add_argument('--ipy', action='store_const', const=True,
             default=False,
-            help=('Uses IPython controller and engines to execute tasks; this '
-                  'permits running a MapReduce job flow on a wide array of '
-                  'cluster setups. Ignores --num-processes in favor of the '
-                  'number of available engines.')
+            help=('Uses IPython Parallel controller and engines to execute '
+                  'tasks; this permits running a MapReduce job flow on a wide '
+                  'array of cluster setups. Ignores --num-processes in favor '
+                  'of the number of available engines.')
         )
     parser.add_argument('--ipcontroller-json', type=str, required=False,
             default=None,
             help=('Path to ipcontroller-client.json file; relevant only if '
-                  '--ipy is invoked. See IPython documentation for '
-                  'more information. If left unspecified, IPython\'s default '
-                  'path is used.')
+                  '--ipy is invoked. See IPython Parallel documentation for '
+                  'more information. If left unspecified, IPython\'s '
+                  'default path is used.')
         )
     parser.add_argument('--ipy-profile', type=str, required=False,
             default=None,
-            help=('Connects to this IPython profile; relevant only if --ipy '
-                  'is invoked and takes precedence over --ipcontroller-json.')
+            help=('Connects to this IPython profile; relevant only '
+                  'if --ipy is invoked and takes precedence over '
+                  '--ipcontroller-json.')
         )
     parser.add_argument('--scratch', type=str, required=False,
             default=None,
@@ -441,7 +442,8 @@ def counter_cmd(outfn):
     return ("grep '^reporter:counter:' | "
             "sed 's/.*://' | "
             "awk -v FS=',' "
-            "'{tot[$1,\" \",$2] += $3} END {for(d in tot) {print d,tot[d]}}' > %s") % outfn
+            "'{tot[$1,\" \",$2] += $3} END "
+            "{for(d in tot) {print d,tot[d]}}' > %s") % outfn
 
 
 def step_runner_with_error_return(streaming_command, input_glob, output_dir,
@@ -641,10 +643,11 @@ def step_runner_with_error_return(streaming_command, input_glob, output_dir,
                                 os.path.join(output_dir, str(task_id))
                             )
                 command_to_run \
-                    = prefix + ' | ' + streaming_command + (' >%s 2> >(tee %s | %s)'
-                                                             % (out_file,
-                                                                err_file,
-                                                                counter_cmd(counter_file)))
+                    = prefix + ' | ' + streaming_command + (
+                        ' >%s 2> >(tee %s | %s)'
+                                            % (out_file,
+                                            err_file,
+                                            counter_cmd(counter_file)))
             try:
                 # Need bash or zsh for process substitution
                 subprocess.check_output(' '.join([('set -eo pipefail; cd %s;'
@@ -722,12 +725,12 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
         log: name of file in which to store messages written to stderr
         gzip: True iff all files written should be gzipped; else False.
         gzip_level: level of gzip compression to use, if applicable.
-        ipy: use iPython engines to run tasks.
+        ipy: use iPython Parallel engines to run tasks.
         ipcontroller_json: path to ipcontroller-client.json; relevant only if 
             ipy is True. If None, uses IPython's default location.
-        ipy_profile: name of IPython cluster configuration profile to use; None
-            if profile is not specified. In this case, ipcontroller_json takes
-            precedence.
+        ipy_profile: name of IPython Parallel cluster configuration profile to 
+            use; None if profile is not specified. In this case,
+            ipcontroller_json takes precedence.
         scratch: scratch directory, typically local. Files are written here by
             tasks before copying to final destination. If None, files are
             written directly to final destination. If '-', files are written
@@ -760,13 +763,13 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                          log_stream=log_stream)
     failed = False
     try:
-        # Using IPython?
+        # Using IPython Parallel?
         if ipy:
             try:
-                from IPython.parallel import Client
+                from ipyparallel import Client
             except ImportError:
-                iface.fail('IPython is required to run Dooplicity\'s EMR '
-                           'simulator in --ipy mode. Visit ipython.org to '
+                iface.fail('IPython Parallel is required to run Dooplicity\'s '
+                           'EMR simulator in --ipy mode. Visit ipython.org to '
                            'download it, or simply download the Anaconda '
                            'distribution of Python at '
                            'https://store.continuum.io/cshop/anaconda/; it\'s '
@@ -798,11 +801,11 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 except IOError:
                     iface.fail(
                             'Cannot find ipcontroller-client.json. Ensure '
-                            'that IPython controller and engines are running.'
-                            ' If controller is running on a remote machine, '
-                            'copy the ipcontroller-client.json file from there '
-                            'to a local directory; then rerun this script '
-                            'specifying the local path to '
+                            'that IPython Parallel controller and engines are '
+                            'running. If controller is running on a remote '
+                            'machine, copy the ipcontroller-client.json file '
+                            'from there to a local directory; then rerun this '
+                            'script specifying the local path to '
                             'ipcontroller-client.json with the '
                             '--ipcontroller-json command-line parameter.'
                         )
@@ -810,8 +813,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     raise
             if not pool.ids:
                 iface.fail(
-                        'An IPython controller is running, but no engines are '
-                        'connected to it.'
+                        'An IPython Parallel controller is running, but no '
+                        'engines are connected to it.'
                     )
                 failed = True
                 raise RuntimeError
@@ -832,7 +835,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     )
             else:
                 direct_view.use_dill()
-            iface.status('Loading dependencies on IPython engines...')
+            iface.status('Loading dependencies on IPython Parallel engines...')
             with direct_view.sync_imports(quiet=True):
                 import subprocess
                 import glob
@@ -845,9 +848,10 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     step_runner_with_error_return=\
                         step_runner_with_error_return,
                     presorted_tasks=presorted_tasks,
-                    parsed_keys=parsed_keys
+                    parsed_keys=parsed_keys,
+                    counter_cmd=counter_cmd
                 ))
-            iface.step('Loaded dependencies on IPython engines.')
+            iface.step('Loaded dependencies on IPython Parallel engines.')
             # Get host-to-engine and engine pids relations
             current_hostname = socket.gethostname()
             host_map = apply_async_with_errors(
@@ -862,18 +866,18 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     dict_format=True
                                 )
             def interrupt_engines(pool, iface):
-                """ Interrupts IPython engines spanned by view
+                """ Interrupts IPython Parallel engines spanned by view
 
                     Taken from:
                     http://mail.scipy.org/pipermail/ipython-dev/
                     2014-March/013426.html
 
-                    pool: IPython Client object
+                    pool: IPython Parallel Client object
                     iface: instance of DooplicityInterface
 
                     No return value.
                 """
-                iface.status('Interrupting IPython engines...')
+                iface.status('Interrupting IPython Parallel engines...')
                 for engine_id in pool.ids:
                     host = host_map[engine_id]
                     kill_command = (
@@ -900,14 +904,15 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                 task_function, task_function_args,
                 status_message='Tasks completed',
                 finish_message='Completed tasks.', max_attempts=4):
-                """ Executes parallel job over IPython engines with retries.
+                """ Executes parallel job over IPython Parallel engines.
 
                     Tasks are assigned to free engines as they become
                     available. If a task fails on one engine, it is retried on
                     another engine. If a task has been tried on all engines but
                     fails before max_attempts is exceeded, the step is failed.
 
-                    pool: IPython Client object; all engines it spans are used
+                    pool: IPython Parallel Client object; all engines it spans
+                        are used
                     iface: DooplicityInterface object for spewing log messages
                         to console
                     task_function: name if function to execute
@@ -952,12 +957,12 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                     engine_map[host_map[forbidden_engine]]
                                 )
                         if all_engines <= forbidden_engines:
-                            iface.fail(('No more running IPython engines '
-                                        'and/or nodes on which function-arg '
-                                        'combo (%s, %s) has not failed '
-                                        'attempt to execute. Check the '
-                                        'IPython cluster\'s integrity and '
-                                        'resource availability.')
+                            iface.fail(('No more running IPython Parallel '
+                                        'engines and/or nodes on which '
+                                        'function-arg combo (%s, %s) has not '
+                                        'failed attempt to execute. Check the '
+                                        'IPython Parallel cluster\'s '
+                                        'integrity and resource availability.')
                                          % (task_function, task_to_assign[0]),
                                          steps=(job_flow[step_number:]
                                             if step_number != 0 else None))
@@ -1034,7 +1039,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             def cache(pool=None, file_or_archive=None, archive=True):
                 """ Places X.[tar.gz/tgz]#Y in dir Y, unpacked if archive
 
-                    pool: IPython Client object; all engines it spans are used
+                    pool: IPython Parallel Client object; all engines it spans
+                        are used
                     archive: file in format X.tar.gz#Y; None if nothing should
                         be done
 
@@ -1126,7 +1132,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     executable='/bin/bash',
                     message=('Error obtaining full paths of temporary '
                              'directories on cluster nodes. Restart IPython '
-                             'engines and try again.'),
+                             'Parallel engines and try again.'),
                     dict_format=True)
                 for engine in temp_dirs:
                     temp_dirs[engine].strip()
@@ -1150,9 +1156,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     executable='/bin/bash',
                     message=(('Error(s) encountered creating temporary '
                               'directories for storing {} on slave nodes. '
-                              'Restart IPython engines and try again.').format(
-                                                        file_or_archive
-                                                    ))
+                              'Restart IPython Parallel engines and try '
+                              'again.').format(file_or_archive))
                 )
                 if engines_to_symlink:
                     '''Create symlinks to resources in case of slot-local
@@ -1199,7 +1204,7 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     message=(
                             'Error creating script for scheduling temporary '
                             'directories on cluster nodes for deletion. '
-                            'Restart IPython engines and try again.'
+                            'Restart IPython Parallel engines and try again.'
                         )
                 )
                 apply_async_with_errors(
@@ -1208,8 +1213,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                     executable='/bin/bash',
                     message=(
                         'Error scheduling temporary directories on slave '
-                        'nodes for deletion. Restart IPython engines and try '
-                        'again.'
+                        'nodes for deletion. Restart IPython Parallel engines '
+                        'and try again.'
                     )
                 )
                 iface.status('Caching %s.' % file_or_archive_basename)
@@ -1228,7 +1233,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                   'slave nodes. Refer to the errors above '
                                   '-- and especially make sure $TMPDIR is not '
                                   'out of space on any node supporting an '
-                                  'IPython engine -- before trying again.')
+                                  'IPython Parallel engine -- before trying '
+                                  'again.')
                                     % file_or_archive),
                     )
                 else:
@@ -1242,8 +1248,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
                                       'local filesystem. Refer to the errors '
                                       'above -- and especially make sure '
                                       '$TMPDIR is not out of space on any '
-                                      'node supporting an IPython engine '
-                                      '-- before trying again.')
+                                      'node supporting an IPython Parallel '
+                                      'engine -- before trying again.')
                                         % file_or_archive),
                         )
                     if remote_hostnames_for_copying:
@@ -1392,7 +1398,8 @@ def run_simulation(branding, json_config, force, memcap, num_processes,
             def cache(pool=None, file_or_archive=None, archive=True):
                 """ Places X.[tar.gz/tgz]#Y in dir Y, unpacked if archive
 
-                    pool: IPython Client object; all engines it spans are used
+                    pool: IPython Parallel Client object; all engines it spans
+                        are used
                     archive: file in format X.tar.gz#Y; False if nothing should
                         be done
 

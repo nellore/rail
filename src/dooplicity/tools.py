@@ -328,14 +328,14 @@ def engine_string_from_list(id_list):
 def apply_async_with_errors(rc, ids, function_to_apply, *args, **kwargs):
     """ apply_async() that cleanly outputs engines responsible for exceptions.
 
-        For IPython parallel mode.
+        For IPython Parallel mode.
 
         WARNING: in general, this method requires Dill for pickling.
         See https://pypi.python.org/pypi/dill
         and http://matthewrocklin.com/blog/work/2013/12/05
         /Parallelism-and-Serialization/
 
-        rc: IPython parallel Client object
+        rc: IPython Parallel Client object
         ids: IDs of engines where function_to_apply should be run
         function_to_apply: function to run across engines. If this is a
             dictionary whose keys are exactly the engine IDs, each engine ID's
