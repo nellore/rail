@@ -40,7 +40,7 @@ linux_dependencies = {
               'http://verve.webfactional.com/mirror/linux/'
               'pypy-2.5-linux_x86_64-portable.tar.bz2'],
     'ipython' : ['https://github.com/ipython/ipyparallel/archive/'
-                 '6.0.2.zip',
+                 'ipyparallel-6.0.2.zip',
                  'http://verve.webfactional.com/mirror/linux/'
                  'ipyparallel-6.0.2.zip'],
     'sra_tools' : ['http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.8.2/'
@@ -80,7 +80,7 @@ mac_dependencies = {
               'http://verve.webfactional.com/mirror/mac/'
               'pypy-2.5.0-osx64.tar.bz2'],
     'ipyparallel' : ['https://github.com/ipython/ipyparallel/archive/'
-                     '6.0.2.zip',
+                     'ipyparallel-6.0.2.zip',
                      'http://verve.webfactional.com/mirror/mac/'
                      'ipyparallel-6.0.2.zip'],
     'sra_tools' : ['http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.8.2/'
