@@ -39,10 +39,10 @@ linux_dependencies = {
               'pypy-2.5-linux_x86_64-portable.tar.bz2',
               'http://verve.webfactional.com/mirror/linux/'
               'pypy-2.5-linux_x86_64-portable.tar.bz2'],
-    'ipython' : ['https://github.com/ipython/ipython/releases/download/'
-                 'rel-3.0.0/ipython-3.0.0.zip',
+    'ipython' : ['https://github.com/ipython/ipyparallel/archive/'
+                 '6.0.2.zip',
                  'http://verve.webfactional.com/mirror/linux/'
-                 'ipython-3.0.0.zip'],
+                 'ipyparallel-6.0.2.zip'],
     'sra_tools' : ['http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.8.2/'
                    'sratoolkit.2.8.2-centos_linux64.tar.gz',
                    'http://verve.webfactional.com/mirror/linux/'
@@ -53,7 +53,7 @@ ec2_dependencies = {}
 for dependency in linux_dependencies:
     ec2_dependencies[dependency] = [
             'http://s3.amazonaws.com/rail-emr/dependencies/'
-            + os.path.basename(linux_dependencies[dependency][0])
+            + os.path.basename(linux_dependencies[dependency][-1])
         ] + linux_dependencies[dependency]
 
 mac_dependencies = {
@@ -79,10 +79,10 @@ mac_dependencies = {
               'pypy-2.5.0-osx64.tar.bz2',
               'http://verve.webfactional.com/mirror/mac/'
               'pypy-2.5.0-osx64.tar.bz2'],
-    'ipython' : ['https://github.com/ipython/ipython/releases/download/'
-                 'rel-3.0.0/ipython-3.0.0.zip',
-                 'http://verve.webfactional.com/mirror/mac/'
-                 'ipython-3.0.0.zip'],
+    'ipyparallel' : ['https://github.com/ipython/ipyparallel/archive/'
+                     '6.0.2.zip',
+                     'http://verve.webfactional.com/mirror/mac/'
+                     'ipyparallel-6.0.2.zip'],
     'sra_tools' : ['http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.8.2/'
                    'sratoolkit.2.8.2-mac64.tar.gz',
                    'http://verve.webfactional.com/mirror/mac/'

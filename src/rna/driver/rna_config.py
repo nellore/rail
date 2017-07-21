@@ -241,18 +241,18 @@ def print_to_screen(message, newline=True, carriage_return=False):
 def ready_engines(rc, base, prep=False):
     """ Prepares engines for checks and copies Rail/manifest/index to nodes. 
 
-        rc: IPython Client object
+        rc: IPython Parallel Client object
         base: instance of RailRnaErrors
         prep: True iff it's a preprocess job flow
 
         No return value.
     """
     try:
-        import IPython
+        import ipyparallel
     except ImportError:
         # Should have been taken care of by a different fxn, but just in case
         raise RuntimeError(
-               'IPython is required to run Rail-RNA in '
+               'IPython Parallel is required to run Rail-RNA in '
                '"parallel" mode. Visit ipython.org to '
                'download it, or simply download the Anaconda '
                'distribution of Python at '
@@ -290,8 +290,8 @@ def ready_engines(rc, base, prep=False):
                                                      'the log directory is '
                                                      'accessible from '
                                                      'all engines. Restart '
-                                                     'IPython engines '
-                                                     'and try again.')
+                                                     'IPython Parallel '
+                                                     'engines and try again.')
                                         )
     finally:
         # No matter what, kill the dud
@@ -350,7 +350,7 @@ def ready_engines(rc, base, prep=False):
         shell=True,
         executable='/bin/bash',
         message=('Error obtaining full paths of temporary directories '
-                 'on cluster nodes. Restart IPython engines '
+                 'on cluster nodes. Restart IPython Parallel engines '
                  'and try again.'
             ),
         dict_format=True)
@@ -376,7 +376,7 @@ def ready_engines(rc, base, prep=False):
         'mkdir -p %s' % dir_to_create, shell=True, executable='/bin/bash',
         message=('Error(s) encountered creating temporary '
                  'directories for storing Rail on slave nodes. '
-                 'Restart IPython engines and try again.'))
+                 'Restart IPython Parallel engines and try again.'))
     if engines_to_symlink:
         # Create symlinks to resources in case of slot-local scratch dirs
         print_to_screen(
@@ -415,15 +415,15 @@ def ready_engines(rc, base, prep=False):
         executable='/bin/bash',
         message=(
                 'Error creating script for scheduling temporary directories '
-                'on cluster nodes for deletion. Restart IPython engines '
-                'and try again.'
+                'on cluster nodes for deletion. Restart IPython Parallel '
+                'engines and try again.'
             ))
     apply_async_with_errors(rc, engines_with_unique_scratch, subprocess.Popen,
             '/usr/bin/env bash %s/delscript.sh' % temp_dir, shell=True,
             executable='/bin/bash',
             message=(
                 'Error scheduling temporary directories on slave nodes '
-                'for deletion. Restart IPython engines and try again.'
+                'for deletion. Restart IPython Parallel engines and try again.'
             ))
     # Compress Rail-RNA and distribute it to nodes
     compressed_rail_file = 'rail.tar.gz'
@@ -448,7 +448,7 @@ def ready_engines(rc, base, prep=False):
             message=('Error(s) encountered copying Rail to '
                      'slave nodes. Refer to the errors above -- and '
                      'especially make sure "%s" is not out of space on any '
-                     'node supporting an IPython engine '
+                     'node supporting an IPython Parallel engine '
                      '-- before trying again.') % temp_dir,
         )
         print_to_screen('Copied Rail-RNA to cluster nodes.',
@@ -463,7 +463,7 @@ def ready_engines(rc, base, prep=False):
                 message=('Error(s) encountered copying Rail to '
                          'local filesystem. Refer to the errors above -- and '
                          'especially make sure "%s" is not out of space on '
-                         'any node supporting an IPython engine '
+                         'any node supporting an IPython Parallel engine '
                          '-- before trying again.') % temp_dir,
             )
             print_to_screen('Copied Rail-RNA to local filesystem.',
@@ -518,7 +518,7 @@ def ready_engines(rc, base, prep=False):
             message=('Error(s) encountered copying manifest to '
                      'slave nodes. Refer to the errors above -- and '
                      'especially make sure "%s" is not out of space on any '
-                     'node supporting an IPython engine '
+                     'node supporting an IPython Parallel engine '
                      '-- before trying again.') % temp_dir,
         )
         print_to_screen('Copied file manifest to cluster nodes.',
@@ -532,7 +532,7 @@ def ready_engines(rc, base, prep=False):
                 message=('Error(s) encountered copying manifest to '
                          'slave nodes. Refer to the errors above -- and '
                          'especially make sure "%s" is not out of space on '
-                         'any node supporting an IPython engine '
+                         'any node supporting an IPython Parallel engine '
                          '-- before trying again.') % temp_dir,
             )
             print_to_screen('Copied manifest to local filesystem.',
@@ -587,7 +587,8 @@ def ready_engines(rc, base, prep=False):
                     message=('Error(s) encountered copying Bowtie indexes to '
                              'cluster nodes. Refer to the errors above -- and '
                              'especially make sure "%s" is not out of '
-                             'space on any node supporting an IPython engine '
+                             'space on any node supporting an IPython '
+                             'Parallel engine '
                              '-- before trying again.') % temp_dir
                 )
                 files_copied += 1
@@ -615,8 +616,8 @@ def ready_engines(rc, base, prep=False):
                                  'indexes to local filesystem. Refer to the '
                                  'errors above -- and especially make sure '
                                  '"%s" is not out of space '
-                                 'on any node supporting an IPython engine '
-                                 '-- before trying again.') % temp_dir
+                                 'on any node supporting an IPython Parallel '
+                                 'engine -- before trying again.') % temp_dir
                     )
                     files_copied += 1
                     print_to_screen(
@@ -659,7 +660,7 @@ def ready_engines(rc, base, prep=False):
                                      'the errors above -- and especially make '
                                      'sure "%s" is not out of space '
                                      'on any node supporting an IPython '
-                                     'engine -- before trying again.')
+                                     'Parallel engine -- before trying again.')
                                         % temp_dir
                         )
                         files_copied += 1
@@ -1359,7 +1360,7 @@ class RailRnaErrors(object):
 def raise_runtime_error(bases):
     """ Raises RuntimeError if any base.errors is nonempty.
 
-        bases: dictionary mapping IPython engine IDs to RailRnaErrors
+        bases: dictionary mapping IPython Parallel engine IDs to RailRnaErrors
             instances or a single RailRnaError instance.
 
         No return value.
@@ -1394,23 +1395,23 @@ def raise_runtime_error(bases):
             raise RuntimeError('\n',join(errors_to_report))
 
 def ipython_client(ipython_profile=None, ipcontroller_json=None):
-    """ Performs checks on IPython engines and returns IPython Client object.
+    """ Performs checks on IPython Parallel engines and returns Client object.
 
-        Also checks that IPython is installed/configured properly and raises
-        exception _immediately_ if it's not; then prints
+        Also checks that IPython Parallel is installed/configured properly and
+        raises exception _immediately_ if it's not; then prints
         engine detection message.
 
-        ipython_profile: IPython parallel profile, if specified; otherwise None
+        ipython_profile: IPython profile, if specified; otherwise None
         ipcontroller_json: IP Controller json file, if specified; else None
 
         No return value.
     """
     errors = []
     try:
-        from IPython.parallel import Client
+        from ipyparallel import Client
     except ImportError:
         errors.append(
-                   'IPython is required to run Rail-RNA in '
+                   'IPython Parallel is required to run Rail-RNA in '
                    '"parallel" mode. Visit ipython.org to '
                    'download it, or simply download the Anaconda '
                    'distribution of Python at '
@@ -1440,7 +1441,7 @@ def ipython_client(ipython_profile=None, ipcontroller_json=None):
         except IOError:
             errors.append(
                     'Cannot find ipcontroller-client.json. Ensure '
-                    'that IPython controller and engines are running.'
+                    'that IPython Parallel controller and engines are running.'
                     ' If controller is running on a remote machine, '
                     'copy the ipcontroller-client.json file from there '
                     'to a local directory; then rerun this script '
@@ -1460,11 +1461,11 @@ def ipython_client(ipython_profile=None, ipcontroller_json=None):
                 )
     if not rc.ids:
         raise RuntimeError(
-                'An IPython controller is running, but no engines are '
-                'connected to it. Engines must be connected to an IPython '
-                'controller when running Rail-RNA in "parallel" mode.'
+                'An IPython Parallel controller is running, but no engines '
+                'are connected to it. Engines must be connected to an IPython '
+                'Parallel controller when running Rail-RNA in "parallel" mode.'
             )
-    print_to_screen('Detected %d running IPython engines.' 
+    print_to_screen('Detected %d running IPython Parallel engines.' 
                                 % len(rc.ids))
     # Use Dill to permit general serializing
     try:
@@ -1589,8 +1590,8 @@ class RailRnaLocal(object):
                                         'try again.').format(base.isofrag_idx))
                 else:
                     if not isofrag_url.is_local:
-                        '''Download isofrag index only if not an IPython engine
-                        (not parallel).'''
+                        '''Download isofrag index only if not an IPython 
+                        Parallel engine (not parallel).'''
                         base.isofrag_dir = base.intermediate_dir
                         base.isofrag_idx = os.path.join(
                                             base.isofrag_dir,
@@ -1628,8 +1629,8 @@ class RailRnaLocal(object):
                                     'try again.').format(base.manifest))
             else:
                 if not manifest_url.is_local:
-                    '''Download/check manifest only if not an IPython engine
-                    (not parallel).'''
+                    '''Download/check manifest only if not an IPython
+                    Parallel engine (not parallel).'''
                     base.manifest_dir = base.intermediate_dir
                     base.manifest = os.path.join(base.manifest_dir, 'MANIFEST')
                     ansible.get(manifest_url.to_url(),

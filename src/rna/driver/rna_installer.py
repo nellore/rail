@@ -189,7 +189,9 @@ class RailRnaInstaller(object):
         url_deque = deque(urls)
         while url_deque:
             url = url_deque.popleft()
-            command = [self.curl_exe, '-L', '-O', url]
+            '''Follow redirects (-L), write to file (-O), respect
+            content disposition'''
+            command = [self.curl_exe, '-L', '-O', '-J', url]
             filename = url.rpartition('/')[2]
             print >>self.log_stream, 'Downloading {} from {}...'.format(
                                                                     name, url
@@ -427,7 +429,8 @@ class RailRnaInstaller(object):
                 bowtie1_toks = self.depends['bowtie1'][0].rpartition(
                             '/'
                         )[2].split('-')
-                bowtie1_legacy = len(bowtie1_toks) > 2 and bowtie1_toks[2] == 'legacy'
+                bowtie1_legacy = (
+                        len(bowtie1_toks) > 2 and bowtie1_toks[2] == 'legacy')
                 bowtie1_base = '-'.join(bowtie1_toks[:3 if bowtie1_legacy else 2])
                 bowtie1 = os.path.join(self.final_install_dir,
                                                 bowtie1_base, 'bowtie')
@@ -436,7 +439,8 @@ class RailRnaInstaller(object):
                 bowtie2_toks = self.depends['bowtie2'][0].rpartition(
                             '/'
                         )[2].split('-')
-                bowtie2_legacy = len(bowtie2_toks) > 2 and bowtie2_toks[2] == 'legacy'
+                bowtie2_legacy = (
+                        len(bowtie2_toks) > 2 and bowtie2_toks[2] == 'legacy')
                 bowtie2_base = '-'.join(bowtie2_toks[:3 if bowtie2_legacy else 2])
                 bowtie2 = os.path.join(self.final_install_dir,
                                                 bowtie2_base, 'bowtie2')
@@ -651,21 +655,22 @@ export RAILDOTBIO={install_dir}
                                     bowtie2_build, samtools, bedgraphtobigwig]:
                         self._add_symlink_to_exe(program)
         self._print_to_screen_and_log('Installed Rail-RNA.')
-        # IPython much?
+        # ipyparallel much?
         try:
-            import IPython
+            import ipyparallel
         except ImportError:
             # Guess not
             if self._yes_no_query(
-                    'IPython is not installed but required for Rail-RNA to '
-                    'work in its "parallel" mode.\n'
-                    '    * Install IPython now?'
+                    'IPython Parallel is not installed but required for '
+                    'Rail-RNA to work in its "parallel" mode.\n'
+                    '    * Install IPython Parallel now?'
                 ):
                 temp_ipython_install_dir = tempfile.mkdtemp()
                 register_cleanup(remove_temporary_directories,
                                     [temp_ipython_install_dir])
                 with cd(temp_ipython_install_dir):
-                    self._grab_and_explode(self.depends['ipython'], 'IPython')
+                    self._grab_and_explode(
+                        self.depends['ipyparallel'], 'IPython Parallel')
                     setup_dir = os.path.dirname(find('setup.py', './'))
                     with cd(setup_dir):
                         ipython_command = [
@@ -678,8 +683,9 @@ export RAILDOTBIO={install_dir}
                                                         stderr=self.log_stream)
                         except subprocess.CalledProcessError as e:
                             self._print_to_screen_and_log(
-                                ('Error encountered installing IPython; exit '
-                                 'code was %d; command invoked was "%s".') %
+                                ('Error encountered installing IPython '
+                                 'Parallel; exit code was %d; command '
+                                 'invoked was "%s".') %
                                     (e.returncode, ' '.join(ipython_command))
                             )
                             self._bail()
