@@ -114,7 +114,7 @@ u"""rail-rna <job flow> <mode> <[args]>
                      elastic: run Rail-RNA on Amazon Elastic MapReduce.
                        Requires that the user sign up for Amazon Web Services
 
-{0} Rail-RNA v{1} by Abhi Nellore (anellore@jhu.edu; nellore.github.io)
+{0} Rail-RNA v{1} by Abhi Nellore (nellore@ohsu.edu; nellore.github.io)
 
 Rail-RNA is a scalable MapReduce pipeline that can analyze many RNA-seq
 samples at once. To view help for a given combination of <job flow> and
@@ -655,6 +655,7 @@ if __name__ == '__main__':
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
                 max_task_attempts=args.max_task_attempts,
+                no_setup=args.no_setup,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
@@ -715,6 +716,7 @@ if __name__ == '__main__':
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
                 max_task_attempts=args.max_task_attempts,
+                no_setup=args.no_setup,
                 keep_intermediates=args.keep_intermediates,
                 sort_exe=args.sort,
                 scratch=args.scratch
@@ -737,6 +739,7 @@ if __name__ == '__main__':
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
                 max_task_attempts=args.max_task_attempts,
+                no_setup=args.no_setup,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 sort_exe=args.sort,
@@ -802,6 +805,7 @@ if __name__ == '__main__':
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
                 max_task_attempts=args.max_task_attempts,
+                no_setup=args.no_setup,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 ipython_profile=args.ipython_profile,
@@ -865,6 +869,7 @@ if __name__ == '__main__':
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
                 max_task_attempts=args.max_task_attempts,
+                no_setup=args.no_setup,
                 keep_intermediates=args.keep_intermediates,
                 ipython_profile=args.ipython_profile,
                 ipcontroller_json=args.ipcontroller_json,
@@ -890,6 +895,7 @@ if __name__ == '__main__':
                 gzip_level=args.gzip_level,
                 sort_memory_cap=args.sort_memory_cap,
                 max_task_attempts=args.max_task_attempts,
+                no_setup=args.no_setup,
                 keep_intermediates=args.keep_intermediates,
                 check_manifest=(not args.do_not_check_manifest),
                 ipython_profile=args.ipython_profile,
@@ -972,6 +978,7 @@ if __name__ == '__main__':
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime,
                 max_task_attempts=args.max_task_attempts,
+                no_setup=args.no_setup,
                 dbgap_key=args.dbgap_key,
                 secure_stack_name=args.secure_stack_name,
                 ec2_subnet_id=args.ec2_subnet_id,
@@ -1048,6 +1055,8 @@ if __name__ == '__main__':
                 no_direct_copy=args.no_direct_copy,
                 intermediate_lifetime=args.intermediate_lifetime,
                 max_task_attempts=args.max_task_attempts,
+                no_setup=args.no_setup,
+                do_not_talk_to_web=args.do_not_talk_to_web,
                 secure_stack_name=args.secure_stack_name,
                 ec2_subnet_id=args.ec2_subnet_id,
                 ec2_master_security_group_id=args.ec2_master_security_group_id,
@@ -1093,6 +1102,8 @@ if __name__ == '__main__':
                 check_manifest=(not args.do_not_check_manifest),
                 intermediate_lifetime=args.intermediate_lifetime,
                 max_task_attempts=args.max_task_attempts,
+                no_setup=args.no_setup,
+                do_not_talk_to_web=args.do_not_talk_to_web,
                 dbgap_key=args.dbgap_key,
                 secure_stack_name=args.secure_stack_name,
                 ec2_subnet_id=args.ec2_subnet_id,
