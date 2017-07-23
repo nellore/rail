@@ -40,7 +40,8 @@ install:
       conda install --yes python=$TRAVIS_PYTHON_VERSION numpy scipy;
       pip install weave;
     fi
-  - conda install --yes bowtie bowtie2=2.2.5 samtools bedtools ucsc-bigwigtobedgraph
+  - conda install --yes samtools bedtools ucsc-bigwigtobedgraph
+  - cd src && export BOWTIE1=$(python -c "from dependency_urls import linux_dependencies; print linux_dependencies['bowtie1'][0]") && export BOWTIE2=$(python -c "from dependency_urls import linux_dependencies; print linux_dependencies['bowtie2'][0]") && wget ${BOWTIE1} && wget ${BOWTIE2}; unzip $(basename ${BOWTIE1}) && unzip $(basename ${BOWTIE2}) && export PATH=${PATH}:$(cd $(echo $(basename ${BOWTIE1}) | rev | cut -d'.' -f2 | rev); pwd):$(cd $(echo $(basename ${BOWTIE2}) | rev | cut -d'.' -f2 | rev); pwd)
   - which bowtie
   - bowtie --version
   - which bowtie2
