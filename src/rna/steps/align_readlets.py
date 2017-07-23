@@ -184,17 +184,15 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
                 # Separate qnames with single + character
                 print >>qname_stream, '+'
     counter.flush()
-    input_command = 'gzip -cd %s' % readlet_file
     bowtie_command = ' '.join([bowtie_exe, bowtie_args,
-        '-S -t --sam-nohead --mm', bowtie_index_base, '--12 -'])
+        '-S -t --sam-nohead --mm', bowtie_index_base, '--12', readlet_file])
     delegate_command = ''.join(
                 [sys.executable, ' ', os.path.realpath(__file__)[:-3],
                     '_delegate.py --report-multiplier %08f --qnames-file %s %s'
                         % (report_multiplier, qnames_file,
                             '--verbose' if verbose else '')]
             )
-    full_command = ' | '.join([input_command, 
-                                bowtie_command, delegate_command])
+    full_command = ' | '.join([bowtie_command, delegate_command])
     print >>sys.stderr, 'Starting Bowtie with command: ' + full_command
     bowtie_process = subprocess.Popen(' '.join(
                     ['set -exo pipefail;', full_command]

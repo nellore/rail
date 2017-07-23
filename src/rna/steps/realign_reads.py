@@ -316,14 +316,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base = os.path.join(temp_dir_path, 'tempidx')
     alignment_count_to_report, _, _ \
             = bowtie.parsed_bowtie_args(bowtie2_args)
-    reads_filename = os.path.join(temp_dir_path, 'reads.temp')
-    input_command = 'gzip -cd %s' % reads_filename
+    reads_filename = os.path.join(temp_dir_path, 'reads.temp.gz')
     bowtie_command = ' ' .join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         '{0} --local -t --no-hd --mm -x'.format(
                 '-k {0}'.format(alignment_count_to_report * count_multiplier)
             ),
-        bowtie2_index_base, '--12 -'])
+        bowtie2_index_base, '--12', reads_filename])
     delegate_command = ''.join(
             [sys.executable, ' ', os.path.realpath(__file__)[:-3],
                 ('_delegate.py --report-multiplier %08f '
@@ -332,9 +331,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                     % (report_multiplier, alignment_count_to_report,
                         tie_margin, '--verbose' if verbose else '')]
         )
-    # Use grep to kill empty lines terminating python script
-    full_command = ' | '.join([input_command, 
-                                bowtie_command, delegate_command])
+    full_command = ' | '.join([bowtie_command, delegate_command])
     print >>sys.stderr, 'Bowtie2 command to execute: ' + full_command
     for fasta_file, reads_file in input_files_from_input_stream(
                                                 input_stream,

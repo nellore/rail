@@ -501,11 +501,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     if nothing_doing:
         # No input
         sys.exit(0)
-    input_command = 'gzip -cd %s' % align_file
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         ' --sam-no-qname-trunc --local -t --no-hd --mm -x',
-        bowtie2_index_base, '--12 -'])
+        bowtie2_index_base, '--12', align_file])
     delegate_command = ''.join(
                 [sys.executable, ' ', os.path.realpath(__file__)[:-3],
                     ('_delegate.py --task-partition {task_partition} '
@@ -558,8 +557,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                             else '')
                      )]
             )
-    full_command = ' | '.join([input_command, 
-                                bowtie_command, delegate_command])
+    full_command = ' | '.join([bowtie_command, delegate_command])
     print >>sys.stderr, \
         'Starting first-pass Bowtie 2 with command: ' + full_command
     bowtie_process = subprocess.Popen(' '.join(
@@ -574,11 +572,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     os.remove(align_file)
     os.remove(other_reads_file)
     if not no_realign:
-        input_command = 'gzip -cd %s' % second_pass_file
         bowtie_command = ' '.join([bowtie2_exe,
             bowtie2_args if bowtie2_args is not None else '',
             ' --sam-no-qname-trunc --local -t --no-hd --mm -x',
-            bowtie2_index_base, '--12 -'])
+            bowtie2_index_base, '--12', second_pass_file])
         delegate_command = ''.join(
                     [sys.executable, ' ', os.path.realpath(__file__)[:-3],
                         ('_delegate.py --task-partition {task_partition} '
@@ -625,8 +622,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                                 else '')
                          )]
                 )
-        full_command = ' | '.join([input_command, 
-                                    bowtie_command, delegate_command])
+        full_command = ' | '.join([bowtie_command, delegate_command])
         print >>sys.stderr, \
             'Starting second-pass Bowtie 2 with command: ' + full_command
         bowtie_process = subprocess.Popen(' '.join(

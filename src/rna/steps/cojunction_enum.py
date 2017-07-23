@@ -150,11 +150,10 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
             seq = line.strip()
             counter.add('reads_to_temp')
             print >>reads_stream, '\t'.join([seq, seq, 'I'*len(seq)])
-    input_command = 'gzip -cd %s' % reads_file
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
-        ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12 -',
-        '--score-min L,%d,0' % score_min, 
+        ' --local -t --no-hd --mm -x', bowtie2_index_base, '--12', reads_file,
+        '--score-min L,%d,0' % score_min,
         '-D 24 -R 3 -N 1 -L 20 -i L,4,0'])
     delegate_command = ''.join(
             [sys.executable, ' ', os.path.realpath(__file__)[:-3],
@@ -163,8 +162,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                             '--stranded' if stranded else '',
                                             '--verbose' if verbose else '')]
         )
-    full_command = ' | '.join([input_command,
-                                bowtie_command, delegate_command])
+    full_command = ' | '.join([bowtie_command, delegate_command])
     print >>sys.stderr, 'Starting Bowtie2 with command: ' + full_command
     bowtie_process = subprocess.Popen(' '.join(
                 ['set -exo pipefail;', full_command]
