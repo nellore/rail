@@ -17,9 +17,9 @@ import os
 
 linux_dependencies = {
     'bowtie1' : ['http://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie/1.1.2/bowtie-1.1.2-linux-x86_64.zip',
+                 'bowtie/1.2.1.1/bowtie-1.2.1.1-linux-x86_64.zip',
                  'http://verve.webfactional.com/mirror/linux/'
-                 'bowtie-1.1.2-linux-x86_64.zip'],
+                 'bowtie-1.2.1.1-linux-x86_64.zip'],
     'bowtie2' : ['http://downloads.sourceforge.net/project/bowtie-bio/'
                  'bowtie2/2.3.2/bowtie2-2.3.2-legacy-linux-x86_64.zip',
                  'http://verve.webfactional.com/mirror/linux/'
@@ -58,9 +58,9 @@ for dependency in linux_dependencies:
 
 mac_dependencies = {
     'bowtie1' : ['http://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie/1.1.2/bowtie-1.1.2-macos-x86_64.zip',
+                 'bowtie/1.2.1.1/bowtie-1.2.1.1-macos-x86_64.zip',
                  'http://verve.webfactional.com/mirror/mac/'
-                 'bowtie-1.1.2-macos-x86_64.zip'],
+                 'bowtie-1.2.1.1-macos-x86_64.zip'],
     'bowtie2' : ['http://downloads.sourceforge.net/project/bowtie-bio/'
                  'bowtie2/2.3.2/bowtie2-2.3.2-legacy-macos-x86_64.zip',
                  'http://verve.webfactional.com/mirror/mac/'
