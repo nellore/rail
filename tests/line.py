@@ -663,6 +663,7 @@ if __name__ == '__main__':
                 )
             with open(log_file) as log_stream:
                 print >>sys.stderr, log_stream.read()
+        print rail_output.stdout.read()
         raise RuntimeError(error_out(e))
 
     for sample, unique in product(samples, (False, True)):
