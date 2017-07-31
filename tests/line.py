@@ -652,7 +652,7 @@ if __name__ == '__main__':
                 stderr=subprocess.STDOUT
             )
     except subprocess.CalledProcessError as e:
-        error_match = re.search(r'2>(.*\.log)" failed;', e.output)
+        error_match = re.search(r'2> >\(tee (.*\.log)', e.output)
         if error_match:
             log_file = error_match.string[
                                 error_match.start(1):error_match.end(1)
@@ -663,7 +663,6 @@ if __name__ == '__main__':
                 )
             with open(log_file) as log_stream:
                 print >>sys.stderr, log_stream.read()
-        print e.output
         raise RuntimeError(error_out(e))
 
     for sample, unique in product(samples, (False, True)):
