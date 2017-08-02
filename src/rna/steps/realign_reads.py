@@ -210,7 +210,7 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
                                     [args.bowtie2_build_exe,
                                         fasta_file,
                                         index_basename],
-                                    stderr=null_stream,
+                                    stderr=sys.stderr,
                                     stdout=null_stream
                                 )
     bowtie_build_process.wait()
