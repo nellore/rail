@@ -501,7 +501,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     if nothing_doing:
         # No input
         sys.exit(0)
-    gzip_command = 'gzip -cd {}'.format(align_file)
+    input_command = 'gzip -cd %s' % align_file
     bowtie_command = ' '.join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         ' --sam-no-qname-trunc --local -t --no-hd --mm -x',
@@ -558,7 +558,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                             else '')
                      )]
             )
-    full_command = ' | '.join([bowtie_command, delegate_command])
+    full_command = ' | '.join([input_command, 
+                                bowtie_command, delegate_command])
     print >>sys.stderr, \
         'Starting first-pass Bowtie 2 with command: ' + full_command
     bowtie_process = subprocess.Popen(' '.join(
@@ -573,7 +574,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     os.remove(align_file)
     os.remove(other_reads_file)
     if not no_realign:
-        gzip_command = 'gzip -cd {}'.format(second_pass_file)
+        input_command = 'gzip -cd %s' % second_pass_file
         bowtie_command = ' '.join([bowtie2_exe,
             bowtie2_args if bowtie2_args is not None else '',
             ' --sam-no-qname-trunc --local -t --no-hd --mm -x',
@@ -624,7 +625,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                                 else '')
                          )]
                 )
-        full_command = ' | '.join([gzip_command,
+        full_command = ' | '.join([input_command, 
                                     bowtie_command, delegate_command])
         print >>sys.stderr, \
             'Starting second-pass Bowtie 2 with command: ' + full_command

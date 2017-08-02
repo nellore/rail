@@ -184,7 +184,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
                 # Separate qnames with single + character
                 print >>qname_stream, '+'
     counter.flush()
-    gzip_command = 'gzip -cd {}'.format(readlet_file)
+    input_command = 'gzip -cd %s' % readlet_file
     bowtie_command = ' '.join([bowtie_exe, bowtie_args,
         '-S -t --sam-nohead --mm', bowtie_index_base, '--12 -'])
     delegate_command = ''.join(
@@ -193,7 +193,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie_exe='bowtie',
                         % (report_multiplier, qnames_file,
                             '--verbose' if verbose else '')]
             )
-    full_command = ' | '.join([gzip_command,
+    full_command = ' | '.join([input_command, 
                                 bowtie_command, delegate_command])
     print >>sys.stderr, 'Starting Bowtie with command: ' + full_command
     bowtie_process = subprocess.Popen(' '.join(

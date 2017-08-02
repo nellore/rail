@@ -210,7 +210,7 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
                                     [args.bowtie2_build_exe,
                                         fasta_file,
                                         index_basename],
-                                    stderr=sys.stderr,
+                                    stderr=null_stream,
                                     stdout=null_stream
                                 )
     bowtie_build_process.wait()
@@ -316,8 +316,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     bowtie2_index_base = os.path.join(temp_dir_path, 'tempidx')
     alignment_count_to_report, _, _ \
             = bowtie.parsed_bowtie_args(bowtie2_args)
-    reads_filename = os.path.join(temp_dir_path, 'reads.temp.gz')
-    gzip_command = 'gzip -cd {}'.format(reads_filename)
+    reads_filename = os.path.join(temp_dir_path, 'reads.temp')
+    input_command = 'gzip -cd %s' % reads_filename
     bowtie_command = ' ' .join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         '{0} --local -t --no-hd --mm -x'.format(
@@ -332,7 +332,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                     % (report_multiplier, alignment_count_to_report,
                         tie_margin, '--verbose' if verbose else '')]
         )
-    full_command = ' | '.join([gzip_command,
+    # Use grep to kill empty lines terminating python script
+    full_command = ' | '.join([input_command, 
                                 bowtie_command, delegate_command])
     print >>sys.stderr, 'Bowtie2 command to execute: ' + full_command
     for fasta_file, reads_file in input_files_from_input_stream(
