@@ -317,12 +317,13 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     alignment_count_to_report, _, _ \
             = bowtie.parsed_bowtie_args(bowtie2_args)
     reads_filename = os.path.join(temp_dir_path, 'reads.temp.gz')
+    gzip_command = 'gzip -cd {}'.format(reads_filename)
     bowtie_command = ' ' .join([bowtie2_exe,
         bowtie2_args if bowtie2_args is not None else '',
         '{0} --local -t --no-hd --mm -x'.format(
                 '-k {0}'.format(alignment_count_to_report * count_multiplier)
             ),
-        bowtie2_index_base, '--12', reads_filename])
+        bowtie2_index_base, '--12 -'])
     delegate_command = ''.join(
             [sys.executable, ' ', os.path.realpath(__file__)[:-3],
                 ('_delegate.py --report-multiplier %08f '
@@ -331,7 +332,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                     % (report_multiplier, alignment_count_to_report,
                         tie_margin, '--verbose' if verbose else '')]
         )
-    full_command = ' | '.join([bowtie_command, delegate_command])
+    full_command = ' | '.join([gzip_command,
+                                bowtie_command, delegate_command])
     print >>sys.stderr, 'Bowtie2 command to execute: ' + full_command
     for fasta_file, reads_file in input_files_from_input_stream(
                                                 input_stream,
