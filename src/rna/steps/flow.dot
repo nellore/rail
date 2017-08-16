@@ -1,0 +1,141 @@
+digraph {
+	"preprocess.py" -> preproc;
+	"preprocess.py" [shape=oval];
+	preproc [shape=record];
+	preproc -> "align_reads.py"
+
+	"align_reads.py" -> align_reads:f0
+	"align_reads.py" [shape=oval];
+	align_reads [shape=record, label="<f0>align_reads | {<f1>readletized| <f2>dummy |<f3>unique |<f4>unmapped |<f5>postponed_sam |<f6>sam |<f7>exon_diff}"];
+	align_reads:f1 -> "align_readlets.py"
+	align_reads:f2 -> "junction_index.py"
+	align_reads:f3 -> "cojunction_enum.py"
+	align_reads:f4 -> "realign_reads.py";
+	align_reads:f5 -> "compare_alignments.py";
+	align_reads:f6 -> "bam.py";
+	align_reads:f7 -> "sum.py";
+
+	"align_readlets.py" [shape=oval];
+	"align_readlets.py" -> align_readlets
+	align_readlets [shape=record, label="align_readlets"];
+	align_readlets -> "junction_search.py"
+
+	"junction_search.py" [shape=oval];
+	"junction_search.py" -> junction_search;
+	junction_search [shape=record, label="junction_search"];
+	junction_search -> "junction_filter.py"
+
+	"junction_filter.py" [shape=oval];
+	"junction_filter.py" -> junction_filter:f0;
+	junction_filter [shape=record, label="<f0>junction_filter | {<f1>filter |<f2>collect}"];
+	junction_filter:f1 -> "junction_config.py"
+	junction_filter:f2 -> "junction_collect.py"
+
+	"junction_collect.py" [shape=oval];
+	"junction_collect.py" -> junction_collect
+	junction_collect [shape=record, label="junction_collect"];
+
+	"junction_config.py" [shape=oval];
+	"junction_config.py" -> junction_config
+	junction_config [shape=record, label="junction_config"];
+	junction_config -> "junction_fasta.py"
+
+	"junction_fasta.py" [shape=oval];
+	"junction_fasta.py" -> junction_fasta
+	junction_fasta [shape=record, label="junction_fasta"];
+	junction_fasta -> "junction_index.py"
+
+	"junction_index.py" [shape=oval];
+	"junction_index.py" -> junction_index;
+	junction_index [shape=record, label="junction_index"];
+	"junction_index.py" -> junction_isofrags
+	junction_isofrags [shape=parallelogram, label="output/cross_sample_results/isofrags.tar.gz"];
+	junction_isofrags -> "cojunction_enum.py"
+
+	"cojunction_enum.py" [shape=oval];
+	"cojunction_enum.py" -> cojunction_enum;
+	cojunction_enum [shape=record, label="cojunction_enum"];
+	cojunction_enum -> "cojunction_fasta.py"
+
+	"cojunction_fasta.py" [shape=oval];
+	"cojunction_fasta.py" -> cojunction_fasta;
+	cojunction_fasta [shape=record, label="cojunction_fasta"];
+	cojunction_fasta -> "realign_reads.py";
+
+	"realign_reads.py" [shape=oval];
+	"realign_reads.py" -> realign_reads;
+	realign_reads [shape=record, label="realign_reads"];
+	realign_reads -> "compare_alignments.py";
+
+	"compare_alignments.py" [shape=oval];
+	"compare_alignments.py" -> compare_alignments:f0;
+	compare_alignments [shape=record, label="<f0>compare_alignments | {<f1>junction_bed| <f2>sam_junction_ties |<f3>sam_clip_ties |<f4>sam |<f5>exon_diff |<f6>indel_bed}"];
+	compare_alignments:f1 -> "junction_coverage.py";
+	compare_alignments:f1 -> "bed_pre.py";
+	compare_alignments:f2 -> "junction_coverage.py";
+	compare_alignments:f3 -> "break_ties.py";
+	compare_alignments:f4 -> "bam.py";
+	compare_alignments:f5 -> "sum.py";
+	compare_alignments:f6 -> "bed_pre.py";
+
+	"junction_coverage.py" [shape=oval];
+	"junction_coverage.py" -> junction_coverage
+	junction_coverage [shape=record, label="junction_coverage"];
+	junction_coverage -> "break_ties.py";
+
+	"break_ties.py" [shape=oval];
+	"break_ties.py" -> break_ties;
+	break_ties [shape=record, label="<f0>break_ties | {<f1>sam |<f2>exon_diff |<f3>indel_bed |<f4>junction_bed}"];
+	break_ties:f1 -> "bam.py";
+	break_ties:f2 -> "sum.py";
+	break_ties:f3 -> "bed_pre.py";
+	break_ties:f4 -> "bed_pre.py";
+
+	"bam.py" [shape=oval];
+	"bam.py" -> bam:f0;
+	bam [shape=record, label="<f0>bam | {<f1>counts}"];
+	bam:f1 -> "collect_read_stats.py";
+	"bam.py" -> "bams";
+	bams [shape=parallelogram, label="output/alignments/*.bam"];
+
+	"collect_read_stats.py" [shape=oval];
+	"collect_read_stats.py" -> read_counts;
+	read_counts [shape=record, label="read_counts"];
+	"collect_read_stats.py" -> counts
+	counts [shape=parallelogram, label="output/cross_sample_results/counts.tsv.gz"];
+
+	"sum.py" [shape=oval];
+	"sum.py" -> collapse;
+	collapse [shape=record, label="collapse"];
+	collapse -> "coverage_pre.py";
+
+	"coverage_pre.py" [shape=oval];
+	"coverage_pre.py" -> precoverage;
+	precoverage [shape=record, label="<f0>precoverage | {<f1>coverage}"];
+	precoverage:f1 -> "coverage.py";
+
+	"coverage.py" [shape=oval];
+	"coverage.py" -> coverage;
+	coverage [shape=record, label="coverage"];
+	coverage -> "tsv.py";
+	"coverage.py" -> bigwigs
+	bigwigs [shape=parallelogram, label="output/coverage_bigwigs/*.bw"];
+
+	"bed_pre.py" [shape=oval];
+	"bed_pre.py" -> prebed:f0
+	prebed [shape=record, label="<f0>prebed | {<f1>collect |<f2>bed}"];
+	prebed:f1 -> "tsv.py"
+	prebed:f2 -> "bed.py"
+
+	"tsv.py" [shape=oval];
+	"tsv.py" -> tsv;
+	tsv [shape=record, label="tsv"];
+	"tsv.py" -> insertions;
+	insertions [shape=parallelogram, label="output/cross_sample_results/insertions.tsv.gz\noutput/cross_sample_results/deletions.tsv.gz\noutput/cross_sample_results/junctions.tsv.gz\noutput/cross_sample_results/normalization.tsv.gz"];
+
+	"bed.py" [shape=oval];
+	"bed.py" -> bed;
+	bed [shape=record, label="bed"];
+	"bed.py" -> beds
+	beds [shape=parallelogram, label="output/junctions_and_indels/junctions.bed\noutput/junctions_and_indels/insertions.bed\noutput/junctions_and_indels/deletions.bed"];
+}
