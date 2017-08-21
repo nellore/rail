@@ -4138,7 +4138,7 @@ class RailRnaAlign(object):
             try:
                 base.index_archive = _assemblies[assembly]
             except KeyError:
-                if not Url(assembly).is_s3:
+                if not ab.Url(assembly).is_s3:
                     base.errors.append(('Bowtie index archive must be on S3'
                                         ' in "elastic" mode, but '
                                         '"{0}" was entered.').format(assembly))
