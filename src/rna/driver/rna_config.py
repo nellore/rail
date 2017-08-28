@@ -4041,8 +4041,12 @@ class RailRnaAlign(object):
                 bowtie1_idx, _, bowtie2_idx = bowtie_idx.partition(',')
             else:
                 bowtie1_idx = bowtie2_idx = bowtie_idx
-            bowtie1_idx = os.path.expandvars(os.path.expanduser(bowtie1_idx))
-            bowtie2_idx = os.path.expandvars(os.path.expanduser(bowtie2_idx))
+            bowtie1_idx = os.path.abspath(
+                            os.path.expandvars(os.path.expanduser(bowtie1_idx))
+                        )
+            bowtie2_idx = os.path.abspath(
+                            os.path.expandvars(os.path.expanduser(bowtie2_idx))
+                        )
             bowtie1_extensions = set(['.1.ebwt', '.2.ebwt', '.3.ebwt',
                                       '.4.ebwt', '.rev.1.ebwt', '.rev.2.ebwt'])
             bowtie2_extensions = set(['.1.bt2', '.2.bt2', '.3.bt2', '.4.bt2', 
