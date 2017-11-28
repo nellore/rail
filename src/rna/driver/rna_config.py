@@ -1345,6 +1345,11 @@ class RailRnaErrors(object):
             help='perform no checks/setup until creation of job flow JSON'
         )
         general_parser.add_argument(
+            '--emr-debug', action='store_const', const=True,
+            default=False,
+            help='Enable EMR debug support; requires SimpleDB'
+        )
+        general_parser.add_argument(
             '--verbose', action='store_const', const=True,
             default=False,
             help='write extra debugging statements to stderr'
@@ -2114,7 +2119,8 @@ class RailRnaElastic(object):
         task_instance_bid_price=None, ec2_key_name=None,
         ec2_subnet_id=None, ec2_master_security_group_id=None,
         ec2_slave_security_group_id=None, keep_alive=False,
-        termination_protected=False, consistent_view=False,
+        termination_protected=False, emr_debug=False,
+        consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4,
         secure_stack_name=None, use_ebs=False, ebs_gb=500,
         ebs_volume_type='st1', ebs_iops=None, ebs_volumes_per_instance=1):
@@ -3209,6 +3215,7 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
         base.ec2_key_name = ec2_key_name
         base.keep_alive = keep_alive
         base.termination_protected = termination_protected
+        base.emr_debug = emr_debug
         base.consistent_view = consistent_view
         base.no_direct_copy = no_direct_copy
         base.use_ebs = use_ebs
@@ -3469,6 +3476,8 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
 
     @staticmethod
     def hadoop_debugging_steps(base):
+        if not base.emr_debug:
+            return []
         return [
             {
                 'ActionOnFailure' : base.action_on_failure,
@@ -5823,7 +5832,7 @@ class RailRnaElasticPreprocessJson(object):
         task_instance_bid_price=None, ec2_key_name=None,
         ec2_subnet_id=None, ec2_master_security_group_id=None,
         ec2_slave_security_group_id=None, keep_alive=False,
-        termination_protected=False, consistent_view=False,
+        termination_protected=False, emr_debug=False, consistent_view=False,
         no_direct_copy=False, check_manifest=True, intermediate_lifetime=4,
         max_task_attempts=4, no_setup=False, secure_stack_name=None,
         dbgap_key=None, use_ebs=False, ebs_gb=500, ebs_volume_type='st1',
@@ -5854,7 +5863,7 @@ class RailRnaElasticPreprocessJson(object):
             ec2_slave_security_group_id=ec2_slave_security_group_id,
             keep_alive=keep_alive,
             termination_protected=termination_protected,
-            consistent_view=consistent_view,
+            emr_debug=emr_debug, consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime,
             secure_stack_name=secure_stack_name,
@@ -6193,7 +6202,7 @@ class RailRnaElasticAlignJson(object):
         task_instance_bid_price=None, ec2_key_name=None,
         ec2_subnet_id=None, ec2_master_security_group_id=None,
         ec2_slave_security_group_id=None, keep_alive=False,
-        termination_protected=False, consistent_view=False,
+        termination_protected=False, emr_debug=False, consistent_view=False,
         no_direct_copy=False, intermediate_lifetime=4, max_task_attempts=4,
         no_setup=False, secure_stack_name=None, assembly='hg19',
         use_ebs=False, ebs_gb=500, ebs_volume_type='st1', ebs_iops=None,
@@ -6223,6 +6232,7 @@ class RailRnaElasticAlignJson(object):
             ec2_slave_security_group_id=ec2_slave_security_group_id,
             keep_alive=keep_alive,
             termination_protected=termination_protected,
+            emr_debug=emr_debug,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime,
@@ -6631,7 +6641,7 @@ class RailRnaElasticAllJson(object):
         task_instance_bid_price=None, ec2_key_name=None, ec2_subnet_id=None,
         ec2_master_security_group_id=None, ec2_slave_security_group_id=None,
         keep_alive=False, termination_protected=False, check_manifest=True,
-        no_direct_copy=False, consistent_view=False,
+        no_direct_copy=False, emr_debug=False, consistent_view=False,
         intermediate_lifetime=4, max_task_attempts=4, no_setup=False,
         dbgap_key=None, secure_stack_name=None, assembly='hg19',
         use_ebs=False, ebs_gb=500, ebs_volume_type='st1', ebs_iops=None,
@@ -6661,6 +6671,7 @@ class RailRnaElasticAllJson(object):
             ec2_master_security_group_id=ec2_master_security_group_id,
             ec2_slave_security_group_id=ec2_slave_security_group_id,
             keep_alive=keep_alive, termination_protected=termination_protected,
+            emr_debug=emr_debug,
             consistent_view=consistent_view,
             no_direct_copy=no_direct_copy,
             intermediate_lifetime=intermediate_lifetime,
