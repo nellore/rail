@@ -353,7 +353,7 @@ class S3Ansible(object):
                         'job flow is complete.'
                     ).format(prefix)
                 return
-            if 'NoSuchLifecycleConfiguration' in errors:
+            if 'NoSuchLifecycleConfiguration' not in errors:
                 # Raise exception iff lifecycle config exists
                 raise RuntimeError(errors)
         add_rule = True

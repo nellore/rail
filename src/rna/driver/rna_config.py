@@ -1887,7 +1887,7 @@ class RailRnaLocal(object):
         base.scratch = scratch
         if sort_exe:
             sort_exe_parameters = [parameter.strip()
-                                    for parameter in sort_exe.split(' ')]
+                                    for parameter in sort_exe]
         else:
             sort_exe_parameters = []
         check_scratch = True and not base.no_setup
@@ -1951,7 +1951,7 @@ class RailRnaLocal(object):
             No return value.
         """
         exec_parser.add_argument(
-            '--sort', type=str, required=False, metavar='<exe>',
+            '--sort', type=str, required=False, nargs='+', metavar='<exe>',
             default=exe_paths.sort,
             help=('path to sort executable; include extra sort parameters '
                   'here (def: %s)'
