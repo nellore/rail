@@ -3453,8 +3453,8 @@ sudo ln -s /home/hadoop/.ncbi /home/.ncbi
             help=('IOPs to provision per EBS block storage device (def: AWS '
                   'default for volume type')
         )
-        elastic_parser.add_argument('--ebs-volumes-per-instance', type=str,
-            metavar='<str>',
+        elastic_parser.add_argument('--ebs-volumes-per-instance', type=int,
+            metavar='<int>',
             required=False,
             default=1,
             help=('IOPs to provision per EBS block storage device')
