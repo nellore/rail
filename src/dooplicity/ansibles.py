@@ -550,6 +550,8 @@ def parsed_credentials(profile='default', base=None):
                             break
                     grab_roles = False
                     for line in config_stream:
+                        if len(line.strip()) == 0:
+                            continue
                         tokens = [token.strip() for token
                                     in line.strip().split('=')]
                         if tokens[0] == 'region' and not region_set:
