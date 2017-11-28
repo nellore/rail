@@ -38,7 +38,7 @@ import webbrowser
 import ansibles as ab
 import urllib2
 
-_aws_regions = set(['us-east-1', 'us-west-2', 'us-west-1', 'eu-west-1',
+_aws_regions = set(['us-east-1', 'us-east-2', 'us-west-2', 'us-west-1', 'eu-west-1',
                     'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1',
                     'sa-east-1', 'us-gov-west-1'])
 _emr_url = ('https://console.aws.amazon.com/elasticmapreduce/?region={region}'
