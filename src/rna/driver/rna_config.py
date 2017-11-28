@@ -2225,7 +2225,7 @@ class RailRnaElastic(object):
         # Initialize ansible for easy checks
         ansible = ab.Ansible(aws_exe=base.aws_exe, profile=base.profile)
         output_dir_url = ab.Url(base.output_dir)
-        if not base.no_setup and output_dir_url.is_s3:
+        if not base.no_setup and not output_dir_url.is_s3:
             '''Don't check if output URL is on S3 when not setting up; might
             be using elastic mode to prep Hadoop job flow JSON'''
             base.errors.append(('Output directory (--output) must be on S3 '
