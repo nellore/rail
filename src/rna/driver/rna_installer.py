@@ -59,7 +59,8 @@ class RailRnaInstaller(object):
 
     def __init__(self, zip_name, curl_exe=None, install_dir=None,
                     no_dependencies=False, prep_dependencies=False,
-                    yes=False, me=False, add_symlinks=False):
+                    yes=False, me=False, add_symlinks=False,
+                    print_log_on_error=False):
         print_to_screen(u"""{0} Rail-RNA v{1} Installer""".format(
                                         u'\u2200', version_number)
                                     )
@@ -91,6 +92,7 @@ class RailRnaInstaller(object):
         self.me = me
         self.prep_dependencies = prep_dependencies
         self.add_symlinks = add_symlinks
+        self.print_log_on_error = print_log_on_error
 
     def __enter__(self):
         return self
@@ -104,7 +106,15 @@ class RailRnaInstaller(object):
         new_log_file = os.path.join(tempfile.mkdtemp(),
                                             'rail-rna_installer.log')
         shutil.copyfile(self.log_file, new_log_file)
-        print_to_screen('Installation log may be found at %s.' % new_log_file)
+        if self.print_log_on_error:
+            print_to_screen('Installation log (also at %s):' % new_log_file)
+            print_to_screen('===')
+            with open(new_log_file, 'r') as log_fh:
+                for ln in log_fh:
+                    print_to_screen(ln.rstrip())
+            print_to_screen('===')
+        else:
+            print_to_screen('Installation log may be found at %s.' % new_log_file)
         sys.exit(1)
 
     def _yes_no_query(self, question, answer=None):
@@ -426,30 +436,55 @@ class RailRnaInstaller(object):
                 samtools = os.path.join(self.final_install_dir,
                         self.depends['samtools'][0].rpartition('/')[2][:-8],
                         'samtools')
+
+                def get_immediate_subdirectories(dr):
+                    return [name for name in os.listdir(dr)
+                            if os.path.isdir(os.path.join(dr, name))]
+
                 bowtie1_toks = self.depends['bowtie1'][0].rpartition(
                             '/'
                         )[2].split('-')
-                bowtie1_legacy = (
-                        len(bowtie1_toks) > 2 and bowtie1_toks[2] == 'legacy')
-                bowtie1_base = '-'.join(bowtie1_toks[:3 if bowtie1_legacy else 2])
-                if bowtie1_base.endswith('.zip'):
-                    bowtie1_base = bowtie1_base[:-4]
+                for i in [2, 3, 4]:
+                    bowtie1_base = '-'.join(bowtie1_toks[:i])
+                    if bowtie1_base.endswith('.zip'):
+                        bowtie1_base = bowtie1_base[:-4]
+                    bowtie1_tmp = os.path.join(bowtie1_base, 'bowtie')
+                    if os.path.exists(bowtie1_tmp):
+                        break
+                bowtie1_build_tmp = os.path.join(bowtie1_base, 'bowtie-build')
+
+                if not os.path.exists(bowtie1_tmp) or not os.path.exists(bowtie1_build_tmp):
+                    raise RuntimeError('Exploding bowtie package failed to '
+                                       'create appropriately named directory: '
+                                       + get_immediate_subdirectories('.'))
+
                 bowtie1 = os.path.join(self.final_install_dir,
-                                                bowtie1_base, 'bowtie')
+                                       bowtie1_base, 'bowtie')
                 bowtie1_build = os.path.join(self.final_install_dir,
-                                                bowtie1_base, 'bowtie-build')
+                                             bowtie1_base, 'bowtie-build')
+
                 bowtie2_toks = self.depends['bowtie2'][0].rpartition(
                             '/'
                         )[2].split('-')
-                bowtie2_legacy = (
-                        len(bowtie2_toks) > 2 and bowtie2_toks[2] == 'legacy')
-                bowtie2_base = '-'.join(bowtie2_toks[:3 if bowtie2_legacy else 2])
-                if bowtie2_base.endswith('.zip'):
-                    bowtie2_base = bowtie2_base[:-4]
+                for i in [2, 3, 4]:
+                    bowtie2_base = '-'.join(bowtie2_toks[:i])
+                    if bowtie2_base.endswith('.zip'):
+                        bowtie2_base = bowtie2_base[:-4]
+                    bowtie2_tmp = os.path.join(bowtie2_base, 'bowtie2')
+                    if os.path.exists(bowtie2_tmp):
+                        break
+                bowtie2_build_tmp = os.path.join(bowtie2_base, 'bowtie2-build')
+
+                if not os.path.exists(bowtie2_tmp) or not os.path.exists(bowtie2_build_tmp):
+                    raise RuntimeError('Exploding bowtie2 package failed to '
+                                       'create appropriately named directory: '
+                                       + get_immediate_subdirectories('.'))
+
                 bowtie2 = os.path.join(self.final_install_dir,
-                                                bowtie2_base, 'bowtie2')
+                                       bowtie2_base, 'bowtie2')
                 bowtie2_build = os.path.join(self.final_install_dir,
-                                                bowtie2_base, 'bowtie2-build')
+                                             bowtie2_base, 'bowtie2-build')
+
                 bedgraphtobigwig = os.path.join(
                                                 self.final_install_dir,
                                                 'bedGraphToBigWig'
@@ -746,8 +781,16 @@ export RAILDOTBIO={install_dir}
             new_log_file = os.path.join(self.final_install_dir,
                                             'rail-rna_installer.log')
             shutil.copyfile(self.log_file, new_log_file)
-            print_to_screen('Installation log may be found at %s.'
-                                                        % new_log_file)
+            if self.print_log_on_error:
+                print_to_screen('Installation log (also at %s):' % new_log_file)
+                print_to_screen('===')
+                with open(new_log_file, 'r') as log_fh:
+                    for ln in log_fh:
+                        print_to_screen(ln.rstrip())
+                print_to_screen('===')
+            else:
+                print_to_screen('Installation log may be found at %s.'
+                                                            % new_log_file)
             print_to_screen('*Before running any commands below, enter '
                             '"source ~/.bash_profile".*')
             if self.installed_aws:
