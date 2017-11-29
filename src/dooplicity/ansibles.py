@@ -129,7 +129,7 @@ class S3Ansible(object):
                 raise RuntimeError(('Error "{}" encountered trying to list '
                                     'bucket with command "{}".').format(
                                             e.output, ' '.join(
-                                                    create_bucket_command
+                                                    check_bucket_command
                                                 )
                                         ))
             if 'NoSuchBucket' in e.output:
