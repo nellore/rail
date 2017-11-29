@@ -74,6 +74,13 @@ if zipfile.is_zipfile(containing_dir):
             help=('symlinks all installed dependencies to /usr/local/bin if '
                   'installing for all users')
         )
+    parser.add_argument('--print-log-on-error', action='store_const',
+            const=True,
+            default=False,
+            help=('Print out the (long) installation log if there is an '
+                  'error.  By default, only the path to the log file is '
+                  'printed.')
+        )
     parser.add_argument('--curl', type=str, required=False, metavar='<exe>',
             default=exe_paths.curl,
             help=('path to cURL executable (def: %s)'
@@ -86,7 +93,9 @@ if zipfile.is_zipfile(containing_dir):
                             no_dependencies=args.no_dependencies,
                             prep_dependencies=args.prep_dependencies,
                             add_symlinks=args.symlink_dependencies,
-                            yes=args.yes, me=args.me) as railrna_installer:
+                            yes=args.yes, me=args.me,
+                            print_log_on_error=args.print_log_on_error) \
+            as railrna_installer:
         railrna_installer.install()
     sys.exit(0)
 

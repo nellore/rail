@@ -3970,7 +3970,7 @@ class RailRnaPreprocess(object):
                 'ScriptBootstrapAction' : {
                     'Args' : [
                         base.elastic_rail_path, _jar_target,
-                        '-y', '-p', '-s'
+                        '-y', '-p', '-s', '--print-log-on-error'
                     ], # always say yes, only prep dependencies, and symlink  
                     'Path' : base.install_rail_bootstrap
                 }
