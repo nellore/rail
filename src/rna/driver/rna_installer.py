@@ -674,7 +674,7 @@ export RAILDOTBIO={install_dir}
                                     [temp_ipython_install_dir])
                 with cd(temp_ipython_install_dir):
                     self._grab_and_explode(
-                        self.depends['ipyparallel'], 'IPython Parallel')
+                        self.depends['ipython'], 'IPython Parallel')
                     setup_dir = os.path.dirname(find('setup.py', './'))
                     with cd(setup_dir):
                         ipython_command = [
