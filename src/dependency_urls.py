@@ -21,9 +21,9 @@ linux_dependencies = {
                  'http://verve.webfactional.com/mirror/linux/'
                  'bowtie-1.2.1.1-linux-x86_64.zip'],
     'bowtie2' : ['https://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie2/2.3.2/bowtie2-2.3.2-legacy-linux-x86_64.zip',
+                 'bowtie2/2.3.3.1/bowtie2-2.3.3.1-linux-x86_64.zip',
                  'http://verve.webfactional.com/mirror/linux/'
-                 'bowtie2-2.3.2-legacy-linux-x86_64.zip'],
+                 'bowtie2-2.3.3.1-linux-x86_64.zip'],
     'bedgraphtobigwig' : ['ftp://ftp.ccb.jhu.edu/pub/langmead/rail/'
                           'linux.x86_64/bedGraphToBigWig',
                           'http://verve.webfactional.com/mirror/linux/'
@@ -62,9 +62,9 @@ mac_dependencies = {
                  'http://verve.webfactional.com/mirror/mac/'
                  'bowtie-1.2.1.1-macos-x86_64.zip'],
     'bowtie2' : ['https://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie2/2.3.2/bowtie2-2.3.2-legacy-macos-x86_64.zip',
+                 'bowtie2/2.3.3.1/bowtie2-2.3.3.1-macos-x86_64.zip',
                  'http://verve.webfactional.com/mirror/mac/'
-                 'bowtie2-2.3.2-legacy-macos-x86_64.zip'],
+                 'bowtie2-2.3.3.1-macos-x86_64.zip'],
     'bedgraphtobigwig' : ['ftp://ftp.ccb.jhu.edu/pub/langmead/rail/'
                           'macOSX.x86_64/bedGraphToBigWig',
                           'http://verve.webfactional.com/mirror/mac/'
