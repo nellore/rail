@@ -68,7 +68,7 @@ site.addsitedir(base_path)
 
 from dooplicity.tools import xstream, register_cleanup, xopen, \
     make_temp_dir
-from dooplicity.counters import Counter
+#from dooplicity.counters import Counter
 import bowtie
 import argparse
 import tempdel
@@ -76,8 +76,8 @@ import itertools
 
 # Initialize global variable for tracking number of input lines
 _input_line_count = 0
-counter = Counter('realign_reads')
-register_cleanup(counter.flush)
+#counter = Counter('realign_reads')
+#register_cleanup(counter.flush)
 
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 
@@ -109,7 +109,7 @@ def input_files_from_input_stream(input_stream,
     for (group_counter, ((index_group,), xpartition)) in enumerate(
                                                     xstream(input_stream, 1)
                                                 ):
-        counter.add('partitions')
+        #counter.add('partitions')
         if verbose:
             print >>sys.stderr, (
                         'Group %d: Writing prefasta and input reads...'
@@ -120,7 +120,7 @@ def input_files_from_input_stream(input_stream,
                 for read_seq, values in itertools.groupby(xpartition, 
                                                     key=lambda val: val[0]):
                     fasta_printed = False
-                    counter.add('inputs')
+                    #counter.add('inputs')
                     for value in values:
                         _input_line_count += 1
                         if value[1][0] == '0':
@@ -348,8 +348,8 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                                         fasta_file,
                                         bowtie2_index_base
                                     )
-        counter.add('bowtie_build_invocations')
-        counter.add('bowtie_build_return_%d' % bowtie_build_return_code)
+        #counter.add('bowtie_build_invocations')
+        #counter.add('bowtie_build_return_%d' % bowtie_build_return_code)
         if bowtie_build_return_code == 0:
             try:
                 os.remove(fasta_file)
