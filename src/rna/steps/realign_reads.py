@@ -193,6 +193,7 @@ def input_files_from_input_stream(input_stream,
                     final_fasta_stream.write('\n')
         os.remove(deduped_fasta_filename)
         os.remove(prefasta_filename)
+        output_stream.flush()
         yield final_fasta_filename, reads_filename
 
 def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
