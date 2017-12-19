@@ -275,6 +275,10 @@ if __name__ == '__main__':
                 else:
                     seq_to_write = initial_multiread[0][9]
                     qual_to_write = initial_multiread[0][10]
+                if seq_to_write == 'AGATATGCGGTAACTTAAAGATTTGGCTCTCGCTCTTCAGCGATTCAGCGCAAAGNTGNTCGAGCAGGTACTGCCT':
+                    print >>sys.stderr, 'seq makes it to compare_alignments'
+                    print >>sys.stderr, corrected_multiread
+                    raise RuntimeError
                 output_line_count \
                     += alignment_printer.print_unmapped_read(
                                                     qname,
