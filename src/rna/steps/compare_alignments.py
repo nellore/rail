@@ -282,10 +282,6 @@ if __name__ == '__main__':
                                                     qual_to_write
                                                 )
                 continue
-            if corrected_multiread[0][9] == 'TCTATACGCCATTGAATTTCTAAACCGAGAGCGAGAAGTCGCTAAGTCGCGTTTCNACNAGCTCGTCCATGACGGA':
-                print >>sys.stderr, 'seq makes it to compare_alignments'
-                print >>sys.stderr, corrected_multiread
-                raise RuntimeError
             count = alignment_printer.print_alignment_data(
                 multiread_to_report(
                     corrected_multiread,
