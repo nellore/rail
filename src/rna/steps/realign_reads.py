@@ -449,7 +449,7 @@ if __name__ == '__main__' and not args.test:
     archive = os.path.join(args.archive,
         str(os.getpid())) if args.archive is not None else None
     # Handle temporary directory if CTRL+C'd
-    #register_cleanup(handle_temporary_directory, archive, temp_dir_path)
+    register_cleanup(handle_temporary_directory, archive, temp_dir_path)
     if args.verbose:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path
