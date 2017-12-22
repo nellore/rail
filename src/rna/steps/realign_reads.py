@@ -123,7 +123,6 @@ def input_files_from_input_stream(input_stream,
                     fasta_printed = False
                     counter.add('inputs')
                     for value in values:
-                        print >>sys.stderr, value
                         _input_line_count += 1
                         if value[1][0] == '0':
                             # Print FASTA line
