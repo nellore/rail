@@ -214,20 +214,14 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
         print >>sys.stderr, os.path.getsize(fasta_file)
         command = ' '.join([bowtie2_build_exe,
                                         fasta_file,
-                                        index_basename])
+                                        index_basename,
+                                        '>/dev/null'
+                                        '2>/dev/null'])
         print >>sys.stderr, command
         bowtie_build_process = subprocess.Popen(
-                                    ['ls'],
-                                    stderr=sys.stderr,
-                                    stdout=null_stream,
-                                ).wait()
-        print >>sys.stderr, 'Exit code {}'.format(bowtie_build_process)
-        bowtie_build_process = subprocess.Popen(
-                                    [bowtie2_build_exe,
-                                        fasta_file,
-                                        index_basename],
-                                    stderr=sys.stderr,
-                                    stdout=null_stream,
+                                    command,
+                                    shell=True,
+                                    executable='/bin/bash'
                                 )
     bowtie_build_process.wait()
     return bowtie_build_process.returncode
