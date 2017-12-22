@@ -210,12 +210,16 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
     with open(os.devnull) as null_stream:
         print >>sys.stderr, 'FASTA file size:'
         print >>sys.stderr, os.path.getsize(fasta_file)
-        bowtie_build_process = subprocess.Popen(
-                                    [bowtie2_build_exe,
+        command = ' '.join([bowtie2_build_exe,
                                         fasta_file,
-                                        index_basename],
+                                        index_basename])
+        print >>sys.stderr, command
+        bowtie_build_process = subprocess.Popen(
+                                    command,
                                     stderr=null_stream,
-                                    stdout=null_stream
+                                    stdout=null_stream,
+                                    shell=True,
+                                    executable='/bin/bash'
                                 )
     bowtie_build_process.wait()
     return bowtie_build_process.returncode
