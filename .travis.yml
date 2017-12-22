@@ -46,6 +46,10 @@ install:
   - bowtie --version
   - which bowtie2
   - bowtie2 --version
+  - which bowtie-build
+  - bowtie-build --version
+  - which bowtie2-build
+  - bowtie2-build --version
 script:
   - make
   - df -h
