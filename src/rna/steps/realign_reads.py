@@ -207,6 +207,8 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
 
         Return value: return value of bowtie-build process
     """
+    print >>sys.stderr, 'This is devnull'
+    print >>sys.stderr, os.devnull
     with open(os.devnull) as null_stream:
         print >>sys.stderr, 'FASTA file size:'
         print >>sys.stderr, os.path.getsize(fasta_file)
