@@ -73,6 +73,7 @@ import bowtie
 import argparse
 import tempdel
 import itertools
+from copy import copy
 
 # Initialize global variable for tracking number of input lines
 _input_line_count = 0
@@ -122,6 +123,7 @@ def input_files_from_input_stream(input_stream,
                     fasta_printed = False
                     counter.add('inputs')
                     for value in values:
+                        #print >>sys.stderr, value
                         _input_line_count += 1
                         if value[1][0] == '0':
                             # Print FASTA line
@@ -314,6 +316,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     """
     start_time = time.time()
     if temp_dir_path is None: temp_dir_path = tempfile.mkdtemp()
+    print >>sys.stderr, temp_dir_path
     bowtie2_index_base = os.path.join(temp_dir_path, 'tempidx')
     alignment_count_to_report, _, _ \
             = bowtie.parsed_bowtie_args(bowtie2_args)
@@ -334,7 +337,7 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
                         tie_margin, '--verbose' if verbose else '')]
         )
     # Use grep to kill empty lines terminating python script
-    full_command = ' | '.join([input_command, 
+    full_command = ' | '.join([input_command,
                                 bowtie_command, delegate_command])
     print >>sys.stderr, 'Bowtie2 command to execute: ' + full_command
     for fasta_file, reads_file in input_files_from_input_stream(
@@ -447,7 +450,7 @@ if __name__ == '__main__' and not args.test:
     archive = os.path.join(args.archive,
         str(os.getpid())) if args.archive is not None else None
     # Handle temporary directory if CTRL+C'd
-    register_cleanup(handle_temporary_directory, archive, temp_dir_path)
+    #register_cleanup(handle_temporary_directory, archive, temp_dir_path)
     if args.verbose:
         print >>sys.stderr, 'Creating temporary directory %s' \
             % temp_dir_path

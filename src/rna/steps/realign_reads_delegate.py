@@ -25,10 +25,8 @@ site.addsitedir(base_path)
 
 from dooplicity.tools import xstream, xopen, register_cleanup
 from dooplicity.counters import Counter
-
 counter = Counter('realign_reads_delegate')
 register_cleanup(counter.flush)
-
 import string
 _reversed_complement_translation_table = string.maketrans('ATCG', 'TAGC')
 

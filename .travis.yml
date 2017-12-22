@@ -52,6 +52,8 @@ script:
   - mkdir -p $HOME/railtemp
   - TMPDIR="$HOME/railtemp" python tests/line.py --bowtie-idx Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/genome --bowtie2-idx Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/genome --genome Drosophila_melanogaster/UCSC/dm6/Sequence/WholeGenomeFasta/genome.fa --manifest ex/dm3_example.manifest
 after_failure:
+  - grep AGATATGCGGTAACTTAAAGATTTGGCTCTCGCTCTTCAGCGATTCAGCGCAAAGNTGNTCGAGCAGGTACTGCCT -r rail-rna_logs
+  - grep TCTATACGCCATTGAATTTCTAAACCGAGAGCGAGAAGTCGCTAAGTCGCGTTTCNACNAGCTCGTCCATGACGGA -r rail-rna_logs
   - df -h
 notifications:
   slack:
