@@ -53,7 +53,7 @@ script:
   - TMPDIR="$HOME/railtemp" python tests/line.py --bowtie-idx Drosophila_melanogaster/UCSC/dm6/Sequence/BowtieIndex/genome --bowtie2-idx Drosophila_melanogaster/UCSC/dm6/Sequence/Bowtie2Index/genome --genome Drosophila_melanogaster/UCSC/dm6/Sequence/WholeGenomeFasta/genome.fa --manifest ex/dm3_example.manifest
 after_failure:
   - grep AGATATGCGGTAACTTAAAGATTTGGCTCTCGCTCTTCAGCGATTCAGCGCAAAGNTGNTCGAGCAGGTACTGCCT -r /
-  - grep TCTATACGCCATTGAATTTCTAAACCGAGAGCGAGAAGTCGCTAAGTCGCGTTTCNACNAGCTCGTCCATGACGGA -r /
+  - grep AGGCAGTACCTGCTCGANCANCTTTGCGCTGAATCGCTGAAGAGCGAGAGCCAAATCTTTAAGTTACCGCATATCT -r /
   - df -h
 notifications:
   slack:
