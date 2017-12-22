@@ -215,7 +215,7 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
                                         index_basename])
         print >>sys.stderr, command
         bowtie_build_process = subprocess.Popen(
-                                    [bowtie2_build_exe],
+                                    ['ls'],
                                     stderr=sys.stderr,
                                     stdout=null_stream,
                                 ).wait()
