@@ -215,7 +215,7 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
         command = ' '.join([bowtie2_build_exe,
                                         fasta_file,
                                         index_basename,
-                                        '>/dev/null'
+                                        '>/dev/null',
                                         '2>/dev/null'])
         print >>sys.stderr, command
         bowtie_build_process = subprocess.Popen(
