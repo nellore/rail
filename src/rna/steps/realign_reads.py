@@ -461,7 +461,6 @@ if __name__ == '__main__' and not args.test:
         gzip_level=args.gzip_level,
         count_multiplier=args.count_multiplier,
         tie_margin=args.tie_margin)
-    raise RuntimeError
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
