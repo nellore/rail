@@ -659,10 +659,20 @@ if __name__ == '__main__':
                             ]
             print >>sys.stderr, (
                     'Error occurred running a step. Contents of '
-                    'log file {}:'.format(log_file)
+                    'log file {}, where error was found:'.format(log_file)
                 )
             with open(log_file) as log_stream:
                 print >>sys.stderr, log_stream.read()
+            for other_log_file in glob.glob(
+                        os.path.join(os.path.dirname(log_file), '*.log')
+                    ):
+                if other_log_file != log_file:
+                    print >>sys.stderr, 'Contents of log file {}:'.format(
+                                                            other_log_file
+                                                        )
+                    with open(other_log_file) as log_stream:
+                        print >>sys.stderr, log_stream.read()
+
         raise RuntimeError(error_out(e))
 
     for sample, unique in product(samples, (False, True)):
