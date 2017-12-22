@@ -315,7 +315,6 @@ def go(input_stream=sys.stdin, output_stream=sys.stdout, bowtie2_exe='bowtie2',
     """
     start_time = time.time()
     if temp_dir_path is None: temp_dir_path = tempfile.mkdtemp()
-    print >>sys.stderr, temp_dir_path
     bowtie2_index_base = os.path.join(temp_dir_path, 'tempidx')
     alignment_count_to_report, _, _ \
             = bowtie.parsed_bowtie_args(bowtie2_args)
