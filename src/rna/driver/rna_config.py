@@ -202,8 +202,6 @@ else:
     else:
         _warning_message = 'Launching Dooplicity runner with PyPy...'
 
-_executable = _executable + ' -u'
-
 def print_to_screen(message, newline=True, carriage_return=False):
     """ Prints message to stdout as well as stderr if stderr is redirected.
 

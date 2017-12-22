@@ -123,7 +123,7 @@ def input_files_from_input_stream(input_stream,
                     fasta_printed = False
                     counter.add('inputs')
                     for value in values:
-                        #print >>sys.stderr, value
+                        print >>sys.stderr, value
                         _input_line_count += 1
                         if value[1][0] == '0':
                             # Print FASTA line
@@ -463,6 +463,7 @@ if __name__ == '__main__' and not args.test:
         gzip_level=args.gzip_level,
         count_multiplier=args.count_multiplier,
         tie_margin=args.tie_margin)
+    raise RuntimeError
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
