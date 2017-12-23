@@ -871,7 +871,7 @@ class CommandThread(threading.Thread):
         self.process_return = None
     def run(self):
         self.process_return = subprocess.Popen(
-                ' '.join([self.command_list, '>/dev/null', '2>/dev/null']),
+                ' '.join(self.command_list + ['>/dev/null', '2>/dev/null']),
                 shell=True,
                 executable='/bin/bash'
             ).wait()
