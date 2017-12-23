@@ -103,7 +103,6 @@ class S3Ansible(object):
         """
         self.aws = aws_exe
         self.profile = profile
-        self._osdevnull = open(os.devnull, 'w')
         self.iface = iface
 
     def create_bucket(self, bucket, region='us-east-1'):
@@ -162,11 +161,14 @@ class S3Ansible(object):
         cleaned_url = clean_url(path)
         # Extract filename from URL; everything after terminal slash
         filename = cleaned_url[::-1][:cleaned_url[::-1].index('/')][::-1]
-        aws_command = [self.aws, '--profile', self.profile, 
-                        's3', 'ls', cleaned_url]
+        aws_command = ' '.join(
+                            [self.aws, '--profile', self.profile, 
+                             's3', 'ls', cleaned_url, '2>/dev/null']
+                        )
         aws_process = subprocess.Popen(aws_command,
                                         stdout=subprocess.PIPE,
-                                        stderr=self._osdevnull,
+                                        shell=True,
+                                        executable='/bin/bash',
                                         bufsize=-1)
         filename_size = len(filename)
         for line in aws_process.stdout:
@@ -190,13 +192,16 @@ class S3Ansible(object):
         while cleaned_url[-2] == '/':
             cleaned_url = cleaned_url[:-1]
         # Now the URL has just one trailing slash
-        aws_command = [self.aws, '--profile', self.profile, 
-                        's3', 'ls', cleaned_url]
+        aws_command = ' '.join(
+                        [self.aws, '--profile', self.profile, 
+                         's3', 'ls', cleaned_url, '2>/dev/null']
+                    )
         try:
             list_out = \
                 subprocess.check_output(aws_command,
-                                         stderr=self._osdevnull,
-                                         bufsize=-1).strip()
+                                        shell=True,
+                                        executable='/bin/bash',
+                                        bufsize=-1).strip()
         except subprocess.CalledProcessError:
             # Bucket doesn't exist
             return False
@@ -220,13 +225,17 @@ class S3Ansible(object):
         while cleaned_url[-2] == '/':
             cleaned_url = cleaned_url[:-1]
         # Now the URL has just one trailing slash
-        aws_command = [self.aws, '--profile', self.profile,
-                        's3', 'rm', '--recursive', cleaned_url]
+        aws_command = ' '.join(
+                        [self.aws, '--profile', self.profile,
+                         's3', 'rm', '--recursive', cleaned_url,
+                         '2>/dev/null']
+                    )
         if self.iface:
             rm_process = subprocess.Popen(aws_command,
                                             bufsize=-1,
                                             stdout=subprocess.PIPE,
-                                            stderr=self._osdevnull)
+                                            shell=True,
+                                            executable='/bin/bash')
             lim = 70 # Max number of chars to print in delete message
             process_start = time.time()
             printed = False
@@ -265,9 +274,12 @@ class S3Ansible(object):
                 pass
         else:
             try:
-                subprocess.check_call(aws_command, bufsize=-1,
-                                            stdout=self._osdevnull,
-                                            stderr=self._osdevnull)
+                subprocess.check_call(' '.join([aws_command,
+                                                '>/dev/null',
+                                                '2>/dev/null']),
+                                            bufsize=-1,
+                                            shell=True,
+                                            executable='/bin/bash')
             except subprocess.CalledProcessError:
                 # Bucket does not exist
                 pass
@@ -281,12 +293,16 @@ class S3Ansible(object):
             No return value.
         """
         # Always use SSE
-        aws_command = [self.aws, '--profile', self.profile,
+        aws_command = ' '.join(
+                       [self.aws, '--profile', self.profile,
                         's3', 'cp', os.path.abspath(source),
-                        clean_url(destination), '--sse']
+                        clean_url(destination), '--sse',
+                        '>/dev/null']
+                    )
         subprocess.check_call(aws_command, bufsize=-1,
-                                    stdout=self._osdevnull,
-                                    stderr=sys.stderr)
+                                    stderr=sys.stderr,
+                                    shell=True,
+                                    executable='/bin/bash')
 
     def get(self, source, destination='.'):
         """ Gets a file from S3.
@@ -296,10 +312,14 @@ class S3Ansible(object):
 
             No return value.
         """
-        aws_command = [self.aws, '--profile', self.profile, 's3', 'cp',
-                        clean_url(source), os.path.abspath(destination)]
+        aws_command = ' '.join(
+                        [self.aws, '--profile', self.profile, 's3', 'cp',
+                         clean_url(source), os.path.abspath(destination),
+                         '>/dev/null']
+                    )
         subprocess.check_call(aws_command, bufsize=-1,
-                                stdout=self._osdevnull,
+                                shell=True,
+                                executable='/bin/bash',
                                 stderr=sys.stderr)
 
     def expire_prefix(self, prefix, days=4):
@@ -371,14 +391,17 @@ class S3Ansible(object):
                         'Prefix' : prefix
                     }
                 )
-            aws_command = [self.aws, '--profile', self.profile,
-                            's3api', 'put-bucket-lifecycle', '--bucket',
-                            bucket, '--lifecycle-configuration',
+            aws_command = ' '.join(
+                            [self.aws, '--profile', self.profile,
+                             's3api', 'put-bucket-lifecycle', '--bucket',
+                             bucket, '--lifecycle-configuration',
                                                 '{"Rules":%s}'
-                                                % json.dumps(rules)]
+                                                % json.dumps(rules),
+                            '>/dev/null']
+                        )
             try:
                 subprocess.check_call(aws_command, bufsize=-1,
-                                            stdout=self._osdevnull,
+                                            shell=True, executable='/bin/bash',
                                             stderr=sys.stderr)
             except subprocess.CalledProcessError as e:
                 raise RuntimeError(('Error encountered changing lifecycle'
@@ -846,11 +869,12 @@ class CommandThread(threading.Thread):
         super(CommandThread, self).__init__()
         self.command_list = command_list
         self.process_return = None
-        self._osdevnull = open(os.devnull, 'w')
     def run(self):
-        self.process_return \
-            = subprocess.Popen(self.command_list, stdout=self._osdevnull,
-                                                stderr=self._osdevnull).wait()
+        self.process_return = subprocess.Popen(
+                ' '.join([self.command_list, '>/dev/null', '2>/dev/null']),
+                shell=True,
+                executable='/bin/bash'
+            ).wait()
 
 class WebAnsible(object):
     """ Ultimate goal: seamless communication with various web services.
@@ -864,13 +888,15 @@ class WebAnsible(object):
         """
         self.curl = curl_exe
         self.keep_alive = keep_alive
-        self._osdevnull = open(os.devnull, 'w')
 
     def exists(self, path):
         curl_process = subprocess.Popen(
-                                ['curl', '--head', path],
+                                ' '.join(
+                                    ['curl', '--head', path, '2>/dev/null']
+                                ),
                                 bufsize=-1, stdout=subprocess.PIPE,
-                                stderr=self._osdevnull
+                                shell=True,
+                                executable='/bin/bash'
                             )
         curl_err = curl_process.stdout.read()
         return_code = curl_process.wait()

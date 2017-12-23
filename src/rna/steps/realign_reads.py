@@ -207,22 +207,16 @@ def create_index_from_reference_fasta(bowtie2_build_exe, fasta_file,
 
         Return value: return value of bowtie-build process
     """
-    print >>sys.stderr, 'This is devnull'
-    print >>sys.stderr, os.devnull
-    with open(os.devnull) as null_stream:
-        print >>sys.stderr, 'FASTA file size:'
-        print >>sys.stderr, os.path.getsize(fasta_file)
-        command = ' '.join([bowtie2_build_exe,
-                                        fasta_file,
-                                        index_basename,
-                                        '>/dev/null',
-                                        '2>/dev/null'])
-        print >>sys.stderr, command
-        bowtie_build_process = subprocess.Popen(
-                                    command,
-                                    shell=True,
-                                    executable='/bin/bash'
-                                )
+    command = ' '.join([bowtie2_build_exe,
+                                    fasta_file,
+                                    index_basename,
+                                    '>/dev/null',
+                                    '2>/dev/null'])
+    bowtie_build_process = subprocess.Popen(
+                                command,
+                                shell=True,
+                                executable='/bin/bash'
+                            )
     bowtie_build_process.wait()
     return bowtie_build_process.returncode
 
@@ -469,7 +463,6 @@ if __name__ == '__main__' and not args.test:
         gzip_level=args.gzip_level,
         count_multiplier=args.count_multiplier,
         tie_margin=args.tie_margin)
-    raise RuntimeError
 elif __name__ == '__main__':
     # Test units
     del sys.argv[1:] # Don't choke on extra command-line parameters
