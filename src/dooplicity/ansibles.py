@@ -275,8 +275,7 @@ class S3Ansible(object):
         else:
             try:
                 subprocess.check_call(' '.join([aws_command,
-                                                '>/dev/null',
-                                                '2>/dev/null']),
+                                                '>/dev/null']),
                                             bufsize=-1,
                                             shell=True,
                                             executable='/bin/bash')
@@ -406,7 +405,7 @@ class S3Ansible(object):
             except subprocess.CalledProcessError as e:
                 raise RuntimeError(('Error encountered changing lifecycle'
                                     'parameters with command "{}".').format(
-                                                ' '.join(aws_command)
+                                                aws_command
                                             ))
 
 def aws_params_from_json(json_object, prefix=''):
