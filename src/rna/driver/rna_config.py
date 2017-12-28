@@ -1892,10 +1892,10 @@ class RailRnaLocal(object):
         base.scratch = scratch
         if sort_exe:
             sort_exe_parameters = [parameter.strip()
-                                    for parameter in sort_exe]
+                                    for parameter in sort_exe.split()]
         else:
             sort_exe_parameters = []
-        check_scratch = True and not base.no_setup
+        check_scratch = not base.no_setup
         try:
             sort_scratch = sort_exe_parameters[
                     sort_exe_parameters.index('--temporary-directory')+1
@@ -1956,7 +1956,7 @@ class RailRnaLocal(object):
             No return value.
         """
         exec_parser.add_argument(
-            '--sort', type=str, required=False, nargs='+', metavar='<exe>',
+            '--sort', type=str, required=False, metavar='<exe>',
             default=exe_paths.sort,
             help=('path to sort executable; include extra sort parameters '
                   'here (def: %s)'
