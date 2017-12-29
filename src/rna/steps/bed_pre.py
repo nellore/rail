@@ -445,15 +445,15 @@ elif __name__ == '__main__':
                     in output_lines
                 )
             self.assertTrue(
-                    'collect\t0\t000000000000\t140\t140\tATAC\t12\t0\t0'
+                    'collect\t0\t000000000000\t140\t140\tATAC\t0\t12'
                     in output_lines
                 )
             self.assertTrue(
-                    'collect\t1\t000000000001\t150\t156\tAACCTT\t3\t3\t0'
+                    'collect\t1\t000000000001\t150\t156\tAACCTT\t0,1\t3,3'
                     in output_lines
                 )
             self.assertTrue(
-                    'collect\t2\t000000000003\t3567\t3889\t+\t0\t0\t2'
+                    'collect\t2\t000000000003\t3567\t3889\t+\t2\t2'
                     in output_lines
                 )
             self.assertEquals(
