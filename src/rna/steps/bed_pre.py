@@ -205,19 +205,13 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
         collect_specs = [rname, pos, end_pos if line_type != 'N'
                                              else str(int(end_pos) - 1),
                                      strand_or_seq]
-        coverages = []
-        i = 0
+        sample_indexes, coverages = [], []
         if line_type == 'N':
             counter.add('junction_line')
             for sample_index, data in itertools.groupby(
                                                     xpartition, 
                                                     key=lambda val: val[0]
                                                 ):
-                sample_index = int(sample_index)
-                while i != sample_index:
-                    # Write 0 coverage for sample indexes reporting 0 junctions
-                    coverages.append(0)
-                    i += 1
                 coverage_sum = 0
                 max_left_displacement, max_right_displacement = None, None
                 maximin_displacement = None
@@ -239,35 +233,31 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                 assert maximin_displacement is not None
                 counter.add('bed_line')
                 print >>output_stream, \
-                    'bed\tN\t%d\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d' % (
+                    'bed\tN\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d' % (
                         sample_index, rname, pos, end_pos, strand_or_seq,
                         max_left_displacement, max_right_displacement,
                         maximin_displacement, coverage_sum
                     )
+                sample_indexes.append(sample_index)
                 coverages.append(coverage_sum)
-                i += 1
                 output_line_count += 1
             counter.add('collect_line')
             output_stream.write('collect\t2\t')
             print >>output_stream, '\t'.join(
                         collect_specs
-                        + [str(coverage_value) for coverage_value in coverages]
-                        + ['0']*(total_sample_count - len(coverages))
+                        + [','.join(sample_indexes),
+                           ','.join(map(str, coverages))]
                     )
             output_line_count += 1
         else:
-            counter.add('insertion_line' if line_type == 'I' else 'deletion_line')
+            counter.add('insertion_line' if line_type == 'I'
+                            else 'deletion_line')
             assert line_type in 'ID'
             sample_count = 0
             for sample_index, data in itertools.groupby(
                                                     xpartition, 
                                                     key=lambda val: val[0]
                                                 ):
-                sample_index = int(sample_index)
-                while i != sample_index:
-                    # Write 0 coverage for sample indexes reporting 0 indels
-                    coverages.append(0)
-                    i += 1
                 coverage_sum = 0
                 for _, _, _, coverage in data:
                     input_line_count += 1
@@ -278,9 +268,9 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                         line_type, sample_index, rname, pos, end_pos,
                         strand_or_seq, coverage_sum
                     )
+                sample_indexes.append(sample_index)
                 coverages.append(coverage_sum)
                 sample_count += 1
-                i += 1
                 output_line_count += 1
             max_coverage = max(coverages)
             if (sample_count >= min_sample_count
@@ -294,19 +284,19 @@ def go(manifest_object, input_stream=sys.stdin, output_stream=sys.stdout,
                 print >>output_stream, \
                     '\t'.join(
                         collect_specs 
-                        + [str(coverage_value) for coverage_value in coverages]
-                        + ['0']*(total_sample_count - len(coverages))
+                        + [','.join(sample_indexes),
+                           ','.join(map(str, coverages))]
                     )
                 output_line_count += 1
             else:
                 counter.add('indel_filtered_out')
                 if verbose:
                     print >>sys.stderr, (
-                            'Indel (%s, %s, %s, %s) filtered out; it appeared in '
-                            '%d sample(s), and its coverage in any one sample did '
-                            'not exceed %d.'
-                        ) % (rname, strand_or_seq, pos, end_pos, sample_count,
-                                max_coverage)
+                        'Indel (%s, %s, %s, %s) filtered out; it appeared in '
+                        '%d sample(s), and its coverage in any one sample did '
+                        'not exceed %d.'
+                    ) % (rname, strand_or_seq, pos, end_pos, sample_count,
+                            max_coverage)
     counter.flush()
     return input_line_count, output_line_count
 

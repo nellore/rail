@@ -10,23 +10,26 @@ coverages of junctions, insertions, and deletions across samples.
 Input (read from stdin)
 ----------------------------
 Tab-delimited output tuple columns (collect)
-1. '0' if insertion, '1' if deletion, '2' if junction line, '3'
-    if normalization factor
+1. '0' if insertion, '1' if deletion, '2' if junction line,
+   '3[.RNAME if outputting TSV by RNAME else blank]' if
+    coverage line, '4' if normalization factor
 2. Number string representing RNAME (+ '+ or -' if junction; same as field 6)
-    or sample index if field 1 is '3'
+    or sample index if field 1 is '4'
 3. Start position (Last base before insertion, first base of deletion,
-                    or first base of intron)
-    or '\x1c' if field 1 is '3'
+                    first base of intron, or position where coverage changes
+                    in some sample)
+    or '\x1c' if field 1 is '4'
 4. End position (Last base before insertion, last base of deletion (exclusive),
-                    or last base of intron (INCLUSIVE))
-    or '\x1c' if field 1 is '3'
+                    or last base of intron (INCLUSIVE), or
+                    last base of coverage block)
+    or '\x1c' if field 1 is '3' or '4'
 5. '+' or '-' indicating which strand is the sense strand for junctions,
-   inserted sequence for insertions, or deleted sequence for deletions
-   or '\x1c' if field 1 is '3'
-6. Coverage of feature for sample with index N
-    or normalization factor
-...
-N + 6. Coverage of feature in sample with index N
+   inserted sequence for insertions, deleted sequence for deletions
+   or '\x1c' if field 1 is '3' or '4'
+6. Comma-separated list of sample indexes, or normalization factor if
+    field 1 is '4'
+7. Comma-separated list of coverages corresponding to sample indexes from 
+    field 6 or blank
 
 Input is partitioned by field 1 and sorted by fields 2-5.
 
@@ -93,10 +96,12 @@ parser.add_argument('--manifest', type=str, required=False,
         default='manifest',
         help='Path to manifest file')
 parser.add_argument(
-    '--tsv-basename', type=str, required=False, 
-    default='',
-    help='The basename (excluding path) of TSV output. Basename is '
-         'followed by ".[junctions/insertions/deletions].tsv.gz"')
+        '--tsv-basename', type=str, required=False, 
+        default='',
+        help=('The basename (excluding path) of TSV output. Basename is '
+              'followed by '
+              '".[junctions/insertions/deletions/coverages[.RNAME]].tsv.gz"')
+    )
 parser.add_argument('--gzip-level', type=int, required=False,
         default=3,
         help='Level of gzip compression to use for temporary files')
@@ -122,10 +127,6 @@ start_time = time.time()
 reference_index = bowtie_index.BowtieIndexReference(
                         os.path.expandvars(args.bowtie_idx)
                     )
-# For mapping sample indices back to original sample labels
-manifest_object = manifest.LabelsAndIndices(
-                        os.path.expandvars(args.manifest)
-                    )
 output_url = Url(args.out) if args.out is not None \
     else Url(os.getcwd())
 input_line_count = 0
@@ -141,14 +142,16 @@ else:
     register_cleanup(tempdel.remove_temporary_directories, [temp_dir_path])
 
 input_line_count = 0
-counter = Counter('realign_reads_delegate')
+counter = Counter('tsv')
 register_cleanup(counter.flush)
 
 for (line_type,), xpartition in xstream(sys.stdin, 1):
     type_string = ('insertions' if line_type == '0' else
                     ('deletions' if line_type == '1' else
                       ('junctions' if line_type == '2' else
-                        'normalization')))
+                         ('coverages' + line_type[1:]
+                            if line_type.startswith('3') else
+                                'normalization'))))
     counter.add(type_string + '_partitions')
     output_filename = ((args.tsv_basename + '.'
                           if args.tsv_basename != '' else '')
@@ -158,30 +161,40 @@ for (line_type,), xpartition in xstream(sys.stdin, 1):
     else:
         output_path = os.path.join(temp_dir_path, output_filename)
     with xopen(True, output_path, 'w', args.gzip_level) as output_stream:
-        if line_type != '3':
-            '''Print all labels in the order in which they appear in the
-            manifest file.'''
-            sample_count = len(manifest_object.index_to_label)
-            for i in xrange(sample_count):
-                output_stream.write(
-                        '\t' + manifest_object.index_to_label[str(i)]
-                    )
-            output_stream.write('\n')
+        if line_type != '4':
             for coverage_line in xpartition:
                 input_line_count += 1
-                (rname, pos, end_pos, strand_or_seq) = coverage_line[:4]
+                (rname, pos, end_pos, strand_or_seq,
+                    sample_indexes, coverages) = coverage_line
                 '''Handle missing zeros at end of line here; in previous step,
                 the total number of samples was unknown, so this was not
                 done.'''
                 counter.add(type_string + '_outputs')
-                print >>output_stream, '\t'.join(
-                    (';'.join(
-                        [reference_index.string_to_rname[rname],
-                            strand_or_seq, str(int(pos)), str(int(end_pos))]
-                    ),) + coverage_line[4:] + ('0',)*(-len(coverage_line) + 4
-                                                        + sample_count)
-                )
+                try:
+                    end_pos = str(int(end_pos))
+                except ValueError:
+                    # end_pos is '\x1c', which means line_type is 3
+                    assert end_pos == '\x1c'
+                    print >>output_stream, '\t'.join([
+                            reference_index.l_string_to_rname[rname],
+                            str(int(pos)),
+                            sample_indexes,
+                            coverages
+                        ])
+                else:
+                    print >>output_stream, '\t'.join([
+                            reference_index.string_to_rname[rname],
+                            strand_or_seq,
+                            str(int(pos)),
+                            end_pos,
+                            sample_indexes,
+                            coverages
+                        ])
         else:
+            # For mapping sample indices back to original sample labels
+            manifest_object = manifest.LabelsAndIndices(
+                            os.path.expandvars(args.manifest)
+                        )
             # Print label
             print >>output_stream, '\t'.join(
                     ['sample label',

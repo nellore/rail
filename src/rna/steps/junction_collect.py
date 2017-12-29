@@ -29,12 +29,12 @@ Other output (written to directory specified by command-line parameter --out)
 ----------------------------
 File whose name is collected_junctions.tsv.gz by default.
 Tab-delimited tuple columns:
-1. Reference name (RNAME in SAM format) +
-    '+' or '-' indicating which strand is the sense strand
-2. Intron start position (inclusive)
-3. Intron end position (inclusive)
-4. comma-separated list of sample indexes in which junction was found
-5. comma-separated list of numbers of reads in which junction was found
+1. Reference name (RNAME in SAM format)
+2. '+' or '-' indicating which strand is the sense strand
+3. Intron start position (inclusive)
+4. Intron end position (inclusive)
+5. comma-separated list of sample indexes in which junction was found
+6. comma-separated list of numbers of reads in which junction was found
     in respective sample specified by field 4
 """
 import os
@@ -113,7 +113,7 @@ if args.out is not None:
             tokens = line.strip().split('\t')
             # Remove leading zeros from ints
             print >>output_stream, '\t'.join(
-                    [tokens[0], str(int(tokens[1])),
+                    [tokens[0][:-1], tokens[0][-1], str(int(tokens[1])),
                         str(int(tokens[2]) - 1), tokens[3], tokens[4]]
                 )
             input_line_count += 1

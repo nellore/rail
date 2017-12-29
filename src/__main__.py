@@ -654,6 +654,8 @@ if __name__ == '__main__':
                 drop_deletions=args.drop_deletions,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 do_not_output_ave_bw_by_chr=args.do_not_output_ave_bw_by_chr,
+                do_not_output_coverage_tsv_by_chr=\
+                    args.do_not_output_coverage_tsv_by_chr,
                 do_not_drop_polyA_tails=args.do_not_drop_polyA_tails,
                 deliverables=args.deliverables,
                 bam_basename=args.bam_basename,
@@ -715,6 +717,8 @@ if __name__ == '__main__':
                 drop_deletions=args.drop_deletions,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 do_not_output_ave_bw_by_chr=args.do_not_output_ave_bw_by_chr,
+                do_not_output_coverage_tsv_by_chr=\
+                    args.do_not_output_coverage_tsv_by_chr,
                 do_not_drop_polyA_tails=args.do_not_drop_polyA_tails,
                 deliverables=args.deliverables,
                 bam_basename=args.bam_basename,
@@ -805,6 +809,8 @@ if __name__ == '__main__':
                 drop_deletions=args.drop_deletions,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 do_not_output_ave_bw_by_chr=args.do_not_output_ave_bw_by_chr,
+                do_not_output_coverage_tsv_by_chr=\
+                    args.do_not_output_coverage_tsv_by_chr,
                 do_not_drop_polyA_tails=args.do_not_drop_polyA_tails,
                 deliverables=args.deliverables,
                 bam_basename=args.bam_basename,
@@ -869,6 +875,8 @@ if __name__ == '__main__':
                 drop_deletions=args.drop_deletions,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 do_not_output_ave_bw_by_chr=args.do_not_output_ave_bw_by_chr,
+                do_not_output_coverage_tsv_by_chr=\
+                    args.do_not_output_coverage_tsv_by_chr,
                 do_not_drop_polyA_tails=args.do_not_drop_polyA_tails,
                 deliverables=args.deliverables,
                 bam_basename=args.bam_basename,
@@ -960,6 +968,8 @@ if __name__ == '__main__':
                 drop_deletions=args.drop_deletions,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 do_not_output_ave_bw_by_chr=args.do_not_output_ave_bw_by_chr,
+                do_not_output_coverage_tsv_by_chr=\
+                    args.do_not_output_coverage_tsv_by_chr,
                 do_not_drop_polyA_tails=args.do_not_drop_polyA_tails,
                 deliverables=args.deliverables,
                 bam_basename=args.bam_basename,
@@ -1040,6 +1050,8 @@ if __name__ == '__main__':
                 drop_deletions=args.drop_deletions,
                 do_not_output_bam_by_chr=args.do_not_output_bam_by_chr,
                 do_not_output_ave_bw_by_chr=args.do_not_output_ave_bw_by_chr,
+                do_not_output_coverage_tsv_by_chr=\
+                    args.do_not_output_coverage_tsv_by_chr,
                 do_not_drop_polyA_tails=args.do_not_drop_polyA_tails,
                 deliverables=args.deliverables,
                 bam_basename=args.bam_basename, tsv_basename=args.tsv_basename,

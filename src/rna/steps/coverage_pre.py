@@ -20,11 +20,26 @@ Tab-delimited input tuple columns:
     --tie-margin criterion; else '0'
 5. A diff -- that is, by how much coverage increases or decreases at the 
     given genomic position: +n or -n for some natural number n.
+
 Input is partitioned by genome partition (field 1) and sorted by position, then
 sample index (fields 2-3).
 
 Hadoop output (written to stdout)
 ----------------------------
+Raw coverages for TSV (coverage_tsv)
+
+Tab-delimited output tuple columns:
+1. '3[.RNAME]'
+2. Number string representing reference name (RNAME in SAM format; see
+    BowtieIndexReference class in bowtie_index for conversion information)
+3. Position
+4. '\x1c'
+5. '\x1c'
+6. Comma-separated list of samples in which raw coverage value changes at
+    position from field 2
+7. Comma-separated list of raw coverage values corresponding to samples from
+    field 3
+
 Coverage (coverage)
 
 Tab-delimited output tuple columns:
@@ -101,6 +116,13 @@ parser.add_argument(
         default=False,
         help='Divides bigwigs storing average coverages up by chromosome'
     )
+parser.add_argument(
+        '--output-coverage-tsv-by-chr', action='store_const',
+        const=True,
+        default=False,
+        help=('Divides TSV storing raw coverage in each sample up by '
+              'chromosome')
+    )
 bowtie.add_args(parser)
 manifest.add_args(parser)
 args = parser.parse_args()
@@ -125,7 +147,7 @@ def median(a_list):
 library_size = args.library_size * 1000000
 start_time = time.time()
 input_line_count, output_line_count = 0, 0
-counter = Counter('coverage')
+counter = Counter('coverage_pre')
 register_cleanup(counter.flush)
 bin_count = 0
 # For converting RNAMEs to number strings
@@ -163,8 +185,10 @@ for (partition_id,), xpartition in xstream(sys.stdin, 1):
     bin_count += 1
     bin_start_time, bin_diff_count = time.time(), 0
     rname = partition_id.rpartition(';')[0]
-    maybe_rname = (('.' + rname)
+    ave_bigwig_rname = (('.' + rname)
                             if args.output_ave_bigwig_by_chr else '')
+    coverage_tsv_rname = (('.' + rname)
+                            if args.output_coverage_tsv_by_chr else '')
     rname_index = reference_index.l_rname_to_string[rname]
     coverages, unique_coverages = defaultdict(int), defaultdict(int)
     nonref_coverages, unique_nonref_coverages = (
@@ -176,9 +200,17 @@ for (partition_id,), xpartition in xstream(sys.stdin, 1):
         input_line_count += 1
         counter.add('inputs')
         pos = int(pos)
+        sample_indexes = []
         for sample_index, diffs in itertools.groupby(
                                 sample_indexes_and_diffs, lambda val: val[1]
                             ):
+            try:
+                int(sample_index)
+            except ValueError:
+                # Not a sample index to be written to coverage TSV
+                pass
+            else:
+                sample_indexes.append(sample_index)
             for _, _, uniqueness, diff in diffs:
                 diff = int(diff)
                 coverages[sample_index] += diff
@@ -223,27 +255,41 @@ for (partition_id,), xpartition in xstream(sys.stdin, 1):
                         for sample_index in manifest_object.index_to_label
                         if unique_mapped_read_counts[sample_index]
                 ]
+        # Print TSV coverage line
+        if sample_indexes:
+            # Print TSV coverage line
+            print ('coverage_tsv\t3{extra_name}\t{rname_index}\t{pos}\t'
+                   '\x1c\t\x1c\t{sample_indexes}\t{sample_coverages}').format(
+                            extra_name=coverage_tsv_rname,
+                            rname_index=rname_index,
+                            pos='%012d' % pos,
+                            sample_indexes=','.join(sample_indexes),
+                            sample_coverages=','.join([
+                                        str(coverages[sample_index])
+                                        for sample_index in sample_indexes
+                                    ])
+                        )
         print 'coverage\t%s\t%s\t%012d\t%08f\t%08f' % (
-                'mean' + maybe_rname, 
+                'mean' + ave_bigwig_rname, 
                 rname_index, pos,
                 sum([cov * mean_weight for cov in coverage_row]),
                 sum([cov * unique_mean_weight for cov in unique_coverage_row])
             )
         print 'coverage\t%s\t%s\t%012d\t%08f\t%08f' % (
-                'median' + maybe_rname, 
+                'median' + ave_bigwig_rname, 
                 rname_index, pos,
                 median(coverage_row),
                 median(unique_coverage_row)
             )
         print 'coverage\t%s\t%s\t%012d\t%08f\t%08f' % (
-                'mean.nonref' + maybe_rname, 
+                'mean.nonref' + ave_bigwig_rname, 
                 rname_index, pos,
                 sum([cov * mean_weight for cov in nonref_coverage_row]),
                 sum([cov * unique_mean_weight for cov
                         in unique_nonref_coverage_row])
             )
         print 'coverage\t%s\t%s\t%012d\t%08f\t%08f' % (
-                'median.nonref' + maybe_rname, 
+                'median.nonref' + ave_bigwig_rname, 
                 rname_index, pos,
                 median(nonref_coverage_row),
                 median(unique_nonref_coverage_row)

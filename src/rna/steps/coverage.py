@@ -31,7 +31,7 @@ Input is partitioned first by sample index, then sorted by fields 2-3.
 Hadoop output (written to stdout)
 ----------------------------
 Tab-delimited output tuple columns (only 1 per sample):
-1. '3' to denote the output is a normalization factor
+1. '4' to denote the output is a normalization factor
 2. Sample index
 3. '\x1c'
 4. '\x1c'
@@ -304,7 +304,7 @@ for (sample_index,), xpartition in xstream(sys.stdin, 1):
         unique_auc = sum(coverage_value
                             * unique_coverage_histogram[coverage_value]
                         for coverage_value in unique_coverage_histogram)
-        print '3\t%s\t\x1c\t\x1c\t\x1c\t%d\t%d\t%d\t%d' % (sample_index,
+        print '4\t%s\t\x1c\t\x1c\t\x1c\t%d\t%d\t%d\t%d' % (sample_index,
                                                 percentile(coverage_histogram,
                                                             args.percentile),
                                                 percentile(
