@@ -5511,7 +5511,7 @@ class RailRnaAlign(object):
                 'reducer' : (
                          'coverage.py --bowtie-idx={0} --percentile={1} '
                          '--out={2} --bigwig-exe={3} '
-                         '--manifest={4} {5} {6}').format(base.bowtie1_idx,
+                         '--manifest={4} {5} {6} {7}').format(base.bowtie1_idx,
                                                      base.normalize_percentile,
                                                      ab.Url(
                                                         path_join(elastic,
@@ -5525,7 +5525,8 @@ class RailRnaAlign(object):
                                                      base.bedgraphtobigwig_exe,
                                                      manifest,
                                                      verbose,
-                                                     scratch),
+                                                     scratch,
+                                                     keep_alive),
                 'inputs' : [path_join(elastic, 'precoverage', 'coverage')],
                 'output' : 'coverage',
                 'mod_partitioner' : True,
