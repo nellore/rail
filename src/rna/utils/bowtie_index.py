@@ -239,7 +239,6 @@ if __name__ == "__main__":
 
     if args.test:
         import unittest
-
         class TestBowtieIndexReference(unittest.TestCase):
 
             def setUp(self):

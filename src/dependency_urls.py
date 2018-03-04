@@ -17,13 +17,13 @@ import os
 
 linux_dependencies = {
     'bowtie1' : ['http://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie/1.2.1.1/bowtie-1.2.1.1-linux-x86_64.zip',
+                 'bowtie/1.2.2/bowtie-1.2.2-linux-x86_64.zip',
                  'http://verve.webfactional.com/mirror/linux/'
-                 'bowtie-1.2.1.1-linux-x86_64.zip'],
+                 'bowtie-1.2.2-linux-x86_64.zip'],
     'bowtie2' : ['https://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie2/2.3.3.1/bowtie2-2.3.3.1-linux-x86_64.zip',
+                 'bowtie2/2.3.4/bowtie2-2.3.4-linux-x86_64.zip',
                  'http://verve.webfactional.com/mirror/linux/'
-                 'bowtie2-2.3.3.1-linux-x86_64.zip'],
+                 'bowtie2-2.3.4-linux-x86_64.zip'],
     'bedgraphtobigwig' : ['ftp://ftp.ccb.jhu.edu/pub/langmead/rail/'
                           'linux.x86_64/bedGraphToBigWig',
                           'http://verve.webfactional.com/mirror/linux/'
@@ -36,17 +36,17 @@ linux_dependencies = {
                   'http://verve.webfactional.com/mirror/linux/'
                   'samtools-1.2.tar.bz2'],
     'pypy' : ['https://bitbucket.org/squeaky/portable-pypy/downloads/'
-              'pypy-2.5-linux_x86_64-portable.tar.bz2',
+              'pypy-5.10.0-linux_x86_64-portable.tar.bz2',
               'http://verve.webfactional.com/mirror/linux/'
-              'pypy-2.5-linux_x86_64-portable.tar.bz2'],
+              'pypy-5.10.0-linux_x86_64-portable.tar.bz2'],
     'ipython' : ['https://github.com/ipython/ipyparallel/archive/'
                  '6.0.2.zip',
                  'http://verve.webfactional.com/mirror/linux/'
                  'ipyparallel-6.0.2.zip'],
-    'sra_tools' : ['http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.8.2/'
-                   'sratoolkit.2.8.2-centos_linux64.tar.gz',
+    'sra_tools' : ['https://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.9.0/'
+                   'sratoolkit.2.9.0-centos_linux64.tar.gz',
                    'http://verve.webfactional.com/mirror/linux/'
-                   'sratoolkit.2.8.2-centos_linux64.tar.gz']
+                   'sratoolkit.2.9.0-centos_linux64.tar.gz']
 }
 
 ec2_dependencies = {}
@@ -58,13 +58,13 @@ for dependency in linux_dependencies:
 
 mac_dependencies = {
     'bowtie1' : ['http://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie/1.2.1.1/bowtie-1.2.1.1-macos-x86_64.zip',
+                 'bowtie/1.2.2/bowtie-1.2.2-macos-x86_64.zip',
                  'http://verve.webfactional.com/mirror/mac/'
-                 'bowtie-1.2.1.1-macos-x86_64.zip'],
+                 'bowtie-1.2.2-macos-x86_64.zip'],
     'bowtie2' : ['https://downloads.sourceforge.net/project/bowtie-bio/'
-                 'bowtie2/2.3.3.1/bowtie2-2.3.3.1-macos-x86_64.zip',
+                 'bowtie2/2.3.4/bowtie2-2.3.4-macos-x86_64.zip',
                  'http://verve.webfactional.com/mirror/mac/'
-                 'bowtie2-2.3.3.1-macos-x86_64.zip'],
+                 'bowtie2-2.3.4-macos-x86_64.zip'],
     'bedgraphtobigwig' : ['ftp://ftp.ccb.jhu.edu/pub/langmead/rail/'
                           'macOSX.x86_64/bedGraphToBigWig',
                           'http://verve.webfactional.com/mirror/mac/'
@@ -76,15 +76,15 @@ mac_dependencies = {
                   'http://verve.webfactional.com/mirror/mac/'
                   'samtools-1.2.tar.bz2'],
     'pypy' : ['http://bitbucket.org/pypy/pypy/downloads/'
-              'pypy-2.5.0-osx64.tar.bz2',
+              'pypy-5.1.10-osx64.tar.bz2',
               'http://verve.webfactional.com/mirror/mac/'
-              'pypy-2.5.0-osx64.tar.bz2'],
+              'pypy-5.1.10-osx64.tar.bz2'],
     'ipyparallel' : ['https://github.com/ipython/ipyparallel/archive/'
                      '6.0.2.zip',
                      'http://verve.webfactional.com/mirror/mac/'
                      'ipyparallel-6.0.2.zip'],
     'sra_tools' : ['http://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/2.8.2/'
-                   'sratoolkit.2.8.2-mac64.tar.gz',
+                   'sratoolkit.2.9.0-mac64.tar.gz',
                    'http://verve.webfactional.com/mirror/mac/'
-                   'sratoolkit.2.8.2-mac64.tar.gz']
+                   'sratoolkit.2.9.0-mac64.tar.gz']
 }
