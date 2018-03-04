@@ -394,7 +394,7 @@ class S3Ansible(object):
                             [self.aws, '--profile', self.profile,
                              's3api', 'put-bucket-lifecycle', '--bucket',
                              bucket, '--lifecycle-configuration',
-                                                '{"Rules":%s}'
+                                                '\'{"Rules":%s}\''
                                                 % json.dumps(rules),
                             '>/dev/null']
                         )
