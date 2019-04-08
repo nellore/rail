@@ -52,8 +52,221 @@ src_path = os.path.join(base_path, 'src')
 site.addsitedir(utils_path)
 site.addsitedir(src_path)
 
-from alignment_handlers import indels_junctions_exons_mismatches
-from dooplicity.tools import xstream
+
+def indels_junctions_exons_mismatches(
+        cigar, md, pos, seq, drop_deletions=False, junctions_only=False
+):
+    """ Finds indels, junctions, exons, mismatches from CIGAR, MD string, POS
+
+        cigar: CIGAR string
+        md: MD:Z string
+        pos: position of first aligned base
+        seq: read sequence
+        drop_deletions: drops deletions from coverage vectors iff True
+        junctions_only: does not populate mismatch list
+
+        Return value: tuple
+            (insertions, deletions, junctions, exons, mismatches).
+        Insertions is a list of tuples (last genomic position before insertion,
+                                 string of inserted bases). Deletions
+            is a list of tuples (first genomic position of deletion,
+                                 string of deleted bases). Junctions is a list
+            of tuples (intron start position (inclusive),
+                       intron end position (exclusive),
+                       left_diplacement, right_displacement). Exons is a list
+            of tuples (exon start position (inclusive),
+                       exon end position (exclusive)). Mismatches is a list
+            of tuples (genomic position of mismatch, read base)
+    """
+    insertions, deletions, junctions, exons, mismatches = [], [], [], [], []
+    cigar = re.split(r'([MINDS])', cigar)[:-1]
+    md = parsed_md(md)
+    seq_size = len(seq)
+    cigar_index, md_index, seq_index = 0, 0, 0
+    max_cigar_index = len(cigar)
+    while cigar_index != max_cigar_index:
+        if cigar[cigar_index] == 0:
+            cigar_index += 2
+            continue
+        if cigar[cigar_index + 1] == 'M':
+            aligned_base_cap = int(cigar[cigar_index])
+            aligned_bases = 0
+            while True:
+                try:
+                    aligned_bases += int(md[md_index])
+                    if aligned_bases <= aligned_base_cap:
+                        md_index += 1
+                except ValueError:
+                    # Not an int, but should not have reached a deletion
+                    assert md[md_index] != '^', '\n'.join(
+                        ['cigar and md:',
+                         ''.join(cigar), ''.join(md)]
+                    )
+                    if not junctions_only:
+                        mismatches.append(
+                            (pos + aligned_bases,
+                             seq[seq_index + aligned_bases])
+                        )
+                    correction_length = len(md[md_index])
+                    m_length = aligned_base_cap - aligned_bases
+                    if correction_length > m_length:
+                        md[md_index] = md[md_index][:m_length]
+                        aligned_bases = aligned_base_cap
+                    else:
+                        aligned_bases += correction_length
+                        md_index += 1
+                if aligned_bases > aligned_base_cap:
+                    md[md_index] = aligned_bases - aligned_base_cap
+                    break
+                elif aligned_bases == aligned_base_cap:
+                    break
+            # Add exon
+            exons.append((pos, pos + aligned_base_cap))
+            pos += aligned_base_cap
+            seq_index += aligned_base_cap
+        elif cigar[cigar_index + 1] == 'N':
+            skip_increment = int(cigar[cigar_index])
+            # Add junction
+            junctions.append((pos, pos + skip_increment,
+                              seq_index, seq_size - seq_index))
+            # Skip region of reference
+            pos += skip_increment
+        elif cigar[cigar_index + 1] == 'I':
+            # Insertion
+            insert_size = int(cigar[cigar_index])
+            insertions.append(
+                (pos - 1, seq[seq_index:seq_index + insert_size])
+            )
+            seq_index += insert_size
+        elif cigar[cigar_index + 1] == 'D':
+            assert md[md_index] == '^', '\n'.join(
+                ['cigar and md:',
+                 ''.join(cigar), ''.join(md)]
+            )
+            # Deletion
+            delete_size = int(cigar[cigar_index])
+            md_delete_size = len(md[md_index + 1])
+            assert md_delete_size >= delete_size
+            deletions.append((pos, md[md_index + 1][:delete_size]))
+            if not drop_deletions: exons.append((pos, pos + delete_size))
+            if md_delete_size > delete_size:
+                # Deletion contains a junction
+                md[md_index + 1] = md[md_index + 1][delete_size:]
+            else:
+                md_index += 2
+            # Skip deleted part of reference
+            pos += delete_size
+        else:
+            # Soft clip
+            assert cigar[cigar_index + 1] == 'S'
+            # Advance seq_index
+            seq_index += int(cigar[cigar_index])
+        cigar_index += 2
+    '''Merge exonic chunks/deletions; insertions/junctions could have chopped
+    them up.'''
+    new_exons = []
+    last_exon = exons[0]
+    for exon in exons[1:]:
+        if exon[0] == last_exon[1]:
+            # Merge ECs
+            last_exon = (last_exon[0], exon[1])
+        else:
+            # Push last exon to new exon list
+            new_exons.append(last_exon)
+            last_exon = exon
+    new_exons.append(last_exon)
+    return insertions, deletions, junctions, new_exons, mismatches
+
+
+class xstream(object):
+    """ Permits Pythonic iteration through partitioned/sorted input streams.
+
+        All iterators are implemented as generators. Could have subclassed
+        itertools.groupby here; however, implementation of itertools.groupby
+        may change from version to version of Python. Implementation is thus
+        just based on itertools.groupby from
+        https://docs.python.org/2/library/itertools.html .
+
+        Usage: for key, xpartition in xstream(hadoop_stream):
+                   for value in xpartition:
+                        <code goes here>
+
+        Each of key and value above is a tuple of strings.
+
+        Properties
+        -------------
+        key: key tuple that denotes current partition; this is an attribute
+            of both an xstream. None when no lines have been read yet.
+        value: tuple that denotes current value. None when no lines have been
+            read yet.
+
+        Init vars
+        -------------
+        input_stream: where to find input lines
+        key_fields: the first "key_fields" fields from an input line are
+            considered the key denoting a partition
+        separator: delimiter separating fields from each input line
+        skip_duplicates: skip any duplicate lines that may follow a line
+    """
+    @staticmethod
+    def stream_iterator(
+            input_stream,
+            separator='\t',
+            skip_duplicates=False
+        ):
+        if skip_duplicates:
+            for line, _ in groupby(input_stream):
+                yield tuple(line.strip().split(separator))
+        else:
+            for line in input_stream:
+                yield tuple(line.strip().split(separator))
+
+    def __init__(
+            self,
+            input_stream,
+            key_fields=1,
+            separator='\t',
+            skip_duplicates=False
+        ):
+        self._key_fields = key_fields
+        self.it = self.stream_iterator(
+                        input_stream,
+                        separator=separator,
+                        skip_duplicates=skip_duplicates
+                    )
+        self.tgtkey = self.currkey = self.currvalue = object()
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        while self.currkey == self.tgtkey:
+            self.currvalue = next(self.it)    # Exit on StopIteration
+            self.currkey = self.currvalue[:self._key_fields]
+        self.tgtkey = self.currkey
+        return self.currkey, self._grouper(self.tgtkey)
+
+    def _grouper(self, tgtkey):
+        while self.currkey == tgtkey:
+            yield self.currvalue[self._key_fields:]
+            self.currvalue = next(self.it)    # Exit on StopIteration
+            self.currkey = self.currvalue[:self._key_fields]
+
+
+def remove_temporary_directories(temp_dir_paths):
+    """ Deletes temporary directory.
+
+        temp_dir_paths: iterable of paths of temporary directories
+
+        No return value.
+    """
+    for temp_dir_path in temp_dir_paths:
+        try:
+            shutil.rmtree(temp_dir_path,
+                            ignore_errors=True)
+        except Exception as e:
+            # Don't know what's up, but forge on
+            pass
 
 def dummy_md_index(cigar):
     """ Creates dummy MD string from CIGAR in case of missing MD.
@@ -90,6 +303,15 @@ def dummy_md_index(cigar):
                     )
     return ''.join(str(el) for el in md)
 
+"""
+Here's what a few lines of the simulator BED file look like:
+
+chr1	13362	13438	chr1:11869-14412W:ENST00000515242.2:2:1653:603:993/1	0	+	.	.	0,0,0	1	76	0
+chr1	13677	13753	chr1:11869-14412W:ENST00000515242.2:2:1653:603:993/2	0	-	.	.	0,0,0	1	76	0
+chr1	12693	13272	chr1:11869-14412W:ENST00000515242.2:3:1653:437:781/1	0	+	.	.	0,0,0	2	28,48	0,531
+chr1	13465	13541	chr1:11869-14412W:ENST00000515242.2:3:1653:437:781/2	0	-	.	.	0,0,0	1	76	0
+"""
+
 def write_read_introns_from_bed_stream(bed_stream, output_stream,
                                         intron_counts,
                                         generous=False,
@@ -111,13 +333,13 @@ def write_read_introns_from_bed_stream(bed_stream, output_stream,
         introns = set()
         tokens = line.rstrip().split('\t')
         if len(tokens) < 12:
-            continue
+            continue  # BTL: what are these lines?
         chrom = tokens[0]
         chrom_start = int(tokens[1])
         chrom_end = int(tokens[2])
-        name = tokens[3]
-        block_sizes = tokens[10].split(',')
-        block_starts = tokens[11].split(',')
+        name = tokens[3]  # this is a complicated string
+        block_sizes = tokens[10].split(',')   # 1 and 2 above
+        block_starts = tokens[11].split(',')  # 0 and 0,531 above
         # Handle trailing commas
         try:
             int(block_sizes[-1])
@@ -138,9 +360,9 @@ def write_read_introns_from_bed_stream(bed_stream, output_stream,
                                 + int(block_sizes[0]))
         for i in xrange(1, block_count - 1):
             # Any intervening blocks characterize two junctions
-            intron_start = chrom_start + int(block_starts[i])
-            junctions.append(intron_start)
-            junctions.append(intron_start + int(block_sizes[i]))
+            intron_start = chrom_start + int(block_starts[i])     # BTL: so block starts are cumulative
+            junctions.append(intron_start)                        # BTL: end of prev junction
+            junctions.append(intron_start + int(block_sizes[i]))  # BTL: beginning of next junction
         # Final block characterizes junction on right side of intron
         junctions.append(chrom_start + int(block_starts[-1]))
         for i in xrange(len(junctions)/2):
@@ -165,6 +387,7 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream,
                                         retrieved_intron_counts,
                                         instance=False):
     """ Writes output that maps QNAMES to exon-exon junctions overlapped.
+        BTL: also, populates the retrieved_intron_counts object.
 
         sam_stream: where to find retrieved alignments in SAM form
         output_stream: where to write output. Each line takes the form:
@@ -181,25 +404,29 @@ def write_read_introns_from_sam_stream(sam_stream, output_stream,
             tokens = line.strip().split('\t')
             flag = int(tokens[1])
             if flag & 4:
-                continue
-            name = tokens[0]
+                continue  # skip unmapped?  We won't miss true instances, will we?
+            name = tokens[0]  # SAM: read name or chromosome name?
             rname = tokens[2]
             cigar = tokens[5]
             pos = int(tokens[3])
             seq = tokens[9]
             flag = int(tokens[1])
             if 'N' not in cigar or flag & 256:
-                continue
+                continue  # skip secondaries and ones with no splicing
             #md = [token[5:] for token in tokens if token[:5] == 'MD:Z:'][0]
+            # BTL: it just wants introns back, so it doesn't matter that mismatches are getting ignored in the dummy md string
             _, _, introns, _, _ = indels_junctions_exons_mismatches(cigar,
                                         dummy_md_index(cigar), pos, seq)
-            introns = [intron[:2] for intron in introns]
+            introns = [intron[:2] for intron in introns]  # just take first 2 fields of each
             introns = [rname 
                           + ';'.join([''] + [str(bound) for bound in intron])
                           for intron in sorted(list(introns))]
             if instance:
                 for intron in introns:
                     retrieved_intron_counts[intron] += 1
+                # Print read name, than a tab-separated list of introns covered,
+                # each intron being a semicolon separated list of chromosome and
+                # coordinates.  Then final column gets "r". (For retrieved?)
                 print >>output_stream, '%s\t%s\tr' % (name, '\t'.join(introns))
             else:
                 for intron in introns:
@@ -244,6 +471,9 @@ def print_instance(code, introns, intron_counts, retrieved_intron_counts):
     elif code == 'relret':
         relevant = True
         retrieved = True
+    else:
+        raise RuntimeError('Bad code: "%s"' % code)
+    # BTL: does this properly hand 0 coverages?  Maybe it's a defaultdict?
     coverages = [intron_counts[intron] for intron in introns]
     retrieved_coverages = [retrieved_intron_counts[intron]
                             for intron in introns]
@@ -282,7 +512,6 @@ if __name__ == '__main__':
         help='Consider only reads that overlap at least '
              'one exon-exon junction whose TRUE coverage is <= -c')
     args = parser.parse_args(sys.argv[1:])
-    from tempdel import remove_temporary_directories
     import tempfile
     import atexit
     try:
@@ -295,6 +524,7 @@ if __name__ == '__main__':
     #print >>sys.stderr, temp_dir_path
     atexit.register(remove_temporary_directories, [temp_dir_path])
     combined_file = os.path.join(temp_dir_path, 'combined.temp')
+    # BTL: yes, these are defaultdicts
     intron_counts, retrieved_intron_counts = defaultdict(int), defaultdict(int)
     with open(combined_file, 'w') as combined_stream:
         with open(args.true_introns_bed) as true_introns_bed_stream:
