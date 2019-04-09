@@ -53,6 +53,31 @@ site.addsitedir(utils_path)
 site.addsitedir(src_path)
 
 
+def parsed_md(md):
+    """ Divides an MD string up by boundaries between ^, letters, and numbers
+
+        md: an MD string (example: 33A^CC).
+
+        Return value: MD string split by boundaries described above.
+    """
+    md_to_parse = []
+    md_group = [md[0]]
+    for i, char in enumerate(md):
+        if i == 0: continue
+        if (re.match('[A-Za-z]', char) is not None) \
+            != (re.match('[A-Za-z]', md[i-1]) is not None) or \
+            (re.match('[0-9]', char) is not None) \
+            != (re.match('[0-9]', md[i-1]) is not None):
+            if md_group:
+                md_to_parse.append(''.join(md_group))
+            md_group = [char]
+        else:
+            md_group.append(char)
+    if md_group:
+        md_to_parse.append(''.join(md_group))
+    return [char for char in md_to_parse if char != '0']
+
+
 def indels_junctions_exons_mismatches(
         cigar, md, pos, seq, drop_deletions=False, junctions_only=False
 ):
