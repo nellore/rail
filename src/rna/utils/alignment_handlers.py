@@ -1104,4 +1104,16 @@ if __name__ == '__main__':
                                 drop_deletions=False)
                     )
 
+        def test_read_7(self):
+            """ Fails if example doesn't give expected indels/jx/exons/mm."""
+            self.assertEquals(([],
+                               [], [],
+                               [(85074006, 85074054)],
+                               []),
+                         indels_junctions_exons_mismatches(
+                                '48M', '48', 85074006,
+                                'AAAAAAGTTTTTTTTTTTTTTTTTTTTTTTTTTTGGGGGGGGGGGGGG',
+                                drop_deletions=False)
+                    )
+
     unittest.main()
