@@ -1,7 +1,7 @@
 ![Rail-RNA logo](https://github.com/nellore/rail/blob/master/assets/railrnalogodark.png)
 ====
 
-is software for RNA-seq analysis.
+is software for RNA-seq analysis. It was used to generate outputs for the [recount2](https://jhubiostatistics.shinyapps.io/recount/) project and is deprecated as of January 2021. Please use [monorail](https://github.com/langmead-lab/monorail-external) instead to generate RNA-seq outputs that can be compared with [recount3](http://research.libd.org/recount3-docs/), the successor to recount2.
 
 [![Build Status](https://travis-ci.org/nellore/rail.svg?branch=master)](https://travis-ci.org/nellore/rail)
 
